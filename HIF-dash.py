@@ -153,14 +153,14 @@ with st.sidebar:
 
 # --- 7. DASHBOARD ROUTING ---
 if selected == "HIF DATA":
-    st.title("Hvidovre IF Performance Hub")
-    st.info("Brug menuen til venstre for at navigere i dataen.")
+    st.title("Hvidovre IF Data Hub")
+    st.info("Denne side bruges til at præsentere Hvidove IFs dataanalyse.")
 
 elif selected == "DATAANALYSE":
     if selected_sub == "Heatmaps":
         heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps":
-        shotmaps.vis_side(df_events, 4, hold_map)
+        skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Afslutninger":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
