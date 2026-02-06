@@ -1,33 +1,39 @@
 import streamlit as st
 import plotly.express as px
 
-def vis_side(spillere):
+def vis_side(spillere, player_events):
 
-    # 1. Vi finder alle talkolonner i dit ark (f.eks. GOALS, ASSISTS, SHOTS)
-    talkolonner = spillere.select_dtypes(include=['number']).columns.tolist()
+    # 1. Vi fletter (merger) de to ark sammen vha. PLAYER_WYID
+    # Det gør, at vi får FIRSTNAME/LASTNAME over på vores stats-rækker
+    df = player_events.merge(
+        spillere[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME']], 
+        on='PLAYER_WYID', 
+        how='left'
+    )
+
+    # 2. Lav fuldt navn
+    df['Full_Name'] = df['FIRSTNAME'] + " " + df['LASTNAME']
+
+    # 3. Find alle talkolonner (stats)
+    talkolonner = df.select_dtypes(include=['number']).columns.tolist()
     
-    # 2. Vi bygger spillernavnet ved at samle FIRSTNAME og LASTNAME
-    if "FIRSTNAME" in spillere.columns and "LASTNAME" in spillere.columns:
-        spillere['Full_Name'] = spillere['FIRSTNAME'] + " " + spillere['LASTNAME']
-        navne_kolonne = 'Full_Name'
-    else:
-        # Fallback hvis navnene ikke findes som forventet
-        navne_kolonne = spillere.columns[1] 
+    # Fjern tekniske ID-kolonner fra listen, så de ikke driller i dropdown
+    relevante_stats = [col for col in talkolonner if col not in ['PLAYER_WYID', 'TEAM_WYID', 'WYID']]
 
-    # 3. Fjern kolonner der ikke giver mening at lave statistik på (f.eks. PLAYER_WYID eller BIRTHDATE)
-    relevante_stats = [col for col in talkolonner if col not in ['PLAYER_WYID', 'BIRTHDATE']]
+    # 4. Dropdown til valg af kategori
+    valgt_kolonne = st.selectbox("Vælg statistik-kategori:", relevante_stats)
 
-    # 4. Brugeren vælger kategori
-    valgt_kolonne = st.selectbox("Vælg kategori:", relevante_stats)
+    # 5. Gruppér data (Hvis en spiller optræder flere gange, lægger vi deres stats sammen)
+    df_grouped = df.groupby('Full_Name')[valgt_kolonne].sum().reset_index()
 
-    # 5. Sortering (Top 15)
-    df_plot = spillere.sort_values(by=valgt_kolonne, ascending=False).head(15)
+    # 6. Sorter og snup top 15
+    df_plot = df_grouped.sort_values(by=valgt_kolonne, ascending=False).head(15)
 
-    # 6. Lav grafen (Plotly)
+    # 7. Lav grafen
     fig = px.bar(
         df_plot,
         x=valgt_kolonne,
-        y=navne_kolonne,
+        y='Full_Name',
         orientation='h',
         text=valgt_kolonne,
         color_discrete_sequence=['#df003b'] # Hvidovre rød
