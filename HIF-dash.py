@@ -52,25 +52,51 @@ def verify_user(username, password):
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-# --- 4. LOGIN SKÆRM (Billede: Skærmbillede 2026-02-06 kl. 18.29.18.png) ---
+# --- 4. LOGIN SKÆRM ---
 if not st.session_state["logged_in"]:
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Vi bruger col1, col2, col3 for at skabe luft i siderne
+    col1, col2, col3 = st.columns([1, 1.2, 1]) # col2 er gjort lidt bredere her
+    
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=100)
-        st.title("HIF Hub Login")
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        
+        # Centreret Logo via HTML
+        st.markdown(
+            """
+            <div style="display: flex; justify-content: center;">
+                <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120">
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        # Centreret Titel via HTML
+        st.markdown(
+            """
+            <h1 style='text-align: center; color: white; margin-bottom: 20px;'>HIF Hub Login</h1>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        # Selve formen
         with st.form("login_form"):
             u_input = st.text_input("Brugernavn")
             p_input = st.text_input("Adgangskode", type="password")
-            if st.form_submit_button("Log ind"):
+            
+            # Centreret knap i bunden af formen
+            submit_col1, submit_col2, submit_col3 = st.columns([1, 2, 1])
+            with submit_col2:
+                submit_button = st.form_submit_button("Log ind", use_container_width=True)
+            
+            if submit_button:
                 if verify_user(u_input, p_input):
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u_input
                     st.rerun()
                 else:
-                    st.error("Forkert brugernavn eller kodeord")
+                    st.error("❌ Forkert brugernavn eller kodeord")
+                    
     st.stop()
-
 # --- 5. DATA LOADING (Kører kun efter succesfuldt login) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
