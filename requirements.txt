@@ -4,3 +4,6 @@ openpyxl
 bcrypt
 sqlalchemy
 streamlit-option-menu
+matplotlib
+seaborn
+scipy
