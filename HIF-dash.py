@@ -73,7 +73,7 @@ if not st.session_state["logged_in"]:
         # Centreret Titel via HTML
         st.markdown(
             """
-            <h1 style='text-align: center; color: white; margin-bottom: 20px;'>HIF Hub Login</h1>
+            <h1 style='text-align: center; color: gray; margin-bottom: 20px;'>HIF Hub Login</h1>
             """, 
             unsafe_allow_html=True
         )
@@ -94,7 +94,7 @@ if not st.session_state["logged_in"]:
                     st.session_state["user"] = u_input
                     st.rerun()
                 else:
-                    st.error("❌ Forkert brugernavn eller kodeord")
+                    st.error("Forkert brugernavn eller kodeord")
                     
     st.stop()
 # --- 5. DATA LOADING (Kører kun efter succesfuldt login) ---
