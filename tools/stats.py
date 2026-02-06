@@ -18,7 +18,7 @@ def vis_side(spillere):
     relevante_stats = [col for col in talkolonner if col not in ['PLAYER_WYID', 'BIRTHDATE']]
 
     # 4. Brugeren vælger kategori
-    valgt_kolonne = st.selectbox("Vælg statistik-kategori:", relevante_stats)
+    valgt_kolonne = st.selectbox("Vælg kategori:", relevante_stats)
 
     # 5. Sortering (Top 15)
     df_plot = spillere.sort_values(by=valgt_kolonne, ascending=False).head(15)
