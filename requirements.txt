@@ -1,1 +1,6 @@
 streamlit
+pandas
+openpyxl
+bcrypt
+sqlalchemy
+streamlit-option-menu
