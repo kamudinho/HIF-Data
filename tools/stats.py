@@ -5,10 +5,10 @@ import plotly.express as px
 def vis_side(spillere):
 
     kategorier = {
-        "Mål": "Goals",
-        "Assists": "Assists",
-        "Minutter spillet": "Minutes_played",
-        "xG (Expected Goals)": "xG"
+        "Mål": "GOALS",
+        "Assists": "ASSIST",
+        "Minutter spillet": "MINUTESONFIELD",
+        "xG (Expected Goals)": "XGSHOT"
     }
 
     valgt_label = st.selectbox("Vælg kategori:", list(kategorier.keys()))
