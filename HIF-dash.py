@@ -127,7 +127,7 @@ with st.sidebar:
     st.markdown(
         f'<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="60"></div>',
         unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align:center;'>Bruger: <b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center;'>HIF er de bedste, <b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
     selected = option_menu(
@@ -139,12 +139,12 @@ with st.sidebar:
 
     if selected == "DATAANALYSE":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Skud Map", "Afslutninger", "DataViz"],
+        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Shotmaps", "Afslutninger", "DataViz"],
                                 label_visibility="collapsed")
 
     if selected == "SCOUTING":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Scout", options=["Hvidovre IF", "Positioner", "Sammenligning"],
+        selected_sub = st.radio("Sub_Scout", options=["Hvidovre IF", "Sammenligning"],
                                 label_visibility="collapsed")
 
     if st.button("Log ud"):
@@ -159,8 +159,8 @@ if selected == "HIF DATA":
 elif selected == "DATAANALYSE":
     if selected_sub == "Heatmaps":
         heatmaps.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Skud Map":
-        skudmap.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Shotmaps":
+        shotmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Afslutninger":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
@@ -169,7 +169,5 @@ elif selected == "DATAANALYSE":
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
         players.vis_side(spillere)
-    elif selected_sub == "Positioner":
-        st.header("Positions-analyse")
     elif selected_sub == "Sammenligning":
         comparison.vis_side(spillere, player_events, df_scout)
