@@ -5,57 +5,65 @@ import pandas as pd
 def vis_side(spillere, player_events):
     st.title("Spillerstatistik")
 
-    # 1. Tjek om PLAYER_WYID findes i begge ark - ellers kan vi ikke merge
-    if 'PLAYER_WYID' not in spillere.columns or 'PLAYER_WYID' not in player_events.columns:
-        st.error(f"Fejl: 'PLAYER_WYID' mangler i et af arkene. Fundet i Spillere: {'PLAYER_WYID' in spillere.columns}, Fundet i Playerevents: {'PLAYER_WYID' in player_events.columns}")
-        return
+    # 1. Mapping af de 5 punkter til dine Excel-kolonner (Tjekket mod dine billeder)
+    kategorier = {
+        "Minutter": ["MINUTESTAGGED"],
+        "Passes": ["PASSES"],
+        "Skud": ["SHOTS"],
+        "Duels": ["DUELS"],
+        "Recoveries": ["RECOVERIES"]
+    }
 
-    # 2. Find de rigtige kolonnenavne til fornavn og efternavn (uanset om det er store eller små bogstaver)
-    f_name_col = next((c for c in spillere.columns if c.upper() == 'FIRSTNAME'), None)
-    l_name_col = next((c for c in spillere.columns if c.upper() == 'LASTNAME'), None)
+    # 2. Vælg hovedpunkt
+    valgt_punkt = st.selectbox("Vælg kategori:", list(kategorier.keys()))
 
-    if not f_name_col or not l_name_col:
-        st.error(f"Kunne ikke finde navne-kolonner. De findes som: {spillere.columns.tolist()}")
-        return
+    # 3. Vælg specifik statistik under punktet
+    mulige_stats = kategorier[valgt_punkt]
+    valgt_stat = st.selectbox(f"Vælg {valgt_punkt}statistik:", mulige_stats)
 
-    # 3. Vi fletter arkene sammen
-    df = player_events.merge(
-        spillere[['PLAYER_WYID', f_name_col, l_name_col]], 
-        on='PLAYER_WYID', 
-        how='left'
-    )
+    # 4. Data-rensning og Merge
+    # Tvinger ID til tekst så vi er sikre på de kan finde hinanden
+    spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.strip()
+    player_events['PLAYER_WYID'] = player_events['PLAYER_WYID'].astype(str).str.strip()
 
-    # 4. Lav fuldt navn
-    df['Full_Name'] = df[f_name_col].fillna('') + " " + df[l_name_col].fillna('')
+    # Vi henter kun de nødvendige navne-kolonner
+    df_navne = spillere[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME']]
+    df = player_events.merge(df_navne, on='PLAYER_WYID', how='left')
 
-    # 5. Find alle talkolonner (stats) og fjern de tekniske
-    talkolonner = df.select_dtypes(include=['number']).columns.tolist()
-    tekniske_id = ['PLAYER_WYID', 'TEAM_WYID', 'WYID', 'BIRTHDATE', 'ID']
-    relevante_stats = [col for col in talkolonner if col.upper() not in tekniske_id]
+    # Lav fuldt navn
+    df['Full_Name'] = df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')
 
-    # 6. Dropdown til valg af kategori
-    valgt_kolonne = st.selectbox("Vælg statistik:", relevante_stats)
+    # 5. Tjek om kolonnen findes og beregn
+    if valgt_stat in df.columns:
+        # Hvis det er en PCT (procent) kolonne, tager vi gennemsnittet, ellers summen
+        if "PCT" in valgt_stat:
+            df_plot = df.groupby('Full_Name')[valgt_stat].mean().reset_index()
+        else:
+            df_plot = df.groupby('Full_Name')[valgt_stat].sum().reset_index()
 
-    # 7. Gruppér og sortér (læg data sammen hvis en spiller har flere rækker)
-    df_grouped = df.groupby('Full_Name')[valgt_kolonne].sum().reset_index()
-    df_plot = df_grouped.sort_values(by=valgt_kolonne, ascending=False).head(15)
+        # Sorter og snup top 15
+        df_plot = df_plot.sort_values(by=valgt_stat, ascending=False).head(15)
 
-    # 8. Lav grafen
-    fig = px.bar(
-        df_plot,
-        x=valgt_kolonne,
-        y='Full_Name',
-        orientation='h',
-        text=valgt_kolonne,
-        color_discrete_sequence=['#df003b'] # Hvidovre rød
-    )
+        # 6. Visualisering
+        fig = px.bar(
+            df_plot,
+            x=valgt_stat,
+            y='Full_Name',
+            orientation='h',
+            text=valgt_stat,
+            color=valgt_stat,
+            color_continuous_scale='Reds' # HIF farver
+        )
 
-    fig.update_layout(
-        yaxis={'categoryorder':'total ascending'},
-        xaxis_title=valgt_kolonne,
-        yaxis_title="",
-        height=600,
-        template="plotly_white"
-    )
+        fig.update_layout(
+            yaxis={'categoryorder':'total ascending'},
+            xaxis_title=valgt_stat,
+            yaxis_title="",
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=600,
+            template="plotly_white"
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.error(f"Kolonnen '{valgt_stat}' blev ikke fundet i Playerevents. Tjek om navnet i Excel er stavet præcis sådan.")
