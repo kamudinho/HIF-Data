@@ -35,7 +35,7 @@ with engine.connect() as conn:
     # Tvinger opdatering af Kasper så vi er sikre på koden '1234' virker
     conn.execute(text("""
         INSERT INTO users (username, password_hash, role) 
-        VALUES ('Kasper', :hpw, 'admin')
+        VALUES ('Data', :hpw, 'admin')
         ON CONFLICT(username) DO UPDATE SET password_hash = :hpw
     """), {"hpw": hashed_pw})
     conn.commit()
@@ -44,7 +44,7 @@ with engine.connect() as conn:
 # --- 3. LOGIN FUNKTIONER ---
 def verify_user(username, password):
     # Vi tjekker direkte på teksten for at udelukke fejl i bcrypt
-    if username.lower() == "kasper" and password == "1234":
+    if username.lower() == "Data" and password == "Data":
         return True
     return False
 
@@ -112,12 +112,12 @@ with st.sidebar:
 
     if selected == "DATAANALYSE":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Skud Map", "Afslutninger", "DataViz"],
+        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Skudmaps", "Afslutninger", "DataViz"],
                                 label_visibility="collapsed")
 
     if selected == "SCOUTING":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Scout", options=["Hvidovre IF", "Positioner", "Sammenligning"],
+        selected_sub = st.radio("Sub_Scout", options=["Hvidovre IF", "Sammenligning"],
                                 label_visibility="collapsed")
 
     if st.button("Log ud"):
@@ -132,8 +132,8 @@ if selected == "HIF DATA":
 elif selected == "DATAANALYSE":
     if selected_sub == "Heatmaps":
         heatmaps.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Skud Map":
-        skudmap.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Skudmaps":
+        skudmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Afslutninger":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
@@ -142,7 +142,5 @@ elif selected == "DATAANALYSE":
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
         players.vis_side(spillere)
-    elif selected_sub == "Positioner":
-        st.header("Positions-analyse")
     elif selected_sub == "Sammenligning":
         comparison.vis_side(spillere, player_events, df_scout)
