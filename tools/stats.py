@@ -2,7 +2,7 @@ import streamlit as st
 import plotly.express as px
 
 
-def vis_side(df_spillere):
+def vis_side(spillere):
 
     kategorier = {
         "Mål": "Goals",
@@ -15,7 +15,7 @@ def vis_side(df_spillere):
     valgt_kolonne = kategorier[valgt_label]
 
     # 2. Sorter data og snup top 15
-    df_plot = df_spillere.sort_values(by=valgt_kolonne, ascending=False).head(15)
+    df_plot = spillere.sort_values(by=valgt_kolonne, ascending=False).head(15)
 
     # 3. Lav grafen (Plotly gør den interaktiv)
     fig = px.bar(
