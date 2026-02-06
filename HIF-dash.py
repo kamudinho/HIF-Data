@@ -173,7 +173,7 @@ elif selected == "DATAANALYSE":
 
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats":
-        stats.vis_side(spillere, playerevents)
+        stats.vis_side(spillere, player_events)
 
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
