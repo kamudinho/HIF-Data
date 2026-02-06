@@ -3,7 +3,7 @@ import plotly.express as px
 import pandas as pd
 
 def vis_side(spillere, player_events):
-    st.title("📊 Spillerstatistik")
+    st.title("Spillerstatistik")
 
     # 1. Tjek om PLAYER_WYID findes i begge ark - ellers kan vi ikke merge
     if 'PLAYER_WYID' not in spillere.columns or 'PLAYER_WYID' not in player_events.columns:
