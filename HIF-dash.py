@@ -132,14 +132,19 @@ with st.sidebar:
 
     selected = option_menu(
         menu_title=None,
-        options=["HIF DATA", "DATAANALYSE", "SCOUTING"],
-        icons=["House", "graph-up", "search"],
+        options=["HIF DATA", "DATAANALYSE", "STATISTIK", "SCOUTING"],
+        icons=["House", "graph-up", "graph-up", "search"],
         default_index=0
     )
 
     if selected == "DATAANALYSE":
         st.markdown("**Vælg type:**")
         selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Shotmaps", "Afslutninger", "DataViz"],
+                                label_visibility="collapsed")
+    
+    if selected == "STATISTIK":
+        st.markdown("**Vælg type:**")
+        selected_sub = st.radio("Sub_Scout", options=["Spillerstats"],
                                 label_visibility="collapsed")
 
     if selected == "SCOUTING":
@@ -165,6 +170,10 @@ elif selected == "DATAANALYSE":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
         dataviz.vis_side(df_events, kamp, hold_map)
+
+elif selected == "STATISTIK":
+    if selected_sub == "Spillerstats":
+        stats.vis_side(spillere)
 
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
