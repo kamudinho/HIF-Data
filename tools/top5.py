@@ -3,27 +3,32 @@ import pandas as pd
 import numpy as np
 
 def vis_side(spillere_df, player_events_df):
+    st.title("Top 5 Spillere - KPI Analyse")
 
     # --- 1. DATA FORBEREDELSE ---
-    left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in spillere_df.columns), None)
-    right_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in player_events_df.columns), None)
+    # Find ID-kolonner (PLAYER_WYID)
+    left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id'] if col in spillere_df.columns), None)
+    right_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id'] if col in player_events_df.columns), None)
 
     if not left_id or not right_id:
-        st.error("Kunne ikke finde ID-kolonne.")
+        st.error("Kunne ikke finde ID-kolonne (PLAYER_WYID).")
         return
 
+    # Merge data
     df = pd.merge(spillere_df, player_events_df, left_on=left_id, right_on=right_id, how='inner')
+    
+    # Tving alle kolonner til store bogstaver for konsistens
     df.columns = [c.upper() for c in df.columns]
 
-    # Navne-håndtering
+    # Navne-fix: Kombiner FIRSTNAME og LASTNAME
     if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
         df['NAVN'] = df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')
     elif 'PLAYER_NAME' in df.columns:
         df['NAVN'] = df['PLAYER_NAME']
     else:
-        df['NAVN'] = "Ukendt Spiller"
+        df['NAVN'] = df[left_id.upper()].astype(str) # Fallback til ID hvis navne mangler
 
-    # --- 2. KPI & KATEGORIER ---
+    # --- 2. KPI DEFINITIONER ---
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'TOTAL_GOALS': 'Målinvolveringer',
         'SHOTS': 'Skud', 'XGSHOT': 'xG', 'PASSES': 'Pasninger',
@@ -37,6 +42,7 @@ def vis_side(spillere_df, player_events_df):
         'Defensivt': ['INTERCEPTIONS', 'TACKLES', 'LOSSES', 'FOULS']
     }
 
+    # Beregn Målinvolveringer
     if 'TOTAL_GOALS' not in df.columns:
         df['TOTAL_GOALS'] = pd.to_numeric(df.get('GOALS', 0), errors='coerce').fillna(0) + \
                             pd.to_numeric(df.get('ASSISTS', 0), errors='coerce').fillna(0)
@@ -50,24 +56,16 @@ def vis_side(spillere_df, player_events_df):
 
     st.divider()
 
-    # --- 4. GRID VISNING (RETTET LAYOUT) ---
+    # --- 4. GRID VISNING ---
     kpis_at_show = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
-    
-    # Antal kolonner vi vil have
     num_cols = 3
     
-    # Loop gennem KPI'er og placer dem i det rigtige grid
     for i in range(0, len(kpis_at_show), num_cols):
-        # Opret en ny række af kolonner for hver 3. KPI
         cols = st.columns(num_cols)
-        
-        # Fyld de 3 kolonner i den aktuelle række
         for j in range(num_cols):
-            kpi_idx = i + j
-            if kpi_idx < len(kpis_at_show):
-                kpi = kpis_at_show[kpi_idx]
+            if i + j < len(kpis_at_show):
+                kpi = kpis_at_show[i + j]
                 with cols[j]:
-                    # Brug st.container(border=True) for at skabe de adskilte bokse uden CSS-fejl
                     with st.container(border=True):
                         st.subheader(KPI_MAP.get(kpi, kpi.title()))
                         
@@ -75,25 +73,33 @@ def vis_side(spillere_df, player_events_df):
                         plot_df = df.copy()
                         plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
                         
-                        min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES', 'MIN'] if c in plot_df.columns), None)
+                        # Find minutter
+                        min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES'] if c in plot_df.columns), None)
+                        
+                        # Beregn værdi og format
                         if visning == "Pr. 90" and min_col:
                             mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
-                            plot_df['Værdi'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
+                            plot_df['RESULTAT'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
+                            num_format = "%.2f"
                         else:
-                            plot_df['Værdi'] = plot_df[kpi]
+                            plot_df['RESULTAT'] = plot_df[kpi]
+                            # xG skal altid have decimaler, andre Totaler skal ikke
+                            num_format = "%.2f" if kpi == 'XGSHOT' else "%.0f"
 
-                        # Sorter og tag top 5
-                        top5 = plot_df[plot_df['Værdi'] > 0].sort_values('Værdi', ascending=ascending).head(5)
+                        top5 = plot_df[plot_df['RESULTAT'] > 0].sort_values('RESULTAT', ascending=ascending).head(5)
                         
                         if not top5.empty:
                             st.dataframe(
-                                top5[['NAVN', 'Værdi']],
+                                top5[['NAVN', 'RESULTAT']],
                                 hide_index=True,
                                 use_container_width=True,
-                                height=210, # Fast højde på selve tabellen sikrer flugt
+                                height=210,
                                 column_config={
                                     "NAVN": "Spiller",
-                                    "Værdi": st.column_config.NumberColumn(format="%.2f")
+                                    "RESULTAT": st.column_config.NumberColumn(
+                                        visning, # Her ændres navnet dynamisk til "Total" eller "Pr. 90"
+                                        format=num_format
+                                    )
                                 }
                             )
                         else:
