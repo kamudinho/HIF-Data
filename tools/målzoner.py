@@ -40,27 +40,20 @@ ZONE_BOUNDARIES = {
 
 
 def vis_side(df, kamp=None, hold_map=None):
-    # ... (Samme mapping og filter som før) ...
-
-    # VIGTIGT: I Wyscout er LOCATIONX længden og LOCATIONY er bredden.
-    # Vi mapper dem så de passer til find_zone(bredde, længde)
+    
     df_skud['ZONE_ID'] = df_skud.apply(
         lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1
     )
 
-    # ... (Beregn zone_stats som før) ...
     draw_pitch_with_stats(zone_stats, total_skud)
 
 
 def draw_pitch_with_stats(zone_stats, total_skud):
-    # pitch_type='wyscout' forventer (længde, bredde)
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=60)
     fig, ax = pitch.draw(figsize=(10, 8))
 
-    # ... (Samme Rectangle tegning som før) ...
-    # Rectangle((x_min, y_min), bredde, højde)
     for name, b in ZONE_BOUNDARIES.items():
-        # ...
+    
         rect = Rectangle((b["x_min"], b["y_min"]),
                          b["x_max"] - b["x_min"],
                          b["y_max"] - b["y_min"],
