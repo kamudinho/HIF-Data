@@ -61,7 +61,7 @@ def vis_side(df):
                 bg_color = '#e6ffe6' if prior == 'A' else 'white'
                 edge_color = '#006400' if prior == 'A' else '#cc0000'
                 
-                y_row = (y_pos - 3) + (i * 2.1)
+                y_row = (y_pos - 2.1) + (i * 2.1)
                 
                 # family='monospace' er vigtigt for at alle tegn fylder det samme
                 ax.text(x_pos, y_row, visnings_tekst, size=8.5, color="black",
