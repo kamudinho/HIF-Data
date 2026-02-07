@@ -15,8 +15,8 @@ def vis_side(df):
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
-    # --- 2. FORMATIONER (X=0-120, Y=0-80) ---
-    form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2", "4-4-2"])
+    # --- 2. FORMATIONER (Korrekt Y-akse: Høj værdi = Top, Lav værdi = Bund) ---
+    form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
 
     if form_valg == "4-3-3":
         pos_config = {
@@ -25,7 +25,7 @@ def vis_side(df):
             6: (55, 40, 'DM'), 8: (78, 58, 'VCM'), 10: (78, 22, 'HCM'),
             11: (105, 74, 'VW'), 9: (112, 40, 'ANG'), 7: (105, 6, 'HW')
         }
-    elif form_valg == "3-5-2":
+    else: # 3-5-2
         pos_config = {
             1: (12, 40, 'MM'), 
             4: (32, 58, 'VCB'), 3: (28, 40, 'CB'), 2: (32, 22, 'HCB'),
@@ -33,15 +33,9 @@ def vis_side(df):
             8: (82, 58, 'CM'), 10: (82, 22, 'CM'),
             11: (112, 55, 'ANG'), 9: (112, 25, 'ANG')
         }
-    else: # 4-4-2
-        pos_config = {
-            1: (12, 40, 'MM'), 5: (35, 72, 'VB'), 4: (30, 48, 'VCB'), 3: (30, 32, 'HCB'), 2: (35, 8, 'HB'),
-            11: (65, 72, 'VM'), 6: (60, 48, 'CM'), 8: (60, 32, 'CM'), 7: (65, 8, 'HM'),
-            9: (112, 50, 'ANG'), 10: (112, 30, 'ANG')
-        }
 
     # --- 3. TEGN BANEN ---
-    pitch = Pitch(pitch_type='statsbomb', pitch_color='#1e331e', line_color='#eeeeee', goal_type='box')
+    pitch = Pitch(pitch_type='statsbomb', pitch_color='#1e331e', line_color='#eeeeee')
     fig, ax = pitch.draw(figsize=(14, 10))
 
     # --- 4. INDSÆT POSITIONER OG TABELLER ---
@@ -50,23 +44,21 @@ def vis_side(df):
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
-            # A. POSITION LABEL (Den røde boks - fast anker)
-            ax.text(x_pos, y_pos + 4, f" {label} ", size=10, color="white",
+            # A. POSITION LABEL (Den røde boks - Øverst)
+            # Vi lægger +5 til y for at løfte den op som overskrift
+            ax.text(x_pos, y_pos + 5, f" {label} ", size=10, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
 
-            # B. SPILLER-TABEL (Den hvide boks - placeret ca. 1 cm / 4 enheder under)
+            # B. SPILLER-TABEL (Den hvide boks - 1 cm nedenunder)
             spiller_liste = [f"{p['PRIOR']}: {p.get('NAVN', '')}" for _, p in spillere.iterrows()]
             samlet_tekst = "\n".join(spiller_liste)
             
-            # Vi bruger y_pos (uden +4) for at skabe afstanden ned til tabellen
-            ax.text(x_pos, y_pos - 1, samlet_tekst, size=8.5, color="black",
+            # Vi bruger va='top' og placerer den ved y_pos + 1 for at skabe luft ned fra labelen
+            ax.text(x_pos, y_pos + 1, samlet_tekst, size=8.5, color="black",
                     va='top', ha='center', fontweight='bold',
                     bbox=dict(facecolor='white', edgecolor='#cc0000', 
                               boxstyle='round,pad=0.4', linewidth=1.5, alpha=1.0))
 
     st.pyplot(fig)
-
-    if st.button("🖨️ Gem overblik"):
-        st.info("Højreklik på banen og vælg 'Gem billede som...'")
