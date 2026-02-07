@@ -34,8 +34,8 @@ def vis_side(df):
         }
 
     # --- 3. TEGN BANEN ---
-    pitch = Pitch(pitch_type='statsbomb', pitch_color='#1e331e', line_color='#eeeeee')
-    fig, ax = pitch.draw(figsize=(14, 10))
+    pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
+    fig, ax = pitch.draw(figsize=(12, 8))
 
     # --- 4. INDSÆT POSITIONER OG TABELLER ---
     for pos_num, coords in pos_config.items():
@@ -60,7 +60,7 @@ def vis_side(df):
                 
                 # y_row beregning med mindre spring (3.2 i stedet for 3.8)
                 # Starter lige under positionen
-                y_row = (y_pos - 3) + (i * 3.2)
+                y_row = (y_pos - 3) + (i * 2.8)
                 
                 ax.text(x_pos, y_row, f" {prior}: {navn} ", size=8.5, color="black",
                         va='top', ha='center', fontweight='bold',
