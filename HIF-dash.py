@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import bcrypt
 from sqlalchemy import create_engine, text
-from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, målzoner
+from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats
 
 # --- 1. KONFIGURATION & DATABASE ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide", initial_sidebar_state="expanded")
