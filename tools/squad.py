@@ -18,16 +18,17 @@ def vis_side(df):
     # Håndtering af kontrakt-datoer
     idag = datetime.now()
     if 'CONTRACT' in df_squad.columns:
+        # Konverterer kontrakt til dato - antager formatet i din CSV er standard
         df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
     else:
-        df_squad['DAYS_LEFT'] = 999  # Standard hvis ingen dato findes
+        df_squad['DAYS_LEFT'] = 999 
 
     def get_status_color(days):
-        if pd.isna(days): return 'white' # Ingen dato = hvid
-        if days < 182: return '#ff4b4b'   # Rød
-        if days <= 365: return '#fffd8d'  # Gul
-        return 'white'                   # Over et år = hvid
+        if pd.isna(days): return 'white'
+        if days < 182: return '#ff4b4b'   # Rød (< 6 måneder)
+        if days <= 365: return '#fffd8d'  # Gul (6-12 måneder)
+        return 'white'                   # Hvid (> 1 år)
 
     # --- 2. FORMATIONER ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
@@ -55,6 +56,7 @@ def vis_side(df):
     # --- 4. INDSÆT POSITIONER OG TABELLER ---
     for pos_num, coords in pos_config.items():
         x_pos, y_pos, label = coords
+        # Sorterer efter PRIOR, men viser det ikke
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
@@ -66,14 +68,14 @@ def vis_side(df):
 
             # B. SPILLER-TABEL
             for i, (_, p) in enumerate(spillere.iterrows()):
+                # Henter kun navnet
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
-                prior = p['PRIOR']
                 
                 # Farvelogik baseret på kontrakt
                 bg_color = get_status_color(p['DAYS_LEFT'])
                 
-                # Tekst med fast bredde for ensartede bokse
-                visnings_tekst = f" {prior}: {navn} ".ljust(22)
+                # Tekst justeret til venstre med fast bredde (25 passer til lange navne)
+                visnings_tekst = f" {navn} ".ljust(25)
                 
                 y_row = (y_pos - 2.1) + (i * 2.1)
                 
