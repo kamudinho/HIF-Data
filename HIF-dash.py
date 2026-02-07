@@ -185,6 +185,6 @@ elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
         players.vis_side(spillere)
     elif selected_sub == "Trupsammensætning":
-        players.vis_side(spillere)
+        squad.vis_side(spillere)
     elif selected_sub == "Sammenligning":
         comparison.vis_side(spillere, player_events, df_scout)
