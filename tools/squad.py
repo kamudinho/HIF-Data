@@ -44,7 +44,7 @@ def vis_side(df):
         
         if not spillere.empty:
             # A. POSITION LABEL
-            ax.text(x_pos, y_pos - 3, f" {label} ", size=10, color="white",
+            ax.text(x_pos, y_pos - 5, f" {label} ", size=10, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
