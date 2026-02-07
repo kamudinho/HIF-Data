@@ -7,20 +7,21 @@ import streamlit as st
 import matplotlib.colors as mcolors
 
 ZONE_BOUNDARIES = {
-    # Zone 1, 4A og 4B løftet en smule (y_min fra 94.5 -> 94.0)
+    # Zone 1, 4A og 4B: Løftet bundlinjen (y_min) for at ramme kanten af det lille felt
     "Zone 1": {"y_min": 94.0, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
     "Zone 4A": {"y_min": 94.0, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
     "Zone 4B": {"y_min": 94.0, "y_max": 100.0, "x_min": 19.0, "x_max": 36.8},
 
-    # Zone 2 rykket lidt ned mod straffesparkspletten (y_min fra 89.0 -> 87.0)
-    "Zone 2": {"y_min": 87.0, "y_max": 94.0, "x_min": 36.8, "x_max": 63.2},
+    # Zone 2: Rykket OP mod det lille felt (y_max sat til 94.0)
+    # Vi holder bunden på 88.0 for at ramme pletten perfekt
+    "Zone 2": {"y_min": 88.0, "y_max": 94.0, "x_min": 36.8, "x_max": 63.2},
 
-    # Zone 3, 5A og 5B tilpasset den nye Zone 2 grænse
-    "Zone 3": {"y_min": 84.0, "y_max": 87.0, "x_min": 36.8, "x_max": 63.2},
-    "Zone 5A": {"y_min": 84.0, "y_max": 87.0, "x_min": 63.2, "x_max": 81.0},
-    "Zone 5B": {"y_min": 84.0, "y_max": 87.0, "x_min": 19.0, "x_max": 36.8},
+    # Zone 3, 5A og 5B: Starter nu hvor Zone 2 slutter (88.0) og går til feltkant (84.0)
+    "Zone 3": {"y_min": 84.0, "y_max": 88.0, "x_min": 36.8, "x_max": 63.2},
+    "Zone 5A": {"y_min": 84.0, "y_max": 88.0, "x_min": 63.2, "x_max": 81.0},
+    "Zone 5B": {"y_min": 84.0, "y_max": 88.0, "x_min": 19.0, "x_max": 36.8},
 
-    # Resten forbliver uændret (stramt til feltkant)
+    # Yderzoner og Zone 7/8 (uændret da de sad perfekt)
     "Zone 6A": {"y_min": 84.0, "y_max": 100.0, "x_min": 81.0, "x_max": 100.0},
     "Zone 6B": {"y_min": 84.0, "y_max": 100.0, "x_min": 0.0, "x_max": 19.0},
     "Zone 7": {"y_min": 70.0, "y_max": 84.0, "x_min": 30.0, "x_max": 70.0},
