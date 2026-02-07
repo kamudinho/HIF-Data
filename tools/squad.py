@@ -15,7 +15,7 @@ def vis_side(df):
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
-    # --- 2. FORMATIONER (X=0-120, Y=0-80) ---
+    # --- 2. FORMATIONER ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
 
     if form_valg == "4-3-3":
@@ -47,14 +47,13 @@ def vis_side(df):
             spiller_liste = [f"{p['PRIOR']}: {p.get('NAVN', '')}" for _, p in spillere.iterrows()]
             samlet_tekst = "\n".join(spiller_liste)
             
-            # A. POSITION LABEL (Rykket 2-3 cm op)
-            # Vi bruger nu +12 i stedet for +6 for at skabe stor afstand
+            # A. POSITION LABEL (Nu rykket i negativ retning for at komme "op")
             ax.text(x_pos, y_pos + 12, f" {label} ", size=10, color="white",
-                    va='bottom', ha='center', fontweight='bold',
+                    va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
 
-            # B. SPILLER-TABEL (Bliver stående under ankeret)
+            # B. SPILLER-TABEL (Bliver stående som fundamentet)
             ax.text(x_pos, y_pos + 5, samlet_tekst, size=8.5, color="black",
                     va='top', ha='center', fontweight='bold',
                     bbox=dict(facecolor='white', edgecolor='#cc0000', 
