@@ -3,7 +3,6 @@ import pandas as pd
 from mplsoccer import Pitch
 
 def vis_side(df):
-    st.title("Hvidovre IF - Taktisk Trupoverblik")
 
     if df is None:
         st.error("Ingen data fundet.")
