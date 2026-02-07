@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
+from datetime import datetime
 
 def vis_side(df):
 
@@ -8,11 +9,25 @@ def vis_side(df):
         st.error("Ingen data fundet.")
         return
 
-    # --- 1. DATAVASK ---
+    # --- 1. DATA-PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
+
+    # Håndtering af kontrakt-datoer
+    idag = datetime.now()
+    if 'CONTRACT' in df_squad.columns:
+        df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
+        df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
+    else:
+        df_squad['DAYS_LEFT'] = 999  # Standard hvis ingen dato findes
+
+    def get_status_color(days):
+        if pd.isna(days): return 'white' # Ingen dato = hvid
+        if days < 182: return '#ff4b4b'   # Rød
+        if days <= 365: return '#fffd8d'  # Gul
+        return 'white'                   # Over et år = hvid
 
     # --- 2. FORMATIONER ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
@@ -49,24 +64,22 @@ def vis_side(df):
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
 
-            # B. SPILLER-TABEL (Faste størrelser og venstrejusteret tekst)
+            # B. SPILLER-TABEL
             for i, (_, p) in enumerate(spillere.iterrows()):
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
                 prior = p['PRIOR']
                 
-                # Opret tekststreng med fast bredde (20 tegn) for at sikre ens bokse
-                # .ljust(20) fylder ud med mellemrum til venstre
-                visnings_tekst = f" {prior}: {navn} ".ljust(22)
+                # Farvelogik baseret på kontrakt
+                bg_color = get_status_color(p['DAYS_LEFT'])
                 
-                bg_color = '#e6ffe6' if prior == 'A' else 'white'
-                edge_color = '#006400' if prior == 'A' else '#cc0000'
+                # Tekst med fast bredde for ensartede bokse
+                visnings_tekst = f" {prior}: {navn} ".ljust(22)
                 
                 y_row = (y_pos - 2.1) + (i * 2.1)
                 
-                # family='monospace' er vigtigt for at alle tegn fylder det samme
                 ax.text(x_pos, y_row, visnings_tekst, size=8.5, color="black",
                         va='top', ha='center', fontweight='light', family='monospace',
-                        bbox=dict(facecolor=bg_color, edgecolor=edge_color, 
+                        bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
     st.pyplot(fig)
