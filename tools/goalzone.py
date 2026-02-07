@@ -138,12 +138,17 @@ def draw_pitch_with_stats(zone_stats, total_skud):
 
         if count > 0:
             x_text = b["x_min"] + (b["x_max"] - b["x_min"]) / 2
-            y_text = b["y_min"] + (b["y_max"] - b["y_min"]) / 2
             
-            if y_text > 45:
-                label = f"{int(count)}\n({percent:.1f}%)"
-                ax.text(x_text, y_text, label, ha='center', va='center',
-                        fontweight='bold', fontsize=10, color='black')
+            # --- SPECIALHÅNDTERING AF ZONE 8 ---
+            if name == "Zone 8":
+                y_text = 57.5
+            else:
+                y_text = b["y_min"] + (b["y_max"] - b["y_min"]) / 2
+
+            label = f"{int(count)}\n({percent:.1f}%)"
+            ax.text(x_text, y_text, label, ha='center', va='center',
+                    fontweight='bold', fontsize=10, color='black',
+                    bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', boxstyle='round,pad=0.2'))
 
     st.pyplot(fig)
     st.write(f"**Total antal afslutninger i valgte filter:** {int(total_skud)}")
