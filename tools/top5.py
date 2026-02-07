@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 
 def vis_side(spillere_df, player_events_df):
-    st.title("Top 5 Spillere - KPI Analyse")
 
     # --- 1. DATA FORBEREDELSE ---
     left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in spillere_df.columns), None)
