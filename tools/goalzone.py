@@ -18,8 +18,8 @@ ZONE_BOUNDARIES = {
 
     # Zone 3, 5A og 5B: Starter nu præcis ved 88.5 og går til feltkant (84.0)
     "Zone 3": {"y_min": 84.0, "y_max": 88.5, "x_min": 36.8, "x_max": 63.2},
-    "Zone 5A": {"y_min": 84.0, "y_max": 88.5, "x_min": 63.2, "x_max": 81.0},
-    "Zone 5B": {"y_min": 84.0, "y_max": 88.5, "x_min": 19.0, "x_max": 36.8},
+    "Zone 5A": {"y_min": 84.0, "y_max": 94.2, "x_min": 63.2, "x_max": 81.0},
+    "Zone 5B": {"y_min": 84.0, "y_max": 94.2, "x_min": 19.0, "x_max": 36.8},
 
     # Resten af banen (uændret)
     "Zone 6A": {"y_min": 84.0, "y_max": 100.0, "x_min": 81.0, "x_max": 100.0},
