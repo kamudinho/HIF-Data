@@ -5,30 +5,43 @@ import numpy as np
 def vis_side(spillere_df, player_events_df):
     st.title("Top 5 Spillere - KPI Analyse")
 
-    # --- 1. DATA FORBEREDELSE (Robust Merge med PLAYER_WYID) ---
-    # Vi leder specifikt efter dit kolonnenavn 'PLAYER_WYID'
+    # --- CSS til at låse layoutet ---
+    st.markdown("""
+        <style>
+        [data-testid="stVerticalBlock"] > div:has(div.top5-card) {
+            min-height: 400px;
+        }
+        .top5-card {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #eeeeee;
+            height: 380px;  /* Fast højde på alle kort */
+            overflow: hidden;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 1. DATA FORBEREDELSE ---
     left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in spillere_df.columns), None)
     right_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in player_events_df.columns), None)
 
     if not left_id or not right_id:
-        st.error(f"Kunne ikke finde ID-kolonne. Fundne kolonner: {list(spillere_df.columns[:5])}...")
+        st.error("Kunne ikke finde ID-kolonne.")
         return
 
-    # Merge data
     df = pd.merge(spillere_df, player_events_df, left_on=left_id, right_on=right_id, how='inner')
-    
-    # Navne-fix
+    df.columns = [c.upper() for c in df.columns]
+
+    # Navne-håndtering
     if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
-        df['Navn'] = df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')
-    elif 'firstname' in df.columns and 'lastname' in df.columns:
-        df['Navn'] = df['firstname'].fillna('') + " " + df['lastname'].fillna('')
+        df['NAVN'] = df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')
     elif 'PLAYER_NAME' in df.columns:
-        df['Navn'] = df['PLAYER_NAME']
+        df['NAVN'] = df['PLAYER_NAME']
     else:
-        df['Navn'] = "Ukendt Spiller"
-    
-    # --- 2. KPI DEFINITIONER (Sørger for de findes i dit ark) ---
-    # Jeg har tilføjet de mest gængse Wyscout-navne (både små og store bogstaver)
+        df['NAVN'] = "Ukendt Spiller"
+
+    # --- 2. KPI & KATEGORIER ---
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'TOTAL_GOALS': 'Målinvolveringer',
         'SHOTS': 'Skud', 'XGSHOT': 'xG', 'PASSES': 'Pasninger',
@@ -42,10 +55,6 @@ def vis_side(spillere_df, player_events_df):
         'Defensivt': ['INTERCEPTIONS', 'TACKLES', 'LOSSES', 'FOULS']
     }
 
-    # Sørg for at vi finder kolonnerne selvom de står med småt i Excel
-    df.columns = [c.upper() for c in df.columns]
-    
-    # Beregn Målinvolveringer hvis de ikke findes
     if 'TOTAL_GOALS' not in df.columns:
         df['TOTAL_GOALS'] = pd.to_numeric(df.get('GOALS', 0), errors='coerce').fillna(0) + \
                             pd.to_numeric(df.get('ASSISTS', 0), errors='coerce').fillna(0)
@@ -59,46 +68,44 @@ def vis_side(spillere_df, player_events_df):
 
     st.divider()
 
-    # --- 4. GRID VISNING ---
-    kpis_at_show = CATEGORIES[valgt_kat]
-    kpis_at_show = [k for k in kpis_at_show if k in df.columns]
+    # --- 4. GRID VISNING MED FAST LAYOUT ---
+    kpis_at_show = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     
-    if not kpis_at_show:
-        st.warning(f"Ingen af de valgte KPI'er blev fundet. Kolonner i data: {list(df.columns[:10])}")
-        return
+    # Vi opretter rækker med 3 kolonner af gangen
+    for i in range(0, len(kpis_at_show), 3):
+        row_kpis = kpis_at_show[i:i+3]
+        cols = st.columns(3)
+        
+        for idx, kpi in enumerate(row_kpis):
+            with cols[idx]:
+                # Vi omslutter hver tabel i en div med klassen 'top5-card'
+                st.markdown(f'<div class="top5-card">', unsafe_allow_html=True)
+                st.subheader(KPI_MAP.get(kpi, kpi.title()))
+                
+                ascending = True if kpi in ['LOSSES', 'FOULS'] else False
+                plot_df = df.copy()
+                plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
+                
+                min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES', 'MIN'] if c in plot_df.columns), None)
+                if visning == "Pr. 90" and min_col:
+                    mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
+                    plot_df['Værdi'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
+                else:
+                    plot_df['Værdi'] = plot_df[kpi]
 
-    cols = st.columns(3)
-    
-    for idx, kpi in enumerate(kpis_at_show):
-        with cols[idx % 3]:
-            # Sortering: Lav er godt for Boldtab og Frispark
-            ascending = True if kpi in ['LOSSES', 'FOULS'] else False
-            
-            plot_df = df.copy()
-            plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
-            
-            # Find minutter (leder efter forskellige navne)
-            min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES', 'MIN'] if c in plot_df.columns), None)
-            
-            if visning == "Pr. 90" and min_col:
-                mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
-                plot_df['Værdi'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
-            else:
-                plot_df['Værdi'] = plot_df[kpi]
-
-            # Filtrer spillere med 0 og tag Top 5
-            top5 = plot_df[plot_df['Værdi'] > 0].sort_values('Værdi', ascending=ascending).head(5)
-            
-            st.subheader(KPI_MAP.get(kpi, kpi.title()))
-            if not top5.empty:
-                st.dataframe(
-                    top5[['NAVN', 'Værdi']],
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={
-                        "NAVN": "Spiller",
-                        "Værdi": st.column_config.NumberColumn(format="%.2f")
-                    }
-                )
-            else:
-                st.caption("Ingen data fundet")
+                top5 = plot_df[plot_df['Værdi'] > 0].sort_values('Værdi', ascending=ascending).head(5)
+                
+                if not top5.empty:
+                    st.dataframe(
+                        top5[['NAVN', 'Værdi']],
+                        hide_index=True,
+                        use_container_width=True,
+                        column_config={
+                            "NAVN": "Spiller",
+                            "Værdi": st.column_config.NumberColumn(format="%.2f")
+                        }
+                    )
+                else:
+                    st.write("Ingen data registreret")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
