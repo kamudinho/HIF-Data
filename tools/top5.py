@@ -5,36 +5,28 @@ import numpy as np
 def vis_side(spillere_df, player_events_df):
     st.title("Top 5 Spillere - KPI Analyse")
 
-    st.markdown("""
-        <style>
-            .stTable td {
-                text-align: center !important;
-                vertical-align: middle !important;
-            }
-            .stTable th {
-                text-align: center !important;
-                background-color: #f0f2f6 !important;
-            }
-            .stTable td:first-child, .stTable th:first-child {
-                text-align: left !important;
-                width: 200px !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
+    # --- 1. DATA RENSNING & POSITIONSMAPPING ---
     p_events = player_events_df.copy()
     s_info = spillere_df.copy()
 
     p_events.columns = [c.upper() for c in p_events.columns]
     s_info.columns = [c.upper() for c in s_info.columns]
 
+    # Positionsmapping
+    pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
+    if 'ROLECODE3' in s_info.columns:
+        s_info['POS'] = s_info['ROLECODE3'].map(pos_map).fillna(s_info['ROLECODE3'])
+    else:
+        s_info['POS'] = '-'
+
     left_id = next((col for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID'] if col in s_info.columns), None)
     right_id = next((col for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID'] if col in p_events.columns), None)
 
     if not left_id or not right_id:
-        st.error(f"Kunne ikke finde ID-kolonne.")
+        st.error("Kunne ikke finde ID-kolonne.")
         return
 
+    # Navne-generering
     if 'FIRSTNAME' in p_events.columns and 'LASTNAME' in p_events.columns:
         p_events['NAVN_FINAL'] = (p_events['FIRSTNAME'].fillna('') + " " + p_events['LASTNAME'].fillna('')).str.title()
     else:
@@ -43,6 +35,7 @@ def vis_side(spillere_df, player_events_df):
     df = pd.merge(s_info, p_events, left_on=left_id, right_on=right_id, how='inner', suffixes=('', '_DROP'))
     df = df.loc[:, ~df.columns.str.contains('_DROP')]
 
+    # --- 2. KPI & FILTRE ---
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'TOTAL_GOALS': 'Målinvolveringer',
         'SHOTS': 'Skud', 'XGSHOT': 'xG', 'PASSES': 'Pasninger',
@@ -68,6 +61,7 @@ def vis_side(spillere_df, player_events_df):
 
     st.divider()
 
+    # --- 3. GRID VISNING MED REN HTML (FOR CENTRERING) ---
     kpis_at_show = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     num_cols = 3
     
@@ -84,28 +78,41 @@ def vis_side(spillere_df, player_events_df):
                         plot_df = df.copy()
                         plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
                         
-                        min_col = next((c for c in ['MINUTESTAGGED', 'MINUTESONFIELD', 'MINUTES'] if c in plot_df.columns), None)
+                        min_col = next((c for c in ['MINUTESTAGGED', 'MINUTESONFIELD'] if c in plot_df.columns), None)
                         
+                        # Beregn resultat
                         if visning == "Pr. 90" and min_col:
                             mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
-                            plot_df['RESULTAT'] = np.where(mins > 0, (plot_df[kpi] / mins * 90), 0)
-                            plot_df['RESULTAT'] = plot_df['RESULTAT'].map('{:,.2f}'.format)
+                            plot_df['VAL'] = np.where(mins > 0, (plot_df[kpi] / mins * 90), 0)
+                            plot_df['RESULTAT'] = plot_df['VAL'].map('{:.2f}'.format)
                         else:
-                            plot_df['RESULTAT'] = plot_df[kpi]
-                            if kpi == 'XGSHOT':
-                                plot_df['RESULTAT'] = plot_df['RESULTAT'].map('{:,.2f}'.format)
-                            else:
-                                plot_df['RESULTAT'] = plot_df['RESULTAT'].astype(int)
+                            plot_df['VAL'] = plot_df[kpi]
+                            plot_df['RESULTAT'] = plot_df['VAL'].map('{:.2f}'.format) if kpi == 'XGSHOT' else plot_df['VAL'].astype(int).astype(str)
 
-                        top5 = plot_df[pd.to_numeric(plot_df['RESULTAT'], errors='coerce') > 0].sort_values(
-                            by='RESULTAT', 
-                            ascending=ascending, 
-                            key=lambda x: pd.to_numeric(x, errors='coerce')
-                        ).head(5)
+                        top5 = plot_df[plot_df['VAL'] > 0].sort_values(by='VAL', ascending=ascending).head(5)
                         
                         if not top5.empty:
-                            display_df = top5[['NAVN_FINAL', 'RESULTAT']].copy()
-                            display_df.columns = ['Spiller', visning]
-                            st.table(display_df)
+                            # Byg HTML Tabel for 100% styling kontrol
+                            html = f"""
+                            <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">
+                                <thead>
+                                    <tr style="border-bottom:2px solid #f0f2f6;">
+                                        <th style="text-align:left; padding:8px;">Spiller</th>
+                                        <th style="text-align:center; padding:8px;">Pos</th>
+                                        <th style="text-align:center; padding:8px;">{visning}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                            """
+                            for _, row in top5.iterrows():
+                                html += f"""
+                                    <tr style="border-bottom:1px solid #f0f2f6;">
+                                        <td style="text-align:left; padding:8px;">{row['NAVN_FINAL']}</td>
+                                        <td style="text-align:center; padding:8px;">{row['POS']}</td>
+                                        <td style="text-align:center; padding:8px; font-weight:bold;">{row['RESULTAT']}</td>
+                                    </tr>
+                                """
+                            html += "</tbody></table>"
+                            st.write(html, unsafe_allow_html=True)
                         else:
-                            st.info("Ingen data over 0")
+                            st.info("Ingen data")
