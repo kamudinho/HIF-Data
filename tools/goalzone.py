@@ -69,7 +69,6 @@ def find_zone(x, y):
 
 
 def vis_side(df, kamp=None, hold_map=None):
-    st.title("🎯 Målzoner & Effektivitet")
 
     # Rens kolonner
     df.columns = [str(c).strip().upper() for c in df.columns]
