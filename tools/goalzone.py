@@ -6,38 +6,28 @@ from mplsoccer import VerticalPitch
 import streamlit as st
 import matplotlib.colors as mcolors
 
-# --- STRAMME ZONE DEFINITIONER (Rykket op for at undgå overlap) ---
 ZONE_BOUNDARIES = {
-    # Selve det lille felt (6-yard box)
-    "Zone 1": {"y_min": 94.5, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
+    # Zone 1, 4A og 4B løftet en smule (y_min fra 94.5 -> 94.0)
+    "Zone 1": {"y_min": 94.0, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
+    "Zone 4A": {"y_min": 94.0, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
+    "Zone 4B": {"y_min": 94.0, "y_max": 100.0, "x_min": 19.0, "x_max": 36.8},
 
-    # Midten af det store felt
-    "Zone 2": {"y_min": 89.0, "y_max": 94.5, "x_min": 36.8, "x_max": 63.2},
+    # Zone 2 rykket lidt ned mod straffesparkspletten (y_min fra 89.0 -> 87.0)
+    "Zone 2": {"y_min": 87.0, "y_max": 94.0, "x_min": 36.8, "x_max": 63.2},
 
-    # Kanten af det store felt - Nu rykket til 84.0 for at ramme feltkanten
-    "Zone 3": {"y_min": 84.0, "y_max": 89.0, "x_min": 36.8, "x_max": 63.2},
+    # Zone 3, 5A og 5B tilpasset den nye Zone 2 grænse
+    "Zone 3": {"y_min": 84.0, "y_max": 87.0, "x_min": 36.8, "x_max": 63.2},
+    "Zone 5A": {"y_min": 84.0, "y_max": 87.0, "x_min": 63.2, "x_max": 81.0},
+    "Zone 5B": {"y_min": 84.0, "y_max": 87.0, "x_min": 19.0, "x_max": 36.8},
 
-    # Siderne af det lille felt
-    "Zone 4A": {"y_min": 94.5, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
-    "Zone 4B": {"y_min": 94.5, "y_max": 100.0, "x_min": 19.0, "x_max": 36.8},
-
-    # Siderne af det store felt - Nu rykket til 84.0
-    "Zone 5A": {"y_min": 84.0, "y_max": 94.5, "x_min": 63.2, "x_max": 81.0},
-    "Zone 5B": {"y_min": 84.0, "y_max": 94.5, "x_min": 19.0, "x_max": 36.8},
-
-    # Yderzonerne - Nu rykket til 84.0
+    # Resten forbliver uændret (stramt til feltkant)
     "Zone 6A": {"y_min": 84.0, "y_max": 100.0, "x_min": 81.0, "x_max": 100.0},
     "Zone 6B": {"y_min": 84.0, "y_max": 100.0, "x_min": 0.0, "x_max": 19.0},
-
-    # Zone 7 starter nu præcis ved 84.0 (hvor feltet slutter)
     "Zone 7": {"y_min": 70.0, "y_max": 84.0, "x_min": 30.0, "x_max": 70.0},
     "Zone 7B": {"y_min": 70.0, "y_max": 84.0, "x_min": 0.0, "x_max": 30.0},
     "Zone 7A": {"y_min": 70.0, "y_max": 84.0, "x_min": 70.0, "x_max": 100.0},
-
-    # Resten af banen
     "Zone 8": {"y_min": 0.0, "y_max": 70.0, "x_min": 0.0, "x_max": 100.0}
 }
-
 
 def vis_side(df, kamp=None, hold_map=None):
     
