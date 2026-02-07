@@ -43,27 +43,29 @@ def vis_side(df):
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
-            # A. POSITION LABEL (Sænket til den gode højde)
+            # A. POSITION LABEL
             ax.text(x_pos, y_pos - 6, f" {label} ", size=10, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
 
-            # B. SPILLER-TABEL (Tættere rækker)
+            # B. SPILLER-TABEL (Faste størrelser og venstrejusteret tekst)
             for i, (_, p) in enumerate(spillere.iterrows()):
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
                 prior = p['PRIOR']
                 
-                # Farve-markering af Prior A
+                # Opret tekststreng med fast bredde (20 tegn) for at sikre ens bokse
+                # .ljust(20) fylder ud med mellemrum til venstre
+                visnings_tekst = f" {prior}: {navn} ".ljust(22)
+                
                 bg_color = '#e6ffe6' if prior == 'A' else 'white'
                 edge_color = '#006400' if prior == 'A' else '#cc0000'
                 
-                # y_row beregning med mindre spring (3.2 i stedet for 3.8)
-                # Starter lige under positionen
                 y_row = (y_pos - 3) + (i * 2.8)
                 
-                ax.text(x_pos, y_row, f" {prior}: {navn} ", size=8.5, color="black",
-                        va='top', ha='center', fontweight='bold',
+                # family='monospace' er vigtigt for at alle tegn fylder det samme
+                ax.text(x_pos, y_row, visnings_tekst, size=8.5, color="black",
+                        va='top', ha='center', fontweight='bold', family='monospace',
                         bbox=dict(facecolor=bg_color, edgecolor=edge_color, 
                                   boxstyle='square,pad=0.2', linewidth=1, alpha=1.0))
 
