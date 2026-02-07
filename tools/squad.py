@@ -65,8 +65,8 @@ def vis_side(df):
                 
                 # family='monospace' er vigtigt for at alle tegn fylder det samme
                 ax.text(x_pos, y_row, visnings_tekst, size=8.5, color="black",
-                        va='top', ha='center', fontweight='bold', family='monospace',
+                        va='top', ha='center', fontweight='light', family='monospace',
                         bbox=dict(facecolor=bg_color, edgecolor=edge_color, 
-                                  boxstyle='square,pad=0.2', linewidth=1, alpha=1.0))
+                                  boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
     st.pyplot(fig)
