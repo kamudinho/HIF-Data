@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import bcrypt
 from sqlalchemy import create_engine, text
-from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats
+from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, målzoner
 
 # --- 1. KONFIGURATION & DATABASE ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide", initial_sidebar_state="expanded")
@@ -55,26 +55,26 @@ if "logged_in" not in st.session_state:
 # --- 4. LOGIN SKÆRM ---
 if not st.session_state["logged_in"]:
     # Vi bruger col1, col2, col3 for at skabe luft i siderne
-    col1, col2, col3 = st.columns([1, 1.2, 1]) # col2 er gjort lidt bredere her
-    
+    col1, col2, col3 = st.columns([1, 1.2, 1])  # col2 er gjort lidt bredere her
+
     with col2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
-        
+
         # Centreret Logo via HTML
         st.markdown(
             """
             <div style="display: flex; justify-content: center;">
                 <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120">
             </div>
-            """, 
+            """,
             unsafe_allow_html=True
         )
-        
+
         # Centreret Titel via HTML
         st.markdown(
             """
             <h1 style='text-align: center; color: Gray; margin-bottom: 20px;'>HIF Hub</h1>
-            """, 
+            """,
             unsafe_allow_html=True
         )
 
@@ -82,12 +82,12 @@ if not st.session_state["logged_in"]:
         with st.form("login_form"):
             u_input = st.text_input("Brugernavn")
             p_input = st.text_input("Adgangskode", type="password")
-            
+
             # Centreret knap i bunden af formen
             submit_col1, submit_col2, submit_col3 = st.columns([1, 2, 1])
             with submit_col2:
                 submit_button = st.form_submit_button("Log ind", use_container_width=True)
-            
+
             if submit_button:
                 if verify_user(u_input, p_input):
                     st.session_state["logged_in"] = True
@@ -95,7 +95,7 @@ if not st.session_state["logged_in"]:
                     st.rerun()
                 else:
                     st.error("Forkert brugernavn eller kodeord")
-                    
+
     st.stop()
 
 # --- 5. DATA LOADING (Kører kun efter succesfuldt login) ---
@@ -127,7 +127,8 @@ with st.sidebar:
     st.markdown(
         f'<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="60"></div>',
         unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align:center;'>HIF er de bedste, <b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center;'>HIF er de bedste, <b>{st.session_state['user']}</b></p>",
+                unsafe_allow_html=True)
     st.divider()
 
     selected = option_menu(
@@ -139,9 +140,9 @@ with st.sidebar:
 
     if selected == "DATAANALYSE":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Shotmaps", "Afslutninger", "DataViz"],
+        selected_sub = st.radio("Sub_Data", options=["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"],
                                 label_visibility="collapsed")
-    
+
     if selected == "STATISTIK":
         st.markdown("**Vælg type:**")
         selected_sub = st.radio("Sub_Scout", options=["Spillerstats"],
@@ -166,10 +167,13 @@ elif selected == "DATAANALYSE":
         heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps":
         skudmap.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Målzoner":
+        målzoner.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "Afslutninger":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
         dataviz.vis_side(df_events, kamp, hold_map)
+
 
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats":
