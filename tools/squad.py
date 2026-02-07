@@ -44,19 +44,17 @@ def vis_side(df):
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
-            # Vi definerer spiller-listen først
             spiller_liste = [f"{p['PRIOR']}: {p.get('NAVN', '')}" for _, p in spillere.iterrows()]
             samlet_tekst = "\n".join(spiller_liste)
             
-            # A. POSITION LABEL (Den røde boks - NU ØVERST)
-            # Vi bruger va='bottom' og lægger luft til (+7), så den troner over det hele
-            ax.text(x_pos, y_pos + 6, f" {label} ", size=10, color="white",
+            # A. POSITION LABEL (Rykket 2-3 cm op)
+            # Vi bruger nu +12 i stedet for +6 for at skabe stor afstand
+            ax.text(x_pos, y_pos + 12, f" {label} ", size=10, color="white",
                     va='bottom', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', 
                               boxstyle='round,pad=0.2', linewidth=1))
 
-            # B. SPILLER-TABEL (Den hvide boks - NU NEDERST)
-            # Vi bruger va='top' og lægger den ved y_pos + 5 (præcis 1 enhed under label-bund)
+            # B. SPILLER-TABEL (Bliver stående under ankeret)
             ax.text(x_pos, y_pos + 5, samlet_tekst, size=8.5, color="black",
                     va='top', ha='center', fontweight='bold',
                     bbox=dict(facecolor='white', edgecolor='#cc0000', 
