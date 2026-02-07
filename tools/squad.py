@@ -1,89 +1,82 @@
 import streamlit as st
 import pandas as pd
-from mplsoccer import Pitch
-from datetime import datetime
-import matplotlib.patches as mpatches
+from mplsoccer import VerticalPitch
 
 def vis_side(df):
-    st.title("Hvidovre IF - Struktureret Trupoverblik")
+    st.title("Hvidovre IF - Taktisk Trupoverblik")
 
     if df is None:
         st.error("Ingen data fundet.")
         return
 
-    # --- 1. DATA-PROCESSERING ---
+    # --- 1. DATAVASK ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
 
-    # Beregn restdage til kontraktudløb
-    if 'CONTRACT' in df_squad.columns:
-        df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], errors='coerce')
-        idag = datetime.now()
-        df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
-    else:
-        df_squad['DAYS_LEFT'] = 999
+    if 'POS' not in df_squad.columns:
+        st.error("Kunne ikke finde kolonnen 'POS'.")
+        return
 
-    def get_bg_color(days):
-        if pd.isna(days): return '#ffffff'
-        if days < 182: return '#ff4b4b'    # Rød
-        if days <= 365: return '#fffd8d'   # Gul
-        return '#90ee90'                  # Grøn
+    df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
+    df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
-    # --- 2. FORMATIONER (X=0-120, Y=0-80) ---
-    form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
+    # --- 2. FORMATIONER (Koordinater 0-120 vertikal, 0-80 horisontal) ---
+    form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2", "4-4-2"])
 
     if form_valg == "4-3-3":
+        # Format: { POS_NR: (x, y, Label) }
         pos_config = {
-            1: (12, 40, 'MM'), 5: (35, 72, 'VB'), 4: (30, 52, 'VCB'), 3: (30, 28, 'HCB'), 2: (35, 8, 'HB'),
-            6: (55, 40, 'DM'), 8: (78, 55, 'VCM'), 10: (78, 25, 'HCM'),
-            11: (102, 72, 'VW'), 9: (110, 40, 'ANG'), 7: (102, 8, 'HW')
+            1: (10, 40, 'MM'), 
+            5: (35, 10, 'VB'), 4: (30, 28, 'VCB'), 3: (30, 52, 'HCB'), 2: (35, 70, 'HB'),
+            6: (55, 40, 'DM'), 8: (75, 25, 'VCM'), 10: (75, 55, 'HCM'),
+            11: (100, 10, 'VW'), 9: (105, 40, 'ANG'), 7: (100, 70, 'HW')
         }
-    else: # 3-5-2
+    elif form_valg == "3-5-2":
         pos_config = {
-            1: (12, 40, 'MM'), 4: (32, 58, 'VCB'), 3: (28, 40, 'CB'), 2: (32, 22, 'HCB'),
-            5: (58, 75, 'VWB'), 6: (52, 40, 'DM'), 7: (58, 5, 'HWB'), 
-            8: (82, 58, 'CM'), 10: (82, 22, 'CM'),
-            11: (112, 52, 'ANG'), 9: (112, 28, 'ANG')
+            1: (10, 40, 'MM'), 
+            4: (30, 20, 'VCB'), 3: (25, 40, 'CB'), 2: (30, 60, 'HCB'),
+            5: (55, 10, 'VWB'), 6: (50, 40, 'DM'), 7: (55, 70, 'HWB'), 
+            8: (75, 25, 'CM'), 10: (75, 55, 'CM'),
+            11: (105, 30, 'ANG'), 9: (105, 50, 'ANG')
+        }
+    else: # 4-4-2
+        pos_config = {
+            1: (10, 40, 'MM'), 
+            5: (35, 10, 'VB'), 4: (30, 28, 'VCB'), 3: (30, 52, 'HCB'), 2: (35, 70, 'HB'),
+            11: (65, 10, 'VM'), 6: (60, 30, 'CM'), 8: (60, 50, 'CM'), 7: (65, 70, 'HM'),
+            9: (105, 30, 'ANG'), 10: (105, 50, 'ANG')
         }
 
     # --- 3. TEGN BANEN ---
-    pitch = Pitch(pitch_type='statsbomb', pitch_color='#1a331a', line_color='white', goal_type='box')
-    fig, ax = pitch.draw(figsize=(14, 10))
+    pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='#224422', line_color='#eeeeee', goal_type='box')
+    fig, ax = pitch.draw(figsize=(10, 14))
 
-    # --- 4. RENDER POSITIONER SOM TABELLER ---
+    # --- 4. INDSÆT SPILLERE ---
     for pos_num, coords in pos_config.items():
-        x_pos, y_pos, label = coords
-        spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
+        y_pos, x_pos, label = coords
         
-        if not spillere.empty:
-            # A. POSITION LABEL (ØVERST)
-            ax.text(x_pos, y_pos + 7, label, size=10, fontweight='black', color="black",
-                    va='center', ha='center', 
-                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
-            
-            # B. SPILLER-TABEL (Hver spiller er en række)
-            # Vi starter i toppen og bygger nedad
-            for i, (_, p) in enumerate(spillere.iterrows()):
+        # Filtrer spillere og sorter efter PRIOR (A, B, C)
+        spillere_paa_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
+        
+        # Lav tekst-blok for spillerne
+        if not spillere_paa_pos.empty:
+            spiller_liste = []
+            for _, p in spillere_paa_pos.iterrows():
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
-                bg_color = get_bg_color(p['DAYS_LEFT'])
-                
-                # Præcis lodret placering under hinanden
-                y_offset = i * 4.2 
-                
-                # Vi bruger ha='left' for at sikre tabel-look. 
-                # x_pos - 6 sørger for at tabellen starter samme sted hver gang.
-                ax.text(x_pos - 6, y_pos + 3 - y_offset, f" {navn.ljust(25)} ", 
-                        size=8, color="black", family='monospace', # Monospace sikrer ens bredde
-                        va='center', ha='left', fontweight='bold',
-                        bbox=dict(facecolor=bg_color, edgecolor='black', linewidth=0.5, boxstyle='square,pad=0.2'))
-
-    # --- 5. LEGEND ---
-    patches = [
-        mpatches.Patch(color='#ff4b4b', label='< 182 dage'),
-        mpatches.Patch(color='#fffd8d', label='183-365 dage'),
-        mpatches.Patch(color='#90ee90', label='> 365 dage')
-    ]
-    ax.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.5, -0.05), 
-              ncol=3, fontsize=10, frameon=False)
+                prior = p['PRIOR'] if p['PRIOR'] != 'NAN' else '-'
+                spiller_liste.append(f"{prior}: {navn}")
+            
+            samlet_tekst = "\n".join(spiller_liste)
+            
+            # Tegn en boks bag teksten
+            ax.text(x_pos, y_pos, f" {label} ", size=12, fontweight='bold', color="white",
+                    va='bottom', ha='center', bbox=dict(facecolor='#cc0000', edgecolor='white', boxstyle='round,pad=0.3'))
+            
+            ax.text(x_pos, y_pos - 2, samlet_tekst, size=9, color="black",
+                    va='top', ha='center', fontweight='bold',
+                    bbox=dict(facecolor='white', edgecolor='#cc0000', alpha=0.9, boxstyle='round,pad=0.5'))
 
     st.pyplot(fig)
+
+    if st.button("🖨️ Gem overblik"):
+        st.write("Højreklik på billedet og vælg 'Gem billede som...' for at gemme banen.")
