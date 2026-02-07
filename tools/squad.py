@@ -31,24 +31,25 @@ def vis_side(df):
     # --- 2. FORMATIONER (X=0-120, Y=0-80) ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2", "4-4-2"])
 
+    # Vi definerer centrum for hver position
     if form_valg == "4-3-3":
         pos_config = {
-            1: (8, 40, 'MM'), 5: (30, 72, 'VB'), 4: (25, 48, 'VCB'), 3: (25, 32, 'HCB'), 2: (30, 8, 'HB'),
-            6: (50, 40, 'DM'), 8: (70, 55, 'VCM'), 10: (70, 25, 'HCM'),
-            11: (100, 72, 'VW'), 9: (108, 40, 'ANG'), 7: (100, 8, 'HW')
+            1: (10, 40, 'MM'), 5: (35, 72, 'VB'), 4: (30, 48, 'VCB'), 3: (30, 32, 'HCB'), 2: (35, 8, 'HB'),
+            6: (55, 40, 'DM'), 8: (75, 55, 'VCM'), 10: (75, 25, 'HCM'),
+            11: (105, 72, 'VW'), 9: (112, 40, 'ANG'), 7: (105, 8, 'HW')
         }
     elif form_valg == "3-5-2":
         pos_config = {
-            1: (8, 40, 'MM'), 4: (25, 55, 'VCB'), 3: (22, 40, 'CB'), 2: (25, 25, 'HCB'),
-            5: (50, 75, 'VWB'), 6: (45, 40, 'DM'), 7: (50, 5, 'HWB'), 
-            8: (75, 55, 'CM'), 10: (75, 25, 'CM'),
-            11: (108, 50, 'ANG'), 9: (108, 30, 'ANG')
+            1: (10, 40, 'MM'), 4: (30, 55, 'VCB'), 3: (28, 40, 'CB'), 2: (30, 25, 'HCB'),
+            5: (55, 75, 'VWB'), 6: (50, 40, 'DM'), 7: (55, 5, 'HWB'), 
+            8: (78, 55, 'CM'), 10: (78, 25, 'CM'),
+            11: (112, 52, 'ANG'), 9: (112, 28, 'ANG')
         }
     else: # 4-4-2
         pos_config = {
-            1: (8, 40, 'MM'), 5: (30, 72, 'VB'), 4: (25, 48, 'VCB'), 3: (25, 32, 'HCB'), 2: (30, 8, 'HB'),
-            11: (65, 75, 'VM'), 6: (60, 48, 'CM'), 8: (60, 32, 'CM'), 7: (65, 5, 'HM'),
-            9: (108, 50, 'ANG'), 10: (108, 30, 'ANG')
+            1: (10, 40, 'MM'), 5: (35, 72, 'VB'), 4: (30, 48, 'VCB'), 3: (30, 32, 'HCB'), 2: (35, 8, 'HB'),
+            11: (70, 75, 'VM'), 6: (65, 48, 'CM'), 8: (65, 32, 'CM'), 7: (70, 5, 'HM'),
+            9: (112, 50, 'ANG'), 10: (112, 30, 'ANG')
         }
 
     # --- 3. TEGN BANEN ---
@@ -62,33 +63,31 @@ def vis_side(df):
         spillere_paa_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere_paa_pos.empty:
-            # 1. Tegn Position Label ØVERST
-            ax.text(x_pos, y_pos + 6, label, size=9, fontweight='bold', color="white",
-                    va='center', ha='center', bbox=dict(facecolor='#111111', edgecolor='white', boxstyle='round,pad=0.3'))
+            # 1. Tegn Position Label HELT ØVERST
+            ax.text(x_pos, y_pos + 8, label, size=10, fontweight='bold', color="black",
+                    va='center', ha='center', 
+                    bbox=dict(facecolor='#ffffff', edgecolor='black', boxstyle='round,pad=0.2', alpha=0.9))
             
-            # 2. Tegn spillere under - VENSTRE-JUSTERET tekst
-            offset = 0
+            # 2. Tegn spillere under - Venstrejusteret i forhold til center
+            # Vi starter offset ved 4 for at give plads under label
+            offset = 4 
             for _, p in spillere_paa_pos.iterrows():
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
                 bg_color = get_bg_color(p['DAYS_LEFT'])
                 
-                # Vi bruger ha='left' for venstre-justering. 
-                # x_pos justeres lidt til venstre (-4) så boksen centrerer pænt under label
-                ax.text(x_pos - 4, y_pos - offset, f" {navn} ", size=8, color="black",
+                # x_pos - 5 flytter starten af boksen til venstre for center, så den ser centreret ud samlet set
+                ax.text(x_pos - 5, y_pos + 4 - offset, f" {navn} ", size=8, color="black",
                         va='center', ha='left', fontweight='bold',
-                        bbox=dict(facecolor=bg_color, edgecolor='black', linewidth=0.5, boxstyle='square,pad=0.3'))
-                offset += 4.2
+                        bbox=dict(facecolor=bg_color, edgecolor='black', linewidth=0.7, boxstyle='square,pad=0.3'))
+                offset += 4.5
 
-    # --- 5. LEGENDS (Manuelt tegnet på figuren) ---
+    # --- 5. LEGEND ---
     red_patch = mpatches.Patch(color='#ff4b4b', label='< 182 dage')
     yellow_patch = mpatches.Patch(color='#fffd8d', label='183-365 dage')
     green_patch = mpatches.Patch(color='#90ee90', label='> 365 dage')
     
     ax.legend(handles=[red_patch, yellow_patch, green_patch], 
-              loc='lower left', bbox_to_anchor=(0, -0.1), 
-              ncol=3, fontsize=9, frameon=False)
+              loc='lower center', bbox_to_anchor=(0.5, -0.05), 
+              ncol=3, fontsize=10, frameon=False)
 
     st.pyplot(fig)
-
-    if st.button("🖨️ Gem overblik"):
-        st.write("Højreklik på billedet og vælg 'Gem billede som...'")
