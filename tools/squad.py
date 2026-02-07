@@ -15,7 +15,7 @@ def vis_side(df):
 
     # --- TJEK FOR DET NYE NAVN 'POS-TAL' ---
     # Vi tjekker efter 'POS-TAL' (som bliver 'POS-TAL' efter .upper())
-    target_col = 'POS-TAL' 
+    target_col = 'POS' 
     
     if target_col not in df_squad.columns:
         st.error(f"⚠️ Kunne ikke finde '{target_col}'.")
