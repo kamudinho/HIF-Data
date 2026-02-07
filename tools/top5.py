@@ -92,7 +92,7 @@ def vis_side(spillere_df, player_events_df):
                                 column_config={
                                     "NAVN": st.column_config.Column(
                                         "Spiller",
-                                        width="large", # Gør navne-kolonnen bred
+                                        width="medium", # Gør navne-kolonnen bred
                                     ),
                                     "RESULTAT": st.column_config.NumberColumn(
                                         visning,
