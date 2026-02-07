@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import bcrypt
 from sqlalchemy import create_engine, text
-from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, målzoner
+from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone
 
 # --- 1. KONFIGURATION & DATABASE ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide", initial_sidebar_state="expanded")
@@ -168,7 +168,7 @@ elif selected == "DATAANALYSE":
     elif selected_sub == "Shotmaps":
         skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Målzoner":
-        målzoner.vis_side(df_events, kamp, hold_map)
+        goalzone.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "Afslutninger":
         shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz":
