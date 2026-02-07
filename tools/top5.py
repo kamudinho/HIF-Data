@@ -5,23 +5,6 @@ import numpy as np
 def vis_side(spillere_df, player_events_df):
     st.title("Top 5 Spillere - KPI Analyse")
 
-    # --- CSS til at låse layoutet ---
-    st.markdown("""
-        <style>
-        [data-testid="stVerticalBlock"] > div:has(div.top5-card) {
-            min-height: 400px;
-        }
-        .top5-card {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid #eeeeee;
-            height: 380px;  /* Fast højde på alle kort */
-            overflow: hidden;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     # --- 1. DATA FORBEREDELSE ---
     left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in spillere_df.columns), None)
     right_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id', 'WYID'] if col in player_events_df.columns), None)
@@ -68,44 +51,51 @@ def vis_side(spillere_df, player_events_df):
 
     st.divider()
 
-    # --- 4. GRID VISNING MED FAST LAYOUT ---
+    # --- 4. GRID VISNING (RETTET LAYOUT) ---
     kpis_at_show = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     
-    # Vi opretter rækker med 3 kolonner af gangen
-    for i in range(0, len(kpis_at_show), 3):
-        row_kpis = kpis_at_show[i:i+3]
-        cols = st.columns(3)
+    # Antal kolonner vi vil have
+    num_cols = 3
+    
+    # Loop gennem KPI'er og placer dem i det rigtige grid
+    for i in range(0, len(kpis_at_show), num_cols):
+        # Opret en ny række af kolonner for hver 3. KPI
+        cols = st.columns(num_cols)
         
-        for idx, kpi in enumerate(row_kpis):
-            with cols[idx]:
-                # Vi omslutter hver tabel i en div med klassen 'top5-card'
-                st.markdown(f'<div class="top5-card">', unsafe_allow_html=True)
-                st.subheader(KPI_MAP.get(kpi, kpi.title()))
-                
-                ascending = True if kpi in ['LOSSES', 'FOULS'] else False
-                plot_df = df.copy()
-                plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
-                
-                min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES', 'MIN'] if c in plot_df.columns), None)
-                if visning == "Pr. 90" and min_col:
-                    mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
-                    plot_df['Værdi'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
-                else:
-                    plot_df['Værdi'] = plot_df[kpi]
+        # Fyld de 3 kolonner i den aktuelle række
+        for j in range(num_cols):
+            kpi_idx = i + j
+            if kpi_idx < len(kpis_at_show):
+                kpi = kpis_at_show[kpi_idx]
+                with cols[j]:
+                    # Brug st.container(border=True) for at skabe de adskilte bokse uden CSS-fejl
+                    with st.container(border=True):
+                        st.subheader(KPI_MAP.get(kpi, kpi.title()))
+                        
+                        ascending = True if kpi in ['LOSSES', 'FOULS'] else False
+                        plot_df = df.copy()
+                        plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
+                        
+                        min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES', 'MIN'] if c in plot_df.columns), None)
+                        if visning == "Pr. 90" and min_col:
+                            mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
+                            plot_df['Værdi'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
+                        else:
+                            plot_df['Værdi'] = plot_df[kpi]
 
-                top5 = plot_df[plot_df['Værdi'] > 0].sort_values('Værdi', ascending=ascending).head(5)
-                
-                if not top5.empty:
-                    st.dataframe(
-                        top5[['NAVN', 'Værdi']],
-                        hide_index=True,
-                        use_container_width=True,
-                        column_config={
-                            "NAVN": "Spiller",
-                            "Værdi": st.column_config.NumberColumn(format="%.2f")
-                        }
-                    )
-                else:
-                    st.write("Ingen data registreret")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
+                        # Sorter og tag top 5
+                        top5 = plot_df[plot_df['Værdi'] > 0].sort_values('Værdi', ascending=ascending).head(5)
+                        
+                        if not top5.empty:
+                            st.dataframe(
+                                top5[['NAVN', 'Værdi']],
+                                hide_index=True,
+                                use_container_width=True,
+                                height=210, # Fast højde på selve tabellen sikrer flugt
+                                column_config={
+                                    "NAVN": "Spiller",
+                                    "Værdi": st.column_config.NumberColumn(format="%.2f")
+                                }
+                            )
+                        else:
+                            st.info("Ingen data")
