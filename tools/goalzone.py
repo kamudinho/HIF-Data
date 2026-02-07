@@ -117,8 +117,10 @@ def vis_side(df, kamp=None, hold_map=None):
 
 
 def draw_pitch_with_stats(zone_stats, total_skud):
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=60)
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
     fig, ax = pitch.draw(figsize=(10, 8))
+
+    ax.set_ylim(45, 105) 
 
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', '#df003b'])
@@ -129,21 +131,19 @@ def draw_pitch_with_stats(zone_stats, total_skud):
 
         color_val = count / max_count if max_count > 0 else 0
 
-        # Tegn zonen
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"],
                          b["y_max"] - b["y_min"], edgecolor='black',
                          linestyle='--', facecolor=cmap(color_val), alpha=0.5)
         ax.add_patch(rect)
 
-        # Tekst: Viser Antal og %
         if count > 0:
             x_text = b["x_min"] + (b["x_max"] - b["x_min"]) / 2
             y_text = b["y_min"] + (b["y_max"] - b["y_min"]) / 2
-
-            # Formatering af tekst: Antal øverst, procent under
-            label = f"{int(count)}\n({percent:.1f}%)"
-            ax.text(x_text, y_text, label, ha='center', va='center',
-                    fontweight='bold', fontsize=10, color='black')
+            
+            if y_text > 45:
+                label = f"{int(count)}\n({percent:.1f}%)"
+                ax.text(x_text, y_text, label, ha='center', va='center',
+                        fontweight='bold', fontsize=10, color='black')
 
     st.pyplot(fig)
     st.write(f"**Total antal afslutninger i valgte filter:** {int(total_skud)}")
