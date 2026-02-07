@@ -6,7 +6,7 @@ def vis_side(spillere_df, player_events_df):
     st.title("Top 5 Spillere - KPI Analyse")
 
     # --- 1. DATA FORBEREDELSE ---
-    # Find ID-kolonner (PLAYER_WYID)
+    # Vi sikrer os at vi bruger PLAYER_WYID til at merge
     left_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id'] if col in spillere_df.columns), None)
     right_id = next((col for col in ['PLAYER_WYID', 'wyId', 'player_id'] if col in player_events_df.columns), None)
 
@@ -17,16 +17,14 @@ def vis_side(spillere_df, player_events_df):
     # Merge data
     df = pd.merge(spillere_df, player_events_df, left_on=left_id, right_on=right_id, how='inner')
     
-    # Tving alle kolonner til store bogstaver for konsistens
+    # Tving alle kolonner til store bogstaver med det samme
     df.columns = [c.upper() for c in df.columns]
 
-    # Navne-fix: Kombiner FIRSTNAME og LASTNAME
+    # Navne-fix: Hent direkte fra de nu store kolonnenavne i merged dataframe
     if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
         df['NAVN'] = df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')
-    elif 'PLAYER_NAME' in df.columns:
-        df['NAVN'] = df['PLAYER_NAME']
     else:
-        df['NAVN'] = df[left_id.upper()].astype(str) # Fallback til ID hvis navne mangler
+        df['NAVN'] = "Ukendt Spiller"
 
     # --- 2. KPI DEFINITIONER ---
     KPI_MAP = {
@@ -73,17 +71,14 @@ def vis_side(spillere_df, player_events_df):
                         plot_df = df.copy()
                         plot_df[kpi] = pd.to_numeric(plot_df[kpi], errors='coerce').fillna(0)
                         
-                        # Find minutter
                         min_col = next((c for c in ['MINUTESTAGGED', 'MINUTES'] if c in plot_df.columns), None)
                         
-                        # Beregn værdi og format
                         if visning == "Pr. 90" and min_col:
                             mins = pd.to_numeric(plot_df[min_col], errors='coerce').fillna(0)
                             plot_df['RESULTAT'] = (plot_df[kpi] / mins * 90).replace([np.inf, -np.inf], 0).fillna(0)
                             num_format = "%.2f"
                         else:
                             plot_df['RESULTAT'] = plot_df[kpi]
-                            # xG skal altid have decimaler, andre Totaler skal ikke
                             num_format = "%.2f" if kpi == 'XGSHOT' else "%.0f"
 
                         top5 = plot_df[plot_df['RESULTAT'] > 0].sort_values('RESULTAT', ascending=ascending).head(5)
@@ -93,12 +88,16 @@ def vis_side(spillere_df, player_events_df):
                                 top5[['NAVN', 'RESULTAT']],
                                 hide_index=True,
                                 use_container_width=True,
-                                height=210,
+                                height=212,
                                 column_config={
-                                    "NAVN": "Spiller",
+                                    "NAVN": st.column_config.Column(
+                                        "Spiller",
+                                        width="large", # Gør navne-kolonnen bred
+                                    ),
                                     "RESULTAT": st.column_config.NumberColumn(
-                                        visning, # Her ændres navnet dynamisk til "Total" eller "Pr. 90"
-                                        format=num_format
+                                        visning,
+                                        format=num_format,
+                                        width="small", # Gør værdi-kolonnen smal
                                     )
                                 }
                             )
