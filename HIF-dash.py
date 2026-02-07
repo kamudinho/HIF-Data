@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import bcrypt
 from sqlalchemy import create_engine, text
-from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone
+from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5
 
 # --- 1. KONFIGURATION & DATABASE ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide", initial_sidebar_state="expanded")
@@ -145,7 +145,7 @@ with st.sidebar:
 
     if selected == "STATISTIK":
         st.markdown("**Vælg type:**")
-        selected_sub = st.radio("Sub_Scout", options=["Spillerstats"],
+        selected_sub = st.radio("Sub_Scout", options=["Spillerstats", "Top 5"],
                                 label_visibility="collapsed")
 
     if selected == "SCOUTING":
@@ -178,6 +178,8 @@ elif selected == "DATAANALYSE":
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats":
         stats.vis_side(spillere, player_events)
+    elif selected_sub == "Top 5":
+        top5.vis_side(spillere, player_events)
 
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF":
