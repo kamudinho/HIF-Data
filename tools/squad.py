@@ -4,43 +4,41 @@ import pandas as pd
 def vis_side(df):
     st.title("Trupsammensætning & Taktisk Overblik")
 
-    # --- 1. DIAGNOSTIK (Vises kun hvis der er fejl) ---
     if df is None:
-        st.error("Ingen data modtaget fra main.py")
+        st.error("Ingen data modtaget.")
         return
 
-    # Lav en kopi og rens kolonnenavne (fjern mellemrum og gør store)
+    # --- 1. DATAVASK ---
     df_squad = df.copy()
+    # Rens overskrifter (fjerner mellemrum og gør store)
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
 
-    # --- TJEK FOR KOLONNER ---
-    if 'POS' not in df_squad.columns:
-        st.warning("⚠️ Finder ikke 'POS' kolonnen. Her er hvad Python ser i dit Excel-ark:")
-        
-        # Vis de første 3 rækker af dit ark, så vi kan se overskrifterne
-        st.write(df.head(3))
-        
-        st.info(f"Fundne kolonner (efter rensning): {list(df_squad.columns)}")
-        st.markdown("""
-        **Løsningsforslag:**
-        1. Sørg for at gemme din Excel-fil helt.
-        2. Hvis du lige har tilføjet 'POS', så tjek om den er skrevet i række 1.
-        3. Prøv at omdøbe kolonnen i Excel til noget helt andet, f.eks. 'PLADS', og se om den dukker op her.
-        """)
+    # --- TJEK FOR DET NYE NAVN 'POS-TAL' ---
+    # Vi tjekker efter 'POS-TAL' (som bliver 'POS-TAL' efter .upper())
+    target_col = 'POS-TAL' 
+    
+    if target_col not in df_squad.columns:
+        st.error(f"⚠️ Kunne ikke finde '{target_col}'.")
+        st.write("Fundne kolonner lige nu:", list(df_squad.columns))
         return
 
-    # --- 2. HVIS POS ER FUNDET, FORTSÆT ---
-    df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
-    df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.upper()
+    # Konverter til tal
+    df_squad['POS_CLEAN'] = pd.to_numeric(df_squad[target_col], errors='coerce')
+    
+    # Håndtering af PRIOR (Hvis den ikke findes, laver vi en tom en så koden ikke dør)
+    if 'PRIOR' in df_squad.columns:
+        df_squad['PRIOR_CLEAN'] = df_squad['PRIOR'].astype(str).str.strip().str.upper()
+    else:
+        df_squad['PRIOR_CLEAN'] = 'B' # Default hvis kolonnen mangler
 
-    # Mapping af positioner (1-11) til banen (række, kolonne, label)
+    # --- 2. POSITIONSMAPPING (1-11) ---
     pos_config = {
         1: (4, 2, 'MM'), 2: (3, 4, 'HB'), 3: (3, 3, 'HCB'), 4: (3, 1, 'VCB'),
         5: (3, 0, 'VB'), 6: (2, 2, 'DM'), 8: (1, 1, 'VCM'), 10: (1, 3, 'HCM'),
         7: (0, 4, 'HW'), 9: (0, 2, 'ANG'), 11: (0, 0, 'VW')
     }
 
-    # --- 3. CSS TIL BANEN ---
+    # --- 3. CSS DESIGN ---
     st.markdown("""
         <style>
             .pitch {
@@ -57,29 +55,44 @@ def vis_side(df):
             }
             .pos-zone { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
             .player-card {
-                background: white; border-left: 5px solid #0e3255; padding: 3px 8px;
+                background: white; border-left: 5px solid #0e3255; padding: 4px 8px;
                 border-radius: 4px; margin-bottom: 3px; width: 95%; box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
             }
+            .prior-tag { font-size: 10px; font-weight: bold; color: #cc0000; margin-right: 5px; }
             .name-text { font-size: 11px; font-weight: 600; color: #333; }
             .label-text { color: white; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 2px black; margin-bottom: 5px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TEGN BANEN ---
+    # --- 4. RENDER BANEN ---
     html = '<div class="pitch">'
     for r in range(5):
         for c in range(5):
             pos_num = next((p for p, coords in pos_config.items() if coords[0] == r and coords[1] == c), None)
+            
             if pos_num:
                 label = pos_config[pos_num][2]
-                spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
+                # Filtrer spillere på denne position
+                mask = df_squad['POS_CLEAN'] == pos_num
+                spillere = df_squad[mask].sort_values('PRIOR_CLEAN')
+                
                 html += f'<div class="pos-zone"><div class="label-text">{label}</div>'
                 for _, p in spillere.iterrows():
                     navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
-                    html += f'<div class="player-card"><span class="name-text">{navn}</span></div>'
+                    prior = p['PRIOR_CLEAN'] if p['PRIOR_CLEAN'] != 'NAN' else '-'
+                    html += f'''
+                        <div class="player-card">
+                            <span class="prior-tag">{prior}</span>
+                            <span class="name-text">{navn}</span>
+                        </div>
+                    '''
                 html += '</div>'
             else:
                 html += '<div></div>'
-    html += '</div>'
     
+    html += '</div>'
     st.write(html, unsafe_allow_html=True)
+    
+    # Print funktion
+    if st.button("🖨️ Gem overblik"):
+        st.write('<script>window.print();</script>', unsafe_allow_html=True)
