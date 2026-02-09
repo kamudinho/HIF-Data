@@ -35,9 +35,8 @@ def vis_side(df, kamp=None, hold_map=None):
     BG_WHITE = '#ffffff'
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # --- 1. DROPDOWNS (2 KOLONNER) ---
+    # --- 1. DROPDOWNS ---
     col1, col2 = st.columns(2)
-    
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
@@ -65,25 +64,24 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    # Beregn stats
+    # --- FIX HER: Vi sender LOCATIONX (længde) som b["y"] og LOCATIONY (bredde) som b["x"] ---
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
+    
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- 3. VISUALISERING (KOMPAKT) ---
+    # --- 3. VISUALISERING ---
     fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG_WHITE)
-    # pad_top=-15 fjerner hvidt område over banen
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', 
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # TITEL & STATS (Koordinater der matcher din afslutnings-side)
+    # TITEL & STATS
     ax.text(50, 107.5, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
     ax.text(50, 105.2, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
     ax.text(50, 103.8, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
 
-    # Tegn Zoner
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
 
@@ -98,13 +96,10 @@ def vis_side(df, kamp=None, hold_map=None):
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            # Zone 8 tekst trækkes op til y=55 så den er synlig på den halve bane
             y_t = 55 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
             ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5.5)
 
-    # ENSARTET VISNING (Matcher Afslutninger.py)
     ax.set_ylim(40, 110) 
     ax.set_xlim(-2, 102)
     ax.axis('off')
-
     st.pyplot(fig)
