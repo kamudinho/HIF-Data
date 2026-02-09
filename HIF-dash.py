@@ -12,24 +12,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Indlæser Bootstrap Icons via CDN
+# Bootstrap Icons
 st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">', unsafe_allow_html=True)
 
 st.markdown("""
     <style>
-        /* 1. FJERN ALT TOMRUM I TOPPEN AF HOVEDINDHOLDET */
         .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
             margin-top: -25px !important; 
         }
 
-        /* 2. SKJUL STREAMLITS STANDARD HEADER */
-        [data-testid="stHeader"] {
-            display: none !important;
-        }
-        
-        /* 3. SIDEBAR NAVIGATION & TOP GAB */
+        [data-testid="stHeader"] { display: none !important; }
         [data-testid="stSidebarNav"] { display: none; }
         
         [data-testid="stSidebarUserContent"] {
@@ -37,7 +31,7 @@ st.markdown("""
             margin-top: -50px !important; 
         }
 
-        /* 4. SAMLET CONTAINER TIL LOGO OG IKON (INGEN BOKS) */
+        /* TOP CONTAINER I SIDEBAR */
         .sidebar-top-container {
             display: flex;
             align-items: center;
@@ -45,19 +39,27 @@ st.markdown("""
             width: 100%;
             position: relative;
             margin-bottom: 10px;
+            height: 50px;
         }
 
-        .logout-link {
+        /* NAVIGATION IKONER (Hjem og Logud) */
+        .nav-icons-left {
+            position: absolute;
+            left: 5px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .nav-icon {
             color: #d3d3d3 !important;
-            font-size: 22px !important;
+            font-size: 20px !important;
             text-decoration: none !important;
             transition: 0.3s;
             cursor: pointer;
-            position: absolute;
-            left: 5px;
         }
         
-        .logout-link:hover {
+        .nav-icon:hover {
             color: #cc0000 !important;
         }
 
@@ -65,7 +67,6 @@ st.markdown("""
             width: 70px;
         }
 
-        /* 5. SIDEBAR STYLING */
         [data-testid="stSidebar"] { min-width: 260px; max-width: 300px; }
         
         div.row-widget.stRadio > div {
@@ -83,18 +84,23 @@ st.markdown("""
             margin-bottom: 5px;
             text-transform: uppercase;
         }
-        
         header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGOUT LOGIK ---
+# --- 2. LOGIK FOR LOGOUT OG HJEM ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-if st.query_params.get("logout") == "true":
+# Håndtering af ikontryk via URL-parametre
+params = st.query_params
+if params.get("action") == "logout":
     st.session_state["logged_in"] = False
     st.query_params.clear()
+    st.rerun()
+elif params.get("action") == "home":
+    st.query_params.clear()
+    st.session_state["page"] = "home"
     st.rerun()
 
 # --- 3. LOGIN SKÆRM ---
@@ -111,6 +117,7 @@ if not st.session_state["logged_in"]:
                 if u_input.lower() == "kasper" and p_input == "1234":
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u_input
+                    st.session_state["page"] = "home"
                     st.rerun()
                 else:
                     st.error("Fejl i login")
@@ -138,12 +145,17 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
-    # Top-sektion: Logout + Logo
+    # Top-sektion: Hjem + Logout til venstre, Logo i midten
     st.markdown('''
         <div class="sidebar-top-container">
-            <a href="/?logout=true" target="_self" class="logout-link" title="Log ud">
-                <i class="bi bi-box-arrow-left"></i>
-            </a>
+            <div class="nav-icons-left">
+                <a href="/?action=home" target="_self" class="nav-icon" title="Hjem">
+                    <i class="bi bi-house"></i>
+                </a>
+                <a href="/?action=logout" target="_self" class="nav-icon" title="Log ud">
+                    <i class="bi bi-box-arrow-left"></i>
+                </a>
+            </div>
             <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" class="sidebar-logo">
         </div>
     ''', unsafe_allow_html=True)
@@ -151,11 +163,11 @@ with st.sidebar:
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # Hovedmenu
+    # Menu uden HIF DATA
     selected = option_menu(
         menu_title=None,
-        options=["HIF DATA", "DATA - HOLD", "DATA - INDIVIDUELT", "STATISTIK", "SCOUTING"],
-        icons=["house", "shield-shaded", "person-bounding-box", "bar-chart", "search"],
+        options=["DATA - HOLD", "DATA - INDIVIDUELT", "STATISTIK", "SCOUTING"],
+        icons=["shield-shaded", "person-bounding-box", "bar-chart", "search"],
         default_index=0,
         styles={
             "container": {"padding": "0!important"},
@@ -164,33 +176,37 @@ with st.sidebar:
         }
     )
 
-    selected_sub = None
+    # Nulstil "page" til menu-valg hvis man klikker i menuen
+    if st.session_state.get("page") == "home" and selected:
+        # Hvis brugeren klikker på noget i menuen, fjerner vi "home" status
+        # men kun hvis det er et aktivt skift. 
+        # For at gøre det simpelt: Hjem-ikonet overstyrer menuen.
+        pass
 
+    selected_sub = None
     if selected == "DATA - HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
-        
     elif selected == "DATA - INDIVIDUELT":
         st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_ind", ["Spillerzoner", "Afslutninger (Spiller)", "Aktionskort", "Pass Net"], label_visibility="collapsed")
-        
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
-        
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Vælg scouting</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
-        if selected_sub == "Trupsammensætning":
-            st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
-            st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
 
 # --- 6. ROUTING ---
-if selected == "HIF DATA":
+
+# Tjek om vi skal vise forsiden (enten ved login eller ved tryk på huset)
+if st.session_state.get("page") == "home":
     st.title("Hvidovre IF Data Hub")
-    st.info("Vælg en kategori i menuen til venstre for at starte analysen.")
+    st.info("Velkommen til Performance Hub. Brug menuen til venstre for at navigere i data.")
+    # Du kan tilføje widgets her til forsiden (f.eks. seneste kampresultat)
 
 elif selected == "DATA - HOLD":
+    st.session_state["page"] = "menu" # Fjern home status
     if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps": skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Målzoner": goalzone.vis_side(df_events, kamp, hold_map)
@@ -198,15 +214,17 @@ elif selected == "DATA - HOLD":
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DATA - INDIVIDUELT":
+    st.session_state["page"] = "menu"
     st.title(f"Individuel Analyse: {selected_sub}")
-    st.info("Her skal vi implementere de spiller-specifikke filtreringer.")
-    # Her kan du kalde dine kommende spiller-moduler
+    st.info("Sektion under udarbejdelse...")
 
 elif selected == "STATISTIK":
+    st.session_state["page"] = "menu"
     if selected_sub == "Spillerstats": stats.vis_side(spillere, player_events)
     elif selected_sub == "Top 5": top5.vis_side(spillere, player_events)
 
 elif selected == "SCOUTING":
+    st.session_state["page"] = "menu"
     if selected_sub == "Hvidovre IF": players.vis_side(spillere)
     elif selected_sub == "Trupsammensætning": squad.vis_side(spillere)
     elif selected_sub == "Sammenligning": comparison.vis_side(spillere, player_events, df_scout)
