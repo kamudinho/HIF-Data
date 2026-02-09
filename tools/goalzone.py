@@ -29,56 +29,43 @@ def find_zone(val_x, val_y):
             return zone
     return "Udenfor"
 
-def get_col(df, possible_names):
-    """Hjælpefunktion til at finde en kolonne uanset case (PLAYER_WYID, player_wyid osv.)"""
-    for name in possible_names:
-        for actual_col in df.columns:
-            if actual_col.strip().upper() == name.upper():
-                return actual_col
-    return None
-
 def vis_side(df_events, spillere_df, hold_map=None):
     HIF_ID = 38331
     HIF_RED = '#df003b'
     BG_WHITE = '#ffffff'
     
+    # 1. TVING store bogstaver på alle kolonner med det samme
     df = df_events.copy()
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    
     s_df = spillere_df.copy()
+    s_df.columns = [str(c).strip().upper() for c in s_df.columns]
 
-    # 1. Find ID-kolonnerne dynamisk
-    id_col_events = get_col(df, ['PLAYER_WYID', 'WYID'])
-    id_col_spillere = get_col(s_df, ['PLAYER_WYID', 'WYID'])
-
-    if not id_col_events or not id_col_spillere:
-        st.error(f"Kunne ikke finde ID-kolonne. Kolonner i event-data: {list(df.columns)}")
-        return
-
-    # 2. Rens ID'er og Map Navne
-    s_df[id_col_spillere] = s_df[id_col_spillere].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    df[id_col_events] = df[id_col_events].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    # Vi ved nu fra din fejlbesked, at PLAYER_WYID findes i df_events
+    id_col = 'PLAYER_WYID'
     
-    # Find Navne-kolonner
-    fn_col = get_col(s_df, ['FIRSTNAME'])
-    ln_col = get_col(s_df, ['LASTNAME'])
+    # Tjek om den også findes i spillere_df (ellers brug WYID)
+    s_id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in s_df.columns else 'WYID'
+
+    # 2. Rens ID'er
+    s_df[s_id_col] = s_df[s_id_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    df[id_col] = df[id_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     
+    # 3. Lav navne_dict fra Spillere-arket
     navne_dict = {}
     for _, row in s_df.iterrows():
-        f = str(row.get(fn_col, '')).replace('nan', '').strip()
-        l = str(row.get(ln_col, '')).replace('nan', '').strip()
-        navne_dict[row[id_col_spillere]] = f"{f} {l}".strip()
+        f = str(row.get('FIRSTNAME', '')).replace('nan', '').strip()
+        l = str(row.get('LASTNAME', '')).replace('nan', '').strip()
+        navne_dict[row[s_id_col]] = f"{f} {l}".strip()
     
-    df['NAVN'] = df[id_col_events].map(navne_dict).fillna("Ukendt Spiller")
+    # Map navnene over på skud-data
+    df['NAVN'] = df[id_col].map(navne_dict).fillna("Ukendt Spiller")
 
-    # 3. Find andre nødvendige kolonner (Opponent, Team, Type, Location)
-    opp_col = get_col(df, ['OPPONENTTEAM_WYID'])
-    team_col = get_col(df, ['TEAM_WYID'])
-    type_col = get_col(df, ['PRIMARYTYPE'])
-    lx_col = get_col(df, ['LOCATIONX'])
-    ly_col = get_col(df, ['LOCATIONY'])
-
-    # 4. DROPDOWNS
+    # 4. DROPDOWNS (Brug de kolonner vi ved findes)
     c1, c2 = st.columns(2)
+    opp_col = 'OPPONENTTEAM_WYID'
     opp_ids = sorted([int(tid) for tid in df[opp_col].unique() if int(tid) != HIF_ID])
+    
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
         navn = hold_map.get(mid, f"ID: {mid}")
@@ -90,7 +77,8 @@ def vis_side(df_events, spillere_df, hold_map=None):
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
     # 5. FILTRERING
-    mask = (df[team_col].astype(int) == HIF_ID) & (df[type_col].str.contains('shot', case=False, na=False))
+    mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
+    
     if valgt_id:
         mask &= (df[opp_col].astype(int) == valgt_id)
         titel_tekst = f"HIF ZONER VS. {valgt_navn}"
@@ -98,17 +86,17 @@ def vis_side(df_events, spillere_df, hold_map=None):
         titel_tekst = "HIF ZONER: ALLE KAMPE"
 
     if valgt_type == "Mål":
-        mask &= df[type_col].str.contains('goal', case=False, na=False)
+        mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
     df_skud = df[mask].copy()
-    df_skud[lx_col] = pd.to_numeric(df_skud[lx_col], errors='coerce')
-    df_skud[ly_col] = pd.to_numeric(df_skud[ly_col], errors='coerce')
-    df_skud = df_skud.dropna(subset=[lx_col, ly_col])
+    df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
+    df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
+    df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
     # Beregn zoner
-    df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row[ly_col], row[lx_col]), axis=1)
+    df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     
-    # 6. FIND TOP SPILLER PR. ZONE
+    # 6. TOP SPILLER LOGIK
     top_players = {}
     if not df_skud.empty:
         player_stats = df_skud.groupby(['ZONE_ID', 'NAVN']).size().reset_index(name='COUNT')
@@ -123,7 +111,7 @@ def vis_side(df_events, spillere_df, hold_map=None):
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # 7. VISUALISERING
+    # 7. PITCH PLOT
     fig, ax = plt.subplots(figsize=(8, 10), facecolor=BG_WHITE)
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', 
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
