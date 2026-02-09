@@ -29,21 +29,29 @@ def find_zone(x, y):
     return "Udenfor"
 
 def vis_side(df, kamp=None, hold_map=None):
+    HIF_ID = 38331
+    HIF_RED = '#df003b'
+    BG_WHITE = '#ffffff'
     df.columns = [str(c).strip().upper() for c in df.columns]
-    
-    if hold_map:
-        df['HOLD_NAVN'] = df['TEAM_WYID'].astype(str).map({str(k): v for k, v in hold_map.items()})
 
-    col1, col2 = st.columns(2)
-    with col1:
-        hold_liste = ["Alle"] + sorted(df['HOLD_NAVN'].dropna().unique().tolist())
-        valgt_hold = st.selectbox("Vælg Hold:", hold_liste)
-    with col2:
-        valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"], key="team_goal_key")
+    # --- 1. MODSTANDER DROPDOWN ---
+    opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
+    dropdown_options = [("Alle Kampe", None)]
+    for mid in opp_ids:
+        navn = hold_map.get(mid, f"ID: {mid}")
+        dropdown_options.append((navn, mid))
 
-    mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    if valgt_hold != "Alle":
-        mask &= (df['HOLD_NAVN'] == valgt_hold)
+    valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
+    valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
+
+    # --- 2. FILTRERING ---
+    mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
+    if valgt_id:
+        mask &= (df['OPPONENTTEAM_WYID'].astype(int) == valgt_id)
+        titel_tekst = f"HIF Zoner vs. {valgt_navn}"
+    else:
+        titel_tekst = "HIF Zoner: Alle Kampe"
+
     if valgt_type == "Mål":
         mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
@@ -52,29 +60,42 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
+    # Beregn stats
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
-    total = zone_stats['Antal'].sum()
+    total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
-    fig, ax = pitch.draw(figsize=(10, 8))
-    ax.set_ylim(45, 105)
+    # --- 3. VISUALISERING ---
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG_WHITE)
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', linewidth=1.2)
+    pitch.draw(ax=ax)
 
+    # Titel (fontsize=7 som aftalt)
+    ax.text(50, 114, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
+
+    # Stats Block (Kompakt look)
+    ax.text(50, 110, str(total), color=HIF_RED, fontsize=8, fontweight='bold', ha='center')
+    ax.text(50, 108.5, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
+
+    # Tegn Zoner
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
-    cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', '#df003b'])
+    cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
 
     for name, b in ZONE_BOUNDARIES.items():
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         color_val = count / max_count if max_count > 0 else 0
+        
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
-                         edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.5)
+                         edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.4, linewidth=0.5)
         ax.add_patch(rect)
+        
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            y_t = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=10)
+            y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
+            ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5)
 
+    ax.set_ylim(45, 116)
+    ax.axis('off')
     st.pyplot(fig)
-    st.write(f"**Total afslutninger i filter:** {int(total)}")
