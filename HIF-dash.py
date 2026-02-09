@@ -17,17 +17,31 @@ st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap
 
 st.markdown("""
     <style>
-        [data-testid="stSidebarNav"] { display: none; }
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 0.5rem !important;
-            margin-top: -55px !important; 
+        /* 1. FJERN ALT TOMRUM I TOPPEN AF HOVEDINDHOLDET */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+            margin-top: -30px !important; /* Trækker indholdet op */
         }
 
-        /* SAMLET CONTAINER TIL LOGO OG IKON */
+        /* 2. SKJUL STREAMLITS STANDARD HEADER (DEN USYNLIGE BJÆLKE) */
+        [data-testid="stHeader"] {
+            display: none !important;
+        }
+        
+        /* 3. SIDEBAR NAVIGATION & TOP GAB */
+        [data-testid="stSidebarNav"] { display: none; }
+        
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 0.5rem !important;
+            margin-top: -50px !important; 
+        }
+
+        /* 4. SAMLET CONTAINER TIL LOGO OG IKON */
         .sidebar-top-container {
             display: flex;
             align-items: center;
-            justify-content: center; /* Centrerer hele gruppen */
+            justify-content: center;
             width: 100%;
             position: relative;
             margin-bottom: 10px;
@@ -39,7 +53,7 @@ st.markdown("""
             text-decoration: none !important;
             transition: 0.3s;
             cursor: pointer;
-            position: absolute; /* Låser ikonet til venstre for logoet */
+            position: absolute;
             left: 5px;
         }
         
@@ -53,21 +67,8 @@ st.markdown("""
 
         /* SIDEBAR GENEREL STYLING */
         [data-testid="stSidebar"] { min-width: 260px; max-width: 300px; }
-        div.row-widget.stRadio > div {
-            background-color: #f8f9fb;
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid #eceef1;
-        }
-        .sidebar-header {
-            font-size: 0.8rem;
-            font-weight: bold;
-            color: #6d6d6d;
-            margin-top: 10px;
-            text-transform: uppercase;
-        }
+        
         header {visibility: hidden;}
-        [data-testid="stHeader"] {background: rgba(0,0,0,0); height: 0rem;}
     </style>
 """, unsafe_allow_html=True)
 
