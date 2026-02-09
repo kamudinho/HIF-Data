@@ -174,10 +174,9 @@ if selected == "DATA - HOLD":
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DATA - INDIVIDUELT":
-    # Her kalder vi den individuelle visning
     if selected_sub == "Spillerzoner":
-        # Vi sender df_events og spillere med, så modulet kan parre navne
-        goalzone.vis_individuel_side(df_events)
+        # RETTELSE: Tilføj 'spillere' som det andet argument
+        goalzone.vis_individuel_side(df_events, spillere)
     else:
         st.title(f"Individuel Analyse: {selected_sub}")
         st.info("Denne sektion er under opbygning.")
