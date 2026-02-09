@@ -34,16 +34,21 @@ def vis_side(df, kamp=None, hold_map=None):
     BG_WHITE = '#ffffff'
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # --- 1. MODSTANDER DROPDOWN ---
+   # --- 1. MODSTANDER DROPDOWN (PÅ ÉN LINJE) ---
+    col1, col2 = st.columns(2)
+    
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
         navn = hold_map.get(mid, f"ID: {mid}")
         dropdown_options.append((navn, mid))
 
-    valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
-    valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
-
+    with col1:
+        valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
+    
+    with col2:
+        valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
+        
     # --- 2. FILTRERING ---
     mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
     if valgt_id:
