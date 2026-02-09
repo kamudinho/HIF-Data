@@ -71,16 +71,6 @@ def vis_side(df_spillere):
         return style_df
 
     # --- 5. TABEL VISNING ---
-    kolonner = {
-        "ROLECODE3": "Pos",
-        "FULL_NAME": "Navn",
-        "BIRTH_STR": "Fødselsdato",
-        "HEIGHT_STR": "Højde",
-        "FOD": "Fod",
-        "CONTR_STR": "Kontraktudløb"
-    }
-
-    # Vi bruger st.dataframe direkte på det stylede objekt
     st.dataframe(
         df_viz.style.apply(highlight_contract, axis=None),
         column_order=list(kolonner.keys()),
@@ -92,8 +82,9 @@ def vis_side(df_spillere):
             "FOD": st.column_config.TextColumn("Fod", width="small"),
             "CONTR_STR": st.column_config.TextColumn("Kontraktudløb")
         },
-        use_container_width=True, # Streamlit internt mapper denne nu korrekt i de fleste versioner, men ellers skift til width="stretch"
-        hide_index=True
+        use_container_width=True,
+        hide_index=True,
+        height=1000  # <--- Tilføj denne linje (højde i pixels)
     )
 
     # --- 6. STATISTIK I BUNDEN ---
