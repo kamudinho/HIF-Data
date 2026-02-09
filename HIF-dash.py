@@ -4,10 +4,10 @@ import os
 import pandas as pd
 import importlib
 
-# --- 1. KONFIGURATION (VIGTIGT: Skal stå øverst) ---
+# --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide")
 
-# CSS til styling
+# CSS til styling og fjernelse af standard-marginer
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
@@ -16,16 +16,48 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. IMPORT AF TOOLS (Siderne) ---
-# Vi bruger en stabil metode til at importere dine filer fra /tools mappen
+# --- 2. LOGIN SYSTEM ---
+USER_DB = {
+    "kasper": "1234",
+    "ceo": "2650",
+    "mr": "2650",
+    "kd": "2650",
+    "cg": "2650"
+}
+
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    # Centreret login boks
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        # Centreret logo i login-skærm
+        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=120)
+        st.subheader("HIF Performance Hub")
+        
+        with st.form("login_form"):
+            user = st.text_input("Brugernavn").lower().strip()
+            pw = st.text_input("Adgangskode", type="password")
+            submit = st.form_submit_button("Log ind", use_container_width=True)
+            
+            if submit:
+                if user in USER_DB and USER_DB[user] == pw:
+                    st.session_state["logged_in"] = True
+                    st.rerun()
+                else:
+                    st.error("Ugyldigt brugernavn eller kode")
+    st.stop() # Stopper appen her indtil man er logget ind
+
+# --- 3. IMPORT AF TOOLS (Siderne) ---
 def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
     except Exception as e:
-        st.sidebar.error(f"Fejl i tools/{name}.py: {e}")
         return None
 
-# Her henter vi alle dine sider manuelt ind
+# Hent alle sider
 heatmaps = load_module("heatmaps")
 shots = load_module("shots")
 skudmap = load_module("skudmap")
@@ -38,14 +70,13 @@ top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
 
-# --- 3. DATA LOADING ---
+# --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
 @st.cache_data(ttl=900)
 def load_full_data():
     try:
-        # Læs alle nødvendige ark fra din Excel
         ev = pd.read_excel(DATA_PATH, sheet_name='Eventdata', engine='openpyxl')
         ka = pd.read_excel(DATA_PATH, sheet_name='Kampdata', engine='openpyxl')
         ho = pd.read_excel(DATA_PATH, sheet_name='Hold', engine='openpyxl')
@@ -53,7 +84,6 @@ def load_full_data():
         pe = pd.read_excel(DATA_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(DATA_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # Merge NAVN på events med det samme
         if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
             navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
@@ -64,17 +94,18 @@ def load_full_data():
         st.error(f"Datafejl: {e}")
         return None, None, {}, None, None, None
 
-# Hent dataen
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
-# Stop appen hvis data ikke kunne indlæses
 if df_events is None:
-    st.warning("Vent på at Excel-filen indlæses korrekt...")
+    st.warning("Vent på data...")
     st.stop()
 
-# --- 4. SIDEBAR MENU ---
+# --- 5. SIDEBAR MENU ---
 with st.sidebar:
-    st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", align="center", width=80)
+    # Centrerings-trick til logo i sidebaren
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=80)
     
     selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
                            icons=["shield", "person", "bar-chart", "search"], 
@@ -93,8 +124,14 @@ with st.sidebar:
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
+    
+    # Logout knap i bunden
+    st.markdown("---")
+    if st.button("Log ud", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.rerun()
 
-# --- 5. ROUTING (Her kaldes de enkelte sider) ---
+# --- 6. ROUTING ---
 if selected == "HOLD":
     if selected_sub == "Heatmaps" and heatmaps: heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps" and skudmap: skudmap.vis_side(df_events, 4, hold_map)
