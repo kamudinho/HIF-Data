@@ -56,7 +56,7 @@ def vis_side(df_events, df_kamp, hold_map):
     x_col, y_col = conf["x"], conf["y"]
 
     # Diskret beskrivelse
-    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic; margin-bottom: 20px;'>💡 {conf['desc']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic; margin-bottom: 20px;'>{conf['desc']}</p>", unsafe_allow_html=True)
 
     # --- 4. BEREGNING ---
     if x_col in df_plot.columns and y_col in df_plot.columns:
