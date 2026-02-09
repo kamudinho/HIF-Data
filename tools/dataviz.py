@@ -46,7 +46,7 @@ def vis_side(df_events, df_kamp, hold_map):
             "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
         },
         "FREMADRETTEDE (PASSES vs. FORWARDPASSES)": {
-            "x": "PASSES", "y": "FORWARDPASSES",
+            "x": "FORWARDPASSES", "y": "PASSES",
             "desc": "Spiller vi fremad når chancen byder sig?"
         }
     }
