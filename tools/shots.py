@@ -52,16 +52,16 @@ def vis_side(df_events, df_kamp, hold_map):
     # STATS RÆKKE (Mindre skrift, god bredde)
     # y=112 for tallene, y=109 for teksten
     ax.text(12, 112, str(s_shots), color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
-    ax.text(12, 109, "SKUD", fontsize=8, color='gray', ha='center', fontweight='bold')
+    ax.text(12, 109, "SKUD", fontsize=4, color='gray', ha='center', fontweight='bold')
     
     ax.text(27, 112, str(s_goals), color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
-    ax.text(27, 109, "MÅL", fontsize=8, color='gray', ha='center', fontweight='bold')
+    ax.text(27, 109, "MÅL", fontsize=4, color='gray', ha='center', fontweight='bold')
     
     ax.text(42, 112, s_conv, color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
-    ax.text(42, 109, "KONV.", fontsize=8, color='gray', ha='center', fontweight='bold')
+    ax.text(42, 109, "KONV.", fontsize=4, color='gray', ha='center', fontweight='bold')
     
     ax.text(57, 112, s_xg, color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
-    ax.text(57, 109, "xG TOTAL", fontsize=8, color='gray', ha='center', fontweight='bold')
+    ax.text(57, 109, "xG TOTAL", fontsize=4, color='gray', ha='center', fontweight='bold')
 
     # LEGENDS (Placeret præcis i venstre side over kridtstregen)
     # y=106 rammer lige mellem teksten ovenfor og selve banen
