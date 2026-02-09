@@ -27,12 +27,10 @@ def vis_side(df_events, df_kamp, hold_map):
         stats_df = df_kamp[df_kamp['TEAM_WYID'] == HIF_ID].copy()
         titel_tekst = "HIF vs. Alle"
 
-    # --- 3. STATS BEREGNING (xG Robusthed) ---
+    # --- 3. STATS BEREGNING ---
     if not stats_df.empty:
         s_shots = int(pd.to_numeric(stats_df['SHOTS'], errors='coerce').fillna(0).sum())
         s_goals = int(pd.to_numeric(stats_df['GOALS'], errors='coerce').fillna(0).sum())
-        
-        # Vi tvinger xG til at være et fornuftigt tal (max 10 pr. kamp som sikkerhed)
         raw_xg = pd.to_numeric(stats_df['XG'], errors='coerce').fillna(0).sum()
         if raw_xg > 100: raw_xg = raw_xg / 100 
         s_xg = f"{raw_xg:.2f}"
@@ -41,37 +39,32 @@ def vis_side(df_events, df_kamp, hold_map):
         s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
 
     # --- 4. VISUALISERING ---
-    fig, ax = plt.subplots(figsize=(10, 5.5), facecolor=BG_WHITE)
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG_WHITE)
     pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
                           half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.2)
     pitch.draw(ax=ax)
 
-    # TITEL (Helt i top)
-    ax.text(34, 118, titel_tekst.upper(), fontsize=6, color='#333333', ha='center', fontweight='black')
+    # --- KOMPAKT TEKST-BLOK (Reduceret y-mellemrum) ---
+    # Titel
+    ax.text(34, 114, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
 
-    # STATS RÆKKE (Mindre skrift, god bredde)
-    # y=112 for tallene, y=109 for teksten
-    ax.text(12, 112, str(s_shots), color=HIF_RED, fontsize=6, fontweight='bold', ha='center')
-    ax.text(12, 109, "SKUD", fontsize=4, color='gray', ha='center', fontweight='bold')
-    
-    ax.text(27, 112, str(s_goals), color=HIF_RED, fontsize=6, fontweight='bold', ha='center')
-    ax.text(27, 109, "MÅL", fontsize=4, color='gray', ha='center', fontweight='bold')
-    
-    ax.text(42, 112, s_conv, color=HIF_RED, fontsize=6, fontweight='bold', ha='center')
-    ax.text(42, 109, "KONV.", fontsize=4, color='gray', ha='center', fontweight='bold')
-    
-    ax.text(57, 112, s_xg, color=HIF_RED, fontsize=6, fontweight='bold', ha='center')
-    ax.text(57, 109, "xG TOTAL", fontsize=4, color='gray', ha='center', fontweight='bold')
+    # Stats (y-værdier rykket tættere sammen: 110 og 108)
+    x_pos = [15, 28, 41, 54]
+    stats_vals = [str(s_shots), str(s_goals), s_conv, s_xg]
+    stats_labels = ["SKUD", "MÅL", "KONV.", "xG TOTAL"]
 
-    # LEGENDS (Placeret præcis i venstre side over kridtstregen)
-    # y=106 rammer lige mellem teksten ovenfor og selve banen
-    ax.scatter(3, 106, s=50, color=HIF_RED, edgecolors='white', zorder=5)
-    ax.text(5, 106, "Mål", fontsize=4, va='center', fontweight='bold')
-    
-    ax.scatter(11, 106, s=35, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
-    ax.text(13, 106, "Afslutning", fontsize=4, va='center', fontweight='bold')
+    for i in range(4):
+        ax.text(x_pos[i], 110, stats_vals[i], color=HIF_RED, fontsize=8, fontweight='bold', ha='center')
+        ax.text(x_pos[i], 108.2, stats_labels[i], fontsize=5, color='gray', ha='center', fontweight='bold')
 
-    # TEGN SKUD
+    # Legends (Rykket helt ned til y=105.5, lige over banen)
+    ax.scatter(3, 105.5, s=30, color=HIF_RED, edgecolors='white', zorder=5)
+    ax.text(4.5, 105.5, "Mål", fontsize=5, va='center', fontweight='bold')
+    
+    ax.scatter(9, 105.5, s=25, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
+    ax.text(10.5, 105.5, "Afslutning", fontsize=5, va='center', fontweight='bold')
+
+    # --- TEGN SKUD ---
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     hif_shots = df_events_filtered[shot_mask].copy()
     if not hif_shots.empty:
@@ -79,13 +72,13 @@ def vis_side(df_events, df_kamp, hold_map):
         
         # Misses
         ax.scatter(hif_shots[~hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[~hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
-                   s=100, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
+                   s=80, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
         # Goals
         ax.scatter(hif_shots[hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
-                   s=250, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=0.8, zorder=4)
+                   s=200, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=0.8, zorder=4)
 
-    # AFGRÆNSNING (Sikrer at vi ser det hele)
-    ax.set_ylim(60, 122) 
+    # AFGRÆNSNING (Nu med lavere top-grænse for at fjerne tomrum)
+    ax.set_ylim(60, 116)  
     ax.set_xlim(-2, 70)
     ax.axis('off')
 
