@@ -68,7 +68,7 @@ def vis_side(spillere_df, player_events_df):
 
                 html = f"""
                 <div style="background:#fff; border:1px solid #e6e9ef; border-radius:1px; padding:5px; margin-bottom:5px; min-height:250px;">
-                    <h6 style="text-align:center; margin:0 0 5px 0;">{KPI_MAP.get(kpi, kpi)}</h6>
+                    <h5 style="text-align:center; margin:0 0 5px 0;">{KPI_MAP.get(kpi, kpi)}</h5>
                     <table style="width:100%; border-collapse:collapse; font-size:14px;">
                         <thead>
                             <tr style="background:#f8f9fb;">
