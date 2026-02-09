@@ -75,10 +75,10 @@ with st.sidebar:
     selected_sub = None
     if selected == "DATA - HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
+        selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Zoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
     elif selected == "DATA - INDIVIDUELT":
         st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_ind", ["Spillerzoner", "Afslutninger (Spiller)", "Aktionskort", "Pass Net"], label_visibility="collapsed")
+        selected_sub = st.radio("S_ind", ["Zoner", "Afslutninger"], label_visibility="collapsed")
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
