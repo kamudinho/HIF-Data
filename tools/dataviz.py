@@ -33,11 +33,11 @@ def vis_side(df_events, df_kamp, hold_map):
 
     # --- ANALYSE MODES (Nu helt uden suffix) ---
     ANALYSE_MODES = {
-        "Skud x Mål = Effektivitet": {
+        "SKUD x MÅL = Effektivitet": {
             "x": "SHOTS", "y": "GOALS",
             "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
         },
-        "xG x Mål = Performance": {
+        "XG x MÅL = Performance": {
             "x": "XG", "y": "GOALS",
             "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
         },
@@ -51,11 +51,12 @@ def vis_side(df_events, df_kamp, hold_map):
         }
     }
 
-    valgt_label = st.selectbox("Vælg analyse-metrik:", options=list(ANALYSE_MODES.keys()))
+  valgt_label = st.selectbox("Vælg analyse-metrik:", options=list(ANALYSE_MODES.keys()))
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    st.info(f"ℹ️ **Analyse-info:** {conf['desc']}")
+    # Diskret lille tekst under menuen
+    st.caption(f"💡 {conf['desc']}")
 
     # BEREGNING (Gennemsnit pr. hold)
     stats = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
