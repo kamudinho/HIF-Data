@@ -7,7 +7,7 @@ import importlib
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide")
 
-# CSS til styling: Centrerer logo og rydder op i margins
+# CSS til styling
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
@@ -33,7 +33,6 @@ if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        # Centreret logo på login-skærm
         st.markdown(
             """
             <div style="display: flex; justify-content: center; margin-bottom: 20px;">
@@ -74,65 +73,65 @@ top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
 
-# --- 4. DATA LOADING (Smart Version) ---
+# --- 4. DATA LOADING (Filtreret & Optimeret) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
-@st.cache_data(ttl=3600, show_spinner="Henter data...")
+@st.cache_data(ttl=3600, show_spinner="Opdaterer HIF data...")
 def load_full_data():
     try:
         # 1. Hent Excel-arkene
-        ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
+        ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # 2. Hent Eventdata (Smart CSV-søgning)
+        # Definer gyldige hold-ID'er fra Hold-arket
+        godkendte_hold_ids = ho['TEAM_WYID'].unique()
+        h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
+
+        # 2. Hent Eventdata (CSV) med case-insensitive søgning
         ev = None
-        # Liste over mulige filnavne (Linux er case-sensitive!)
         possible_names = ['eventdata.csv', 'Eventdata.csv', 'EventData.csv', 'EVENTDATA.csv']
-        
-        found_path = None
-        for name in possible_names:
-            path = os.path.join(BASE_DIR, name)
-            if os.path.exists(path):
-                found_path = path
-                break
+        found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
         
         if found_path:
-            # Prøv at indlæse med komma, hvis det fejler så semikolon
             try:
+                # Prøv komma først, derefter semikolon
                 ev = pd.read_csv(found_path, sep=',', low_memory=False)
-                if len(ev.columns) < 2: # Hvis alt ligger i én kolonne, prøv semikolon
+                if len(ev.columns) < 2:
                     ev = pd.read_csv(found_path, sep=';', low_memory=False)
             except Exception as e:
                 st.error(f"Fejl ved læsning af CSV: {e}")
                 return None, None, {}, None, None, None
         else:
-            # DEBUG INFO: Hvis filen stadig ikke findes, vis hvad der ligger i mappen
-            files_in_dir = os.listdir(BASE_DIR)
-            st.error(f"Kunne ikke finde eventdata.csv. Filer i mappen: {files_in_dir}")
+            st.error("Kunne ikke finde 'eventdata.csv'. Tjek upload.")
             return None, None, {}, None, None, None
 
-        # 3. Data Merge
+        # --- 3. FILTRERING ---
+        # Behold kun data for hold defineret i 'Hold'-arket
+        if ev is not None:
+            ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
+            
+        if ka is not None:
+            ka = ka[ka['TEAM_WYID'].isin(godkendte_hold_ids)]
+
+        # 4. Merge navne
         if ev is not None and 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
             navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
             
-        h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
-        
         return ev, ka, h_map, sp, pe, sc
 
     except Exception as e:
-        st.error(f"Kritisk fejl ved indlæsning: {e}")
+        st.error(f"Kritisk datafejl: {e}")
         return None, None, {}, None, None, None
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
-# SIKKERHEDS-CHECK: Stop hvis data ikke blev indlæst
+# Stop hvis data mangler
 if df_events is None:
-    st.warning("Data kunne ikke indlæses. Tjek fejlbeskeden ovenfor.")
     st.stop()
 
 # --- 5. SIDEBAR MENU ---
@@ -169,6 +168,7 @@ with st.sidebar:
         
         if selected_sub == "Trupsammensætning":
             st.markdown("---")
+            st.markdown('<p class="sidebar-header">Taktik</p>', unsafe_allow_html=True)
             st.selectbox("Vælg formation:", ["3-4-3", "4-3-3", "3-5-2"], key="formation_valg")
 
     st.markdown("---")
