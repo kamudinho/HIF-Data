@@ -66,10 +66,10 @@ def vis_side(df_events, df_kamp, hold_map):
     # LEGENDS (Placeret præcis i venstre side over kridtstregen)
     # y=106 rammer lige mellem teksten ovenfor og selve banen
     ax.scatter(3, 106, s=50, color=HIF_RED, edgecolors='white', zorder=5)
-    ax.text(5, 106, "Mål", fontsize=7, va='center', fontweight='bold')
+    ax.text(5, 106, "Mål", fontsize=4, va='center', fontweight='bold')
     
     ax.scatter(11, 106, s=35, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
-    ax.text(13, 106, "Afslutning", fontsize=7, va='center', fontweight='bold')
+    ax.text(13, 106, "Afslutning", fontsize=4, va='center', fontweight='bold')
 
     # TEGN SKUD
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
