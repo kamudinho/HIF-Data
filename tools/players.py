@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-
 def vis_side(df_spillere):
 
     if df_spillere is None or df_spillere.empty:
@@ -12,7 +11,7 @@ def vis_side(df_spillere):
     # --- DATA FORBEREDELSE ---
     df_working = df_spillere.copy()
 
-    # 1. Omdøb positioner til dine forkortelser
+    # 1. Omdøb positioner
     pos_map = {
         "GKP": "MM",
         "DEF": "FOR",
@@ -21,11 +20,9 @@ def vis_side(df_spillere):
     }
     df_working['ROLECODE3'] = df_working['ROLECODE3'].replace(pos_map)
 
-    # 2. Lav sorterings-nøgle (GKP, DEF, MID, FWD)
+    # 2. Lav sorterings-nøgle
     sort_map = {"MM": 1, "FOR": 2, "MID": 3, "ANG": 4}
     df_working['sort_order'] = df_working['ROLECODE3'].map(sort_map).fillna(5)
-
-    # Sorter efter position-rækkefølge og derefter efternavn
     df_working = df_working.sort_values(by=['sort_order', 'LASTNAME'])
 
     # Søgefelt
@@ -39,7 +36,7 @@ def vis_side(df_spillere):
     else:
         df_display = df_working.copy()
 
-    # --- LOGIK FOR FARVEMARKERING (Rød og Gul) ---
+    # --- LOGIK FOR FARVEMARKERING ---
     def highlight_contract(row):
         styles = [''] * len(row)
         try:
@@ -48,10 +45,8 @@ def vis_side(df_spillere):
             today = datetime.now()
             dage_til_udloeb = (contract_date - today).days
 
-            # Rød: Under 6 mdr (183 dage)
             if dage_til_udloeb < 183:
                 styles[contract_idx] = 'background-color: #ffcccc; color: black;'
-            # Gul: Mellem 183 og 365 dage
             elif 183 <= dage_til_udloeb <= 365:
                 styles[contract_idx] = 'background-color: #ffffcc; color: black;'
         except:
@@ -61,8 +56,8 @@ def vis_side(df_spillere):
     styled_df = df_display.style.apply(highlight_contract, axis=1)
 
     # --- TABEL KONFIGURATION ---
-    # Vi udelader 'sort_order' fra kolonne_raekkefoelge, så den er skjult
-    kolonne_raekkefoelge = ["ROLECODE3", "FIRSTNAME", "LASTNAME", "BIRTHDATE", "HEIGHT", "WEIGHT", "CONTRACT"]
+    # TILFØJET: "FOD" er nu med i rækkefølgen
+    kolonne_raekkefoelge = ["ROLECODE3", "FIRSTNAME", "LASTNAME", "BIRTHDATE", "HEIGHT", "FOD", "WEIGHT", "CONTRACT"]
 
     st.dataframe(
         styled_df,
@@ -72,8 +67,10 @@ def vis_side(df_spillere):
             "FIRSTNAME": st.column_config.TextColumn("Fornavn", width="medium"),
             "LASTNAME": st.column_config.TextColumn("Efternavn", width="medium"),
             "BIRTHDATE": st.column_config.DateColumn("Fødselsdato", format="DD.MM.YYYY"),
-            "HEIGHT": st.column_config.NumberColumn("Højde (cm)"),
-            "FOD": st.column_config.TextColumn("Fod"),
+            # OPDATERET: Bruger format="%d cm" for at vise enheden i cellen
+            "HEIGHT": st.column_config.NumberColumn("Højde", format="%d cm"),
+            "FOD": st.column_config.TextColumn("Fod", width="small"),
+            "WEIGHT": st.column_config.NumberColumn("Vægt (kg)"),
             "CONTRACT": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY", width="medium")
         },
         use_container_width=True,
