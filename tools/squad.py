@@ -31,9 +31,17 @@ def vis_side(df):
         return 'white'                   # Hvid (> 1 år)
 
     # --- 2. FORMATIONER ---
-    form_valg = st.sidebar.radio("Vælg Formation:", ["4-3-3", "3-5-2"])
+    form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
 
-    if form_valg == "4-3-3":
+    if form_valg == "3-4-3":
+        pos_config = {
+            1: (10, 43, 'MM'), 
+            4: (33, 25, 'VCB'), 3: (30, 43, 'CB'), 2: (33, 65, 'HCB'),
+            5: (50, 8, 'VWB'), 6: (50, 43, 'DM'), 8: (50, 63), 7: (50, 75, 'HWB'), 
+            11: (80, 15, 'VW'), 9: (90, 44, 'ANG'), 7: (80, 65, 'HW')
+        }
+        
+    else form_valg == "4-3-3":
         pos_config = {
             1: (10, 43, 'MM'), 
             5: (35, 10, 'VB'), 4: (30, 30, 'VCB'), 3: (30, 55, 'HCB'), 2: (35, 75, 'HB'),
