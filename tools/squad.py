@@ -104,17 +104,3 @@ def vis_side(df):
 
     st.pyplot(fig)
 
-    # --- 6. STATISTIK I BUNDEN ---
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.caption("ANTAL SPILLERE")
-        st.subheader(len(df_squad))
-    with c2:
-        h_avg = pd.to_numeric(df_squad['HEIGHT'], errors='coerce').mean()
-        st.caption("GNS. HØJDE")
-        st.subheader(f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
-    with c3:
-        age_avg = df_squad['ALDER'].mean() if 'ALDER' in df_squad.columns else None
-        st.caption("GNS. ALDER")
-        st.subheader(f"{age_avg:.1f} år" if pd.notna(age_avg) else "-")
