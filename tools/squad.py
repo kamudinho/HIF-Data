@@ -39,14 +39,14 @@ def vis_side(df):
 
     # --- 3. KONFIGURATION AF BANE ---
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-    fig, ax = pitch.draw(figsize=(14, 9), constrained_layout=True)
+    fig, ax = pitch.draw(figsize=(16, 9), constrained_layout=True)
 
     # Forklaring (Legend) i bunden af banen
     legend_y = -4 
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
         ("#fffd8d", "Udløb 6-12 mdr"),
-        ("#d3d3d3", "Leje / Udlejet (L)")
+        ("#d3d3d3", "Leje / Udlejet")
     ]
     
     for i, (color, text) in enumerate(legend_items):
