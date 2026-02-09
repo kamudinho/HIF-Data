@@ -2,29 +2,43 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+from datetime import datetime  # Flyttet herop så konverteringen virker
 
 def fix_excel_dates(series):
-    """Konverterer Excel-datoer (f.eks. 15. maj) tilbage til tal (15.5)"""
+    """Konverterer Excel-datoer (f.eks. 0.9 / 9. sep) tilbage til tal"""
     def convert(val):
+        # Hvis værdien allerede er et tal (float/int), så lad den være
+        if isinstance(val, (int, float)):
+            return val
+        
+        # Hvis Excel har lavet det til et datetime-objekt
         if isinstance(val, datetime):
-            # Hvis Excel har lavet det til en dato, tager vi dag + (måned/10)
-            # F.eks. 15. maj -> 15 + 0.5 = 15.5
+            # 0.9 i Excel bliver ofte til 9. september. 
+            # Vi tager måneden og dividerer med 10 for at få decimalen.
+            if val.day < 10 and val.month > 0:
+                return val.month / 10.0
+            # For afstande som 15.5 (15. maj), tager vi dag + (måned/10)
             return val.day + (val.month / 10.0)
+            
         try:
+            # Forsøg at tvinge tekst til tal (hvis der er brugt komma i Excel)
+            if isinstance(val, str):
+                val = val.replace(',', '.')
             return float(val)
         except:
             return np.nan
+            
     return series.apply(convert)
 
 def vis_side(df_events, df_kamp, hold_map):
-    from datetime import datetime
     HIF_ID = 38331
     HIF_RED = '#df003b'
 
     df_plot = df_kamp.copy()
+    # Rens kolonnenavne
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
-    # --- 1. DATA VASK (Fixer dato-fejl fra Excel) ---
+    # --- 1. DATA VASK (Kører fix-funktionen på relevante kolonner) ---
     cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSION', 'CROSSES', 'AVGDISTANCE']
     for col in cols_to_fix:
         if col in df_plot.columns:
@@ -46,8 +60,11 @@ def vis_side(df_events, df_kamp, hold_map):
         st.error(f"Kolonnerne {x_col} eller {y_col} mangler i Excel.")
         return
 
-    # --- 3. BEREGNING PR. HOLD ---
-    stats = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
+    # --- 3. BEREGNING ---
+    # Fjern rækker hvor vi mangler kritiske tal efter vask
+    df_clean = df_plot.dropna(subset=[x_col, y_col])
+    
+    stats = df_clean.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
 
     # --- 4. PLOT ---
     fig = go.Figure()
@@ -57,17 +74,20 @@ def vis_side(df_events, df_kamp, hold_map):
         team_name = hold_map.get(tid, f"ID: {tid}")
         is_hif = (tid == HIF_ID)
         
-        # Formatering af label (f.eks. tilføj % ved Possession)
         x_val = row[x_col]
-        x_text = f"{x_val:.1f}{conf['suffix']}"
+        y_val = row[y_col]
         
         fig.add_trace(go.Scatter(
-            x=[x_val], y=[row[y_col]],
+            x=[x_val], y=[y_val],
             mode='markers+text',
             text=[team_name] if is_hif else [""],
             textposition="top center",
-            marker=dict(size=18 if is_hif else 12, color=HIF_RED if is_hif else 'rgba(170,170,170,0.5)'),
-            hovertemplate=f"<b>{team_name}</b><br>{x_col}: {x_text}<br>{y_col}: %{{y:.2f}}<extra></extra>"
+            marker=dict(
+                size=18 if is_hif else 12, 
+                color=HIF_RED if is_hif else 'rgba(170,170,170,0.5)',
+                line=dict(width=1.5, color='black' if is_hif else 'white')
+            ),
+            hovertemplate=f"<b>{team_name}</b><br>{x_col}: {x_val:.2f}{conf['suffix']}<br>{y_col}: {y_val:.2f}<extra></extra>"
         ))
 
     # Gennemsnitslinjer
@@ -78,7 +98,8 @@ def vis_side(df_events, df_kamp, hold_map):
         plot_bgcolor='white',
         xaxis_title=f"{x_col} {conf['suffix']}",
         yaxis_title=y_col,
-        height=600
+        height=600,
+        margin=dict(t=20)
     )
 
     st.plotly_chart(fig, width='stretch')
