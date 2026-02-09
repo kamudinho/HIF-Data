@@ -74,33 +74,49 @@ top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
 
-# --- 4. DATA LOADING ---
+# --- 4. DATA LOADING (Smart Version) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
-CSV_PATH = os.path.join(BASE_DIR, 'eventdata.csv')
 
-@st.cache_data(ttl=3600, show_spinner="Henter data (CSV + Excel)...")
+@st.cache_data(ttl=3600, show_spinner="Henter data...")
 def load_full_data():
     try:
-        # 1. Hent de små dataark fra Excel (som du plejer)
-        # Vi bruger 'None' til Eventdata her, da vi henter den fra CSV
+        # 1. Hent Excel-arkene
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # 2. Hent den tunge Eventdata fra CSV
-        # VIGTIGT: Hvis din CSV bruger semikolon (;) som i dansk Excel, ret sep=',' til sep=';'
-        if os.path.exists(CSV_PATH):
-            ev = pd.read_csv(CSV_PATH, sep=',', low_memory=False) 
-        else:
-            st.error(f"Kunne ikke finde filen: {CSV_PATH}")
-            return None, None, {}, None, None, None
+        # 2. Hent Eventdata (Smart CSV-søgning)
+        ev = None
+        # Liste over mulige filnavne (Linux er case-sensitive!)
+        possible_names = ['eventdata.csv', 'Eventdata.csv', 'EventData.csv', 'EVENTDATA.csv']
         
-        # 3. Data Behandling (Merge navne)
-        # Sikrer at kolonnenavne er ens (f.eks. store bogstaver) for en sikkerheds skyld
-        if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
+        found_path = None
+        for name in possible_names:
+            path = os.path.join(BASE_DIR, name)
+            if os.path.exists(path):
+                found_path = path
+                break
+        
+        if found_path:
+            # Prøv at indlæse med komma, hvis det fejler så semikolon
+            try:
+                ev = pd.read_csv(found_path, sep=',', low_memory=False)
+                if len(ev.columns) < 2: # Hvis alt ligger i én kolonne, prøv semikolon
+                    ev = pd.read_csv(found_path, sep=';', low_memory=False)
+            except Exception as e:
+                st.error(f"Fejl ved læsning af CSV: {e}")
+                return None, None, {}, None, None, None
+        else:
+            # DEBUG INFO: Hvis filen stadig ikke findes, vis hvad der ligger i mappen
+            files_in_dir = os.listdir(BASE_DIR)
+            st.error(f"Kunne ikke finde eventdata.csv. Filer i mappen: {files_in_dir}")
+            return None, None, {}, None, None, None
+
+        # 3. Data Merge
+        if ev is not None and 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
             navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
             
@@ -109,10 +125,15 @@ def load_full_data():
         return ev, ka, h_map, sp, pe, sc
 
     except Exception as e:
-        st.error(f"Kritisk fejl ved indlæsning af data: {e}")
+        st.error(f"Kritisk fejl ved indlæsning: {e}")
         return None, None, {}, None, None, None
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
+
+# SIKKERHEDS-CHECK: Stop hvis data ikke blev indlæst
+if df_events is None:
+    st.warning("Data kunne ikke indlæses. Tjek fejlbeskeden ovenfor.")
+    st.stop()
 
 # --- 5. SIDEBAR MENU ---
 with st.sidebar:
