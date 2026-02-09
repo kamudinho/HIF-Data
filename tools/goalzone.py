@@ -24,10 +24,6 @@ ZONE_BOUNDARIES = {
 }
 
 def find_zone(val_x, val_y):
-    """
-    val_x skal være LOCATIONY (bredde: 0-100)
-    val_y skal være LOCATIONX (længde: 0-100)
-    """
     for zone, b in ZONE_BOUNDARIES.items():
         if b["x_min"] <= val_x <= b["x_max"] and b["y_min"] <= val_y <= b["y_max"]:
             return zone
@@ -40,7 +36,7 @@ def vis_side(df, kamp=None, hold_map=None):
     df.columns = [str(c).strip().upper() for c in df.columns]
 
     # --- 1. DROPDOWNS ---
-    c1, c2 = st.columns(2)
+    c1, col2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
@@ -49,7 +45,7 @@ def vis_side(df, kamp=None, hold_map=None):
 
     with c1:
         valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
-    with c2:
+    with col2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
     # --- 2. FILTRERING ---
@@ -68,10 +64,30 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    # --- BEREGNING: Her mappes koordinaterne korrekt ---
-    # Vi sender LOCATIONY (bredde) som x, og LOCATIONX (længde) som y.
+    # Map zoner
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     
+    # --- FIND TOP SPILLER PR. ZONE (Brug PLAYER_NAME) ---
+    top_players = {}
+    if not df_skud.empty:
+        # Tæl optrædener pr zone pr spiller
+        # Vi sikrer os at vi grupperer på navnet, så det er det vi får ud
+        player_stats = df_skud.groupby(['ZONE_ID', 'PLAYER_NAME']).size().reset_index(name='antal_skud')
+        
+        for zone in player_stats['ZONE_ID'].unique():
+            zone_data = player_stats[player_stats['ZONE_ID'] == zone]
+            # Find rækken med flest skud
+            top_row = zone_data.loc[zone_data['antal_skud'].idxmax()]
+            p_navn = str(top_row['PLAYER_NAME'])
+            
+            # Forkort navnet pænt (f.eks. "Mads Agger" -> "M. AGGER")
+            navn_dele = p_navn.split()
+            if len(navn_dele) > 1:
+                short_name = f"{navn_dele[0][0]}. {navn_dele[-1]}"
+            else:
+                short_name = p_navn
+            top_players[zone] = short_name.upper()
+
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
@@ -82,7 +98,7 @@ def vis_side(df, kamp=None, hold_map=None):
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # TITEL & STATS (Matching 'Afslutninger' side)
+    # TITEL & STATS
     ax.text(50, 107.5, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
     ax.text(50, 105.2, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
     ax.text(50, 103.8, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
@@ -101,9 +117,14 @@ def vis_side(df, kamp=None, hold_map=None):
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            # Træk tekst fra Zone 8 op, så den er synlig på halv bane
             y_t = 55 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5.5)
+            
+            # Antal og %
+            ax.text(x_t, y_t + 0.6, f"{int(count)} ({percent:.0f}%)", ha='center', va='bottom', fontweight='bold', fontsize=5.5)
+            
+            # Topspiller Navn
+            if name in top_players:
+                ax.text(x_t, y_t - 1.2, top_players[name], ha='center', va='top', fontsize=4.5, color='#444444', fontweight='bold')
 
     ax.set_ylim(40, 110) 
     ax.set_xlim(-2, 102)
