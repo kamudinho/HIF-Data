@@ -38,21 +38,27 @@ def vis_side(df):
         if days <= 365: return '#fffd8d'  # Gul
         return 'white'
 
-    # --- 2. KOMPAKT LEGEND ØVERST ---
-    l_col1, l_col2, l_col3 = st.columns(3)
-    with l_col1:
-        st.caption("KONTRAKT < 6 MDR")
-        st.markdown('<div style="height:10px; width:100%; background-color:#ff4b4b; border-radius:5px;"></div>', unsafe_allow_html=True)
-    with l_col2:
-        st.caption("KONTRAKT 6-12 MDR")
-        st.markdown('<div style="height:10px; width:100%; background-color:#fffd8d; border-radius:5px;"></div>', unsafe_allow_html=True)
-    with l_col3:
-        st.caption("LEJE / UDLEJET (L)")
-        st.markdown('<div style="height:10px; width:100%; background-color:#d3d3d3; border-radius:5px;"></div>', unsafe_allow_html=True)
+    # --- 2. TEGN BANEN ---
+    # Vi bruger Pitch men tegner på en akse, hvor vi har plads i toppen
+    pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
+    fig, ax = pitch.draw(figsize=(12, 9)) # Lidt højere figur for at give plads
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --- 3. LEGENDS INDE I BILLEDET (Øverst til venstre) ---
+    legend_y = -5  # Koordinat ovenover selve kridtstregerne
+    legend_items = [
+        ("#ff4b4b", "Udløb < 6 mdr"),
+        ("#fffd8d", "Udløb 6-12 mdr"),
+        ("#d3d3d3", "Leje / Udlejet (L)")
+    ]
+    
+    for i, (color, text) in enumerate(legend_items):
+        # x-start på 2 og øget mellemrum (25 enheder)
+        x_pos = 2 + (i * 25) 
+        ax.text(x_pos, legend_y, f"  {text}  ", size=9, color="black",
+                va='center', ha='left', family='monospace', fontweight='bold',
+                bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.4', linewidth=0.5))
 
-    # --- 3. FORMATIONER & BANE ---
+    # --- 4. FORMATIONER ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
 
     if form_valg == "3-4-3":
@@ -75,10 +81,7 @@ def vis_side(df):
             11: (95, 30, 'ANG'), 9: (95, 55, 'ANG')
         }
 
-    pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-    fig, ax = pitch.draw(figsize=(12, 8))
-
-    # --- 4. TEGN SPILLERE ---
+    # --- 5. TEGN SPILLERE ---
     for pos_num, coords in pos_config.items():
         x_pos, y_pos, label = coords
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
@@ -101,19 +104,16 @@ def vis_side(df):
 
     st.pyplot(fig)
 
-    # --- 5. STATISTIK I BUNDEN (Præcis som på din anden side) ---
+    # --- 6. STATISTIK I BUNDEN ---
     st.markdown("---")
     c1, c2, c3 = st.columns(3)
-    
     with c1:
         st.caption("ANTAL SPILLERE")
         st.subheader(len(df_squad))
-    
     with c2:
         h_avg = pd.to_numeric(df_squad['HEIGHT'], errors='coerce').mean()
         st.caption("GNS. HØJDE")
         st.subheader(f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
-        
     with c3:
         age_avg = df_squad['ALDER'].mean() if 'ALDER' in df_squad.columns else None
         st.caption("GNS. ALDER")
