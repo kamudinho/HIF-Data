@@ -9,6 +9,9 @@ def vis_side(df):
         st.error("Ingen data fundet.")
         return
 
+    # --- 0. SIDEBAR ELEMENTER (Placeres tidligt for at ligge øverst) ---
+    form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
+
     # --- 1. DATA-PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
@@ -22,13 +25,6 @@ def vis_side(df):
     else:
         df_squad['DAYS_LEFT'] = 999 
 
-    # Beregn alder til bunden
-    if 'BIRTHDATE' in df_squad.columns:
-        df_squad['BIRTHDATE'] = pd.to_datetime(df_squad['BIRTHDATE'], errors='coerce')
-        df_squad['ALDER'] = df_squad['BIRTHDATE'].apply(
-            lambda x: idag.year - x.year - ((idag.month, idag.day) < (x.month, x.day)) if pd.notna(x) else None
-        )
-
     def get_status_color(row):
         if row['PRIOR'] == 'L':
             return '#d3d3d3'  # Grå for leje
@@ -39,12 +35,14 @@ def vis_side(df):
         return 'white'
 
     # --- 2. TEGN BANEN ---
-    # Vi bruger Pitch men tegner på en akse, hvor vi har plads i toppen
+    # Pitch setup
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-    fig, ax = pitch.draw(figsize=(12, 9)) # Lidt højere figur for at give plads
+    
+    # Vi bruger en bredere figur (figsize 16:9 ratio) for at fylde skærmen bedre ud
+    fig, ax = pitch.draw(figsize=(16, 9)) 
 
     # --- 3. LEGENDS INDE I BILLEDET (Øverst til venstre) ---
-    legend_y = -5  # Koordinat ovenover selve kridtstregerne
+    legend_y = -5 
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
         ("#fffd8d", "Udløb 6-12 mdr"),
@@ -52,15 +50,12 @@ def vis_side(df):
     ]
     
     for i, (color, text) in enumerate(legend_items):
-        # x-start på 2 og øget mellemrum (25 enheder)
-        x_pos = 2 + (i * 25) 
-        ax.text(x_pos, legend_y, f"  {text}  ", size=9, color="black",
+        x_pos = 2 + (i * 22) # Justeret afstand for 16:9 formatet
+        ax.text(x_pos, legend_y, f"  {text}  ", size=10, color="black",
                 va='center', ha='left', family='monospace', fontweight='bold',
                 bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.4', linewidth=0.5))
 
-    # --- 4. FORMATIONER ---
-    form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
-
+    # --- 4. FORMATIONS-KONFIGURATION ---
     if form_valg == "3-4-3":
         pos_config = {
             1: (10, 43, 'MM'), 4: (33, 25, 'VCB'), 3: (33, 43, 'CB'), 2: (33, 65, 'HCB'),
@@ -87,7 +82,7 @@ def vis_side(df):
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
-            ax.text(x_pos, y_pos - 4.6, f" {label} ", size=10, color="white",
+            ax.text(x_pos, y_pos - 4.6, f" {label} ", size=11, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
 
@@ -97,10 +92,11 @@ def vis_side(df):
                 visnings_tekst = f" {navn} ".ljust(25)
                 y_row = (y_pos - 2.1) + (i * 2.1)
                 
-                ax.text(x_pos, y_row, visnings_tekst, size=8.5, color="black",
+                ax.text(x_pos, y_row, visnings_tekst, size=9, color="black",
                         va='top', ha='center', fontweight='light', family='monospace',
                         bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
-    st.pyplot(fig)
-
+    # --- 6. VISUALISERING ---
+    # use_container_width=True sørger for at billedet udfylder sidens bredde
+    st.pyplot(fig, use_container_width=True)
