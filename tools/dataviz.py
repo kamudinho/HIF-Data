@@ -25,7 +25,7 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
     # Rens data
-    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSES', 'AVGDISTANCE']
+    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSESTOTAL', 'AVGDISTANCE']
     for col in cols_to_fix:
         if col in df_plot.columns:
             df_plot[col] = fix_excel_dates(df_plot[col])
@@ -45,8 +45,8 @@ def vis_side(df_events, df_kamp, hold_map):
             "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
         },
         "Boldbesiddelse vs. xG": {
-            "x": "POSSESSIONPERCENT", "y": "XG", "suffix": "%",
-            "desc": "Bliver boldbesiddelsen konverteret til store chancer (xG)?"
+            "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL", "suffix": "%",
+            "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
         },
         "Skudafstand (Distance vs. xG)": {
             "x": "AVGDISTANCE", "y": "XG", "suffix": "m",
