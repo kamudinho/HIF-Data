@@ -11,7 +11,7 @@ def vis_side(spillere, player_events):
     kategorier = {
         "AFLEVERINGER": ("PASSES", "SUCCESSFULPASSES"),
         "PASSES TO FINAL THIRD": ("PASSESTOFINALTHIRD", "SUCCESSFULPASSESTOFINALTHIRD"),
-        "SKUD": ("SHOTS", "SUCCESSFULSHOTS"),
+        "SKUD": ("SHOTS", "SHOTONTARGET"),
         "DUELLER": ("DUELS", "DUELSWON"),
         "TOUCHES IN BOX": ("TOUCHINBOX"),
     }
