@@ -34,28 +34,26 @@ def vis_side(df, kamp=None, hold_map=None):
     BG_WHITE = '#ffffff'
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-   # --- 1. MODSTANDER DROPDOWN (PÅ ÉN LINJE) ---
-    col1, col2 = st.columns(2)
-    
+    # --- 1. DROPDOWNS (Kompakt på én linje) ---
+    c1, c2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
         navn = hold_map.get(mid, f"ID: {mid}")
         dropdown_options.append((navn, mid))
 
-    with col1:
+    with c1:
         valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
-    
-    with col2:
+    with c2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
-        
+
     # --- 2. FILTRERING ---
     mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
     if valgt_id:
         mask &= (df['OPPONENTTEAM_WYID'].astype(int) == valgt_id)
-        titel_tekst = f"HIF Zoner vs. {valgt_navn}"
+        titel_tekst = f"HIF ZONER vs. {valgt_navn}"
     else:
-        titel_tekst = "HIF Zoner: Alle Kampe"
+        titel_tekst = "HIF ZONER: ALLE KAMPE"
 
     if valgt_type == "Mål":
         mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
@@ -65,25 +63,21 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    # Beregn stats
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
     # --- 3. VISUALISERING ---
-    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG_WHITE)
+    fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG_WHITE)
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', linewidth=1.2)
     pitch.draw(ax=ax)
 
-    # Titel (fontsize=7 som aftalt)
-    ax.text(50, 114, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
+    # Titel & Stats (Tæt på banen)
+    ax.text(50, 112, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
+    ax.text(50, 109, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
+    ax.text(50, 107.5, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
 
-    # Stats Block (Kompakt look)
-    ax.text(50, 110, str(total), color=HIF_RED, fontsize=8, fontweight='bold', ha='center')
-    ax.text(50, 108.5, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
-
-    # Tegn Zoner
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
 
@@ -98,9 +92,10 @@ def vis_side(df, kamp=None, hold_map=None):
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5)
+            y_t = 60 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=6)
 
-    ax.set_ylim(45, 116)
+    ax.set_ylim(40, 115) 
+    ax.set_xlim(-5, 105)
     ax.axis('off')
     st.pyplot(fig)
