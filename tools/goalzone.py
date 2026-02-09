@@ -29,75 +29,37 @@ def find_zone(x, y):
     return "Udenfor"
 
 def vis_side(df, kamp=None, hold_map=None):
-    """ Standard Hold-visning """
     df.columns = [str(c).strip().upper() for c in df.columns]
+    
     if hold_map:
         df['HOLD_NAVN'] = df['TEAM_WYID'].astype(str).map({str(k): v for k, v in hold_map.items()})
-    
+
     col1, col2 = st.columns(2)
     with col1:
         hold_liste = ["Alle"] + sorted(df['HOLD_NAVN'].dropna().unique().tolist())
         valgt_hold = st.selectbox("Vælg Hold:", hold_liste)
     with col2:
-        valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"], key="team_goal_type")
+        valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"], key="team_goal_key")
 
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    if valgt_hold != "Alle": mask &= (df['HOLD_NAVN'] == valgt_hold)
-    if valgt_type == "Mål": mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
+    if valgt_hold != "Alle":
+        mask &= (df['HOLD_NAVN'] == valgt_hold)
+    if valgt_type == "Mål":
+        mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
-    process_and_draw(df[mask].copy())
-
-def vis_individuel_side(df_events, df_spillere):
-    """ Individuel Spiller-visning med kobling til Spiller-ark """
-    # Rens kolonner i begge dataframes
-    df_events.columns = [str(c).strip().upper() for c in df_events.columns]
-    df_spillere.columns = [str(c).strip().upper() for c in df_spillere.columns]
-
-    # Sikr at vi har PLAYER_NAME ved at koble på PLAYER_WYID
-    if 'PLAYER_NAME' not in df_events.columns:
-        # Vi merger kun de nødvendige kolonner fra spiller-arket
-        # Vi tjekker her om dine kolonner hedder noget andet (f.eks. SPILLER)
-        spiller_navn_kolonne = 'PLAYER_NAME' if 'PLAYER_NAME' in df_spillere.columns else 'SPILLER'
-        
-        df_events = df_events.merge(
-            df_spillere[['PLAYER_WYID', spiller_navn_kolonne]], 
-            on='PLAYER_WYID', 
-            how='left'
-        )
-        # Omdøb til standard internt navn
-        df_events = df_events.rename(columns={spiller_navn_kolonne: 'PLAYER_NAME'})
-
-    st.subheader("Individuel Analyse")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        spiller_liste = sorted(df_events['PLAYER_NAME'].dropna().unique().tolist())
-        valgt_spiller = st.selectbox("Vælg Spiller:", spiller_liste)
-    with col2:
-        valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"], key="indiv_goal_type")
-
-    mask = df_events['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    mask &= (df_events['PLAYER_NAME'] == valgt_spiller)
-    if valgt_type == "Mål": 
-        mask &= df_events['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
-
-    process_and_draw(df_events[mask].copy())
-
-def process_and_draw(df_skud):
-    """ Fælles tegnings-logik """
+    df_skud = df[mask].copy()
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
-    
+
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
-    
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
-    total_skud = zone_stats['Antal'].sum()
-    zone_stats['Procent'] = (zone_stats['Antal'] / total_skud * 100) if total_skud > 0 else 0
+    total = zone_stats['Antal'].sum()
+    zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
     fig, ax = pitch.draw(figsize=(10, 8))
-    ax.set_ylim(45, 105) 
+    ax.set_ylim(45, 105)
 
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', '#df003b'])
@@ -106,17 +68,13 @@ def process_and_draw(df_skud):
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         color_val = count / max_count if max_count > 0 else 0
-
-        rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"],
-                         b["y_max"] - b["y_min"], edgecolor='black',
-                         linestyle='--', facecolor=cmap(color_val), alpha=0.5)
+        rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
+                         edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.5)
         ax.add_patch(rect)
-
         if count > 0:
-            x_text = b["x_min"] + (b["x_max"] - b["x_min"]) / 2
-            y_text = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"] - b["y_min"]) / 2
-            label = f"{int(count)}\n({percent:.1f}%)"
-            ax.text(x_text, y_text, label, ha='center', va='center', fontweight='bold', fontsize=10)
+            x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
+            y_t = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=10)
 
     st.pyplot(fig)
-    st.write(f"**Total antal afslutninger i valgte filter:** {int(total_skud)}")
+    st.write(f"**Total afslutninger i filter:** {int(total)}")
