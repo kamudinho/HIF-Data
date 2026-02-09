@@ -22,7 +22,7 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot = df_kamp.copy()
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
-    # Her omdøber vi de tekniske navne til dine ønskede navne
+    # Ordbog til omdøbning af de tekniske navne
     navne_map = {
         'SHOTS': 'Skud',
         'GOALS': 'Mål',
@@ -33,25 +33,41 @@ def vis_side(df_events, df_kamp, hold_map):
         'FORWARDPASSES': 'Fremadrettede afleveringer'
     }
     
-    # Fix dato-formateringen før vi omdøber
-    for col in navne_map.keys():
+    # Fix dato-formateringen før omdøbning
+    original_cols = ['SHOTS', 'GOALS', 'XG', 'POSSESSIONPERCENT', 'CROSSESTOTAL', 'PASSES', 'FORWARDPASSES']
+    for col in original_cols:
         if col in df_plot.columns:
             df_plot[col] = fix_excel_dates(df_plot[col])
             
-    # Nu omdøber vi kolonnerne officielt
+    # Omdøb kolonnerne til pænere navne
     df_plot = df_plot.rename(columns=navne_map)
 
-    # --- 2. ANALYSE MODES (Nu med de nye navne) ---
+    # --- 2. ANALYSE MODES (Med forklaringer og pæne navne) ---
     ANALYSE_MODES = {
-        "Effektivitet": {"x": "Skud", "y": "Mål"},
-        "Performance": {"x": "xG", "y": "Mål"},
-        "Konvertering": {"x": "Boldbesiddelse %", "y": "Indlæg"},
-        "Spilstil": {"x": "Fremadrettede afleveringer", "y": "Afleveringer"}
+        "Effektivitet": {
+            "x": "Skud", "y": "Mål", 
+            "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
+        },
+        "Konvertering": {
+            "x": "xG", "y": "Mål", 
+            "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
+        },
+        "Offensivt output": {
+            "x": "Boldbesiddelse %", "y": "Indlæg", 
+            "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
+        },
+        "Fremadrettede": {
+            "x": "Fremadrettede afleveringer", "y": "Afleveringer", 
+            "desc": "Spiller vi fremad når chancen byder sig?"
+        }
     }
 
     valgt_label = st.selectbox("Vælg analyse:", options=list(ANALYSE_MODES.keys()))
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
+
+    # Vis forklaringen under dropdown
+    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic; margin-bottom: 20px;'>{conf['desc']}</p>", unsafe_allow_html=True)
 
     # --- 3. BEREGNING ---
     if x_col in df_plot.columns and y_col in df_plot.columns:
