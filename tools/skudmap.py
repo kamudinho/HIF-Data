@@ -24,7 +24,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
     # Vi sætter højden lavere (rows * 4) for at presse dem sammen vertikalt
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(18, rows * 4.5), 
+        figsize=(20, rows * 5.5), 
         facecolor=BG_WHITE
     )
 
