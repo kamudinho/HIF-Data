@@ -29,38 +29,73 @@ def find_zone(x, y):
     return "Udenfor"
 
 def vis_side(df_events, df_spillere):
-    # Rens kolonner
+    # 1. Rens kolonner (Fjerner mellemrum og gør dem STORE)
     df_events.columns = [str(c).strip().upper() for c in df_events.columns]
     df_spillere.columns = [str(c).strip().upper() for c in df_spillere.columns]
 
-    # Merge navne på events baseret på PLAYER_WYID
-    if 'PLAYER_NAME' not in df_events.columns:
-        navne_df = df_spillere[['PLAYER_WYID', 'PLAYER_NAME']].drop_duplicates()
-        df_events = df_events.merge(navne_df, on='PLAYER_WYID', how='left')
+    # Debug hjælp: Hvis koden fejler herunder, kan vi se navnene
+    try:
+        # Vi tjekker om de rigtige kolonner findes
+        if 'PLAYER_WYID' not in df_spillere.columns:
+            st.error(f"Kunne ikke finde 'PLAYER_WYID'. Kolonner i arket er: {list(df_spillere.columns)}")
+            return
+            
+        # Find kolonnen med navnet (den kan hedde PLAYER_NAME, SPILLER, eller NAVN)
+        navne_col = None
+        for col in ['PLAYER_NAME', 'PLAYER', 'SPILLER', 'NAVN']:
+            if col in df_spillere.columns:
+                navne_col = col
+                break
+        
+        if not navne_col:
+            st.error(f"Kunne ikke finde en kolonne med spillernavn. Tilgængelige kolonner: {list(df_spillere.columns)}")
+            return
 
+        # Lav en ren mapping-liste
+        navne_df = df_spillere[['PLAYER_WYID', navne_col]].drop_duplicates()
+        navne_df = navne_df.rename(columns={navne_col: 'PLAYER_NAME_CLEAN'})
+
+        # Merge navne på events baseret på PLAYER_WYID
+        df_final = df_events.merge(navne_df, on='PLAYER_WYID', how='left')
+        
+    except Exception as e:
+        st.error(f"Data-fejl: {e}")
+        return
+
+    # --- UI FILTRE ---
     col1, col2 = st.columns(2)
     with col1:
-        spiller_liste = sorted(df_events['PLAYER_NAME'].dropna().unique().tolist())
+        # Vi bruger det rensede navn fra merge
+        spiller_liste = sorted(df_final['PLAYER_NAME_CLEAN'].dropna().unique().tolist())
+        if not spiller_liste:
+            st.warning("Ingen spillere fundet i data.")
+            return
         valgt_spiller = st.selectbox("Vælg Spiller:", spiller_liste)
+    
     with col2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
-    mask = df_events['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    mask &= (df_events['PLAYER_NAME'] == valgt_spiller)
+    # --- FILTRERING ---
+    mask = df_final['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
+    mask &= (df_final['PLAYER_NAME_CLEAN'] == valgt_spiller)
+    
     if valgt_type == "Mål":
-        mask &= df_events['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
+        mask &= df_final['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
-    df_skud = df_events[mask].copy()
+    df_skud = df_final[mask].copy()
+    
+    # Lokationsdata
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
+    # Beregn zoner
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
     total = zone_stats['Antal'].sum()
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # Tegn banen
+    # --- TEGN BANE ---
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
     fig, ax = pitch.draw(figsize=(10, 8))
     ax.set_ylim(45, 105)
@@ -72,13 +107,15 @@ def vis_side(df_events, df_spillere):
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         color_val = count / max_count if max_count > 0 else 0
+        
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
                          edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.5)
         ax.add_patch(rect)
+        
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
             y_t = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold')
+            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=9)
 
     st.pyplot(fig)
     st.write(f"**Total afslutninger for {valgt_spiller}:** {int(total)}")
