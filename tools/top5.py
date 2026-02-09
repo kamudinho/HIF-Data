@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 
 def vis_side(spillere_df, player_events_df):
-    st.title("Top 5 Spillere - KPI Analyse")
 
     p_events = player_events_df.copy()
     s_info = spillere_df.copy()
