@@ -9,12 +9,11 @@ def vis_side(df):
         st.error("Ingen data fundet.")
         return
 
-    # --- 0. SIDEBAR (Øverst) ---
-    # Ved at lægge den her, kommer den over andre sidebar-elementer
-    st.sidebar.markdown("### Formation")
-    form_valg = st.sidebar.radio("Vælg opstilling:", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
+    # --- 1. HENT FORMATION FRA MAIN.PY (Fjerner dublet) ---
+    # Vi fjerner st.sidebar.radio herfra, da den nu styres fra main.py
+    form_valg = st.session_state.get('valgt_formation', "3-4-3")
 
-    # --- 1. DATA-PROCESSERING ---
+    # --- 2. DATA-PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
@@ -36,17 +35,16 @@ def vis_side(df):
         if days <= 365: return '#fffd8d'
         return 'white'
 
-    # --- 2. KONFIGURATION AF BANE OG FIGUR ---
-    # Vi bruger en meget bred figur (16, 8) og fjerner margin
+    # --- 3. KONFIGURATION AF BANE OG FIGUR ---
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
     fig, ax = pitch.draw(figsize=(16, 8), constrained_layout=True)
 
-    # --- 3. LEGENDS (Øverst til venstre) ---
+    # Legends inde i billedet
     legend_y = -4 
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
         ("#fffd8d", "Udløb 6-12 mdr"),
-        ("#d3d3d3", "Leje / Udlejet")
+        ("#d3d3d3", "Leje / Udlejet (L)")
     ]
     
     for i, (color, text) in enumerate(legend_items):
@@ -55,7 +53,7 @@ def vis_side(df):
                 va='center', ha='left', family='monospace', fontweight='bold',
                 bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.4', linewidth=0.5))
 
-    # --- 4. FORMATIONER ---
+    # --- 4. FORMATIONER (Bruger form_valg fra session_state) ---
     if form_valg == "3-4-3":
         pos_config = {
             1: (10, 43, 'MM'), 4: (33, 25, 'VCB'), 3: (33, 43, 'CB'), 2: (33, 65, 'HCB'),
@@ -97,7 +95,6 @@ def vis_side(df):
                         bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
-    # --- 6. VISUALISERING (MED TIGHT LAYOUT) ---
-    # Vi fjerner hvid margin manuelt her:
+    # --- 6. VISUALISERING ---
     fig.subplots_adjust(left=0, right=1, bottom=0, top=0.95)
     st.pyplot(fig, use_container_width=True)
