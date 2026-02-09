@@ -39,7 +39,7 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
     # --- 1. DATA VASK (Kører fix-funktionen på relevante kolonner) ---
-    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSION', 'CROSSES', 'AVGDISTANCE']
+    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSES', 'AVGDISTANCE']
     for col in cols_to_fix:
         if col in df_plot.columns:
             df_plot[col] = fix_excel_dates(df_plot[col])
@@ -48,7 +48,7 @@ def vis_side(df_events, df_kamp, hold_map):
     ANALYSE_MODES = {
         "Afslutningseffektivitet (Skud vs. Mål)": {"x": "SHOTS", "y": "GOALS", "suffix": ""},
         "Chance-skabelse (xG vs. Mål)": {"x": "XG", "y": "GOALS", "suffix": ""},
-        "Boldbesiddelse vs. xG": {"x": "POSSESSION", "y": "XG", "suffix": "%"},
+        "Boldbesiddelse vs. xG": {"x": "POSSESSIONPERCENT", "y": "XG", "suffix": "%"},
         "Skudafstand (Distance vs. xG)": {"x": "AVGDISTANCE", "y": "XG", "suffix": "m"}
     }
 
