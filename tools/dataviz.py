@@ -55,7 +55,7 @@ def vis_side(df_events, df_kamp, hold_map):
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    # Diskret lille tekst under menuen
+    # VI HAR ERSTATTET st.info MED st.caption HER:
     st.caption(f"💡 {conf['desc']}")
 
     # BEREGNING (Gennemsnit pr. hold)
