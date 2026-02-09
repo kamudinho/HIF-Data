@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Bootstrap Icons
+# Indlæser Bootstrap Icons via CDN
 st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">', unsafe_allow_html=True)
 
 st.markdown("""
@@ -21,10 +21,10 @@ st.markdown("""
         .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
-            margin-top: -25px !important; /* Trækker indholdet op */
+            margin-top: -25px !important; 
         }
 
-        /* 2. SKJUL STREAMLITS STANDARD HEADER (DEN USYNLIGE BJÆLKE) */
+        /* 2. SKJUL STREAMLITS STANDARD HEADER */
         [data-testid="stHeader"] {
             display: none !important;
         }
@@ -37,7 +37,7 @@ st.markdown("""
             margin-top: -50px !important; 
         }
 
-        /* 4. SAMLET CONTAINER TIL LOGO OG IKON */
+        /* 4. SAMLET CONTAINER TIL LOGO OG IKON (INGEN BOKS) */
         .sidebar-top-container {
             display: flex;
             align-items: center;
@@ -65,8 +65,24 @@ st.markdown("""
             width: 70px;
         }
 
-        /* SIDEBAR GENEREL STYLING */
+        /* 5. SIDEBAR STYLING */
         [data-testid="stSidebar"] { min-width: 260px; max-width: 300px; }
+        
+        div.row-widget.stRadio > div {
+            background-color: #f8f9fb;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #eceef1;
+        }
+
+        .sidebar-header {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #6d6d6d;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
         
         header {visibility: hidden;}
     </style>
@@ -122,7 +138,7 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
-    # HER ER DEN NYE SAMLEDE TOP
+    # Top-sektion: Logout + Logo
     st.markdown('''
         <div class="sidebar-top-container">
             <a href="/?logout=true" target="_self" class="logout-link" title="Log ud">
@@ -135,10 +151,11 @@ with st.sidebar:
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
+    # Hovedmenu
     selected = option_menu(
         menu_title=None,
-        options=["HIF DATA", "DATAANALYSE", "STATISTIK", "SCOUTING"],
-        icons=["house", "graph-up", "bar-chart", "search"],
+        options=["HIF DATA", "DATA - HOLD", "DATA - INDIVIDUELT", "STATISTIK", "SCOUTING"],
+        icons=["house", "shield-shaded", "person-bounding-box", "bar-chart", "search"],
         default_index=0,
         styles={
             "container": {"padding": "0!important"},
@@ -148,15 +165,22 @@ with st.sidebar:
     )
 
     selected_sub = None
-    if selected == "DATAANALYSE":
-        st.markdown('<p class="sidebar-header">Vælg analyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S1", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
+
+    if selected == "DATA - HOLD":
+        st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
+        selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
+        
+    elif selected == "DATA - INDIVIDUELT":
+        st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
+        selected_sub = st.radio("S_ind", ["Spillerzoner", "Afslutninger (Spiller)", "Aktionskort", "Pass Net"], label_visibility="collapsed")
+        
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S2", ["Spillerstats", "Top 5"], label_visibility="collapsed")
+        selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
+        
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Vælg scouting</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S3", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
+        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
         if selected_sub == "Trupsammensætning":
             st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
             st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
@@ -164,16 +188,24 @@ with st.sidebar:
 # --- 6. ROUTING ---
 if selected == "HIF DATA":
     st.title("Hvidovre IF Data Hub")
-    st.info("Brug menuen til venstre for at navigere.")
-elif selected == "DATAANALYSE":
+    st.info("Vælg en kategori i menuen til venstre for at starte analysen.")
+
+elif selected == "DATA - HOLD":
     if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps": skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Målzoner": goalzone.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "Afslutninger": shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
+
+elif selected == "DATA - INDIVIDUELT":
+    st.title(f"Individuel Analyse: {selected_sub}")
+    st.info("Her skal vi implementere de spiller-specifikke filtreringer.")
+    # Her kan du kalde dine kommende spiller-moduler
+
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats": stats.vis_side(spillere, player_events)
     elif selected_sub == "Top 5": top5.vis_side(spillere, player_events)
+
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF": players.vis_side(spillere)
     elif selected_sub == "Trupsammensætning": squad.vis_side(spillere)
