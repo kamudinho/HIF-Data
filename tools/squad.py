@@ -13,7 +13,6 @@ def vis_side(df):
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
-    # Sørg for at PRIOR er string og renset
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
     # Håndtering af kontrakt-datoer
@@ -25,9 +24,9 @@ def vis_side(df):
         df_squad['DAYS_LEFT'] = 999 
 
     def get_status_color(row):
-        # Tjek først om det er en lejespiller
+        # Tjek først PRIOR for 'L' (Leje)
         if row['PRIOR'] == 'L':
-            return '#d3d3d3'  # Grå (Udlejet/Leje)
+            return '#d3d3d3'  # Grå
         
         days = row['DAYS_LEFT']
         if pd.isna(days): return 'white'
@@ -65,11 +64,25 @@ def vis_side(df):
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
     fig, ax = pitch.draw(figsize=(12, 8))
 
-    # --- 4. INDSÆT POSITIONER OG TABELLER ---
+    # --- 4. INDSÆT LEGEND ØVERST ---
+    legend_y = 2
+    legend_items = [
+        ("#ff4b4b", "Udløb < 6 mdr"),
+        ("#fffd8d", "Udløb 6-12 mdr"),
+        ("#d3d3d3", "Leje / Udlejet")
+    ]
+    
+    for i, (color, text) in enumerate(legend_items):
+        # Vi spreder dem ud over midten af banen (x fra 25 til 75)
+        x_pos = 30 + (i * 20)
+        ax.text(x_pos, legend_y, f"  {text}  ", size=8, color="black",
+                va='top', ha='center', family='monospace', fontweight='bold',
+                bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3', linewidth=0.5))
+
+    # --- 5. INDSÆT POSITIONER OG TABELLER ---
     for pos_num, coords in pos_config.items():
         x_pos, y_pos, label = coords if len(coords) == 3 else (coords[0], coords[1], "N/A")
         
-        # Sorterer efter PRIOR. 'L' vil automatisk ligge under A, B og C.
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
@@ -82,7 +95,6 @@ def vis_side(df):
             # B. SPILLER-TABEL
             for i, (_, p) in enumerate(spillere.iterrows()):
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
-                # Bruger den nye farvelogik der inkluderer 'L'
                 bg_color = get_status_color(p)
                 visnings_tekst = f" {navn} ".ljust(25)
                 
@@ -92,22 +104,5 @@ def vis_side(df):
                         va='top', ha='center', fontweight='light', family='monospace',
                         bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
-
-    # --- 5. LEGEND (SIGNATURFORKLARING) ---
-    # Placeret i bunden af banen
-    legend_y = 95
-    legend_x_start = 20
-    
-    legend_items = [
-        ("#ff4b4b", "Udløb < 6 mdr"),
-        ("#fffd8d", "Udløb 6-12 mdr"),
-        ("#d3d3d3", "Leje / Udlejet")
-    ]
-    
-    for i, (color, text) in enumerate(legend_items):
-        x_offset = legend_x_start + (i * 25)
-        ax.text(x_offset, legend_y, f"  {text}  ", size=8, color="black",
-                va='center', ha='left', family='monospace',
-                bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3', linewidth=0.5))
 
     st.pyplot(fig)
