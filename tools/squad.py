@@ -46,7 +46,7 @@ def vis_side(df):
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
         ("#fffd8d", "Udløb 6-12 mdr"),
-        ("#d3d3d3", "Leje / Udlejet (L)")
+        ("#d3d3d3", "Leje / Udlejet")
     ]
     
     for i, (color, text) in enumerate(legend_items):
