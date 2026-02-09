@@ -1,21 +1,22 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from mplsoccer import VerticalPitch
+import plotly.graph_objects as go
+import numpy as np
 
 def vis_side(df_events, df_kamp, hold_map):
     HIF_ID = 38331
     HIF_RED = '#df003b'
-    BG_WHITE = '#ffffff'
 
-    # --- 1. SPILLER DROPDOWN ---
-    # Vi henter alle unikke spillere fra Hvidovre (HIF_ID)
+    # --- 1. SPILLER DROPDOWN I SIDEBAR ---
+    # Vi henter spillere fra HIF
     hif_events = df_events[df_events['TEAM_WYID'] == HIF_ID].copy()
-    
-    # Vi filtrerer kun spillere, der rent faktisk har haft en hændelse
     spiller_navne = sorted(hif_events['PLAYER_NAME'].dropna().unique())
     
-    valgt_spiller = st.selectbox("Vælg spiller", options=["Alle Spillere"] + spiller_navne)
+    # Vi bruger st.sidebar til dropdownen
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown('<p class="sidebar-header">Spillervalg</p>', unsafe_allow_html=True)
+        valgt_spiller = st.selectbox("Vælg spiller", options=["Alle Spillere"] + spiller_navne)
 
     # --- 2. FILTRERING ---
     if valgt_spiller != "Alle Spillere":
@@ -25,65 +26,81 @@ def vis_side(df_events, df_kamp, hold_map):
         df_filtered = hif_events
         titel_tekst = "HIF - Alle Spillere"
 
-    # --- 3. STATS BEREGNING (Baseret på events, da df_kamp er på hold-niveau) ---
+    # Filtrer skud
     shot_mask = df_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     spiller_shots = df_filtered[shot_mask].copy()
     
-    if not spiller_shots.empty:
-        # Tjek for mål i PRIMARYTYPE eller i en dedikeret mål-kolonne hvis den findes
-        spiller_shots['IS_GOAL'] = spiller_shots.apply(
-            lambda r: 'goal' in str(r.get('PRIMARYTYPE', '')).lower() or 
-                      'goal' in str(r.get('SUBTYPE', '')).lower(), axis=1
-        )
+    if spiller_shots.empty:
+        st.warning(f"Ingen skud registreret for {valgt_spiller}")
+        return
+
+    # Marker mål
+    spiller_shots['IS_GOAL'] = spiller_shots.apply(
+        lambda r: 'goal' in str(r.get('PRIMARYTYPE', '')).lower(), axis=1
+    )
+
+    # --- 3. STATS BEREGNING ---
+    s_shots = len(spiller_shots)
+    s_goals = spiller_shots['IS_GOAL'].sum()
+    raw_xg = pd.to_numeric(spiller_shots['XG'], errors='coerce').fillna(0).sum()
+    if raw_xg > s_shots: raw_xg = raw_xg / 100
+    
+    # Vis stats i toppen af siden
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("SKUD", s_shots)
+    c2.metric("MÅL", s_goals)
+    c3.metric("KONV.", f"{(s_goals/s_shots*100):.1f}%" if s_shots > 0 else "0%")
+    c4.metric("xG TOTAL", f"{raw_xg:.2f}")
+
+    # --- 4. INTERAKTIVT SKUDKORT (PLOTLY) ---
+    fig = go.Figure()
+
+    # Tegn banen (halv bane)
+    # Vi laver simple linjer for at simulere feltet
+    shapes = [
+        dict(type="rect", x0=0, y0=60, x1=100, y1=100, line=dict(color="black", width=1)), # Bane omrids
+        dict(type="rect", x0=20, y0=85, x1=80, y1=100, line=dict(color="black", width=1)), # Felt
+        dict(type="rect", x0=40, y0=95, x1=60, y1=100, line=dict(color="black", width=1)), # Lille felt
+    ]
+
+    for is_goal in [False, True]:
+        mask = spiller_shots['IS_GOAL'] == is_goal
+        subset = spiller_shots[mask]
         
-        s_shots = len(spiller_shots)
-        s_goals = spiller_shots['IS_GOAL'].sum()
-        
-        # xG beregning (hvis kolonnen findes i events)
-        if 'XG' in spiller_shots.columns:
-            raw_xg = pd.to_numeric(spiller_shots['XG'], errors='coerce').fillna(0).sum()
-            # Fix hvis xG er i formatet 0-100 i stedet for 0-1
-            if raw_xg > s_shots: raw_xg = raw_xg / 100 
-            s_xg = f"{raw_xg:.2f}"
-        else:
-            s_xg = "N/A"
-            
-        s_conv = f"{(s_goals / s_shots * 100):.1f}%" if s_shots > 0 else "0.0%"
-    else:
-        s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
+        if subset.empty: continue
 
-    # --- 4. VISUALISERING ---
-    fig, ax = plt.subplots(figsize=(10, 6), facecolor=BG_WHITE)
-    pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
-                          half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.2)
-    pitch.draw(ax=ax)
+        # Lav hover-tekst
+        hover_info = []
+        for _, row in subset.iterrows():
+            modstander = hold_map.get(row['OPPONENTTEAM_WYID'], "Ukendt")
+            xg_val = round(row['XG']/100 if row['XG'] > 1 else row['XG'], 2)
+            hover_info.append(f"<b>vs. {modstander}</b><br>xG: {xg_val}")
 
-    # TITEL & SPILLERINFO
-    ax.text(34, 114, titel_tekst.upper(), fontsize=10, color='#333333', ha='center', fontweight='black')
+        fig.add_trace(go.Scatter(
+            x=subset['LOCATIONY'], # I Plotly bruger vi de rå koordinater (0-100)
+            y=subset['LOCATIONX'],
+            mode='markers',
+            name="Mål" if is_goal else "Skud",
+            marker=dict(
+                size=20 if is_goal else 12,
+                color=HIF_RED if is_goal else 'rgba(74, 85, 104, 0.4)',
+                line=dict(width=1, color='white')
+            ),
+            text=hover_info,
+            hoverinfo="text"
+        ))
 
-    # STATS BLOCK
-    x_pos = [15, 28, 41, 54]
-    vals = [str(s_shots), str(s_goals), s_conv, s_xg]
-    labs = ["SKUD", "MÅL", "KONV.", "xG"]
-    for i in range(4):
-        ax.text(x_pos[i], 110, vals[i], color=HIF_RED, fontsize=12, fontweight='bold', ha='center')
-        ax.text(x_pos[i], 108.3, labs[i], fontsize=7, color='gray', ha='center', fontweight='bold')
+    fig.update_layout(
+        title=dict(text=titel_tekst.upper(), x=0.5, font=dict(size=20)),
+        shapes=shapes,
+        xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(range=[60, 105], showgrid=False, zeroline=False, showticklabels=False),
+        width=800,
+        height=600,
+        plot_bgcolor='white',
+        clickmode='event+select',
+        showlegend=False,
+        margin=dict(l=0, r=0, t=50, b=0)
+    )
 
-    # --- TEGN SKUD ---
-    if not spiller_shots.empty:
-        # Almindelige skud (Ikke mål)
-        no_goal = spiller_shots[~spiller_shots['IS_GOAL']]
-        ax.scatter(no_goal['LOCATIONY'] * 0.68, no_goal['LOCATIONX'] * 1.05,
-                   s=100, color='#4a5568', alpha=0.4, edgecolors='white', linewidth=0.5, zorder=3)
-        
-        # Mål
-        goals = spiller_shots[spiller_shots['IS_GOAL']]
-        ax.scatter(goals['LOCATIONY'] * 0.68, goals['LOCATIONX'] * 1.05,
-                   s=250, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1.0, zorder=4)
-
-    # AFGRÆNSNING
-    ax.set_ylim(60, 116)  
-    ax.set_xlim(-2, 70)
-    ax.axis('off')
-
-    st.pyplot(fig)
+    st.plotly_chart(fig, use_container_width=True)
