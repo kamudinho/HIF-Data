@@ -39,7 +39,7 @@ def vis_side(df):
 
     # --- 3. KONFIGURATION AF BANE ---
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-    fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=True)
+    fig, ax = pitch.draw(figsize=(14, 9), constrained_layout=True)
 
     # Forklaring (Legend) i bunden af banen
     legend_y = -4 
