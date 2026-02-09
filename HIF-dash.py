@@ -17,19 +17,13 @@ st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap
 
 st.markdown("""
     <style>
-        /* 1. FJERN ALT TOMRUM I TOPPEN AF HOVEDINDHOLDET */
         .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
             margin-top: -25px !important; 
         }
 
-        /* 2. SKJUL STREAMLITS STANDARD HEADER */
-        [data-testid="stHeader"] {
-            display: none !important;
-        }
-        
-        /* 3. SIDEBAR NAVIGATION & TOP GAB */
+        [data-testid="stHeader"] { display: none !important; }
         [data-testid="stSidebarNav"] { display: none; }
         
         [data-testid="stSidebarUserContent"] {
@@ -37,7 +31,6 @@ st.markdown("""
             margin-top: -50px !important; 
         }
 
-        /* 4. SAMLET CONTAINER TIL LOGO OG IKON */
         .sidebar-top-container {
             display: flex;
             align-items: center;
@@ -57,15 +50,8 @@ st.markdown("""
             left: 5px;
         }
         
-        .logout-link:hover {
-            color: #cc0000 !important;
-        }
-
-        .sidebar-logo {
-            width: 70px;
-        }
-
-        /* 5. SIDEBAR GENEREL STYLING */
+        .logout-link:hover { color: #cc0000 !important; }
+        .sidebar-logo { width: 70px; }
         [data-testid="stSidebar"] { min-width: 260px; max-width: 300px; }
         
         div.row-widget.stRadio > div {
@@ -129,7 +115,10 @@ def load_full_data():
         spillere = pd.read_excel(DATA_PATH, sheet_name='Spillere')
         player_events = pd.read_excel(DATA_PATH, sheet_name='Playerevents')
         df_scout = pd.read_excel(DATA_PATH, sheet_name='Playerscouting')
+        
+        # Mapping af holdnavne og spillernavne
         hold_map = dict(zip(df_hold['TEAM_WYID'], df_hold['Hold']))
+        
         return events, kamp, hold_map, spillere, player_events, df_scout
     except:
         return None, None, {}, None, None, None
@@ -138,7 +127,6 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
-    # Top-sektion: Logout + Logo
     st.markdown('''
         <div class="sidebar-top-container">
             <a href="/?logout=true" target="_self" class="logout-link" title="Log ud">
@@ -151,7 +139,6 @@ with st.sidebar:
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # Hovedmenu
     selected = option_menu(
         menu_title=None,
         options=["DATA - HOLD", "DATA - INDIVIDUELT", "STATISTIK", "SCOUTING"],
@@ -165,25 +152,18 @@ with st.sidebar:
     )
 
     selected_sub = None
-
     if selected == "DATA - HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
-        
     elif selected == "DATA - INDIVIDUELT":
         st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_ind", ["Spillerzoner", "Afslutninger (Spiller)", "Aktionskort", "Pass Net"], label_visibility="collapsed")
-        
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
-        
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Vælg scouting</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
-        if selected_sub == "Trupsammensætning":
-            st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
-            st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
 
 # --- 6. ROUTING ---
 if selected == "DATA - HOLD":
@@ -194,8 +174,13 @@ if selected == "DATA - HOLD":
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DATA - INDIVIDUELT":
-    st.title(f"Individuel Analyse: {selected_sub}")
-    st.info("Denne sektion er klar til indhold.")
+    # Her kalder vi den individuelle visning
+    if selected_sub == "Spillerzoner":
+        # Vi sender df_events og spillere med, så modulet kan parre navne
+        goalzone.vis_individuel_side(df_events)
+    else:
+        st.title(f"Individuel Analyse: {selected_sub}")
+        st.info("Denne sektion er under opbygning.")
 
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats": stats.vis_side(spillere, player_events)
