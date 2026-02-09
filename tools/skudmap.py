@@ -16,26 +16,26 @@ def vis_side(df_events, cols_slider, hold_map=None):
         st.error("Ingen afslutningsdata fundet.")
         return
 
-    # 2. Layout konfiguration
+    # 2. Layout konfiguration (Hvidovre altid først)
     hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
     rows = int(np.ceil(len(hold_ids) / cols_slider))
 
-    # --- ULTRA KOMPAKT GRID ---
-    # Vi sætter højden meget lavt (3.0 per række), da vi kun bruger en halv bane.
-    # Dette fjerner det hvide tomrum mellem rækkerne.
+    # --- MATCHING GRID STYLE ---
+    # Vi bruger constrained_layout=True og en lav rækkehøjde (3.0) 
+    # for at fjerne "gabet" ved de halve baner.
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(15, rows * 4), 
+        figsize=(15, rows * 3.0), 
         facecolor=BG_WHITE,
-        constrained_layout=True  # Fjerner automatisk overflødig luft
+        constrained_layout=True
     )
     
     axes_flat = np.atleast_1d(axes).flatten()
 
-    # Pitch setup: half=True giver det fokus du ønsker
+    # Pitch setup (half=True bibeholdes)
     pitch = VerticalPitch(
         pitch_type='custom', pitch_length=100, pitch_width=100,
-        line_color='#2b2b2b', line_zorder=2, linewidth=1,
+        line_color='#1a1a1a', line_zorder=2, linewidth=0.5,
         half=True
     )
 
@@ -45,26 +45,26 @@ def vis_side(df_events, cols_slider, hold_map=None):
         hold_df = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         pitch.draw(ax=ax)
 
-        # Hent holdnavn og antal
-        navn = str(hold_map.get(tid, f"ID: {tid}")).upper()
-        antal = len(hold_df)
-        
-        # TITEL-STRUKTUR FRA BILLEDE 2:
-        # Vi placerer antallet lige under holdnavnet i selve titlen
-        ax.set_title(f"{navn}\n({antal} SKUD)", 
-                     fontsize=12, 
-                     fontweight='bold', 
-                     pad=10) # Meget lille pad for at holde det tæt på banen
+        # Hent holdnavn
+        if hold_map and tid in hold_map:
+            navn = str(hold_map[tid]).upper()
+        else:
+            navn = "HVIDOVRE IF" if tid == HIF_ID else f"ID: {tid}"
 
-        # Heatmap (KDE)
-        if antal > 3:
+        # TITEL-STIL FRA BILLEDE 2:
+        # Navn øverst, antal skud lige under i parentes.
+        ax.set_title(f"{navn}\n({len(hold_df)} afslutninger)",
+                     fontsize=12, fontweight='bold', pad=8)
+
+        # Heatmap (KDE) - Samme indstillinger som dit heatmap-ark
+        if len(hold_df) > 5:
             sns.kdeplot(
                 x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
-                fill=True, thresh=0.05, levels=40, 
+                fill=True, thresh=0.02, levels=40, 
                 cmap='YlOrRd', alpha=0.8, zorder=1
             )
 
-    # Skjul tomme felter hvis antal hold ikke går op i kolonner
+    # Skjul overskydende baner
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
 
