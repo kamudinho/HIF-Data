@@ -73,7 +73,7 @@ def vis_side(df_spillere):
             "LASTNAME": st.column_config.TextColumn("Efternavn", width="medium"),
             "BIRTHDATE": st.column_config.DateColumn("Fødselsdato", format="DD.MM.YYYY"),
             "HEIGHT": st.column_config.NumberColumn("Højde (cm)"),
-            "WEIGHT": st.column_config.NumberColumn("Vægt (kg)"),
+            "FOD": st.column_config.TextColumn("Fod"),
             "CONTRACT": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY", width="medium")
         },
         use_container_width=True,
@@ -86,6 +86,4 @@ def vis_side(df_spillere):
     col1.metric("Antal spillere", len(df_display))
     if not df_display.empty:
         h_mean = pd.to_numeric(df_display['HEIGHT'], errors='coerce').mean()
-        w_mean = pd.to_numeric(df_display['WEIGHT'], errors='coerce').mean()
         col2.metric("Gns. Højde", f"{h_mean:.1f} cm" if not pd.isna(h_mean) else "-")
-        col3.metric("Gns. Vægt", f"{w_mean:.1f} kg" if not pd.isna(w_mean) else "-")
