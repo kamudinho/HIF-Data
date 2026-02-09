@@ -30,11 +30,11 @@ def vis_side(df_events, df_kamp, hold_map):
         relevante_match_ids = df_events_filtered['MATCH_WYID'].unique()
         stats_df = df_kamp[(df_kamp['TEAM_WYID'] == HIF_ID) &
                            (df_kamp['MATCH_WYID'].isin(relevante_match_ids))].copy()
-        titel_tekst = f"Afslutninger mod {valgt_navn}"
+        titel_tekst = f"HIF mod {valgt_navn}"
     else:
         df_events_filtered = df_events[df_events['TEAM_WYID'] == HIF_ID]
         stats_df = df_kamp[df_kamp['TEAM_WYID'] == HIF_ID].copy()
-        titel_tekst = "Afslutninger: Alle Kampe"
+        titel_tekst = "HIF: Alle Kampe"
 
     # --- 3. BEREGN STATS ---
     if not stats_df.empty:
@@ -47,48 +47,47 @@ def vis_side(df_events, df_kamp, hold_map):
         s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
 
     # --- 4. VISUALISERING ---
-    # Figurstørrelse ændret for at passe bedre til skærmen (bredere end før)
-    fig, ax = plt.subplots(figsize=(10, 8), facecolor=BG_WHITE)
+    # Figurstørrelse optimeret til dashboard (Bredere og mindre høj)
+    fig, ax = plt.subplots(figsize=(12, 7), facecolor=BG_WHITE, constrained_layout=True)
+    
     pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
-                          half=True, pitch_color='white', line_color='#1a1a1a', linewidth=2)
+                          half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.5)
     pitch.draw(ax=ax)
 
-    # Dynamisk titel
-    ax.text(34, 115, titel_tekst, fontsize=16, color='#1a1a1a', ha='center', fontweight='bold')
+    # TITEL (Modstander)
+    ax.text(34, 118, titel_tekst.upper(), fontsize=14, color='#333333', ha='center', fontweight='black')
 
-    # Top-stats tekst (Skriftstørrelse reduceret fra 28/12 til 20/10)
-    header_data = [(s_xg, "xG Total"), (s_conv, "Konvertering"), (str(s_goals), "Mål"), (str(s_shots), "Afslutninger")]
-    x_pos = [12, 27, 41, 56] # Justeret positioner til den nye bredde
+    # STATS BLOCK (Mindre og mere kompakt)
+    header_data = [(s_xg, "xG Total"), (s_conv, "Konvertering"), (str(s_goals), "Mål"), (str(s_shots), "Skud")]
+    x_pos = [10, 26, 42, 58] 
     for i, (val, label) in enumerate(header_data):
-        ax.text(x_pos[i], 110, val, color=HIF_RED, fontsize=20, fontweight='bold', ha='center')
-        ax.text(x_pos[i], 107.5, label, fontsize=10, color='gray', ha='center', fontweight='bold')
+        ax.text(x_pos[i], 112, val, color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
+        ax.text(x_pos[i], 109, label, fontsize=9, color='gray', ha='center', fontweight='bold')
 
-    # Find og tegn skud
+    # LEGENDS (Placeret i øverste højre hjørne under stats)
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=8),
+        Line2D([0], [0], marker='o', color='w', label='Afslutning', markerfacecolor='#4a5568', markersize=6, alpha=0.4)
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 1.08), 
+              frameon=False, fontsize=8, ncol=1, labelspacing=0.2)
+
+    # TEGN SKUD
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     hif_shots = df_events_filtered[shot_mask].copy()
 
     if not hif_shots.empty:
         hif_shots['IS_GOAL'] = hif_shots.apply(lambda r: 'goal' in str(r.get('PRIMARYTYPE', '')).lower(), axis=1)
-
         goals = hif_shots[hif_shots['IS_GOAL'] == True]
         misses = hif_shots[hif_shots['IS_GOAL'] == False]
 
-        # Størrelse på cirkler let reduceret for renere look
         ax.scatter(misses['LOCATIONY'] * 0.68, misses['LOCATIONX'] * 1.05,
-                   s=150, color='#4a5568', alpha=0.3, edgecolors='white', zorder=3)
+                   s=120, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
         ax.scatter(goals['LOCATIONY'] * 0.68, goals['LOCATIONX'] * 1.05,
-                   s=350, color=HIF_RED, alpha=0.9, edgecolors='white', zorder=4)
+                   s=280, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1, zorder=4)
 
-    # Legend
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=10),
-        Line2D([0], [0], marker='o', color='w', label='Afslutning', markerfacecolor='#4a5568', markersize=8, alpha=0.4)
-    ]
-    ax.legend(handles=legend_elements, loc='lower center', ncol=2, bbox_to_anchor=(0.5, 0.01), frameon=False, fontsize=9)
-
-    # Juster synligheden af banen
-    ax.set_ylim(60, 118)
+    # AFGRÆNSNING
+    ax.set_ylim(60, 122) # Giver plads til tekst i toppen
     ax.axis('off')
-    
-    plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+
+    st.pyplot(fig)
