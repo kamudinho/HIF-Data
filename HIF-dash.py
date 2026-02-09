@@ -76,25 +76,40 @@ player_goalzone = load_module("player_goalzone")
 
 # --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
+XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
+CSV_PATH = os.path.join(BASE_DIR, 'eventdata.csv')
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Henter data (CSV + Excel)...")
 def load_full_data():
     try:
-        ev = pd.read_excel(DATA_PATH, sheet_name='Eventdata', engine='openpyxl')
-        ka = pd.read_excel(DATA_PATH, sheet_name='Kampdata', engine='openpyxl')
-        ho = pd.read_excel(DATA_PATH, sheet_name='Hold', engine='openpyxl')
-        sp = pd.read_excel(DATA_PATH, sheet_name='Spillere', engine='openpyxl')
-        pe = pd.read_excel(DATA_PATH, sheet_name='Playerevents', engine='openpyxl')
-        sc = pd.read_excel(DATA_PATH, sheet_name='Playerscouting', engine='openpyxl')
+        # 1. Hent de små dataark fra Excel (som du plejer)
+        # Vi bruger 'None' til Eventdata her, da vi henter den fra CSV
+        ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
+        ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
+        sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
+        pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
+        sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
+        # 2. Hent den tunge Eventdata fra CSV
+        # VIGTIGT: Hvis din CSV bruger semikolon (;) som i dansk Excel, ret sep=',' til sep=';'
+        if os.path.exists(CSV_PATH):
+            ev = pd.read_csv(CSV_PATH, sep=',', low_memory=False) 
+        else:
+            st.error(f"Kunne ikke finde filen: {CSV_PATH}")
+            return None, None, {}, None, None, None
+        
+        # 3. Data Behandling (Merge navne)
+        # Sikrer at kolonnenavne er ens (f.eks. store bogstaver) for en sikkerheds skyld
         if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
             navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
+            
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
+        
         return ev, ka, h_map, sp, pe, sc
+
     except Exception as e:
-        st.error(f"Datafejl: {e}")
+        st.error(f"Kritisk fejl ved indlæsning af data: {e}")
         return None, None, {}, None, None, None
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
