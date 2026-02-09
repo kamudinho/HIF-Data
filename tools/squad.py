@@ -9,8 +9,10 @@ def vis_side(df):
         st.error("Ingen data fundet.")
         return
 
-    # --- 0. SIDEBAR ELEMENTER (Placeres tidligt for at ligge øverst) ---
-    form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
+    # --- 0. SIDEBAR (Øverst) ---
+    # Ved at lægge den her, kommer den over andre sidebar-elementer
+    st.sidebar.markdown("### Formation")
+    form_valg = st.sidebar.radio("Vælg opstilling:", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
 
     # --- 1. DATA-PROCESSERING ---
     df_squad = df.copy()
@@ -27,22 +29,20 @@ def vis_side(df):
 
     def get_status_color(row):
         if row['PRIOR'] == 'L':
-            return '#d3d3d3'  # Grå for leje
+            return '#d3d3d3'
         days = row['DAYS_LEFT']
         if pd.isna(days): return 'white'
-        if days < 182: return '#ff4b4b'   # Rød
-        if days <= 365: return '#fffd8d'  # Gul
+        if days < 182: return '#ff4b4b'
+        if days <= 365: return '#fffd8d'
         return 'white'
 
-    # --- 2. TEGN BANEN ---
-    # Pitch setup
+    # --- 2. KONFIGURATION AF BANE OG FIGUR ---
+    # Vi bruger en meget bred figur (16, 8) og fjerner margin
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-    
-    # Vi bruger en bredere figur (figsize 16:9 ratio) for at fylde skærmen bedre ud
-    fig, ax = pitch.draw(figsize=(16, 9)) 
+    fig, ax = pitch.draw(figsize=(16, 8), constrained_layout=True)
 
-    # --- 3. LEGENDS INDE I BILLEDET (Øverst til venstre) ---
-    legend_y = -5 
+    # --- 3. LEGENDS (Øverst til venstre) ---
+    legend_y = -4 
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
         ("#fffd8d", "Udløb 6-12 mdr"),
@@ -50,16 +50,16 @@ def vis_side(df):
     ]
     
     for i, (color, text) in enumerate(legend_items):
-        x_pos = 2 + (i * 22) # Justeret afstand for 16:9 formatet
-        ax.text(x_pos, legend_y, f"  {text}  ", size=10, color="black",
+        x_pos = 1 + (i * 22)
+        ax.text(x_pos, legend_y, f"  {text}  ", size=11, color="black",
                 va='center', ha='left', family='monospace', fontweight='bold',
                 bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.4', linewidth=0.5))
 
-    # --- 4. FORMATIONS-KONFIGURATION ---
+    # --- 4. FORMATIONER ---
     if form_valg == "3-4-3":
         pos_config = {
             1: (10, 43, 'MM'), 4: (33, 25, 'VCB'), 3: (33, 43, 'CB'), 2: (33, 65, 'HCB'),
-            5: (55, 8, 'VWB'), 6: (55, 33, 'DM'), 8: (55, 53, 'DM'), 7: (55, 78, 'HWB'), 
+            5: (55, 10, 'VWB'), 6: (55, 33, 'DM'), 8: (55, 53, 'DM'), 7: (55, 76, 'HWB'), 
             11: (85, 15, 'VW'), 9: (105, 43, 'ANG'), 10: (85, 71, 'HW')
         }
     elif form_valg == "4-3-3":
@@ -71,7 +71,7 @@ def vis_side(df):
     else: # 3-5-2
         pos_config = {
             1: (10, 43, 'MM'), 4: (33, 25, 'VCB'), 3: (33, 43, 'CB'), 2: (33, 65, 'HCB'),
-            5: (55, 8, 'VWB'), 6: (55, 43, 'DM'), 7: (55, 75, 'HWB'), 
+            5: (55, 10, 'VWB'), 6: (55, 43, 'DM'), 7: (55, 76, 'HWB'), 
             8: (65, 30, 'CM'), 10: (65, 60, 'CM'),
             11: (95, 30, 'ANG'), 9: (95, 55, 'ANG')
         }
@@ -82,7 +82,7 @@ def vis_side(df):
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
-            ax.text(x_pos, y_pos - 4.6, f" {label} ", size=11, color="white",
+            ax.text(x_pos, y_pos - 4.8, f" {label} ", size=12, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
 
@@ -90,13 +90,14 @@ def vis_side(df):
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
                 bg_color = get_status_color(p)
                 visnings_tekst = f" {navn} ".ljust(25)
-                y_row = (y_pos - 2.1) + (i * 2.1)
+                y_row = (y_pos - 2.2) + (i * 2.2)
                 
-                ax.text(x_pos, y_row, visnings_tekst, size=9, color="black",
+                ax.text(x_pos, y_row, visnings_tekst, size=10, color="black",
                         va='top', ha='center', fontweight='light', family='monospace',
                         bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
-    # --- 6. VISUALISERING ---
-    # use_container_width=True sørger for at billedet udfylder sidens bredde
+    # --- 6. VISUALISERING (MED TIGHT LAYOUT) ---
+    # Vi fjerner hvid margin manuelt her:
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=0.95)
     st.pyplot(fig, use_container_width=True)
