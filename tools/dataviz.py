@@ -17,7 +17,6 @@ def vis_side(df_events, df_kamp, hold_map):
     BILLEDE_MAPPING = {
         "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
         "Afleveringer vs. Mål": {"x": "PASSES", "y": "GOALS"},
-        "Disciplin: Frispark vs. Gule kort": {"x": "FOULS", "y": "YELLOWCAR"}
     }
 
     valgt_label = st.selectbox("Vælg analyse:", options=list(BILLEDE_MAPPING.keys()))
