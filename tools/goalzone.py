@@ -6,7 +6,7 @@ from mplsoccer import VerticalPitch
 import streamlit as st
 import matplotlib.colors as mcolors
 
-# --- KONSTANTER (Skal stå uden for vis_side for at undgå NameError) ---
+# --- KONSTANTER ---
 ZONE_BOUNDARIES = {
     "Zone 1": {"y_min": 94.2, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
     "Zone 4A": {"y_min": 94.2, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
@@ -24,7 +24,6 @@ ZONE_BOUNDARIES = {
 }
 
 def find_zone(y, x):
-    """Find zone baseret på y (længde) og x (bredde)"""
     for zone, b in ZONE_BOUNDARIES.items():
         if b["x_min"] <= x <= b["x_max"] and b["y_min"] <= y <= b["y_max"]:
             return zone
@@ -35,10 +34,9 @@ def vis_side(df, kamp=None, hold_map=None):
     HIF_RED = '#df003b'
     BG_WHITE = '#ffffff'
     
-    # Standardiser kolonner
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # --- 1. DROPDOWNS (Pænt på én linje) ---
+    # --- 1. DROPDOWNS (Ensartet med afslutninger) ---
     c1, c2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
@@ -67,26 +65,24 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    # Beregn zone-statistik
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- 3. VISUALISERING (Kompakt layout) ---
+    # --- 3. VISUALISERING (Præcis samme layout som afslutninger) ---
     fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG_WHITE)
     
-    # pad_top=-15 fjerner det hvide tomrum over banen
+    # pad_top=-15 fjerner afstanden. half=True sikrer halv bane.
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', 
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # TITEL & STATS (Placeret tæt på baglinjen)
+    # TITEL & STATS (Koordinater matcher afslutninger.py)
     ax.text(50, 107.5, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
     ax.text(50, 105.2, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
     ax.text(50, 103.8, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
 
-    # TEGN ZONER
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
 
@@ -95,18 +91,23 @@ def vis_side(df, kamp=None, hold_map=None):
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         color_val = count / max_count if max_count > 0 else 0
         
+        # Vi tegner kun zoner der er inden for den viste halvdel (y > 40-50)
+        # Zone 8 bliver nu "bunden" af vores visning
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
                          edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.4, linewidth=0.5)
         ax.add_patch(rect)
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            # Zone 8 tekst løftes op, de andre centreres
-            y_t = 63 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5.5)
+            # Justering af Zone 8 tekst så den ses på den halve bane (omkring y=55)
+            y_t = 55 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            
+            # Vi skriver kun teksten hvis den er inden for vores ylim
+            if y_t > 45:
+                ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5.5)
 
-    # Stram afgrænsning (0 til 110 sikrer Zone 8 er med og toppen er tæt)
-    ax.set_ylim(0, 110) 
+    # ENSARTET LIMIT (Matcher afslutninger.py)
+    ax.set_ylim(40, 110) 
     ax.set_xlim(-2, 102)
     ax.axis('off')
 
