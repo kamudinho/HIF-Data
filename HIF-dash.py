@@ -74,7 +74,7 @@ if df_events is None:
 
 # --- 4. SIDEBAR MENU ---
 with st.sidebar:
-    st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=80)
+    st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", align="center", width=80)
     
     selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
                            icons=["shield", "person", "bar-chart", "search"], 
