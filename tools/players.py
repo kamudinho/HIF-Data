@@ -16,7 +16,7 @@ def vis_side(df_spillere):
     df_working['CONTRACT'] = pd.to_datetime(df_working['CONTRACT'], dayfirst=True, errors='coerce')
     df_working['HEIGHT'] = pd.to_numeric(df_working['HEIGHT'], errors='coerce')
 
-    # Beregn Alder (bruges til gennemsnit)
+    # Beregn Alder
     df_working['ALDER'] = df_working['BIRTHDATE'].apply(
         lambda x: idag.year - x.year - ((idag.month, idag.day) < (x.month, x.day)) if pd.notna(x) else None
     )
@@ -31,13 +31,11 @@ def vis_side(df_spillere):
     # --- 2. KLARGØRING TIL VISNING ---
     df_viz = df_working.copy()
 
-    # Navne-samling
     df_viz['FULL_NAME'] = df_viz.apply(
         lambda x: f"{x['FIRSTNAME']} {x['LASTNAME']}".strip() if pd.notna(x['FIRSTNAME']) or pd.notna(x['LASTNAME']) else "-",
         axis=1
     )
 
-    # Højde som tekst (venstrestillet)
     df_viz['HEIGHT_STR'] = df_viz['HEIGHT'].apply(
         lambda x: f"{int(x)} cm" if pd.notna(x) else "-"
     )
@@ -55,24 +53,24 @@ def vis_side(df_spillere):
         )
         df_viz = df_viz[mask]
 
-    # --- 4. FARVEMARKERING ---
-    def highlight_contract(row):
-        styles = [''] * len(row)
-        if pd.notna(row['CONTRACT']):
-            try:
-                contr_idx = row.index.get_loc('CONTR_STR')
-                dage = (row['CONTRACT'] - idag).days
-                if dage < 183:
-                    styles[contr_idx] = 'background-color: #ffcccc; color: black;'
-                elif dage <= 365:
-                    styles[contr_idx] = 'background-color: #ffffcc; color: black;'
-            except:
-                pass
-        return styles
+    # --- 4. FARVEMARKERING (Omskrevet for stabilitet) ---
+    def highlight_contract(data):
+        # Vi laver en kopi af dataframe til styling
+        attr = 'background-color: #ffcccc; color: black;' # Rød for udløb snart
+        attr_warn = 'background-color: #ffffcc; color: black;' # Gul for udløb indenfor et år
+        
+        # Opret en DataFrame med tomme strenge til styling
+        style_df = pd.DataFrame('', index=data.index, columns=data.columns)
+        
+        # Find rækker hvor kontrakt udløber snart
+        if 'CONTRACT' in data.columns:
+            dage = (data['CONTRACT'] - idag).dt.days
+            style_df.loc[dage < 183, 'CONTR_STR'] = attr
+            style_df.loc[(dage >= 183) & (dage <= 365), 'CONTR_STR'] = attr_warn
+            
+        return style_df
 
-    styled_df = df_viz.style.apply(highlight_contract, axis=1)
-
-    # --- 5. TABEL ---
+    # --- 5. TABEL VISNING ---
     kolonner = {
         "ROLECODE3": "Pos",
         "FULL_NAME": "Navn",
@@ -82,8 +80,9 @@ def vis_side(df_spillere):
         "CONTR_STR": "Kontraktudløb"
     }
 
+    # Vi bruger st.dataframe direkte på det stylede objekt
     st.dataframe(
-        styled_df,
+        df_viz.style.apply(highlight_contract, axis=None),
         column_order=list(kolonner.keys()),
         column_config={
             "ROLECODE3": st.column_config.TextColumn("Pos", width="small"),
@@ -93,14 +92,12 @@ def vis_side(df_spillere):
             "FOD": st.column_config.TextColumn("Fod", width="small"),
             "CONTR_STR": st.column_config.TextColumn("Kontraktudløb")
         },
-        use_container_width=True,
-        hide_index=True,
-        height=int(35.5 * (len(df_viz) + 1))
+        use_container_width=True, # Streamlit internt mapper denne nu korrekt i de fleste versioner, men ellers skift til width="stretch"
+        hide_index=True
     )
 
-    # --- 6. STATISTIK I BUNDEN (Kompakt) ---
+    # --- 6. STATISTIK I BUNDEN ---
     st.markdown("---")
-    # Vi bruger st.caption eller mindre metrics her
     c1, c2, c3 = st.columns(3)
     
     with c1:
