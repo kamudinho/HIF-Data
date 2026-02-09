@@ -9,7 +9,7 @@ from tools import (
 
 # --- 1. KONFIGURATION & CSS ---
 st.set_page_config(
-    page_title="HIF Performance Hub", 
+    page_title="HIF Performance", 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
