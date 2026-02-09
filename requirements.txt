@@ -9,3 +9,4 @@ seaborn
 scipy
 mplsoccer
 plotly
+jinja2
