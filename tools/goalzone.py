@@ -34,26 +34,34 @@ def vis_side(df_events, spillere_df, hold_map=None):
     HIF_RED = '#df003b'
     BG_WHITE = '#ffffff'
     
-    # Standardiser kolonner
+    # 1. Standardiser kolonner til store bogstaver
     df = df_events.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
+    
     s_df = spillere_df.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
 
-    # --- 1. KOBL NAVNE PÅ DATA (VIGTIGT!) ---
-    # Vi gør præcis som i din Stats/Top 5 logik
-    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    # 2. Find de rigtige ID-kolonner (PLAYER_WYID eller WYID)
+    id_col_events = 'PLAYER_WYID' if 'PLAYER_WYID' in df.columns else 'WYID'
+    id_col_spillere = 'PLAYER_WYID' if 'PLAYER_WYID' in s_df.columns else 'WYID'
+
+    if id_col_events not in df.columns or id_col_spillere not in s_df.columns:
+        st.error("Kunne ikke finde en spiller-ID kolonne (WYID eller PLAYER_WYID).")
+        return
+
+    # 3. Rens ID'er og Map Navne
+    s_df[id_col_spillere] = s_df[id_col_spillere].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    df[id_col_events] = df[id_col_events].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     
     navne_dict = {}
     for _, row in s_df.iterrows():
         f = str(row.get('FIRSTNAME', '')).replace('nan', '')
         l = str(row.get('LASTNAME', '')).replace('nan', '')
-        navne_dict[row['PLAYER_WYID']] = f"{f} {l}".strip()
+        navne_dict[row[id_col_spillere]] = f"{f} {l}".strip()
     
-    df['NAVN'] = df['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
+    df['NAVN'] = df[id_col_events].map(navne_dict).fillna("Ukendt Spiller")
 
-    # --- 2. DROPDOWNS ---
+    # 4. DROPDOWNS
     c1, c2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
@@ -66,7 +74,7 @@ def vis_side(df_events, spillere_df, hold_map=None):
     with c2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
-    # --- 3. FILTRERING ---
+    # 5. FILTRERING
     mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
     if valgt_id:
         mask &= (df['OPPONENTTEAM_WYID'].astype(int) == valgt_id)
@@ -85,16 +93,14 @@ def vis_side(df_events, spillere_df, hold_map=None):
     # Beregn zoner
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     
-    # --- 4. FIND TOP SPILLER PR. ZONE ---
+    # 6. FIND TOP SPILLER PR. ZONE
     top_players = {}
     if not df_skud.empty:
-        # Gruppér på Zone og Navn
         player_stats = df_skud.groupby(['ZONE_ID', 'NAVN']).size().reset_index(name='COUNT')
         for zone in player_stats['ZONE_ID'].unique():
             zone_df = player_stats[player_stats['ZONE_ID'] == zone]
             best_p = zone_df.loc[zone_df['COUNT'].idxmax(), 'NAVN']
             
-            # Forkort til "F. EFTERNAVN"
             dele = str(best_p).split()
             short = f"{dele[0][0]}. {dele[-1]}" if len(dele) > 1 else best_p
             top_players[zone] = short.upper()
@@ -103,13 +109,12 @@ def vis_side(df_events, spillere_df, hold_map=None):
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- 5. VISUALISERING ---
+    # 7. VISUALISERING
     fig, ax = plt.subplots(figsize=(8, 10), facecolor=BG_WHITE)
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', 
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # Titel og Stats
     ax.text(50, 107.5, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
     ax.text(50, 105.2, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
     ax.text(50, 103.8, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
@@ -130,10 +135,8 @@ def vis_side(df_events, spillere_df, hold_map=None):
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
             y_t = 55 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
             
-            # Statistik linje (Antal og %)
             ax.text(x_t, y_t + 0.6, f"{int(count)} ({percent:.0f}%)", ha='center', va='bottom', fontweight='bold', fontsize=5.5)
             
-            # Navn på den skarpeste spiller i zonen
             if name in top_players:
                 ax.text(x_t, y_t - 1.2, top_players[name], ha='center', va='top', fontsize=4.8, color='#1a1a1a', fontweight='black')
 
