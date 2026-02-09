@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5, squad
 
-# --- 1. KONFIGURATION & CSS (FJERNER TOMRUM I SIDEBAR) ---
+# --- 1. KONFIGURATION & CSS (OPTIMERET TIL TOP-LOGOUT) ---
 st.set_page_config(
     page_title="HIF Performance Hub", 
     layout="wide", 
@@ -20,8 +20,8 @@ st.markdown("""
         }
         
         [data-testid="stSidebarUserContent"] {
-            padding-top: 0rem !important;
-            margin-top: -50px !important; /* Trækker indholdet op over det usynlige tomrum */
+            padding-top: 0.5rem !important;
+            margin-top: -45px !important; 
         }
 
         /* 2. FJERN TOP-PADDING PÅ CONTENT AREA */
@@ -29,13 +29,27 @@ st.markdown("""
             padding-top: 1rem !important;
         }
 
-        /* 3. SIDEBAR STYLING */
+        /* 3. DISKRET LOGUD KNAP ØVERST */
+        div[data-testid="stSidebar"] button {
+            background-color: transparent;
+            color: #d3d3d3;
+            border: none;
+            padding: 0px;
+            font-size: 12px;
+            float: left;
+        }
+        div[data-testid="stSidebar"] button:hover {
+            color: #cc0000;
+            background-color: transparent;
+            border: none;
+        }
+
+        /* 4. SIDEBAR STYLING */
         [data-testid="stSidebar"] {
             min-width: 260px;
             max-width: 300px;
         }
 
-        /* Gør radio-buttons pæne og kompakte */
         div.row-widget.stRadio > div {
             background-color: #f8f9fb;
             padding: 10px;
@@ -52,7 +66,6 @@ st.markdown("""
             text-transform: uppercase;
         }
 
-        /* Skjul Streamlit standard elementer */
         header {visibility: hidden;}
         [data-testid="stHeader"] {background: rgba(0,0,0,0); height: 0rem;}
     </style>
@@ -62,7 +75,7 @@ def get_engine():
     db_path = os.path.join(os.getcwd(), 'hif_database.db')
     return create_engine(f"sqlite:///{db_path}")
 
-# --- 2. INITIALISERING AF DATABASE ---
+# --- 2. INITIALISERING ---
 engine = get_engine()
 with engine.connect() as conn:
     conn.execute(text("""
@@ -81,7 +94,7 @@ with engine.connect() as conn:
     """), {"hpw": hashed_pw})
     conn.commit()
 
-# --- 3. LOGIN LOGIK ---
+# --- 3. LOGIN ---
 def verify_user(username, password):
     return username.lower() == "kasper" and password == "1234"
 
@@ -131,7 +144,12 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # Logoet placeres nu helt i toppen
+    # Lille anonym logud-knap i øverste venstre hjørne
+    if st.button("🚪 Log ud"):
+        st.session_state["logged_in"] = False
+        st.rerun()
+
+    # Logo og velkomst
     st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="80"></div>', unsafe_allow_html=True)
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
@@ -163,11 +181,6 @@ with st.sidebar:
         if selected_sub == "Trupsammensætning":
             st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
             st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
-
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-    if st.button("Log ud", use_container_width=True):
-        st.session_state["logged_in"] = False
-        st.rerun()
 
 # --- 6. ROUTING ---
 if selected == "HIF DATA":
