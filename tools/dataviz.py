@@ -31,17 +31,17 @@ def vis_side(df_events, df_kamp, hold_map):
 
     # --- 2. ANALYSE MODES ---
     ANALYSE_MODES = {
-        "SKUD x MÅL = Effektivitet": {"x": "SHOTS", "y": "GOALS", "desc": "Hvor mange skud skal holdet bruge? Højre-top er mest effektive."},
-        "XG x MÅL = Performance": {"x": "XG", "y": "GOALS", "desc": "Over/underperformance på chancer. Over linjen er klinisk."},
-        "POSSESSION x INDLÆG = Konvertering": {"x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL", "desc": "Bliver boldbesiddelsen konverteret til indlæg?"},
-        "PASSES x FORWARDPASSES = Fremadrettede": {"x": "FORWARDPASSES", "y": "PASSES", "desc": "Hvor stor en del af afleveringerne er fremadrettede?"}
+        "SKUD x MÅL = Effektivitet": {"x": "SHOTS", "y": "GOALS", "desc": "Hvor mange skud skal holdet bruge?"},
+        "XG x MÅL = Performance": {"x": "XG", "y": "GOALS", "desc": "Under- eller overperformance på chancer."},
+        "POSSESSION x INDLÆG = Konvertering": {"x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL", "desc": "Bliver boldbesiddelse til indlæg?"},
+        "PASSES x FORWARDPASSES = Fremadrettede": {"x": "FORWARDPASSES", "y": "PASSES", "desc": "Hvor stor en del af spillet er fremadrettet?"}
     }
 
     valgt_label = st.selectbox("Vælg analyse-metrik:", options=list(ANALYSE_MODES.keys()))
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic; margin-bottom: 20px;'>{conf['desc']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic;'>{conf['desc']}</p>", unsafe_allow_html=True)
 
     # --- 3. BEREGNING ---
     if x_col in df_plot.columns and y_col in df_plot.columns:
@@ -63,52 +63,44 @@ def vis_side(df_events, df_kamp, hold_map):
                 mode='markers+text',
                 text=[team_name],
                 textposition="top center",
-                customdata=[tid], # Vi gemmer ID'et her så vi kan fange det ved klik
-                textfont=dict(size=11, color='black' if is_hif else '#666'),
+                customdata=[[team_name, x_val, y_val]], # Gemmer værdier til klik
+                textfont=dict(size=10, color='black' if is_hif else '#777'),
                 showlegend=False,
                 marker=dict(
-                    size=18 if is_hif else 13, 
-                    color=HIF_RED if is_hif else 'rgba(100,100,100,0.4)',
+                    size=18 if is_hif else 12, 
+                    color=HIF_RED if is_hif else 'rgba(150,150,150,0.5)',
                     line=dict(width=1.5, color='black' if is_hif else 'white')
                 ),
-                hovertemplate=f"<b>{team_name}</b><br>Klik for detaljer<extra></extra>"
+                hovertemplate="<b>%{text}</b><br>Klik for info<extra></extra>"
             ))
-
-        avg_x, avg_y = stats[x_col].mean(), stats[y_col].mean()
-        fig.add_vline(x=avg_x, line_dash="dot", opacity=0.3)
-        fig.add_hline(y=avg_y, line_dash="dot", opacity=0.3)
 
         fig.update_layout(
             plot_bgcolor='white',
-            xaxis_title=f"Gennemsnitlig {x_col}",
-            yaxis_title=f"Gennemsnitlig {y_col}",
-            height=550,
-            clickmode='event+select', # Gør det muligt at fange klikket
-            margin=dict(l=20, r=20, t=20, b=20)
+            xaxis_title=f"{x_col} (Gns)",
+            yaxis_title=f"{y_col} (Gns)",
+            height=500,
+            clickmode='event+select',
+            margin=dict(l=20, r=20, t=30, b=20)
         )
 
-        # Vis grafen og fang retur-data
-        selected_points = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+        # Vis graf og fang event
+        event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
-        # --- 5. VIS DATA VED KLIK ---
-        # Tjek om brugeren har klikket på en prik
-        if selected_points and "selection" in selected_points and len(selected_points["selection"]["points"]) > 0:
-            # Hent TEAM_WYID fra customdata på det klikkede punkt
-            clicked_id = selected_points["selection"]["points"][0]["customdata"]
-            clicked_name = hold_map.get(clicked_id, f"ID: {clicked_id}")
+        # --- 5. INFO BOKS VED KLIK ---
+        if event_data and "selection" in event_data and len(event_data["selection"]["points"]) > 0:
+            # Udtræk data fra det valgte punkt
+            info = event_data["selection"]["points"][0]["customdata"]
+            team_name, val_x, val_y = info[0], info[1], info[2]
             
-            st.markdown(f"### Detaljer: {clicked_name}")
-            
-            # Filtrer de seneste kampe for det valgte hold
-            hold_detaljer = df_plot[df_plot['TEAM_WYID'] == clicked_id].sort_index(ascending=False)
-            
-            # Vis en lille tabel med de relevante kolonner
-            cols_to_show = ['DATE', x_col, y_col]
-            if 'MODSTANDER' in hold_detaljer.columns: cols_to_show.insert(1, 'MODSTANDER')
-            
-            st.dataframe(hold_detaljer[cols_to_show], hide_index=True, use_container_width=True)
+            # Vis en boks med info
+            st.markdown(f"### 📊 {team_name}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.metric(label=x_col, value=val_x)
+            with c2:
+                st.metric(label=y_col, value=val_y)
         else:
-            st.info("💡 Tryk på en af prikkerne i grafen for at se kampspecifikke data.")
+            st.info("Tryk på et hold i grafen for at se præcise værdier.")
 
     else:
-        st.error(f"Kolonnerne findes ikke i datasættet.")
+        st.error("Data kolonner mangler.")
