@@ -44,40 +44,35 @@ def vis_side(df_events, df_kamp, hold_map):
                           half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.2)
     pitch.draw(ax=ax)
 
-    # --- KOMPAKT TEKST-BLOK (Reduceret y-mellemrum) ---
-    # Titel
+    # TITEL (y=114)
     ax.text(34, 114, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
 
-    # Stats (y-værdier rykket tættere sammen: 110 og 108)
+    # STATS (y=110 for tal, 108.5 for labels)
     x_pos = [15, 28, 41, 54]
-    stats_vals = [str(s_shots), str(s_goals), s_conv, s_xg]
-    stats_labels = ["SKUD", "MÅL", "KONV.", "xG TOTAL"]
-
+    vals = [str(s_shots), str(s_goals), s_conv, s_xg]
+    labs = ["SKUD", "MÅL", "KONV.", "xG TOTAL"]
     for i in range(4):
-        ax.text(x_pos[i], 110, stats_vals[i], color=HIF_RED, fontsize=8, fontweight='bold', ha='center')
-        ax.text(x_pos[i], 108.2, stats_labels[i], fontsize=5, color='gray', ha='center', fontweight='bold')
+        ax.text(x_pos[i], 110, vals[i], color=HIF_RED, fontsize=8, fontweight='bold', ha='center')
+        ax.text(x_pos[i], 108.5, labs[i], fontsize=5, color='gray', ha='center', fontweight='bold')
 
-    # Legends (Rykket helt ned til y=105.5, lige over banen)
-    ax.scatter(3, 105.5, s=30, color=HIF_RED, edgecolors='white', zorder=5)
-    ax.text(4.5, 105.5, "Mål", fontsize=5, va='center', fontweight='bold')
+    # LEGENDS (Nu rykket op på y=106.5 for at ligge OVER kridtstregen)
+    ax.scatter(2, 106.5, s=30, color=HIF_RED, edgecolors='white', zorder=5)
+    ax.text(3.5, 106.5, "Mål", fontsize=5, va='center', fontweight='bold')
     
-    ax.scatter(9, 105.5, s=25, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
-    ax.text(10.5, 105.5, "Afslutning", fontsize=5, va='center', fontweight='bold')
+    ax.scatter(8, 106.5, s=25, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
+    ax.text(9.5, 106.5, "Afslutning", fontsize=5, va='center', fontweight='bold')
 
     # --- TEGN SKUD ---
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     hif_shots = df_events_filtered[shot_mask].copy()
     if not hif_shots.empty:
         hif_shots['IS_GOAL'] = hif_shots.apply(lambda r: 'goal' in str(r.get('PRIMARYTYPE', '')).lower(), axis=1)
-        
-        # Misses
         ax.scatter(hif_shots[~hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[~hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
                    s=80, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
-        # Goals
         ax.scatter(hif_shots[hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
                    s=200, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=0.8, zorder=4)
 
-    # AFGRÆNSNING (Nu med lavere top-grænse for at fjerne tomrum)
+    # AFGRÆNSNING (Vi klipper toppen præcist ved 116 for at fjerne hvidt mellemrum)
     ax.set_ylim(60, 116)  
     ax.set_xlim(-2, 70)
     ax.axis('off')
