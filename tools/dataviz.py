@@ -12,6 +12,7 @@ def fix_excel_dates(series):
             if val.day < 10 and val.month > 0: return val.month / 10.0
             return val.day + (val.month / 10.0)
         try:
+            # Håndterer både komma og punktum
             return float(str(val).replace(',', '.'))
         except:
             return np.nan
@@ -24,27 +25,23 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot = df_kamp.copy()
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
-    # Rens data
+    # Rens data for de kolonner vi bruger
     cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSESTOTAL', 'PASSES', 'FORWARDPASSES']
     for col in cols_to_fix:
         if col in df_plot.columns:
             df_plot[col] = fix_excel_dates(df_plot[col])
 
-    if 'POSSESSIONPERCENT' in df_plot.columns:
-        if df_plot['POSSESSIONPERCENT'].max() <= 1.0:
-            df_plot['POSSESSIONPERCENT'] = df_plot['POSSESSIONPERCENT'] * 100
-
-    # --- ANALYSE MODES MED BESKRIVELSER ---
+    # --- ANALYSE MODES (Nu helt uden suffix) ---
     ANALYSE_MODES = {
         "Afslutningseffektivitet (Skud vs. Mål)": {
-            "x": "SHOTS", "y": "GOALS", "suffix": "",
+            "x": "SHOTS", "y": "GOALS",
             "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
         },
         "Chance-skabelse (xG vs. Mål)": {
-            "x": "XG", "y": "GOALS", "suffix": "",
+            "x": "XG", "y": "GOALS",
             "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
         },
-        "Boldbesiddelse vs. xG": {
+        "Boldbesiddelse vs. Indlæg": {
             "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL",
             "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
         },
@@ -58,10 +55,9 @@ def vis_side(df_events, df_kamp, hold_map):
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    # Vis beskrivelsen under selectboxen
     st.info(f"ℹ️ **Analyse-info:** {conf['desc']}")
 
-    # BEREGNING
+    # BEREGNING (Gennemsnit pr. hold)
     stats = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
 
     fig = go.Figure()
@@ -71,21 +67,25 @@ def vis_side(df_events, df_kamp, hold_map):
         team_name = hold_map.get(tid, f"ID: {tid}")
         is_hif = (tid == HIF_ID)
         
+        # Vi runder til 2 decimaler for overskuelighed
+        x_val = round(row[x_col], 2)
+        y_val = round(row[y_col], 2)
+        
         fig.add_trace(go.Scatter(
-            x=[row[x_col]], y=[row[y_col]],
+            x=[x_val], y=[y_val],
             mode='markers+text',
             text=[team_name] if is_hif else [""],
             textposition="top center",
-            showlegend=False, # Fjerner trace-navne
+            showlegend=False,
             marker=dict(
                 size=18 if is_hif else 12, 
                 color=HIF_RED if is_hif else 'rgba(170,170,170,0.5)',
                 line=dict(width=1.5, color='black' if is_hif else 'white')
             ),
-            hovertemplate=f"<b>{team_name}</b><br>{x_col}: {row[x_col]:.2f}{conf['suffix']}<br>{y_col}: {row[y_col]:.2f}<extra></extra>"
+            hovertemplate=f"<b>{team_name}</b><br>{x_col}: {x_val}<br>{y_col}: {y_val}<extra></extra>"
         ))
 
-    # Quadrant linjer (Gennemsnit)
+    # Quadrant linjer (Gennemsnit af ligaen)
     avg_x = stats[x_col].mean()
     avg_y = stats[y_col].mean()
     fig.add_vline(x=avg_x, line_dash="dot", opacity=0.5)
@@ -93,8 +93,8 @@ def vis_side(df_events, df_kamp, hold_map):
 
     fig.update_layout(
         plot_bgcolor='white',
-        xaxis_title=f"Gns. {x_col} pr. kamp {conf['suffix']}",
-        yaxis_title=f"Gns. {y_col} pr. kamp",
+        xaxis_title=f"Gns. {x_col}",
+        yaxis_title=f"Gns. {y_col}",
         height=600,
         showlegend=False
     )
