@@ -18,7 +18,6 @@ def vis_side(df):
     # Håndtering af kontrakt-datoer
     idag = datetime.now()
     if 'CONTRACT' in df_squad.columns:
-        # Konverterer kontrakt til dato - antager formatet i din CSV er standard
         df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
     else:
@@ -37,11 +36,10 @@ def vis_side(df):
         pos_config = {
             1: (10, 43, 'MM'), 
             4: (33, 25, 'VCB'), 3: (30, 43, 'CB'), 2: (33, 65, 'HCB'),
-            5: (50, 8, 'VWB'), 6: (50, 43, 'DM'), 8: (50, 63), 7: (50, 75, 'HWB'), 
-            11: (80, 15, 'VW'), 9: (90, 44, 'ANG'), 7: (80, 65, 'HW')
+            5: (50, 8, 'VWB'), 6: (50, 33, 'DM'), 8: (50, 53, 'DM'), 7: (50, 78, 'HWB'), 
+            11: (85, 15, 'VW'), 9: (105, 43, 'ANG'), 10: (85, 71, 'HW')
         }
-        
-    else; # 4-3-3:
+    elif form_valg == "4-3-3":
         pos_config = {
             1: (10, 43, 'MM'), 
             5: (35, 10, 'VB'), 4: (30, 30, 'VCB'), 3: (30, 55, 'HCB'), 2: (35, 75, 'HB'),
@@ -63,8 +61,9 @@ def vis_side(df):
 
     # --- 4. INDSÆT POSITIONER OG TABELLER ---
     for pos_num, coords in pos_config.items():
-        x_pos, y_pos, label = coords
-        # Sorterer efter PRIOR, men viser det ikke
+        # Her tjekker vi om der er 2 eller 3 værdier i coords for at undgå fejl
+        x_pos, y_pos, label = coords if len(coords) == 3 else (coords[0], coords[1], "N/A")
+        
         spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere.empty:
@@ -76,13 +75,8 @@ def vis_side(df):
 
             # B. SPILLER-TABEL
             for i, (_, p) in enumerate(spillere.iterrows()):
-                # Henter kun navnet
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
-                
-                # Farvelogik baseret på kontrakt
                 bg_color = get_status_color(p['DAYS_LEFT'])
-                
-                # Tekst justeret til venstre med fast bredde (25 passer til lange navne)
                 visnings_tekst = f" {navn} ".ljust(25)
                 
                 y_row = (y_pos - 2.1) + (i * 2.1)
