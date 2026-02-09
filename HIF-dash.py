@@ -7,57 +7,52 @@ import importlib
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Performance Hub", layout="wide")
 
-# CSS til styling og fjernelse af standard-marginer
+# CSS til styling: Centrerer logo og rydder op i margins
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
         [data-testid="stHeader"] { background-color: rgba(0,0,0,0); }
         .sidebar-header { font-size: 0.8rem; font-weight: bold; color: #6d6d6d; margin-top: 15px; text-transform: uppercase; }
+        /* Tvinger billeder i sidebaren til at centrere */
+        [data-testid="stSidebar"] img {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- 2. LOGIN SYSTEM ---
-USER_DB = {
-    "kasper": "1234",
-    "ceo": "2650",
-    "mr": "2650",
-    "kd": "2650",
-    "cg": "2650"
-}
+USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    # Centreret login boks
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        # Centreret logo i login-skærm
         st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=120)
         st.subheader("HIF Performance Hub")
-        
         with st.form("login_form"):
             user = st.text_input("Brugernavn").lower().strip()
             pw = st.text_input("Adgangskode", type="password")
             submit = st.form_submit_button("Log ind", use_container_width=True)
-            
             if submit:
                 if user in USER_DB and USER_DB[user] == pw:
                     st.session_state["logged_in"] = True
                     st.rerun()
                 else:
                     st.error("Ugyldigt brugernavn eller kode")
-    st.stop() # Stopper appen her indtil man er logget ind
+    st.stop()
 
-# --- 3. IMPORT AF TOOLS (Siderne) ---
+# --- 3. IMPORT AF TOOLS ---
 def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
-    except Exception as e:
+    except:
         return None
 
-# Hent alle sider
 heatmaps = load_module("heatmaps")
 shots = load_module("shots")
 skudmap = load_module("skudmap")
@@ -87,7 +82,6 @@ def load_full_data():
         if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
             navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
-            
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
@@ -96,19 +90,16 @@ def load_full_data():
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
-if df_events is None:
-    st.warning("Vent på data...")
-    st.stop()
-
 # --- 5. SIDEBAR MENU ---
 with st.sidebar:
-    # Centrerings-trick med CSS + Columns
-    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=100)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Logo (Centreret via CSS i toppen)
+    st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=100)
     
+    # HOVEDMENU (Denne linje manglede!)
+    selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
+                           icons=["shield", "person", "bar-chart", "search"], 
+                           default_index=0)
+
     selected_sub = None
     if selected == "HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
@@ -123,7 +114,6 @@ with st.sidebar:
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
     
-    # Logout knap i bunden
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
