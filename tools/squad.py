@@ -9,23 +9,21 @@ def vis_side(df):
         st.error("Ingen data fundet.")
         return
 
-    # --- 1. FORMATIONSVÆLGER ---
-    # Vi placerer den i en kolonne for at gøre den kompakt
-    col1, col2 = st.columns([1, 2])
-    with col1:
+    # --- 1. FORMATIONSVÆLGER I SIDEBAR ---
+    with st.sidebar:
+        st.markdown("---") # En lille adskiller
+        st.markdown('<p class="sidebar-header">Taktisk opstilling</p>', unsafe_allow_html=True)
         form_valg = st.selectbox(
-            "Vælg formation:",
+            "Vælg formation for truppen:",
             ["3-4-3", "4-3-3", "3-5-2"],
             index=0,
-            key="squad_formation_selector"
+            key="squad_formation_sidebar"
         )
 
     # --- 2. DATA-PROCESSERING ---
     df_squad = df.copy()
-    # Sørg for at kolonnenavne matcher (trim spaces og gør til STORE bogstaver)
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     
-    # Konvertér POS til tal, så vi kan matche med vores pos_config
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
@@ -49,7 +47,7 @@ def vis_side(df):
     pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
     fig, ax = pitch.draw(figsize=(16, 10), constrained_layout=True)
 
-    # Legends i bunden af banen
+    # Legends i bunden
     legend_y = -4 
     legend_items = [
         ("#ff4b4b", "Udløb < 6 mdr"),
@@ -84,19 +82,16 @@ def vis_side(df):
             11: (95, 25, 'ANG'), 9: (95, 55, 'ANG')
         }
 
-    # --- 5. TEGN SPILLERE PÅ BANEN ---
+    # --- 5. TEGN SPILLERE ---
     for pos_num, coords in pos_config.items():
         x_pos, y_pos, label = coords
-        # Filtrér spillere der har dette POS-nummer
         spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
         
         if not spillere_pos.empty:
-            # Tegn positionslabel (f.eks. MM, CB)
             ax.text(x_pos, y_pos - 4.8, f" {label} ", size=12, color="white",
                     va='center', ha='center', fontweight='bold',
                     bbox=dict(facecolor='#cc0000', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
 
-            # Tegn hver spiller under positionen
             for i, (_, p) in enumerate(spillere_pos.iterrows()):
                 navn = p.get('NAVN', f"{p.get('FIRSTNAME','')} {p.get('LASTNAME','')}")
                 bg_color = get_status_color(p)
@@ -109,5 +104,4 @@ def vis_side(df):
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
     # --- 6. VISUALISERING ---
-    # Vi bruger st.pyplot med width='stretch' (den nye 2026-standard)
-    st.pyplot(fig, width='stretch')
+    st.pyplot(fig)
