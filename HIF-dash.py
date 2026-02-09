@@ -92,8 +92,16 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
 # --- 5. SIDEBAR MENU ---
 with st.sidebar:
-    # Logo (Centreret via CSS i toppen)
-    st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=100)
+    # Denne HTML-blok tvinger logoet i midten uanset Streamlits standard-indstillinger
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: center;">
+            <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="100">
+        </div>
+        <br>
+        """,
+        unsafe_allow_html=True
+    )
     
     # HOVEDMENU (Denne linje manglede!)
     selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
