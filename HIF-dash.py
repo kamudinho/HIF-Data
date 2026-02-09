@@ -14,32 +14,32 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-        /* 1. RYGER INDHOLDET HELT OP I TOPPEN AF SIDEBAREN */
+        /* RYGER INDHOLDET HELT OP I TOPPEN AF SIDEBAREN */
         [data-testid="stSidebarNav"] {
             display: none;
         }
         
         [data-testid="stSidebarUserContent"] {
             padding-top: 0.5rem !important;
-            margin-top: -50px !important; 
+            margin-top: -55px !important; 
         }
 
-        /* 2. DISKRET LOGUD IKON STYLING */
-        /* Vi fjerner standard knap-udseende */
+        /* STYLING AF LOGUD-IKON (box-arrow-in-left look) */
         div[data-testid="stSidebar"] button {
             background-color: transparent !important;
             color: #d3d3d3 !important;
             border: none !important;
             padding: 0px !important;
-            font-size: 20px !important; /* Størrelse på ikonet */
-            line-height: 1 !important;
-            margin-top: 10px !important;
+            font-size: 22px !important; 
+            margin-top: 12px !important;
+            transition: 0.3s;
         }
         div[data-testid="stSidebar"] button:hover {
             color: #cc0000 !important;
+            transform: scale(1.1);
         }
 
-        /* 3. SIDEBAR GENEREL STYLING */
+        /* SIDEBAR GENEREL STYLING */
         [data-testid="stSidebar"] {
             min-width: 260px;
             max-width: 300px;
@@ -139,18 +139,19 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # --- LOGUD OG LOGO I SAMME LINJE ---
-    sidebar_top_col1, sidebar_top_col2, sidebar_top_col3 = st.columns([1, 3, 1])
+    # Top-sektion med Logout-ikon og Logo på samme linje
+    side_top_col1, side_top_col2, side_top_col3 = st.columns([1, 4, 1])
     
-    with sidebar_top_col1:
-        if st.button("🚪", help="Log ud"):
+    with side_top_col1:
+        # Streamlit understøtter ikoner via ":emoji_navn:" eller visse ikoner. 
+        # Her bruger vi standard emoji eller ikonsymbol der ligner box-arrow-in-left
+        if st.button("⬅️", help="Log ud"):
             st.session_state["logged_in"] = False
             st.rerun()
             
-    with sidebar_top_col2:
+    with side_top_col2:
         st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="70"></div>', unsafe_allow_html=True)
     
-    # Velkomsttekst
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
