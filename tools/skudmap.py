@@ -16,23 +16,23 @@ def vis_side(df_events, cols_slider, hold_map=None):
         st.error("Ingen afslutningsdata fundet.")
         return
 
-    # 2. Layout konfiguration (Hvidovre altid først)
+    # 2. Layout konfiguration
     hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
     rows = int(np.ceil(len(hold_ids) / cols_slider))
 
-    # --- MATCHING GRID STYLE ---
-    # Vi bruger constrained_layout=True og en lav rækkehøjde (3.0) 
-    # for at fjerne "gabet" ved de halve baner.
+    # --- MATCHING FIGSIZE ---
+    # Vi bruger præcis samme bredde (15), men da banen er halv, 
+    # skal række-multiplikatoren være lavere (2.5) for at undgå at strække skriften.
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(15, rows * 3.0), 
-        facecolor=BG_WHITE,
-        constrained_layout=True
+        figsize=(15, rows * 2.5), 
+        facecolor=BG_WHITE
     )
-    
+
+    # Vi bruger subplots_adjust i stedet for constrained_layout for at få 100% kontrol
+    fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90, wspace=0.1, hspace=0.4)
     axes_flat = np.atleast_1d(axes).flatten()
 
-    # Pitch setup (half=True bibeholdes)
     pitch = VerticalPitch(
         pitch_type='custom', pitch_length=100, pitch_width=100,
         line_color='#1a1a1a', line_zorder=2, linewidth=0.5,
@@ -45,18 +45,15 @@ def vis_side(df_events, cols_slider, hold_map=None):
         hold_df = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         pitch.draw(ax=ax)
 
-        # Hent holdnavn
         if hold_map and tid in hold_map:
             navn = str(hold_map[tid]).upper()
         else:
             navn = "HVIDOVRE IF" if tid == HIF_ID else f"ID: {tid}"
 
-        # TITEL-STIL FRA BILLEDE 2:
-        # Navn øverst, antal skud lige under i parentes.
+        # Her bruger vi præcis samme fontsize=12 og pad=10 som i din heatmap-kode
         ax.set_title(f"{navn}\n({len(hold_df)} afslutninger)",
-                     fontsize=12, fontweight='bold', pad=8)
+                     fontsize=12, fontweight='bold', pad=10)
 
-        # Heatmap (KDE) - Samme indstillinger som dit heatmap-ark
         if len(hold_df) > 5:
             sns.kdeplot(
                 x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
@@ -64,7 +61,6 @@ def vis_side(df_events, cols_slider, hold_map=None):
                 cmap='YlOrRd', alpha=0.8, zorder=1
             )
 
-    # Skjul overskydende baner
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
 
