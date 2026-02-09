@@ -7,16 +7,16 @@ def vis_side(spillere, player_events):
     spillere.columns = [str(c).strip().upper() for c in spillere.columns]
     player_events.columns = [str(c).strip().upper() for c in player_events.columns]
 
-    # 2. De 5 kategorier
-    valg_muligheder = {
-        "PASSES": "PASSES",
-        "SKUD": "SHOTS",
-        "DUELLER": "DUELS",
-        "EROBRINGER": "RECOVERIES",
-        "MINUTTER": "MINUTESTAGGED",
+    # 2. Kategorier (Vi linker den totale kolonne med den succesfulde)
+    kategorier = {
+        "AFLEVERINGER": ("PASSES", "SUCCESSFUL_PASSES"),
+        "SKUD": ("SHOTS", "SUCCESSFUL_SHOTS"),
+        "DUELLER": ("DUELS", "SUCCESSFUL_DUELS"),
+        "EROBRINGER": ("RECOVERIES", "SUCCESSFUL_RECOVERIES"),
     }
-    valgt_label = st.selectbox("Vælg statistik:", list(valg_muligheder.keys()))
-    valgt_kolonne = valg_muligheder[valgt_label]
+    
+    # Tilføj minutter separat da de ikke har en succes-rate
+    valg_label = st.selectbox("Vælg statistik:", list(kategorier.keys()) + ["MINUTTER"])
 
     # 3. Rens ID'er
     spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
@@ -29,43 +29,59 @@ def vis_side(spillere, player_events):
         l_name = str(row.get('LASTNAME', '')).replace('nan', '')
         navne_dict[str(row['PLAYER_WYID'])] = f"{f_name} {l_name}".strip()
 
-    # 5. Map navne
     player_events['NAVN'] = player_events['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
-    # 6. Beregn og vis graf
-    if valgt_kolonne in player_events.columns:
-        df_plot = player_events.groupby('NAVN')[valgt_kolonne].sum().reset_index()
-        df_plot = df_plot.sort_values(by=valgt_kolonne, ascending=False).head(15)
-
-        # Vi omdøber kolonnen midlertidigt for at få den rigtige label i boksen
-        df_plot = df_plot.rename(columns={valgt_kolonne: valgt_label.capitalize()})
-        ny_kolonne_navn = valgt_label.capitalize()
-
-        fig = px.bar(
-            df_plot,
-            x=ny_kolonne_navn,
-            y='NAVN',
-            orientation='h',
-            text=ny_kolonne_navn,
-            color_discrete_sequence=['#df003b'],
-            # Dette fjerner "VISNINGSNAVN" og viser de rigtige labels når man holder musen over
-            labels={'NAVN': 'Spiller', ny_kolonne_navn: valgt_label.capitalize()}
-        )
-
-        # Her skræddersyr vi "svæve-boksen" (hover)
-        fig.update_traces(
-            hovertemplate="<b>%{y}</b><br>" +
-                          valgt_label.capitalize() + ": %{x}<extra></extra>"
-        )
-
-        fig.update_layout(
-            yaxis={'categoryorder': 'total ascending'},
-            xaxis_title=valgt_label.capitalize(),
-            yaxis_title="",
-            template="plotly_white",
-            height=600
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
+    # 5. Beregning
+    if valg_label == "MINUTTER":
+        kolonne = "MINUTESTAGGED"
+        df_plot = player_events.groupby('NAVN')[kolonne].sum().reset_index()
+        df_plot = df_plot.sort_values(by=kolonne, ascending=False).head(15)
+        df_plot['LABEL'] = df_plot[kolonne].astype(str)
+        hover_tmpl = "<b>%{y}</b><br>Minutter: %{x}<extra></extra>"
     else:
-        st.error(f"Kolonnen '{valgt_kolonne}' mangler i Playerevents.")
+        tot_col, suc_col = kategorier[valg_label]
+        
+        if tot_col in player_events.columns and suc_col in player_events.columns:
+            # Gruppér og opsummer
+            df_plot = player_events.groupby('NAVN')[[tot_col, suc_col]].sum().reset_index()
+            
+            # Beregn procent (håndter division med nul)
+            df_plot['PCT'] = (df_plot[suc_col] / df_plot[tot_col] * 100).fillna(0)
+            
+            # Lav den ønskede tekst-label: "150 (85%)"
+            df_plot['LABEL'] = df_plot.apply(lambda r: f"{int(r[tot_col])} ({r['PCT']:.1f}%)", axis=1)
+            
+            df_plot = df_plot.sort_values(by=tot_col, ascending=False).head(15)
+            kolonne = tot_col
+            hover_tmpl = "<b>%{y}</b><br>Total: %{x}<br>Succes: %{customdata}%<extra></extra>"
+        else:
+            st.error(f"Kolonnerne {tot_col} eller {suc_col} mangler i data.")
+            return
+
+    # 6. Vis Graf
+    fig = px.bar(
+        df_plot,
+        x=kolonne,
+        y='NAVN',
+        orientation='h',
+        text='LABEL', # Her viser vi "xxx (xx%)"
+        color_discrete_sequence=['#df003b'],
+        custom_data=['PCT'] if valg_label != "MINUTTER" else None,
+        labels={'NAVN': 'Spiller', kolonne: valg_label.capitalize()}
+    )
+
+    fig.update_traces(
+        hovertemplate=hover_tmpl,
+        textposition='outside' # Sætter teksten for enden af søjlen
+    )
+
+    fig.update_layout(
+        yaxis={'categoryorder': 'total ascending'},
+        xaxis_title=valg_label.capitalize(),
+        yaxis_title="",
+        template="plotly_white",
+        height=650,
+        margin=dict(r=50) # Ekstra plads til de lange labels
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
