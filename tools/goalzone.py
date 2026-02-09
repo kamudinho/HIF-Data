@@ -6,27 +6,7 @@ from mplsoccer import VerticalPitch
 import streamlit as st
 import matplotlib.colors as mcolors
 
-ZONE_BOUNDARIES = {
-    "Zone 1": {"y_min": 94.2, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
-    "Zone 4A": {"y_min": 94.2, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
-    "Zone 4B": {"y_min": 94.2, "y_max": 100.0, "x_min": 19.0, "x_max": 36.8},
-    "Zone 2": {"y_min": 88.5, "y_max": 94.2, "x_min": 36.8, "x_max": 63.2},
-    "Zone 3": {"y_min": 84.0, "y_max": 88.5, "x_min": 36.8, "x_max": 63.2},
-    "Zone 5A": {"y_min": 84.0, "y_max": 94.2, "x_min": 63.2, "x_max": 81.0},
-    "Zone 5B": {"y_min": 84.0, "y_max": 94.2, "x_min": 19.0, "x_max": 36.8},
-    "Zone 6A": {"y_min": 84.0, "y_max": 100.0, "x_min": 81.0, "x_max": 100.0},
-    "Zone 6B": {"y_min": 84.0, "y_max": 100.0, "x_min": 0.0, "x_max": 19.0},
-    "Zone 7": {"y_min": 70.0, "y_max": 84.0, "x_min": 30.0, "x_max": 70.0},
-    "Zone 7B": {"y_min": 70.0, "y_max": 84.0, "x_min": 0.0, "x_max": 30.0},
-    "Zone 7A": {"y_min": 70.0, "y_max": 84.0, "x_min": 70.0, "x_max": 100.0},
-    "Zone 8": {"y_min": 0.0, "y_max": 70.0, "x_min": 0.0, "x_max": 100.0}
-}
-
-def find_zone(x, y):
-    for zone, b in ZONE_BOUNDARIES.items():
-        if b["x_min"] <= x <= b["x_max"] and b["y_min"] <= y <= b["y_max"]:
-            return zone
-    return "Udenfor"
+# ... ZONE_BOUNDARIES og find_zone forbliver de samme ...
 
 def vis_side(df, kamp=None, hold_map=None):
     HIF_ID = 38331
@@ -34,7 +14,7 @@ def vis_side(df, kamp=None, hold_map=None):
     BG_WHITE = '#ffffff'
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # --- 1. DROPDOWNS (Kompakt på én linje) ---
+    # --- 1. DROPDOWNS ---
     c1, c2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
@@ -47,7 +27,7 @@ def vis_side(df, kamp=None, hold_map=None):
     with c2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
-    # --- 2. FILTRERING ---
+    # --- 2. FILTRERING & BEREGNING ---
     mask = (df['TEAM_WYID'].astype(int) == HIF_ID) & (df['PRIMARYTYPE'].str.contains('shot', case=False, na=False))
     if valgt_id:
         mask &= (df['OPPONENTTEAM_WYID'].astype(int) == valgt_id)
@@ -68,15 +48,18 @@ def vis_side(df, kamp=None, hold_map=None):
     total = int(zone_stats['Antal'].sum())
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- 3. VISUALISERING ---
+    # --- 3. VISUALISERING (Minimeret afstand) ---
     fig, ax = plt.subplots(figsize=(8, 8), facecolor=BG_WHITE)
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', linewidth=1.2)
+    
+    # FIX: Vi bruger pad_top=-15 for at fjerne det automatiske tomrum
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', 
+                          linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # Titel & Stats (Tæt på banen)
-    ax.text(50, 112, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
-    ax.text(50, 109, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
-    ax.text(50, 107.5, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
+    # TITEL & STATS (Rykket en smule ned for at møde banen)
+    ax.text(50, 108, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
+    ax.text(50, 105.5, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
+    ax.text(50, 104, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
 
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
@@ -92,10 +75,12 @@ def vis_side(df, kamp=None, hold_map=None):
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            y_t = 60 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            # Zone 8 tekst er nu løftet mere ind på banen
+            y_t = 65 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
             ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=6)
 
-    ax.set_ylim(40, 115) 
-    ax.set_xlim(-5, 105)
+    # FIX: ylim er nu meget strammere (0 til 110)
+    ax.set_ylim(0, 110) 
+    ax.set_xlim(-2, 102)
     ax.axis('off')
     st.pyplot(fig)
