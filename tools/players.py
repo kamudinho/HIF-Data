@@ -53,16 +53,13 @@ def vis_side(df_spillere):
         )
         df_viz = df_viz[mask]
 
-    # --- 4. FARVEMARKERING (Omskrevet for stabilitet) ---
+    # --- 4. FARVEMARKERING ---
     def highlight_contract(data):
-        # Vi laver en kopi af dataframe til styling
         attr = 'background-color: #ffcccc; color: black;' # Rød for udløb snart
         attr_warn = 'background-color: #ffffcc; color: black;' # Gul for udløb indenfor et år
         
-        # Opret en DataFrame med tomme strenge til styling
         style_df = pd.DataFrame('', index=data.index, columns=data.columns)
         
-        # Find rækker hvor kontrakt udløber snart
         if 'CONTRACT' in data.columns:
             dage = (data['CONTRACT'] - idag).dt.days
             style_df.loc[dage < 183, 'CONTR_STR'] = attr
@@ -70,7 +67,20 @@ def vis_side(df_spillere):
             
         return style_df
 
-    # --- 5. TABEL VISNING ---
+    # --- 5. TABEL DEFINITION & VISNING ---
+    # Definer kolonner her for at undgå NameError
+    kolonner = {
+        "ROLECODE3": "Pos",
+        "FULL_NAME": "Navn",
+        "BIRTH_STR": "Fødselsdato",
+        "HEIGHT_STR": "Højde",
+        "FOD": "Fod",
+        "CONTR_STR": "Kontraktudløb"
+    }
+
+    # Beregn dynamisk højde (35px pr række + 45px til header)
+    dynamic_height = (len(df_viz) + 1) * 35 + 45
+
     st.dataframe(
         df_viz.style.apply(highlight_contract, axis=None),
         column_order=list(kolonner.keys()),
@@ -84,7 +94,7 @@ def vis_side(df_spillere):
         },
         use_container_width=True,
         hide_index=True,
-        height=1000  # <--- Tilføj denne linje (højde i pixels)
+        height=dynamic_height
     )
 
     # --- 6. STATISTIK I BUNDEN ---
