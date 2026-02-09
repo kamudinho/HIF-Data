@@ -41,11 +41,12 @@ def vis_side(df_events, df_kamp, hold_map):
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic;'>{conf['desc']}</p>", unsafe_allow_html=True)
-
-    # --- 3. BEREGNING ---
+    # --- 3. BEREGNING AF STATS OG GENNEMSNIT ---
     if x_col in df_plot.columns and y_col in df_plot.columns:
         stats = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
+        
+        avg_x = stats[x_col].mean()
+        avg_y = stats[y_col].mean()
 
         # --- 4. GRAF ---
         fig = go.Figure()
@@ -58,12 +59,20 @@ def vis_side(df_events, df_kamp, hold_map):
             x_val = round(row[x_col], 2)
             y_val = round(row[y_col], 2)
             
+            # INFO-BOKS DESIGN (Hovertemplate)
+            # Her laver vi den boks, der popper op ved prikken
+            hover_text = (
+                f"<b>{team_name}</b><br><br>" +
+                f"{x_col}: <b>{x_val}</b><br>" +
+                f"{y_col}: <b>{y_val}</b><br>" +
+                "<extra></extra>"
+            )
+
             fig.add_trace(go.Scatter(
                 x=[x_val], y=[y_val],
                 mode='markers+text',
                 text=[team_name],
                 textposition="top center",
-                customdata=[[team_name, x_val, y_val]], # Gemmer værdier til klik
                 textfont=dict(size=10, color='black' if is_hif else '#777'),
                 showlegend=False,
                 marker=dict(
@@ -71,36 +80,30 @@ def vis_side(df_events, df_kamp, hold_map):
                     color=HIF_RED if is_hif else 'rgba(150,150,150,0.5)',
                     line=dict(width=1.5, color='black' if is_hif else 'white')
                 ),
-                hovertemplate="<b>%{text}</b><br>Klik for info<extra></extra>"
+                hovertemplate=hover_text
             ))
+
+        # --- GENNEMSNITSLINJER (KVADRANTER) ---
+        fig.add_vline(x=avg_x, line_dash="dot", line_color="black", opacity=0.3, 
+                      annotation_text=f"Gns: {round(avg_x,1)}", annotation_position="bottom right")
+        fig.add_hline(y=avg_y, line_dash="dot", line_color="black", opacity=0.3,
+                      annotation_text=f"Gns: {round(avg_y,1)}", annotation_position="top left")
 
         fig.update_layout(
             plot_bgcolor='white',
-            xaxis_title=f"{x_col} (Gns)",
-            yaxis_title=f"{y_col} (Gns)",
-            height=500,
-            clickmode='event+select',
-            margin=dict(l=20, r=20, t=30, b=20)
+            xaxis_title=f"{x_col} (Gennemsnit)",
+            yaxis_title=f"{y_col} (Gennemsnit)",
+            height=600,
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=14,
+                font_family="Arial"
+            ),
+            margin=dict(l=20, r=20, t=40, b=20)
         )
 
-        # Vis graf og fang event
-        event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-
-        # --- 5. INFO BOKS VED KLIK ---
-        if event_data and "selection" in event_data and len(event_data["selection"]["points"]) > 0:
-            # Udtræk data fra det valgte punkt
-            info = event_data["selection"]["points"][0]["customdata"]
-            team_name, val_x, val_y = info[0], info[1], info[2]
-            
-            # Vis en boks med info
-            st.markdown(f"### 📊 {team_name}")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.metric(label=x_col, value=val_x)
-            with c2:
-                st.metric(label=y_col, value=val_y)
-        else:
-            st.info("Tryk på et hold i grafen for at se præcise værdier.")
+        # Vis grafen
+        st.plotly_chart(fig, use_container_width=True)
 
     else:
-        st.error("Data kolonner mangler.")
+        st.error("Data kolonner mangler i arkene.")
