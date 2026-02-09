@@ -133,7 +133,6 @@ with st.sidebar:
         
         if selected_sub == "Trupsammensætning":
             st.markdown("---")
-            st.markdown('<p class="sidebar-header">Taktik</p>', unsafe_allow_html=True)
             st.selectbox("Vælg formation:", ["3-4-3", "4-3-3", "3-5-2"], key="formation_valg")
 
     st.markdown("---")
