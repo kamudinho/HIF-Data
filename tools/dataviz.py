@@ -25,14 +25,14 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot.columns = [str(c).upper().strip() for c in df_plot.columns]
 
     # Rens data
-    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSESTOTAL', 'AVGDISTANCE']
+    cols_to_fix = ['XG', 'SHOTS', 'GOALS', 'POSSESSIONPERCENT', 'CROSSESTOTAL', 'PASSES', 'FORWARDPASSES']
     for col in cols_to_fix:
         if col in df_plot.columns:
             df_plot[col] = fix_excel_dates(df_plot[col])
 
-    if 'POSSESSION' in df_plot.columns:
-        if df_plot['POSSESSION'].max() <= 1.0:
-            df_plot['POSSESSION'] = df_plot['POSSESSION'] * 100
+    if 'POSSESSIONPERCENT' in df_plot.columns:
+        if df_plot['POSSESSIONPERCENT'].max() <= 1.0:
+            df_plot['POSSESSIONPERCENT'] = df_plot['POSSESSIONPERCENT'] * 100
 
     # --- ANALYSE MODES MED BESKRIVELSER ---
     ANALYSE_MODES = {
@@ -45,12 +45,12 @@ def vis_side(df_events, df_kamp, hold_map):
             "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
         },
         "Boldbesiddelse vs. xG": {
-            "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL", "suffix": "%",
+            "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL",
             "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
         },
-        "Skudafstand (Distance vs. xG)": {
-            "x": "AVGDISTANCE", "y": "XG", "suffix": "m",
-            "desc": "Hvor langt skyder holdet fra? Kortere afstand giver normalt højere xG pr. skud."
+        "FREMADRETTEDE (PASSES vs. FORWARDPASSES)": {
+            "x": "PASSES", "y": "FORWARDPASSES",
+            "desc": "Spiller vi fremad når chancen byder sig?"
         }
     }
 
