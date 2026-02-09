@@ -23,9 +23,13 @@ ZONE_BOUNDARIES = {
     "Zone 8": {"y_min": 0.0, "y_max": 70.0, "x_min": 0.0, "x_max": 100.0}
 }
 
-def find_zone(y, x):
+def find_zone(val_x, val_y):
+    """
+    val_x skal være LOCATIONY (bredde: 0-100)
+    val_y skal være LOCATIONX (længde: 0-100)
+    """
     for zone, b in ZONE_BOUNDARIES.items():
-        if b["x_min"] <= x <= b["x_max"] and b["y_min"] <= y <= b["y_max"]:
+        if b["x_min"] <= val_x <= b["x_max"] and b["y_min"] <= val_y <= b["y_max"]:
             return zone
     return "Udenfor"
 
@@ -36,16 +40,16 @@ def vis_side(df, kamp=None, hold_map=None):
     df.columns = [str(c).strip().upper() for c in df.columns]
 
     # --- 1. DROPDOWNS ---
-    col1, col2 = st.columns(2)
+    c1, c2 = st.columns(2)
     opp_ids = sorted([int(tid) for tid in df['OPPONENTTEAM_WYID'].unique() if int(tid) != HIF_ID])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
         navn = hold_map.get(mid, f"ID: {mid}")
         dropdown_options.append((navn, mid))
 
-    with col1:
+    with c1:
         valgt_navn, valgt_id = st.selectbox("Vælg modstander", options=dropdown_options, format_func=lambda x: x[0])
-    with col2:
+    with c2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
 
     # --- 2. FILTRERING ---
@@ -64,7 +68,8 @@ def vis_side(df, kamp=None, hold_map=None):
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    # --- FIX HER: Vi sender LOCATIONX (længde) som b["y"] og LOCATIONY (bredde) som b["x"] ---
+    # --- BEREGNING: Her mappes koordinaterne korrekt ---
+    # Vi sender LOCATIONY (bredde) som x, og LOCATIONX (længde) som y.
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
     
     zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
@@ -77,7 +82,7 @@ def vis_side(df, kamp=None, hold_map=None):
                           linewidth=1.2, pad_top=-15, pad_bottom=0)
     pitch.draw(ax=ax)
 
-    # TITEL & STATS
+    # TITEL & STATS (Matching 'Afslutninger' side)
     ax.text(50, 107.5, titel_tekst.upper(), fontsize=7, color='#333333', ha='center', fontweight='black')
     ax.text(50, 105.2, str(total), color=HIF_RED, fontsize=9, fontweight='bold', ha='center')
     ax.text(50, 103.8, "TOTAL AFSLUTNINGER", fontsize=5, color='gray', ha='center', fontweight='bold')
@@ -96,6 +101,7 @@ def vis_side(df, kamp=None, hold_map=None):
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
+            # Træk tekst fra Zone 8 op, så den er synlig på halv bane
             y_t = 55 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
             ax.text(x_t, y_t, f"{int(count)}\n{percent:.1f}%", ha='center', va='center', fontweight='bold', fontsize=5.5)
 
