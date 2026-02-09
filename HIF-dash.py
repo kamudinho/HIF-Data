@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5, squad
 
-# --- 1. KONFIGURATION & CSS (TOTAL OPSTRAMNING) ---
+# --- 1. KONFIGURATION & CSS (FJERNER TOMRUM I SIDEBAR) ---
 st.set_page_config(
     page_title="HIF Performance Hub", 
     layout="wide", 
@@ -14,36 +14,33 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-        /* 1. FJERN ALT TOMRUM I TOPPEN AF SIDEN */
-        .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 0rem !important;
+        /* 1. RYGER INDHOLDET HELT OP I TOPPEN AF SIDEBAREN */
+        [data-testid="stSidebarNav"] {
+            display: none;
         }
         
-        /* 2. RYGER LOGOET HELT OP I TOPPEN AF SIDEBAREN */
-        /* Vi rammer den specifikke container Streamlit bruger til indhold */
         [data-testid="stSidebarUserContent"] {
+            padding-top: 0rem !important;
+            margin-top: -50px !important; /* Trækker indholdet op over det usynlige tomrum */
+        }
+
+        /* 2. FJERN TOP-PADDING PÅ CONTENT AREA */
+        .block-container {
             padding-top: 1rem !important;
         }
 
-        /* 3. FJERNER EKSTRA MARGIN FRA STREAMLITS ELEMENT-CONTAINERE */
-        [data-testid="stVerticalBlock"] > div:first-child {
-            margin-top: -20px !important;
-        }
-
-        /* 4. SIDEBAR STYLING */
+        /* 3. SIDEBAR STYLING */
         [data-testid="stSidebar"] {
             min-width: 260px;
-            max-width: 320px;
+            max-width: 300px;
         }
 
-        /* Styling af radio-boxes */
+        /* Gør radio-buttons pæne og kompakte */
         div.row-widget.stRadio > div {
             background-color: #f8f9fb;
             padding: 10px;
             border-radius: 10px;
             border: 1px solid #eceef1;
-            margin-top: -5px;
         }
 
         .sidebar-header {
@@ -55,10 +52,8 @@ st.markdown("""
             text-transform: uppercase;
         }
 
-        /* Skjul Streamlit standard elementer helt */
-        #MainMenu {visibility: hidden;}
+        /* Skjul Streamlit standard elementer */
         header {visibility: hidden;}
-        footer {visibility: hidden;}
         [data-testid="stHeader"] {background: rgba(0,0,0,0); height: 0rem;}
     </style>
 """, unsafe_allow_html=True)
@@ -136,8 +131,8 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # Logoet placeres nu i toppen pga. CSS justeringen
-    st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="85"></div>', unsafe_allow_html=True)
+    # Logoet placeres nu helt i toppen
+    st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="80"></div>', unsafe_allow_html=True)
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
