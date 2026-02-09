@@ -8,7 +8,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
     HIF_ID = 38331
     BG_WHITE = '#ffffff'
 
-    # 1. Filtrering af skud (afslutninger)
+    # 1. Filtrering af skud/afslutninger
     mask = df_events['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     df_p = df_events[mask].copy()
 
@@ -16,24 +16,28 @@ def vis_side(df_events, cols_slider, hold_map=None):
         st.error("Ingen afslutningsdata fundet.")
         return
 
-    # 2. Layout konfiguration
+    # 2. Layout konfiguration (HIF altid først)
     hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
     rows = int(np.ceil(len(hold_ids) / cols_slider))
 
-    # --- OPTIMERING AF AFSTAND ---
-    # Vi sætter en fast højde pr. række (f.eks. 5 i stedet for 8) for at fjerne tom luft
+    # --- KOMPAKT LAYOUT ---
+    # Vi bruger en mindre figsize-faktor for at tvinge dem sammen
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(20, rows * 5.5), 
+        figsize=(18, rows * 6), 
         facecolor=BG_WHITE
     )
 
-    # wspace er bredden mellem figurer, hspace er højden. Begge er sat lavt her.
-    fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.92, wspace=0.05, hspace=0.15)
+    # Vi minimerer hspace og wspace for at få dem til at ligge tæt
+    fig.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.92, wspace=0.02, hspace=0.15)
     axes_flat = np.atleast_1d(axes).flatten()
 
-    pitch = VerticalPitch(pitch_type='custom', pitch_length=100, pitch_width=100,
-                          line_color='#1a1a1a', line_zorder=2, linewidth=1.2)
+    # Pitch setup der matcher heatmaps.py stilen
+    pitch = VerticalPitch(
+        pitch_type='custom', pitch_length=100, pitch_width=100,
+        line_color='#2b2b2b', line_zorder=2, linewidth=1, 
+        half=True # Viser kun den angribende halvdel for skud (valgfrit)
+    )
 
     # 3. Tegne-loop
     for i, tid in enumerate(hold_ids):
@@ -41,20 +45,26 @@ def vis_side(df_events, cols_slider, hold_map=None):
         hold_df = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         pitch.draw(ax=ax)
 
+        # Navngivning
         if hold_map and tid in hold_map:
             navn = str(hold_map[tid]).upper()
         else:
             navn = "HVIDOVRE IF" if tid == HIF_ID else f"HOLD ID: {tid}"
 
-        # Mindre pad og fontstørrelse for at spare plads
-        ax.set_title(f"{navn} ({len(hold_df)} afslutninger)",
-                     fontsize=14, fontweight='bold', pad=5)
+        # Titel tæt på banen
+        ax.set_title(f"{navn}", fontsize=16, fontweight='bold', pad=8)
+        ax.text(50, 55, f"{len(hold_df)} AFSLUTNINGER", color='gray', 
+                fontsize=10, ha='center', fontweight='bold', alpha=0.6)
 
-        if len(hold_df) > 5:
-            sns.kdeplot(x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
-                        fill=True, thresh=0.05, levels=30, cmap='YlOrRd', alpha=0.7, zorder=1)
+        # Heatmap (KDE)
+        if len(hold_df) > 3:
+            sns.kdeplot(
+                x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
+                fill=True, thresh=0.05, levels=40, 
+                cmap='YlOrRd', alpha=0.8, zorder=1
+            )
 
-    # Skjul overskydende hvide felter
+    # Skjul overskydende plots
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
 
