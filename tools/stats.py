@@ -10,9 +10,10 @@ def vis_side(spillere, player_events):
     # 2. Kategorier (Vi linker den totale kolonne med den succesfulde)
     kategorier = {
         "AFLEVERINGER": ("PASSES", "SUCCESSFULPASSES"),
+        "PASSES TO FINAL THIRD": ("PASSESTOFINALTHIRD", "SUCCESSFULPASSESTOFINALTHIRD"),
         "SKUD": ("SHOTS", "SUCCESSFULSHOTS"),
-        "DUELLER": ("DUELS", "SUCCESSFULDUELS"),
-        "EROBRINGER": ("RECOVERIES", "SUCCESSFULRECOVERIES"),
+        "DUELLER": ("DUELS", "DUELSWON"),
+        "TOUCHES IN BOX": ("TOUCHINBOX"),
     }
     
     # Tilføj minutter separat da de ikke har en succes-rate
