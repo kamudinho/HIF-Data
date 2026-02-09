@@ -71,7 +71,6 @@ def vis_side(df_spillere):
             "BIRTHDATE": st.column_config.DateColumn("Fødselsdato", format="DD.MM.YYYY"),
             "HEIGHT": st.column_config.TextColumn("Højde"), # Ændret til Text for at håndtere "-"
             "FOD": st.column_config.TextColumn("Fod", width="small"),
-            "WEIGHT": st.column_config.TextColumn("Vægt"), # Ændret til Text for at håndtere "-"
             "CONTRACT": st.column_config.TextColumn("Kontraktudløb", width="medium") # Text pga "-"
         },
         use_container_width=True,
