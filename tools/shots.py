@@ -47,30 +47,29 @@ def vis_side(df_events, df_kamp, hold_map):
         s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
 
     # --- 4. VISUALISERING ---
-    # Figurstørrelse optimeret til dashboard (Bredere og mindre høj)
-    fig, ax = plt.subplots(figsize=(12, 7), facecolor=BG_WHITE, constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor=BG_WHITE, constrained_layout=True)
     
     pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
                           half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.5)
     pitch.draw(ax=ax)
 
-    # TITEL (Modstander)
+    # TITEL (Øverst centreret)
     ax.text(34, 118, titel_tekst.upper(), fontsize=14, color='#333333', ha='center', fontweight='black')
 
-    # STATS BLOCK (Mindre og mere kompakt)
+    # STATS BLOCK
     header_data = [(s_xg, "xG Total"), (s_conv, "Konvertering"), (str(s_goals), "Mål"), (str(s_shots), "Skud")]
     x_pos = [10, 26, 42, 58] 
     for i, (val, label) in enumerate(header_data):
         ax.text(x_pos[i], 112, val, color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
         ax.text(x_pos[i], 109, label, fontsize=9, color='gray', ha='center', fontweight='bold')
 
-    # LEGENDS (Placeret i øverste højre hjørne under stats)
+    # LEGENDS (Én linje i venstre side lige over banen)
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=8),
         Line2D([0], [0], marker='o', color='w', label='Afslutning', markerfacecolor='#4a5568', markersize=6, alpha=0.4)
     ]
-    ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.98, 1.08), 
-              frameon=False, fontsize=8, ncol=1, labelspacing=0.2)
+    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 1.08), 
+              frameon=False, fontsize=8, ncol=2, columnspacing=1.0)
 
     # TEGN SKUD
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
@@ -87,7 +86,7 @@ def vis_side(df_events, df_kamp, hold_map):
                    s=280, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1, zorder=4)
 
     # AFGRÆNSNING
-    ax.set_ylim(60, 122) # Giver plads til tekst i toppen
+    ax.set_ylim(60, 122) 
     ax.axis('off')
 
     st.pyplot(fig)
