@@ -5,7 +5,7 @@ import pandas as pd
 import importlib
 
 # --- 1. KONFIGURATION ---
-st.set_page_config(page_title="HIF Performance Hub", layout="wide")
+st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 # CSS til styling
 st.markdown("""
@@ -72,33 +72,30 @@ goalzone = load_module("goalzone")
 top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
+player_shots = load_module("player_shots") # Tilføjet her
 
-# --- 4. DATA LOADING (Filtreret & Optimeret) ---
+# --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
 @st.cache_data(ttl=3600, show_spinner="Opdaterer HIF data...")
 def load_full_data():
     try:
-        # 1. Hent Excel-arkene
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # Definer gyldige hold-ID'er fra Hold-arket
         godkendte_hold_ids = ho['TEAM_WYID'].unique()
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
 
-        # 2. Hent Eventdata (CSV) med case-insensitive søgning
         ev = None
         possible_names = ['eventdata.csv', 'Eventdata.csv', 'EventData.csv', 'EVENTDATA.csv']
         found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
         
         if found_path:
             try:
-                # Prøv komma først, derefter semikolon
                 ev = pd.read_csv(found_path, sep=',', low_memory=False)
                 if len(ev.columns) < 2:
                     ev = pd.read_csv(found_path, sep=';', low_memory=False)
@@ -106,21 +103,20 @@ def load_full_data():
                 st.error(f"Fejl ved læsning af CSV: {e}")
                 return None, None, {}, None, None, None
         else:
-            st.error("Kunne ikke finde 'eventdata.csv'. Tjek upload.")
+            st.error("Kunne ikke finde 'eventdata.csv'.")
             return None, None, {}, None, None, None
 
-        # --- 3. FILTRERING ---
-        # Behold kun data for hold defineret i 'Hold'-arket
         if ev is not None:
             ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
+            # Tilføj PLAYER_NAME til ev fra spillere-arket for nemmere filtrering i player_shots
+            if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
+                navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
+                ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
+                # Omdøb NAVN til PLAYER_NAME for at matche koden i player_shots.py
+                ev = ev.rename(columns={'NAVN': 'PLAYER_NAME'})
             
         if ka is not None:
             ka = ka[ka['TEAM_WYID'].isin(godkendte_hold_ids)]
-
-        # 4. Merge navne
-        if ev is not None and 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
-            navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
-            ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
             
         return ev, ka, h_map, sp, pe, sc
 
@@ -130,7 +126,6 @@ def load_full_data():
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
-# Stop hvis data mangler
 if df_events is None:
     st.stop()
 
@@ -165,11 +160,6 @@ with st.sidebar:
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
-        
-        if selected_sub == "Trupsammensætning":
-            st.markdown("---")
-            st.markdown('<p class="sidebar-header">Taktik</p>', unsafe_allow_html=True)
-            st.selectbox("Vælg formation:", ["3-4-3", "4-3-3", "3-5-2"], key="formation_valg")
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
@@ -186,7 +176,7 @@ if selected == "HOLD":
 
 elif selected == "SPILLERE":
     if selected_sub == "Zoneinddeling" and player_goalzone: player_goalzone.vis_side(df_events, spillere)
-    elif selected_sub == "Afslutninger": st.info("Side under opbygning")
+    elif selected_sub == "Afslutninger" and player_shots: player_shots.vis_side(df_events, kamp, hold_map)
 
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats" and stats: stats.vis_side(spillere, player_events)
