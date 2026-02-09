@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5, squad
 
-# --- 1. KONFIGURATION & CSS (OPTIMERET LAYOUT) ---
+# --- 1. KONFIGURATION & CSS (TOTAL OPSTRAMNING) ---
 st.set_page_config(
     page_title="HIF Performance Hub", 
     layout="wide", 
@@ -14,29 +14,30 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-        /* 1. FJERN TOP-PADDING PÅ HELE SIDEN */
+        /* 1. FJERN ALT TOMRUM I TOPPEN AF SIDEN */
         .block-container {
-            padding-top: 1rem !important;
+            padding-top: 0rem !important;
             padding-bottom: 0rem !important;
         }
         
-        /* 2. FJERN TOP-PADDING I SIDEBAREN */
+        /* 2. RYGER LOGOET HELT OP I TOPPEN AF SIDEBAREN */
+        /* Vi rammer den specifikke container Streamlit bruger til indhold */
         [data-testid="stSidebarUserContent"] {
-            padding-top: 0.5rem !important;
+            padding-top: 1rem !important;
         }
 
-        /* 3. STRAM OP OMKRING LOGO OG NAVN */
-        [data-testid="stSidebar"] img {
-            margin-bottom: -10px;
+        /* 3. FJERNER EKSTRA MARGIN FRA STREAMLITS ELEMENT-CONTAINERE */
+        [data-testid="stVerticalBlock"] > div:first-child {
+            margin-top: -20px !important;
         }
-        
-        /* 4. SIDEBAR BREDDE OG GENEREL STYLING */
+
+        /* 4. SIDEBAR STYLING */
         [data-testid="stSidebar"] {
             min-width: 260px;
             max-width: 320px;
         }
 
-        /* Gør radio-buttons kompakte og pæne */
+        /* Styling af radio-boxes */
         div.row-widget.stRadio > div {
             background-color: #f8f9fb;
             padding: 10px;
@@ -45,7 +46,6 @@ st.markdown("""
             margin-top: -5px;
         }
 
-        /* Justering af overskrifter i sidebaren */
         .sidebar-header {
             font-size: 0.8rem;
             font-weight: bold;
@@ -53,13 +53,13 @@ st.markdown("""
             margin-top: 10px;
             margin-bottom: 2px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        /* Fjern standard Streamlit menu og footer for et rent look */
+        /* Skjul Streamlit standard elementer helt */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
+        [data-testid="stHeader"] {background: rgba(0,0,0,0); height: 0rem;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -136,8 +136,8 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # Logo og velkomst uden ekstra luft
-    st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="80"></div>', unsafe_allow_html=True)
+    # Logoet placeres nu i toppen pga. CSS justeringen
+    st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="85"></div>', unsafe_allow_html=True)
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
@@ -153,7 +153,6 @@ with st.sidebar:
         }
     )
 
-    # Sub-menuer placeret tæt på hovedmenuen
     if selected == "DATAANALYSE":
         st.markdown('<p class="sidebar-header">Vælg analyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("Sub", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
@@ -170,7 +169,7 @@ with st.sidebar:
             st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
             st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
 
-    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
@@ -178,7 +177,7 @@ with st.sidebar:
 # --- 6. ROUTING ---
 if selected == "HIF DATA":
     st.title("Hvidovre IF Data Hub")
-    st.info("Brug menuen til venstre for at navigere i HIF Performance Hub.")
+    st.info("Brug menuen til venstre for at navigere.")
 
 elif selected == "DATAANALYSE":
     if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
