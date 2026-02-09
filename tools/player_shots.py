@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from mplsoccer import VerticalPitch
 
 def vis_side(df_events, df_kamp, hold_map):
     HIF_ID = 38331
     HIF_RED = '#df003b'
+    BG_WHITE = '#ffffff'
 
-    # 1. RENS KOLONNER OG TVING NAVNE
-    # Vi fjerner alt "støj" og tvinger navne til store bogstaver
+    # 1. RENS KOLONNER (Aggressiv rensning for at finde MINUTE)
     df_events.columns = [str(c).strip().upper() for c in df_events.columns]
     
     # 2. SPILLER DROPDOWN I SIDEBAR
@@ -17,13 +18,11 @@ def vis_side(df_events, df_kamp, hold_map):
     
     with st.sidebar:
         st.markdown("---")
-        st.markdown('**VÆLG SPILLER**')
-        valgt_spiller = st.selectbox("HIF Spillere", options=["Alle Spillere"] + spiller_navne)
+        st.markdown('<p style="font-weight:bold; color:#df003b;">SPILLERANALYSE</p>', unsafe_allow_html=True)
+        valgt_spiller = st.selectbox("Vælg spiller", options=["Alle Spillere"] + spiller_navne)
 
     # 3. FILTRERING
     df_filtered = hif_events if valgt_spiller == "Alle Spillere" else hif_events[hif_events[p_col] == valgt_spiller]
-    
-    # Find skud ved at kigge efter 'shot' i PRIMARYTYPE
     mask = df_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     df_s = df_filtered[mask].copy()
     
@@ -33,56 +32,42 @@ def vis_side(df_events, df_kamp, hold_map):
 
     df_s['IS_GOAL'] = df_s['PRIMARYTYPE'].astype(str).str.contains('goal', case=False, na=False)
 
-    # 4. INTERAKTIVT KORT (Plotly)
-    fig = go.Figure()
+    # 4. TEGN DEN ORDENTLIGE BANE (mplsoccer)
+    # 
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor=BG_WHITE)
+    pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
+                          half=True, pitch_color='white', line_color='#1a1a1a', linewidth=2)
+    pitch.draw(ax=ax)
 
-    # Bane-design (Hvid bane, sorte linjer)
-    shapes = [
-        dict(type="rect", x0=0, y0=50, x1=100, y1=100, line=dict(color="black", width=2)),
-        dict(type="rect", x0=21, y0=83, x1=79, y1=100, line=dict(color="black", width=2)),
-        dict(type="rect", x0=40, y0=94, x1=60, y1=100, line=dict(color="black", width=2)),
-        dict(type="path", path="M 38,83 A 12,12 0 0 0 62,83", line=dict(color="black", width=2))
-    ]
+    # Overskrift og Stats på banen (HIF Stil)
+    ax.text(34, 115, valgt_spiller.upper(), fontsize=14, color='#333333', ha='center', fontweight='black')
+    
+    # Tegn skud (Wyscout 0-100 koordinater til 0-68/105)
+    # Ikke-mål (Grå)
+    no_goal = df_s[~df_s['IS_GOAL']]
+    ax.scatter(no_goal['LOCATIONY'] * 0.68, no_goal['LOCATIONX'] * 1.05,
+               s=150, color='#4a5568', alpha=0.4, edgecolors='white', linewidth=0.8, zorder=3)
+    
+    # Mål (HIF Rød)
+    goals = df_s[df_s['IS_GOAL']]
+    ax.scatter(goals['LOCATIONY'] * 0.68, goals['LOCATIONX'] * 1.05,
+               s=350, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1.5, zorder=4)
 
-    for is_goal in [False, True]:
-        subset = df_s[df_s['IS_GOAL'] == is_goal].copy()
-        if subset.empty: continue
+    ax.set_ylim(60, 118)  
+    ax.axis('off')
+    st.pyplot(fig)
+
+    # 5. SKUD-INSPEKTØR (Boksen du bad om, men som interaktiv liste)
+    st.markdown("### 🔍 Skuddetaljer")
+    
+    # Vi henter data sikkert uden KeyError
+    for _, row in df_s.sort_values('MINUTE', ascending=False).iterrows():
+        modstander = hold_map.get(row['OPPONENTTEAM_WYID'], "Ukendt")
+        minut = row['MINUTE']
+        type_skud = "⚽ MÅL" if row['IS_GOAL'] else "❌ Afslutning"
         
-        # SIKKER HENTNING AF DATA TIL BOKSEN
-        # Vi bruger .values for at undgå Index/Key-problemer i loopet
-        opp_ids = subset['OPPONENTTEAM_WYID'].values
-        minutes = subset['MINUTE'].values
-        loc_x = subset['LOCATIONX'].values
-        loc_y = subset['LOCATIONY'].values
-        
-        hover_text = []
-        for i in range(len(subset)):
-            modstander = hold_map.get(opp_ids[i], "Ukendt")
-            minut = minutes[i]
-            hover_text.append(f"<b>vs. {modstander}</b><br>Min: {minut}")
-
-        fig.add_trace(go.Scatter(
-            x=loc_y, 
-            y=loc_x,
-            mode='markers',
-            marker=dict(
-                size=18 if is_goal else 12,
-                color=HIF_RED if is_goal else 'rgba(74, 85, 104, 0.4)',
-                line=dict(width=1.5, color='white')
-            ),
-            text=hover_text,
-            hoverinfo="text"
-        ))
-
-    fig.update_layout(
-        shapes=shapes,
-        xaxis=dict(range=[-5, 105], visible=False, fixedrange=True),
-        yaxis=dict(range=[50, 105], visible=False, fixedrange=True),
-        plot_bgcolor='white',
-        margin=dict(l=0, r=0, t=30, b=0),
-        height=600,
-        showlegend=False,
-        hovermode='closest'
-    )
-
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        # Dette fungerer som de bokse du ville have, bare stakket pænt
+        with st.expander(f"{type_skud} vs. {modstander} (Min: {minut})"):
+            st.write(f"**Tidspunkt:** {minut}. minut")
+            st.write(f"**Modstander:** {modstander}")
+            st.write(f"**Type:** {row['PRIMARYTYPE']}")
