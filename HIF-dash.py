@@ -37,7 +37,7 @@ player_goalzone = get_tool("player_goalzone")
 
 # --- 2. DATA LOADING (15 min cache) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, 'HIF-data1.xlsx')
+DATA_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
 @st.cache_data(ttl=900)
 def load_data():
