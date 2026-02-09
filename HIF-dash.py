@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5, squad
 
-# --- 1. KONFIGURATION & CSS (AVANCERET INTEGRATION) ---
+# --- 1. KONFIGURATION & CSS (TOTAL INTEGRATION AF IKON) ---
 st.set_page_config(
     page_title="HIF Performance Hub", 
     layout="wide", 
@@ -14,42 +14,36 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-        /* FJERN ALT STANDARD FYLD I TOPPEN */
+        /* 1. FJERN STANDARD STREAMLIT NAVIGATION & TOP GAB */
         [data-testid="stSidebarNav"] { display: none; }
         [data-testid="stSidebarUserContent"] {
             padding-top: 0.5rem !important;
-            margin-top: -55px !important; 
+            margin-top: -50px !important; 
         }
         .block-container { padding-top: 1rem !important; }
 
-        /* LOGUD-IKON STYLING (INGEN BOKS, RÅT INTEGRERET) */
-        .logout-container {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 999;
+        /* 2. FJERN ALLE BOKSE OG RAMMER FRA KNAPPER I SIDEBAREN */
+        div[data-testid="stSidebar"] button {
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #d3d3d3 !important;
+            padding: 0px !important;
+            width: auto !important;
+            height: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: 0.3s !important;
         }
         
-        .logout-btn {
-            color: #d3d3d3;
-            text-decoration: none;
-            font-size: 24px;
-            transition: 0.3s ease;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 0;
-        }
-        
-        .logout-btn:hover {
-            color: #cc0000;
-            transform: translateX(-3px);
+        div[data-testid="stSidebar"] button:hover {
+            color: #cc0000 !important;
+            background-color: transparent !important;
+            transform: scale(1.1);
         }
 
-        /* SIDEBAR GENEREL STYLING */
+        /* 3. SIDEBAR STYLING */
         [data-testid="stSidebar"] {
             min-width: 260px;
             max-width: 300px;
@@ -75,7 +69,7 @@ def get_engine():
     db_path = os.path.join(os.getcwd(), 'hif_database.db')
     return create_engine(f"sqlite:///{db_path}")
 
-# --- 2. DATABASE INITIALISERING ---
+# --- 2. DATABASE ---
 engine = get_engine()
 with engine.connect() as conn:
     conn.execute(text("""
@@ -94,7 +88,7 @@ with engine.connect() as conn:
     """), {"hpw": hashed_pw})
     conn.commit()
 
-# --- 3. LOGIN LOGIK ---
+# --- 3. LOGIN ---
 def verify_user(username, password):
     return username.lower() == "kasper" and password == "1234"
 
@@ -107,7 +101,6 @@ if not st.session_state["logged_in"]:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120"></div>', unsafe_allow_html=True)
         st.markdown("<h1 style='text-align: center; color: Gray;'>HIF Hub</h1>", unsafe_allow_html=True)
-
         with st.form("login_form"):
             u_input = st.text_input("Brugernavn")
             p_input = st.text_input("Adgangskode", type="password")
@@ -144,20 +137,21 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # --- RÅT INTEGRERET LOGUD OG LOGO ---
-    # Vi bruger en skjult knap til logikken og HTML til det flotte look
-    col_out, col_logo = st.columns([1, 4])
+    # --- LOGUD OG LOGO PÅ SAMME LINJE (STRAMT) ---
+    # Vi bruger tre små kolonner for at centrere logoet mens ikonet er helt til venstre
+    head_col1, head_col2, head_col3 = st.columns([1, 4, 1])
     
-    with col_out:
-        # En "usynlig" knap der dækkes af ikonet, eller bare en simpel ikon-knap uden boks
-        if st.button("⬅️", key="logout_btn", help="Log ud", use_container_width=False):
+    with head_col1:
+        # Den rå pil uden boks (box-arrow-in-left følelse)
+        # Vi bruger en standard emoji/symbol der integrerer rent
+        if st.button("⬅", help="Log ud"):
             st.session_state["logged_in"] = False
             st.rerun()
             
-    with col_logo:
-        st.markdown('<div style="text-align:center; margin-left: -20px;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="70"></div>', unsafe_allow_html=True)
+    with head_col2:
+        st.markdown('<div style="text-align:center; margin-left: -15px;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="70"></div>', unsafe_allow_html=True)
     
-    st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px; font-size: 14px;'><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
     selected = option_menu(
@@ -174,16 +168,13 @@ with st.sidebar:
 
     if selected == "DATAANALYSE":
         st.markdown('<p class="sidebar-header">Vælg analyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub1", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
-    
+        selected_sub = st.radio("S1", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub2", ["Spillerstats", "Top 5"], label_visibility="collapsed")
-    
+        selected_sub = st.radio("S2", ["Spillerstats", "Top 5"], label_visibility="collapsed")
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Vælg scouting</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub3", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
-        
+        selected_sub = st.radio("S3", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
         if selected_sub == "Trupsammensætning":
             st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
             st.session_state['valgt_formation'] = st.radio("Form", ["3-4-3", "4-3-3", "3-5-2"], label_visibility="collapsed")
@@ -192,18 +183,15 @@ with st.sidebar:
 if selected == "HIF DATA":
     st.title("Hvidovre IF Data Hub")
     st.info("Brug menuen til venstre for at navigere.")
-
 elif selected == "DATAANALYSE":
     if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps": skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Målzoner": goalzone.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "Afslutninger": shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
-
 elif selected == "STATISTIK":
     if selected_sub == "Spillerstats": stats.vis_side(spillere, player_events)
     elif selected_sub == "Top 5": top5.vis_side(spillere, player_events)
-
 elif selected == "SCOUTING":
     if selected_sub == "Hvidovre IF": players.vis_side(spillere)
     elif selected_sub == "Trupsammensætning": squad.vis_side(spillere)
