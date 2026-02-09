@@ -2,15 +2,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import os
 import pandas as pd
-
-# Sikker import af moduler
-try:
-    from tools import (
-        heatmaps, shots, skudmap, dataviz, players, 
-        comparison, stats, goalzone, top5, squad, player_goalzone
-    )
-except ImportError as e:
-    st.error(f"Kunne ikke indlæse et modul fra tools-mappen: {e}")
+import importlib
 
 # --- 1. KONFIGURATION & CSS ---
 st.set_page_config(
@@ -18,6 +10,26 @@ st.set_page_config(
     layout="wide", 
     initial_sidebar_state="expanded"
 )
+
+# Dynamisk import for at undgå KeyError hvis en fil mangler på Github
+def safe_import(module_name):
+    try:
+        return importlib.import_module(f"tools.{module_name}")
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af tools.{module_name}: {e}")
+        return None
+
+heatmaps = safe_import("heatmaps")
+shots = safe_import("shots")
+skudmap = safe_import("skudmap")
+dataviz = safe_import("dataviz")
+players = safe_import("players")
+comparison = safe_import("comparison")
+stats = safe_import("stats")
+goalzone = safe_import("goalzone")
+top5 = safe_import("top5")
+squad = safe_import("squad")
+player_goalzone = safe_import("player_goalzone")
 
 st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">', unsafe_allow_html=True)
 
@@ -34,39 +46,32 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGOUT & LOGIN ---
+# --- 2. LOGIN LOGIK (OPDATERET TIL 2026) ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
-
-if st.query_params.get("logout") == "true":
-    st.session_state["logged_in"] = False
-    st.query_params.clear()
-    st.rerun()
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120"></div>', unsafe_allow_html=True)
-        st.markdown("<h1 style='text-align: center; color: Gray;'>HIF Hub</h1>", unsafe_allow_html=True)
         with st.form("login_form"):
             u_input = st.text_input("Brugernavn")
             p_input = st.text_input("Adgangskode", type="password")
-            # OPDATERET: use_container_width=True -> width='stretch'
+            # RETTET: use_container_width -> width='stretch'
             if st.form_submit_button("Log ind", width='stretch'):
                 if u_input.lower() == "kasper" and p_input == "1234":
                     st.session_state["logged_in"] = True
-                    st.session_state["user"] = u_input
                     st.rerun()
                 else:
                     st.error("Fejl i login")
     st.stop()
 
-# --- 4. DATA LOADING (Opdaterer hvert 15. minut) ---
+# --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
-@st.cache_data(ttl=900) # Automatisk opdatering hvert 15. minut
+@st.cache_data(ttl=900) # Opdaterer hver 15. min
 def load_full_data():
     try:
         events = pd.read_excel(DATA_PATH, sheet_name='Eventdata')
@@ -76,7 +81,6 @@ def load_full_data():
         player_events = pd.read_excel(DATA_PATH, sheet_name='Playerevents')
         df_scout = pd.read_excel(DATA_PATH, sheet_name='Playerscouting')
         
-        # Merge NAVN på events
         if 'PLAYER_WYID' in events.columns and 'PLAYER_WYID' in spillere.columns:
             navne_df = spillere[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
             events = events.merge(navne_df, on='PLAYER_WYID', how='left')
@@ -84,7 +88,7 @@ def load_full_data():
         hold_map = dict(zip(df_hold['TEAM_WYID'], df_hold['Hold']))
         return events, kamp, hold_map, spillere, player_events, df_scout
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
+        st.error(f"Datafejl: {e}")
         return None, None, {}, None, None, None
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
@@ -103,19 +107,18 @@ with st.sidebar:
 
     selected_sub = None
     if selected == "DATA - HOLD":
-        st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Zoneinddeling", "Afslutninger", "DataViz"], label_visibility="collapsed")
     elif selected == "DATA - SPILLERE":
-        st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_ind", ["Zoneinddeling", "Afslutninger"], label_visibility="collapsed")
 
 # --- 6. ROUTING ---
 if selected == "DATA - HOLD":
-    if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Shotmaps": skudmap.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Zoneinddeling": goalzone.vis_side(df_events, kamp, hold_map)
-    elif selected_sub == "Afslutninger": shots.vis_side(df_events, kamp, hold_map)
-    elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
+    if selected_sub == "Heatmaps" and heatmaps: heatmaps.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Shotmaps" and skudmap: skudmap.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Zoneinddeling" and goalzone: goalzone.vis_side(df_events, kamp, hold_map)
+    elif selected_sub == "Afslutninger" and shots: shots.vis_side(df_events, kamp, hold_map)
+    elif selected_sub == "DataViz" and dataviz: dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DATA - SPILLERE":
-    if selected_sub == "Zoneinddeling": player_goalzone.vis_side(df_events, spillere)
+    if selected_sub == "Zoneinddeling" and player_goalzone:
+        player_goalzone.vis_side(df_events, spillere)
