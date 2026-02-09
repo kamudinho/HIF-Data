@@ -61,10 +61,10 @@ def vis_side(spillere_df, player_events_df):
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=(kpi in ['LOSSES', 'FOULS'])).head(5)
 
                 # HTML Tabel Generering
-                header_center = "text-align:center; padding:8px; border-bottom:1px solid #ddd;"
-                header_left = "text-align:left; padding:8px; border-bottom:1px solid #ddd;"
-                cell_center = "text-align:center; padding:8px; border-bottom:1px solid #eee;"
-                cell_left = "text-align:left; padding:8px; border-bottom:1px solid #eee;"
+                header_center = "text-align:center; padding:4px; border-bottom:1px solid #ddd;"
+                header_left = "text-align:left; padding:4px; border-bottom:1px solid #ddd;"
+                cell_center = "text-align:center; padding:4px; border-bottom:1px solid #eee;"
+                cell_left = "text-align:left; padding:4px; border-bottom:1px solid #eee;"
 
                 html = f"""
                 <div style="background:#fff; border:1px solid #e6e9ef; border-radius:1px; padding:5px; margin-bottom:5px; min-height:320px;">
