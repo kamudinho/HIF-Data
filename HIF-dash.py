@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from tools import heatmaps, shots, skudmap, dataviz, players, comparison, stats, goalzone, top5, squad
 
-# --- 1. KONFIGURATION & CSS ---
+# --- 1. KONFIGURATION & CSS (AVANCERET INTEGRATION) ---
 st.set_page_config(
     page_title="HIF Performance Hub", 
     layout="wide", 
@@ -14,29 +14,39 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-        /* RYGER INDHOLDET HELT OP I TOPPEN AF SIDEBAREN */
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
-        
+        /* FJERN ALT STANDARD FYLD I TOPPEN */
+        [data-testid="stSidebarNav"] { display: none; }
         [data-testid="stSidebarUserContent"] {
             padding-top: 0.5rem !important;
             margin-top: -55px !important; 
         }
+        .block-container { padding-top: 1rem !important; }
 
-        /* STYLING AF LOGUD-IKON (box-arrow-in-left look) */
-        div[data-testid="stSidebar"] button {
-            background-color: transparent !important;
-            color: #d3d3d3 !important;
-            border: none !important;
-            padding: 0px !important;
-            font-size: 22px !important; 
-            margin-top: 12px !important;
-            transition: 0.3s;
+        /* LOGUD-IKON STYLING (INGEN BOKS, RÅT INTEGRERET) */
+        .logout-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 999;
         }
-        div[data-testid="stSidebar"] button:hover {
-            color: #cc0000 !important;
-            transform: scale(1.1);
+        
+        .logout-btn {
+            color: #d3d3d3;
+            text-decoration: none;
+            font-size: 24px;
+            transition: 0.3s ease;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        
+        .logout-btn:hover {
+            color: #cc0000;
+            transform: translateX(-3px);
         }
 
         /* SIDEBAR GENEREL STYLING */
@@ -44,25 +54,20 @@ st.markdown("""
             min-width: 260px;
             max-width: 300px;
         }
-
         div.row-widget.stRadio > div {
             background-color: #f8f9fb;
             padding: 10px;
             border-radius: 10px;
             border: 1px solid #eceef1;
         }
-
         .sidebar-header {
             font-size: 0.8rem;
             font-weight: bold;
             color: #6d6d6d;
             margin-top: 10px;
-            margin-bottom: 2px;
             text-transform: uppercase;
         }
-
         header {visibility: hidden;}
-        [data-testid="stHeader"] {background: rgba(0,0,0,0); height: 0rem;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -70,7 +75,7 @@ def get_engine():
     db_path = os.path.join(os.getcwd(), 'hif_database.db')
     return create_engine(f"sqlite:///{db_path}")
 
-# --- 2. INITIALISERING AF DATABASE ---
+# --- 2. DATABASE INITIALISERING ---
 engine = get_engine()
 with engine.connect() as conn:
     conn.execute(text("""
@@ -139,18 +144,18 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 # --- 5. SIDEBAR NAVIGATION ---
 selected_sub = None
 with st.sidebar:
-    # Top-sektion med Logout-ikon og Logo på samme linje
-    side_top_col1, side_top_col2, side_top_col3 = st.columns([1, 4, 1])
+    # --- RÅT INTEGRERET LOGUD OG LOGO ---
+    # Vi bruger en skjult knap til logikken og HTML til det flotte look
+    col_out, col_logo = st.columns([1, 4])
     
-    with side_top_col1:
-        # Streamlit understøtter ikoner via ":emoji_navn:" eller visse ikoner. 
-        # Her bruger vi standard emoji eller ikonsymbol der ligner box-arrow-in-left
-        if st.button("⬅️", help="Log ud"):
+    with col_out:
+        # En "usynlig" knap der dækkes af ikonet, eller bare en simpel ikon-knap uden boks
+        if st.button("⬅️", key="logout_btn", help="Log ud", use_container_width=False):
             st.session_state["logged_in"] = False
             st.rerun()
             
-    with side_top_col2:
-        st.markdown('<div style="text-align:center;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="70"></div>', unsafe_allow_html=True)
+    with col_logo:
+        st.markdown('<div style="text-align:center; margin-left: -20px;"><img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="70"></div>', unsafe_allow_html=True)
     
     st.markdown(f"<p style='text-align:center; margin-top: 5px; margin-bottom: 0px;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
@@ -169,15 +174,15 @@ with st.sidebar:
 
     if selected == "DATAANALYSE":
         st.markdown('<p class="sidebar-header">Vælg analyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
+        selected_sub = st.radio("Sub1", ["Heatmaps", "Shotmaps", "Målzoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
     
     elif selected == "STATISTIK":
         st.markdown('<p class="sidebar-header">Vælg statistik</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub", ["Spillerstats", "Top 5"], label_visibility="collapsed")
+        selected_sub = st.radio("Sub2", ["Spillerstats", "Top 5"], label_visibility="collapsed")
     
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Vælg scouting</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("Sub", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
+        selected_sub = st.radio("Sub3", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
         
         if selected_sub == "Trupsammensætning":
             st.markdown('<p class="sidebar-header">Baneopstilling</p>', unsafe_allow_html=True)
