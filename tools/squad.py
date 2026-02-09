@@ -4,21 +4,9 @@ from mplsoccer import Pitch
 from datetime import datetime
 
 def vis_side(df):
+    if df is None: return
 
-    if df is None:
-        st.error("Ingen data fundet.")
-        return
-
-    # --- 1. FORMATIONSVÆLGER I SIDEBAR ---
-    with st.sidebar:
-        st.markdown("---") # En lille adskiller
-        st.markdown('<p class="sidebar-header">Taktisk opstilling</p>', unsafe_allow_html=True)
-        form_valg = st.selectbox(
-            "Vælg formation for truppen:",
-            ["3-4-3", "4-3-3", "3-5-2"],
-            index=0,
-            key="squad_formation_sidebar"
-        )
+    form_valg = st.session_state.get("formation_valg", "3-4-3")
 
     # --- 2. DATA-PROCESSERING ---
     df_squad = df.copy()
