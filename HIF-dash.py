@@ -96,7 +96,7 @@ with st.sidebar:
     st.markdown(
         """
         <div style="display: flex; justify-content: center;">
-            <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="100">
+            <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="80">
         </div>
         <br>
         """,
