@@ -48,7 +48,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
         navn = str(hold_map.get(tid, f"ID: {tid}")).upper()
         
         # Vi rykker titlen helt ned til banen med pad=2
-        ax.set_title(navn, fontsize=12, fontweight='bold', pad=2, color='#1a1a1a')
+        ax.set_title(navn, fontsize=12, fontweight='bold', pad=5, color='#1a1a1a')
         
         # Lille tekst-info inde på banen for at spare vertikal plads
         ax.text(50, 52, f"{len(hold_df)} SKUD", color='gray', 
