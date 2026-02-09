@@ -106,38 +106,30 @@ def load_full_data():
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
-# --- 5. SIDEBAR MENU ---
+# --- 5. SIDEBAR MENU (i HIF-dash.py) ---
 with st.sidebar:
-    # Centreret logo i sidebaren
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; padding-bottom: 10px;">
-            <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="100">
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("""<div style="display: flex; justify-content: center;"><img src="..." width="100"></div>""", unsafe_allow_html=True)
     
-    # HOVEDMENU
-    selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
-                           icons=["shield", "person", "bar-chart", "search"], 
-                           default_index=0)
+    selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], ...)
 
     selected_sub = None
     if selected == "HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Zoneinddeling", "Afslutninger", "DataViz"], label_visibility="collapsed")
-    elif selected == "SPILLERE":
-        st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_ind", ["Zoneinddeling", "Afslutninger"], label_visibility="collapsed")
-    elif selected == "STATISTIK":
-        st.markdown('<p class="sidebar-header">Ranglister</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
+    
+    # --- HER INDSÆTTER DU FORMATIONSVÆLGEREN HVIS VI ER PÅ SCOUTING/TRUP ---
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
-    
-    st.markdown("---")
+        
+        # Hvis vi har valgt truppen, så vis formationsvælgeren her!
+        if selected_sub == "Trupsammensætning":
+            st.markdown("---")
+            st.markdown('<p class="sidebar-header">Taktik</p>', unsafe_allow_html=True)
+            # Vi gemmer valget i session_state, så squad.py kan læse det
+            st.selectbox("Vælg formation:", ["3-4-3", "4-3-3", "3-5-2"], key="formation_valg")
+
+    st.markdown("---") # Denne linje adskiller menuen fra log ud
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
