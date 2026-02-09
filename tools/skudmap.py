@@ -25,7 +25,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
     # Dette fjerner det hvide tomrum mellem rækkerne.
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(16, rows * 3.0), 
+        figsize=(15, rows * 4), 
         facecolor=BG_WHITE,
         constrained_layout=True  # Fjerner automatisk overflødig luft
     )
@@ -54,7 +54,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
         ax.set_title(f"{navn}\n({antal} SKUD)", 
                      fontsize=12, 
                      fontweight='bold', 
-                     pad=2) # Meget lille pad for at holde det tæt på banen
+                     pad=10) # Meget lille pad for at holde det tæt på banen
 
         # Heatmap (KDE)
         if antal > 3:
