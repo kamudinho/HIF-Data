@@ -102,15 +102,13 @@ if df_events is None:
 
 # --- 5. SIDEBAR MENU ---
 with st.sidebar:
-    # Centrerings-trick til logo i sidebaren
+    # Centrerings-trick med CSS + Columns
+    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=80)
+        st.image("https://cdn5.wyscout.com/photos/team/public/2659_120x120.png", width=100)
+    st.markdown("</div>", unsafe_allow_html=True)
     
-    selected = option_menu(None, ["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
-                           icons=["shield", "person", "bar-chart", "search"], 
-                           default_index=0)
-
     selected_sub = None
     if selected == "HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
