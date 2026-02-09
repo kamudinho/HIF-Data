@@ -29,50 +29,64 @@ def vis_side(df_events, df_kamp, hold_map):
         stats_df = df_kamp[df_kamp['TEAM_WYID'] == HIF_ID].copy()
         titel_tekst = "HIF: Alle Kampe"
 
-    # --- 3. STATS ---
+    # --- 3. BEREGN STATS (MED xG FIX) ---
     if not stats_df.empty:
         s_shots = int(pd.to_numeric(stats_df['SHOTS'], errors='coerce').fillna(0).sum())
         s_goals = int(pd.to_numeric(stats_df['GOALS'], errors='coerce').fillna(0).sum())
-        s_xg = f"{pd.to_numeric(stats_df['XG'], errors='coerce').fillna(0).sum():.2f}"
+        # Vi tjekker om xG er pr. kamp eller total. Her summerer vi dem. 
+        # Hvis 1438 virker vildt, kan det være fordi kolonnen indeholder mærkelige værdier.
+        raw_xg = pd.to_numeric(stats_df['XG'], errors='coerce').fillna(0).sum()
+        s_xg = f"{raw_xg:.2f}"
         s_conv = f"{(s_goals / s_shots * 100):.1f}%" if s_shots > 0 else "0.0%"
     else:
         s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
 
     # --- 4. VISUALISERING ---
-    fig, ax = plt.subplots(figsize=(12, 6.5), facecolor=BG_WHITE, constrained_layout=True)
+    # Vi bruger constrained_layout=False for at have fuld manuel kontrol over placering
+    fig, ax = plt.subplots(figsize=(12, 8), facecolor=BG_WHITE)
     pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
                           half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.5)
     pitch.draw(ax=ax)
 
-    # TITEL (Helt i top)
-    ax.text(34, 120, titel_tekst.upper(), fontsize=14, color='#333333', ha='center', fontweight='black')
+    # A. TITEL (Helt øverst - y=122)
+    ax.text(34, 122, titel_tekst.upper(), fontsize=18, color='#1a1a1a', ha='center', fontweight='black')
 
-    # STATS BLOCK (Rykket lidt op til y=114 for at give plads under)
-    header_data = [(s_xg, "xG Total"), (s_conv, "Konvertering"), (str(s_goals), "Mål"), (str(s_shots), "Skud")]
-    x_pos = [10, 26, 42, 58] 
+    # B. STATS BLOCK (y=114)
+    # Vi rykker dem lidt ind mod midten så de ikke rammer kanten
+    header_data = [(str(s_shots), "Skud"), (str(s_goals), "Mål"), (s_conv, "Konvertering"), (s_xg, "xG Total")]
+    x_pos = [12, 27, 42, 57] 
     for i, (val, label) in enumerate(header_data):
-        ax.text(x_pos[i], 114, val, color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
-        ax.text(x_pos[i], 111, label, fontsize=9, color='gray', ha='center', fontweight='bold')
+        ax.text(x_pos[i], 114, val, color=HIF_RED, fontsize=22, fontweight='bold', ha='center')
+        ax.text(x_pos[i], 110, label, fontsize=11, color='gray', ha='center', fontweight='bold')
 
-    # LEGENDS (Placeret præcis mellem stats og bane-linjen)
+    # C. LEGENDS (y=107 - Lige over banen i venstre side)
     legend_elements = [
-        Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=8),
-        Line2D([0], [0], marker='o', color='w', label='Afslutning', markerfacecolor='#4a5568', markersize=6, alpha=0.4)
+        Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=10),
+        Line2D([0], [0], marker='o', color='w', label='Afslutning', markerfacecolor='#4a5568', markersize=8, alpha=0.4)
     ]
-    # bbox_to_anchor y-værdi sænket til 1.04 for at ramme mellemrummet
-    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.02, 1.04), 
-              frameon=False, fontsize=8, ncol=2, columnspacing=1.0)
+    ax.legend(handles=legend_elements, loc='lower left', bbox_to_anchor=(0.02, 0.88), 
+              transform=ax.transAxes, frameon=False, fontsize=10, ncol=2, columnspacing=1.5)
 
-    # TEGN SKUD
+    # D. TEGN SKUD
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
     hif_shots = df_events_filtered[shot_mask].copy()
+    
     if not hif_shots.empty:
+        # x og y skal ofte vendes/skaleres afhængig af datakilde (Wyscout bruger 0-100)
+        # Her bruger vi dine koordinater fra tidligere
         hif_shots['IS_GOAL'] = hif_shots.apply(lambda r: 'goal' in str(r.get('PRIMARYTYPE', '')).lower(), axis=1)
-        ax.scatter(hif_shots[~hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[~hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
-                   s=120, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
-        ax.scatter(hif_shots[hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, hif_shots[hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
-                   s=280, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1, zorder=4)
+        
+        # Misses
+        ax.scatter(hif_shots[~hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, 
+                   hif_shots[~hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
+                   s=150, color='#4a5568', alpha=0.3, edgecolors='white', linewidth=0.5, zorder=3)
+        # Goals
+        ax.scatter(hif_shots[hif_shots['IS_GOAL']]['LOCATIONY'] * 0.68, 
+                   hif_shots[hif_shots['IS_GOAL']]['LOCATIONX'] * 1.05,
+                   s=350, color=HIF_RED, alpha=0.9, edgecolors='white', linewidth=1, zorder=4)
 
-    ax.set_ylim(60, 124) 
+    # Juster y-aksen så vi kan se alt tekst
+    ax.set_ylim(60, 125) 
     ax.axis('off')
-    st.pyplot(fig)
+
+    st.pyplot(fig, use_container_width=True)
