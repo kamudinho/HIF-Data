@@ -5,7 +5,6 @@ import numpy as np
 from datetime import datetime
 
 def fix_excel_dates(series):
-    """Konverterer Excel-datoer (f.eks. 18.sep) tilbage til tal (18.9)"""
     def convert(val):
         if isinstance(val, (int, float)): return val
         if isinstance(val, datetime):
@@ -32,37 +31,23 @@ def vis_side(df_events, df_kamp, hold_map):
 
     # --- 2. ANALYSE MODES ---
     ANALYSE_MODES = {
-        "SKUD x MÅL = Effektivitet": {
-            "x": "SHOTS", "y": "GOALS",
-            "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
-        },
-        "XG x MÅL = Performance": {
-            "x": "XG", "y": "GOALS",
-            "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
-        },
-        "POSSESSION x INDLÆG = Konvertering": {
-            "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL",
-            "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
-        },
-        "PASSES x FORWARDPASSES = Fremadrettede": {
-            "x": "FORWARDPASSES", "y": "PASSES",
-            "desc": "Spiller vi fremad når chancen byder sig?"
-        }
+        "SKUD x MÅL = Effektivitet": {"x": "SHOTS", "y": "GOALS", "desc": "Hvor mange skud skal holdet bruge? Højre-top er mest effektive."},
+        "XG x MÅL = Performance": {"x": "XG", "y": "GOALS", "desc": "Over/underperformance på chancer. Over linjen er klinisk."},
+        "POSSESSION x INDLÆG = Konvertering": {"x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL", "desc": "Bliver boldbesiddelsen konverteret til indlæg?"},
+        "PASSES x FORWARDPASSES = Fremadrettede": {"x": "FORWARDPASSES", "y": "PASSES", "desc": "Hvor stor en del af afleveringerne er fremadrettede?"}
     }
 
-    # --- 3. UI ELEMENTER (Rettet indrykning her) ---
     valgt_label = st.selectbox("Vælg analyse-metrik:", options=list(ANALYSE_MODES.keys()))
     conf = ANALYSE_MODES[valgt_label]
     x_col, y_col = conf["x"], conf["y"]
 
-    # Diskret beskrivelse
     st.markdown(f"<p style='color: gray; font-size: 0.85rem; font-style: italic; margin-bottom: 20px;'>{conf['desc']}</p>", unsafe_allow_html=True)
 
-    # --- 4. BEREGNING ---
+    # --- 3. BEREGNING ---
     if x_col in df_plot.columns and y_col in df_plot.columns:
         stats = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
 
-        # --- 5. GRAF ---
+        # --- 4. GRAF ---
         fig = go.Figure()
         
         for _, row in stats.iterrows():
@@ -76,20 +61,20 @@ def vis_side(df_events, df_kamp, hold_map):
             fig.add_trace(go.Scatter(
                 x=[x_val], y=[y_val],
                 mode='markers+text',
-                text=[team_name] if is_hif else [""],
+                text=[team_name],
                 textposition="top center",
+                customdata=[tid], # Vi gemmer ID'et her så vi kan fange det ved klik
+                textfont=dict(size=11, color='black' if is_hif else '#666'),
                 showlegend=False,
                 marker=dict(
-                    size=18 if is_hif else 12, 
-                    color=HIF_RED if is_hif else 'rgba(170,170,170,0.5)',
+                    size=18 if is_hif else 13, 
+                    color=HIF_RED if is_hif else 'rgba(100,100,100,0.4)',
                     line=dict(width=1.5, color='black' if is_hif else 'white')
                 ),
-                hovertemplate=f"<b>{team_name}</b><br>{x_col}: {x_val}<br>{y_col}: {y_val}<extra></extra>"
+                hovertemplate=f"<b>{team_name}</b><br>Klik for detaljer<extra></extra>"
             ))
 
-        # Quadrant linjer
-        avg_x = stats[x_col].mean()
-        avg_y = stats[y_col].mean()
+        avg_x, avg_y = stats[x_col].mean(), stats[y_col].mean()
         fig.add_vline(x=avg_x, line_dash="dot", opacity=0.3)
         fig.add_hline(y=avg_y, line_dash="dot", opacity=0.3)
 
@@ -97,10 +82,33 @@ def vis_side(df_events, df_kamp, hold_map):
             plot_bgcolor='white',
             xaxis_title=f"Gennemsnitlig {x_col}",
             yaxis_title=f"Gennemsnitlig {y_col}",
-            height=600,
+            height=550,
+            clickmode='event+select', # Gør det muligt at fange klikket
             margin=dict(l=20, r=20, t=20, b=20)
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        # Vis grafen og fang retur-data
+        selected_points = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+        # --- 5. VIS DATA VED KLIK ---
+        # Tjek om brugeren har klikket på en prik
+        if selected_points and "selection" in selected_points and len(selected_points["selection"]["points"]) > 0:
+            # Hent TEAM_WYID fra customdata på det klikkede punkt
+            clicked_id = selected_points["selection"]["points"][0]["customdata"]
+            clicked_name = hold_map.get(clicked_id, f"ID: {clicked_id}")
+            
+            st.markdown(f"### Detaljer: {clicked_name}")
+            
+            # Filtrer de seneste kampe for det valgte hold
+            hold_detaljer = df_plot[df_plot['TEAM_WYID'] == clicked_id].sort_index(ascending=False)
+            
+            # Vis en lille tabel med de relevante kolonner
+            cols_to_show = ['DATE', x_col, y_col]
+            if 'MODSTANDER' in hold_detaljer.columns: cols_to_show.insert(1, 'MODSTANDER')
+            
+            st.dataframe(hold_detaljer[cols_to_show], hide_index=True, use_container_width=True)
+        else:
+            st.info("💡 Tryk på en af prikkerne i grafen for at se kampspecifikke data.")
+
     else:
-        st.error(f"Kunne ikke finde kolonnerne {x_col} eller {y_col} i data.")
+        st.error(f"Kolonnerne findes ikke i datasættet.")
