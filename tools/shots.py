@@ -21,11 +21,11 @@ def vis_side(df_events, df_kamp, hold_map):
     if valgt_id is not None:
         df_events_filtered = df_events[(df_events['TEAM_WYID'] == HIF_ID) & (df_events['OPPONENTTEAM_WYID'] == valgt_id)]
         stats_df = df_kamp[(df_kamp['TEAM_WYID'] == HIF_ID) & (df_kamp['MATCH_WYID'].isin(df_events_filtered['MATCH_WYID'].unique()))].copy()
-        titel_tekst = f"HIF mod {valgt_navn}"
+        titel_tekst = f"HIF vs. {valgt_navn}"
     else:
         df_events_filtered = df_events[df_events['TEAM_WYID'] == HIF_ID]
         stats_df = df_kamp[df_kamp['TEAM_WYID'] == HIF_ID].copy()
-        titel_tekst = "HIF: Alle Kampe"
+        titel_tekst = "HIF vs. Alle"
 
     # --- 3. STATS BEREGNING (xG Robusthed) ---
     if not stats_df.empty:
@@ -41,35 +41,35 @@ def vis_side(df_events, df_kamp, hold_map):
         s_shots, s_goals, s_xg, s_conv = 0, 0, "0.00", "0.0%"
 
     # --- 4. VISUALISERING ---
-    fig, ax = plt.subplots(figsize=(12, 7), facecolor=BG_WHITE)
+    fig, ax = plt.subplots(figsize=(10, 5.5), facecolor=BG_WHITE)
     pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68,
                           half=True, pitch_color='white', line_color='#1a1a1a', linewidth=1.2)
     pitch.draw(ax=ax)
 
     # TITEL (Helt i top)
-    ax.text(34, 118, titel_tekst.upper(), fontsize=14, color='#333333', ha='center', fontweight='black')
+    ax.text(34, 118, titel_tekst.upper(), fontsize=10, color='#333333', ha='center', fontweight='black')
 
     # STATS RÆKKE (Mindre skrift, god bredde)
     # y=112 for tallene, y=109 for teksten
-    ax.text(12, 112, str(s_shots), color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
+    ax.text(12, 112, str(s_shots), color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
     ax.text(12, 109, "SKUD", fontsize=8, color='gray', ha='center', fontweight='bold')
     
-    ax.text(27, 112, str(s_goals), color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
+    ax.text(27, 112, str(s_goals), color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
     ax.text(27, 109, "MÅL", fontsize=8, color='gray', ha='center', fontweight='bold')
     
-    ax.text(42, 112, s_conv, color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
+    ax.text(42, 112, s_conv, color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
     ax.text(42, 109, "KONV.", fontsize=8, color='gray', ha='center', fontweight='bold')
     
-    ax.text(57, 112, s_xg, color=HIF_RED, fontsize=18, fontweight='bold', ha='center')
+    ax.text(57, 112, s_xg, color=HIF_RED, fontsize=14, fontweight='bold', ha='center')
     ax.text(57, 109, "xG TOTAL", fontsize=8, color='gray', ha='center', fontweight='bold')
 
     # LEGENDS (Placeret præcis i venstre side over kridtstregen)
     # y=106 rammer lige mellem teksten ovenfor og selve banen
     ax.scatter(3, 106, s=50, color=HIF_RED, edgecolors='white', zorder=5)
-    ax.text(5, 106, "Mål", fontsize=9, va='center', fontweight='bold')
+    ax.text(5, 106, "Mål", fontsize=7, va='center', fontweight='bold')
     
     ax.scatter(11, 106, s=35, color='#4a5568', alpha=0.4, edgecolors='white', zorder=5)
-    ax.text(13, 106, "Afslutning", fontsize=9, va='center', fontweight='bold')
+    ax.text(13, 106, "Afslutning", fontsize=7, va='center', fontweight='bold')
 
     # TEGN SKUD
     shot_mask = df_events_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
