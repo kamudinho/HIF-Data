@@ -11,9 +11,15 @@ def vis_side(df_spillere):
     # --- 1. DATA-PROCESSERING ---
     df_working = df_spillere.copy()
     
+    idag = datetime.now()
     df_working['BIRTHDATE'] = pd.to_datetime(df_working['BIRTHDATE'], errors='coerce')
     df_working['CONTRACT'] = pd.to_datetime(df_working['CONTRACT'], dayfirst=True, errors='coerce')
     df_working['HEIGHT'] = pd.to_numeric(df_working['HEIGHT'], errors='coerce')
+
+    # Beregn Alder (bruges til gennemsnit)
+    df_working['ALDER'] = df_working['BIRTHDATE'].apply(
+        lambda x: idag.year - x.year - ((idag.month, idag.day) < (x.month, x.day)) if pd.notna(x) else None
+    )
 
     pos_map = {"GKP": "MM", "DEF": "FOR", "MID": "MID", "FWD": "ANG"}
     df_working['ROLECODE3'] = df_working['ROLECODE3'].replace(pos_map)
@@ -25,13 +31,13 @@ def vis_side(df_spillere):
     # --- 2. KLARGØRING TIL VISNING ---
     df_viz = df_working.copy()
 
-    # SAMLER NAVN: Fornavn + Efternavn
+    # Navne-samling
     df_viz['FULL_NAME'] = df_viz.apply(
         lambda x: f"{x['FIRSTNAME']} {x['LASTNAME']}".strip() if pd.notna(x['FIRSTNAME']) or pd.notna(x['LASTNAME']) else "-",
         axis=1
     )
 
-    # Formater Højde (som tekst for at sikre venstrestilling og "-")
+    # Højde som tekst (venstrestillet)
     df_viz['HEIGHT_STR'] = df_viz['HEIGHT'].apply(
         lambda x: f"{int(x)} cm" if pd.notna(x) else "-"
     )
@@ -55,7 +61,7 @@ def vis_side(df_spillere):
         if pd.notna(row['CONTRACT']):
             try:
                 contr_idx = row.index.get_loc('CONTR_STR')
-                dage = (row['CONTRACT'] - datetime.now()).days
+                dage = (row['CONTRACT'] - idag).days
                 if dage < 183:
                     styles[contr_idx] = 'background-color: #ffcccc; color: black;'
                 elif dage <= 365:
@@ -66,7 +72,7 @@ def vis_side(df_spillere):
 
     styled_df = df_viz.style.apply(highlight_contract, axis=1)
 
-    # --- 5. TABEL KONFIGURATION ---
+    # --- 5. TABEL ---
     kolonner = {
         "ROLECODE3": "Pos",
         "FULL_NAME": "Navn",
@@ -80,10 +86,10 @@ def vis_side(df_spillere):
         styled_df,
         column_order=list(kolonner.keys()),
         column_config={
-            "ROLECODE3": st.column_config.TextColumn("Pos", width="small"), # Small gør kolonnen smal
+            "ROLECODE3": st.column_config.TextColumn("Pos", width="small"),
             "FULL_NAME": st.column_config.TextColumn("Navn", width="large"),
             "BIRTH_STR": st.column_config.TextColumn("Fødselsdato"),
-            "HEIGHT_STR": st.column_config.TextColumn("Højde"), # TextColumn venstrestiller automatisk
+            "HEIGHT_STR": st.column_config.TextColumn("Højde"),
             "FOD": st.column_config.TextColumn("Fod", width="small"),
             "CONTR_STR": st.column_config.TextColumn("Kontraktudløb")
         },
@@ -92,9 +98,21 @@ def vis_side(df_spillere):
         height=int(35.5 * (len(df_viz) + 1))
     )
 
-    # Metrics
-    st.divider()
-    c1, c2 = st.columns(2)
-    c1.metric("Antal spillere", len(df_viz))
-    h_avg = df_working.loc[df_viz.index, 'HEIGHT'].mean()
-    c2.metric("Gns. Højde", f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
+    # --- 6. STATISTIK I BUNDEN (Kompakt) ---
+    st.markdown("---")
+    # Vi bruger st.caption eller mindre metrics her
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.caption("ANTAL SPILLERE")
+        st.subheader(len(df_viz))
+    
+    with c2:
+        h_avg = df_working.loc[df_viz.index, 'HEIGHT'].mean()
+        st.caption("GNS. HØJDE")
+        st.subheader(f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
+        
+    with c3:
+        age_avg = df_working.loc[df_viz.index, 'ALDER'].mean()
+        st.caption("GNS. ALDER")
+        st.subheader(f"{age_avg:.1f} år" if pd.notna(age_avg) else "-")
