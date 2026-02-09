@@ -33,19 +33,19 @@ def vis_side(df_events, df_kamp, hold_map):
 
     # --- ANALYSE MODES (Nu helt uden suffix) ---
     ANALYSE_MODES = {
-        "Afslutningseffektivitet (Skud vs. Mål)": {
+        "Skud x Mål = Effektivitet": {
             "x": "SHOTS", "y": "GOALS",
             "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
         },
-        "Chance-skabelse (xG vs. Mål)": {
+        "xG x Mål = Performance": {
             "x": "XG", "y": "GOALS",
             "desc": "Under- eller overperformer holdet på deres chancer? Over linjen er klinisk afslutning."
         },
-        "Boldbesiddelse vs. Indlæg": {
+        "POSSESSION x INDLÆG = Konvertering": {
             "x": "POSSESSIONPERCENT", "y": "CROSSESTOTAL",
             "desc": "Bliver boldbesiddelsen konverteret til indlæg?"
         },
-        "FREMADRETTEDE (PASSES vs. FORWARDPASSES)": {
+        "PASSES x FORWARDPASSES = Fremadrettede": {
             "x": "FORWARDPASSES", "y": "PASSES",
             "desc": "Spiller vi fremad når chancen byder sig?"
         }
