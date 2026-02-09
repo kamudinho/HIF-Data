@@ -22,6 +22,13 @@ def vis_side(df):
     else:
         df_squad['DAYS_LEFT'] = 999 
 
+    # Beregn alder til bunden
+    if 'BIRTHDATE' in df_squad.columns:
+        df_squad['BIRTHDATE'] = pd.to_datetime(df_squad['BIRTHDATE'], errors='coerce')
+        df_squad['ALDER'] = df_squad['BIRTHDATE'].apply(
+            lambda x: idag.year - x.year - ((idag.month, idag.day) < (x.month, x.day)) if pd.notna(x) else None
+        )
+
     def get_status_color(row):
         if row['PRIOR'] == 'L':
             return '#d3d3d3'  # Grå for leje
@@ -31,27 +38,28 @@ def vis_side(df):
         if days <= 365: return '#fffd8d'  # Gul
         return 'white'
 
-    # --- 2. LEGEND OVENOVER BILLEDET ---
-    # Vi bruger kolonner til at lave en pæn række over banen
-    st.markdown("### Kontraktstatus & Prioritet")
-    l_col1, l_col2, l_col3, l_col4 = st.columns([1, 1, 1, 2])
-    
+    # --- 2. KOMPAKT LEGEND ØVERST ---
+    l_col1, l_col2, l_col3 = st.columns(3)
     with l_col1:
-        st.markdown('<p style="border-left: 15px solid #ff4b4b; padding-left: 10px;">Udløb < 6 mdr</p>', unsafe_allow_html=True)
+        st.caption("KONTRAKT < 6 MDR")
+        st.markdown('<div style="height:10px; width:100%; background-color:#ff4b4b; border-radius:5px;"></div>', unsafe_allow_html=True)
     with l_col2:
-        st.markdown('<p style="border-left: 15px solid #fffd8d; padding-left: 10px;">Udløb 6-12 mdr</p>', unsafe_allow_html=True)
+        st.caption("KONTRAKT 6-12 MDR")
+        st.markdown('<div style="height:10px; width:100%; background-color:#fffd8d; border-radius:5px;"></div>', unsafe_allow_html=True)
     with l_col3:
-        st.markdown('<p style="border-left: 15px solid #d3d3d3; padding-left: 10px;">Leje / Udlejet (L)</p>', unsafe_allow_html=True)
+        st.caption("LEJE / UDLEJET (L)")
+        st.markdown('<div style="height:10px; width:100%; background-color:#d3d3d3; border-radius:5px;"></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # --- 3. FORMATIONER & BANE ---
     form_valg = st.sidebar.radio("Vælg Formation:", ["3-4-3", "4-3-3", "3-5-2"])
 
-    # (Formationer koordinater bibeholdes fra din tidligere kode)
     if form_valg == "3-4-3":
         pos_config = {
             1: (10, 43, 'MM'), 4: (33, 25, 'VCB'), 3: (33, 43, 'CB'), 2: (33, 65, 'HCB'),
             5: (55, 8, 'VWB'), 6: (55, 33, 'DM'), 8: (55, 53, 'DM'), 7: (55, 78, 'HWB'), 
-            11: (85, 15, 'VW'), 9: (90, 43, 'ANG'), 10: (85, 70, 'HW')
+            11: (85, 15, 'VW'), 9: (105, 43, 'ANG'), 10: (85, 71, 'HW')
         }
     elif form_valg == "4-3-3":
         pos_config = {
@@ -92,3 +100,21 @@ def vis_side(df):
                                   boxstyle='square,pad=0.1', linewidth=0.5, alpha=1.0))
 
     st.pyplot(fig)
+
+    # --- 5. STATISTIK I BUNDEN (Præcis som på din anden side) ---
+    st.markdown("---")
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.caption("ANTAL SPILLERE")
+        st.subheader(len(df_squad))
+    
+    with c2:
+        h_avg = pd.to_numeric(df_squad['HEIGHT'], errors='coerce').mean()
+        st.caption("GNS. HØJDE")
+        st.subheader(f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
+        
+    with c3:
+        age_avg = df_squad['ALDER'].mean() if 'ALDER' in df_squad.columns else None
+        st.caption("GNS. ALDER")
+        st.subheader(f"{age_avg:.1f} år" if pd.notna(age_avg) else "-")
