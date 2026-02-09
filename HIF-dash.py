@@ -68,7 +68,7 @@ with st.sidebar:
     st.markdown(f"<p style='text-align:center;'>HIF Performance Hub<br><b>{st.session_state['user']}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    selected = option_menu(None, ["DATA - HOLD", "DATA - INDIVIDUELT", "STATISTIK", "SCOUTING"], 
+    selected = option_menu(None, ["DATA - HOLD", "DATA - SPILLERE", "STATISTIK", "SCOUTING"], 
                            icons=["shield-shaded", "person-bounding-box", "bar-chart", "search"], 
                            default_index=0, styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
@@ -76,7 +76,7 @@ with st.sidebar:
     if selected == "DATA - HOLD":
         st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Zoner", "Afslutninger", "DataViz"], label_visibility="collapsed")
-    elif selected == "DATA - INDIVIDUELT":
+    elif selected == "DATA - SPILLERE":
         st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
         selected_sub = st.radio("S_ind", ["Zoner", "Afslutninger"], label_visibility="collapsed")
     elif selected == "STATISTIK":
@@ -90,12 +90,12 @@ with st.sidebar:
 if selected == "DATA - HOLD":
     if selected_sub == "Heatmaps": heatmaps.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Shotmaps": skudmap.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Målzoner": goalzone.vis_side(df_events, kamp, hold_map)
+    elif selected_sub == "Zoner": goalzone.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "Afslutninger": shots.vis_side(df_events, kamp, hold_map)
     elif selected_sub == "DataViz": dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DATA - INDIVIDUELT":
-    if selected_sub == "Spillerzoner":
+    if selected_sub == "Zoner":
         player_goalzone.vis_side(df_events, spillere)
     else:
         st.title(f"Individuel: {selected_sub}")
