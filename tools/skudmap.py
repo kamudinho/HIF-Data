@@ -52,7 +52,7 @@ def vis_side(df_events, cols_slider, hold_map=None):
         # TITEL-STRUKTUR FRA BILLEDE 2:
         # Vi placerer antallet lige under holdnavnet i selve titlen
         ax.set_title(f"{navn}\n({antal} SKUD)", 
-                     fontsize=10, 
+                     fontsize=12, 
                      fontweight='bold', 
                      pad=2) # Meget lille pad for at holde det tæt på banen
 
