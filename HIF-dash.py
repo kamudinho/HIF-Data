@@ -21,7 +21,7 @@ st.markdown("""
         .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
-            margin-top: -35px !important; /* Trækker indholdet op */
+            margin-top: -25px !important; /* Trækker indholdet op */
         }
 
         /* 2. SKJUL STREAMLITS STANDARD HEADER (DEN USYNLIGE BJÆLKE) */
