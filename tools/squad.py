@@ -94,8 +94,3 @@ def vis_side(df):
         
         st.write("---")
         
-        # Popover i bunden af menu-kolonnen
-        with st.popover("Vis Kontrakter", use_container_width=True):
-            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
-            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
-            st.dataframe(df_table, hide_index=True, use_container_width=True)
