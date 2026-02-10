@@ -2,23 +2,16 @@ import streamlit as st
 import streamlit_antd_components as sac
 import os
 import pandas as pd
-import importlib
 
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-# Samlet optimeret CSS
+# CSS til styling
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
-        [data-testid="stHeader"] { background-color: rgba(0,0,0,0); }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
-        
-        /* Gør undermenuer mindre og skarpere */
-        .ant-menu-sub .ant-menu-title-content {
-            font-size: 13px !important;
-            white-space: nowrap !important;
-        }
+        .ant-menu-sub .ant-menu-title-content { font-size: 13px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -27,6 +20,8 @@ USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+if "user" not in st.session_state:
+    st.session_state["user"] = ""
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -34,75 +29,68 @@ if not st.session_state["logged_in"]:
         st.markdown("<br><br><div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='120'></div>", unsafe_allow_html=True)
         st.markdown("<h3 style='text-align: center;'>HIF Performance Hub</h3>", unsafe_allow_html=True)
         with st.form("login_form"):
-            user = st.text_input("Brugernavn").lower().strip()
+            user_input = st.text_input("Brugernavn").lower().strip()
             pw = st.text_input("Adgangskode", type="password")
             if st.form_submit_button("Log ind", use_container_width=True):
-                if user in USER_DB and USER_DB[user] == pw:
+                if user_input in USER_DB and USER_DB[user_input] == pw:
                     st.session_state["logged_in"] = True
+                    st.session_state["user"] = user_input
                     st.rerun()
                 else:
                     st.error("Ugyldigt brugernavn eller kode")
     st.stop()
 
-# --- 3. DATA LOADING (TURBO OPTIMERET) ---
+# --- 3. DATA LOADING (PARQUET OPTIMERET) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR.endswith('tools'):
-    BASE_DIR = os.path.dirname(BASE_DIR)
-
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
-CSV_PATH = os.path.join(BASE_DIR, 'eventdata.csv')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 
-@st.cache_data(ttl=3600, show_spinner="Turbo-indlæser data...")
-def load_full_data():
+@st.cache_resource
+def load_hif_data():
     try:
-        # Læs Excel ark (altid fra Excel)
+        # Læs Excel-arkene
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
 
-        # DATA ENGINE: Prøv at læse Parquet først, ellers læs CSV og konverter
+        # Læs den lynhurtige Parquet-fil
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
-        elif os.path.exists(CSV_PATH):
-            # Læs CSV hurtigt med C-engine og faste typer
-            ev = pd.read_csv(CSV_PATH, low_memory=False, engine='c', dtype={'PLAYER_WYID': str})
-            # Gem som Parquet til næste gang
-            ev.to_parquet(PARQUET_PATH, index=False)
         else:
-            st.error("Ingen eventdata fundet!")
-            return None, None, {}, None, None, None
+            st.error("Fandt ikke eventdata.parquet!")
+            return None
 
-        # Rens PLAYER_WYID (kun hvis nødvendigt efter Parquet load)
+        # Rens PLAYER_WYID i alle relevante tabeller
         for df in [sp, pe, ev]:
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
-        godkendte_hold_ids = ho['TEAM_WYID'].unique()
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
+        godkendte_ids = ho['TEAM_WYID'].unique()
 
-        # Filtrer events og tilføj navne
-        ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
-        if 'PLAYER_NAME' not in ev.columns:
-            navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
-            ev = ev.merge(navne_df, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
+        # Filtrer og join navne én gang for alle
+        ev = ev[ev['TEAM_WYID'].isin(godkendte_ids)]
+        navne = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
+        ev = ev.merge(navne, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
             
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
         st.error(f"Kritisk fejl: {e}")
-        return None, None, {}, None, None, None
+        return None
 
-df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
+# Gem data i session, så vi ikke genindlæser ved hvert klik
+if "main_data" not in st.session_state:
+    st.session_state["main_data"] = load_hif_data()
 
-if df_events is None:
-    st.stop()
+df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
 # --- 4. SIDEBAR MENU ---
 with st.sidebar:
     st.markdown("<div style='text-align: center; padding-top: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='100'></div>", unsafe_allow_html=True)
-    
+    st.markdown(f"<p style='text-align:center;'><b>Hvidovre IF Data Hub</b><br>Bruger: {st.session_state['user'].upper()}</p>", unsafe_allow_html=True)
+
     selected = sac.menu([
         sac.MenuItem('DASHBOARD', icon='house-fill'),
         sac.MenuItem('HOLD', icon='shield', children=[
@@ -119,12 +107,12 @@ with st.sidebar:
             sac.MenuItem('Hvidovre IF'), sac.MenuItem('Trupsammensætning'), 
             sac.MenuItem('Sammenligning'), sac.MenuItem('Scouting-database'),
         ]),
-    ], format_func='upper', key='hif_menu_v3')
+    ], format_func='upper', key='hif_menu_vfinal')
 
 # --- 5. ROUTING (LAZY LOADING) ---
 if selected == 'DASHBOARD':
     st.title("Hvidovre IF Performance Hub")
-    st.write(f"Data er nu optimeret via Parquet-format for maksimal hastighed.")
+    st.success("Data indlæst lynhurtigt via Parquet-format.")
 
 elif selected == 'Heatmaps':
     import tools.heatmaps as heatmaps
