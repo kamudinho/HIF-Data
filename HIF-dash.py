@@ -171,7 +171,7 @@ with st.sidebar:
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
         # OPDATERET: Database-input tilføjet
-        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning", "Database-input"], label_visibility="collapsed")
+        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning", "Scouting-database"], label_visibility="collapsed")
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
