@@ -9,11 +9,9 @@ def vis_side(df):
         st.error("Ingen data fundet for truppen.")
         return
 
-    # --- 1. SESSION STATE FOR VALG ---
+    # --- 1. SESSION STATE FOR FORMATION ---
     if 'formation_valg' not in st.session_state:
         st.session_state.formation_valg = "3-4-3"
-    if 'show_squad_data' not in st.session_state:
-        st.session_state.show_squad_data = False
 
     # --- 2. DATA-PROCESSERING ---
     df_squad = df.copy()
@@ -36,32 +34,29 @@ def vis_side(df):
         if days <= 365: return '#fffd8d' 
         return 'white'
 
-    # --- 3. FORMATIONS-KNAPPER OG DATA-KNAP ---
-    # Vi laver 4 kolonner til formationer og 1 til Data-knappen
-    col_space, col1, col2, col3, col_data = st.columns([1, 1, 1, 1, 2])
+    # --- 3. TOP MENU (KNAPPER + POPOVER) ---
+    col1, col2, col3, col_spacer, col_pop = st.columns([1, 1, 1, 2, 1.5])
     
     formations = ["3-4-3", "4-3-3", "3-5-2"]
     cols = [col1, col2, col3]
 
     for i, f in enumerate(formations):
         with cols[i]:
-            # Hvis knappen er den valgte formation, kan vi give den lidt visuel hjælp
             if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
                 st.session_state.formation_valg = f
                 st.rerun()
 
-    with col_data:
-        if st.button("Kontrakter", use_container_width=True):
-            st.session_state.show_squad_data = not st.session_state.show_squad_data
-            st.rerun()
+    with col_pop:
+        with st.popover("Kontrakter", use_container_width=True):
+            st.markdown("**Oversigt over udløb**")
+            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
+            # Formatér datoen kun hvis den ikke er NaT
+            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "Ingen dato")
+            st.dataframe(df_table, hide_index=True, use_container_width=True)
 
-    # --- 4. DYNAMISK LAYOUT ---
+    # --- 4. BANE LAYOUT (ALTID CENTRERET) ---
     form_valg = st.session_state.formation_valg
-    
-    if st.session_state.show_squad_data:
-        col_main, col_side = st.columns([3.2, 1])
-    else:
-        _, col_main, _ = st.columns([0.2, 3.8, 0.2])
+    _, col_main, _ = st.columns([0.1, 4, 0.1]) # Giver banen god plads
 
     with col_main:
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
@@ -118,10 +113,3 @@ def vis_side(df):
                                       boxstyle='square,pad=0.1', linewidth=0.5))
 
         st.pyplot(fig, use_container_width=True)
-
-    # --- 5. SIDEPANEL (RÅDATA) ---
-    if st.session_state.show_squad_data:
-        with col_side:
-            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
-            df_table['CONTRACT'] = df_table['CONTRACT'].dt.strftime('%d-%m-%Y')
-            st.dataframe(df_table, hide_index=True, use_container_width=True)
