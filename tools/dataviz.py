@@ -47,7 +47,6 @@ def vis_side(df_events, kamp, hold_map):
         col_graf, col_data = st.columns([2.5, 1])
         
         with col_data:
-            st.markdown(f"<p style='text-align:center; font-weight:bold;'>Rådata</p>", unsafe_allow_html=True)
             df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
             df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
             df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
