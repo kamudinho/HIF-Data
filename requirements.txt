@@ -10,3 +10,4 @@ scipy
 mplsoccer
 plotly
 jinja2
+streamlit-gsheets
