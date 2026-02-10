@@ -59,9 +59,9 @@ def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
     except Exception as e:
-        # st.sidebar.error(f"Kunne ikke loade {name}: {e}") # Debug
         return None
 
+# Load eksisterende moduler
 heatmaps = load_module("heatmaps")
 shots = load_module("shots")
 skudmap = load_module("skudmap")
@@ -74,6 +74,9 @@ top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
 player_shots = load_module("player_shots")
+
+# NYT: Scouting Database Input modul
+scout_input = load_module("scout_input")
 
 # --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +91,7 @@ def load_full_data():
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # Sikr PLAYER_WYID altid er tekststrenge uden .0 for præcis matching
+        # Sikr PLAYER_WYID altid er tekststrenge uden .0
         for df_tmp in [sp, pe]:
             if 'PLAYER_WYID' in df_tmp.columns:
                 df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -106,10 +109,8 @@ def load_full_data():
                 if len(ev.columns) < 2:
                     ev = pd.read_csv(found_path, sep=';', low_memory=False)
                 
-                # Vigtigt: Rens også ID i eventdata
                 if 'PLAYER_WYID' in ev.columns:
                     ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-                
             except Exception as e:
                 st.error(f"Fejl ved læsning af CSV: {e}")
                 return None, None, {}, None, None, None
@@ -119,7 +120,6 @@ def load_full_data():
 
         if ev is not None:
             ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
-            # Tilføj PLAYER_NAME til ev fra spillere-arket
             if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
                 navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
                 ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
@@ -169,7 +169,8 @@ with st.sidebar:
         selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
     elif selected == "SCOUTING":
         st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning"], label_visibility="collapsed")
+        # OPDATERET: Database-input tilføjet
+        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning", "Database-input"], label_visibility="collapsed")
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
@@ -183,7 +184,6 @@ if selected == "HOLD":
     elif selected_sub == "Shotmaps" and skudmap: 
         skudmap.vis_side(df_events, 4, hold_map)
     elif selected_sub == "Zoneinddeling" and goalzone: 
-        # RETTET: Sender 'spillere' (df) med i stedet for 'kamp' (df)
         goalzone.vis_side(df_events, spillere, hold_map)
     elif selected_sub == "Afslutninger" and shots: 
         shots.vis_side(df_events, kamp, hold_map)
@@ -194,7 +194,6 @@ elif selected == "SPILLERE":
     if selected_sub == "Zoneinddeling" and player_goalzone: 
         player_goalzone.vis_side(df_events, spillere)
     elif selected_sub == "Afslutninger" and player_shots: 
-        # Bemærk: Her bruges 'kamp' og 'hold_map' til filtrering af kampe/modstandere
         player_shots.vis_side(df_events, kamp, hold_map)
 
 elif selected == "STATISTIK":
@@ -210,3 +209,6 @@ elif selected == "SCOUTING":
         squad.vis_side(spillere)
     elif selected_sub == "Sammenligning" and comparison: 
         comparison.vis_side(spillere, player_events, df_scout)
+    # NY ROUTE: Database-input kalder det nye modul med spillere-listen
+    elif selected_sub == "Database-input" and scout_input:
+        scout_input.vis_side(spillere)
