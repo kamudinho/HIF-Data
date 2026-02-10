@@ -13,8 +13,8 @@ def vis_side(df):
     if 'formation_valg' not in st.session_state:
         st.session_state.formation_valg = "3-4-3"
 
-    # --- 2. FARVE-DEFINITIONER ---
-    klub_rod = "#6b0013"  # Din specifikke mørkerøde
+    # --- 2. FARVE-DEFINITIONER (Dashboard Match) ---
+    hif_rod = "#d31313"  # Den præcise røde fra dit Dashboard-billede
 
     # --- 3. DATA-PROCESSERING ---
     df_squad = df.copy()
@@ -31,7 +31,7 @@ def vis_side(df):
         if row['PRIOR'] == 'L': return '#d3d3d3' 
         days = row.get('DAYS_LEFT', 999)
         if pd.isna(days): return 'white'
-        if days < 182: return klub_rod  # Bruger den mørkerøde her
+        if days < 182: return hif_rod  # < 6 mdr match
         if days <= 365: return '#fffd8d' 
         return 'white'
 
@@ -39,15 +39,12 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
-        # Styling af knapper via CSS for at ramme den mørkerøde præcis
+        # CSS for at tvinge knapperne til at bruge Dashboard-rød
         st.markdown(f"""
             <style>
-            div[st-vertical-layout="true"] > div:first-child {{
-                margin-top: 0px;
-            }}
             button[kind="primary"] {{
-                background-color: {klub_rod} !important;
-                border-color: {klub_rod} !important;
+                background-color: {hif_rod} !important;
+                border-color: {hif_rod} !important;
                 color: white !important;
             }}
             </style>
@@ -61,7 +58,6 @@ def vis_side(df):
         st.write("---")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
-            # Type="primary" vil nu bruge klub_rod pga. CSS'en ovenfor
             if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
                 st.session_state.formation_valg = f
                 st.rerun()
@@ -72,15 +68,17 @@ def vis_side(df):
         
         fig, ax = pitch.draw(figsize=(14, 10))
         
-        # Legend
-        legend_items = [(klub_rod, "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
+        # Legend - Rykket sammen mod venstre
+        legend_items = [(hif_rod, "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            text_color = "white" if color == klub_rod else "black"
-            ax.text(1 + (i * 12), 2.5, text, size=11, color=text_color, va='center', ha='left', 
+            # Hvid tekst på den røde baggrund for læsbarhed
+            text_col = "white" if color == hif_rod else "black"
+            ax.text(1 + (i * 12), 2.5, text, size=11, color=text_col, va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
         # Positions logik
         form_valg = st.session_state.formation_valg
+        # (Positions-definitioner fra din tidligere kode...)
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 7: (60, 70, 'HWB'), 
@@ -98,14 +96,13 @@ def vis_side(df):
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
             if not spillere_pos.empty:
-                # Positionslabel (Mørkerød)
+                # Positionslabel (HIF Rød)
                 ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
-                        bbox=dict(facecolor=klub_rod, edgecolor='white', boxstyle='round,pad=0.3'))
+                        bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.3'))
                 
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     bg_color = get_status_color(p)
-                    # Tekstfarve skifter til hvid hvis baggrunden er mørkerød
-                    text_color = "white" if bg_color == klub_rod else "black"
+                    text_color = "white" if bg_color == hif_rod else "black"
                     
                     visnings_tekst = f" {p['NAVN']} ".ljust(22)
                     ax.text(x_pos, (y_pos - 1.5) + (i * 3.8), visnings_tekst, size=11, 
