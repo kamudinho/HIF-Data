@@ -64,18 +64,26 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # --- 3. DATA LOADING (Cachet) ---
+# Vi sikrer, at BASE_DIR peger på rodmappen af dit projekt
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Da HIF-data.xlsx ligger i hovedmappen, skal vi bare bruge BASE_DIR
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 
 @st.cache_data(ttl=3600, show_spinner="Henter HIF data...")
 def load_full_data():
+    if not os.path.exists(XLSX_PATH):
+        st.error(f"Kunne ikke finde filen: {XLSX_PATH}")
+        return None, None, {}, None, None, None
+        
     try:
+        # Læs Excel ark
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
+        # Datarens: Sørg for at PLAYER_WYID er rene tekststrenge
         for df_tmp in [sp, pe]:
             if 'PLAYER_WYID' in df_tmp.columns:
                 df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -83,6 +91,7 @@ def load_full_data():
         godkendte_hold_ids = ho['TEAM_WYID'].unique()
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
 
+        # Håndtering af eventdata.csv (også i rodmappen)
         ev = None
         possible_names = ['eventdata.csv', 'Eventdata.csv', 'EventData.csv', 'EVENTDATA.csv']
         found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
@@ -103,9 +112,10 @@ def load_full_data():
             
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
-        st.error(f"Kritisk datafejl: {e}")
+        st.error(f"Kritisk datafejl ved indlæsning: {e}")
         return None, None, {}, None, None, None
 
+# Kør load funktionen
 df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 
 if df_events is None:
