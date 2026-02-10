@@ -65,7 +65,7 @@ def vis_side(df):
 
     with col_main:
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-        fig, ax = pitch.draw(figsize=(10, 7), constrained_layout=True)
+        fig, ax = pitch.draw(figsize=(12, 7), constrained_layout=True)
 
         # Legend
         legend_y = -3
