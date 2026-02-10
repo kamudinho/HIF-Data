@@ -13,3 +13,5 @@ jinja2
 gspread
 google-auth
 streamlit-antd-components
+pyarrow
+fastparquet
