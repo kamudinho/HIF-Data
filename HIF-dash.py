@@ -8,7 +8,7 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 # CSS til styling (Holdes simpel)
 st.markdown("""
     <style>
-        .block-container { padding-top: 2rem !important; }
+        .block-container { padding-top: 4rem !important; }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
         /* Styling af den klassiske radio-menu */
         .stRadio [data-testid="stWidgetLabel"] { display: none; }
