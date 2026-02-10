@@ -7,16 +7,11 @@ import importlib
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-# CSS til styling (Mindre skrift på underpunkter + overskrifter)
+# CSS til styling
 st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
-        
-        /* Gør underpunkter mindre og sikrer de holder sig på én linje */
-        .ant-menu-sub .ant-menu-title-content {
-            font-size: 12px !important;
-            white-space: nowrap !important;
-        }
+        [data-testid="stHeader"] { background-color: rgba(0,0,0,0); }
         
         /* Centrerer logo i sidebaren */
         [data-testid="stSidebar"] img {
@@ -24,13 +19,51 @@ st.markdown("""
             margin-left: auto;
             margin-right: auto;
         }
+
+        /* Gør underpunkter mindre og fjerner unødvendig luft */
+        .ant-menu-sub .ant-menu-title-content {
+            font-size: 13px !important;
+            white-space: nowrap !important;
+            color: #a0a0a0 !important;
+        }
+        
+        /* Gør overskrifter (HOLD, SPILLERE osv) tydelige */
+        .ant-menu-submenu-title {
+            font-weight: bold !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGIN (Forkortet for overblik - behold din egen version her) ---
+# --- 2. LOGIN SYSTEM ---
+USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
+
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
-# ... (indsæt din egen login logik her) ...
+
+if not st.session_state["logged_in"]:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown("<h3 style='text-align: center;'>HIF Performance Hub</h3>", unsafe_allow_html=True)
+        with st.form("login_form"):
+            user = st.text_input("Brugernavn").lower().strip()
+            pw = st.text_input("Adgangskode", type="password")
+            submit = st.form_submit_button("Log ind", use_container_width=True)
+            if submit:
+                if user in USER_DB and USER_DB[user] == pw:
+                    st.session_state["logged_in"] = True
+                    st.rerun()
+                else:
+                    st.error("Ugyldigt brugernavn eller kode")
+    st.stop()
 
 # --- 3. IMPORT AF TOOLS ---
 def load_module(name):
@@ -39,6 +72,7 @@ def load_module(name):
     except Exception as e:
         return None
 
+# Load alle dine moduler
 heatmaps = load_module("heatmaps")
 shots = load_module("shots")
 skudmap = load_module("skudmap")
@@ -53,8 +87,53 @@ player_goalzone = load_module("player_goalzone")
 player_shots = load_module("player_shots")
 scout_input = load_module("scout_input")
 
-# --- 4. DATA LOADING (Brug din eksisterende load_full_data funktion) ---
-# df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
+# --- 4. DATA LOADING ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
+
+@st.cache_data(ttl=3600, show_spinner="Opdaterer HIF data...")
+def load_full_data():
+    try:
+        ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
+        sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
+        ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
+        pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
+        sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
+        
+        for df_tmp in [sp, pe]:
+            if 'PLAYER_WYID' in df_tmp.columns:
+                df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+
+        godkendte_hold_ids = ho['TEAM_WYID'].unique()
+        h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
+
+        ev = None
+        possible_names = ['eventdata.csv', 'Eventdata.csv', 'EventData.csv', 'EVENTDATA.csv']
+        found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
+        
+        if found_path:
+            ev = pd.read_csv(found_path, low_memory=False)
+            if len(ev.columns) < 2:
+                ev = pd.read_csv(found_path, sep=';', low_memory=False)
+            if 'PLAYER_WYID' in ev.columns:
+                ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+        
+        if ev is not None:
+            ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
+            if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
+                navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
+                ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
+                ev = ev.rename(columns={'NAVN': 'PLAYER_NAME'})
+            
+        return ev, ka, h_map, sp, pe, sc
+    except Exception as e:
+        st.error(f"Kritisk datafejl: {e}")
+        return None, None, {}, None, None, None
+
+df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
+
+if df_events is None:
+    st.stop()
 
 # --- 5. SIDEBAR MENU ---
 with st.sidebar:
@@ -67,7 +146,7 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    # Her tilføjer vi accordion=True for at sikre, at kun én mappe er åben
+    # Her bruger vi sac.menu med accordion=True og en fast key
     selected = sac.menu([
         sac.MenuItem('DASHBOARD', icon='house-fill'),
         sac.MenuItem('HOLD', icon='shield', children=[
@@ -94,44 +173,37 @@ with st.sidebar:
     ], 
     format_func='upper', 
     open_all=False, 
-    accordion=True,  # <--- DETTE ER NØGLEN TIL DIN EFFEKT
-    index=0)
+    accordion=True, 
+    key='hif_nav_menu')
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
-        
+
 # --- 6. ROUTING ---
 if selected == 'DASHBOARD':
     st.title("Hvidovre IF Performance Hub")
-    st.write("Vælg et værktøj i menuen til venstre.")
+    st.info(f"Logget ind som: {user.upper()}")
 
-# Hold Analyse
 elif selected == "Heatmaps":
     heatmaps.vis_side(df_events, 4, hold_map)
 elif selected == "Shotmaps":
     skudmap.vis_side(df_events, 4, hold_map)
-elif selected == "Zoneinddeling (Hold)":
+elif selected == "Zoneinddeling":
     goalzone.vis_side(df_events, spillere, hold_map)
-elif selected == "Afslutninger (Hold)":
+elif selected == "Afslutninger":
     shots.vis_side(df_events, kamp, hold_map)
 elif selected == "DataViz":
     dataviz.vis_side(df_events, kamp, hold_map)
-
-# Spiller Analyse
-elif selected == "Zoneinddeling (Spiller)":
+elif selected == "Zoneinddeling":
     player_goalzone.vis_side(df_events, spillere)
-elif selected == "Afslutninger (Spiller)":
+elif selected == "Afslutninger":
     player_shots.vis_side(df_events, kamp, hold_map)
-
-# Statistik
 elif selected == "Spillerstats":
     stats.vis_side(spillere, player_events)
 elif selected == "Top 5":
     top5.vis_side(spillere, player_events)
-
-# Scouting
 elif selected == "Hvidovre IF":
     players.vis_side(spillere)
 elif selected == "Trupsammensætning":
