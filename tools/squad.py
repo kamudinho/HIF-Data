@@ -22,8 +22,6 @@ def vis_side(df):
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
-    
-    # Vi genindfører PRIOR internt til logikken, men viser den ikke
     df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).str.strip().str.upper()
 
     idag = datetime.now()
@@ -32,7 +30,7 @@ def vis_side(df):
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
 
     def get_status_color(row):
-        if row['PRIOR'] == 'L': return leje_gra # Leje/Udlejet prioriteres
+        if row['PRIOR'] == 'L': return leje_gra 
         days = row.get('DAYS_LEFT', 999)
         if pd.isna(days): return 'white'
         if days < 182: return hif_rod 
@@ -49,20 +47,19 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
-        # CSS til knapper
         st.markdown(f"<style>button[kind='primary'] {{ background-color: {hif_rod} !important; border-color: {hif_rod} !important; color: white !important; }}</style>", unsafe_allow_html=True)
 
-        # Popover uden ikoner - bare ren tekst
         with st.popover("Kontrakter", use_container_width=True):
             df_table = df_squad[['NAVN', 'CONTRACT', 'DAYS_LEFT', 'PRIOR']].copy()
             styled_df = df_table.style.apply(style_rows, axis=1)
             
+            # Her har jeg øget bredden (width) markant for begge kolonner
             st.dataframe(
                 styled_df,
                 column_order=("NAVN", "CONTRACT"),
                 column_config={
-                    "NAVN": st.column_config.TextColumn("Navn", width="medium"),
-                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width="small"),
+                    "NAVN": st.column_config.TextColumn("Navn", width=250),
+                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=150),
                 },
                 hide_index=True,
                 use_container_width=False
@@ -79,16 +76,13 @@ def vis_side(df):
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0, pad_left=1, pad_right=1)
         fig, ax = pitch.draw(figsize=(14, 10))
         
-        # Legend er nu komplet igen
         legend_items = [(hif_rod, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
         for i, (color, text) in enumerate(legend_items):
             text_col = "white" if color == hif_rod else "black"
             ax.text(1 + (i * 12), 2.5, text, size=11, color=text_col, va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
-        # Positions logik
         form_valg = st.session_state.formation_valg
-        # (Positions-definitioner her...)
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 7: (60, 70, 'HWB'), 
