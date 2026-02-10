@@ -74,7 +74,7 @@ def vis_side(df_events, df_kamp, hold_map):
             plot_bgcolor='white',
             xaxis_title=f"Gns. {x_col}",
             yaxis_title=f"Gns. {y_col}",
-            height=480,
+            height=680,
             margin=dict(t=10, b=10, l=10, r=10),
             showlegend=False,
             font=dict(size=10)
