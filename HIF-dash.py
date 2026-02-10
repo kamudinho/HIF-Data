@@ -211,5 +211,5 @@ elif selected == "SCOUTING":
     elif selected_sub == "Sammenligning" and comparison: 
         comparison.vis_side(spillere, player_events, df_scout)
     # NY ROUTE: Database-input kalder det nye modul med spillere-listen
-    elif selected_sub == "Database-input" and scout_input:
+    elif selected_sub == "Scouting-database" and scout_input:
         scout_input.vis_side(spillere)
