@@ -60,7 +60,7 @@ def vis_side(df_events, df_kamp, hold_map):
         plot_bgcolor='white',
         xaxis_title=f"Gns. {x_col}",
         yaxis_title=f"Gns. {y_col}",
-        height=400, # Reduceret højde for at passe til skærmen
+        height=500, # Reduceret højde for at passe til skærmen
         margin=dict(t=20, b=40, l=40, r=20), # Minimale margins
         showlegend=False,
         font=dict(size=10) # Mindre font for mere luft
