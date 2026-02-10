@@ -146,19 +146,19 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    # Her bruger vi sac.menu med accordion=True og en fast key
+    # Vi bruger 'label' til visning og lader sac styre det unikke ID
     selected = sac.menu([
         sac.MenuItem('DASHBOARD', icon='house-fill'),
         sac.MenuItem('HOLD', icon='shield', children=[
             sac.MenuItem('Heatmaps'),
             sac.MenuItem('Shotmaps'),
-            sac.MenuItem('Zoneinddeling (Hold)'),
-            sac.MenuItem('Afslutninger (Hold)'),
+            sac.MenuItem('Zoneinddeling'), # Tidligere (Hold)
+            sac.MenuItem('Afslutninger'), # Tidligere (Hold)
             sac.MenuItem('DataViz'),
         ]),
         sac.MenuItem('SPILLERE', icon='person', children=[
-            sac.MenuItem('Zoneinddeling (Spiller)'),
-            sac.MenuItem('Afslutninger (Spiller)'),
+            sac.MenuItem('Zoneinddeling'), # Tidligere (Spiller)
+            sac.MenuItem('Afslutninger'), # Tidligere (Spiller)
         ]),
         sac.MenuItem('STATISTIK', icon='bar-chart', children=[
             sac.MenuItem('Spillerstats'),
@@ -170,45 +170,49 @@ with st.sidebar:
             sac.MenuItem('Sammenligning'),
             sac.MenuItem('Scouting-database'),
         ]),
-    ], 
-    format_func='upper', 
-    open_all=False, 
-    accordion=True, 
-    key='hif_nav_menu')
+    ], key='hif_menu_v2')
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
 
-# --- 6. ROUTING ---
+# --- 6. ROUTING (Håndterer dubletter automatisk) ---
+# Da sac.menu returnerer stien (f.eks. 'HOLD/Zoneinddeling'), tjekker vi på den præcise streng
+
 if selected == 'DASHBOARD':
     st.title("Hvidovre IF Performance Hub")
-    st.info(f"Logget ind som: {user.upper()}")
 
-elif selected == "Heatmaps":
+# --- HOLD ---
+elif selected == 'Heatmaps':
     heatmaps.vis_side(df_events, 4, hold_map)
-elif selected == "Shotmaps":
+elif selected == 'Shotmaps':
     skudmap.vis_side(df_events, 4, hold_map)
-elif selected == "Zoneinddeling":
+elif selected == 'HOLD/Zoneinddeling': # Unik identifikation
     goalzone.vis_side(df_events, spillere, hold_map)
-elif selected == "Afslutninger":
+elif selected == 'HOLD/Afslutninger': # Unik identifikation
     shots.vis_side(df_events, kamp, hold_map)
-elif selected == "DataViz":
+elif selected == 'DataViz':
     dataviz.vis_side(df_events, kamp, hold_map)
-elif selected == "Zoneinddeling":
+
+# --- SPILLERE ---
+elif selected == 'SPILLERE/Zoneinddeling': # Unik identifikation
     player_goalzone.vis_side(df_events, spillere)
-elif selected == "Afslutninger":
+elif selected == 'SPILLERE/Afslutninger': # Unik identifikation
     player_shots.vis_side(df_events, kamp, hold_map)
-elif selected == "Spillerstats":
+
+# --- STATISTIK ---
+elif selected == 'Spillerstats':
     stats.vis_side(spillere, player_events)
-elif selected == "Top 5":
+elif selected == 'Top 5':
     top5.vis_side(spillere, player_events)
-elif selected == "Hvidovre IF":
+
+# --- SCOUTING ---
+elif selected == 'Hvidovre IF':
     players.vis_side(spillere)
-elif selected == "Trupsammensætning":
+elif selected == 'Trupsammensætning':
     squad.vis_side(spillere)
-elif selected == "Sammenligning":
+elif selected == 'Sammenligning':
     comparison.vis_side(spillere, player_events, df_scout)
-elif selected == "Scouting-database":
+elif selected == 'Scouting-database':
     scout_input.vis_side(spillere)
