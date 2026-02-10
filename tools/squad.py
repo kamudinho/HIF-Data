@@ -36,16 +36,16 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([4, 1])
 
     with col_menu:
-        # Kontrakter øverst
         st.write("### Oversigt")
+        # Popover med bredere tabel-visning
         with st.popover("📅 Vis Kontrakter", use_container_width=True):
+            st.markdown("**Fuldt overblik**")
             df_table = df_squad[['NAVN', 'CONTRACT']].copy()
             df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
-            st.dataframe(df_table, hide_index=True, use_container_width=True)
+            # Vi fjerner container_width for at lade tabellen brede sig naturligt i popoveren
+            st.dataframe(df_table, hide_index=True, width=500)
         
         st.write("---")
-        
-        # Formationer nedenunder
         st.write("### Formation")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
@@ -57,11 +57,11 @@ def vis_side(df):
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0)
         fig, ax = pitch.draw(figsize=(12, 9))
         
-        # Legend (Større tekst)
+        # Legend - Rykket tættere sammen mod venstre (afstand 12 i stedet for 22)
         legend_items = [("#ff4b4b", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            ax.text(5 + (i * 22), 3, text, size=11, color="black", va='center', ha='left', 
-                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3'))
+            ax.text(2 + (i * 12), 3, text, size=10, color="black", va='center', ha='left', 
+                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
         # Positions logik
         form_valg = st.session_state.formation_valg
@@ -82,14 +82,11 @@ def vis_side(df):
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
             if not spillere_pos.empty:
-                # Positionslabel (Større)
                 ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
                         bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.3'))
                 
-                # Spillernavne (Større og tydeligere)
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     bg_color = get_status_color(p)
-                    # ljust(22) sikrer ensartede kasser til længere navne
                     visnings_tekst = f" {p['NAVN']} ".ljust(22)
                     ax.text(x_pos, (y_pos - 1.5) + (i * 3.5), visnings_tekst, size=10, 
                             va='top', ha='center', family='monospace', fontweight='bold',
