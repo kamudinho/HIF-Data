@@ -30,24 +30,33 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. RÅDATA (POPOVER) MED TVUNGEN CENTRERING ---
+    # --- 2. RÅDATA (POPOVER) ---
     with col_btn:
         with st.popover("Vis Rådata", use_container_width=True):
-            # Formater data til tabel
+            # Formater data og fjern index helt
             df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
             df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
             df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
-
-            # CSS der tvinger alt i kolonne 2 og 3 til midten (både header og celler)
+            
+            # CSS: Skjul index-kolonnen og centrer kun kolonne 2 og 3
             st.markdown("""
                 <style>
-                    thead th:nth-child(2), thead th:nth-child(3) { text-align: center !important; }
-                    tbody td:nth-child(2), tbody td:nth-child(3) { text-align: center !important; }
-                    table { width: 100%; }
+                    /* Skjul index kolonnen (den første th/td) */
+                    thead tr th:first-child { display:none; }
+                    tbody tr th { display:none; }
+                    
+                    /* Venstrestil første datakolonne (Hold) */
+                    table tr td:nth-child(2) { text-align: left !important; }
+                    table tr th:nth-child(2) { text-align: left !important; }
+                    
+                    /* Centrer de næste to (Shots/Goals) */
+                    table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                    table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                    
+                    table { width: 100%; border-collapse: collapse; }
                 </style>
             """, unsafe_allow_html=True)
 
-            # Vi bruger st.table i stedet for dataframe for at CSS'en bider ordentligt
             st.table(df_table)
 
     # --- 3. SCATTERPLOT ---
