@@ -29,33 +29,28 @@ def vis_side(df_events, df_kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- RÅDATA: CENTRERET OG FULD LÆNGDE ---
+    # --- RÅDATA: RETTET TABEL ---
     with col_btn:
         with st.popover("Vis Rådata", use_container_width=True):
             st.markdown(f"**Komplet tabel ({y_col})**")
-            df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
-            df_display[x_col] = df_display[x_col].round(1)
-            df_display[y_col] = df_display[y_col].round(2)
             
-            # Vi bruger st.column_config til at centrere data
+            # Vi forbereder data til visning
+            df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
+            
+            # Brug st.column_config til at styre formatering og centrering
             st.dataframe(
                 df_display, 
                 hide_index=True, 
                 use_container_width=True,
-                height=500, # Sørger for at den viser mange rækker
+                height=500,
                 column_config={
-                    x_col: st.column_config.NumberColumn(format="%.1f", help="Gennemsnit", width="medium"),
-                    y_col: st.column_config.NumberColumn(format="%.2f", help="Gennemsnit", width="medium"),
+                    "Hold": st.column_config.TextColumn("Hold", width="medium"),
+                    x_col: st.column_config.NumberColumn(f"Gns. {x_col}", format="%.1f"),
+                    y_col: st.column_config.NumberColumn(f"Gns. {y_col}", format="%.2f")
                 }
             )
-            # CSS hack til at centrere tekst i dataframe-celler
-            st.markdown("""
-                <style>
-                    [data-testid="stTable"] td {text-align: center !important;}
-                    [data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] div {text-align: center !important;}
-                </style>
-            """, unsafe_allow_html=True)
 
+    # --- GRAF ---
     _, col_graf, _ = st.columns([0.1, 8, 0.1])
     
     with col_graf:
@@ -67,25 +62,16 @@ def vis_side(df_events, df_kamp, hold_map):
             tid = int(row['TEAM_WYID'])
             is_hif = (tid == HIF_ID)
             
-            # Store, tydelige prikker
-            dot_size = 28 if is_hif else 20
-            dot_color = HIF_RED if is_hif else 'rgba(70, 70, 70, 0.7)'
-
             fig.add_trace(go.Scatter(
                 x=[row[x_col]], y=[row[y_col]],
                 mode='markers+text',
-                text=[row['Hold']], # ALLE holdnavne på nu
+                text=[row['Hold']], # Alle navne på
                 textposition="top center",
-                textfont=dict(
-                    size=12 if is_hif else 10,
-                    color='black',
-                    family="Arial Black" if is_hif else "Arial"
-                ),
+                textfont=dict(size=11, color='black', family="Arial Narrow"),
                 marker=dict(
-                    size=dot_size,
-                    color=dot_color,
-                    line=dict(width=2, color='white'),
-                    opacity=1 if is_hif else 0.8
+                    size=26 if is_hif else 18,
+                    color=HIF_RED if is_hif else 'rgba(70, 70, 70, 0.7)',
+                    line=dict(width=2, color='white')
                 ),
                 hovertemplate=f"<b>{row['Hold']}</b><br>{x_col}: %{{x:.2f}}<br>{y_col}: %{{y:.2f}}<extra></extra>"
             ))
