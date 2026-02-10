@@ -78,7 +78,7 @@ def vis_side(df):
         st.pyplot(fig, use_container_width=True)
 
 
-        with col_menu:
+    with col_menu:
         st.markdown("### Formation")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
