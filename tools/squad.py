@@ -62,7 +62,7 @@ def vis_side(df):
                 styled_df,
                 column_order=("NAVN", "CONTRACT"),
                 column_config={
-                    "NAVN": st.column_config.TextColumn("Navn", width=250),
+                    "NAVN": st.column_config.TextColumn("Navn", width=550),
                     "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=150),
                 },
                 hide_index=True,
