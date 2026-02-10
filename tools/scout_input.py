@@ -32,7 +32,6 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    st.title("📂 Scouting Database")
 
     # --- 1. VIS EKSISTERENDE DATA FØRST ---
     try:
@@ -60,7 +59,7 @@ def vis_side(df_spillere):
     
     # --- 3. SELVE FORMULAREN (Vises kun hvis knappen er trykket) ---
     if st.session_state.vis_formular:
-        with st.expander("📝 Ny Scoutingrapport", expanded=True):
+        with st.expander("Ny Scoutingrapport", expanded=True):
             kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True)
 
             with st.form("scout_form", clear_on_submit=True):
@@ -93,11 +92,11 @@ def vis_side(df_spillere):
                 with f3:
                     potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
-                noter = st.text_area("Scouting Noter (Styrker, svagheder, personlighed)")
+                noter = st.text_area("Kommentarer (Styrker, svagheder, personlighed)")
 
                 col_save, col_cancel = st.columns([1, 1])
                 with col_save:
-                    submit = st.form_submit_button("✅ Gem rapport")
+                    submit = st.form_submit_button("Gem rapport")
                 
                 if submit:
                     if navn:
@@ -108,7 +107,7 @@ def vis_side(df_spillere):
                         
                         res = save_to_github(ny_data)
                         if res in [200, 201]:
-                            st.success(f"Gemt! GitHub opdaterer om et øjeblik.")
+                            st.success(f"Gemt! DATA Hub opdaterer om et øjeblik.")
                             st.session_state.vis_formular = False
                             st.rerun()
                         else:
