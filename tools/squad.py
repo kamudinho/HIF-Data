@@ -64,7 +64,7 @@ def vis_side(df):
     else:
         # Lille bane: centreret og smal (fylder kun ca. 60% af skærmen)
         _, col_main, _ = st.columns([1.5, 3, 1.5])
-        fig_size = (10, 8) # Mere kvadratisk når den er lille
+        fig_size = (12, 8) # Mere kvadratisk når den er lille
         font_size = 8
 
     with col_main:
