@@ -23,20 +23,18 @@ def vis_side(df):
     if 'CONTRACT' in df_squad.columns:
         df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
-    else:
-        df_squad['DAYS_LEFT'] = 999 
 
     def get_status_color(row):
         if row['PRIOR'] == 'L': return '#d3d3d3' 
-        days = row['DAYS_LEFT']
+        days = row.get('DAYS_LEFT', 999)
         if pd.isna(days): return 'white'
         if days < 182: return '#ff4b4b' 
         if days <= 365: return '#fffd8d' 
         return 'white'
 
-    # --- 3. ULTRA-KOMPAKT TOP MENU ---
-    # Vi bruger meget små kolonner til knapperne for at rykke banen helt op
-    col1, col2, col3, col_spacer, col_pop = st.columns([0.4, 0.4, 0.4, 3.3, 1.0])
+    # --- 3. TOP MENU MED ZOOM-KNAP ---
+    # Vi tilføjer col_zoom til rækken
+    col1, col2, col3, col_zoom, col_spacer, col_pop = st.columns([0.4, 0.4, 0.4, 0.6, 2.7, 1.0])
     
     formations = ["3-4-3", "4-3-3", "3-5-2"]
     cols = [col1, col2, col3]
@@ -47,77 +45,64 @@ def vis_side(df):
                 st.session_state.formation_valg = f
                 st.rerun()
 
+    with col_zoom:
+        # En toggle-knap til at styre størrelsen
+        zoom = st.toggle("🔍 Zoom", value=False)
+
     with col_pop:
         with st.popover("Kontrakter", use_container_width=True):
-            st.markdown("**Kontraktudløb**")
             df_table = df_squad[['NAVN', 'CONTRACT']].copy()
             df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
             st.dataframe(df_table, hide_index=True, use_container_width=True)
 
-    # --- 4. BANE LAYOUT MED STRAM FIGUR-KONTROL ---
-    form_valg = st.session_state.formation_valg
-    
-    # Vi fjerner næsten al margin i siderne for at få banen op i størrelse uden vertikal scroll
-    _, col_main, _ = st.columns([0.01, 9.98, 0.01])
+    # --- 4. DYNAMISK STØRRELSE (Zoom logik) ---
+    if zoom:
+        # Stor bane: fylder næsten det hele
+        _, col_main, _ = st.columns([0.01, 9.98, 0.01])
+        fig_size = (14, 7)
+        font_size = 6.5
+    else:
+        # Lille bane: centreret og smal (fylder kun ca. 60% af skærmen)
+        _, col_main, _ = st.columns([1.5, 3, 1.5])
+        fig_size = (10, 8) # Mere kvadratisk når den er lille
+        font_size = 8
 
     with col_main:
-        # pitch_type='statsbomb' giver banen 120x80 enheder
-        pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', 
-                      goal_type='line', pad_top=0, pad_bottom=0) # Fjerner luft over/under
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0)
+        fig, ax = pitch.draw(figsize=fig_size)
         
-        # Vi sætter et bredt aspekt (14x7), så den ikke bliver for høj
-        fig, ax = pitch.draw(figsize=(14, 7))
-        fig.set_facecolor('white')
-
-        # Legend - Flyttet ind på selve banen (øverst) for at spare plads udenfor banen
+        # Legend
         legend_items = [("#ff4b4b", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            x_pos = 5 + (i * 20)
-            ax.text(x_pos, 2, text, size=7, color="black", va='center', ha='left', 
-                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2', linewidth=0.5))
+            ax.text(5 + (i * 18), 2, text, size=font_size-1, color="black", va='center', ha='left', 
+                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
-        # Positions logik
+        # Formationer (brug eksisterende pos_config logik her...)
+        form_valg = st.session_state.formation_valg
+        # [Her indsættes pos_config logikken fra tidligere svar]
         if form_valg == "3-4-3":
-            pos_config = {
-                1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
-                5: (55, 10, 'VWB'), 6: (55, 30, 'DM'), 8: (55, 50, 'DM'), 7: (55, 70, 'HWB'), 
-                11: (85, 15, 'VW'), 9: (108, 40, 'ANG'), 10: (85, 65, 'HW')
-            }
+            pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
+                          5: (55, 10, 'VWB'), 6: (55, 30, 'DM'), 8: (55, 50, 'DM'), 7: (55, 70, 'HWB'), 
+                          11: (85, 15, 'VW'), 9: (108, 40, 'ANG'), 10: (85, 65, 'HW')}
         elif form_valg == "4-3-3":
-            pos_config = {
-                1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
-                6: (55, 40, 'DM'), 8: (65, 25, 'VCM'), 10: (65, 55, 'HCM'),
-                11: (80, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (80, 65, 'HW')
-            }
+            pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
+                          6: (55, 40, 'DM'), 8: (65, 25, 'VCM'), 10: (65, 55, 'HCM'),
+                          11: (80, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (80, 65, 'HW')}
         else: # 3-5-2
-            pos_config = {
-                1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
-                5: (55, 10, 'VWB'), 6: (55, 40, 'DM'), 7: (55, 70, 'HWB'), 
-                8: (65, 25, 'CM'), 10: (65, 55, 'CM'),
-                11: (100, 25, 'ANG'), 9: (100, 55, 'ANG')
-            }
+            pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
+                          5: (55, 10, 'VWB'), 6: (55, 40, 'DM'), 7: (55, 70, 'HWB'), 
+                          8: (65, 25, 'CM'), 10: (65, 55, 'CM'), 11: (100, 25, 'ANG'), 9: (100, 55, 'ANG')}
 
-        # Tegn spillere
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
-            
             if not spillere_pos.empty:
-                ax.text(x_pos, y_pos - 4, f" {label} ", size=8, color="white",
-                        va='center', ha='center', fontweight='bold',
-                        bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
-
+                ax.text(x_pos, y_pos - 4, f" {label} ", size=font_size+1, color="white", va='center', ha='center', fontweight='bold',
+                        bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.2'))
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
-                    navn = p.get('NAVN', 'Ukendt')
                     bg_color = get_status_color(p)
-                    visnings_tekst = f" {navn} ".ljust(18)
-                    y_row = (y_pos - 1.2) + (i * 2.8)
-                    
-                    ax.text(x_pos, y_row, visnings_tekst, size=6.5, color="black",
-                            va='top', ha='center', family='monospace',
-                            bbox=dict(facecolor=bg_color, edgecolor='#000000', 
-                                      boxstyle='square,pad=0.1', linewidth=0.5))
+                    ax.text(x_pos, (y_pos - 1.2) + (i * 2.8), f" {p['NAVN']} ".ljust(18), size=font_size, 
+                            va='top', ha='center', family='monospace', bbox=dict(facecolor=bg_color, edgecolor='black', boxstyle='square,pad=0.1'))
 
-        # Dette her er "The Secret Sauce": Vi trimmer hvid plads omkring banen helt væk
         plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
         st.pyplot(fig, use_container_width=True)
