@@ -9,7 +9,7 @@ def vis_side(df):
         st.error("Ingen data fundet for truppen.")
         return
 
-    # --- 1. SESSION STATE FOR FORMATION ---
+    # --- 1. SESSION STATE ---
     if 'formation_valg' not in st.session_state:
         st.session_state.formation_valg = "3-4-3"
 
@@ -34,8 +34,9 @@ def vis_side(df):
         if days <= 365: return '#fffd8d' 
         return 'white'
 
-    # --- 3. TOP MENU (KNAPPER + POPOVER) ---
-    col1, col2, col3, col_spacer, col_pop = st.columns([1, 1, 1, 2, 1.5])
+    # --- 3. KOMPAKT TOP MENU ---
+    # Vi bruger mindre ratios [0.5, 0.5, 0.5] for at gøre formationsknapperne små
+    col1, col2, col3, col_spacer, col_pop = st.columns([0.5, 0.5, 0.5, 2.5, 1.2])
     
     formations = ["3-4-3", "4-3-3", "3-5-2"]
     cols = [col1, col2, col3]
@@ -47,29 +48,32 @@ def vis_side(df):
                 st.rerun()
 
     with col_pop:
+        # Popover til kontrakter holder banen ren
         with st.popover("Kontrakter", use_container_width=True):
-            st.markdown("**Oversigt over udløb**")
+            st.markdown("**Kontraktudløb**")
             df_table = df_squad[['NAVN', 'CONTRACT']].copy()
-            # Formatér datoen kun hvis den ikke er NaT
-            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "Ingen dato")
+            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
             st.dataframe(df_table, hide_index=True, use_container_width=True)
 
-    # --- 4. BANE LAYOUT (ALTID CENTRERET) ---
+    # --- 4. BANE LAYOUT ---
     form_valg = st.session_state.formation_valg
-    _, col_main, _ = st.columns([0.1, 4, 0.1]) # Giver banen god plads
+    
+    # Vi bruger en bred midterkolonne for at maksimere banens synlighed
+    _, col_main, _ = st.columns([0.05, 5, 0.05])
 
     with col_main:
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-        fig, ax = pitch.draw(figsize=(11, 7), constrained_layout=True)
+        # Figsize 12x7 giver en god bredde uden at tvinge vertikal scroll
+        fig, ax = pitch.draw(figsize=(12, 7), constrained_layout=True)
 
-        # Legend
+        # Legend (Mindre tekst for at spare vertikal plads)
         legend_y = -3
         legend_items = [("#ff4b4b", "Udløb < 6 mdr"), ("#fffd8d", "Udløb 6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            x_pos = 5 + (i * 30)
-            ax.text(x_pos, legend_y, f"  {text}  ", size=8, color="black",
+            x_pos = 5 + (i * 28)
+            ax.text(x_pos, legend_y, f"  {text}  ", size=7, color="black",
                     va='center', ha='left', family='monospace', fontweight='bold',
-                    bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3', linewidth=0.5))
+                    bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2', linewidth=0.5))
 
         # Positions logik
         if form_valg == "3-4-3":
@@ -92,22 +96,25 @@ def vis_side(df):
                 11: (95, 25, 'ANG'), 9: (95, 55, 'ANG')
             }
 
+        # Tegn spillere
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
             
             if not spillere_pos.empty:
-                ax.text(x_pos, y_pos - 4, f" {label} ", size=9, color="white",
+                # Positions-label
+                ax.text(x_pos, y_pos - 4, f" {label} ", size=8, color="white",
                         va='center', ha='center', fontweight='bold',
                         bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
 
+                # Spiller-navne
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     navn = p.get('NAVN', 'Ukendt')
                     bg_color = get_status_color(p)
                     visnings_tekst = f" {navn} ".ljust(18)
-                    y_row = (y_pos - 1.5) + (i * 3.0)
+                    y_row = (y_pos - 1.2) + (i * 2.8)
                     
-                    ax.text(x_pos, y_row, visnings_tekst, size=7.5, color="black",
+                    ax.text(x_pos, y_row, visnings_tekst, size=7, color="black",
                             va='top', ha='center', family='monospace',
                             bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                       boxstyle='square,pad=0.1', linewidth=0.5))
