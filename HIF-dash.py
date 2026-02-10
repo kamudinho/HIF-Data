@@ -85,9 +85,17 @@ if "main_data" not in st.session_state:
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
-# --- 4. SIDEBAR MENU (RENSKET FOR PARENTESER) ---
+# --- 4. SIDEBAR MENU (OPDATERET LAYOUT) ---
 with st.sidebar:
-    st.markdown("<div style='text-align: center; padding-top: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
+    # Vi bruger en <div> med negativ margin for at tvinge indholdet helt op i toppen
+    st.markdown("""
+        <div style='text-align: center; margin-top: -50px;'>
+            <img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Valgfri: En meget lille tekst under logoet
+    st.markdown("<p style='text-align:center; font-size: 10px; margin-bottom: 5px;'>HIF DATA HUB</p>", unsafe_allow_html=True)
     
     selected = option_menu(
         menu_title=None,
@@ -108,9 +116,9 @@ with st.sidebar:
         menu_icon="cast", 
         default_index=0,
         styles={
-            "container": {"padding": "0!important", "background-color": "#fafafa"},
+            "container": {"padding": "0!important", "background-color": "#fafafa", "margin-top": "0px"},
             "icon": {"color": "#cc0000", "font-size": "14px"}, 
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
+            "nav-link": {"font-size": "13px", "text-align": "left", "padding-top": "5px", "padding-bottom": "5px", "margin":"0px", "--hover-color": "#eee"},
             "nav-link-selected": {"background-color": "#cc0000"},
         }
     )
