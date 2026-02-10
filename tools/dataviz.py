@@ -4,23 +4,24 @@ import plotly.graph_objects as go
 import numpy as np
 
 def vis_side(df_events, df_kamp, hold_map):
-    # --- 1. CONFIG & DATA PREP ---
     HIF_ID = 38331
     HIF_RED = '#df003b'
     
+    # --- DATA PREP ---
     df_plot = df_kamp.copy()
     df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
     df_plot = df_plot.dropna(subset=['TEAM_WYID'])
 
-    # Top-linje med valgmulighed
-    col_header, col_spacer = st.columns([1, 2])
+    # Top-linje med valgmulighed og "Rådata" knap
+    col_header, col_btn = st.columns([3, 1])
+    
     with col_header:
         BILLEDE_MAPPING = {
             "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
             "Afleveringer vs. Mål": {"x": "PASSES", "y": "GOALS"},
         }
         valgt_label = st.selectbox("Analyse", options=list(BILLEDE_MAPPING.keys()), label_visibility="collapsed")
-
+    
     mapping = BILLEDE_MAPPING[valgt_label]
     x_col, y_col = mapping["x"], mapping["y"]
 
@@ -28,14 +29,22 @@ def vis_side(df_events, df_kamp, hold_map):
     df_plot[x_col] = pd.to_numeric(df_plot[x_col], errors='coerce').fillna(0)
     df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors='coerce').fillna(0)
     stats_pr_hold = df_plot.groupby('TEAM_WYID').agg({x_col: 'mean', y_col: 'mean'}).reset_index()
-    
-    # Tilføj holdnavne til rådata med det samme
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. LAYOUT: GRAF TIL VENSTRE, RÅDATA TIL HØJRE ---
-    col_graf, col_data = st.columns([2.2, 1]) # 70% graf, 30% tabel
+    # --- RÅDATA COLLAPSE (POPOVER) ---
+    with col_btn:
+        with st.popover("Vis Rådata", use_container_width=True):
+            st.markdown(f"**Topliste ({y_col})**")
+            df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
+            df_display[x_col] = df_display[x_col].round(1)
+            df_display[y_col] = df_display[y_col].round(2)
+            st.dataframe(df_display, hide_index=True, use_container_width=True)
 
+    # --- GRAF (FYLDER NU HELE BREDDEN ELLER CENTRERET) ---
+    # Vi bruger en kolonne-struktur for at holde grafen lidt smal og centreret
+    _, col_graf, _ = st.columns([0.2, 5, 0.2])
+    
     with col_graf:
         fig = go.Figure()
         avg_x = stats_pr_hold[x_col].mean()
@@ -65,7 +74,7 @@ def vis_side(df_events, df_kamp, hold_map):
             plot_bgcolor='white',
             xaxis_title=f"Gns. {x_col}",
             yaxis_title=f"Gns. {y_col}",
-            height=500,
+            height=480,
             margin=dict(t=10, b=10, l=10, r=10),
             showlegend=False,
             font=dict(size=10)
@@ -74,17 +83,3 @@ def vis_side(df_events, df_kamp, hold_map):
         fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0')
 
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-    with col_data:
-        st.markdown(f"<p style='font-size: 13px; font-weight: bold; margin-bottom: 5px;'>Topliste ({y_col})</p>", unsafe_allow_html=True)
-        # Vi runder tallene for at gøre tabellen mere læselig (smal)
-        df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
-        df_display[x_col] = df_display[x_col].round(1)
-        df_display[y_col] = df_display[y_col].round(2)
-        
-        st.dataframe(
-            df_display, 
-            height=465, # Matcher næsten grafens højde
-            use_container_width=True,
-            hide_index=True
-        )
