@@ -36,14 +36,12 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
-        st.markdown("### 📅 Info")
         with st.popover("Kontrakter", use_container_width=True):
             df_table = df_squad[['NAVN', 'CONTRACT']].copy()
             df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
             st.dataframe(df_table, hide_index=True, width=550)
         
         st.write("---")
-        st.markdown("### ⚽ Form")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
             # Mindre knapper ved at fjerne overflødig tekst og bruge kompakt padding
@@ -70,15 +68,15 @@ def vis_side(df):
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (55, 10, 'VWB'), 6: (55, 30, 'DM'), 8: (55, 50, 'DM'), 7: (55, 70, 'HWB'), 
-                          11: (85, 15, 'VW'), 9: (108, 40, 'ANG'), 10: (85, 65, 'HW')}
+                          11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 10: (85, 65, 'HW')}
         elif form_valg == "4-3-3":
             pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
                           6: (55, 40, 'DM'), 8: (65, 25, 'VCM'), 10: (65, 55, 'HCM'),
-                          11: (80, 15, 'VW'), 9: (102, 40, 'ANG'), 7: (80, 65, 'HW')}
+                          11: (80, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (80, 65, 'HW')}
         else: # 3-5-2
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (55, 10, 'VWB'), 6: (55, 40, 'DM'), 7: (55, 70, 'HWB'), 
-                          8: (65, 25, 'CM'), 10: (65, 55, 'CM'), 11: (105, 28, 'ANG'), 9: (105, 52, 'ANG')}
+                          8: (65, 25, 'CM'), 10: (65, 55, 'CM'), 11: (100, 28, 'ANG'), 9: (100, 52, 'ANG')}
 
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
