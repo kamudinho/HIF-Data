@@ -59,6 +59,7 @@ def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
     except Exception as e:
+        st.error(f"Fejl ved indlæsning af {name}: {e}") # Dette vil vise os fejlen
         return None
 
 # Load eksisterende moduler
