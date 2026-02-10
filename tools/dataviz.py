@@ -32,13 +32,11 @@ def vis_side(df_events, kamp, hold_map):
 
     # --- 2. RÅDATA (POPOVER) ---
     with col_btn:
-        with st.popover("Vis Rådata", use_container_width=True):
-            # Formater data og fjern index helt
+        with st.popover("Data", use_container_width=True):
             df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
             df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
             df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
             
-            # CSS: Skjul index-kolonnen og centrer kun kolonne 2 og 3
             st.markdown("""
                 <style>
                     /* Skjul index kolonnen (den første th/td) */
