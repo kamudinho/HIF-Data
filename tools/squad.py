@@ -16,13 +16,11 @@ def vis_side(df):
     # --- 2. FARVE-DEFINITIONER ---
     hif_rod = "#d31313"
     gul_udlob = "#fffd8d"
-    leje_gra = "#d3d3d3"
 
     # --- 3. DATA-PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
-    df_squad['PRIOR'] = df_squad.get('PRIOR', '-').astype(str).strip().upper()
 
     idag = datetime.now()
     if 'CONTRACT' in df_squad.columns:
@@ -30,19 +28,18 @@ def vis_side(df):
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
 
     def get_status_color(row):
-        if row['PRIOR'] == 'L': return leje_gra 
+        # Vi tjekker kun på dage tilbage nu
         days = row.get('DAYS_LEFT', 999)
         if pd.isna(days): return 'white'
         if days < 182: return hif_rod 
         if days <= 365: return gul_udlob 
         return 'white'
 
-    # Funktion til at farvelægge rækker i dataframe
+    # Funktion til farver i tabellen
     def style_contract_table(row):
         color = get_status_color(row)
         if color == 'white':
             return [''] * len(row)
-        # Sæt hvid tekst hvis baggrunden er den mørkerøde
         text_color = "white" if color == hif_rod else "black"
         return [f'background-color: {color}; color: {text_color}'] * len(row)
 
@@ -50,25 +47,26 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
+        # CSS til knapperne
         st.markdown(f"<style>button[kind='primary'] {{ background-color: {hif_rod} !important; border-color: {hif_rod} !important; color: white !important; }}</style>", unsafe_allow_html=True)
 
         with st.popover("📅 Kontrakter", use_container_width=True):
-            # Forbered tabel-data
-            df_table = df_squad[['NAVN', 'CONTRACT', 'PRIOR', 'DAYS_LEFT']].copy()
+            # Vi tager kun de relevante kolonner til tabellen
+            df_table = df_squad[['NAVN', 'CONTRACT', 'DAYS_LEFT']].copy()
             
-            # Styling af tabellen
+            # Styling
             styled_df = df_table.style.apply(style_contract_table, axis=1)
             
-            # Vis dataframe med specifik kolonnebredde
+            # Vis dataframe (Kompakt og uden PRIOR)
             st.dataframe(
                 styled_df,
-                column_order=("NAVN", "CONTRACT"), # Vis kun disse to
+                column_order=("NAVN", "CONTRACT"),
                 column_config={
                     "NAVN": st.column_config.TextColumn("Navn", width="medium"),
                     "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width="small"),
                 },
                 hide_index=True,
-                use_container_width=False # Sikrer den ikke bliver for bred
+                use_container_width=False
             )
         
         st.write("---")
@@ -82,8 +80,8 @@ def vis_side(df):
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0, pad_left=1, pad_right=1)
         fig, ax = pitch.draw(figsize=(14, 10))
         
-        # Legend
-        legend_items = [(hif_rod, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
+        # Legend (Kompakt)
+        legend_items = [(hif_rod, "< 6 mdr"), (gul_udlob, "6-12 mdr")]
         for i, (color, text) in enumerate(legend_items):
             text_col = "white" if color == hif_rod else "black"
             ax.text(1 + (i * 12), 2.5, text, size=11, color=text_col, va='center', ha='left', 
@@ -106,7 +104,7 @@ def vis_side(df):
 
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
-            spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
+            spillere_pos = df_squad[df_squad['POS'] == pos_num]
             if not spillere_pos.empty:
                 ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.3'))
