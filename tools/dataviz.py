@@ -12,17 +12,20 @@ def vis_side(df_events, kamp, hold_map):
     df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
     df_plot = df_plot.dropna(subset=['TEAM_WYID'])
 
-    # Toggle til at styre layout-tilstand
-    show_data = st.sidebar.toggle("Vis tabel ved siden af graf", value=False)
-
-    col_header, col_valg = st.columns([3, 1])
-    with col_header:
+    # Overskriftslinje
+    col_sel, col_space, col_toggle = st.columns([2, 1, 1])
+    
+    with col_sel:
         BILLEDE_MAPPING = {
             "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
             "Afleveringer vs. Mål": {"x": "PASSES", "y": "GOALS"},
         }
         valgt_label = st.selectbox("Analyse", options=list(BILLEDE_MAPPING.keys()), label_visibility="collapsed")
     
+    with col_toggle:
+        # Denne knap styrer om grafen komprimeres
+        vis_data = st.checkbox("Vis rådata ved siden af", value=False)
+
     mapping = BILLEDE_MAPPING[valgt_label]
     x_col, y_col = mapping["x"], mapping["y"]
 
@@ -33,16 +36,18 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. DYNAMISK LAYOUT ---
-    if show_data:
-        col_graf, col_data = st.columns([2, 1]) # Graf fylder 2/3
+    # --- 2. DYNAMISK LAYOUT (GRAF KOMPRIMERER HER) ---
+    if vis_data:
+        # Hvis tjekket af: Del skærmen i 70% graf og 30% tabel
+        c_graf, c_data = st.columns([2.5, 1])
     else:
-        col_graf = st.container() # Graf fylder det hele
+        # Hvis ikke tjekket af: Grafen får det hele
+        c_graf = st.container()
 
-    # --- TABEL (Kun hvis show_data er True) ---
-    if show_data:
-        with col_data:
-            st.markdown(f"**Topliste ({y_col})**")
+    # --- TABEL SEKTION (Kun når vis_data er True) ---
+    if vis_data:
+        with c_data:
+            st.markdown(f"**Data: {valgt_label}**")
             df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
             df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
             df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
@@ -53,13 +58,13 @@ def vis_side(df_events, kamp, hold_map):
                     tbody tr th { display:none; }
                     table tr td:nth-child(2) { text-align: left !important; }
                     table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
-                    table { width: 100%; font-size: 12px; }
+                    table { width: 100%; font-size: 11px; border-collapse: collapse; }
                 </style>
             """, unsafe_allow_html=True)
             st.table(df_table)
 
-    # --- 3. SCATTERPLOT (I col_graf) ---
-    with col_graf:
+    # --- 3. SCATTERPLOT (I c_graf) ---
+    with c_graf:
         fig = go.Figure()
         avg_x = stats_pr_hold[x_col].mean()
         avg_y = stats_pr_hold[y_col].mean()
@@ -75,7 +80,7 @@ def vis_side(df_events, kamp, hold_map):
                 textposition="top center",
                 textfont=dict(size=10, color='black'),
                 marker=dict(
-                    size=22 if is_hif else 15, # Lidt mindre prikker hvis komprimeret
+                    size=25 if is_hif else 18, 
                     color=HIF_RED if is_hif else 'rgba(80, 80, 80, 0.7)',
                     line=dict(width=2, color='white')
                 ),
