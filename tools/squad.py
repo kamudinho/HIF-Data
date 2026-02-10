@@ -84,7 +84,7 @@ def vis_side(df):
             if not spillere_pos.empty:
                 # Positionslabel
                 ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
-                        bbox=dict(facecolor='#9b0021', edgecolor='white', boxstyle='round,pad=0.3'))
+                        bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.3'))
                 
                 # Spillernavne
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
