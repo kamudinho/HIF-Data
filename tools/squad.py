@@ -32,21 +32,36 @@ def vis_side(df):
         if days <= 365: return '#fffd8d' 
         return 'white'
 
-    # --- 3. HOVED-LAYOUT (To kolonner) ---
-    # Vi giver banen 80% af bredden og menuen 20%
+    # --- 3. HOVED-LAYOUT ---
     col_pitch, col_menu = st.columns([4, 1])
 
+    with col_menu:
+        # Kontrakter øverst
+        st.write("### Oversigt")
+        with st.popover("📅 Vis Kontrakter", use_container_width=True):
+            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
+            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
+            st.dataframe(df_table, hide_index=True, use_container_width=True)
+        
+        st.write("---")
+        
+        # Formationer nedenunder
+        st.write("### Formation")
+        formations = ["3-4-3", "4-3-3", "3-5-2"]
+        for f in formations:
+            if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
+                st.session_state.formation_valg = f
+                st.rerun()
+
     with col_pitch:
-        # Bane-setup (Maksimeret højde)
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0)
-        # Vi bruger (12, 9) for at få den til at fylde mere vertikalt nu hvor toppen er fri
         fig, ax = pitch.draw(figsize=(12, 9))
         
-        # Legend (Kompakt i toppen)
+        # Legend (Større tekst)
         legend_items = [("#ff4b4b", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            ax.text(5 + (i * 18), 2, text, size=10, color="black", va='center', ha='left', 
-                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
+            ax.text(5 + (i * 22), 3, text, size=11, color="black", va='center', ha='left', 
+                    fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3'))
 
         # Positions logik
         form_valg = st.session_state.formation_valg
@@ -61,36 +76,24 @@ def vis_side(df):
         else: # 3-5-2
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (55, 10, 'VWB'), 6: (55, 40, 'DM'), 7: (55, 70, 'HWB'), 
-                          8: (65, 25, 'CM'), 10: (65, 55, 'CM'), 11: (100, 25, 'ANG'), 9: (100, 55, 'ANG')}
+                          8: (65, 25, 'CM'), 10: (65, 55, 'CM'), 11: (102, 28, 'ANG'), 9: (102, 52, 'ANG')}
 
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
             if not spillere_pos.empty:
-                ax.text(x_pos, y_pos - 4, f" {label} ", size=9, color="white", va='center', ha='center', fontweight='bold',
-                        bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.2'))
+                # Positionslabel (Større)
+                ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
+                        bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.3'))
+                
+                # Spillernavne (Større og tydeligere)
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     bg_color = get_status_color(p)
-                    ax.text(x_pos, (y_pos - 1.2) + (i * 2.8), f" {p['NAVN']} ".ljust(18), size=7.5, 
-                            va='top', ha='center', family='monospace', bbox=dict(facecolor=bg_color, edgecolor='black', boxstyle='square,pad=0.1'))
+                    # ljust(22) sikrer ensartede kasser til længere navne
+                    visnings_tekst = f" {p['NAVN']} ".ljust(22)
+                    ax.text(x_pos, (y_pos - 1.5) + (i * 3.5), visnings_tekst, size=10, 
+                            va='top', ha='center', family='monospace', fontweight='bold',
+                            bbox=dict(facecolor=bg_color, edgecolor='black', boxstyle='square,pad=0.2', linewidth=0.8))
 
         plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
         st.pyplot(fig, use_container_width=True)
-
-
-    with st.popover("Vis Kontrakter", use_container_width=True):
-            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
-            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
-            st.dataframe(df_table, hide_index=True, use_container_width=True)
-
-        with col_menu:
-        st.markdown("### Formation")
-        formations = ["3-4-3", "4-3-3", "3-5-2"]
-        for f in formations:
-            # Knapper stablet lodret
-            if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
-                st.session_state.formation_valg = f
-                st.rerun()
-        
-        st.write("---")
-        
