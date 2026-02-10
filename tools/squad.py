@@ -58,7 +58,7 @@ def vis_side(df):
         fig, ax = pitch.draw(figsize=(14, 10))
         
         # Legend - Rykket helt ud til venstre kant
-        legend_items = [("#ff4b4b", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
+        legend_items = [("#9b0021", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
             ax.text(1 + (i * 12), 2.5, text, size=11, color="black", va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
@@ -84,7 +84,7 @@ def vis_side(df):
             if not spillere_pos.empty:
                 # Positionslabel
                 ax.text(x_pos, y_pos - 5, f" {label} ", size=12, color="white", va='center', ha='center', fontweight='bold',
-                        bbox=dict(facecolor='#ff4b4b', edgecolor='white', boxstyle='round,pad=0.3'))
+                        bbox=dict(facecolor='#9b0021', edgecolor='white', boxstyle='round,pad=0.3'))
                 
                 # Spillernavne
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
