@@ -37,11 +37,9 @@ def vis_side(df):
         if days <= 365: return gul_udlob 
         return 'white'
 
-    # Denne funktion sørger for at tabellen i popover får de rigtige farver
     def style_rows(row):
         bg_color = get_status_color(row)
         if bg_color == 'white': return [''] * len(row)
-        # Hvid tekst på rød baggrund, sort på gul/grå
         text_color = "white" if bg_color == hif_rod else "black"
         return [f'background-color: {bg_color}; color: {text_color}; font-weight: bold'] * len(row)
 
@@ -49,24 +47,36 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
-        st.markdown(f"<style>button[kind='primary'] {{ background-color: {hif_rod} !important; border-color: {hif_rod} !important; color: white !important; }}</style>", unsafe_allow_html=True)
+        # CSS TRICK: Gør selve popover-beholderen bredere
+        st.markdown(f"""
+            <style>
+            /* Gør selve popover-vinduet bredere når det åbnes */
+            div[data-testid="stPopoverContent"] {{
+                width: 450px !important;
+            }}
+            /* Styling af de aktive knapper */
+            button[kind="primary"] {{
+                background-color: {hif_rod} !important;
+                border-color: {hif_rod} !important;
+                color: white !important;
+            }}
+            </style>
+        """, unsafe_allow_html=True)
 
         with st.popover("Kontrakter", use_container_width=True):
-            # Forbered data til display
             df_display = df_squad[['NAVN', 'CONTRACT', 'PRIOR', 'DAYS_LEFT']].copy()
-            
-            # Anvend farverne
             styled_df = df_display.style.apply(style_rows, axis=1)
             
+            # Tabellen fylder nu 100% af den (nu bredere) popover
             st.dataframe(
                 styled_df,
                 column_order=("NAVN", "CONTRACT"),
                 column_config={
-                    "NAVN": st.column_config.TextColumn("Navn", width=250),
-                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=150),
+                    "NAVN": st.column_config.TextColumn("Navn", width="large"),
+                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width="medium"),
                 },
                 hide_index=True,
-                use_container_width=True # False så den respekterer vores pixels
+                use_container_width=True 
             )
         
         st.write("---")
@@ -77,18 +87,16 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # Pitch tegning (samme som før)
+        # (Resten af pitch-koden er uændret)
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0, pad_left=1, pad_right=1)
         fig, ax = pitch.draw(figsize=(14, 10))
         
-        # Legend
         legend_items = [(hif_rod, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
         for i, (color, text) in enumerate(legend_items):
             text_col = "white" if color == hif_rod else "black"
             ax.text(1 + (i * 12), 2.5, text, size=11, color=text_col, va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
-        # Formationer og spillere på banen
         form_valg = st.session_state.formation_valg
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
