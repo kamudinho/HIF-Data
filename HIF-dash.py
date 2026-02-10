@@ -1,18 +1,21 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
 import os
 import pandas as pd
 
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-# CSS til styling (Holdes simpel)
+# CSS til styling - SIKRER PLADS I TOPPEN
 st.markdown("""
     <style>
-        .block-container { padding-top: 4rem !important; }
+        .block-container { 
+            padding-top: 3rem !important; 
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
-        /* Styling af den klassiske radio-menu */
-        .stRadio [data-testid="stWidgetLabel"] { display: none; }
-        div[data-testid="stSidebarUserContent"] { padding-top: 0rem; }
+        .nav-link { font-size: 14px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -49,21 +52,18 @@ PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 @st.cache_resource
 def load_hif_data():
     try:
-        # Læs Excel
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
 
-        # Læs Parquet (Lynhurtig)
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
         else:
             st.error("Fandt ikke eventdata.parquet!")
             return None
 
-        # Rens PLAYER_WYID
         for df in [sp, pe, ev]:
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -85,77 +85,89 @@ if "main_data" not in st.session_state:
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
-# --- 4. SIDEBAR MENU (KLASSISK & HURTIG) ---
+# --- 4. SIDEBAR MENU (RENSKET FOR PARENTESER) ---
 with st.sidebar:
-    st.markdown("<div style='text-align: center; padding-top: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='100'></div>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align:center;'><b>Hvidovre IF Data Hub</b><br>Bruger: {st.session_state['user'].upper()}</p>", unsafe_allow_html=True)
-    st.write("---")
+    st.markdown("<div style='text-align: center; padding-top: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    # Klassisk Streamlit menu
-    menu_options = [
-        "Dashboard", 
-        "Heatmaps", "Shotmaps", "Zoneinddeling (Hold)", "Afslutninger (Hold)", "DataViz",
-        "Zoneinddeling (Spiller)", "Afslutninger (Spiller)",
-        "Spillerstats", "Top 5",
-        "Hvidovre IF Truppen", "Trupsammensætning", "Sammenligning", "Scouting-database"
-    ]
-    selected = st.radio("Vælg Modul", menu_options)
+    selected = option_menu(
+        menu_title=None,
+        options=[
+            "Dashboard", "Heatmaps", "Shotmaps", 
+            "Zoneinddeling", "Afslutninger", "DataViz",
+            "Spiller Zoneinddeling", "Spiller Afslutninger",
+            "Spillerstats", "Top 5",
+            "Hvidovre IF Truppen", "Trupsammensætning", "Sammenligning", "Scouting-database"
+        ],
+        icons=[
+            'house', 'map', 'target', 
+            'grid-3x3', 'lightning', 'graph-up',
+            'person-bounding-box', 'person-badge',
+            'bar-chart', 'trophy',
+            'people', 'diagram-3', 'intersect', 'search'
+        ],
+        menu_icon="cast", 
+        default_index=0,
+        styles={
+            "container": {"padding": "0!important", "background-color": "#fafafa"},
+            "icon": {"color": "#cc0000", "font-size": "14px"}, 
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
+            "nav-link-selected": {"background-color": "#cc0000"},
+        }
+    )
 
 # --- 5. ROUTING ---
-# Vi importerer alt én gang her for stabilitet
-import tools.heatmaps as heatmaps
-import tools.skudmap as skudmap
-import tools.goalzone as goalzone
-import tools.shots as shots
-import tools.dataviz as dataviz
-import tools.player_goalzone as player_goalzone
-import tools.player_shots as player_shots
-import tools.stats as stats
-import tools.top5 as top5
-import tools.players as players
-import tools.squad as squad
-import tools.comparison as comparison
-import tools.scout_input as scout_input
-
 if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
-    st.success("Systemet kører nu med standard Streamlit-komponenter for maksimal hastighed.")
+    st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
 
 elif selected == "Heatmaps":
+    import tools.heatmaps as heatmaps
     heatmaps.vis_side(df_events, 4, hold_map)
 
 elif selected == "Shotmaps":
+    import tools.skudmap as skudmap
     skudmap.vis_side(df_events, 4, hold_map)
 
-elif selected == "Zoneinddeling (Hold)":
+elif selected == "Zoneinddeling":
+    import tools.goalzone as goalzone
     goalzone.vis_side(df_events, spillere, hold_map)
 
-elif selected == "Afslutninger (Hold)":
+elif selected == "Afslutninger":
+    import tools.shots as shots
     shots.vis_side(df_events, kamp, hold_map)
 
 elif selected == "DataViz":
+    import tools.dataviz as dataviz
     dataviz.vis_side(df_events, kamp, hold_map)
 
-elif selected == "Zoneinddeling (Spiller)":
+elif selected == "Spiller Zoneinddeling":
+    import tools.player_goalzone as player_goalzone
     player_goalzone.vis_side(df_events, spillere)
 
-elif selected == "Afslutninger (Spiller)":
+elif selected == "Spiller Afslutninger":
+    import tools.player_shots as player_shots
     player_shots.vis_side(df_events, kamp, hold_map)
 
 elif selected == "Spillerstats":
+    import tools.stats as stats
     stats.vis_side(spillere, player_events)
 
 elif selected == "Top 5":
+    import tools.top5 as top5
     top5.vis_side(spillere, player_events)
 
 elif selected == "Hvidovre IF Truppen":
+    import tools.players as players
     players.vis_side(spillere)
 
 elif selected == "Trupsammensætning":
+    import tools.squad as squad
     squad.vis_side(spillere)
 
 elif selected == "Sammenligning":
+    import tools.comparison as comparison
     comparison.vis_side(spillere, player_events, df_scout)
 
 elif selected == "Scouting-database":
+    import tools.scout_input as scout_input
     scout_input.vis_side(spillere)
