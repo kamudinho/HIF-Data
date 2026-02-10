@@ -74,8 +74,6 @@ def vis_side(df):
             df_display = df_squad[['NAVN', 'CONTRACT', 'PRIOR', 'DAYS_LEFT']].copy()
             styled_df = df_display.style.apply(style_rows, axis=1)
             
-            # Beregn højde: ca. 35 pixels pr. række + lidt til overskriften
-            # Eller sæt den fast til f.eks. 800 for at være sikker på at fange alle
             dynamisk_hoejde = (len(df_display) * 35) + 40
 
             st.dataframe(
@@ -134,7 +132,7 @@ def vis_side(df):
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     bg_color = get_status_color(p)
                     text_color = "white" if bg_color == hif_rod else "black"
-                    visnings_tekst = f" {p['NAVN']} ".ljust(22)
+                    visnings_tekst = f" {p['NAVN']} ".ljust(25)
                     ax.text(x_pos, (y_pos - 1.5) + (i * 3.8), visnings_tekst, size=11, 
                             color=text_color, va='top', ha='center', family='monospace', fontweight='bold',
                             bbox=dict(facecolor=bg_color, edgecolor='black', boxstyle='square,pad=0.2', linewidth=1.0))
