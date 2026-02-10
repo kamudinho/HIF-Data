@@ -122,7 +122,6 @@ def vis_side(df):
     # --- 5. SIDEPANEL (RÅDATA) ---
     if st.session_state.show_squad_data:
         with col_side:
-            st.markdown("### Kontrakter")
-            df_table = df_squad[['NAVN', 'CONTRACT', 'PRIOR']].copy()
+            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
             df_table['CONTRACT'] = df_table['CONTRACT'].dt.strftime('%d-%m-%Y')
             st.dataframe(df_table, hide_index=True, use_container_width=True)
