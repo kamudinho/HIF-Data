@@ -38,7 +38,7 @@ def vis_side(df):
 
     # --- 3. FORMATIONS-KNAPPER OG DATA-KNAP ---
     # Vi laver 4 kolonner til formationer og 1 til Data-knappen
-    col1, col2, col3, col_data = st.columns([1, 1, 1, 1])
+    col1, col2, col3, col_space, col_space, col_data = st.columns([1, 1, 1, 1, 1, 1])
     
     formations = ["3-4-3", "4-3-3", "3-5-2"]
     cols = [col1, col2, col3]
