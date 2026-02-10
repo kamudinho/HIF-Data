@@ -58,7 +58,8 @@ if not st.session_state["logged_in"]:
 def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
-    except:
+    except Exception as e:
+        # st.sidebar.error(f"Kunne ikke loade {name}: {e}") # Debug
         return None
 
 heatmaps = load_module("heatmaps")
@@ -72,7 +73,7 @@ goalzone = load_module("goalzone")
 top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
-player_shots = load_module("player_shots") # Tilføjet her
+player_shots = load_module("player_shots")
 
 # --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +88,11 @@ def load_full_data():
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
+        # Sikr PLAYER_WYID altid er tekststrenge uden .0 for præcis matching
+        for df_tmp in [sp, pe]:
+            if 'PLAYER_WYID' in df_tmp.columns:
+                df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+
         godkendte_hold_ids = ho['TEAM_WYID'].unique()
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
 
@@ -99,6 +105,11 @@ def load_full_data():
                 ev = pd.read_csv(found_path, sep=',', low_memory=False)
                 if len(ev.columns) < 2:
                     ev = pd.read_csv(found_path, sep=';', low_memory=False)
+                
+                # Vigtigt: Rens også ID i eventdata
+                if 'PLAYER_WYID' in ev.columns:
+                    ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+                
             except Exception as e:
                 st.error(f"Fejl ved læsning af CSV: {e}")
                 return None, None, {}, None, None, None
@@ -108,11 +119,10 @@ def load_full_data():
 
         if ev is not None:
             ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
-            # Tilføj PLAYER_NAME til ev fra spillere-arket for nemmere filtrering i player_shots
+            # Tilføj PLAYER_NAME til ev fra spillere-arket
             if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
                 navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
                 ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
-                # Omdøb NAVN til PLAYER_NAME for at matche koden i player_shots.py
                 ev = ev.rename(columns={'NAVN': 'PLAYER_NAME'})
             
         if ka is not None:
@@ -168,21 +178,35 @@ with st.sidebar:
 
 # --- 6. ROUTING ---
 if selected == "HOLD":
-    if selected_sub == "Heatmaps" and heatmaps: heatmaps.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Shotmaps" and skudmap: skudmap.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Zoneinddeling" and goalzone: goalzone.vis_side(df_events, kamp, hold_map)
-    elif selected_sub == "Afslutninger" and shots: shots.vis_side(df_events, kamp, hold_map)
-    elif selected_sub == "DataViz" and dataviz: dataviz.vis_side(df_events, kamp, hold_map)
+    if selected_sub == "Heatmaps" and heatmaps: 
+        heatmaps.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Shotmaps" and skudmap: 
+        skudmap.vis_side(df_events, 4, hold_map)
+    elif selected_sub == "Zoneinddeling" and goalzone: 
+        # RETTET: Sender 'spillere' (df) med i stedet for 'kamp' (df)
+        goalzone.vis_side(df_events, spillere, hold_map)
+    elif selected_sub == "Afslutninger" and shots: 
+        shots.vis_side(df_events, kamp, hold_map)
+    elif selected_sub == "DataViz" and dataviz: 
+        dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "SPILLERE":
-    if selected_sub == "Zoneinddeling" and player_goalzone: player_goalzone.vis_side(df_events, spillere)
-    elif selected_sub == "Afslutninger" and player_shots: player_shots.vis_side(df_events, kamp, hold_map)
+    if selected_sub == "Zoneinddeling" and player_goalzone: 
+        player_goalzone.vis_side(df_events, spillere)
+    elif selected_sub == "Afslutninger" and player_shots: 
+        # Bemærk: Her bruges 'kamp' og 'hold_map' til filtrering af kampe/modstandere
+        player_shots.vis_side(df_events, kamp, hold_map)
 
 elif selected == "STATISTIK":
-    if selected_sub == "Spillerstats" and stats: stats.vis_side(spillere, player_events)
-    elif selected_sub == "Top 5" and top5: top5.vis_side(spillere, player_events)
+    if selected_sub == "Spillerstats" and stats: 
+        stats.vis_side(spillere, player_events)
+    elif selected_sub == "Top 5" and top5: 
+        top5.vis_side(spillere, player_events)
 
 elif selected == "SCOUTING":
-    if selected_sub == "Hvidovre IF" and players: players.vis_side(spillere)
-    elif selected_sub == "Trupsammensætning" and squad: squad.vis_side(spillere)
-    elif selected_sub == "Sammenligning" and comparison: comparison.vis_side(spillere, player_events, df_scout)
+    if selected_sub == "Hvidovre IF" and players: 
+        players.vis_side(spillere)
+    elif selected_sub == "Trupsammensætning" and squad: 
+        squad.vis_side(spillere)
+    elif selected_sub == "Sammenligning" and comparison: 
+        comparison.vis_side(spillere, player_events, df_scout)
