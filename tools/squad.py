@@ -23,11 +23,11 @@ def vis_side(df):
         <style>
         /* Målretter selve popover vinduet globalt */
         [data-testid="stPopoverBody"] {{
-            width: 500px !important;
+            width: 380px !important;
         }}
         /* Sikrer at indholdet indeni også må fylde det hele */
         [data-testid="stPopoverContent"] {{
-            min-width: 500px !important;
+            min-width: 380px !important;
         }}
         /* Knap farve */
         button[kind="primary"] {{
