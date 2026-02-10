@@ -30,10 +30,19 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. RÅDATA (POPOVER) - RETTET FOR AT VISE ALLE KOLONNER ---
+    # --- 2. RÅDATA (POPOVER) MED CENTREREDE TAL ---
     with col_btn:
         with st.popover("Vis Rådata", use_container_width=True):
-            # Vi sikrer os at kolonnerne hedder det rigtige i dataframe
+            # CSS til at centrere tal-kolonner (kolonne 2 og 3) uden at ramme holdnavne
+            st.markdown("""
+                <style>
+                    [data-testid="stDataFrame"] td:nth-child(2), 
+                    [data-testid="stDataFrame"] td:nth-child(3) {
+                        text-align: center !important;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
             df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
             
             st.dataframe(
