@@ -5,7 +5,7 @@ import base64
 from datetime import datetime
 import uuid
 
-# --- KONFIGURATION (Behold som de er) ---
+# --- KONFIGURATION ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "scouting_db.csv"
@@ -32,89 +32,75 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-
-    # --- 1. VIS EKSISTERENDE DATA FØRST ---
+    # --- 1. VIS DATABASEN ---
     try:
-        # Tilføj et tilfældigt tal for at undgå at browseren cacher en gammel version af filen
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         db = pd.read_csv(raw_url)
-        
-        # Styling af tabellen
         st.dataframe(db, width='stretch', hide_index=True)
     except:
-        st.info("Databasen er tom eller kunne ikke findes på GitHub.")
+        st.info("Databasen er tom.")
 
     st.divider()
 
-    # --- 2. LOGIK TIL AT ÅBNE FORMULAR ---
-    # Vi bruger session_state til at huske om formularen skal være åben
+    # --- 2. TOGGLE LOGIK ---
     if "vis_formular" not in st.session_state:
         st.session_state.vis_formular = False
 
-    col_btn1, col_btn2 = st.columns([1, 4])
-    with col_btn1:
-        if st.button("➕ Tilføj scoutingrapport"):
-            st.session_state.vis_formular = True
-            st.rerun()
+    # Knappen skifter tekst baseret på status
+    btn_label = "Luk scoutingrapport" if st.session_state.vis_formular else "Tilføj scoutingrapport"
     
-    # --- 3. SELVE FORMULAREN (Vises kun hvis knappen er trykket) ---
+    if st.button(btn_label):
+        st.session_state.vis_formular = not st.session_state.vis_formular
+        st.rerun()
+
+    # --- 3. FORMULAR ---
     if st.session_state.vis_formular:
-        with st.expander("Ny Scoutingrapport", expanded=True):
-            kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True)
+        # Valg af type (Uden for form for øjeblikkelig opdatering)
+        kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True, label_visibility="collapsed")
+        
+        # Logik til at hente data med det samme
+        if kilde_type == "Find i system":
+            valgt_navn = st.selectbox("Vælg Spiller", sorted(df_spillere['NAVN'].unique()))
+            spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
+            p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
+            navn = valgt_navn
+            klub = "Hvidovre IF"
+            st.info(f"WYID: {p_id}")
+        else:
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                navn = st.text_input("Spillernavn")
+            with col_m2:
+                klub = st.text_input("Klub")
+            p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
+            st.info(f"Nyt ID: {p_id}")
 
-            with st.form("scout_form", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                if kilde_type == "Find i system":
-                    with c1:
-                        valgt_navn = st.selectbox("Vælg Spiller", sorted(df_spillere['NAVN'].unique()))
-                        spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
-                        p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
-                        navn = valgt_navn
-                        klub = "Hvidovre IF"
-                    with c2:
-                        st.info(f"**WYID:** {p_id}")
-                else:
-                    with c1:
-                        navn = st.text_input("Spillernavn")
-                        klub = st.text_input("Klub")
-                        p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
-                    with c2:
-                        st.info(f"**Nyt ID:** {p_id}")
+        # Selve indtastnings-formularen
+        with st.form("scout_form"):
+            f1, f2, f3 = st.columns(3)
+            with f1:
+                pos = st.text_input("Position")
+                rating = st.slider("Rating (1-10)", 1, 10, 5)
+            with f2:
+                status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
+            with f3:
+                potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
-                st.divider()
-                
-                f1, f2, f3 = st.columns(3)
-                with f1:
-                    pos = st.text_input("Position")
-                    rating = st.slider("Rating (1-10)", 1, 10, 5)
-                with f2:
-                    status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
-                with f3:
-                    potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+            noter = st.text_area("Kommentarer")
 
-                noter = st.text_area("Kommentarer (Styrker, svagheder, personlighed)")
-
-                col_save, col_cancel = st.columns([1, 1])
-                with col_save:
-                    submit = st.form_submit_button("Gem rapport")
-                
-                if submit:
-                    if navn:
-                        ny_data = pd.DataFrame([[
-                            p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, 
-                            pos, rating, status, potentiale, noter
-                        ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating", "Status", "Potentiale", "Noter"])
-                        
-                        res = save_to_github(ny_data)
-                        if res in [200, 201]:
-                            st.success(f"Gemt! DATA Hub opdaterer om et øjeblik.")
-                            st.session_state.vis_formular = False
-                            st.rerun()
-                        else:
-                            st.error(f"Fejl: {res}")
+            if st.form_submit_button("Gem rapport"):
+                if navn:
+                    ny_data = pd.DataFrame([[
+                        p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, 
+                        pos, rating, status, potentiale, noter
+                    ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating", "Status", "Potentiale", "Noter"])
+                    
+                    res = save_to_github(ny_data)
+                    if res in [200, 201]:
+                        st.success("Gemt!")
+                        st.session_state.vis_formular = False
+                        st.rerun()
                     else:
-                        st.error("Navn skal udfyldes")
-
-        if st.button("Annuller"):
-            st.session_state.vis_formular = False
-            st.rerun()
+                        st.error(f"Fejl: {res}")
+                else:
+                    st.error("Navn mangler")
