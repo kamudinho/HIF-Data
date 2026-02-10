@@ -78,7 +78,12 @@ def vis_side(df):
         st.pyplot(fig, use_container_width=True)
 
 
-    with col_menu:
+    with st.popover("Vis Kontrakter", use_container_width=True):
+            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
+            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
+            st.dataframe(df_table, hide_index=True, use_container_width=True)
+
+        with col_menu:
         st.markdown("### Formation")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
