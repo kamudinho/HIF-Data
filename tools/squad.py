@@ -61,11 +61,11 @@ def vis_side(df):
     if st.session_state.show_squad_data:
         col_main, col_side = st.columns([2.2, 1])
     else:
-        _, col_main, _ = st.columns([0.2, 4, 0.2])
+        _, col_main, _ = st.columns([0.2, 3.8, 0.2])
 
     with col_main:
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-        fig, ax = pitch.draw(figsize=(12, 7), constrained_layout=True)
+        fig, ax = pitch.draw(figsize=(11, 7), constrained_layout=True)
 
         # Legend
         legend_y = -3
