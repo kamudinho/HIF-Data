@@ -28,22 +28,29 @@ def generate_cached_heatmaps(df_p, cols_slider, hold_ids, hold_map):
 
     for i, tid in enumerate(hold_ids):
         ax = axes_flat[i]
-        hold_df = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         
-        # --- SPEED BOOST: SAMPLING ---
-        # 170.000 linjer er for meget til KDE. 5.000 er rigeligt til et præcist heatmap.
-        if len(hold_df) > 5000:
-            hold_df = hold_df.sample(n=5000, random_state=42)
+        # 1. Hent ALL data for holdet
+        hold_df_full = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         
+        # 2. Gem det rigtige antal til titlen
+        rigtigt_antal = len(hold_df_full)
+        
+        # 3. Lav et lille udpluk (n=2000) KUN til at tegne selve farverne
+        if rigtigt_antal > 2000:
+            hold_df_sample = hold_df_full.sample(n=2000, random_state=42)
+        else:
+            hold_df_sample = hold_df_full
+
         pitch.draw(ax=ax)
 
+        # 4. Skriv det RIGTIGE antal i titlen (f.eks. 14.500 passes)
         navn = str(hold_map.get(tid, f"HOLD ID: {tid}")).upper()
-        ax.set_title(f"{navn}\n({len(hold_df)} passes)", fontsize=12, fontweight='bold', pad=10)
+        ax.set_title(f"{navn}\n({rigtigt_antal} passes)", fontsize=12, fontweight='bold', pad=10)
 
-        if len(hold_df) > 5:
-            # Vi sænker levels til 20 (stadig meget pænt, men dobbelt så hurtigt som 40)
+        # 5. Tegn heatmappet baseret på de 2.000 punkter (lynhurtigt)
+        if rigtigt_antal > 5:
             sns.kdeplot(
-                x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
+                x=hold_df_sample['LOCATIONY'], y=hold_df_sample['LOCATIONX'], ax=ax,
                 fill=True, thresh=0.05, levels=20, 
                 cmap='YlOrRd', alpha=0.8, zorder=1
             )
