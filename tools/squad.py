@@ -9,7 +9,7 @@ def vis_side(df):
         st.error("Ingen data fundet for truppen.")
         return
 
-    # --- 1. SESSION STATE TIL LAYOUT ---
+    # --- 1. SESSION STATE FOR LAYOUT ---
     if 'show_squad_data' not in st.session_state:
         st.session_state.show_squad_data = False
 
@@ -28,45 +28,45 @@ def vis_side(df):
         df_squad['DAYS_LEFT'] = 999 
 
     def get_status_color(row):
-        if row['PRIOR'] == 'L': return '#d3d3d3' # Grå leje
+        if row['PRIOR'] == 'L': return '#d3d3d3' 
         days = row['DAYS_LEFT']
         if pd.isna(days): return 'white'
-        if days < 182: return '#ff4b4b' # Rød (< 6 mdr)
-        if days <= 365: return '#fffd8d' # Gul (6-12 mdr)
+        if days < 182: return '#ff4b4b' 
+        if days <= 365: return '#fffd8d' 
         return 'white'
 
-    # --- 3. TOPBAR MED FORMATION OG DATA-KNAP ---
-    col_form, col_btn = st.columns([3, 1])
-    with col_form:
-        form_valg = st.selectbox("Vælg Formation", ["3-4-3", "4-3-3", "3-5-2"], 
+    # --- 3. TOPBAR (FORMATION + DATA KNAP) ---
+    col_sel, col_btn = st.columns([3, 1])
+    with col_sel:
+        form_valg = st.selectbox("Formation", ["3-4-3", "4-3-3", "3-5-2"], 
                                  key="formation_valg", label_visibility="collapsed")
     with col_btn:
         if st.button("Data", use_container_width=True):
             st.session_state.show_squad_data = not st.session_state.show_squad_data
 
-    # --- 4. DYNAMISK LAYOUT (STYRER STØRRELSEN PÅ BANEN) ---
+    # --- 4. DYNAMISK LAYOUT (TÆMMER BANENS STØRRELSE) ---
     if st.session_state.show_squad_data:
-        col_main, col_side = st.columns([2.5, 1])
+        # Hvis data vises: Bane til venstre, tabel til højre
+        col_main, col_side = st.columns([2.2, 1])
     else:
-        # Hvis data er skjult, bruger vi tomme kolonner til at centrere og begrænse bredden
-        _, col_main, _ = st.columns([0.2, 5, 0.2])
+        # Hvis data er skjult: Centrer banen og begræns dens bredde kraftigt
+        _, col_main, _ = st.columns([0.5, 3, 0.5])
 
     with col_main:
-        # --- 5. KONFIGURATION AF BANE ---
-        # Mindre figsize (12, 8) gør at den ikke fylder 3 skærmhøjder
+        # Pitch setup med mindre figsize for bedre skærm-pasform
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
-        fig, ax = pitch.draw(figsize=(12, 8), constrained_layout=True)
+        fig, ax = pitch.draw(figsize=(10, 7), constrained_layout=True)
 
-        # Legend (Forklaring)
-        legend_y = -4 
+        # Legend
+        legend_y = -3
         legend_items = [("#ff4b4b", "Udløb < 6 mdr"), ("#fffd8d", "Udløb 6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            x_pos = 1 + (i * 25)
-            ax.text(x_pos, legend_y, f"  {text}  ", size=9, color="black",
+            x_pos = 5 + (i * 30)
+            ax.text(x_pos, legend_y, f"  {text}  ", size=8, color="black",
                     va='center', ha='left', family='monospace', fontweight='bold',
                     bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.3', linewidth=0.5))
 
-        # Formationer
+        # Formations-konfiguration
         if form_valg == "3-4-3":
             pos_config = {
                 1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
@@ -87,33 +87,36 @@ def vis_side(df):
                 11: (95, 25, 'ANG'), 9: (95, 55, 'ANG')
             }
 
-        # Tegn spillere
+        # Tegn spillere og mærkater
         for pos_num, coords in pos_config.items():
             x_pos, y_pos, label = coords
             spillere_pos = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR')
             
             if not spillere_pos.empty:
-                ax.text(x_pos, y_pos - 5, f" {label} ", size=10, color="white",
+                ax.text(x_pos, y_pos - 4, f" {label} ", size=9, color="white",
                         va='center', ha='center', fontweight='bold',
                         bbox=dict(facecolor='#df003b', edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
 
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
                     navn = p.get('NAVN', 'Ukendt')
                     bg_color = get_status_color(p)
-                    visnings_tekst = f" {navn} ".ljust(20)
-                    y_row = (y_pos - 2.5) + (i * 2.8) # Lidt mere luft mellem boksene
+                    # Kortere ljust for at spare plads på mindre bane
+                    visnings_tekst = f" {navn} ".ljust(18)
+                    y_row = (y_pos - 1.5) + (i * 3.0)
                     
-                    ax.text(x_pos, y_row, visnings_tekst, size=8, color="black",
+                    ax.text(x_pos, y_row, visnings_tekst, size=7.5, color="black",
                             va='top', ha='center', family='monospace',
                             bbox=dict(facecolor=bg_color, edgecolor='#000000', 
                                       boxstyle='square,pad=0.1', linewidth=0.5))
 
         st.pyplot(fig, use_container_width=True)
 
-    # --- 6. SIDEPANEL (RÅDATA) ---
+    # --- 5. SIDEPANEL (RÅDATA) ---
     if st.session_state.show_squad_data:
         with col_side:
-            st.markdown("### Kontraktstatus")
-            df_display = df_squad[['NAVN', 'CONTRACT', 'PRIOR']].copy()
-            df_display['CONTRACT'] = df_display['CONTRACT'].dt.strftime('%d-%m-%Y')
-            st.dataframe(df_display, hide_index=True, use_container_width=True)
+            st.markdown("### Kontrakter")
+            df_table = df_squad[['NAVN', 'CONTRACT', 'PRIOR']].copy()
+            df_table['CONTRACT'] = df_table['CONTRACT'].dt.strftime('%d-%m-%Y')
+            
+            # Vi bruger en ren tabel-visning her for overblik
+            st.dataframe(df_table, hide_index=True, use_container_width=True)
