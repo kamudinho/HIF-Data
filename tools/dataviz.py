@@ -30,32 +30,25 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. RÅDATA (POPOVER) MED CENTREREDE TAL ---
+    # --- 2. RÅDATA (POPOVER) MED TVUNGEN CENTRERING ---
     with col_btn:
         with st.popover("Vis Rådata", use_container_width=True):
-            # CSS til at centrere tal-kolonner (kolonne 2 og 3) uden at ramme holdnavne
+            # Formater data til tabel
+            df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
+            df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+            df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+
+            # CSS der tvinger alt i kolonne 2 og 3 til midten (både header og celler)
             st.markdown("""
                 <style>
-                    [data-testid="stDataFrame"] td:nth-child(2), 
-                    [data-testid="stDataFrame"] td:nth-child(3) {
-                        text-align: center !important;
-                    }
+                    thead th:nth-child(2), thead th:nth-child(3) { text-align: center !important; }
+                    tbody td:nth-child(2), tbody td:nth-child(3) { text-align: center !important; }
+                    table { width: 100%; }
                 </style>
             """, unsafe_allow_html=True)
 
-            df_display = stats_pr_hold[['Hold', x_col, y_col]].copy()
-            
-            st.dataframe(
-                df_display, 
-                hide_index=True, 
-                use_container_width=True,
-                height=600,
-                column_config={
-                    "Hold": st.column_config.TextColumn("Hold"),
-                    x_col: st.column_config.NumberColumn(x_col, format="%.1f"),
-                    y_col: st.column_config.NumberColumn(y_col, format="%.2f")
-                }
-            )
+            # Vi bruger st.table i stedet for dataframe for at CSS'en bider ordentligt
+            st.table(df_table)
 
     # --- 3. SCATTERPLOT ---
     fig = go.Figure()
