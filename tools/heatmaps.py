@@ -5,21 +5,28 @@ from mplsoccer import VerticalPitch
 import numpy as np
 
 # --- CACHING AF SELVE FIGUREN ---
-# Vi bruger hash_funcs eller konverterer hold_ids til en tuple for at sikre stabil caching
 @st.cache_data(show_spinner="Genererer taktiske heatmaps...")
 def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
     HIF_ID = 38331
     BG_WHITE = '#ffffff'
 
-    # Layout konfiguration
     rows = int(np.ceil(len(hold_ids_tuple) / cols_slider))
+    
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(15, rows * 5), # Lidt ekstra højde til titlerne
+        figsize=(15, rows * 4), 
         facecolor=BG_WHITE
     )
 
-    fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.92, wspace=0.1, hspace=0.4)
+     fig.subplots_adjust(
+        left=0.05, 
+        right=0.95, 
+        bottom=0.02, 
+        top=0.95, 
+        wspace=0.05, 
+        hspace=0.22
+    )
+    
     axes_flat = np.atleast_1d(axes).flatten()
 
     pitch = VerticalPitch(
