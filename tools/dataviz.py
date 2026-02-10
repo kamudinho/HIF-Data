@@ -44,7 +44,7 @@ def vis_side(df_events, df_kamp, hold_map):
 
     # --- 2. ANALYSE MODES (Med forklaringer og pæne navne) ---
     ANALYSE_MODES = {
-        "Konverteringsrat": {
+        "Konverteringsrate": {
             "x": "Skud", "y": "Mål", 
             "desc": "Hvor mange skud skal holdet bruge for at score? Højre-top er mest effektive."
         },
