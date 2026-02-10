@@ -67,7 +67,7 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    # Hierarkisk menu med kun ikoner i toppen
+    # Her tilføjer vi accordion=True for at sikre, at kun én mappe er åben
     selected = sac.menu([
         sac.MenuItem('DASHBOARD', icon='house-fill'),
         sac.MenuItem('HOLD', icon='shield', children=[
@@ -91,13 +91,17 @@ with st.sidebar:
             sac.MenuItem('Sammenligning'),
             sac.MenuItem('Scouting-database'),
         ]),
-    ], format_func='upper', open_all=False, index=0)
+    ], 
+    format_func='upper', 
+    open_all=False, 
+    accordion=True,  # <--- DETTE ER NØGLEN TIL DIN EFFEKT
+    index=0)
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
-
+        
 # --- 6. ROUTING ---
 if selected == 'DASHBOARD':
     st.title("Hvidovre IF Performance Hub")
