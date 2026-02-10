@@ -45,7 +45,7 @@ def vis_side(df):
         # Legend (Kompakt i toppen)
         legend_items = [("#ff4b4b", "< 6 mdr"), ("#fffd8d", "6-12 mdr"), ("#d3d3d3", "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            ax.text(5 + (i * 18), 2, text, size=8, color="black", va='center', ha='left', 
+            ax.text(5 + (i * 18), 2, text, size=10, color="black", va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
         # Positions logik
@@ -77,7 +77,13 @@ def vis_side(df):
         plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
         st.pyplot(fig, use_container_width=True)
 
-    with col_menu:
+    # Popover i bunden af menu-kolonnen
+        with st.popover("Vis Kontrakter", use_container_width=True):
+            df_table = df_squad[['NAVN', 'CONTRACT']].copy()
+            df_table['CONTRACT'] = df_table['CONTRACT'].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "N/A")
+            st.dataframe(df_table, hide_index=True, use_container_width=True)
+
+        with col_menu:
         st.markdown("### Formation")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
