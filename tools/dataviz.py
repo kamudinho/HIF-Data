@@ -1,225 +1,101 @@
 import streamlit as st
-import streamlit_antd_components as sac
-import os
 import pandas as pd
-import importlib
+import plotly.graph_objects as go
+import numpy as np
 
-# --- 1. KONFIGURATION ---
-st.set_page_config(page_title="HIF Data Hub", layout="wide")
+def vis_side(df_events, df_kamp, hold_map):
+    # Overskrift der ikke bliver skåret af pga. vores nye CSS padding
+    st.subheader("Performance Matrix: Effektivitet & Volumen")
 
-# Samlet CSS for at optimere hastighed
-st.markdown("""
-    <style>
-        .block-container { padding-top: 2rem !important; }
-        [data-testid="stHeader"] { background-color: rgba(0,0,0,0); }
+    HIF_ID = 38331
+    HIF_RED = '#df003b'
+
+    # --- 1. DATARENS ---
+    df_plot = df_kamp.copy()
+    df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
+    df_plot = df_plot.dropna(subset=['TEAM_WYID'])
+
+    # --- 2. VALG AF ANALYSE ---
+    # Jeg har tilføjet 'Konvertering' som en beregnet mulighed
+    BILLEDE_MAPPING = {
+        "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS", "label": "Skudstærke vs. Skarpe"},
+        "Afleveringer vs. Mål": {"x": "PASSES", "y": "GOALS", "label": "Besiddelse vs. Slutprodukt"},
+    }
+
+    valgt_label = st.selectbox("Vælg analyse-metrik:", options=list(BILLEDE_MAPPING.keys()))
+    mapping = BILLEDE_MAPPING[valgt_label]
+    x_col, y_col = mapping["x"], mapping["y"]
+
+    # --- 3. BEREGNING AF STATS ---
+    df_plot[x_col] = pd.to_numeric(df_plot[x_col], errors='coerce').fillna(0)
+    df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors='coerce').fillna(0)
+
+    # Gruppér pr. hold for at få gennemsnit pr. kamp
+    stats_pr_hold = df_plot.groupby('TEAM_WYID').agg({
+        x_col: 'mean',
+        y_col: 'mean'
+    }).reset_index()
+
+    # --- 4. SCATTERPLOT (PLOTLY) ---
+    fig = go.Figure()
+
+    avg_x = stats_pr_hold[x_col].mean()
+    avg_y = stats_pr_hold[y_col].mean()
+
+    for _, row in stats_pr_hold.iterrows():
+        tid = int(row['TEAM_WYID'])
+        if tid == 0: continue
+
+        team_name = hold_map.get(tid, f"ID: {tid}")
+        is_hif = (tid == HIF_ID)
         
-        /* Centrerer logo i sidebars */
-        [data-testid="stSidebar"] img {
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-        }
+        # Styling af punkter
+        color = HIF_RED if is_hif else 'rgba(100, 100, 100, 0.5)'
+        size = 18 if is_hif else 12
+        text_font = dict(size=14, color="black") if is_hif else dict(size=10, color="gray")
 
-        /* Gør underpunkter mindre og fjerner ikoner (via CSS for en sikkerheds skyld) */
-        .ant-menu-sub .ant-menu-title-content {
-            font-size: 13px !important;
-            white-space: nowrap !important;
-        }
-        
-        .ant-menu-submenu-title {
-            font-weight: bold !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+        fig.add_trace(go.Scatter(
+            x=[row[x_col]],
+            y=[row[y_col]],
+            mode='markers+text',
+            text=[team_name] if is_hif or row[y_col] > avg_y * 1.2 else [""], # Vis kun navne for HIF og topscorere
+            textposition="top center",
+            name=team_name,
+            marker=dict(
+                size=size,
+                color=color,
+                line=dict(width=1.5, color='white')
+            ),
+            hovertemplate=f"<b>{team_name}</b><br>{x_col}: %{{x:.2f}}<br>{y_col}: %{{y:.2f}}<extra></extra>"
+        ))
 
-# --- 2. LOGIN SYSTEM ---
-USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
+    # Gennemsnitslinjer (Benchmarking)
+    fig.add_vline(x=avg_x, line_dash="dot", line_color="#333", opacity=0.5)
+    fig.add_hline(y=avg_y, line_dash="dot", line_color="#333", opacity=0.5)
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+    # --- 5. KVADRANT-TEKSTER ---
+    # Tilføjer labels i de fire hjørner for hurtig forståelse
+    fig.add_annotation(x=stats_pr_hold[x_col].max(), y=stats_pr_hold[y_col].max(), text="Høj volumen / Høj kynisme", showarrow=False, opacity=0.5)
+    fig.add_annotation(x=stats_pr_hold[x_col].min(), y=stats_pr_hold[y_col].max(), text="Lav volumen / Høj kynisme", showarrow=False, opacity=0.5)
 
-if not st.session_state["logged_in"]:
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-                <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="120">
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.markdown("<h3 style='text-align: center;'>HIF Performance Hub</h3>", unsafe_allow_html=True)
-        with st.form("login_form"):
-            user = st.text_input("Brugernavn").lower().strip()
-            pw = st.text_input("Adgangskode", type="password")
-            submit = st.form_submit_button("Log ind", use_container_width=True)
-            if submit:
-                if user in USER_DB and USER_DB[user] == pw:
-                    st.session_state["logged_in"] = True
-                    st.rerun()
-                else:
-                    st.error("Ugyldigt brugernavn eller kode")
-    st.stop()
-
-# --- 3. DATA LOADING ---
-# Find den absolutte sti til mappen hvor HIF-dash.py ligger
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Hvis BASE_DIR ved en fejl ender i 'tools', hopper vi et niveau op
-if BASE_DIR.endswith('tools'):
-    BASE_DIR = os.path.dirname(BASE_DIR)
-
-XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
-
-@st.cache_data(ttl=3600, show_spinner="Henter HIF data...")
-def load_full_data():
-    # Debug info (kan fjernes når det virker)
-    if not os.path.exists(XLSX_PATH):
-        st.error(f"DEBUG: Leder efter filen her: {XLSX_PATH}")
-        return None, None, {}, None, None, None
-        
-    try:
-        # Læs Excel ark med openpyxl
-        ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
-        sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
-        ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
-        pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
-        sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
-        
-        # Rens PLAYER_WYID
-        for df_tmp in [sp, pe]:
-            if 'PLAYER_WYID' in df_tmp.columns:
-                df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-
-        godkendte_hold_ids = ho['TEAM_WYID'].unique()
-        h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
-
-        # Eventdata håndtering
-        ev = None
-        possible_names = ['eventdata.csv', 'Eventdata.csv']
-        found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
-        
-        if found_path:
-            ev = pd.read_csv(found_path, low_memory=False)
-            if len(ev.columns) < 2:
-                ev = pd.read_csv(found_path, sep=';', low_memory=False)
-            if 'PLAYER_WYID' in ev.columns:
-                ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-        
-        if ev is not None:
-            ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
-            if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
-                navne_df = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
-                ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
-                ev = ev.rename(columns={'NAVN': 'PLAYER_NAME'})
-            
-        return ev, ka, h_map, sp, pe, sc
-    except Exception as e:
-        st.error(f"Kritisk datafejl: {e}")
-        return None, None, {}, None, None, None
-
-# Kør loading
-df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
-if df_events is None:
-    st.stop()
-
-# --- 4. SIDEBAR MENU ---
-with st.sidebar:
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; padding-top: 10px; margin-bottom: 20px;">
-            <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="100">
-        </div>
-        """,
-        unsafe_allow_html=True
+    fig.update_layout(
+        title=f"<b>{mapping['label']}</b>",
+        plot_bgcolor='white',
+        xaxis_title=f"Gns. {x_col} pr. kamp",
+        yaxis_title=f"Gns. {y_col} pr. kamp",
+        height=700,
+        showlegend=False,
+        margin=dict(t=50, b=50, l=50, r=50)
     )
-    
-    selected = sac.menu([
-        sac.MenuItem('DASHBOARD', icon='house-fill'),
-        sac.MenuItem('HOLD', icon='shield', children=[
-            sac.MenuItem('Heatmaps'),
-            sac.MenuItem('Shotmaps'),
-            sac.MenuItem('Zoneinddeling'),
-            sac.MenuItem('Afslutninger'),
-            sac.MenuItem('DataViz'),
-        ]),
-        sac.MenuItem('SPILLERE', icon='person', children=[
-            sac.MenuItem('Zoneinddeling'),
-            sac.MenuItem('Afslutninger'),
-        ]),
-        sac.MenuItem('STATISTIK', icon='bar-chart', children=[
-            sac.MenuItem('Spillerstats'),
-            sac.MenuItem('Top 5'),
-        ]),
-        sac.MenuItem('SCOUTING', icon='search', children=[
-            sac.MenuItem('Hvidovre IF'),
-            sac.MenuItem('Trupsammensætning'),
-            sac.MenuItem('Sammenligning'),
-            sac.MenuItem('Scouting-database'),
-        ]),
-    ], format_func='upper', key='hif_menu_v2')
 
-# --- 5. ROUTING (LAZY LOADING) ---
-# Vi importerer først modulerne herinde for at øge hastigheden på menuen
+    # Grid styling
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#f0f0f0')
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#f0f0f0')
 
-if selected == 'DASHBOARD':
-    st.title("Hvidovre IF Performance Hub")
-    st.info(f"Velkommen tilbage. Vælg et modul i menuen til venstre.")
+    st.plotly_chart(fig, use_container_width=True)
 
-# --- HOLD ---
-elif selected == 'Heatmaps':
-    import tools.heatmaps as heatmaps
-    heatmaps.vis_side(df_events, 4, hold_map)
-
-elif selected == 'Shotmaps':
-    import tools.skudmap as skudmap
-    skudmap.vis_side(df_events, 4, hold_map)
-
-elif selected == 'HOLD/Zoneinddeling':
-    import tools.goalzone as goalzone
-    goalzone.vis_side(df_events, spillere, hold_map)
-
-elif selected == 'HOLD/Afslutninger':
-    import tools.shots as shots
-    shots.vis_side(df_events, kamp, hold_map)
-
-elif selected == 'DataViz':
-    import tools.dataviz as dataviz
-    dataviz.vis_side(df_events, kamp, hold_map)
-
-# --- SPILLERE ---
-elif selected == 'SPILLERE/Zoneinddeling':
-    import tools.player_goalzone as player_goalzone
-    player_goalzone.vis_side(df_events, spillere)
-
-elif selected == 'SPILLERE/Afslutninger':
-    import tools.player_shots as player_shots
-    player_shots.vis_side(df_events, kamp, hold_map)
-
-# --- STATISTIK ---
-elif selected == 'Spillerstats':
-    import tools.stats as stats
-    stats.vis_side(spillere, player_events)
-
-elif selected == 'Top 5':
-    import tools.top5 as top5
-    top5.vis_side(spillere, player_events)
-
-# --- SCOUTING ---
-elif selected == 'Hvidovre IF':
-    import tools.players as players
-    players.vis_side(spillere)
-
-elif selected == 'Trupsammensætning':
-    import tools.squad as squad
-    squad.vis_side(spillere)
-
-elif selected == 'Sammenligning':
-    import tools.comparison as comparison
-    comparison.vis_side(spillere, player_events, df_scout)
-
-elif selected == 'Scouting-database':
-    import tools.scout_input as scout_input
-    scout_input.vis_side(spillere)
+    # --- 6. DATA-TABEL ---
+    with st.expander("Se rådata bag grafen"):
+        df_out = stats_pr_hold.copy()
+        df_out['Hold'] = df_out['TEAM_WYID'].map(hold_map)
+        st.dataframe(df_out[['Hold', x_col, y_col]].sort_values(y_col, ascending=False), use_container_width=True)
