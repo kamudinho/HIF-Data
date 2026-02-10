@@ -61,7 +61,7 @@ def vis_side(df):
     if st.session_state.show_squad_data:
         col_main, col_side = st.columns([2.2, 1])
     else:
-        _, col_main, _ = st.columns([0.5, 3, 0.5])
+        _, col_main, _ = st.columns([0.2, 4, 0.2])
 
     with col_main:
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000')
