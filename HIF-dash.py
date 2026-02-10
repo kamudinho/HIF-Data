@@ -172,10 +172,6 @@ with st.sidebar:
         ]),
     ], key='hif_menu_v2')
 
-    st.markdown("---")
-    if st.button("Log ud", use_container_width=True):
-        st.session_state["logged_in"] = False
-        st.rerun()
 
 # --- 6. ROUTING (Håndterer dubletter automatisk) ---
 # Da sac.menu returnerer stien (f.eks. 'HOLD/Zoneinddeling'), tjekker vi på den præcise streng
