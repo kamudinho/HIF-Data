@@ -1,8 +1,10 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
+import streamlit_antd_components as sac
 import os
 import pandas as pd
 import importlib
+import uuid
 
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
@@ -12,7 +14,6 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; }
         [data-testid="stHeader"] { background-color: rgba(0,0,0,0); }
-        .sidebar-header { font-size: 0.8rem; font-weight: bold; color: #6d6d6d; margin-top: 15px; text-transform: uppercase; }
         
         /* Centrerer logo i sidebaren */
         [data-testid="stSidebar"] img {
@@ -20,6 +21,9 @@ st.markdown("""
             margin-left: auto;
             margin-right: auto;
         }
+        
+        /* Styling af Ant Design Menu */
+        .nav-link-text { font-weight: 500; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -59,10 +63,10 @@ def load_module(name):
     try:
         return importlib.import_module(f"tools.{name}")
     except Exception as e:
-        st.error(f"Fejl ved indlæsning af {name}: {e}") # Dette vil vise os fejlen
+        st.error(f"Fejl ved indlæsning af {name}: {e}")
         return None
 
-# Load eksisterende moduler
+# Load moduler
 heatmaps = load_module("heatmaps")
 shots = load_module("shots")
 skudmap = load_module("skudmap")
@@ -75,8 +79,6 @@ top5 = load_module("top5")
 squad = load_module("squad")
 player_goalzone = load_module("player_goalzone")
 player_shots = load_module("player_shots")
-
-# NYT: Scouting Database Input modul
 scout_input = load_module("scout_input")
 
 # --- 4. DATA LOADING ---
@@ -92,7 +94,6 @@ def load_full_data():
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
         
-        # Sikr PLAYER_WYID altid er tekststrenge uden .0
         for df_tmp in [sp, pe]:
             if 'PLAYER_WYID' in df_tmp.columns:
                 df_tmp['PLAYER_WYID'] = df_tmp['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -105,20 +106,13 @@ def load_full_data():
         found_path = next((os.path.join(BASE_DIR, n) for n in possible_names if os.path.exists(os.path.join(BASE_DIR, n))), None)
         
         if found_path:
-            try:
-                ev = pd.read_csv(found_path, sep=',', low_memory=False)
-                if len(ev.columns) < 2:
-                    ev = pd.read_csv(found_path, sep=';', low_memory=False)
-                
-                if 'PLAYER_WYID' in ev.columns:
-                    ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            except Exception as e:
-                st.error(f"Fejl ved læsning af CSV: {e}")
-                return None, None, {}, None, None, None
-        else:
-            st.error("Kunne ikke finde 'eventdata.csv'.")
-            return None, None, {}, None, None, None
-
+            ev = pd.read_csv(found_path, low_memory=False)
+            if len(ev.columns) < 2:
+                ev = pd.read_csv(found_path, sep=';', low_memory=False)
+            
+            if 'PLAYER_WYID' in ev.columns:
+                ev['PLAYER_WYID'] = ev['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+        
         if ev is not None:
             ev = ev[ev['TEAM_WYID'].isin(godkendte_hold_ids)]
             if 'PLAYER_WYID' in ev.columns and 'PLAYER_WYID' in sp.columns:
@@ -126,11 +120,7 @@ def load_full_data():
                 ev = ev.merge(navne_df, on='PLAYER_WYID', how='left')
                 ev = ev.rename(columns={'NAVN': 'PLAYER_NAME'})
             
-        if ka is not None:
-            ka = ka[ka['TEAM_WYID'].isin(godkendte_hold_ids)]
-            
         return ev, ka, h_map, sp, pe, sc
-
     except Exception as e:
         st.error(f"Kritisk datafejl: {e}")
         return None, None, {}, None, None, None
@@ -140,76 +130,85 @@ df_events, kamp, hold_map, spillere, player_events, df_scout = load_full_data()
 if df_events is None:
     st.stop()
 
-# --- 5. SIDEBAR MENU ---
+# --- 5. SIDEBAR MENU (Ant Design for Collapsible effect) ---
 with st.sidebar:
     st.markdown(
         """
-        <div style="display: flex; justify-content: center; padding-top: 10px;">
+        <div style="display: flex; justify-content: center; padding-top: 10px; margin-bottom: 20px;">
             <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="100">
         </div>
         """,
         unsafe_allow_html=True
     )
     
-    selected = option_menu(
-        menu_title=None, 
-        options=["HOLD", "SPILLERE", "STATISTIK", "SCOUTING"], 
-        icons=["shield", "person", "bar-chart", "search"], 
-        default_index=0
-    )
-
-    selected_sub = None
-    if selected == "HOLD":
-        st.markdown('<p class="sidebar-header">Holdanalyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_hold", ["Heatmaps", "Shotmaps", "Zoneinddeling", "Afslutninger", "DataViz"], label_visibility="collapsed")
-    elif selected == "SPILLERE":
-        st.markdown('<p class="sidebar-header">Spilleranalyse</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_ind", ["Zoneinddeling", "Afslutninger"], label_visibility="collapsed")
-    elif selected == "STATISTIK":
-        st.markdown('<p class="sidebar-header">Ranglister</p>', unsafe_allow_html=True)
-        selected_sub = st.radio("S_stat", ["Spillerstats", "Top 5"], label_visibility="collapsed")
-    elif selected == "SCOUTING":
-        st.markdown('<p class="sidebar-header">Scoutingværktøjer</p>', unsafe_allow_html=True)
-        # OPDATERET: Database-input tilføjet
-        selected_sub = st.radio("S_scout", ["Hvidovre IF", "Trupsammensætning", "Sammenligning", "Scouting-database"], label_visibility="collapsed")
+    # Ny hierarkisk menu
+    selected = sac.menu([
+        sac.MenuItem('DASHBOARD', icon='house-fill'),
+        sac.MenuItem('HOLD', icon='shield', children=[
+            sac.MenuItem('Heatmaps', icon='fire'),
+            sac.MenuItem('Shotmaps', icon='target'),
+            sac.MenuItem('Zoneinddeling (Hold)', icon='grid-3x3'),
+            sac.MenuItem('Afslutninger (Hold)', icon='fullscreen-exit'),
+            sac.MenuItem('DataViz', icon='graph-up'),
+        ]),
+        sac.MenuItem('SPILLERE', icon='person', children=[
+            sac.MenuItem('Zoneinddeling (Spiller)', icon='grid'),
+            sac.MenuItem('Afslutninger (Spiller)', icon='bullseye'),
+        ]),
+        sac.MenuItem('STATISTIK', icon='bar-chart', children=[
+            sac.MenuItem('Spillerstats', icon='list-ol'),
+            sac.MenuItem('Top 5', icon='trophy'),
+        ]),
+        sac.MenuItem('SCOUTING', icon='search', children=[
+            sac.MenuItem('Hvidovre IF', icon='shield-check'),
+            sac.MenuItem('Trupsammensætning', icon='people'),
+            sac.MenuItem('Sammenligning', icon='arrow-left-right'),
+            sac.MenuItem('Scouting-database', icon='database-fill-add'),
+        ]),
+    ], format_func='upper', open_all=False, index=0)
 
     st.markdown("---")
     if st.button("Log ud", use_container_width=True):
         st.session_state["logged_in"] = False
         st.rerun()
 
-# --- 6. ROUTING ---
-if selected == "HOLD":
-    if selected_sub == "Heatmaps" and heatmaps: 
-        heatmaps.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Shotmaps" and skudmap: 
-        skudmap.vis_side(df_events, 4, hold_map)
-    elif selected_sub == "Zoneinddeling" and goalzone: 
-        goalzone.vis_side(df_events, spillere, hold_map)
-    elif selected_sub == "Afslutninger" and shots: 
-        shots.vis_side(df_events, kamp, hold_map)
-    elif selected_sub == "DataViz" and dataviz: 
-        dataviz.vis_side(df_events, kamp, hold_map)
+# --- 6. ROUTING (Baseret på menuvalg) ---
 
-elif selected == "SPILLERE":
-    if selected_sub == "Zoneinddeling" and player_goalzone: 
-        player_goalzone.vis_side(df_events, spillere)
-    elif selected_sub == "Afslutninger" and player_shots: 
-        player_shots.vis_side(df_events, kamp, hold_map)
+# Dashboard
+if selected == 'DASHBOARD':
+    st.title("Hvidovre IF Performance Hub")
+    st.write(f"Velkommen, {user.capitalize()}. Vælg et værktøj i menuen til venstre.")
 
-elif selected == "STATISTIK":
-    if selected_sub == "Spillerstats" and stats: 
-        stats.vis_side(spillere, player_events)
-    elif selected_sub == "Top 5" and top5: 
-        top5.vis_side(spillere, player_events)
+# Hold Analyse
+elif selected == "Heatmaps" and heatmaps:
+    heatmaps.vis_side(df_events, 4, hold_map)
+elif selected == "Shotmaps" and skudmap:
+    skudmap.vis_side(df_events, 4, hold_map)
+elif selected == "Zoneinddeling (Hold)" and goalzone:
+    goalzone.vis_side(df_events, spillere, hold_map)
+elif selected == "Afslutninger (Hold)" and shots:
+    shots.vis_side(df_events, kamp, hold_map)
+elif selected == "DataViz" and dataviz:
+    dataviz.vis_side(df_events, kamp, hold_map)
 
-elif selected == "SCOUTING":
-    if selected_sub == "Hvidovre IF" and players: 
-        players.vis_side(spillere)
-    elif selected_sub == "Trupsammensætning" and squad: 
-        squad.vis_side(spillere)
-    elif selected_sub == "Sammenligning" and comparison: 
-        comparison.vis_side(spillere, player_events, df_scout)
-    # NY ROUTE: Database-input kalder det nye modul med spillere-listen
-    elif selected_sub == "Scouting-database" and scout_input:
-        scout_input.vis_side(spillere)
+# Spiller Analyse
+elif selected == "Zoneinddeling (Spiller)" and player_goalzone:
+    player_goalzone.vis_side(df_events, spillere)
+elif selected == "Afslutninger (Spiller)" and player_shots:
+    player_shots.vis_side(df_events, kamp, hold_map)
+
+# Statistik
+elif selected == "Spillerstats" and stats:
+    stats.vis_side(spillere, player_events)
+elif selected == "Top 5" and top5:
+    top5.vis_side(spillere, player_events)
+
+# Scouting
+elif selected == "Hvidovre IF" and players:
+    players.vis_side(spillere)
+elif selected == "Trupsammensætning" and squad:
+    squad.vis_side(spillere)
+elif selected == "Sammenligning" and comparison:
+    comparison.vis_side(spillere, player_events, df_scout)
+elif selected == "Scouting-database" and scout_input:
+    scout_input.vis_side(spillere)
