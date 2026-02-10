@@ -133,7 +133,7 @@ def vis_side(df):
                     bg_color = get_status_color(p)
                     text_color = "white" if bg_color == hif_rod else "black"
                     visnings_tekst = f" {p['NAVN']} ".ljust(25)
-                    ax.text(x_pos, (y_pos - 1.5) + (i * 2.1), visnings_tekst, size=11, 
+                    ax.text(x_pos, (y_pos - 1.5) + (i * 2.3), visnings_tekst, size=11, 
                             color=text_color, va='top', ha='center', family='monospace', fontweight='bold',
                             bbox=dict(facecolor=bg_color, edgecolor='black', boxstyle='square,pad=0.2', linewidth=1.0))
 
