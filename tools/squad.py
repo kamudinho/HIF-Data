@@ -59,7 +59,7 @@ def vis_side(df):
     form_valg = st.session_state.formation_valg
     
     if st.session_state.show_squad_data:
-        col_main, col_side = st.columns([2.2, 1])
+        col_main, col_side = st.columns([3.2, 1])
     else:
         _, col_main, _ = st.columns([0.2, 3.8, 0.2])
 
