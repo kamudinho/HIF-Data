@@ -18,7 +18,27 @@ def vis_side(df):
     gul_udlob = "#fffd8d"
     leje_gra = "#d3d3d3"
 
-    # --- 3. DATA-PROCESSERING ---
+    # --- 3. GLOBAL CSS (Tvinger popover bredden) ---
+    st.markdown(f"""
+        <style>
+        /* Målretter selve popover vinduet globalt */
+        [data-testid="stPopoverBody"] {{
+            width: 500px !important;
+        }}
+        /* Sikrer at indholdet indeni også må fylde det hele */
+        [data-testid="stPopoverContent"] {{
+            min-width: 500px !important;
+        }}
+        /* Knap farve */
+        button[kind="primary"] {{
+            background-color: {hif_rod} !important;
+            border-color: {hif_rod} !important;
+            color: white !important;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 4. DATA-PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
@@ -43,41 +63,29 @@ def vis_side(df):
         text_color = "white" if bg_color == hif_rod else "black"
         return [f'background-color: {bg_color}; color: {text_color}; font-weight: bold'] * len(row)
 
-    # --- 4. HOVED-LAYOUT ---
+    # --- 5. HOVED-LAYOUT ---
     col_pitch, col_menu = st.columns([6, 1])
 
     with col_menu:
-        # CSS TRICK: Gør selve popover-beholderen bredere
-        st.markdown(f"""
-            <style>
-            /* Gør selve popover-vinduet bredere når det åbnes */
-            div[data-testid="stPopoverContent"] {{
-                width: 450px !important;
-            }}
-            /* Styling af de aktive knapper */
-            button[kind="primary"] {{
-                background-color: {hif_rod} !important;
-                border-color: {hif_rod} !important;
-                color: white !important;
-            }}
-            </style>
-        """, unsafe_allow_html=True)
-
+        # Popover
         with st.popover("Kontrakter", use_container_width=True):
+            # Vi tvinger indholdet til at have en minimumsbredde herinde også
+            st.markdown('<div style="min-width: 480px;">', unsafe_allow_html=True)
+            
             df_display = df_squad[['NAVN', 'CONTRACT', 'PRIOR', 'DAYS_LEFT']].copy()
             styled_df = df_display.style.apply(style_rows, axis=1)
             
-            # Tabellen fylder nu 100% af den (nu bredere) popover
             st.dataframe(
                 styled_df,
                 column_order=("NAVN", "CONTRACT"),
                 column_config={
-                    "NAVN": st.column_config.TextColumn("Navn", width="large"),
-                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width="medium"),
+                    "NAVN": st.column_config.TextColumn("Navn", width=280),
+                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=150),
                 },
                 hide_index=True,
                 use_container_width=True 
             )
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.write("---")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
@@ -87,7 +95,7 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # (Resten af pitch-koden er uændret)
+        # Pitch koden er den samme stærke version som før
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#000000', pad_top=0, pad_bottom=0, pad_left=1, pad_right=1)
         fig, ax = pitch.draw(figsize=(14, 10))
         
@@ -97,6 +105,7 @@ def vis_side(df):
             ax.text(1 + (i * 12), 2.5, text, size=11, color=text_col, va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='black', boxstyle='square,pad=0.2'))
 
+        # Formationer (Uændret logik)
         form_valg = st.session_state.formation_valg
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
