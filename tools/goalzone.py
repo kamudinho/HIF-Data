@@ -40,19 +40,16 @@ def vis_side(df_events, df_spillere, hold_map):
     s_df = df_spillere.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
 
-    # Sikr ID-format (Fjern .0 og gør til tekst)
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
 
-    # 2. HENT NAVNE FRA SPILLER-ARKET
-    # Vi mapper PLAYER_WYID til NAVN
+    # 2. HENT NAVNE
     navne_dict = dict(zip(s_df['PLAYER_WYID'], s_df['NAVN']))
     df['NAVN_MAP'] = df['PLAYER_WYID'].map(navne_dict).fillna("Ukendt")
 
     # 3. FILTRERING (Låst til HIF)
     df_hif = df[df['TEAM_WYID'].astype(int) == HIF_ID].copy()
 
-    # Dropdown til modstandere
     opp_ids = sorted([int(tid) for tid in df_hif['OPPONENTTEAM_WYID'].unique() if pd.notna(tid)])
     dropdown_options = [("Alle Kampe", None)]
     for mid in opp_ids:
@@ -64,7 +61,6 @@ def vis_side(df_events, df_spillere, hold_map):
     with c2:
         valgt_type = st.selectbox("Type", ["Alle skud", "Mål kun"])
 
-    # Filtrer på skud og modstander
     mask = df_hif['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
     if valgt_id:
         mask &= (df_hif['OPPONENTTEAM_WYID'].astype(int) == valgt_id)
@@ -83,21 +79,23 @@ def vis_side(df_events, df_spillere, hold_map):
     df_plot = df_plot.dropna(subset=['LOCATIONX', 'LOCATIONY'])
     df_plot['ZONE_ID'] = df_plot.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
 
+    # Beregn samlet antal for procentberegning
+    total_shots = len(df_plot)
+
     # Find hvem der afslutter mest i hver zone
     top_per_zone = {}
     df_names = df_plot[df_plot['NAVN_MAP'] != "Ukendt"]
     if not df_names.empty:
-        counts = df_names.groupby(['ZONE_ID', 'NAVN_MAP']).size().reset_index(name='N')
-        for zone in counts['ZONE_ID'].unique():
-            z_data = counts[counts['ZONE_ID'] == zone]
+        counts_grouped = df_names.groupby(['ZONE_ID', 'NAVN_MAP']).size().reset_index(name='N')
+        for zone in counts_grouped['ZONE_ID'].unique():
+            z_data = counts_grouped[counts_grouped['ZONE_ID'] == zone]
             best = z_data.loc[z_data['N'].idxmax(), 'NAVN_MAP']
-            # Forkort navn: "D. Stenderup"
             p = best.split()
             top_per_zone[zone] = f"{p[0][0]}. {p[-1]}".upper() if len(p) > 1 else best.upper()
 
     # 5. PLOT
     fig, ax = plt.subplots(figsize=(8, 10))
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a')
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#1a1a1a', linewidth=1.5)
     pitch.draw(ax=ax)
 
     zone_stats = df_plot['ZONE_ID'].value_counts()
@@ -106,17 +104,24 @@ def vis_side(df_events, df_spillere, hold_map):
 
     for name, b in ZONE_BOUNDARIES.items():
         val = zone_stats.get(name, 0)
+        # Beregn procentdel af holdets samlede afslutninger
+        pct = (val / total_shots * 100) if total_shots > 0 else 0
         color_val = val / max_val
         
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"]-b["x_min"], b["y_max"]-b["y_min"],
-                         facecolor=cmap(color_val), alpha=0.4, edgecolor='black', linestyle='--', linewidth=0.5)
+                         facecolor=cmap(color_val), alpha=0.5, edgecolor='black', linestyle='--', linewidth=0.7)
         ax.add_patch(rect)
         
         if val > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
             y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2 if name != "Zone 8" else 55
-            ax.text(x_t, y_t + 0.8, f"{val}", ha='center', fontweight='bold', fontsize=7)
+            
+            # Vis både antal og procent (f.eks: "12 (15%)")
+            ax.text(x_t, y_t + 1.2, f"{val} ({pct:.1f}%)", ha='center', fontweight='bold', fontsize=7.5, color='black')
             if name in top_per_zone:
-                ax.text(x_t, y_t - 1.2, top_per_zone[name], ha='center', fontsize=5, fontweight='black')
+                ax.text(x_t, y_t - 1.5, top_per_zone[name], ha='center', fontsize=6, fontweight='black', color='#333333')
 
+    # Overskrift med total
+    plt.title(f"HIF ZONE-ANALYSE\nTotal afslutninger: {total_shots}", fontsize=10, fontweight='bold', pad=20)
+    
     st.pyplot(fig)
