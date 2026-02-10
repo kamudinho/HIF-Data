@@ -10,4 +10,5 @@ scipy
 mplsoccer
 plotly
 jinja2
-streamlit-gsheets
+gspread
+google-auth
