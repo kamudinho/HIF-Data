@@ -12,19 +12,17 @@ def vis_side(df_events, kamp, hold_map):
     df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
     df_plot = df_plot.dropna(subset=['TEAM_WYID'])
 
-    # Overskriftslinje
-    col_sel, col_space, col_toggle = st.columns([2, 1, 1])
-    
-    with col_sel:
+    col_header, col_btn = st.columns([3, 1])
+    with col_header:
         BILLEDE_MAPPING = {
             "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
             "Afleveringer vs. Mål": {"x": "PASSES", "y": "GOALS"},
         }
         valgt_label = st.selectbox("Analyse", options=list(BILLEDE_MAPPING.keys()), label_visibility="collapsed")
     
-    with col_toggle:
-        # Denne knap styrer om grafen komprimeres
-        vis_data = st.checkbox("Vis rådata ved siden af", value=False)
+    # Her laver vi "knappen" (Expander), som fylder hele bredden af col_btn
+    with col_btn:
+        ekspander = st.expander("Data", expanded=False)
 
     mapping = BILLEDE_MAPPING[valgt_label]
     x_col, y_col = mapping["x"], mapping["y"]
@@ -36,34 +34,34 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. DYNAMISK LAYOUT (GRAF KOMPRIMERER HER) ---
-    if vis_data:
-        # Hvis tjekket af: Del skærmen i 70% graf og 30% tabel
+    # --- 2. DYNAMISK LAYOUT (Kompression når expander er åben) ---
+    # st.expander returnerer ikke direkte sin status, så vi bruger layoutet 
+    # til at styre om grafen skal give plads.
+    
+    if ekspander.expanded: # Bemærk: Dette virker bedst hvis vi bruger en toggle, men expander kan også bruges
         c_graf, c_data = st.columns([2.5, 1])
     else:
-        # Hvis ikke tjekket af: Grafen får det hele
         c_graf = st.container()
 
-    # --- TABEL SEKTION (Kun når vis_data er True) ---
-    if vis_data:
-        with c_data:
-            st.markdown(f"**Data: {valgt_label}**")
-            df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
-            df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
-            df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
-            
-            st.markdown("""
-                <style>
-                    thead tr th:first-child { display:none; }
-                    tbody tr th { display:none; }
-                    table tr td:nth-child(2) { text-align: left !important; }
-                    table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
-                    table { width: 100%; font-size: 11px; border-collapse: collapse; }
-                </style>
-            """, unsafe_allow_html=True)
-            st.table(df_table)
+    # Vi putter tabellen ind i expanderen
+    with ekspander:
+        df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
+        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+        
+        st.markdown("""
+            <style>
+                thead tr th:first-child { display:none; }
+                tbody tr th { display:none; }
+                table tr td:nth-child(2) { text-align: left !important; }
+                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                table { width: 100%; border-collapse: collapse; }
+            </style>
+        """, unsafe_allow_html=True)
+        st.table(df_table)
 
-    # --- 3. SCATTERPLOT (I c_graf) ---
+    # --- 3. SCATTERPLOT ---
     with c_graf:
         fig = go.Figure()
         avg_x = stats_pr_hold[x_col].mean()
