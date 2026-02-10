@@ -7,12 +7,18 @@ def vis_side(df_events, kamp, hold_map):
     HIF_ID = 38331
     HIF_RED = '#df003b'
     
-    # --- 1. DATA PREP ---
+    # --- 1. INITIALISER STATE ---
+    if 'show_data' not in st.session_state:
+        st.session_state.show_data = False
+
+    # --- 2. DATA PREP ---
     df_plot = kamp.copy()
     df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
     df_plot = df_plot.dropna(subset=['TEAM_WYID'])
 
+    # Top-bar
     col_header, col_btn = st.columns([3, 1])
+    
     with col_header:
         BILLEDE_MAPPING = {
             "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
@@ -20,9 +26,10 @@ def vis_side(df_events, kamp, hold_map):
         }
         valgt_label = st.selectbox("Analyse", options=list(BILLEDE_MAPPING.keys()), label_visibility="collapsed")
     
-    # Her laver vi "knappen" (Expander), som fylder hele bredden af col_btn
     with col_btn:
-        ekspander = st.expander("Data", expanded=False)
+        # En knap der fylder hele bredden og skifter tilstand
+        if st.button("Data", use_container_width=True):
+            st.session_state.show_data = not st.session_state.show_data
 
     mapping = BILLEDE_MAPPING[valgt_label]
     x_col, y_col = mapping["x"], mapping["y"]
@@ -34,35 +41,34 @@ def vis_side(df_events, kamp, hold_map):
     stats_pr_hold['Hold'] = stats_pr_hold['TEAM_WYID'].map(hold_map)
     stats_pr_hold = stats_pr_hold.dropna(subset=['Hold']).sort_values(y_col, ascending=False)
 
-    # --- 2. DYNAMISK LAYOUT (Kompression når expander er åben) ---
-    # st.expander returnerer ikke direkte sin status, så vi bruger layoutet 
-    # til at styre om grafen skal give plads.
-    
-    if ekspander.expanded: # Bemærk: Dette virker bedst hvis vi bruger en toggle, men expander kan også bruges
-        c_graf, c_data = st.columns([2.5, 1])
-    else:
-        c_graf = st.container()
-
-    # Vi putter tabellen ind i expanderen
-    with ekspander:
-        df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
-        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
-        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+    # --- 3. DYNAMISK LAYOUT ---
+    if st.session_state.show_data:
+        # Layout med to kolonner (Graf fylder 70%, Data 30%)
+        col_graf, col_data = st.columns([2.5, 1])
         
-        st.markdown("""
-            <style>
-                thead tr th:first-child { display:none; }
-                tbody tr th { display:none; }
-                table tr td:nth-child(2) { text-align: left !important; }
-                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
-                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
-                table { width: 100%; border-collapse: collapse; }
-            </style>
-        """, unsafe_allow_html=True)
-        st.table(df_table)
+        with col_data:
+            st.markdown(f"<p style='text-align:center; font-weight:bold;'>Rådata</p>", unsafe_allow_html=True)
+            df_table = stats_pr_hold[['Hold', x_col, y_col]].copy()
+            df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+            df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+            
+            st.markdown("""
+                <style>
+                    thead tr th:first-child { display:none; }
+                    tbody tr th { display:none; }
+                    table tr td:nth-child(2) { text-align: left !important; }
+                    table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                    table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                </style>
+            """, unsafe_allow_html=True)
+            st.table(df_table)
+    else:
+        # Layout med én kolonne (Graf fylder det hele)
+        col_graf = st.container()
 
-    # --- 3. SCATTERPLOT ---
-    with c_graf:
+    # --- 4. SCATTERPLOT ---
+    with col_graf:
         fig = go.Figure()
         avg_x = stats_pr_hold[x_col].mean()
         avg_y = stats_pr_hold[y_col].mean()
