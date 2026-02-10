@@ -69,21 +69,25 @@ def vis_side(df):
     with col_menu:
         # Popover
         with st.popover("Kontrakter", use_container_width=True):
-            # Vi tvinger indholdet til at have en minimumsbredde herinde også
-            st.markdown('<div style="min-width: 480px;">', unsafe_allow_html=True)
+            st.markdown('<div style="min-width: 380px;">', unsafe_allow_html=True)
             
             df_display = df_squad[['NAVN', 'CONTRACT', 'PRIOR', 'DAYS_LEFT']].copy()
             styled_df = df_display.style.apply(style_rows, axis=1)
             
+            # Beregn højde: ca. 35 pixels pr. række + lidt til overskriften
+            # Eller sæt den fast til f.eks. 800 for at være sikker på at fange alle
+            dynamisk_hoejde = (len(df_display) * 35) + 40
+
             st.dataframe(
                 styled_df,
                 column_order=("NAVN", "CONTRACT"),
                 column_config={
-                    "NAVN": st.column_config.TextColumn("Navn", width=220),
-                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=130),
+                    "NAVN": st.column_config.TextColumn("Navn", width=200),
+                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD-MM-YYYY", width=120),
                 },
                 hide_index=True,
-                use_container_width=True 
+                use_container_width=True,
+                height=dynamisk_hoejde  # <--- Dette fjerner scrollbaren
             )
             st.markdown('</div>', unsafe_allow_html=True)
         
