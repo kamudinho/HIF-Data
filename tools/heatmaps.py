@@ -4,49 +4,20 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 import numpy as np
 
-def vis_side(df_events, cols_slider, hold_map=None):
+# --- CACHING FUNKTION ---
+# Vi gemmer hele figuren baseret på dataens unikke "fingeraftryk"
+@st.cache_data(show_spinner="Beregner 12 heatmaps...")
+def generate_cached_heatmaps(df_p, cols_slider, hold_ids, hold_map):
     HIF_ID = 38331
     BG_WHITE = '#ffffff'
-
-    # --- SIKKERHEDS-CHECK AF DATA ---
-    if df_events is None or df_events.empty:
-        st.error("Ingen data modtaget i Heatmaps modulet.")
-        return
-
-    # Standardiser kolonnenavne til store bogstaver for at undgå fejl
-    df_events.columns = [c.upper() for c in df_events.columns]
-
-    # 1. Filtrering af afleveringer (passes)
-    # Vi tjekker om kolonnen 'PRIMARYTYPE' findes
-    if 'PRIMARYTYPE' not in df_events.columns:
-        st.error(f"Kolonnen 'PRIMARYTYPE' mangler i data. Fundne kolonner: {list(df_events.columns)}")
-        return
-
-    mask = df_events['PRIMARYTYPE'].astype(str).str.contains('pass', case=False, na=False)
-    df_p = df_events[mask].copy()
-
-    # Hvis df_p er tom, giver vi besked om hvad der faktisk findes i data
-    if df_p.empty:
-        st.warning("Ingen afleveringsdata fundet med filteret 'pass'.")
-        st.info("Her er de typer af hændelser, der findes i din fil:")
-        st.write(df_events['PRIMARYTYPE'].unique())
-        return
-
-    # 2. Layout konfiguration
-    # Sorterer så Hvidovre (38331) altid kommer først
-    hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
-
-    # Beregn rækker baseret på antal hold og slideren
+    
     rows = int(np.ceil(len(hold_ids) / cols_slider))
-
-    # Opret figuren med samme dimensioner som dine andre ark
     fig, axes = plt.subplots(
         rows, cols_slider,
         figsize=(15, rows * 4),
         facecolor=BG_WHITE
     )
-
-    # Justering af afstand (matcher din ønskede stil)
+    
     fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90, wspace=0.1, hspace=0.3)
     axes_flat = np.atleast_1d(axes).flatten()
 
@@ -55,36 +26,59 @@ def vis_side(df_events, cols_slider, hold_map=None):
         line_color='#1a1a1a', line_zorder=2, linewidth=0.5
     )
 
-    # 3. Tegne-loop
     for i, tid in enumerate(hold_ids):
         ax = axes_flat[i]
-        
-        # Filtrer data for det specifikke hold og fjern rækker uden koordinater
         hold_df = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
+        
+        # --- SPEED BOOST: SAMPLING ---
+        # 170.000 linjer er for meget til KDE. 5.000 er rigeligt til et præcist heatmap.
+        if len(hold_df) > 5000:
+            hold_df = hold_df.sample(n=5000, random_state=42)
         
         pitch.draw(ax=ax)
 
-        # Hent holdnavn fra hold_map
-        if hold_map and tid in hold_map:
-            navn = str(hold_map[tid]).upper()
-        else:
-            navn = "HVIDOVRE IF" if tid == HIF_ID else f"HOLD ID: {tid}"
+        navn = str(hold_map.get(tid, f"HOLD ID: {tid}")).upper()
+        ax.set_title(f"{navn}\n({len(hold_df)} passes)", fontsize=12, fontweight='bold', pad=10)
 
-        # Titel (Navn + antal passes på ny linje)
-        ax.set_title(f"{navn}\n({len(hold_df)} passes)",
-                     fontsize=12, fontweight='bold', pad=10)
-
-        # Tegn heatmappet (KDE)
         if len(hold_df) > 5:
+            # Vi sænker levels til 20 (stadig meget pænt, men dobbelt så hurtigt som 40)
             sns.kdeplot(
                 x=hold_df['LOCATIONY'], y=hold_df['LOCATIONX'], ax=ax,
-                fill=True, thresh=0.02, levels=40, 
+                fill=True, thresh=0.05, levels=20, 
                 cmap='YlOrRd', alpha=0.8, zorder=1
             )
 
-    # Skjul de tomme hvide felter til sidst
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
+        
+    return fig
 
-    # Vis figuren i Streamlit
+def vis_side(df_events, cols_slider, hold_map=None):
+    HIF_ID = 38331
+
+    if df_events is None or df_events.empty:
+        st.error("Ingen data modtaget.")
+        return
+
+    # Sørg for store bogstaver
+    df_events.columns = [c.upper() for c in df_events.columns]
+
+    if 'PRIMARYTYPE' not in df_events.columns:
+        st.error("Kolonnen 'PRIMARYTYPE' mangler.")
+        return
+
+    # Filtrering
+    mask = df_events['PRIMARYTYPE'].astype(str).str.contains('pass', case=False, na=False)
+    df_p = df_events[mask].copy()
+
+    if df_p.empty:
+        st.warning("Ingen afleveringsdata fundet.")
+        return
+
+    hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
+
+    # --- KALD DEN CACHEDE FIGUR ---
+    # Vi sender hold_ids med som en liste, så cachen ved hvornår den skal opdatere
+    fig = generate_cached_heatmaps(df_p, cols_slider, tuple(hold_ids), hold_map)
+    
     st.pyplot(fig, use_container_width=True)
