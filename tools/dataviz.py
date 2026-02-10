@@ -7,8 +7,6 @@ def vis_side(df_events, df_kamp, hold_map):
     # --- 0. ULTRA-KOMPAKT TOP ---
     # Vi bruger st.columns til at have titel og vælger på samme linje
     col_titel, col_valg = st.columns([2, 1])
-    with col_titel:
-        st.markdown("<h3 style='margin:0;'>Performance Matrix</h3>", unsafe_allow_html=True)
     with col_valg:
         BILLEDE_MAPPING = {
             "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS", "label": "Afslutninger"},
@@ -62,7 +60,7 @@ def vis_side(df_events, df_kamp, hold_map):
         plot_bgcolor='white',
         xaxis_title=f"Gns. {x_col}",
         yaxis_title=f"Gns. {y_col}",
-        height=480, # Reduceret højde for at passe til skærmen
+        height=400, # Reduceret højde for at passe til skærmen
         margin=dict(t=20, b=40, l=40, r=20), # Minimale margins
         showlegend=False,
         font=dict(size=10) # Mindre font for mere luft
