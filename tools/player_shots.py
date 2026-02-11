@@ -73,7 +73,7 @@ def vis_side(df_events, df_spillere, hold_map):
         GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
         konv_rate = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
 
-        m1, m2, m3 = st.columns(2)
+        m1, m2, m3 = st.columns(1)
         m1.metric("Afslutninger", SHOTS)
         m2.metric("Mål", GOALS)
         m3.metric("Konvertering", f"{konv_rate:.1f}%")
