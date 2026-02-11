@@ -125,12 +125,12 @@ def vis_side(df_events, df_spillere, hold_map):
         for _, row in df_plot.iterrows():
             is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
             ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
-                       s=200 if is_goal else 100 if er_alle else 180,
+                       s=150 if is_goal else 100 if er_alle else 180,
                        color=HIF_RED, edgecolors='white', linewidth=1.2 if is_goal else 0.6, 
                        alpha=0.6 if er_alle else 0.9, zorder=3)
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
-                        color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                        color='white', ha='center', va='center', fontsize=4, fontweight='bold', zorder=4)
         
         # Bruger bbox_inches='tight' for at fjerne hvid ramme om figuren
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
