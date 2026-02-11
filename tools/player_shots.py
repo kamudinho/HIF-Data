@@ -34,88 +34,85 @@ def vis_side(df_events, df_spillere, hold_map):
     df_s = df_s.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
     if df_s.empty:
-        st.info("Ingen afslutninger fundet for HIF.")
+        st.info("Ingen afslutninger fundet.")
         return
 
-    # Sortering og grunddata
     df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {x}") if pd.notna(x) else "Ukendt")
     df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
     df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
-    # --- 2. LAYOUT: BANE TIL VENSTRE, KONTROLLER TIL HØJRE ---
+    # --- 2. LAYOUT ---
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
-        st.markdown("### Filtre & Statistik")
-        
-        # Dropdown for spillervalg
+        st.write("### Filtre & Statistik")
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
+        valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
         
-        # Beregn statistik for den valgte visning
         df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
         
-        # Popover rykket op under dropdown
         with st.popover("🔎 Dataoverblik", use_container_width=True):
             tabel_df = df_stats.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
-            
-            # Kolonne-rækkefølge: Nr, Modstander, Minut, Spiller, Resultat
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
-        
+
         st.markdown("---")
-        
-        # Metrics vises nu under "Dataoverblik"
+
+        # --- BEREGNING AF 6 METRICS ---
         SHOTS = len(df_stats)
         GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
-        konv_rate = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
+        KONV = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
+        
+        # Eksempler på 3 nye metrics (juster beregningerne efter dine behov)
+        # 1. Skud på mål (Eksempel: antager vi har en kolonne eller tæller mål som skud på mål her)
+        ON_TARGET = len(df_stats[df_stats['SECONDARYTYPE'].str.contains('on_target', case=False, na=False)]) if 'SECONDARYTYPE' in df_stats.columns else GOALS
+        
+        # 2. xG (Hvis kolonnen findes, ellers 0.0)
+        XG_TOTAL = df_stats['XG'].sum() if 'XG' in df_stats.columns else 0.0
+        
+        # 3. Gennemsnitlig afstand (Wyscout X er meter fra baglinje 0-100)
+        AVG_DIST = (100 - df_stats['LOCATIONX']).mean() if not df_stats.empty else 0
 
-        m1, m2, m3 = st.columns(1)
-        m1.metric("Afslutninger", SHOTS)
-        m2.metric("Mål", GOALS)
-        m3.metric("Konvertering", f"{konv_rate:.1f}%")
+        # CSS-funktion til metrics (Lille tekst, stor værdi, én pr. linje)
+        def custom_metric(label, value):
+            st.markdown(f"""
+                <div style="margin-bottom: 15px; border-left: 3px solid {HIF_RED}; padding-left: 10px;">
+                    <p style="margin:0; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">{label}</p>
+                    <p style="margin:0; font-size: 28px; font-weight: bold; color: #333;">{value}</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # De 6 rækker
+        custom_metric("Afslutninger", SHOTS)
+        custom_metric("Mål", GOALS)
+        custom_metric("Konverteringsrate", f"{KONV:.1f}%")
+        custom_metric("Skud på mål", ON_TARGET)
+        custom_metric("Expected Goals (xG)", f"{XG_TOTAL:.2f}")
+        custom_metric("Gns. Afstand", f"{AVG_DIST:.1f} m")
 
     with layout_venstre:
         df_plot = df_stats.copy()
         er_alle = valgt_spiller == "Alle Spillere"
 
-        # --- 3. ANTI-OVERLAP (JITTER) ---
         if not df_plot.empty:
             jitter_val = 0.8 if er_alle else 0.5
             df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
             df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
 
-        # --- 4. TEGN BANE ---
-        pitch = VerticalPitch(
-            half=True, 
-            pitch_type='wyscout', 
-            line_color='#444444', 
-            line_zorder=2,
-            pad_bottom=5,  
-            pad_top=2
-        )
-        
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=5, pad_top=2)
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
         for _, row in df_plot.iterrows():
             is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
-            
-            # Tegn alle prikker som HIF_RED
             ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
                        s=200 if is_goal else 100 if er_alle else 180,
-                       color=HIF_RED, 
-                       edgecolors='white', 
-                       linewidth=1.5 if is_goal else 0.6, 
-                       alpha=0.6 if er_alle else 0.9,
-                       zorder=3)
-            
-            # Tal tegnes kun hvis det ikke er "Alle Spillere"
+                       color=HIF_RED, edgecolors='white', linewidth=1.5 if is_goal else 0.6, 
+                       alpha=0.6 if er_alle else 0.9, zorder=3)
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                         color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
-
         st.pyplot(fig)
