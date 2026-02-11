@@ -48,7 +48,6 @@ if not st.session_state["logged_in"]:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
-CSV_PATH = os.path.join(BASE_DIR, 'eventdata.csv')
 
 @st.cache_resource
 def load_hif_data():
@@ -63,12 +62,6 @@ def load_hif_data():
             ev = pd.read_parquet(PARQUET_PATH)
         else:
             st.error("Fandt ikke eventdata.parquet!")
-            return None
-
-          if os.path.exists(CSV_PATH):
-            ev = pd.read_csv(CSV_PATH)
-        else:
-            st.error("Fandt ikke eventdata.csv!")
             return None
 
         for df in [sp, pe, ev]:
