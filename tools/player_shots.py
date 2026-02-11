@@ -4,19 +4,19 @@ import plotly.graph_objects as go
 
 def vis_side(df_events, df_kamp, hold_map):
     HIF_ID = 38331
-    HIF_RED = '#df003b'
+    HIF_RED = '#d31313'
     DARK_GREY = '#413B4D' 
 
     # 1. RENS KOLONNER
     df_events.columns = [str(c).strip().upper() for c in df_events.columns]
     
-    # 2. SPILLERVALG I SIDEBAR
+    # 2. SPILLERVALG
     hif_events = df_events[df_events['TEAM_WYID'] == HIF_ID].copy()
     p_col = 'PLAYER_NAME' if 'PLAYER_NAME' in hif_events.columns else 'PLAYER_WYID'
     spiller_navne = sorted(hif_events[p_col].dropna().unique())
     
-    with st.sidebar:
-        st.markdown("---")
+    col_sel1, col_sel2 = st.columns([2, 1])
+    with col_sel1:
         valgt_spiller = st.selectbox("Vælg spiller", options=["Alle Spillere"] + spiller_navne)
 
     # 3. FILTRERING
@@ -29,33 +29,30 @@ def vis_side(df_events, df_kamp, hold_map):
         return
 
     df_s['IS_GOAL'] = df_s['PRIMARYTYPE'].astype(str).str.contains('goal', case=False, na=False)
+    df_s['LOCATIONX'] = pd.to_numeric(df_s['LOCATIONX'], errors='coerce')
+    df_s['LOCATIONY'] = pd.to_numeric(df_s['LOCATIONY'], errors='coerce')
 
-    # 4. BYG DEN INTERAKTIVE BANE (Med buer)
+    # 4. BYG PLOTLY FIGUR (Bane-geometri)
     fig = go.Figure()
 
-    # Vi tegner banens geometri
+    # Vi tegner banens linjer manuelt i Plotly (Wyscout dimensioner)
+    line_cfg = dict(color="#cfcfcf", width=1.5)
+    
     shapes = [
-        # Halv bane omridset
-        dict(type="rect", x0=0, y0=50, x1=100, y1=100, line=dict(color="#1A202C", width=2)),
-        # Straffesparksfeltet
-        dict(type="rect", x0=21, y0=83, x1=79, y1=100, line=dict(color="#1A202C", width=2)),
+        # Ydre ramme (øverste halvdel)
+        dict(type="rect", x0=0, y0=50, x1=100, y1=100, line=line_cfg),
+        # Feltet
+        dict(type="rect", x0=19, y0=84, x1=81, y1=100, line=line_cfg),
         # Det lille felt
-        dict(type="rect", x0=40, y0=94, x1=60, y1=100, line=dict(color="#1A202C", width=2)),
-        
-        # BUEN VED FELTET (The D)
-        # Vi tegner en ark fra x=38 til x=62 ved y=83
-        dict(type="path", 
-             path="M 37.5,83 A 10,10 0 0 0 62.5,83", 
-             line=dict(color="#1A202C", width=2)),
-        
-        # MIDTERCIRKLEN (Halv)
-        # Vi tegner en ark ved midterlinjen (y=50)
-        dict(type="path", 
-             path="M 35,50 A 15,15 0 0 1 65,50", 
-             line=dict(color="#1A202C", width=2)),
-             
-        # Midterlinjen
-        dict(type="line", x0=0, y0=50, x1=100, y1=50, line=dict(color="#1A202C", width=2))
+        dict(type="rect", x0=36.8, y0=94.2, x1=63.2, y1=100, line=line_cfg),
+        # Målet
+        dict(type="rect", x0=45, y0=100, x1=55, y1=100.5, line=line_cfg, fillcolor="#cfcfcf"),
+        # Midterlinje
+        dict(type="line", x0=0, y0=50, x1=100, y1=50, line=line_cfg),
+        # Straffesparksfelt bue (The D)
+        dict(type="path", path="M 36.8,84 A 10,10 0 0 1 63.2,84", line=line_cfg),
+        # Midtercirkel bue
+        dict(type="path", path="M 35,50 A 15,15 0 0 1 65,50", line=line_cfg)
     ]
 
     # 5. TILFØJ SKUD-PUNKTER
@@ -65,49 +62,52 @@ def vis_side(df_events, df_kamp, hold_map):
         
         hover_text = []
         for _, row in subset.iterrows():
-            opp = hold_map.get(row['OPPONENTTEAM_WYID'], "Ukendt")
+            opp = hold_map.get(row['OPPONENTTEAM_WYID'], "Ukendt modstander")
             minut = row['MINUTE']
-            res_txt = "Mål" if is_goal else "Afslutning"
+            res_txt = "MÅL" if is_goal else "AFSLUTNING"
             hover_text.append(
-                f"<b>Kamp:</b> {opp} vs. HIF<br>"
-                f"<b>Spiller:</b> {valgt_spiller}<br>"
-                f"<b>Min:</b> {minut}<br>"
-                f"<b>Resultat:</b> {res_txt}"
+                f"<b>{row[p_col]}</b><br>"
+                f"Mod: {opp}<br>"
+                f"Tid: {minut}'<br>"
+                f"Resultat: <b>{res_txt}</b>"
             )
 
         fig.add_trace(go.Scatter(
-            x=subset['LOCATIONY'], 
-            y=subset['LOCATIONX'],
+            x=subset['LOCATIONY'], # Wyscout X er lodret, så vi mapper Y til Plotly X
+            y=subset['LOCATIONX'], # Wyscout Y er vandret, så vi mapper X til Plotly Y
             mode='markers',
             marker=dict(
-                size=18 if is_goal else 12,
+                size=14 if is_goal else 9,
                 color=HIF_RED if is_goal else DARK_GREY,
-                opacity=0.8,
-                line=dict(width=1, color='white')
+                symbol='circle',
+                line=dict(width=1, color='white'),
+                opacity=0.9
             ),
             text=hover_text,
             hoverinfo="text",
-            showlegend=False
+            name="Mål" if is_goal else "Skud"
         ))
 
-    # Layout indstillinger
+    # 6. LAYOUT (Zoomet ind og centreret)
     fig.update_layout(
         shapes=shapes,
-        xaxis=dict(range=[-5, 105], visible=False, fixedrange=True),
-        yaxis=dict(range=[45, 105], visible=False, fixedrange=True),
-        plot_bgcolor='white',
-        margin=dict(l=0, r=0, t=50, b=0),
-        height=700,
-        hoverlabel=dict(bgcolor="white", font_size=14, bordercolor="#1A202C")
+        xaxis=dict(range=[-2, 102], visible=False, fixedrange=True),
+        yaxis=dict(range=[48, 105], visible=False, fixedrange=True),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=20, b=0),
+        height=500,
+        showlegend=False,
+        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Monospace")
     )
 
-    # Tilføj en pæn titel med stats
-    mål_antal = len(df_s[df_s['IS_GOAL']])
-    skud_antal = len(df_s)
-    fig.add_annotation(
-        x=50, y=108,
-        text=f"<b>{valgt_spiller.upper()}</b><br>{mål_antal} Mål på {skud_antal} Afslutninger",
-        showarrow=False, font=dict(size=16, color="#1A202C")
-    )
-
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    # 7. VISNING I 70% BREDDE (For at matche de andre sider)
+    spacer_l, center, spacer_r = st.columns([0.15, 0.7, 0.15])
+    
+    with center:
+        # Pæn overskrift indeni center-kolonnen
+        mål = len(df_s[df_s['IS_GOAL']])
+        st.markdown(f"<h3 style='text-align: center;'>{valgt_spiller.upper()}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center; color: grey;'>{mål} mål på {len(df_s)} skud</p>", unsafe_allow_html=True)
+        
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
