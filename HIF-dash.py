@@ -117,11 +117,11 @@ with st.sidebar:
             "Hvidovre IF Truppen", "Trupsammensætning", "Sammenligning", "Scouting-database"
         ],
         icons=[
-            'house', 'map', 'target', 
-            'grid-3x3', 'lightning', 'graph-up',
-            'person-bounding-box', 'person-badge',
-            'bar-chart', 'trophy',
-            'people', 'diagram-3', 'intersect', 'search'
+            'house', 'MAP', 'MAP', 
+            'MAP-3x3', 'MAP', 'MAP-up',
+            'person-MAP-box', 'MAP-badge',
+            'MAP-chart', 'MAP',
+            'MAP', 'MAP-3', 'MAP', 'MAP'
         ],
         menu_icon="cast", default_index=0,
         styles={
