@@ -11,7 +11,7 @@ st.markdown("""
         header[data-testid="stHeader"] { display: none !important; }
         footer { visibility: hidden !important; }
         .main .block-container {
-            padding-top: 0rem !important;
+            padding-top: -1rem !important;
             margin-top: -20px !important;
         }
         [data-testid="stSidebar"] img { 
