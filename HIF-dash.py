@@ -35,6 +35,18 @@ st.markdown("""
         div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
             margin-bottom: -10px !important;
         }
+        
+       /* 6. Fix for sidebar logo: fjerner top-padding i sidebaren */
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 1rem !important;
+        }
+
+        /* Sørg for at billedet i sidebaren ikke kan blive cuttet af overflow */
+        [data-testid="stSidebar"] img {
+            max-width: 100%;
+            height: auto;
+            margin-top: 10px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
