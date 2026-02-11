@@ -12,7 +12,7 @@ st.markdown("""
         footer { visibility: hidden !important; }
         .main .block-container {
             padding-top: 0rem !important;
-            margin-top: -30px !important;
+            margin-top: -20px !important;
         }
         [data-testid="stSidebar"] img { 
             display: block; 
