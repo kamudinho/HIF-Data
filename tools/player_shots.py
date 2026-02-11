@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import numpy as np  # VIGTIGT: Denne skal være her!
+import numpy as np
 import plotly.graph_objects as go
 
 def get_arc(center_x, center_y, radius, start_angle, end_angle):
-    """Hjælpefunktion til at generere koordinater til buer"""
+    """Genererer koordinater til perfekte buer (f.eks. felt-buen)"""
     angles = np.linspace(np.radians(start_angle), np.radians(end_angle), 50)
     return center_x + radius * np.cos(angles), center_y + radius * np.sin(angles)
 
@@ -13,11 +13,9 @@ def vis_side(df_events, df_kamp, hold_map):
     HIF_RED = '#d31313'
     DARK_GREY = '#413B4D' 
 
-    # 1. DATA RENS
+    # 1. RENS DATA
     df_events.columns = [str(c).strip().upper() for c in df_events.columns]
     hif_events = df_events[df_events['TEAM_WYID'] == HIF_ID].copy()
-    
-    # Tjek for kolonnenavne (Wyscout bruger ofte PLAYER_NAME)
     p_col = 'PLAYER_NAME' if 'PLAYER_NAME' in hif_events.columns else 'PLAYER_WYID'
     spiller_navne = sorted(hif_events[p_col].dropna().unique())
     
@@ -38,31 +36,31 @@ def vis_side(df_events, df_kamp, hold_map):
     df_s['LOCATIONX'] = pd.to_numeric(df_s['LOCATIONX'], errors='coerce')
     df_s['LOCATIONY'] = pd.to_numeric(df_s['LOCATIONY'], errors='coerce')
 
-    # 3. BYG PLOTLY FIGUR
+    # 3. BYG DEN INTERAKTIVE BANE
     fig = go.Figure()
-    lc = "#cfcfcf" # Linjefarve
+    lc = "#1a1a1a" # Vi bruger en mørkere linje for at matche dit "Test 3" billede
     
-    # Banens linjer (Halv bane)
+    # Rette linjer (Wyscout standard)
     lines = [
-        ((0, 100, 100, 0, 0), (50, 50, 100, 100, 50)), # Omrids
-        ((19, 19, 81, 81), (100, 84, 84, 100)),        # Feltet
-        ((36.8, 36.8, 63.2, 63.2), (100, 94.2, 94.2, 100)) # Det lille felt
+        ((0, 100, 100, 0, 0), (50, 50, 100, 100, 50)), # Ydre ramme
+        ((19, 19, 81, 81), (100, 84, 84, 100)),        # Straffesparksfelt
+        ((36.8, 36.8, 63.2, 63.2), (100, 94.2, 94.2, 100)), # Det lille felt
+        ((45, 45, 55, 55), (100, 100.5, 100.5, 100))   # Selve målet (detalje)
     ]
 
-    for x_coords, y_coords in lines:
-        fig.add_trace(go.Scatter(x=x_coords, y=y_coords, mode='lines', 
-                                 line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
+    for x_c, y_c in lines:
+        fig.add_trace(go.Scatter(x=x_c, y=y_c, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
 
-    # Buer med get_arc (nu virker np.linspace)
-    # The D
+    # BUER (Matematisk tegnet)
+    # Straffesparksfelt-buen ("The D")
     arc_x, arc_y = get_arc(50, 84, 9, 195, 345)
-    fig.add_trace(go.Scatter(x=arc_x, y=arc_y, mode='lines', line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter(x=arc_x, y=arc_y, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
 
-    # Midtercirkel
+    # Midtercirklen
     arc_x2, arc_y2 = get_arc(50, 50, 9.15, 0, 180)
-    fig.add_trace(go.Scatter(x=arc_x2, y=arc_y2, mode='lines', line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
+    fig.add_trace(go.Scatter(x=arc_x2, y=arc_y2, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
 
-    # 4. TILFØJ PUNKTER
+    # 4. SKUD-PUNKTER
     for is_goal in [False, True]:
         subset = df_s[df_s['IS_GOAL'] == is_goal]
         if subset.empty: continue
@@ -77,9 +75,9 @@ def vis_side(df_events, df_kamp, hold_map):
             y=subset['LOCATIONX'],
             mode='markers',
             marker=dict(
-                size=14 if is_goal else 9,
+                size=16 if is_goal else 11,
                 color=HIF_RED if is_goal else DARK_GREY,
-                line=dict(width=1, color='white'),
+                line=dict(width=1.5, color='white'),
                 opacity=0.9
             ),
             text=hover_text,
@@ -87,21 +85,18 @@ def vis_side(df_events, df_kamp, hold_map):
             showlegend=False
         ))
 
-    # 5. LAYOUT & ZOOM
+    # 5. LAYOUT
     fig.update_layout(
-        xaxis=dict(range=[-2, 102], visible=False, fixedrange=True),
-        yaxis=dict(range=[48, 105], visible=False, fixedrange=True),
-        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(range=[-5, 105], visible=False, fixedrange=True),
+        yaxis=dict(range=[45, 105], visible=False, fixedrange=True),
+        plot_bgcolor='white',
         paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=20, b=0),
-        height=550,
-        hoverlabel=dict(bgcolor="white", font_size=12)
+        margin=dict(l=0, r=0, t=10, b=0),
+        height=600,
+        hoverlabel=dict(bgcolor="white", font_size=13)
     )
 
     # 6. VISNING (70% BREDDE)
     spacer_l, center, spacer_r = st.columns([0.15, 0.7, 0.15])
     with center:
-        mål = len(df_s[df_s['IS_GOAL']])
-        st.markdown(f"<h3 style='text-align: center; margin-bottom: 0;'>{valgt_spiller.upper()}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center; color: grey;'>{mål} mål på {len(df_s)} afslutninger</p>", unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
