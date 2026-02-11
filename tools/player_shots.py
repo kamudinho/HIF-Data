@@ -46,11 +46,15 @@ def vis_side(df_events, df_spillere, hold_map):
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
+        # Spacer for at få dropdown til at flugte med banen
+        st.write("##") 
+        
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
         
         df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
         
+        # Popover uden ikon
         with st.popover("Dataoverblik", use_container_width=True):
             tabel_df = df_stats.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
@@ -58,31 +62,27 @@ def vis_side(df_events, df_spillere, hold_map):
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
+        st.markdown("<br>", unsafe_allow_html=True) # Ekstra luft inden metrics
+
         # --- BEREGNING AF 6 METRICS ---
         SHOTS = len(df_stats)
         GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
         KONV = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
         
-        # Eksempler på 3 nye metrics (juster beregningerne efter dine behov)
-        # 1. Skud på mål (Eksempel: antager vi har en kolonne eller tæller mål som skud på mål her)
+        # Data udtræk (eksempler - kan tilpasses dine specifikke kolonnenavne)
         ON_TARGET = len(df_stats[df_stats['SECONDARYTYPE'].str.contains('on_target', case=False, na=False)]) if 'SECONDARYTYPE' in df_stats.columns else GOALS
-        
-        # 2. xG (Hvis kolonnen findes, ellers 0.0)
         XG_TOTAL = df_stats['XG'].sum() if 'XG' in df_stats.columns else 0.0
-        
-        # 3. Gennemsnitlig afstand (Wyscout X er meter fra baglinje 0-100)
         AVG_DIST = (100 - df_stats['LOCATIONX']).mean() if not df_stats.empty else 0
 
         # CSS-funktion til metrics (Lille tekst, stor værdi, én pr. linje)
         def custom_metric(label, value):
             st.markdown(f"""
-                <div style="margin-bottom: 15px; border-left: 3px solid {HIF_RED}; padding-left: 10px;">
-                    <p style="margin:0; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">{label}</p>
-                    <p style="margin:0; font-size: 28px; font-weight: bold; color: #333;">{value}</p>
+                <div style="margin-bottom: 12px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
+                    <p style="margin:0; font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
+                    <p style="margin:0; font-size: 26px; font-weight: 700; color: #222;">{value}</p>
                 </div>
             """, unsafe_allow_html=True)
 
-        # De 6 rækker
         custom_metric("Afslutninger", SHOTS)
         custom_metric("Mål", GOALS)
         custom_metric("Konverteringsrate", f"{KONV:.1f}%")
@@ -107,7 +107,7 @@ def vis_side(df_events, df_spillere, hold_map):
             is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
             ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
                        s=200 if is_goal else 100 if er_alle else 180,
-                       color=HIF_RED, edgecolors='white', linewidth=1.5 if is_goal else 0.6, 
+                       color=HIF_RED, edgecolors='white', linewidth=1.2 if is_goal else 0.6, 
                        alpha=0.6 if er_alle else 0.9, zorder=3)
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
