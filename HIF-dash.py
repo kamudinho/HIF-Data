@@ -6,7 +6,6 @@ import pandas as pd
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-# CSS til styling - SIKRER PLADS I TOPPEN
 st.markdown("""
     <style>
         .block-container { 
@@ -44,7 +43,7 @@ if not st.session_state["logged_in"]:
                     st.error("Ugyldigt brugernavn eller kode")
     st.stop()
 
-# --- 3. DATA LOADING (OPDATERET OG ROBUST) ---
+# --- 3. DATA LOADING (FORBEDRET TIL MULTILINE CSV) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
@@ -53,39 +52,51 @@ SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv')
 @st.cache_resource
 def load_hif_data():
     try:
+        # Excel data
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
 
+        # Parquet data (Main events)
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
-            # Tving med det samme til store bogstaver
             ev.columns = [str(c).strip().upper() for c in ev.columns]
         else:
             st.error("Fandt ikke eventdata.parquet!")
             return None
 
-        # --- MERGE SHOT DETAILS ---
+        # --- SPECIALISERET CSV INDLÆSNING TIL MULTILINE/TAGS ---
         if os.path.exists(SHOT_CSV_PATH):
-            shot_details = pd.read_csv(SHOT_CSV_PATH)
+            # Vi bruger engine='python' og specielle citat-indstillinger 
+            # for at håndtere ["goal", "opportunity"] listerne korrekt.
+            shot_details = pd.read_csv(
+                SHOT_CSV_PATH, 
+                quotechar='"',          # Håndterer felter med " "
+                on_bad_lines='skip',    # Skipper knækkede linjer der ikke kan læses
+                engine='python',
+                skipinitialspace=True
+            )
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
             
-            # Vi tjekker specifikt om nøglerne findes
+            # Sørg for at ID'er er strenge og uden decimaler
             keys = ['EVENT_WYID', 'MATCH_WYID']
+            for k in keys:
+                if k in ev.columns:
+                    ev[k] = ev[k].astype(str).str.split('.').str[0].str.strip()
+                if k in shot_details.columns:
+                    shot_details[k] = shot_details[k].astype(str).str.split('.').str[0].str.strip()
+
+            # Merge kun hvis nøgler findes
             if all(k in ev.columns for k in keys) and all(k in shot_details.columns for k in keys):
-                # Fjern dubletter i CSV'en så vi ikke puster hoved-dataen op
                 shot_details = shot_details.drop_duplicates(subset=keys)
-                
-                # Vælg kun de nødvendige kolonner fra CSV'en
                 cols_to_add = keys + ['SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
-                # Tjek hvilke af disse der rent faktisk findes i CSV'en
                 existing_cols = [c for c in cols_to_add if c in shot_details.columns]
                 
                 ev = ev.merge(shot_details[existing_cols], on=keys, how='left')
             else:
-                st.warning("Kunne ikke merge shotevents.csv: Tjek om EVENT_WYID og MATCH_WYID findes i begge filer.")
+                st.warning("Merge fejlede: Tjek kolonnenavne i shotevents.csv")
 
         # Standardisering af PLAYER_WYID
         for d in [sp, pe, ev]:
@@ -108,18 +119,12 @@ def load_hif_data():
 if "main_data" not in st.session_state:
     st.session_state["main_data"] = load_hif_data()
 
+# Udpakning af data
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
-# --- 4. SIDEBAR MENU (OPDATERET LAYOUT) ---
+# --- 4. SIDEBAR MENU ---
 with st.sidebar:
-    # Vi bruger en <div> med negativ margin for at tvinge indholdet helt op i toppen
-    st.markdown("""
-        <div style='text-align: center; margin-top: -50px;'>
-            <img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Valgfri: En meget lille tekst under logoet
+    st.markdown("<div style='text-align: center; margin-top: -50px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; font-size: 10px; margin-bottom: 5px;'>HIF DATA HUB</p>", unsafe_allow_html=True)
     
     selected = option_menu(
@@ -141,14 +146,15 @@ with st.sidebar:
         menu_icon="cast", 
         default_index=0,
         styles={
-            "container": {"padding": "0!important", "background-color": "#fafafa", "margin-top": "0px"},
+            "container": {"padding": "0!important", "background-color": "#fafafa"},
             "icon": {"color": "#cc0000", "font-size": "14px"}, 
-            "nav-link": {"font-size": "13px", "text-align": "left", "padding-top": "5px", "padding-bottom": "5px", "margin":"0px", "--hover-color": "#eee"},
+            "nav-link": {"font-size": "13px", "text-align": "left", "padding": "5px 10px"},
             "nav-link-selected": {"background-color": "#cc0000"},
         }
     )
 
 # --- 5. ROUTING ---
+# (Din eksisterende routing herunder...)
 if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
     st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
