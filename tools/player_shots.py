@@ -59,8 +59,6 @@ def vis_side(df_events, df_spillere, hold_map):
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
-        st.markdown("---")
-
         # --- BEREGNING AF 6 METRICS ---
         SHOTS = len(df_stats)
         GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
