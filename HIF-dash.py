@@ -44,10 +44,11 @@ if not st.session_state["logged_in"]:
                     st.error("Ugyldigt brugernavn eller kode")
     st.stop()
 
-# --- 3. DATA LOADING (PARQUET) ---
+# --- 3. DATA LOADING (OPDATERET TIL AT INKLUDERE SHOT EVENTS) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
+SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv') # Din nye fil
 
 @st.cache_resource
 def load_hif_data():
@@ -64,6 +65,22 @@ def load_hif_data():
             st.error("Fandt ikke eventdata.parquet!")
             return None
 
+        # --- NYT: INDLÆS OG MERGE SHOT DETAILS ---
+        if os.path.exists(SHOT_CSV_PATH):
+            shot_details = pd.read_csv(SHOT_CSV_PATH)
+            # Sørg for at kolonnerne er ens til merge (STORE BOGSTAVER)
+            shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
+            ev.columns = [str(c).strip().upper() for c in ev.columns]
+            
+            # Vi merger på EVENT_WYID og MATCH_WYID for at få SHOTXG, SHOTISGOAL osv. ind på de rigtige rækker
+            # Vi bruger 'left' merge så vi beholder alle events, men får ekstra info på skuddene
+            ev = ev.merge(
+                shot_details[['EVENT_WYID', 'MATCH_WYID', 'SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']], 
+                on=['EVENT_WYID', 'MATCH_WYID'], 
+                how='left'
+            )
+        
+        # Standardisering af PLAYER_WYID
         for df in [sp, pe, ev]:
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -77,7 +94,7 @@ def load_hif_data():
             
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
-        st.error(f"Kritisk fejl: {e}")
+        st.error(f"Kritisk fejl ved data-indlæsning: {e}")
         return None
 
 if "main_data" not in st.session_state:
