@@ -66,13 +66,23 @@ def vis_side(df_events, df_spillere, hold_map):
             label_visibility="collapsed"
         )
         
+        # --- HER TILFØJER VI LUFT ---
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        
         if mode == "Individuel":
             spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-            valgt_target = st.selectbox("Vælg spiller", options=spiller_liste, label_visibility="collapsed")
+            valgt_target = st.selectbox(
+                "Vælg spiller", 
+                options=spiller_liste, 
+                label_visibility="collapsed"
+            )
             df_plot = df_s[df_s['SPILLER_NAVN'] == valgt_target].copy()
+            # Tilføj også lidt luft efter selectboxen før dine metrics starter
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
         else:
             df_plot = df_s.copy()
-            st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+            # Holder højden konsistent med selectbox-visningen
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
 
         # Metrics sektion
         total_shots = len(df_plot)
