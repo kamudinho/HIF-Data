@@ -88,8 +88,8 @@ def vis_side(df_events, df_spillere, hold_map):
         def custom_metric(label, value):
             st.markdown(f"""
                 <div style="margin-bottom: 16px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
-                    <p style="margin:0; font-size: 18px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
-                    <p style="margin:0; font-size: 32px; font-weight: 700; color: #222;">{value}</p>
+                    <p style="margin:0; font-size: 16px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
+                    <p style="margin:0; font-size: 26px; font-weight: 700; color: #222;">{value}</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -115,8 +115,8 @@ def vis_side(df_events, df_spillere, hold_map):
             pitch_type='wyscout', 
             line_color='#444444', 
             line_zorder=2, 
-            pad_bottom=0, # Fjerner luft i bunden
-            pad_top=2
+            pad_bottom=-4, # Fjerner luft i bunden
+            pad_top=1
         )
         
         fig, ax = pitch.draw(figsize=(6, 5))
