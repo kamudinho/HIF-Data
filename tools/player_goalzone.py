@@ -6,6 +6,7 @@ from mplsoccer import VerticalPitch
 import streamlit as st
 import matplotlib.colors as mcolors
 
+# --- KONSTANTER ---
 ZONE_BOUNDARIES = {
     "Zone 1": {"y_min": 94.2, "y_max": 100.0, "x_min": 36.8, "x_max": 63.2},
     "Zone 4A": {"y_min": 94.2, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
@@ -30,94 +31,95 @@ def find_zone(x, y):
 
 def vis_side(df_events, df_spillere):
     # 1. DATA RENS
-    df_events.columns = [str(c).strip().upper() for c in df_events.columns]
-    df_spillere.columns = [str(c).strip().upper() for c in df_spillere.columns]
+    df = df_events.copy()
+    sp = df_spillere.copy()
+    
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    sp.columns = [str(c).strip().upper() for c in sp.columns]
 
-    try:
-        navne_col = next((col for col in ['PLAYER_NAME', 'PLAYER', 'SPILLER', 'NAVN'] if col in df_spillere.columns), None)
-        if not navne_col or 'PLAYER_WYID' not in df_spillere.columns:
-            st.error("Dataformattet mangler nødvendige kolonner (PLAYER_WYID / NAVN).")
-            return
+    # Sørg for at PLAYER_WYID er string for præcis match
+    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+    sp['PLAYER_WYID'] = sp['PLAYER_WYID'].astype(str).str.split('.').str[0]
 
-        navne_df = df_spillere[['PLAYER_WYID', navne_col]].drop_duplicates().rename(columns={navne_col: 'PLAYER_NAME_CLEAN'})
-        df_final = df_events.merge(navne_df, on='PLAYER_WYID', how='left')
-    except Exception as e:
-        st.error(f"Data-fejl: {e}")
+    # Find kolonnen med navnet
+    navne_col = next((col for col in ['NAVN', 'PLAYER_NAME', 'PLAYER', 'SPILLER'] if col in sp.columns), None)
+    
+    if not navne_col:
+        st.error("Kunne ikke finde kolonnen med spillernavne.")
         return
+
+    navne_dict = dict(zip(sp['PLAYER_WYID'], sp[navne_col]))
+    df['PLAYER_NAME_CLEAN'] = df['PLAYER_WYID'].map(navne_dict).fillna("Ukendt")
 
     # --- UI FILTRE ---
     col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
     with col_f1:
-        spiller_liste = sorted(df_final['PLAYER_NAME_CLEAN'].dropna().unique().tolist())
+        # Kun spillere der faktisk er i event-data og ikke er "Ukendt"
+        spiller_liste = sorted([s for s in df['PLAYER_NAME_CLEAN'].unique() if s != "Ukendt"])
         valgt_spiller = st.selectbox("Vælg Spiller:", spiller_liste)
     with col_f2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
     
     # --- FILTRERING ---
-    mask = df_final['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    mask &= (df_final['PLAYER_NAME_CLEAN'] == valgt_spiller)
+    mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
+    mask &= (df['PLAYER_NAME_CLEAN'] == valgt_spiller)
+    
     if valgt_type == "Mål":
-        mask &= df_final['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
+        mask &= df['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
-    df_skud = df_final[mask].copy()
+    df_skud = df[mask].copy()
+    
+    if df_skud.empty:
+        st.info(f"Ingen data fundet for {valgt_spiller} med de valgte filtre.")
+        return
+
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
     # Beregn zoner
     df_skud['ZONE_ID'] = df_skud.apply(lambda row: find_zone(row['LOCATIONY'], row['LOCATIONX']), axis=1)
-    zone_stats = df_skud['ZONE_ID'].value_counts().to_frame(name='Antal')
-    total = zone_stats['Antal'].sum()
-    zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
+    zone_stats = df_skud['ZONE_ID'].value_counts()
+    total = len(df_skud)
 
     with col_f3:
-        st.metric("Total", int(total))
+        st.metric("Total skud", total)
 
-    # --- TEGN BANE (Kompakt format) ---
+    # --- TEGN BANE ---
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#cfcfcf', line_zorder=2)
-    
-    # Bredere/lavere figsize for at tvinge højden ned
-    fig, ax = pitch.draw(figsize=(10, 4.5)) 
+    fig, ax = pitch.draw(figsize=(10, 5)) 
     fig.patch.set_facecolor('none')
     ax.set_facecolor('none')
 
-    # Vi zoomer ind på den relevante del af banen (fra y=55 til 102)
     ax.set_ylim(55, 102) 
     plt.subplots_adjust(left=0.01, right=0.99, top=0.98, bottom=0.01)
 
-    max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
-    # HIF Farveskala (hvid til rød)
+    max_count = zone_stats.max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#f9f9f9', '#d31313'])
 
     for name, b in ZONE_BOUNDARIES.items():
-        if name == "Zone 8" and b["y_max"] < 55: continue # Skip hvis zonen er uden for det vi ser
+        if name == "Zone 8" and b["y_max"] < 55: continue 
         
-        count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
-        percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
-        
-        color_val = count / max_count if max_count > 0 else 0
-        face_col = cmap(color_val)
+        count = zone_stats.get(name, 0)
+        percent = (count / total * 100) if total > 0 else 0
+        color_val = count / max_count
         
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
-                          edgecolor='#444444', linestyle='-', linewidth=0.5, facecolor=face_col, alpha=0.7, zorder=1)
+                         edgecolor='#444444', linestyle='-', linewidth=0.5, 
+                         facecolor=cmap(color_val), alpha=0.7, zorder=1)
         ax.add_patch(rect)
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
             y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
-            # Sikrer at tekst ikke ryger ud af bunden hvis vi ser Zone 8
             if name == "Zone 8": y_t = 60
             
-            # Dynamisk tekstfarve baseret på baggrundens mørkhed
             text_color = "white" if color_val > 0.4 else "#333333"
-            ax.text(x_t, y_t, f"{int(count)} ({percent:.0f}%)", 
-                    ha='center', va='center', fontweight='bold', fontsize=8, 
+            ax.text(x_t, y_t, f"{int(count)}\n({percent:.0f}%)", 
+                    ha='center', va='center', fontweight='bold', fontsize=9, 
                     color=text_color, zorder=3)
 
-    # --- RESPONSIV VISNING (70% BREDDE) ---
-    # Vi bruger kolonner til at "zoome ud" og gøre banen mindre på skærmen
-    spacer_l, center, spacer_r = st.columns([0.15, 0.7, 0.15])
-    
-    with center:
+    # Visning
+    center_col = st.columns([0.1, 0.8, 0.1])[1]
+    with center_col:
         st.pyplot(fig, use_container_width=True)
-        st.caption(f"Positionsbaseret skudstatistik for {valgt_spiller}")
