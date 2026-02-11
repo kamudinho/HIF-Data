@@ -85,13 +85,8 @@ with st.sidebar:
         styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
     )
         
-    # TRIN 2: Undermenu baseret på valg
-    selected = None
-    if hoved_omraade == "Dashboard":
-        selected = "Dashboard"
-    
-    elif hoved_omraade == "Truppen":
-        st.markdown("<p style='font-size:12px; font-weight:bold;'>TRUP VÆRKTØJER</p>", unsafe_allow_html=True)
+    # TRIN 2: Undermenu baseret på valg 
+    if hoved_omraade == "Truppen":
         selected = option_menu(
             menu_title=None,
             options=["Oversigt", "Forecast", "Spillerstats", "Top 5"],
@@ -100,7 +95,6 @@ with st.sidebar:
         )
 
     elif hoved_omraade == "Analyse":
-        st.markdown("<p style='font-size:12px; font-weight:bold;'>ANALYSE VÆRKTØJER</p>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
             options=["Zoneinddeling", "Afslutninger", "Heatmaps"],
@@ -109,7 +103,6 @@ with st.sidebar:
         )
 
     elif hoved_omraade == "Scouting":
-        st.markdown("<p style='font-size:12px; font-weight:bold;'>SCOUTING VÆRKTØJER</p>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
             options=["Sammenligning", "Scouting-database"],
