@@ -7,76 +7,82 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
     
-    # 1. RENS DATA
+    # 1. DATA RENS
     df = df_events.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     
-    # Merge med spillere for at få rygnumre og navne
-    s_df = df_spillere[['PLAYER_WYID', 'NAVN', 'NUMMER']].copy()
-    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
-    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+    s_df = df_spillere.copy()
+    s_df.columns = [str(c).strip().upper() for c in s_df.columns]
     
-    df = df.merge(s_df, on='PLAYER_WYID', how='left')
+    # Find navne-kolonne
+    col_navn = next((c for c in ['NAVN', 'PLAYER', 'PLAYER_NAME', 'SPILLER'] if c in s_df.columns), None)
+    navne_dict = dict(zip(s_df['PLAYER_WYID'].astype(str).str.split('.').str[0], s_df[col_navn]))
 
-    # 2. FILTRERING (Skud for HIF)
+    # 2. FILTRERING (HIF Skud)
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    mask &= (df['TEAM_WYID'].astype(int) == HIF_ID)
+    mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
     
     df_skud = df[mask].copy()
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
+    if df_skud.empty:
+        st.info("Ingen skud fundet for HIF.")
+        return
+
+    # Sorter efter minut for at få en logisk rækkefølge (1, 2, 3...)
+    df_skud = df_skud.sort_values(by='MINUTE').reset_index(drop=True)
+    # GENERER LØBENUMMER (starter fra 1)
+    df_skud['SHOT_ID'] = df_skud.index + 1
+
     # UI FILTRE
-    spiller_liste = sorted(df_skud['NAVN'].dropna().unique().tolist())
-    valgt_spiller = st.selectbox("Vælg spiller", ["Alle"] + spiller_liste)
+    spiller_navne = sorted([navne_dict.get(str(pid).split('.')[0], "Ukendt") for pid in df_skud['PLAYER_WYID'].unique()])
+    valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_navne)
     
-    if valgt_spiller != "Alle":
-        df_skud = df_skud[df_skud['NAVN'] == valgt_spiller]
+    # Filtrer plot-data (vi beholder SHOT_ID fra den samlede liste)
+    if valgt_spiller == "Alle Spillere":
+        df_plot = df_skud
+    else:
+        df_plot = df_skud[df_skud['PLAYER_WYID'].astype(str).str.split('.').str[0].map(navne_dict) == valgt_spiller]
 
     # --- 3. TEGN BANE ---
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
-    fig, ax = pitch.draw(figsize=(10, 6))
-    ax.set_ylim(50, 102) # Kompakt visning
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2)
+    fig, ax = pitch.draw(figsize=(10, 5))
+    ax.set_ylim(50, 102)
 
-    for i, row in df_skud.iterrows():
+    for _, row in df_plot.iterrows():
         is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
         color = HIF_RED if is_goal else '#413B4D'
-        size = 500 if is_goal else 300
         
-        # Tegn prikken
+        # Prikken
         ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                   s=size, color=color, edgecolors='white', linewidth=1.5, alpha=0.9, zorder=3)
+                   s=450 if is_goal else 250, 
+                   color=color, edgecolors='white', linewidth=1.2, alpha=0.9, zorder=3)
         
-        # Indsæt rygnummer i prikken
-        nummer = str(int(row['NUMMER'])) if pd.notna(row['NUMMER']) else "?"
-        ax.text(row['LOCATIONY'], row['LOCATIONX'], nummer, 
-                color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
+        # LØBENUMMER i prikken
+        ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_ID'])), 
+                color='white', ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
 
-    # Vis banen i 70% bredde
-    col_l, col_c, col_r = st.columns([0.15, 0.7, 0.15])
-    with col_c:
+    # Visning i 70% bredde
+    l, c, r = st.columns([0.15, 0.7, 0.15])
+    with c:
         st.pyplot(fig)
-
-    # --- 4. POPOVER MED INFORMATION ---
-    with col_c:
-        with st.popover("🔎 Se skud-detaljer"):
-            st.markdown(f"### Afslutninger for {valgt_spiller}")
+        
+        # --- 4. POPOVER MED IDENTIFIKATION ---
+        with st.popover("🔎 Identificér afslutninger"):
+            st.write("Numrene på banen svarer til listen herunder:")
             
-            # Forbered tabel-data
-            table_data = []
-            for _, row in df_skud.iterrows():
-                modstander = hold_map.get(int(row['OPPONENTTEAM_WYID']), "Ukendt")
-                resultat = "⚽ MÅL" if 'goal' in str(row['PRIMARYTYPE']).lower() else "❌ Skud"
-                table_data.append({
+            # Byg overskuelig tabel
+            info_rows = []
+            for _, row in df_plot.iterrows():
+                p_id = str(row['PLAYER_WYID']).split('.')[0]
+                info_rows.append({
+                    "ID": int(row['SHOT_ID']),
                     "Minut": f"{int(row['MINUTE'])}'",
-                    "Spiller": row['NAVN'],
-                    "Nr.": int(row['NUMMER']) if pd.notna(row['NUMMER']) else "-",
-                    "Modstander": modstander,
-                    "Resultat": resultat
+                    "Spiller": navne_dict.get(p_id, "Ukendt"),
+                    "Modstander": hold_map.get(int(row['OPPONENTTEAM_WYID']), "Ukendt"),
+                    "Type": "⚽ MÅL" if 'goal' in str(row['PRIMARYTYPE']).lower() else "❌ Skud"
                 })
             
-            if table_data:
-                st.table(pd.DataFrame(table_data))
-            else:
-                st.write("Ingen data at vise.")
+            st.dataframe(pd.DataFrame(info_rows), hide_index=True, use_container_width=True)
