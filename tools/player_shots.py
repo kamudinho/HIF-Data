@@ -37,7 +37,7 @@ def vis_side(df_events, df_spillere, hold_map):
         st.info("Ingen afslutninger fundet for HIF.")
         return
 
-    # Sortering: Modstander først, så Minut
+    # Sortering og grunddata
     df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {x}") if pd.notna(x) else "Ukendt")
     df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
@@ -47,24 +47,39 @@ def vis_side(df_events, df_spillere, hold_map):
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
+        st.markdown("### Filtre & Statistik")
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
         
+        # Beregn statistik for den valgte visning
+        df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
+        antal_skud = len(df_stats)
+        antal_maal = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
+        konv_rate = (antal_maal / antal_skud * 100) if antal_skud > 0 else 0
+
+        # Vis tal (Metrics)
+        m1, m2 = st.columns(2)
+        m1.metric("Afslutninger", antal_skud)
+        m2.metric("Mål", antal_maal)
+        st.metric("Konvertering", f"{konv_rate:.1f}%")
+        
+        st.markdown("---")
+        
         with st.popover("Dataoverblik", use_container_width=True):
-            tabel_df = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
+            tabel_df = df_stats.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
             
-            vis_tabel = tabel_df[['SHOT_NR', 'SPILLER_NAVN', 'MINUTE', 'MODSTANDER',  'RESULTAT']]
-            vis_tabel.columns = ['Nr.', 'Spiller', 'Minut', 'Modstander', 'Resultat']
+            # Kolonne-rækkefølge: Nr, Modstander, Minut, Spiller, Resultat
+            vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
+            vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
     with layout_venstre:
-        df_plot = df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
+        df_plot = df_stats.copy()
         er_alle = valgt_spiller == "Alle Spillere"
 
         # --- 3. ANTI-OVERLAP (JITTER) ---
         if not df_plot.empty:
-            # Vi bruger lidt mere jitter i "Alle"-visning for at undgå tykke klumper
             jitter_val = 0.8 if er_alle else 0.5
             df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
             df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
@@ -85,16 +100,16 @@ def vis_side(df_events, df_spillere, hold_map):
         for _, row in df_plot.iterrows():
             is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
             
-            # Tegn prikken
+            # Tegn alle prikker som HIF_RED
             ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
-                       s=200 if is_goal else 100 if er_alle else 180, # Mindre prikker i "Alle"
+                       s=200 if is_goal else 100 if er_alle else 180,
                        color=HIF_RED, 
                        edgecolors='white', 
                        linewidth=1.5 if is_goal else 0.6, 
-                       alpha=0.6 if er_alle else 0.9, # Mere gennemsigtig i "Alle"
+                       alpha=0.6 if er_alle else 0.9,
                        zorder=3)
             
-            # --- NY LOGIK: Tegn kun tal hvis det IKKE er "Alle Spillere" ---
+            # Tal tegnes kun hvis det ikke er "Alle Spillere"
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                         color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
