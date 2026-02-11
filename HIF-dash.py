@@ -110,18 +110,22 @@ with st.sidebar:
     selected = option_menu(
         menu_title=None,
         options=[
-            "Dashboard",  "Truppen", "Forecast", 
-            "Spillerstats", "Top 5",
-            "Zoneinddeling - hold", "Afslutninger - hold",
-            "Zoneinddeling - spillere", "Afslutninger - spillere",  "DataViz",
-           "Heatmaps", "Shotmaps", "Sammenligning", "Scouting-database"
+            "Dashboard", 
+            "--- TRUPPEN ---", # Overskrift
+            "Truppen", "Forecast", "Spillerstats", "Top 5",
+            "--- ANALYSE ---", # Overskrift
+            "Zoneinddeling - spillere", "Afslutninger - spillere", "Heatmaps",
+            "--- SCOUTING ---", # Overskrift
+            "Sammenligning", "Scouting-database"
         ],
         icons=[
-            'house', 'MAP', 'MAP', 
-            'MAP-3x3', 'MAP', 'MAP-up',
-            'person-MAP-box', 'MAP-badge',
-            'MAP-chart', 'MAP',
-            'MAP', 'MAP-3', 'MAP', 'MAP'
+            'house', 
+            '', # Ingen ikon til overskrift
+            'people', 'graph-up', 'bar-chart', 'trophy',
+            '', 
+            'person-bounding-box', 'target', 'map',
+            '',
+            'intersect', 'search'
         ],
         menu_icon="cast", default_index=0,
         styles={
