@@ -8,6 +8,19 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
 
+    # --- 0. CSS TIL OPTIMERING AF PLADS ---
+    st.markdown("""
+        <style>
+            /* Fjerner hvid plads i bunden og Streamlit footer */
+            .main .block-container {
+                padding-bottom: 1rem;
+            }
+            footer {display: none;}
+            /* Gør selectbox og popover mere kompakte */
+            div[data-testid="stSelectbox"] { margin-bottom: -10px; }
+        </style>
+    """, unsafe_allow_html=True)
+
     # --- 1. DATA-PROCESSERING ---
     s_df = df_spillere.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
@@ -46,7 +59,7 @@ def vis_side(df_events, df_spillere, hold_map):
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
-        # Spacer for at få dropdown til at flugte med banen
+        # Spacer for at få dropdown til at flugte med banen (justeret til ##)
         st.write("##") 
         
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
@@ -54,7 +67,6 @@ def vis_side(df_events, df_spillere, hold_map):
         
         df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
         
-        # Popover uden ikon
         with st.popover("Dataoverblik", use_container_width=True):
             tabel_df = df_stats.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
@@ -62,19 +74,17 @@ def vis_side(df_events, df_spillere, hold_map):
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
-        st.markdown("<br>", unsafe_allow_html=True) # Ekstra luft inden metrics
+        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
         # --- BEREGNING AF 6 METRICS ---
         SHOTS = len(df_stats)
         GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
         KONV = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
         
-        # Data udtræk (eksempler - kan tilpasses dine specifikke kolonnenavne)
         ON_TARGET = len(df_stats[df_stats['SECONDARYTYPE'].str.contains('on_target', case=False, na=False)]) if 'SECONDARYTYPE' in df_stats.columns else GOALS
         XG_TOTAL = df_stats['XG'].sum() if 'XG' in df_stats.columns else 0.0
         AVG_DIST = (100 - df_stats['LOCATIONX']).mean() if not df_stats.empty else 0
 
-        # CSS-funktion til metrics (Lille tekst, stor værdi, én pr. linje)
         def custom_metric(label, value):
             st.markdown(f"""
                 <div style="margin-bottom: 12px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
@@ -99,7 +109,16 @@ def vis_side(df_events, df_spillere, hold_map):
             df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
             df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-jitter_val, jitter_val, len(df_plot))
 
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=5, pad_top=2)
+        # --- 4. TEGN BANE (Med optimerede marginer) ---
+        pitch = VerticalPitch(
+            half=True, 
+            pitch_type='wyscout', 
+            line_color='#444444', 
+            line_zorder=2, 
+            pad_bottom=0, # Fjerner luft i bunden
+            pad_top=2
+        )
+        
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
@@ -112,4 +131,6 @@ def vis_side(df_events, df_spillere, hold_map):
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                         color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
-        st.pyplot(fig)
+        
+        # Bruger bbox_inches='tight' for at fjerne hvid ramme om figuren
+        st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
