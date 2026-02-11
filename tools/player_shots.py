@@ -1,21 +1,18 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 from mplsoccer import VerticalPitch
 
 def vis_side(df_events, df_spillere, hold_map):
-    """
-    Viser en kompakt skudoversigt med løbenumre.
-    """
     HIF_ID = 38331
     HIF_RED = '#d31313'
     DARK_GREY = '#413B4D'
 
-    # --- 1. KLARGØR SPILLER-DATA ---
+    # --- 1. DATA-PROCESSERING ---
     s_df = df_spillere.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
     
-    # Mapping logik for navne
     s_df['FULL_NAME'] = s_df.apply(
         lambda x: f"{x.get('FIRSTNAME', '')} {x.get('LASTNAME', '')}".strip() if pd.notna(x.get('FIRSTNAME')) or pd.notna(x.get('LASTNAME')) else x.get('NAVN', "-"),
         axis=1
@@ -24,19 +21,15 @@ def vis_side(df_events, df_spillere, hold_map):
     s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     navne_dict = dict(zip(s_df['PLAYER_WYID'], s_df['FULL_NAME']))
 
-    # --- 2. KLARGØR EVENTDATA ---
     df = df_events.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
-    # Filtrer til HIF skud
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
     if 'TEAM_WYID' in df.columns:
         mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
     
     df_s = df[mask].copy()
-    
-    # Lokationer og rensning
     df_s['LOCATIONX'] = pd.to_numeric(df_s['LOCATIONX'], errors='coerce')
     df_s['LOCATIONY'] = pd.to_numeric(df_s['LOCATIONY'], errors='coerce')
     df_s = df_s.dropna(subset=['LOCATIONX', 'LOCATIONY'])
@@ -45,8 +38,11 @@ def vis_side(df_events, df_spillere, hold_map):
         st.info("Ingen afslutninger fundet for HIF.")
         return
 
-    # Sorter kronologisk og generer løbenummer
-    df_s = df_s.sort_values(by='MINUTE').reset_index(drop=True)
+    # Tilføj modstander-navn før sortering
+    df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {x}") if pd.notna(x) else "Ukendt")
+    
+    # --- 2. SORTERING (Hold først, så minut) ---
+    df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
     df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
@@ -54,50 +50,51 @@ def vis_side(df_events, df_spillere, hold_map):
     spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
     valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
     
-    df_plot = df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]
+    df_plot = df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
 
-    # --- 4. TEGN KOMPAKT BANE ---
-    # pad_bottom fjerner tom plads mod midterlinjen
+    # --- 4. ANTI-OVERLAP (JITTER) ---
+    # Vi tilføjer en lille tilfældig forskydning så prikker oven i hinanden kan skelnes
+    if not df_plot.empty:
+        df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-0.5, 0.5, len(df_plot))
+        df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-0.5, 0.5, len(df_plot))
+
+    # --- 5. TEGN BANE ---
     pitch = VerticalPitch(
         half=True, 
         pitch_type='wyscout', 
         line_color='#444444', 
         line_zorder=2,
-        pad_bottom=-15 
+        pad_bottom=-10 # Lidt mere bane end før
     )
     
-    # Mindre figsize for at matche zone-visningen
-    fig, ax = pitch.draw(figsize=(7, 4.5))
-    
-    # Zoom ind på den relevante del (fra 65 til 102 i Wyscout-koordinater)
-    ax.set_ylim(65, 102) 
+    fig, ax = pitch.draw(figsize=(9, 6)) # Større lærred
+    ax.set_ylim(60, 102) # Zoomer stadig ind, men mindre aggressivt
 
     for _, row in df_plot.iterrows():
         is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
         color = HIF_RED if is_goal else DARK_GREY
         
-        # Prikken
-        ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                   s=350 if is_goal else 180, 
-                   color=color, edgecolors='white', linewidth=1.0, alpha=0.9, zorder=3)
+        # Prikkerne (justeret størrelse)
+        ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
+                   s=450 if is_goal else 280, 
+                   color=color, edgecolors='white', linewidth=1.2, alpha=0.9, zorder=3)
         
-        # Løbenummer med skriftstørrelse 6
-        ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
+        # Tallet (størrelse 6 som ønsket)
+        ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                 color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
 
-    # --- 5. VISNING I STREAMLIT ---
-    # Vi bruger smalle side-kolonner for at tvinge banen til at være mindre og centreret
-    l, c, r = st.columns([0.25, 0.5, 0.25])
+    # --- 6. VISNING ---
+    l, c, r = st.columns([0.15, 0.7, 0.15]) # Mere plads til banen (70% bredde)
     with c:
         st.pyplot(fig)
         
-        # Popover placeret direkte under den kompakte bane
-        with st.popover(f"🔎 Detaljer for {valgt_spiller}"):
+        with st.popover(f"🔎 Se detaljer for {valgt_spiller}"):
+            # Forbered tabellen med den ønskede sortering
             tabel_df = df_plot.copy()
-            tabel_df['MODSTANDER'] = tabel_df['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {x}"))
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "⚽ MÅL" if 'goal' in str(x).lower() else "❌ Skud")
             
-            vis_tabel = tabel_df[['SHOT_NR', 'MINUTE', 'SPILLER_NAVN', 'MODSTANDER', 'RESULTAT']]
-            vis_tabel.columns = ['Nr.', 'Minut', 'Spiller', 'Modstander', 'Resultat']
+            # Sorteringen i tabellen er allerede på plads fra df_s
+            vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
+            vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
