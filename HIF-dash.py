@@ -8,15 +8,26 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
-        header[data-testid="stHeader"] { display: none !important; }
-        footer { visibility: hidden !important; }
-        .main .block-container {
-            padding-top: -1rem !important;
-            margin-top: -20px !important;
+        /* 1. Fjern luft i toppen af selve appen */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
         }
-        [data-testid="stSidebar"] img { 
-            display: block; 
-            margin: -20px auto 10px auto; 
+        
+        /* 2. Fjern det skjulte mellemrum over menuen/logoet */
+        header {
+            visibility: hidden;
+            height: 0px;
+        }
+
+        /* 3. Gør afstanden mellem widgets mindre på alle sider */
+        [data-testid="stVerticalBlock"] {
+            gap: 0.5rem !important;
+        }
+
+        /* 4. Fix for at selectboxes og radiobuttons ikke tager for meget plads */
+        div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
+            margin-bottom: -10px !important;
         }
     </style>
 """, unsafe_allow_html=True)
