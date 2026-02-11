@@ -29,62 +29,40 @@ def find_zone(x, y):
     return "Udenfor"
 
 def vis_side(df_events, df_spillere):
-    # 1. Rens kolonner (Fjerner mellemrum og gør dem STORE)
+    # 1. RENS DATA (Som din eksisterende logik)
     df_events.columns = [str(c).strip().upper() for c in df_events.columns]
     df_spillere.columns = [str(c).strip().upper() for c in df_spillere.columns]
 
-    # Debug hjælp: Hvis koden fejler herunder, kan vi se navnene
     try:
-        # Vi tjekker om de rigtige kolonner findes
-        if 'PLAYER_WYID' not in df_spillere.columns:
-            st.error(f"Kunne ikke finde 'PLAYER_WYID'. Kolonner i arket er: {list(df_spillere.columns)}")
-            return
-            
-        # Find kolonnen med navnet (den kan hedde PLAYER_NAME, SPILLER, eller NAVN)
-        navne_col = None
-        for col in ['PLAYER_NAME', 'PLAYER', 'SPILLER', 'NAVN']:
-            if col in df_spillere.columns:
-                navne_col = col
-                break
-        
-        if not navne_col:
-            st.error(f"Kunne ikke finde en kolonne med spillernavn. Tilgængelige kolonner: {list(df_spillere.columns)}")
+        navne_col = next((col for col in ['PLAYER_NAME', 'PLAYER', 'SPILLER', 'NAVN'] if col in df_spillere.columns), None)
+        if not navne_col or 'PLAYER_WYID' not in df_spillere.columns:
+            st.error("Dataformattet mangler nødvendige kolonner.")
             return
 
-        # Lav en ren mapping-liste
-        navne_df = df_spillere[['PLAYER_WYID', navne_col]].drop_duplicates()
-        navne_df = navne_df.rename(columns={navne_col: 'PLAYER_NAME_CLEAN'})
-
-        # Merge navne på events baseret på PLAYER_WYID
+        navne_df = df_spillere[['PLAYER_WYID', navne_col]].drop_duplicates().rename(columns={navne_col: 'PLAYER_NAME_CLEAN'})
         df_final = df_events.merge(navne_df, on='PLAYER_WYID', how='left')
-        
     except Exception as e:
         st.error(f"Data-fejl: {e}")
         return
 
-    # --- UI FILTRE ---
-    col1, col2 = st.columns(2)
+    # --- UI FILTRE I EN PÆN RÆKKE ---
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        # Vi bruger det rensede navn fra merge
         spiller_liste = sorted(df_final['PLAYER_NAME_CLEAN'].dropna().unique().tolist())
-        if not spiller_liste:
-            st.warning("Ingen spillere fundet i data.")
-            return
         valgt_spiller = st.selectbox("Vælg Spiller:", spiller_liste)
-    
     with col2:
         valgt_type = st.selectbox("Vis type:", ["Alle Skud", "Mål"])
+    with col3:
+        # En lille statistik-måler i hjørnet
+        st.metric("Total Skud", len(df_final[(df_final['PLAYER_NAME_CLEAN'] == valgt_spiller) & (df_final['PRIMARYTYPE'].str.contains('shot', case=False, na=False))]))
 
     # --- FILTRERING ---
     mask = df_final['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
     mask &= (df_final['PLAYER_NAME_CLEAN'] == valgt_spiller)
-    
     if valgt_type == "Mål":
         mask &= df_final['PRIMARYTYPE'].str.contains('goal', case=False, na=False)
 
     df_skud = df_final[mask].copy()
-    
-    # Lokationsdata
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
     df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
     df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
@@ -95,27 +73,43 @@ def vis_side(df_events, df_spillere):
     total = zone_stats['Antal'].sum()
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- TEGN BANE ---
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=5)
-    fig, ax = pitch.draw(figsize=(6, 3))
-    ax.set_ylim(45, 105)
+    # --- TEGN BANE (Optimeret til skærm) ---
+    # Vi bruger en lysere grå til linjer for at gøre det mere moderne
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#cfcfcf', line_zorder=2)
     
+    # Fjern 'figsize' her for at lade Streamlit styre det, eller sæt den til noget 'neutralt'
+    fig, ax = pitch.draw(figsize=(8, 10)) 
+    fig.patch.set_facecolor('none') # Gennemsigtig baggrund
+    ax.set_facecolor('none')
+
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
-    cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', '#df003b'])
+    # HIF Rød gradient
+    cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#f9f9f9', '#d31313'])
 
     for name, b in ZONE_BOUNDARIES.items():
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
-        color_val = count / max_count if max_count > 0 else 0
         
+        # Beregn farveintensitet
+        color_val = count / max_count if max_count > 0 else 0
+        face_col = cmap(color_val)
+        
+        # Tegn zone-rektangel
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
-                         edgecolor='black', linestyle='--', facecolor=cmap(color_val), alpha=0.5)
+                          edgecolor='#444444', linestyle='-', linewidth=0.5, facecolor=face_col, alpha=0.7, zorder=1)
         ax.add_patch(rect)
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            y_t = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=5)
+            y_t = 60.0 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            
+            # Skift tekstfarve til hvid hvis baggrunden er meget rød
+            text_color = "white" if color_val > 0.5 else "#333333"
+            
+            ax.text(x_t, y_t, f"{int(count)}\n{percent:.0f}%", 
+                    ha='center', va='center', fontweight='bold', fontsize=9, 
+                    color=text_color, zorder=3)
 
-    st.pyplot(fig)
-    st.write(f"**Total afslutninger for {valgt_spiller}:** {int(total)}")
+    # --- VISUALISERING ---
+    # use_container_width=True sørger for at billedet tilpasser sig din kolonne/skærm
+    st.pyplot(fig, use_container_width=True)
