@@ -130,7 +130,7 @@ def vis_side(df_events, df_spillere, hold_map):
                        alpha=0.6 if er_alle else 0.9, zorder=3)
             if not er_alle:
                 ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
-                        color='white', ha='center', va='center', fontsize=4, fontweight='bold', zorder=4)
+                        color='white', ha='center', va='center', fontsize=4, fontweight='bold', zorder=3)
         
         # Bruger bbox_inches='tight' for at fjerne hvid ramme om figuren
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
