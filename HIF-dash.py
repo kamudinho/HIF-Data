@@ -8,12 +8,36 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
+        /* Grundlæggende layout optimering */
         .block-container { 
             padding-top: 3rem !important; 
             padding-left: 2rem !important;
             padding-right: 2rem !important;
         }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
+        
+        /* --- BLÅ OVERSKRIFTER (DISABLED) --- */
+        /* Denne regel finder alle links der indeholder '---' */
+        .nav-link:has(span:contains("---")) {
+            background-color: #003366 !important; /* Mørkeblå bjælke */
+            color: white !important;
+            font-weight: bold !important;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none !important; /* Gør bjælken umulig at klikke på */
+            cursor: default !important;
+            margin-top: 15px !important;
+            border-radius: 4px !important;
+            padding: 8px 15px !important;
+            opacity: 1 !important; /* Sikrer at den ikke ser gennemsigtig ud */
+        }
+
+        /* Skjul ikonerne for overskrifterne */
+        .nav-link:has(span:contains("---")) i {
+            display: none !important;
+        }
+
+        /* Standard styling for nav-links */
         .nav-link { font-size: 14px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -69,7 +93,6 @@ def load_hif_data():
             shot_details = pd.read_csv(SHOT_CSV_PATH)
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
             
-            # Vask ID'er så de matcher (vigtigt for merge)
             for d in [ev, shot_details]:
                 if 'EVENT_WYID' in d.columns:
                     d['EVENT_WYID'] = d['EVENT_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -80,7 +103,6 @@ def load_hif_data():
                 existing_cols = [c for c in cols if c in shot_details.columns]
                 ev = ev.merge(shot_details[existing_cols], on='EVENT_WYID', how='left')
 
-        # Standardiser PLAYER_WYID
         for d in [sp, pe, ev]:
             if 'PLAYER_WYID' in d.columns:
                 d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -111,20 +133,20 @@ with st.sidebar:
         menu_title=None,
         options=[
             "Dashboard", 
-            "--- TRUPPEN ---", # Overskrift
+            "--- TRUPPEN ---", 
             "Truppen", "Forecast", "Spillerstats", "Top 5",
-            "--- ANALYSE ---", # Overskrift
+            "--- ANALYSE ---", 
             "Zoneinddeling - spillere", "Afslutninger - spillere", "Heatmaps",
-            "--- SCOUTING ---", # Overskrift
+            "--- SCOUTING ---", 
             "Sammenligning", "Scouting-database"
         ],
         icons=[
             'house', 
-            '', # Ingen ikon til overskrift
+            'dot', # Bliver skjult af CSS
             'people', 'graph-up', 'bar-chart', 'trophy',
-            '', 
+            'dot', 
             'person-bounding-box', 'target', 'map',
-            '',
+            'dot',
             'intersect', 'search'
         ],
         menu_icon="cast", default_index=0,
@@ -137,6 +159,12 @@ with st.sidebar:
     )
 
 # --- 5. ROUTING ---
+
+# Hvis brugeren på en eller anden måde lander på en overskrift, stopper vi her.
+if "---" in selected:
+    st.info("Vælg venligst et menupunkt fra listen.")
+    st.stop()
+
 if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
     st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
@@ -148,18 +176,6 @@ elif selected == "Truppen":
 elif selected == "Forecast":
     import tools.squad as squad
     squad.vis_side(spillere)
-
-elif selected == "Zoneinddeling - hold":
-    import tools.goalzone as goalzone
-    goalzone.vis_side(df_events, spillere, hold_map)
-
-elif selected == "Afslutninger - hold":
-    import tools.shots as shots
-    shots.vis_side(df_events, kamp, hold_map)
-
-elif selected == "DataViz":
-    import tools.dataviz as dataviz
-    dataviz.vis_side(df_events, kamp, hold_map)
 
 elif selected == "Zoneinddeling - spillere":
     import tools.player_goalzone as player_goalzone
@@ -180,10 +196,6 @@ elif selected == "Top 5":
 elif selected == "Heatmaps":
     import tools.heatmaps as heatmaps
     heatmaps.vis_side(df_events, 4, hold_map)
-
-elif selected == "Shotmaps":
-    import tools.skudmap as skudmap
-    skudmap.vis_side(df_events, 4, hold_map)
 
 elif selected == "Sammenligning":
     import tools.comparison as comparison
