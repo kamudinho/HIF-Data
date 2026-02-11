@@ -95,7 +95,7 @@ def vis_side(df_events, df_spillere, hold_map):
     with layout_venstre:
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#000000', line_alpha=0.7, line_zorder=2, pad_top=0)
         fig, ax = pitch.draw(figsize=(6, 7))
-        ax.set_ylim(48, 102)
+        ax.set_ylim(45, 102)
 
         # Zone beregninger til heatmap
         zone_counts = df_plot['ZONE_ID'].value_counts()
