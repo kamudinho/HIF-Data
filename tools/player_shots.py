@@ -1,102 +1,82 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from mplsoccer import VerticalPitch
 
-def get_arc(center_x, center_y, radius, start_angle, end_angle):
-    """Genererer koordinater til perfekte buer (f.eks. felt-buen)"""
-    angles = np.linspace(np.radians(start_angle), np.radians(end_angle), 50)
-    return center_x + radius * np.cos(angles), center_y + radius * np.sin(angles)
-
-def vis_side(df_events, df_kamp, hold_map):
+def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
-    DARK_GREY = '#413B4D' 
-
+    
     # 1. RENS DATA
-    df_events.columns = [str(c).strip().upper() for c in df_events.columns]
-    hif_events = df_events[df_events['TEAM_WYID'] == HIF_ID].copy()
-    p_col = 'PLAYER_NAME' if 'PLAYER_NAME' in hif_events.columns else 'PLAYER_WYID'
-    spiller_navne = sorted(hif_events[p_col].dropna().unique())
+    df = df_events.copy()
+    df.columns = [str(c).strip().upper() for c in df.columns]
     
-    col_sel1, col_sel2 = st.columns([2, 1])
-    with col_sel1:
-        valgt_spiller = st.selectbox("Vælg spiller", options=["Alle Spillere"] + spiller_navne)
-
-    # 2. FILTRERING
-    df_filtered = hif_events if valgt_spiller == "Alle Spillere" else hif_events[hif_events[p_col] == valgt_spiller]
-    mask = df_filtered['PRIMARYTYPE'].astype(str).str.contains('shot', case=False, na=False)
-    df_s = df_filtered[mask].copy()
+    # Merge med spillere for at få rygnumre og navne
+    s_df = df_spillere[['PLAYER_WYID', 'NAVN', 'NUMMER']].copy()
+    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     
-    if df_s.empty:
-        st.warning(f"Ingen skud fundet for {valgt_spiller}")
-        return
+    df = df.merge(s_df, on='PLAYER_WYID', how='left')
 
-    df_s['IS_GOAL'] = df_s['PRIMARYTYPE'].astype(str).str.contains('goal', case=False, na=False)
-    df_s['LOCATIONX'] = pd.to_numeric(df_s['LOCATIONX'], errors='coerce')
-    df_s['LOCATIONY'] = pd.to_numeric(df_s['LOCATIONY'], errors='coerce')
-
-    # 3. BYG DEN INTERAKTIVE BANE
-    fig = go.Figure()
-    lc = "#1a1a1a" # Vi bruger en mørkere linje for at matche dit "Test 3" billede
+    # 2. FILTRERING (Skud for HIF)
+    mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
+    mask &= (df['TEAM_WYID'].astype(int) == HIF_ID)
     
-    # Rette linjer (Wyscout standard)
-    lines = [
-        ((0, 100, 100, 0, 0), (50, 50, 100, 100, 50)), # Ydre ramme
-        ((19, 19, 81, 81), (100, 84, 84, 100)),        # Straffesparksfelt
-        ((36.8, 36.8, 63.2, 63.2), (100, 94.2, 94.2, 100)), # Det lille felt
-        ((45, 45, 55, 55), (100, 100.5, 100.5, 100))   # Selve målet (detalje)
-    ]
+    df_skud = df[mask].copy()
+    df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
+    df_skud['LOCATIONY'] = pd.to_numeric(df_skud['LOCATIONY'], errors='coerce')
+    df_skud = df_skud.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
-    for x_c, y_c in lines:
-        fig.add_trace(go.Scatter(x=x_c, y=y_c, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
+    # UI FILTRE
+    spiller_liste = sorted(df_skud['NAVN'].dropna().unique().tolist())
+    valgt_spiller = st.selectbox("Vælg spiller", ["Alle"] + spiller_liste)
+    
+    if valgt_spiller != "Alle":
+        df_skud = df_skud[df_skud['NAVN'] == valgt_spiller]
 
-    # BUER (Matematisk tegnet)
-    # Straffesparksfelt-buen ("The D")
-    arc_x, arc_y = get_arc(50, 84, 9, 195, 345)
-    fig.add_trace(go.Scatter(x=arc_x, y=arc_y, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
+    # --- 3. TEGN BANE ---
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
+    fig, ax = pitch.draw(figsize=(10, 6))
+    ax.set_ylim(50, 102) # Kompakt visning
 
-    # Midtercirklen
-    arc_x2, arc_y2 = get_arc(50, 50, 9.15, 0, 180)
-    fig.add_trace(go.Scatter(x=arc_x2, y=arc_y2, mode='lines', line=dict(color=lc, width=1.2), hoverinfo='skip', showlegend=False))
-
-    # 4. SKUD-PUNKTER
-    for is_goal in [False, True]:
-        subset = df_s[df_s['IS_GOAL'] == is_goal]
-        if subset.empty: continue
+    for i, row in df_skud.iterrows():
+        is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
+        color = HIF_RED if is_goal else '#413B4D'
+        size = 500 if is_goal else 300
         
-        hover_text = [
-            f"<b>{row[p_col]}</b><br>Mod: {hold_map.get(row['OPPONENTTEAM_WYID'], 'Ukendt')}<br>Tid: {row['MINUTE']}'<br>Resultat: {'MÅL' if is_goal else 'SKUD'}"
-            for _, row in subset.iterrows()
-        ]
+        # Tegn prikken
+        ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
+                   s=size, color=color, edgecolors='white', linewidth=1.5, alpha=0.9, zorder=3)
+        
+        # Indsæt rygnummer i prikken
+        nummer = str(int(row['NUMMER'])) if pd.notna(row['NUMMER']) else "?"
+        ax.text(row['LOCATIONY'], row['LOCATIONX'], nummer, 
+                color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
 
-        fig.add_trace(go.Scatter(
-            x=subset['LOCATIONY'],
-            y=subset['LOCATIONX'],
-            mode='markers',
-            marker=dict(
-                size=16 if is_goal else 11,
-                color=HIF_RED if is_goal else DARK_GREY,
-                line=dict(width=1.5, color='white'),
-                opacity=0.9
-            ),
-            text=hover_text,
-            hoverinfo="text",
-            showlegend=False
-        ))
+    # Vis banen i 70% bredde
+    col_l, col_c, col_r = st.columns([0.15, 0.7, 0.15])
+    with col_c:
+        st.pyplot(fig)
 
-    # 5. LAYOUT
-    fig.update_layout(
-        xaxis=dict(range=[-5, 105], visible=False, fixedrange=True),
-        yaxis=dict(range=[45, 105], visible=False, fixedrange=True),
-        plot_bgcolor='white',
-        paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=10, b=0),
-        height=600,
-        hoverlabel=dict(bgcolor="white", font_size=13)
-    )
-
-    # 6. VISNING (70% BREDDE)
-    spacer_l, center, spacer_r = st.columns([0.15, 0.7, 0.15])
-    with center:
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    # --- 4. POPOVER MED INFORMATION ---
+    with col_c:
+        with st.popover("🔎 Se skud-detaljer"):
+            st.markdown(f"### Afslutninger for {valgt_spiller}")
+            
+            # Forbered tabel-data
+            table_data = []
+            for _, row in df_skud.iterrows():
+                modstander = hold_map.get(int(row['OPPONENTTEAM_WYID']), "Ukendt")
+                resultat = "⚽ MÅL" if 'goal' in str(row['PRIMARYTYPE']).lower() else "❌ Skud"
+                table_data.append({
+                    "Minut": f"{int(row['MINUTE'])}'",
+                    "Spiller": row['NAVN'],
+                    "Nr.": int(row['NUMMER']) if pd.notna(row['NUMMER']) else "-",
+                    "Modstander": modstander,
+                    "Resultat": resultat
+                })
+            
+            if table_data:
+                st.table(pd.DataFrame(table_data))
+            else:
+                st.write("Ingen data at vise.")
