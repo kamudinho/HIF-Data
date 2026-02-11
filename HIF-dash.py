@@ -8,36 +8,43 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
-        /* Grundlæggende layout optimering */
         .block-container { 
             padding-top: 3rem !important; 
             padding-left: 2rem !important;
             padding-right: 2rem !important;
         }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
+
+        /* --- PERMANENT BLÅ BAGGRUND TIL OVERSKRIFTER --- */
+        /* Vi målretter os de specifikke menupunkter via deres tekst-indhold */
         
-        /* --- BLÅ OVERSKRIFTER (DISABLED) --- */
-        /* Denne regel finder alle links der indeholder '---' */
         .nav-link:has(span:contains("---")) {
-            background-color: #003366 !important; /* Mørkeblå bjælke */
+            background-color: #003366 !important; /* Mørkeblå */
             color: white !important;
-            font-weight: bold !important;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            pointer-events: none !important; /* Gør bjælken umulig at klikke på */
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            pointer-events: none !important; /* Kan ikke klikkes */
             cursor: default !important;
-            margin-top: 15px !important;
             border-radius: 4px !important;
-            padding: 8px 15px !important;
-            opacity: 1 !important; /* Sikrer at den ikke ser gennemsigtig ud */
+            margin-top: 15px !important;
+            margin-bottom: 5px !important;
+            opacity: 1 !important;
+            display: flex !important;
+            justify-content: center !important;
+            padding: 10px 0 !important;
         }
 
-        /* Skjul ikonerne for overskrifterne */
+        /* Skjul ikonet helt på de blå bjælker */
         .nav-link:has(span:contains("---")) i {
             display: none !important;
         }
 
-        /* Standard styling for nav-links */
+        /* Fjern hover-effekt på de blå bjælker så de føles permanente */
+        .nav-link:has(span:contains("---")):hover {
+            background-color: #003366 !important;
+            color: white !important;
+        }
+
         .nav-link { font-size: 14px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -88,15 +95,12 @@ def load_hif_data():
         else:
             return None
 
-        # --- MERGE SHOT DETAILS ---
         if os.path.exists(SHOT_CSV_PATH):
             shot_details = pd.read_csv(SHOT_CSV_PATH)
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
-            
             for d in [ev, shot_details]:
                 if 'EVENT_WYID' in d.columns:
                     d['EVENT_WYID'] = d['EVENT_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
             if 'EVENT_WYID' in ev.columns and 'EVENT_WYID' in shot_details.columns:
                 shot_details = shot_details.drop_duplicates(subset=['EVENT_WYID'])
                 cols = ['EVENT_WYID', 'SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
@@ -110,10 +114,8 @@ def load_hif_data():
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         godkendte_ids = ho['TEAM_WYID'].unique()
         ev = ev[ev['TEAM_WYID'].isin(godkendte_ids)]
-        
         navne = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
         ev = ev.merge(navne, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
-            
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
         st.error(f"Kritisk fejl: {e}")
@@ -141,13 +143,9 @@ with st.sidebar:
             "Sammenligning", "Scouting-database"
         ],
         icons=[
-            'house', 
-            'dot', # Bliver skjult af CSS
-            'people', 'graph-up', 'bar-chart', 'trophy',
-            'dot', 
-            'person-bounding-box', 'target', 'map',
-            'dot',
-            'intersect', 'search'
+            'house', 'dot', 'people', 'graph-up', 'bar-chart', 'trophy',
+            'dot', 'person-bounding-box', 'target', 'map',
+            'dot', 'intersect', 'search'
         ],
         menu_icon="cast", default_index=0,
         styles={
@@ -159,10 +157,7 @@ with st.sidebar:
     )
 
 # --- 5. ROUTING ---
-
-# Hvis brugeren på en eller anden måde lander på en overskrift, stopper vi her.
 if "---" in selected:
-    st.info("Vælg venligst et menupunkt fra listen.")
     st.stop()
 
 if selected == "Dashboard":
