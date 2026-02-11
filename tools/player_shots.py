@@ -76,7 +76,7 @@ def vis_side(df_events, df_spillere, hold_map):
         m1, m2 = st.columns(2)
         m1.metric("Afslutninger", SHOTS)
         m2.metric("Mål", GOALS)
-        st.metric("Konvertering", f"{konv_rate:.1f}%")
+        m3.metric("Konvertering", f"{konv_rate:.1f}%")
 
     with layout_venstre:
         df_plot = df_stats.copy()
