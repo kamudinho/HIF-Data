@@ -97,7 +97,7 @@ def vis_side(df_events, df_spillere):
 
     # --- TEGN BANE ---
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
-    fig, ax = pitch.draw(figsize=(10, 8))
+    fig, ax = pitch.draw(figsize=(6, 3))
     ax.set_ylim(45, 105)
     
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
