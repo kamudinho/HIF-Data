@@ -137,6 +137,6 @@ def vis_side(df_events, df_spillere, hold_map):
             if not er_alle:
                 ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
                         color='white' if not is_goal else 'black', 
-                        ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                        ha='center', va='center', fontsize=3, fontweight='light', zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
