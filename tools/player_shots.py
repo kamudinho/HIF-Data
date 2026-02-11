@@ -71,7 +71,7 @@ def vis_side(df_events, df_spillere, hold_map):
         
         # Løbenummeret indeni prikken (SHOT_NR)
         ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
-                color='white', ha='center', va='center', fontsize=9, fontweight='bold', zorder=4)
+                color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
 
     # Visning i Streamlit
     l, c, r = st.columns([0.05, 0.9, 0.05])
