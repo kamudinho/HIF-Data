@@ -89,10 +89,10 @@ def vis_side(df_events, df_spillere):
                           line_color='#000000', line_alpha=0.8,
                           linewidth=1.5, line_zorder=2)
     
-    fig, ax = pitch.draw(figsize=(10, 6)) 
+    fig, ax = pitch.draw(figsize=(8, 5)) 
     fig.patch.set_facecolor('none')
     ax.set_facecolor('none')
-    ax.set_ylim(48, 102) 
+    ax.set_ylim(40, 102) 
 
     max_count = zone_stats.max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', '#d31313'])
