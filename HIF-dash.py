@@ -8,38 +8,33 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Global padding - rykker indholdet lidt ned fra den usynlige top */
-        .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
-        }
-        
-        /* 2. Fix for Sidebar Logo - vigtigste del! */
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 2rem !important; /* Giver logoet plads i toppen */
-        }
-
-        /* 3. Skjul standard header men behold funktionalitet */
+        /* 1. Vis menuen (header), men gør baggrunden gennemsigtig */
         header {
-            visibility: hidden;
-            height: 0px;
+            visibility: visible !important;
+            background: rgba(0,0,0,0) !important;
+            height: 3rem !important; /* Giver plads til menu-knappen */
         }
 
-        /* 4. Gør sidebaren pænere og undgå at logoet bliver cuttet */
-        [data-testid="stSidebar"] {
-            background-color: #f0f2f6;
-        }
-        
-        [data-testid="stSidebar"] img {
-            margin-bottom: 20px;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
+        /* 2. Ryk selve indholdet helt op til toppen */
+        .block-container {
+            padding-top: 0rem !important;
+            margin-top: -2rem !important; /* Trækker indholdet op bag den gennemsigtige header */
+            padding-bottom: 1rem !important;
         }
 
-        /* 5. Widget spacing */
+        /* 3. Fix for Sidebar Logo - sørg for det ikke bliver cuttet */
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 1.5rem !important;
+        }
+
+        /* 4. Gør afstanden mellem widgets mindre */
         [data-testid="stVerticalBlock"] {
-            gap: 0.8rem !important;
+            gap: 0.5rem !important;
+        }
+
+        /* 5. Gør selectbox og radio mere kompakte */
+        div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
+            margin-bottom: -5px !important;
         }
     </style>
 """, unsafe_allow_html=True)
