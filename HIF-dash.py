@@ -43,7 +43,7 @@ if not st.session_state["logged_in"]:
                     st.error("Ugyldigt brugernavn eller kode")
     st.stop()
 
-# --- 3. DATA LOADING (FORBEDRET TIL MULTILINE CSV) ---
+# --- 3. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
@@ -52,53 +52,35 @@ SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv')
 @st.cache_resource
 def load_hif_data():
     try:
-        # Excel data
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold', engine='openpyxl')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere', engine='openpyxl')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata', engine='openpyxl')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents', engine='openpyxl')
         sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting', engine='openpyxl')
 
-        # Parquet data (Main events)
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
             ev.columns = [str(c).strip().upper() for c in ev.columns]
         else:
-            st.error("Fandt ikke eventdata.parquet!")
             return None
 
-        # --- SPECIALISERET CSV INDLÆSNING TIL MULTILINE/TAGS ---
+        # --- MERGE SHOT DETAILS ---
         if os.path.exists(SHOT_CSV_PATH):
-            # Vi bruger engine='python' og specielle citat-indstillinger 
-            # for at håndtere ["goal", "opportunity"] listerne korrekt.
-            shot_details = pd.read_csv(
-                SHOT_CSV_PATH, 
-                quotechar='"',          # Håndterer felter med " "
-                on_bad_lines='skip',    # Skipper knækkede linjer der ikke kan læses
-                engine='python',
-                skipinitialspace=True
-            )
+            shot_details = pd.read_csv(SHOT_CSV_PATH)
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
             
-            # Sørg for at ID'er er strenge og uden decimaler
-            keys = ['EVENT_WYID', 'MATCH_WYID']
-            for k in keys:
-                if k in ev.columns:
-                    ev[k] = ev[k].astype(str).str.split('.').str[0].str.strip()
-                if k in shot_details.columns:
-                    shot_details[k] = shot_details[k].astype(str).str.split('.').str[0].str.strip()
+            # Vask ID'er så de matcher (vigtigt for merge)
+            for d in [ev, shot_details]:
+                if 'EVENT_WYID' in d.columns:
+                    d['EVENT_WYID'] = d['EVENT_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
+            if 'EVENT_WYID' in ev.columns and 'EVENT_WYID' in shot_details.columns:
+                shot_details = shot_details.drop_duplicates(subset=['EVENT_WYID'])
+                cols = ['EVENT_WYID', 'SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
+                existing_cols = [c for c in cols if c in shot_details.columns]
+                ev = ev.merge(shot_details[existing_cols], on='EVENT_WYID', how='left')
 
-            # Merge kun hvis nøgler findes
-            if all(k in ev.columns for k in keys) and all(k in shot_details.columns for k in keys):
-                shot_details = shot_details.drop_duplicates(subset=keys)
-                cols_to_add = keys + ['SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
-                existing_cols = [c for c in cols_to_add if c in shot_details.columns]
-                
-                ev = ev.merge(shot_details[existing_cols], on=keys, how='left')
-            else:
-                st.warning("Merge fejlede: Tjek kolonnenavne i shotevents.csv")
-
-        # Standardisering af PLAYER_WYID
+        # Standardiser PLAYER_WYID
         for d in [sp, pe, ev]:
             if 'PLAYER_WYID' in d.columns:
                 d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -107,19 +89,17 @@ def load_hif_data():
         godkendte_ids = ho['TEAM_WYID'].unique()
         ev = ev[ev['TEAM_WYID'].isin(godkendte_ids)]
         
-        # Navne-merge
         navne = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
         ev = ev.merge(navne, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
             
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
-        st.error(f"Kritisk fejl ved data-indlæsning: {e}")
+        st.error(f"Kritisk fejl: {e}")
         return None
 
 if "main_data" not in st.session_state:
     st.session_state["main_data"] = load_hif_data()
 
-# Udpakning af data
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
 # --- 4. SIDEBAR MENU ---
@@ -143,8 +123,7 @@ with st.sidebar:
             'bar-chart', 'trophy',
             'people', 'diagram-3', 'intersect', 'search'
         ],
-        menu_icon="cast", 
-        default_index=0,
+        menu_icon="cast", default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "#fafafa"},
             "icon": {"color": "#cc0000", "font-size": "14px"}, 
@@ -154,7 +133,6 @@ with st.sidebar:
     )
 
 # --- 5. ROUTING ---
-# (Din eksisterende routing herunder...)
 if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
     st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
