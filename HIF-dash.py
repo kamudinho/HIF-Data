@@ -118,7 +118,7 @@ elif selected == "Top 5":
     top5.vis_side(spillere, player_events)
 elif selected == "Zoneinddeling":
     import tools.player_goalzone as pgz
-    pgz.vis_side(df_events, spillere)
+    pgz.vis_side(df_events, spillere, hold_map)
 elif selected == "Afslutninger":
     import tools.player_shots as ps
     ps.vis_side(df_events, spillere, hold_map)
