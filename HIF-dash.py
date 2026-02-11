@@ -77,7 +77,6 @@ with st.sidebar:
     st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     
     # TRIN 1: Vælg Hovedområde
-    st.markdown("<div class='area-header'>VÆLG OMRÅDE</div>", unsafe_allow_html=True)
     hoved_omraade = option_menu(
         menu_title=None,
         options=["Dashboard", "Truppen", "Analyse", "Scouting"],
@@ -85,9 +84,7 @@ with st.sidebar:
         menu_icon="cast", default_index=0,
         styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
     )
-    
-    st.markdown("---")
-    
+        
     # TRIN 2: Undermenu baseret på valg
     selected = None
     if hoved_omraade == "Dashboard":
