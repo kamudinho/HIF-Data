@@ -111,9 +111,9 @@ with st.sidebar:
         menu_title=None,
         options=[
             "Dashboard",  "Truppen", "Forecast", 
-            "Zoneinddeling", "Afslutninger", "DataViz",
-            "Spiller Zoneinddeling", "Spiller Afslutninger",
             "Spillerstats", "Top 5",
+            "Zoneinddeling - hold", "Afslutninger - hold",
+            "Zoneinddeling - spillere", "Afslutninger - spillere",  "DataViz",
            "Heatmaps", "Shotmaps", "Sammenligning", "Scouting-database"
         ],
         icons=[
@@ -145,11 +145,11 @@ elif selected == "Forecast":
     import tools.squad as squad
     squad.vis_side(spillere)
 
-elif selected == "Zoneinddeling":
+elif selected == "Zoneinddeling - hold":
     import tools.goalzone as goalzone
     goalzone.vis_side(df_events, spillere, hold_map)
 
-elif selected == "Afslutninger":
+elif selected == "Afslutninger - hold":
     import tools.shots as shots
     shots.vis_side(df_events, kamp, hold_map)
 
@@ -157,11 +157,11 @@ elif selected == "DataViz":
     import tools.dataviz as dataviz
     dataviz.vis_side(df_events, kamp, hold_map)
 
-elif selected == "Spiller Zoneinddeling":
+elif selected == "Zoneinddeling - spillere":
     import tools.player_goalzone as player_goalzone
     player_goalzone.vis_side(df_events, spillere)
 
-elif selected == "Spiller Afslutninger":
+elif selected == "Afslutninger - spillere":
     import tools.player_shots as player_shots
     player_shots.vis_side(df_events, spillere, hold_map)
 
