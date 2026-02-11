@@ -47,16 +47,16 @@ def vis_side(df_events, df_spillere, hold_map):
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
-        st.markdown("### Filtre & Data")
+        st.markdown("Dataoverblik")
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
         
         with st.popover("🔎 Se data (Bred visning)", use_container_width=True):
             tabel_df = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-            tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "⚽ MÅL" if 'goal' in str(x).lower() else "❌ Skud")
+            tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
             
-            vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
-            vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
+            vis_tabel = tabel_df[['SHOT_NR', 'SPILLER_NAVN', 'MINUTE', 'MODSTANDER',  'RESULTAT']]
+            vis_tabel.columns = ['Nr.', 'Spiller', 'Minut', 'Modstander', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
     with layout_venstre:
