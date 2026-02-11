@@ -11,7 +11,7 @@ st.markdown("""
         /* 1. Fjern luft i toppen af selve appen */
         .block-container {
             padding-top: 2rem !important;
-            padding-bottom: 0rem !important;
+            padding-bottom: 2rem !important;
         }
         
         /* 2. Fjern det skjulte mellemrum over menuen/logoet */
