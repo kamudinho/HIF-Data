@@ -73,43 +73,46 @@ def vis_side(df_events, df_spillere):
     total = zone_stats['Antal'].sum()
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-    # --- TEGN BANE (Optimeret til skærm) ---
-    # Vi bruger en lysere grå til linjer for at gøre det mere moderne
+   # --- TEGN BANE (Kompakt version) ---
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#cfcfcf', line_zorder=2)
     
-    # Fjern 'figsize' her for at lade Streamlit styre det, eller sæt den til noget 'neutralt'
-    fig, ax = pitch.draw(figsize=(8, 10)) 
-    fig.patch.set_facecolor('none') # Gennemsigtig baggrund
+    # Vi gør figuren bredere end den er høj (8, 4.5) for at spare vertikal plads
+    fig, ax = pitch.draw(figsize=(8, 4.5)) 
+    fig.patch.set_facecolor('none')
     ax.set_facecolor('none')
 
+    # Vi skærer bunden af (fra y=65 til 105), så vi kun ser den farlige halvdel
+    # Det gør kortet meget mere "fladt" og skærmvenligt
+    ax.set_ylim(65, 105) 
+    
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
-    # HIF Rød gradient
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#f9f9f9', '#d31313'])
 
     for name, b in ZONE_BOUNDARIES.items():
+        # Spring Zone 8 over (hele egen banehalvdel), hvis vi vil spare endnu mere plads
+        if name == "Zone 8": continue 
+            
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         
-        # Beregn farveintensitet
         color_val = count / max_count if max_count > 0 else 0
         face_col = cmap(color_val)
         
-        # Tegn zone-rektangel
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
                           edgecolor='#444444', linestyle='-', linewidth=0.5, facecolor=face_col, alpha=0.7, zorder=1)
         ax.add_patch(rect)
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
-            y_t = 60.0 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
+            y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
             
-            # Skift tekstfarve til hvid hvis baggrunden er meget rød
             text_color = "white" if color_val > 0.5 else "#333333"
-            
             ax.text(x_t, y_t, f"{int(count)}\n{percent:.0f}%", 
-                    ha='center', va='center', fontweight='bold', fontsize=9, 
+                    ha='center', va='center', fontweight='bold', fontsize=8, 
                     color=text_color, zorder=3)
 
-    # --- VISUALISERING ---
-    # use_container_width=True sørger for at billedet tilpasser sig din kolonne/skærm
+    # Fjerner alt unødvendig luft omkring plottet
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    
+    # Vis kortet
     st.pyplot(fig, use_container_width=True)
