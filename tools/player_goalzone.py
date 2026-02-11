@@ -114,7 +114,7 @@ def vis_side(df_events, df_spillere):
             y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
             if name == "Zone 8": y_t = 60
             
-            text_color = "#000000" if color_val > 0.4 else "#333333"
+            text_color = "#000000" if color_val > 0.1 else "#333333"
             ax.text(x_t, y_t, f"{int(count)}\n({percent:.0f}%)", 
                     ha='center', va='center', fontweight='bold', fontsize=9, 
                     color=text_color, zorder=3)
