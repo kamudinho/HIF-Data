@@ -7,20 +7,35 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
     
-    # 1. DATA RENS
+    # --- 1. ROBUST KOLONNE-IDENTIFIKATION ---
+    # Vi tvinger alle kolonnenavne til UPPERCASE og fjerner mellemrum
     df = df_events.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     
     s_df = df_spillere.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
-    
-    # Find navne-kolonne
-    col_navn = next((c for c in ['NAVN', 'PLAYER', 'PLAYER_NAME', 'SPILLER'] if c in s_df.columns), None)
-    navne_dict = dict(zip(s_df['PLAYER_WYID'].astype(str).str.split('.').str[0], s_df[col_navn]))
 
-    # 2. FILTRERING (HIF Skud)
+    # Find ID-kolonnen i spiller-filen (kan hedde PLAYER_WYID, WYID, ID, etc.)
+    col_spiller_id = next((c for c in ['PLAYER_WYID', 'WYID', 'ID', 'PLAYERID'] if c in s_df.columns), None)
+    # Find Navne-kolonnen
+    col_navn = next((c for c in ['NAVN', 'PLAYER', 'PLAYER_NAME', 'SPILLER'] if c in s_df.columns), None)
+
+    if not col_spiller_id or not col_navn:
+        st.error(f"Kunne ikke finde ID eller Navn i spiller-filen. Kolonner fundet: {list(s_df.columns)}")
+        return
+
+    # Lav en ordbog: {ID: Navn}
+    s_df[col_spiller_id] = s_df[col_spiller_id].astype(str).str.split('.').str[0]
+    navne_dict = dict(zip(s_df[col_spiller_id], s_df[col_navn]))
+
+    # --- 2. FILTRERING (HIF Skud) ---
+    # Find ID-kolonnen i events (typisk PLAYER_WYID)
+    col_event_player = next((c for c in ['PLAYER_WYID', 'PLAYERID'] if c in df.columns), 'PLAYER_WYID')
+    
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
-    mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
+    # Sikr os at TEAM_WYID tjekkes korrekt
+    if 'TEAM_WYID' in df.columns:
+        mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
     
     df_skud = df[mask].copy()
     df_skud['LOCATIONX'] = pd.to_numeric(df_skud['LOCATIONX'], errors='coerce')
@@ -31,22 +46,20 @@ def vis_side(df_events, df_spillere, hold_map):
         st.info("Ingen skud fundet for HIF.")
         return
 
-    # Sorter efter minut for at få en logisk rækkefølge (1, 2, 3...)
+    # Sorter efter minut og generer løbenummer
     df_skud = df_skud.sort_values(by='MINUTE').reset_index(drop=True)
-    # GENERER LØBENUMMER (starter fra 1)
     df_skud['SHOT_ID'] = df_skud.index + 1
 
-    # UI FILTRE
-    spiller_navne = sorted([navne_dict.get(str(pid).split('.')[0], "Ukendt") for pid in df_skud['PLAYER_WYID'].unique()])
-    valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_navne)
+    # --- 3. UI FILTRE ---
+    # Map navne til de spillere der rent faktisk har skudt
+    df_skud['SPILLER_NAVN'] = df_skud[col_event_player].astype(str).str.split('.').str[0].map(navne_dict).fillna("Ukendt Spiller")
     
-    # Filtrer plot-data (vi beholder SHOT_ID fra den samlede liste)
-    if valgt_spiller == "Alle Spillere":
-        df_plot = df_skud
-    else:
-        df_plot = df_skud[df_skud['PLAYER_WYID'].astype(str).str.split('.').str[0].map(navne_dict) == valgt_spiller]
+    spiller_liste = sorted(df_skud['SPILLER_NAVN'].unique().tolist())
+    valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
+    
+    df_plot = df_skud if valgt_spiller == "Alle Spillere" else df_skud[df_skud['SPILLER_NAVN'] == valgt_spiller]
 
-    # --- 3. TEGN BANE ---
+    # --- 4. TEGN BANE ---
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2)
     fig, ax = pitch.draw(figsize=(10, 5))
     ax.set_ylim(50, 102)
@@ -69,20 +82,16 @@ def vis_side(df_events, df_spillere, hold_map):
     with c:
         st.pyplot(fig)
         
-        # --- 4. POPOVER MED IDENTIFIKATION ---
-        with st.popover("🔎 Identificér afslutninger"):
-            st.write("Numrene på banen svarer til listen herunder:")
+        # --- 5. POPOVER MED TABEL ---
+        with st.popover("🔎 Se detaljer for afslutninger"):
+            st.write(f"Viser detaljer for: **{valgt_spiller}**")
             
-            # Byg overskuelig tabel
-            info_rows = []
-            for _, row in df_plot.iterrows():
-                p_id = str(row['PLAYER_WYID']).split('.')[0]
-                info_rows.append({
-                    "ID": int(row['SHOT_ID']),
-                    "Minut": f"{int(row['MINUTE'])}'",
-                    "Spiller": navne_dict.get(p_id, "Ukendt"),
-                    "Modstander": hold_map.get(int(row['OPPONENTTEAM_WYID']), "Ukendt"),
-                    "Type": "⚽ MÅL" if 'goal' in str(row['PRIMARYTYPE']).lower() else "❌ Skud"
-                })
+            info_df = df_plot[['SHOT_ID', 'MINUTE', 'SPILLER_NAVN', 'OPPONENTTEAM_WYID', 'PRIMARYTYPE']].copy()
+            info_df['MODSTANDER'] = info_df['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {int(x)}") if pd.notna(x) else "Ukendt")
+            info_df['RESULTAT'] = info_df['PRIMARYTYPE'].apply(lambda x: "⚽ MÅL" if 'goal' in str(x).lower() else "❌ Skud")
             
-            st.dataframe(pd.DataFrame(info_rows), hide_index=True, use_container_width=True)
+            # Formater til visning
+            vis_tabel = info_df[['SHOT_ID', 'MINUTE', 'SPILLER_NAVN', 'MODSTANDER', 'RESULTAT']]
+            vis_tabel.columns = ['Nr.', 'Minut', 'Spiller', 'Modstander', 'Resultat']
+            
+            st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
