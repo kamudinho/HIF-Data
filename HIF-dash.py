@@ -6,6 +6,7 @@ import pandas as pd
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
+# CSS der tvinger de blå bjælker igennem
 st.markdown("""
     <style>
         /* Grundlæggende layout */
@@ -17,41 +18,43 @@ st.markdown("""
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
         
         /* --- MENU STYLING --- */
+        
+        /* 1. Gør alle menupunkter hvide som standard */
         .nav-link {
-            font-size: 14px !important;
             background-color: white !important;
             color: #333 !important;
+            font-size: 14px !important;
             border-radius: 4px !important;
             margin-bottom: 2px !important;
         }
 
-        /* Det valgte underpunkt bliver HIF Rød */
+        /* 2. Gør det VALGTE underpunkt HIF Rød */
         .nav-link-selected {
             background-color: #cc0000 !important;
             color: white !important;
         }
 
-        /* --- PERMANENTE BLÅ BJÆLKER (Overskrifter) --- */
-        /* Vi tvinger række 2, 7 og 11 til at være blå uanset hvad */
-        ul li:nth-child(2) .nav-link, 
-        ul li:nth-child(7) .nav-link, 
-        ul li:nth-child(11) .nav-link {
+        /* 3. Tving blå baggrund på alle punkter der indeholder "---" */
+        /* Vi bruger [title*="---"] eller span-matching */
+        div[data-testid="stSidebar"] .nav-link:has(span:contains("---")) {
             background-color: #003366 !important;
             color: white !important;
             font-weight: bold !important;
-            text-transform: uppercase;
+            text-transform: uppercase !important;
             pointer-events: none !important; /* Kan ikke klikkes */
             cursor: default !important;
             margin-top: 15px !important;
             text-align: center !important;
-            opacity: 1 !important;
         }
 
-        /* Skjul ikoner KUN for de blå bjælker */
-        ul li:nth-child(2) i, 
-        ul li:nth-child(7) i, 
-        ul li:nth-child(11) i {
+        /* Skjul ikonerne på de blå bjælker */
+        div[data-testid="stSidebar"] .nav-link:has(span:contains("---")) i {
             display: none !important;
+        }
+
+        /* Fjern hover-effekt på de blå bjælker */
+        div[data-testid="stSidebar"] .nav-link:has(span:contains("---")):hover {
+            background-color: #003366 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -161,7 +164,6 @@ with st.sidebar:
         menu_icon="cast", default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "#fafafa"},
-            "icon": {"color": "#cc0000", "font-size": "14px"}, 
             "nav-link-selected": {"background-color": "#cc0000"},
         }
     )
