@@ -126,17 +126,17 @@ def vis_side(df_events, df_spillere, hold_map):
             
             # Scatter
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=200 if is_goal else 110,
+                       s=150 if is_goal else 150,
                        color='gold' if is_goal else HIF_RED, 
                        edgecolors='white', 
-                       linewidth=1.2 if is_goal else 0.5, 
-                       alpha=0.7 if er_alle else 0.9, 
+                       linewidth=1.0 if is_goal else 0.6, 
+                       alpha=1 if er_alle else 1, 
                        zorder=3)
             
             # Tilføj nummer på skuddet hvis én spiller er valgt
             if not er_alle:
                 ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
                         color='white' if not is_goal else 'black', 
-                        ha='center', va='center', fontsize=3, fontweight='light', zorder=4)
+                        ha='center', va='center', fontsize=4, fontweight='light', zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
