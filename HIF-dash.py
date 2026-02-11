@@ -20,12 +20,18 @@ st.markdown("""
             height: 0px;
         }
 
-        /* 3. Gør afstanden mellem widgets mindre på alle sider */
+        /* 3. Gør headeren synlig igen, men fjern dens baggrundsstøj */
+        header {
+            visibility: visible !important;
+            background: rgba(0,0,0,0) !important;
+        }
+
+        /* 4. Gør afstanden mellem widgets mindre på alle sider */
         [data-testid="stVerticalBlock"] {
             gap: 0.5rem !important;
         }
 
-        /* 4. Fix for at selectboxes og radiobuttons ikke tager for meget plads */
+        /* 5. Fix for at selectboxes og radiobuttons ikke tager for meget plads */
         div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
             margin-bottom: -10px !important;
         }
