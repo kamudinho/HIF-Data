@@ -74,7 +74,7 @@ def vis_side(df_events, df_spillere, hold_map):
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
-        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
         # --- BEREGNING AF 6 METRICS ---
         SHOTS = len(df_stats)
@@ -87,9 +87,9 @@ def vis_side(df_events, df_spillere, hold_map):
 
         def custom_metric(label, value):
             st.markdown(f"""
-                <div style="margin-bottom: 6px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
-                    <p style="margin:0; font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
-                    <p style="margin:0; font-size: 26px; font-weight: 700; color: #222;">{value}</p>
+                <div style="margin-bottom: 16px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
+                    <p style="margin:0; font-size: 18px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
+                    <p style="margin:0; font-size: 32px; font-weight: 700; color: #222;">{value}</p>
                 </div>
             """, unsafe_allow_html=True)
 
