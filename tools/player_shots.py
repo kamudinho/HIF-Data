@@ -20,9 +20,16 @@ def vis_side(df_events, df_spillere, hold_map):
     df_s = pd.read_csv(SHOT_CSV_PATH)
     df_s.columns = [str(c).strip().upper() for c in df_s.columns]
     
-    # Rens og filtrer til HIF
+    # Rens PLAYER_WYID og filtrer til HIF
     df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     df_s = df_s[pd.to_numeric(df_s['TEAM_WYID'], errors='coerce').fillna(0).astype(int) == HIF_ID].copy()
+
+    # Tving numeriske værdier og fjern rækker uden koordinater (FIXER DIN VALUEERROR)
+    for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
+        df_s[col] = pd.to_numeric(df_s[col], errors='coerce')
+    
+    # Smid rækker væk hvor vi ikke ved hvor skuddet er (vigtigt for st.pyplot)
+    df_s = df_s.dropna(subset=['LOCATIONX', 'LOCATIONY'])
 
     # Navne mapping
     s_df = df_spillere.copy()
@@ -47,17 +54,18 @@ def vis_side(df_events, df_spillere, hold_map):
         df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
         df_plot = df_plot.sort_values(by=['MINUTE']).reset_index(drop=True)
 
-        # --- BEREGNING AF DE 6 METRICS ---
+        if df_plot.empty:
+            st.warning(f"Ingen gyldige skuddata fundet for {valgt_spiller}")
+            return
+
+        # Metrics
         shots = len(df_plot)
-        goals = int(df_plot['SHOTISGOAL'].apply(is_true).sum()) if 'SHOTISGOAL' in df_plot.columns else 0
-        on_target = int(df_plot['SHOTONTARGET'].apply(is_true).sum()) if 'SHOTONTARGET' in df_plot.columns else 0
-        xg_total = pd.to_numeric(df_plot['SHOTXG'], errors='coerce').sum()
-        
-        # Afledte metrics
+        goals = int(df_plot['SHOTISGOAL'].apply(is_true).sum())
+        on_target = int(df_plot['SHOTONTARGET'].apply(is_true).sum())
+        xg_total = df_plot['SHOTXG'].fillna(0).sum()
         xg_per_shot = xg_total / shots if shots > 0 else 0
         goal_ratio = (goals / shots) * 100 if shots > 0 else 0
 
-        # Visning af metrics i to rækker
         m1, m2 = st.columns(2)
         m1.metric("Afslutninger", shots)
         m2.metric("Mål", goals)
@@ -76,26 +84,28 @@ def vis_side(df_events, df_spillere, hold_map):
             st.dataframe(res_df[['MINUTE', 'SPILLER_NAVN', 'MODSTANDER', 'RESULTAT']], hide_index=True)
 
     with layout_venstre:
-        # BANEN - Vi bruger VerticalPitch til at vise angrebsretningen opad
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', goal_type='box')
+        # BANEN
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
         fig, ax = pitch.draw(figsize=(8, 7))
+        ax.set_ylim(40, 101) # Zoom ind på angrebssiden
+
+        # Plot kun hvis der er data (sikkerhed mod tomme lister)
+        if not df_plot.empty:
+            for _, row in df_plot.iterrows():
+                goal = is_true(row.get('SHOTISGOAL', False))
+                on_tgt = is_true(row.get('SHOTONTARGET', False))
+                
+                # Sikkerheds-check på xG for markørstørrelse
+                val_xg = float(row['SHOTXG']) if pd.notna(row['SHOTXG']) else 0.05
+                marker_size = (val_xg * 500) + 100
+                
+                ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
+                           s=marker_size, 
+                           color='gold' if goal else (HIF_RED if on_tgt else 'white'),
+                           edgecolors='black', 
+                           linewidth=1,
+                           alpha=0.8,
+                           zorder=3)
         
-        # Plot skud
-        for _, row in df_plot.iterrows():
-            goal = is_true(row.get('SHOTISGOAL', False))
-            on_tgt = is_true(row.get('SHOTONTARGET', False))
-            
-            # Størrelse baseret på xG (hvis tilgængelig)
-            marker_size = (row.get('SHOTXG', 0.1) * 500) + 100
-            
-            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=marker_size, 
-                       color='gold' if goal else (HIF_RED if on_tgt else 'white'),
-                       edgecolors='black', 
-                       linewidth=1,
-                       alpha=0.8,
-                       zorder=3)
-        
-        # Legend/Forklaring
         st.pyplot(fig)
-        st.caption("🟡 Mål | 🔴 På mål | ⚪ Forbi/Blokeret | Størrelse indikerer xG værdi")
+        st.caption("🟡 Mål | 🔴 På mål | ⚪ Forbi/Blokeret | Størrelse = xG")
