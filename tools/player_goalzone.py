@@ -96,7 +96,7 @@ def vis_side(df_events, df_spillere):
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
     # --- TEGN BANE ---
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=40)
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='grey', pad_bottom=5)
     fig, ax = pitch.draw(figsize=(6, 3))
     ax.set_ylim(45, 105)
     
@@ -115,7 +115,7 @@ def vis_side(df_events, df_spillere):
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
             y_t = 57.5 if name == "Zone 8" else b["y_min"] + (b["y_max"]-b["y_min"])/2
-            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=9)
+            ax.text(x_t, y_t, f"{int(count)}\n({percent:.1f}%)", ha='center', va='center', fontweight='bold', fontsize=5)
 
     st.pyplot(fig)
     st.write(f"**Total afslutninger for {valgt_spiller}:** {int(total)}")
