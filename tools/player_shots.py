@@ -130,4 +130,4 @@ def vis_side(df_events, df_spillere, hold_map):
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
 
-Men nu har du lige forkortet min kode betragetelig!
+Men gør den ikke allerede det? 
