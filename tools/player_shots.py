@@ -4,6 +4,14 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(df_events, spillere, hold_map):
+    # --- DEBUG START (Fjern når vi har navnene) ---
+    st.write("### Debug: Kolonner i Eventdata")
+    st.write(list(df_events.columns))
+    
+    st.write("### Debug: Kolonner i Spillere-arket")
+    st.write(list(spillere.columns))
+    # --- DEBUG SLUT ---
+    
     """
     df_events: 'ev' fra load_hif_data (har allerede PLAYER_NAME)
     spillere: 'sp' arket fra load_hif_data
