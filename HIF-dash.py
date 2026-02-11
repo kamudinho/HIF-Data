@@ -79,8 +79,8 @@ with st.sidebar:
     # TRIN 1: Vælg Hovedområde
     hoved_omraade = option_menu(
         menu_title=None,
-        options=["Dashboard", "Truppen", "Analyse", "Scouting"],
-        icons=["house", "people", "graph-up", "search"],
+        options=["Truppen", "Analyse", "Scouting"],
+        icons=["people", "graph-up", "search"],
         menu_icon="cast", default_index=0,
         styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
     )
@@ -90,7 +90,7 @@ with st.sidebar:
         selected = option_menu(
             menu_title=None,
             options=["Oversigt", "Forecast", "Spillerstats", "Top 5"],
-            icons=["list", "shimmer", "bar-chart", "trophy"],
+            icons=["people", "people", "people", "people"],
             styles={"nav-link-selected": {"background-color": "#cc0000"}}
         )
 
@@ -98,15 +98,15 @@ with st.sidebar:
         selected = option_menu(
             menu_title=None,
             options=["Zoneinddeling", "Afslutninger", "Heatmaps"],
-            icons=["grid", "target", "map"],
+            icons=["graph-up", "graph-up", "graph-up"],
             styles={"nav-link-selected": {"background-color": "#cc0000"}}
         )
 
     elif hoved_omraade == "Scouting":
         selected = option_menu(
             menu_title=None,
-            options=["Sammenligning", "Scouting-database"],
-            icons=["intersect", "database"],
+            options=["Scouting-database", "Sammenligning"],
+            icons=["search", "search"],
             styles={"nav-link-selected": {"background-color": "#cc0000"}}
         )
 
