@@ -61,51 +61,54 @@ def vis_side(df_events, df_spillere, hold_map):
     df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
 
-    # --- 2. LAYOUT ---
+   # --- 2. LAYOUT ---
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
         st.write("##") 
         
+        # Hent sorteret liste over spillere
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
         
-        df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-        er_alle = valgt_spiller == "Alle Spillere"
+        # Vi fjerner "Alle Spillere" og vælger i stedet den første spiller som standard
+        valgt_spiller = st.selectbox(
+            "Vælg spiller", 
+            options=spiller_liste, 
+            index=0, 
+            label_visibility="collapsed"
+        )
+        
+        # Filter til den valgte spiller
+        df_plot = df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
+        df_plot = df_plot.sort_values(by=['MINUTE']).reset_index(drop=True)
+        # Vi genberegner SHOT_NR så det starter fra 1 for den valgte spiller
+        df_plot['SHOT_NR'] = df_plot.index + 1
 
         # Popover med tabel
-        with st.popover("Dataoverblik", use_container_width=True):
+        with st.popover(f"Skuddata: {valgt_spiller}", use_container_width=True):
             tabel_df = df_plot.copy()
-            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "⚽ MÅL" if str(x).lower() in ['true', '1', '1.0', 't'] else "Skud")
-            vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
-            vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
+            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if str(x).lower() in ['true', '1', '1.0', 't'] else "Skud")
+            vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'RESULTAT']]
+            vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-        # Hjælpefunktion til booleans
-        def get_stat_sum(dataframe, col_name):
-            if col_name in dataframe.columns:
-                return int(dataframe[col_name].apply(lambda x: str(x).lower() in ['true', '1', '1.0', 't']).sum())
-            return 0
-
-        # Beregning af dine 6 Metrics
+        # Metrics (Samme logik som før, nu kun for én spiller)
         SHOTS = len(df_plot)
-        GOALS = get_stat_sum(df_plot, 'SHOTISGOAL')
-        ON_TARGET = get_stat_sum(df_plot, 'SHOTONTARGET')
-        XG_TOTAL = df_plot['SHOTXG'].sum() if 'SHOTXG' in df_plot.columns else 0.0
-        # Afstandsberegning (Wyscout-koordinater: 100-x er afstand til mål-linje)
-        AVG_DIST = (100 - df_plot['LOCATIONX']).mean() if not df_plot.empty else 0
+        GOALS = int(df_plot['SHOTISGOAL'].apply(lambda x: str(x).lower() in ['true', '1', '1.0', 't']).sum())
+        ON_TARGET = int(df_plot['SHOTONTARGET'].apply(lambda x: str(x).lower() in ['true', '1', '1.0', 't']).sum())
+        XG_TOTAL = df_plot['SHOTXG'].sum()
+        AVG_DIST = (100 - df_plot['LOCATIONX']).mean() if SHOTS > 0 else 0
 
         def custom_metric(label, value):
             st.markdown(f"""
                 <div style="margin-bottom: 12px; border-left: 2px solid {HIF_RED}; padding-left: 12px;">
-                    <p style="margin:0; font-size: 12px; color: #777; text-transform: uppercase;">{label}</p>
+                    <p style="margin:0; font-size: 16px; color: #777; text-transform: uppercase;">{label}</p>
                     <p style="margin:0; font-size: 26px; font-weight: 700; color: #222;">{value}</p>
                 </div>
             """, unsafe_allow_html=True)
 
-        # De 6 Metrics
         custom_metric("Afslutninger", SHOTS)
         custom_metric("Mål", GOALS)
         custom_metric("Konverteringsrate", f"{(GOALS / SHOTS * 100) if SHOTS > 0 else 0:.1f}%")
@@ -114,29 +117,23 @@ def vis_side(df_events, df_spillere, hold_map):
         custom_metric("Gns. Afstand", f"{AVG_DIST:.1f} m")
 
     with layout_venstre:
-        # Bane-setup (Dine originale parametre)
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=0)
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
-        # Plot skud
         for _, row in df_plot.iterrows():
-            val = str(row.get('SHOTISGOAL', 'false')).lower()
-            is_goal = val in ['true', '1', '1.0', 't']
+            is_goal = str(row.get('SHOTISGOAL', 'false')).lower() in ['true', '1', '1.0', 't']
             
-            # Scatter
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
                        s=150 if is_goal else 150,
                        color='gold' if is_goal else HIF_RED, 
                        edgecolors='white', 
-                       linewidth=1.0 if is_goal else 0.6, 
-                       alpha=1 if er_alle else 1, 
-                       zorder=3)
+                       linewidth=1.2 if is_goal else 0.5, 
+                       alpha=0.9, zorder=3)
             
-            # Tilføj nummer på skuddet hvis én spiller er valgt
-            if not er_alle:
-                ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
-                        color='white' if not is_goal else 'black', 
-                        ha='center', va='center', fontsize=4, fontweight='light', zorder=4)
+            # Altid nummer på skuddet nu
+            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
+                    color='black' if is_goal else 'white', 
+                    ha='center', va='center', fontsize=4, fontweight='bold', zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
