@@ -86,7 +86,7 @@ def vis_side(df_events, df_spillere):
         st.metric("Total skud", total)
 
     # --- TEGN BANE ---
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#000000', line_zorder=1.5)
+    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#000000', line_zorder=0.5)
     fig, ax = pitch.draw(figsize=(10, 5)) 
     fig.patch.set_facecolor('none')
     ax.set_facecolor('none')
