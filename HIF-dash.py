@@ -8,44 +8,38 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Fjern luft i toppen af selve appen */
+        /* 1. Global padding - rykker indholdet lidt ned fra den usynlige top */
         .block-container {
             padding-top: 2rem !important;
             padding-bottom: 2rem !important;
         }
         
-        /* 2. Fjern det skjulte mellemrum over menuen/logoet */
+        /* 2. Fix for Sidebar Logo - vigtigste del! */
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 2rem !important; /* Giver logoet plads i toppen */
+        }
+
+        /* 3. Skjul standard header men behold funktionalitet */
         header {
             visibility: hidden;
             height: 0px;
         }
 
-        /* 3. Gør headeren synlig igen, men fjern dens baggrundsstøj */
-        header {
-            visibility: visible !important;
-            background: rgba(0,0,0,0) !important;
-        }
-
-        /* 4. Gør afstanden mellem widgets mindre på alle sider */
-        [data-testid="stVerticalBlock"] {
-            gap: 0.5rem !important;
-        }
-
-        /* 5. Fix for at selectboxes og radiobuttons ikke tager for meget plads */
-        div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
-            margin-bottom: -10px !important;
+        /* 4. Gør sidebaren pænere og undgå at logoet bliver cuttet */
+        [data-testid="stSidebar"] {
+            background-color: #f0f2f6;
         }
         
-       /* 6. Fix for sidebar logo: fjerner top-padding i sidebaren */
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 1rem !important;
+        [data-testid="stSidebar"] img {
+            margin-bottom: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
         }
 
-        /* Sørg for at billedet i sidebaren ikke kan blive cuttet af overflow */
-        [data-testid="stSidebar"] img {
-            max-width: 100%;
-            height: auto;
-            margin-top: 10px;
+        /* 5. Widget spacing */
+        [data-testid="stVerticalBlock"] {
+            gap: 0.8rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
