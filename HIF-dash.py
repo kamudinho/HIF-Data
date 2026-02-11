@@ -6,20 +6,33 @@ import pandas as pd
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
+# CSS til at fjerne hvid plads i MAIN CONTENT og SIDEBAR
 st.markdown("""
     <style>
-        .block-container { padding-top: 2rem !important; }
-        [data-testid="stSidebar"] img { display: block; margin: 0 auto 10px auto; }
-        
-        /* Gør hoved-vælgeren (omåde) blå og tydelig */
-        .area-header {
-            background-color: #003366;
-            color: white;
-            padding: 10px;
-            text-align: center;
-            border-radius: 5px;
-            font-weight: bold;
-            margin-bottom: 15px;
+        /* 1. Fjern Streamlit Header og Footer helt */
+        header[data-testid="stHeader"] {
+            display: none !important;
+        }
+        footer {
+            visibility: hidden !important;
+        }
+
+        /* 2. Tving Main Content helt til tops */
+        .main .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+            margin-top: -30px !important; /* Trækker indholdet op i det tomme header-felt */
+        }
+
+        /* 3. Sidebar logo og luft */
+        [data-testid="stSidebar"] img { 
+            display: block; 
+            margin: -20px auto 10px auto; 
+        }
+
+        /* 4. Skjul hvid bjælke øverst i sidebar */
+        [data-testid="stSidebarNav"] {
+            padding-top: 0rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
