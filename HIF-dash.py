@@ -18,13 +18,14 @@ st.markdown("""
         /* 2. Ryk selve indholdet helt op til toppen */
         .block-container {
             padding-top: 0rem !important;
-            margin-top: -2rem !important; /* Trækker indholdet op bag den gennemsigtige header */
+            margin-top: 2rem !important; /* Trækker indholdet op bag den gennemsigtige header */
             padding-bottom: 1rem !important;
         }
 
         /* 3. Fix for Sidebar Logo - sørg for det ikke bliver cuttet */
         [data-testid="stSidebarUserContent"] {
             padding-top: 1.5rem !important;
+            padding-bottom: 1.5rem !important;
         }
 
         /* 4. Gør afstanden mellem widgets mindre */
