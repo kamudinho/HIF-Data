@@ -14,11 +14,11 @@ def vis_side(spillere, player_events, df_scout):
     col_sel1, col_sel2 = st.columns(2)
 
     with col_sel1:
-        st.markdown("<h4 style='color: #df003b;'>🔴 Spiller 1</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #df003b;'>Spiller 1</h4>", unsafe_allow_html=True)
         s1_navn = st.selectbox("Vælg P1", navne_liste, index=0, label_visibility="collapsed")
 
     with col_sel2:
-        st.markdown("<h4 style='color: #0056a3; text-align: right;'>🔵 Spiller 2</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #0056a3; text-align: right;'>Spiller 2</h4>", unsafe_allow_html=True)
         s2_navn = st.selectbox("Vælg P2", navne_liste, index=1 if len(navne_liste) > 1 else 0,
                                label_visibility="collapsed")
 
