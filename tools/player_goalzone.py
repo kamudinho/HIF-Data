@@ -73,46 +73,48 @@ def vis_side(df_events, df_spillere):
     total = zone_stats['Antal'].sum()
     zone_stats['Procent'] = (zone_stats['Antal'] / total * 100) if total > 0 else 0
 
-   # --- TEGN BANE (Kompakt version) ---
+   # --- TEGN BANE (Super kompakt) ---
+    # Vi bruger 'wyscout' som før, men fjerner alt padding
     pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#cfcfcf', line_zorder=2)
     
-    # Vi gør figuren bredere end den er høj (8, 4.5) for at spare vertikal plads
-    fig, ax = pitch.draw(figsize=(8, 4.5)) 
+    # TRICKET: En meget bred og lav figsize (10 bred, 4 høj) tvinger plottet ned
+    fig, ax = pitch.draw(figsize=(10, 4)) 
     fig.patch.set_facecolor('none')
     ax.set_facecolor('none')
 
-    # Vi skærer bunden af (fra y=65 til 105), så vi kun ser den farlige halvdel
-    # Det gør kortet meget mere "fladt" og skærmvenligt
-    ax.set_ylim(65, 105) 
+    # Vi beholder bunden (f.eks. fra 50 til 100), men fjerner den tomme Zone 8 plads
+    # Hvis Zone 8 skal med, så brug 40 til 100, men hold figuren 'lav' i figsize
+    ax.set_ylim(50, 102) 
     
+    # Gør marginerne ekstremt små for at udnytte hver pixel
+    plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01)
+
     max_count = zone_stats['Antal'].max() if not zone_stats.empty else 1
     cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#f9f9f9', '#d31313'])
 
     for name, b in ZONE_BOUNDARIES.items():
-        # Spring Zone 8 over (hele egen banehalvdel), hvis vi vil spare endnu mere plads
-        if name == "Zone 8": continue 
-            
         count = zone_stats.loc[name, 'Antal'] if name in zone_stats.index else 0
         percent = zone_stats.loc[name, 'Procent'] if name in zone_stats.index else 0
         
+        # Farve-logik
         color_val = count / max_count if max_count > 0 else 0
         face_col = cmap(color_val)
         
+        # Vi tegner zonerne. Ved at bruge 'linewidth=0.5' fylder stregerne mindre visuelt
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
                           edgecolor='#444444', linestyle='-', linewidth=0.5, facecolor=face_col, alpha=0.7, zorder=1)
         ax.add_patch(rect)
         
         if count > 0:
             x_t = b["x_min"] + (b["x_max"]-b["x_min"])/2
+            # Justering af tekst-position for Zone 8 så den ikke ryger ud af bunden
             y_t = b["y_min"] + (b["y_max"]-b["y_min"])/2
+            if name == "Zone 8": y_t = 55 
             
-            text_color = "white" if color_val > 0.5 else "#333333"
-            ax.text(x_t, y_t, f"{int(count)}\n{percent:.0f}%", 
-                    ha='center', va='center', fontweight='bold', fontsize=8, 
+            text_color = "white" if color_val > 0.4 else "#333333"
+            ax.text(x_t, y_t, f"{int(count)} ({percent:.0f}%)", 
+                    ha='center', va='center', fontweight='bold', fontsize=7, 
                     color=text_color, zorder=3)
 
-    # Fjerner alt unødvendig luft omkring plottet
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
-    
-    # Vis kortet
+    # VISUALISERING
     st.pyplot(fig, use_container_width=True)
