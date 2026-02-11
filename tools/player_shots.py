@@ -55,19 +55,20 @@ def vis_side(df_events, df_spillere, hold_map):
         df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-0.6, 0.6, len(df_plot))
         df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-0.6, 0.6, len(df_plot))
 
-    # --- 4. TEGN BANE (Med midterlinje og bue) ---
+# --- 4. TEGN BANE (Kompakt halvbane) ---
     pitch = VerticalPitch(
         half=True, 
         pitch_type='wyscout', 
         line_color='#444444', 
         line_zorder=2,
-        pad_bottom=5,  # Tilføjer lidt ekstra "græs" under midterlinjen
+        pad_bottom=5,  
         pad_top=2
     )
     
-    fig, ax = pitch.draw(figsize=(10, 7))
+    # Vi sætter højden ned til 5.5 for at gøre den mere skærmvenlig
+    fig, ax = pitch.draw(figsize=(8, 5.5))
     
-    # Wyscout: 50 er midterlinjen. Ved at starte ved 45 får vi linjen og buen med.
+    # Vi beholder 45 for at få buen med, men lader lærredet være mindre
     ax.set_ylim(45, 102) 
 
     for _, row in df_plot.iterrows():
@@ -75,14 +76,16 @@ def vis_side(df_events, df_spillere, hold_map):
         color = HIF_RED if is_goal else DARK_GREY
         
         ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
-                   s=450 if is_goal else 280, 
+                   s=350 if is_goal else 220, # En anelse mindre prikker til mindre bane
                    color=color, edgecolors='white', linewidth=1.2, alpha=0.9, zorder=3)
         
         ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                 color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
 
-    # --- 5. VISNING ---
-    l, c, r = st.columns([0.1, 0.8, 0.1]) # Giver god plads til den fulde halvbane
+    # --- 5. VISNING (Skalering via kolonner) ---
+    # Ved at bruge [0.2, 0.6, 0.2] tvinger vi banen ned i størrelse,
+    # så den ikke optager for meget vertikal plads.
+    l, c, r = st.columns([0.2, 0.6, 0.2]) 
     with c:
         st.pyplot(fig)
         
