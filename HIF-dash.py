@@ -126,12 +126,12 @@ elif selected == "Forecast":
 elif selected == "Spillerstats":
     import tools.stats as stats
     # Her antager jeg, at din stats-fil skal bruge både spillere og player_events
-    stats.vis_side(spillere, df_events)
+    stats.vis_side(spillere, player_events)
 
 elif selected == "Top 5":
     import tools.top5 as top5
     # Her antager jeg, at din top5-fil skal bruge både spillere og player_events
-    top5.vis_side(spillere, df_events)
+    top5.vis_side(spillere, player_events)
 
 elif selected == "Zoneinddeling":
     import tools.player_goalzone as pgz
