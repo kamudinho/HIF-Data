@@ -137,13 +137,13 @@ if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
     st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
 
-elif selected == "Heatmaps":
-    import tools.heatmaps as heatmaps
-    heatmaps.vis_side(df_events, 4, hold_map)
+elif selected == "Hvidovre IF Truppen":
+    import tools.players as players
+    players.vis_side(spillere)
 
-elif selected == "Shotmaps":
-    import tools.skudmap as skudmap
-    skudmap.vis_side(df_events, 4, hold_map)
+elif selected == "Trupsammensætning":
+    import tools.squad as squad
+    squad.vis_side(spillere)
 
 elif selected == "Zoneinddeling":
     import tools.goalzone as goalzone
@@ -173,13 +173,13 @@ elif selected == "Top 5":
     import tools.top5 as top5
     top5.vis_side(spillere, player_events)
 
-elif selected == "Hvidovre IF Truppen":
-    import tools.players as players
-    players.vis_side(spillere)
+elif selected == "Heatmaps":
+    import tools.heatmaps as heatmaps
+    heatmaps.vis_side(df_events, 4, hold_map)
 
-elif selected == "Trupsammensætning":
-    import tools.squad as squad
-    squad.vis_side(spillere)
+elif selected == "Shotmaps":
+    import tools.skudmap as skudmap
+    skudmap.vis_side(df_events, 4, hold_map)
 
 elif selected == "Sammenligning":
     import tools.comparison as comparison
