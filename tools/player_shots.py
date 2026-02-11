@@ -8,7 +8,7 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
 
-    # --- 0. CSS TIL OPTIMERING (Ingen scroll, ingen footer) ---
+    # --- 0. CSS TIL OPTIMERING ---
     st.markdown("""
         <style>
             .main .block-container { padding-bottom: 1rem; padding-top: 2rem; }
@@ -17,11 +17,10 @@ def vis_side(df_events, df_spillere, hold_map):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. DATA-PROCESSERING (Spillere & Events) ---
+    # --- 1. DATA-PROCESSERING ---
     s_df = df_spillere.copy()
     s_df.columns = [str(c).strip().upper() for c in s_df.columns]
     
-    # Kobling af navn fra FIRSTNAME + LASTNAME
     s_df['FULL_NAME'] = s_df.apply(
         lambda x: f"{x.get('FIRSTNAME', '')} {x.get('LASTNAME', '')}".strip() 
         if pd.notna(x.get('FIRSTNAME')) or pd.notna(x.get('LASTNAME')) 
@@ -31,21 +30,19 @@ def vis_side(df_events, df_spillere, hold_map):
     s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     navne_dict = dict(zip(s_df['PLAYER_WYID'], s_df['FULL_NAME']))
 
-    # Event-data behandling (SQL formatet fra dit billede)
     df = df_events.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
-    # Filtrering (Kun skud fra HIF)
+    # Filtrering
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
     if 'TEAM_WYID' in df.columns:
         mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
     
     df_s = df[mask].copy()
     
-    # Sørg for numeriske værdier til beregninger
-    cols_to_fix = ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']
-    for col in cols_to_fix:
+    # Sørg for numeriske værdier (med sikkerhedstjek)
+    for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
         if col in df_s.columns:
             df_s[col] = pd.to_numeric(df_s[col], errors='coerce')
 
@@ -53,7 +50,6 @@ def vis_side(df_events, df_spillere, hold_map):
         st.info("Ingen afslutninger fundet.")
         return
 
-    # Navne og modstander-mapping
     df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(float(x)), f"Hold {x}") if pd.notna(x) else "Ukendt")
     df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
@@ -63,7 +59,7 @@ def vis_side(df_events, df_spillere, hold_map):
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
     with layout_hoejre:
-        st.write("##") # Spacer til flugtning
+        st.write("##") 
         
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
@@ -72,21 +68,28 @@ def vis_side(df_events, df_spillere, hold_map):
         
         with st.popover("Dataoverblik", use_container_width=True):
             tabel_df = df_stats.copy()
-            # Brug SHOTISGOAL direkte fra din nye SQL data
-            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if str(x).lower() == 'true' else "Skud")
+            # Sikker tjek af SHOTISGOAL
+            if 'SHOTISGOAL' in tabel_df.columns:
+                tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if str(x).lower() in ['true', '1', '1.0'] else "Skud")
+            else:
+                tabel_df['RESULTAT'] = "Skud" # Fallback
+                
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-        # --- DE 6 RIGTIGE SQL-BASEREDE METRICS ---
+        # --- BEREGNINGER (Robust overfor manglende merge) ---
+        def get_stat_sum(dataframe, col_name):
+            if col_name in dataframe.columns:
+                return int(dataframe[col_name].fillna(False).map({'true': True, 'false': False, True: True, False: False, 1: True, 0: False, 1.0: True, 0.0: False}).sum())
+            return 0
+
         SHOTS = len(df_stats)
-        # SHOTISGOAL og SHOTONTARGET er booleans i dit nye format
-        GOALS = int(df_stats['SHOTISGOAL'].map({'true': True, 'false': False, True: True, False: False}).sum())
-        KONV = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
-        ON_TARGET = int(df_stats['SHOTONTARGET'].map({'true': True, 'false': False, True: True, False: False}).sum())
-        XG_TOTAL = df_stats['SHOTXG'].sum()
+        GOALS = get_stat_sum(df_stats, 'SHOTISGOAL')
+        ON_TARGET = get_stat_sum(df_stats, 'SHOTONTARGET')
+        XG_TOTAL = df_stats['SHOTXG'].sum() if 'SHOTXG' in df_stats.columns else 0.0
         AVG_DIST = (100 - df_stats['LOCATIONX']).mean() if not df_stats.empty else 0
 
         def custom_metric(label, value):
@@ -99,22 +102,21 @@ def vis_side(df_events, df_spillere, hold_map):
 
         custom_metric("Afslutninger", SHOTS)
         custom_metric("Mål", GOALS)
-        custom_metric("Konverteringsrate", f"{KONV:.1f}%")
+        custom_metric("Konverteringsrate", f"{(GOALS / SHOTS * 100) if SHOTS > 0 else 0:.1f}%")
         custom_metric("Skud på mål", ON_TARGET)
         custom_metric("Expected Goals (xG)", f"{XG_TOTAL:.2f}")
         custom_metric("Gns. Afstand", f"{AVG_DIST:.1f} m")
 
     with layout_venstre:
-        df_plot = df_stats.copy()
-        er_alle = valgt_spiller == "Alle Spillere"
-
-        # Tegn banen (Vertical, optimeret bund)
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=0)
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
         for _, row in df_plot.iterrows():
-            is_goal = str(row['SHOTISGOAL']).lower() == 'true'
+            # Sikker tjek til plotting
+            val = str(row.get('SHOTISGOAL', 'false')).lower()
+            is_goal = val in ['true', '1', '1.0']
+            
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
                        s=200 if is_goal else 110,
                        color=HIF_RED, edgecolors='white', linewidth=1.2 if is_goal else 0.5, 
