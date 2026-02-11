@@ -53,14 +53,14 @@ def vis_side(df_events, df_spillere, hold_map):
         
         # Beregn statistik for den valgte visning
         df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-        antal_skud = len(df_stats)
-        antal_maal = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
-        konv_rate = (antal_maal / antal_skud * 100) if antal_skud > 0 else 0
+        SHOTS = len(df_stats)
+        GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
+        konv_rate = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
 
         # Vis tal (Metrics)
         m1, m2 = st.columns(2)
-        m1.metric("Afslutninger", antal_skud)
-        m2.metric("Mål", antal_maal)
+        m1.metric("Afslutninger", SHOTS)
+        m2.metric("Mål", GOALS)
         st.metric("Konvertering", f"{konv_rate:.1f}%")
         
         st.markdown("---")
