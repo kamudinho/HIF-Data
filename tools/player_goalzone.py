@@ -105,7 +105,7 @@ def vis_side(df_events, df_spillere):
         color_val = count / max_count
         
         rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"] - b["x_min"], b["y_max"] - b["y_min"], 
-                         edgecolor='#444444', linestyle='-', linewidth=0.3, 
+                         edgecolor='#000000', linestyle='-', linewidth=0.3, 
                          facecolor=cmap(color_val), alpha=0.7, zorder=1)
         ax.add_patch(rect)
         
