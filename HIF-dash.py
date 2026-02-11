@@ -154,7 +154,7 @@ elif selected == "Spiller Zoneinddeling":
 
 elif selected == "Spiller Afslutninger":
     import tools.player_shots as player_shots
-    player_shots.vis_side(df_events, kamp, hold_map)
+    player_shots.vis_side(df_events, spillere, hold_map)
 
 elif selected == "Spillerstats":
     import tools.stats as stats
