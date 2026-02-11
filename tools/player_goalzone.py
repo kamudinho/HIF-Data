@@ -11,35 +11,6 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
 
-    # --- 0. AGGRESSIV CSS OPTIMERING ---
-    # Dette fjerner Streamlits standard top-padding og minimerer widget-afstande
-    st.markdown("""
-        <style>
-            /* Fjerner den store hvide blok i toppen af Streamlit */
-            .main .block-container { 
-                padding-top: 0rem !important; 
-                padding-bottom: 0rem !important;
-                max-width: 95% !important;
-            }
-            /* Fjerner padding mellem rækker af widgets */
-            [data-testid="stVerticalBlock"] > div {
-                padding-top: 0.2rem !important;
-                padding-bottom: 0.2rem !important;
-            }
-            /* Tvinger radio-knapperne helt op */
-            div.row-widget.stRadio {
-                margin-top: -15px !important;
-                margin-bottom: -10px !important;
-            }
-            /* Justerer højden på metrics sektionen */
-            div[data-testid="stColumn"] {
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-start;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
     # --- 1. DATA-PROCESSERING (Beholdes som før) ---
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv')
