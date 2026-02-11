@@ -34,14 +34,14 @@ def vis_side(df_events, df_spillere, hold_map):
     df.columns = [str(c).strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
-    # Filtrering
+    # Filtrering (Kun skud fra HIF)
     mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
     if 'TEAM_WYID' in df.columns:
         mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
     
     df_s = df[mask].copy()
     
-    # Sørg for numeriske værdier (med sikkerhedstjek)
+    # Sørg for numeriske værdier
     for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
         if col in df_s.columns:
             df_s[col] = pd.to_numeric(df_s[col], errors='coerce')
@@ -64,15 +64,16 @@ def vis_side(df_events, df_spillere, hold_map):
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
         
-        df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-        
+        # DEFINER df_plot HER (Det er her fejlen lå)
+        df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
+        er_alle = valgt_spiller == "Alle Spillere"
+
         with st.popover("Dataoverblik", use_container_width=True):
-            tabel_df = df_stats.copy()
-            # Sikker tjek af SHOTISGOAL
+            tabel_df = df_plot.copy()
             if 'SHOTISGOAL' in tabel_df.columns:
                 tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if str(x).lower() in ['true', '1', '1.0'] else "Skud")
             else:
-                tabel_df['RESULTAT'] = "Skud" # Fallback
+                tabel_df['RESULTAT'] = "Skud"
                 
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
@@ -80,17 +81,17 @@ def vis_side(df_events, df_spillere, hold_map):
 
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-        # --- BEREGNINGER (Robust overfor manglende merge) ---
+        # Metrics beregninger
         def get_stat_sum(dataframe, col_name):
             if col_name in dataframe.columns:
                 return int(dataframe[col_name].fillna(False).map({'true': True, 'false': False, True: True, False: False, 1: True, 0: False, 1.0: True, 0.0: False}).sum())
             return 0
 
-        SHOTS = len(df_stats)
-        GOALS = get_stat_sum(df_stats, 'SHOTISGOAL')
-        ON_TARGET = get_stat_sum(df_stats, 'SHOTONTARGET')
-        XG_TOTAL = df_stats['SHOTXG'].sum() if 'SHOTXG' in df_stats.columns else 0.0
-        AVG_DIST = (100 - df_stats['LOCATIONX']).mean() if not df_stats.empty else 0
+        SHOTS = len(df_plot)
+        GOALS = get_stat_sum(df_plot, 'SHOTISGOAL')
+        ON_TARGET = get_stat_sum(df_plot, 'SHOTONTARGET')
+        XG_TOTAL = df_plot['SHOTXG'].sum() if 'SHOTXG' in df_plot.columns else 0.0
+        AVG_DIST = (100 - df_plot['LOCATIONX']).mean() if not df_plot.empty else 0
 
         def custom_metric(label, value):
             st.markdown(f"""
@@ -108,12 +109,13 @@ def vis_side(df_events, df_spillere, hold_map):
         custom_metric("Gns. Afstand", f"{AVG_DIST:.1f} m")
 
     with layout_venstre:
+        # Bane-setup
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=0)
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
+        # Nu virker loopet fordi df_plot er defineret ovenfor
         for _, row in df_plot.iterrows():
-            # Sikker tjek til plotting
             val = str(row.get('SHOTISGOAL', 'false')).lower()
             is_goal = val in ['true', '1', '1.0']
             
