@@ -31,25 +31,42 @@ def vis_side(df_events, df_kamp, hold_map):
     df_s['LOCATIONX'] = pd.to_numeric(df_s['LOCATIONX'], errors='coerce')
     df_s['LOCATIONY'] = pd.to_numeric(df_s['LOCATIONY'], errors='coerce')
 
-    # 3. GENERER BANE-LINJER FRA MPLSOCCER
-    # Vi bruger VerticalPitch til at få de helt korrekte koordinater
-    pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#cfcfcf')
-    lines = pitch.get_linestrings(x0=0, y0=0, x1=100, y1=100)
-
+    # 3. BYG PLOTLY FIGUR (Bane-geometri)
     fig = go.Figure()
 
-    # Tegn alle linjer fra mplsoccer i Plotly
-    for line in lines:
-        fig.add_trace(go.Scatter(
-            x=line[:, 1], # Bytter om så det passer med lodret visning
-            y=line[:, 0],
-            mode='lines',
-            line=dict(color='#cfcfcf', width=1.5),
-            hoverinfo='skip',
-            showlegend=False
-        ))
+    # Vi tegner banens linjer manuelt for at sikre de er med (Wyscout mål)
+    # line_color: #cfcfcf
+    lc = "#cfcfcf"
+    
+    # Vertikale og horisontale linjer (Halv bane)
+    lines = [
+        # Omrids
+        ((0, 100, 100, 0, 0), (50, 50, 100, 100, 50)),
+        # Feltet
+        ((19, 19, 81, 81), (100, 84, 84, 100)),
+        # Det lille felt
+        ((36.8, 36.8, 63.2, 63.2), (100, 94.2, 94.2, 100)),
+    ]
+
+    for x_coords, y_coords in lines:
+        fig.add_trace(go.Scatter(x=x_coords, y=y_coords, mode='lines', line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
+
+    # Buer (The D og Midtercirkel) - Vi bruger matematiske punkter for at få dem perfekte
+    def get_arc(center_x, center_y, radius, start_angle, end_angle):
+        angles = np.linspace(np.radians(start_angle), np.radians(end_angle), 50)
+        return center_x + radius * np.cos(angles), center_y + radius * np.sin(angles)
+
+    # "The D" bue (ved straffesparksfeltet)
+    arc_x, arc_y = get_arc(50, 84, 9, 195, 345)
+    fig.add_trace(go.Scatter(x=arc_x, y=arc_y, mode='lines', line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
+
+    # Midtercirkel (halv)
+    arc_x2, arc_y2 = get_arc(50, 50, 9.15, 0, 180)
+    fig.add_trace(go.Scatter(x=arc_x2, y=arc_y2, mode='lines', line=dict(color=lc, width=1.5), hoverinfo='skip', showlegend=False))
 
     # 4. TILFØJ SKUD-PUNKTER
+    import numpy as np # Husk at importere numpy til buerne
+    
     for is_goal in [False, True]:
         subset = df_s[df_s['IS_GOAL'] == is_goal]
         if subset.empty: continue
@@ -71,18 +88,17 @@ def vis_side(df_events, df_kamp, hold_map):
             ),
             text=hover_text,
             hoverinfo="text",
-            name="Mål" if is_goal else "Skud"
+            showlegend=False
         ))
 
-    # 5. LAYOUT (Optimering til skærm)
+    # 5. LAYOUT
     fig.update_layout(
         xaxis=dict(range=[-2, 102], visible=False, fixedrange=True),
-        yaxis=dict(range=[48, 102], visible=False, fixedrange=True), # Zoom ind
+        yaxis=dict(range=[48, 105], visible=False, fixedrange=True),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=20, b=0),
         height=550,
-        showlegend=False,
         hoverlabel=dict(bgcolor="white", font_size=12)
     )
 
