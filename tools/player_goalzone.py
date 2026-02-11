@@ -93,7 +93,7 @@ def vis_side(df_events, df_spillere, hold_map):
         custom_metric("xG pr. skud", f"{(xg_sum/total_shots) if total_shots > 0 else 0:.2f}")
 
     with layout_venstre:
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#000000', line_alpha=0.1, line_zorder=2, pad_top=0)
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#000000', line_alpha=0.7, line_zorder=2, pad_top=0)
         fig, ax = pitch.draw(figsize=(6, 7))
         ax.set_ylim(48, 102)
 
