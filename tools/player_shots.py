@@ -8,7 +8,7 @@ def vis_side(df_events, df_spillere, hold_map):
     HIF_ID = 38331
     HIF_RED = '#d31313'
 
-    # --- 0. CSS TIL OPTIMERING ---
+    # --- 0. CSS TIL OPTIMERING (Ingen scroll, ingen footer) ---
     st.markdown("""
         <style>
             .main .block-container { padding-bottom: 1rem; padding-top: 2rem; }
@@ -41,7 +41,7 @@ def vis_side(df_events, df_spillere, hold_map):
     
     df_s = df[mask].copy()
     
-    # Sørg for numeriske værdier
+    # Sørg for numeriske værdier (Vigtigt for xG og Lokationer)
     for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
         if col in df_s.columns:
             df_s[col] = pd.to_numeric(df_s[col], errors='coerce')
@@ -55,6 +55,11 @@ def vis_side(df_events, df_spillere, hold_map):
     df_s['SHOT_NR'] = df_s.index + 1
     df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
+    # --- HJÆLPEFUNKTION TIL BOOLEANS (Fixer dit format) ---
+    def check_bool(val):
+        # Dette tager højde for "TRUE", "true", 1, og "1.0"
+        return str(val).strip().upper() in ['TRUE', '1', '1.0']
+
     # --- 2. LAYOUT ---
     layout_venstre, layout_hoejre = st.columns([2, 1])
 
@@ -64,32 +69,22 @@ def vis_side(df_events, df_spillere, hold_map):
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste, label_visibility="collapsed")
         
-        # DEFINER df_plot HER (Det er her fejlen lå)
         df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
         er_alle = valgt_spiller == "Alle Spillere"
 
         with st.popover("Dataoverblik", use_container_width=True):
             tabel_df = df_plot.copy()
-            if 'SHOTISGOAL' in tabel_df.columns:
-                tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if str(x).lower() in ['true', '1', '1.0'] else "Skud")
-            else:
-                tabel_df['RESULTAT'] = "Skud"
-                
+            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "MÅL" if check_bool(x) else "Skud")
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-        # Metrics beregninger
-        def get_stat_sum(dataframe, col_name):
-            if col_name in dataframe.columns:
-                return int(dataframe[col_name].fillna(False).map({'true': True, 'false': False, True: True, False: False, 1: True, 0: False, 1.0: True, 0.0: False}).sum())
-            return 0
-
+        # --- Metrics beregninger ---
         SHOTS = len(df_plot)
-        GOALS = get_stat_sum(df_plot, 'SHOTISGOAL')
-        ON_TARGET = get_stat_sum(df_plot, 'SHOTONTARGET')
+        GOALS = int(df_plot['SHOTISGOAL'].apply(check_bool).sum()) if 'SHOTISGOAL' in df_plot.columns else 0
+        ON_TARGET = int(df_plot['SHOTONTARGET'].apply(check_bool).sum()) if 'SHOTONTARGET' in df_plot.columns else 0
         XG_TOTAL = df_plot['SHOTXG'].sum() if 'SHOTXG' in df_plot.columns else 0.0
         AVG_DIST = (100 - df_plot['LOCATIONX']).mean() if not df_plot.empty else 0
 
@@ -109,23 +104,22 @@ def vis_side(df_events, df_spillere, hold_map):
         custom_metric("Gns. Afstand", f"{AVG_DIST:.1f} m")
 
     with layout_venstre:
-        # Bane-setup
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2, pad_bottom=0)
         fig, ax = pitch.draw(figsize=(6, 5))
         ax.set_ylim(45, 102) 
 
-        # Nu virker loopet fordi df_plot er defineret ovenfor
         for _, row in df_plot.iterrows():
-            val = str(row.get('SHOTISGOAL', 'false')).lower()
-            is_goal = val in ['true', '1', '1.0']
+            # Bruger check_bool her for at tegne de rigtige cirkler
+            is_goal = check_bool(row.get('SHOTISGOAL', False))
             
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
                        s=200 if is_goal else 110,
-                       color=HIF_RED, edgecolors='white', linewidth=1.2 if is_goal else 0.5, 
+                       color=HIF_RED if not is_goal else '#FFD700', # Guld for mål
+                       edgecolors='white', linewidth=1.2 if is_goal else 0.5, 
                        alpha=0.7 if er_alle else 0.9, zorder=3)
             
             if not er_alle:
                 ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
-                        color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                        color='black' if is_goal else 'white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
