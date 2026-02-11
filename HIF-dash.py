@@ -8,44 +8,51 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
+        /* Grundlæggende layout */
         .block-container { 
             padding-top: 3rem !important; 
             padding-left: 2rem !important;
             padding-right: 2rem !important;
         }
         [data-testid="stSidebar"] img { display: block; margin: 0 auto 20px auto; }
-
-        /* --- PERMANENT BLÅ BAGGRUND TIL OVERSKRIFTER --- */
-        /* Vi målretter os de specifikke menupunkter via deres tekst-indhold */
         
-        .nav-link:has(span:contains("---")) {
-            background-color: #003366 !important; /* Mørkeblå */
-            color: white !important;
-            font-weight: 800 !important;
-            text-transform: uppercase !important;
-            pointer-events: none !important; /* Kan ikke klikkes */
-            cursor: default !important;
+        /* --- MENU STYLING --- */
+        .nav-link {
+            font-size: 14px !important;
+            background-color: white !important;
+            color: #333 !important;
             border-radius: 4px !important;
-            margin-top: 15px !important;
-            margin-bottom: 5px !important;
-            opacity: 1 !important;
-            display: flex !important;
-            justify-content: center !important;
-            padding: 10px 0 !important;
+            margin-bottom: 2px !important;
         }
 
-        /* Skjul ikonet helt på de blå bjælker */
-        .nav-link:has(span:contains("---")) i {
-            display: none !important;
+        /* Det valgte underpunkt bliver HIF Rød */
+        .nav-link-selected {
+            background-color: #cc0000 !important;
+            color: white !important;
         }
 
-        /* Fjern hover-effekt på de blå bjælker så de føles permanente */
-        .nav-link:has(span:contains("---")):hover {
+        /* --- PERMANENTE BLÅ BJÆLKER (Overskrifter) --- */
+        /* Vi tvinger række 2, 7 og 11 til at være blå uanset hvad */
+        ul li:nth-child(2) .nav-link, 
+        ul li:nth-child(7) .nav-link, 
+        ul li:nth-child(11) .nav-link {
             background-color: #003366 !important;
             color: white !important;
+            font-weight: bold !important;
+            text-transform: uppercase;
+            pointer-events: none !important; /* Kan ikke klikkes */
+            cursor: default !important;
+            margin-top: 15px !important;
+            text-align: center !important;
+            opacity: 1 !important;
         }
 
-        .nav-link { font-size: 14px !important; }
+        /* Skjul ikoner KUN for de blå bjælker */
+        ul li:nth-child(2) i, 
+        ul li:nth-child(7) i, 
+        ul li:nth-child(11) i {
+            display: none !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -98,9 +105,11 @@ def load_hif_data():
         if os.path.exists(SHOT_CSV_PATH):
             shot_details = pd.read_csv(SHOT_CSV_PATH)
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
+            
             for d in [ev, shot_details]:
                 if 'EVENT_WYID' in d.columns:
                     d['EVENT_WYID'] = d['EVENT_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
             if 'EVENT_WYID' in ev.columns and 'EVENT_WYID' in shot_details.columns:
                 shot_details = shot_details.drop_duplicates(subset=['EVENT_WYID'])
                 cols = ['EVENT_WYID', 'SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
@@ -114,8 +123,10 @@ def load_hif_data():
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         godkendte_ids = ho['TEAM_WYID'].unique()
         ev = ev[ev['TEAM_WYID'].isin(godkendte_ids)]
+        
         navne = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
         ev = ev.merge(navne, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
+            
         return ev, ka, h_map, sp, pe, sc
     except Exception as e:
         st.error(f"Kritisk fejl: {e}")
@@ -143,15 +154,14 @@ with st.sidebar:
             "Sammenligning", "Scouting-database"
         ],
         icons=[
-            'house', 'dot', 'people', 'graph-up', 'bar-chart', 'trophy',
-            'dot', 'person-bounding-box', 'target', 'map',
-            'dot', 'intersect', 'search'
+            'house', '', 'people', 'graph-up', 'bar-chart', 'trophy',
+            '', 'person-bounding-box', 'target', 'map',
+            '', 'intersect', 'search'
         ],
         menu_icon="cast", default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "#fafafa"},
             "icon": {"color": "#cc0000", "font-size": "14px"}, 
-            "nav-link": {"font-size": "13px", "text-align": "left", "padding": "5px 10px"},
             "nav-link-selected": {"background-color": "#cc0000"},
         }
     )
