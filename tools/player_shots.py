@@ -38,62 +38,58 @@ def vis_side(df_events, df_spillere, hold_map):
         st.info("Ingen afslutninger fundet for HIF.")
         return
 
-    # Tilføj modstander-navn før sortering
+    # Tilføj modstander-navn og sorter (Hold -> Minut)
     df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(x), f"Hold {x}") if pd.notna(x) else "Ukendt")
-    
-    # --- 2. SORTERING (Hold først, så minut) ---
     df_s = df_s.sort_values(by=['MODSTANDER', 'MINUTE']).reset_index(drop=True)
     df_s['SHOT_NR'] = df_s.index + 1
     df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
-    # --- 3. UI FILTRE ---
+    # --- 2. UI FILTRE ---
     spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
     valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
     
     df_plot = df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
 
-    # --- 4. ANTI-OVERLAP (JITTER) ---
-    # Vi tilføjer en lille tilfældig forskydning så prikker oven i hinanden kan skelnes
+    # --- 3. ANTI-OVERLAP (JITTER) ---
     if not df_plot.empty:
-        df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-0.5, 0.5, len(df_plot))
-        df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-0.5, 0.5, len(df_plot))
+        df_plot['LOC_X_JITTER'] = df_plot['LOCATIONX'] + np.random.uniform(-0.6, 0.6, len(df_plot))
+        df_plot['LOC_Y_JITTER'] = df_plot['LOCATIONY'] + np.random.uniform(-0.6, 0.6, len(df_plot))
 
-    # --- 5. TEGN BANE ---
+    # --- 4. TEGN BANE (Med midterlinje og bue) ---
     pitch = VerticalPitch(
         half=True, 
         pitch_type='wyscout', 
         line_color='#444444', 
         line_zorder=2,
-        pad_bottom=-10 # Lidt mere bane end før
+        pad_bottom=5,  # Tilføjer lidt ekstra "græs" under midterlinjen
+        pad_top=2
     )
     
-    fig, ax = pitch.draw(figsize=(9, 6)) # Større lærred
-    ax.set_ylim(60, 102) # Zoomer stadig ind, men mindre aggressivt
+    fig, ax = pitch.draw(figsize=(10, 7))
+    
+    # Wyscout: 50 er midterlinjen. Ved at starte ved 45 får vi linjen og buen med.
+    ax.set_ylim(45, 102) 
 
     for _, row in df_plot.iterrows():
         is_goal = 'goal' in str(row['PRIMARYTYPE']).lower()
         color = HIF_RED if is_goal else DARK_GREY
         
-        # Prikkerne (justeret størrelse)
         ax.scatter(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], 
                    s=450 if is_goal else 280, 
                    color=color, edgecolors='white', linewidth=1.2, alpha=0.9, zorder=3)
         
-        # Tallet (størrelse 6 som ønsket)
         ax.text(row['LOC_Y_JITTER'], row['LOC_X_JITTER'], str(int(row['SHOT_NR'])), 
                 color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
 
-    # --- 6. VISNING ---
-    l, c, r = st.columns([0.15, 0.7, 0.15]) # Mere plads til banen (70% bredde)
+    # --- 5. VISNING ---
+    l, c, r = st.columns([0.1, 0.8, 0.1]) # Giver god plads til den fulde halvbane
     with c:
         st.pyplot(fig)
         
         with st.popover(f"🔎 Se detaljer for {valgt_spiller}"):
-            # Forbered tabellen med den ønskede sortering
             tabel_df = df_plot.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "⚽ MÅL" if 'goal' in str(x).lower() else "❌ Skud")
             
-            # Sorteringen i tabellen er allerede på plads fra df_s
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             
