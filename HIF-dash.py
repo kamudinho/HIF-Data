@@ -44,11 +44,11 @@ if not st.session_state["logged_in"]:
                     st.error("Ugyldigt brugernavn eller kode")
     st.stop()
 
-# --- 3. DATA LOADING (OPDATERET TIL AT INKLUDERE SHOT EVENTS) ---
+# --- 3. DATA LOADING (OPDATERET OG ROBUST) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
-SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv') # Din nye fil
+SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv')
 
 @st.cache_resource
 def load_hif_data():
@@ -61,34 +61,42 @@ def load_hif_data():
 
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
+            # Tving med det samme til store bogstaver
+            ev.columns = [str(c).strip().upper() for c in ev.columns]
         else:
             st.error("Fandt ikke eventdata.parquet!")
             return None
 
-        # --- NYT: INDLÆS OG MERGE SHOT DETAILS ---
+        # --- MERGE SHOT DETAILS ---
         if os.path.exists(SHOT_CSV_PATH):
             shot_details = pd.read_csv(SHOT_CSV_PATH)
-            # Sørg for at kolonnerne er ens til merge (STORE BOGSTAVER)
             shot_details.columns = [str(c).strip().upper() for c in shot_details.columns]
-            ev.columns = [str(c).strip().upper() for c in ev.columns]
             
-            # Vi merger på EVENT_WYID og MATCH_WYID for at få SHOTXG, SHOTISGOAL osv. ind på de rigtige rækker
-            # Vi bruger 'left' merge så vi beholder alle events, men får ekstra info på skuddene
-            ev = ev.merge(
-                shot_details[['EVENT_WYID', 'MATCH_WYID', 'SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']], 
-                on=['EVENT_WYID', 'MATCH_WYID'], 
-                how='left'
-            )
-        
+            # Vi tjekker specifikt om nøglerne findes
+            keys = ['EVENT_WYID', 'MATCH_WYID']
+            if all(k in ev.columns for k in keys) and all(k in shot_details.columns for k in keys):
+                # Fjern dubletter i CSV'en så vi ikke puster hoved-dataen op
+                shot_details = shot_details.drop_duplicates(subset=keys)
+                
+                # Vælg kun de nødvendige kolonner fra CSV'en
+                cols_to_add = keys + ['SHOTISGOAL', 'SHOTONTARGET', 'SHOTXG']
+                # Tjek hvilke af disse der rent faktisk findes i CSV'en
+                existing_cols = [c for c in cols_to_add if c in shot_details.columns]
+                
+                ev = ev.merge(shot_details[existing_cols], on=keys, how='left')
+            else:
+                st.warning("Kunne ikke merge shotevents.csv: Tjek om EVENT_WYID og MATCH_WYID findes i begge filer.")
+
         # Standardisering af PLAYER_WYID
-        for df in [sp, pe, ev]:
-            if 'PLAYER_WYID' in df.columns:
-                df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+        for d in [sp, pe, ev]:
+            if 'PLAYER_WYID' in d.columns:
+                d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         godkendte_ids = ho['TEAM_WYID'].unique()
         ev = ev[ev['TEAM_WYID'].isin(godkendte_ids)]
         
+        # Navne-merge
         navne = sp[['PLAYER_WYID', 'NAVN']].drop_duplicates('PLAYER_WYID')
         ev = ev.merge(navne, on='PLAYER_WYID', how='left').rename(columns={'NAVN': 'PLAYER_NAME'})
             
