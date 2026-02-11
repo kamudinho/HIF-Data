@@ -137,11 +137,11 @@ if selected == "Dashboard":
     st.title("Hvidovre IF Performance Hub")
     st.success(f"Velkommen tilbage, {st.session_state['user'].upper()}")
 
-elif selected == "Hvidovre IF Truppen":
+elif selected == "Truppen":
     import tools.players as players
     players.vis_side(spillere)
 
-elif selected == "Trupsammensætning":
+elif selected == "Forecast":
     import tools.squad as squad
     squad.vis_side(spillere)
 
