@@ -21,7 +21,7 @@ st.markdown("""
         .main .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
-            margin-top: -20px !important; /* Trækker indholdet op i det tomme header-felt */
+            margin-top: -5px !important; /* Trækker indholdet op i det tomme header-felt */
         }
 
         /* 3. Sidebar logo og luft */
