@@ -48,24 +48,16 @@ def vis_side(df_events, df_spillere, hold_map):
 
     with layout_hoejre:
         st.markdown("### Filtre & Statistik")
+        
+        # Dropdown for spillervalg
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
         
         # Beregn statistik for den valgte visning
         df_stats = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-        SHOTS = len(df_stats)
-        GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
-        konv_rate = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
-
-        # Vis tal (Metrics)
-        m1, m2 = st.columns(2)
-        m1.metric("Afslutninger", SHOTS)
-        m2.metric("Mål", GOALS)
-        st.metric("Konvertering", f"{konv_rate:.1f}%")
         
-        st.markdown("---")
-        
-        with st.popover("Dataoverblik", use_container_width=True):
+        # Popover rykket op under dropdown
+        with st.popover("🔎 Dataoverblik", use_container_width=True):
             tabel_df = df_stats.copy()
             tabel_df['RESULTAT'] = tabel_df['PRIMARYTYPE'].apply(lambda x: "MÅL" if 'goal' in str(x).lower() else "Skud")
             
@@ -73,6 +65,18 @@ def vis_side(df_events, df_spillere, hold_map):
             vis_tabel = tabel_df[['SHOT_NR', 'MODSTANDER', 'MINUTE', 'SPILLER_NAVN', 'RESULTAT']]
             vis_tabel.columns = ['Nr.', 'Modstander', 'Minut', 'Spiller', 'Resultat']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Metrics vises nu under "Dataoverblik"
+        SHOTS = len(df_stats)
+        GOALS = len(df_stats[df_stats['PRIMARYTYPE'].str.contains('goal', case=False, na=False)])
+        konv_rate = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
+
+        m1, m2 = st.columns(2)
+        m1.metric("Afslutninger", SHOTS)
+        m2.metric("Mål", GOALS)
+        st.metric("Konvertering", f"{konv_rate:.1f}%")
 
     with layout_venstre:
         df_plot = df_stats.copy()
