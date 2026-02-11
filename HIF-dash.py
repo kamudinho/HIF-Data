@@ -10,7 +10,7 @@ st.markdown("""
     <style>
         /* 1. Fjern luft i toppen af selve appen */
         .block-container {
-            padding-top: 0.2rem !important;
+            padding-top: 2rem !important;
             padding-bottom: 0rem !important;
         }
         
