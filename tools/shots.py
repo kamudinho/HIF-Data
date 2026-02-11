@@ -51,12 +51,12 @@ def vis_side(df_events, df_kamp, hold_map):
         # BUEN VED FELTKANTEN (The D)
         dict(type="path", 
              path="M 37,83 A 13,13 0 0 0 63,83", 
-             line=dict(color="black", width=1.5)),
+             line=dict(color="black", width=0.5)),
         
         # MIDTERCIRKLEN (Halv cirkel ved midterlinjen)
         dict(type="path", 
              path="M 32,50 A 18,18 0 0 1 68,50", 
-             line=dict(color="black", width=1.5)),
+             line=dict(color="black", width=0.5)),
              
         # Midterlinjen
         dict(type="line", x0=0, y0=50, x1=100, y1=50, line=dict(color="black", width=1.5))
