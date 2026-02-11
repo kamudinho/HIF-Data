@@ -110,11 +110,11 @@ with st.sidebar:
     selected = option_menu(
         menu_title=None,
         options=[
-            "Dashboard", "Heatmaps", "Shotmaps", 
+            "Dashboard",  "Truppen", "Forecast", 
             "Zoneinddeling", "Afslutninger", "DataViz",
             "Spiller Zoneinddeling", "Spiller Afslutninger",
             "Spillerstats", "Top 5",
-            "Hvidovre IF Truppen", "Trupsammensætning", "Sammenligning", "Scouting-database"
+           "Heatmaps", "Shotmaps", "Sammenligning", "Scouting-database"
         ],
         icons=[
             'house', 'MAP', 'MAP', 
