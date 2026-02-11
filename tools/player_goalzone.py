@@ -119,7 +119,7 @@ def vis_side(df_events, df_spillere):
             # Tekstfarve styres her
             text_color = "#000000"
             ax.text(x_t, y_t, f"{int(count)}\n({percent:.0f}%)", 
-                    ha='center', va='center', fontweight='bold', fontsize=10, 
+                    ha='center', va='center', fontweight='light', fontsize=6, 
                     color=text_color, zorder=3)
 
     center_col = st.columns([0.1, 0.8, 0.1])[1]
