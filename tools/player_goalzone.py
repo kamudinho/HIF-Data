@@ -13,7 +13,7 @@ ZONE_BOUNDARIES = {
     "Zone 4A": {"y_min": 94.2, "y_max": 100.0, "x_min": 63.2, "x_max": 81.0},
     "Zone 4B": {"y_min": 94.2, "y_max": 100.0, "x_min": 19.0, "x_max": 36.8},
     "Zone 2": {"y_min": 90.0, "y_max": 94.2, "x_min": 36.8, "x_max": 63.2},
-    "Zone 3": {"y_min": 80.0, "y_max": 85.5, "x_min": 36.8, "x_max": 63.2},
+    "Zone 3": {"y_min": 84.0, "y_max": 90.0, "x_min": 36.8, "x_max": 63.2},
     "Zone 5A": {"y_min": 84.0, "y_max": 94.2, "x_min": 63.2, "x_max": 81.0},
     "Zone 5B": {"y_min": 84.0, "y_max": 94.2, "x_min": 19.0, "x_max": 36.8},
     "Zone 6A": {"y_min": 84.0, "y_max": 100.0, "x_min": 81.0, "x_max": 100.0},
