@@ -21,13 +21,13 @@ st.markdown("""
         .main .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
-            margin-top: -5px !important; /* Trækker indholdet op i det tomme header-felt */
+            margin-top: 5px !important; /* Trækker indholdet op i det tomme header-felt */
         }
 
         /* 3. Sidebar logo og luft */
         [data-testid="stSidebar"] img { 
             display: block; 
-            margin: -10px auto 10px auto; 
+            margin: 1px auto 10px auto; 
         }
 
         /* 4. Skjul hvid bjælke øverst i sidebar */
