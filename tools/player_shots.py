@@ -1,111 +1,89 @@
 import streamlit as st
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 from mplsoccer import VerticalPitch
 
 def vis_side(df_events, df_spillere, hold_map):
-    HIF_ID = 38331
-    HIF_RED = '#d31313'
-    
-    # --- 1. DATA INDLÆSNING ---
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    SHOT_CSV_PATH = os.path.join(BASE_DIR, 'shotevents.csv')
+    HIF_ID = 38331
+    HIF_RED = '#d31313'
 
-    if not os.path.exists(SHOT_CSV_PATH):
-        st.error(f"Fandt ikke shotevents.csv")
-        return
+    # --- 1. DATA-RENSNING (Vigtig pga. multiline format) ---
+    df = df_events.copy()
+    
+    # Fjern rækker der reelt er "rester" af tags fra SecondaryType
+    # Vi ved at en rigtig række starter med et PLAYER_WYID (et tal)
+    df = df[pd.to_numeric(df['PLAYER_WYID'], errors='coerce').notna()].copy()
+    
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
 
-    df_s = pd.read_csv(SHOT_CSV_PATH)
-    df_s.columns = [str(c).strip().upper() for c in df_s.columns]
-    
-    # Rens PLAYER_WYID og filtrer til HIF
-    df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-    df_s = df_s[pd.to_numeric(df_s['TEAM_WYID'], errors='coerce').fillna(0).astype(int) == HIF_ID].copy()
+    # Mapping af navne
+    s_df = df_spillere.copy()
+    s_df.columns = [str(c).strip().upper() for c in s_df.columns]
+    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
+    navne_dict = dict(zip(s_df['PLAYER_WYID'], (s_df['FIRSTNAME'].fillna('') + ' ' + s_df['LASTNAME'].fillna('')).str.strip()))
 
-    # Tving numeriske værdier og fjern rækker uden koordinater (FIXER DIN VALUEERROR)
-    for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
-        df_s[col] = pd.to_numeric(df_s[col], errors='coerce')
-    
-    # Smid rækker væk hvor vi ikke ved hvor skuddet er (vigtigt for st.pyplot)
-    df_s = df_s.dropna(subset=['LOCATIONX', 'LOCATIONY'])
+    # Filtrering
+    mask = df['PRIMARYTYPE'].str.contains('shot', case=False, na=False)
+    if 'TEAM_WYID' in df.columns:
+        mask &= (df['TEAM_WYID'].astype(float).astype(int) == HIF_ID)
+    df_s = df[mask].copy()
 
-    # Navne mapping
-    s_df = df_spillere.copy()
-    s_df.columns = [str(c).strip().upper() for c in s_df.columns]
-    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-    navne_dict = dict(zip(s_df['PLAYER_WYID'], s_df['NAVN']))
+    # Tving tal-formater
+    for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE']:
+        if col in df_s.columns:
+            df_s[col] = pd.to_numeric(df_s[col], errors='coerce').fillna(0)
 
-    df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
-    df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(float(x)), f"Hold {x}") if pd.notna(x) else "Ukendt")
+    if df_s.empty:
+        st.warning("Data kunne ikke læses korrekt. Tjek CSV-formatering.")
+        return
 
-    def is_true(val):
-        v = str(val).lower().strip()
-        return v in ['true', '1', '1.0', 't']
+    # Modstander og Spiller navne
+    df_s['MODSTANDER'] = df_s['OPPONENTTEAM_WYID'].apply(lambda x: hold_map.get(int(float(x)), f"Hold {x}") if pd.notna(x) else "Ukendt")
+    df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
+    df_s = df_s.sort_values(by=['MINUTE']).reset_index(drop=True)
+    df_s['SHOT_NR'] = df_s.index + 1
 
-    # --- 2. LAYOUT ---
-    layout_venstre, layout_hoejre = st.columns([2, 1])
+    # --- BOOLEAN CHECK (Baseret på din fil: TRUE/FALSE) ---
+    def is_true(val):
+        v = str(val).upper().strip()
+        return v in ['TRUE', '1', '1.0']
 
-    with layout_hoejre:
-        spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
-        
-        df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
-        df_plot = df_plot.sort_values(by=['MINUTE']).reset_index(drop=True)
+    # --- 2. LAYOUT ---
+    layout_venstre, layout_hoejre = st.columns([2, 1])
 
-        if df_plot.empty:
-            st.warning(f"Ingen gyldige skuddata fundet for {valgt_spiller}")
-            return
+    with layout_hoejre:
+        spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
+        valgt_spiller = st.selectbox("Vælg spiller", ["Alle Spillere"] + spiller_liste)
+        
+        df_plot = (df_s if valgt_spiller == "Alle Spillere" else df_s[df_s['SPILLER_NAVN'] == valgt_spiller]).copy()
 
-        # Metrics
-        shots = len(df_plot)
-        goals = int(df_plot['SHOTISGOAL'].apply(is_true).sum())
-        on_target = int(df_plot['SHOTONTARGET'].apply(is_true).sum())
-        xg_total = df_plot['SHOTXG'].fillna(0).sum()
-        xg_per_shot = xg_total / shots if shots > 0 else 0
-        goal_ratio = (goals / shots) * 100 if shots > 0 else 0
+        # Metrics
+        shots = len(df_plot)
+        goals = int(df_plot['SHOTISGOAL'].apply(is_true).sum()) if 'SHOTISGOAL' in df_plot.columns else 0
+        xg_total = df_plot['SHOTXG'].sum()
 
-        m1, m2 = st.columns(2)
-        m1.metric("Afslutninger", shots)
-        m2.metric("Mål", goals)
-        
-        m3, m4 = st.columns(2)
-        m3.metric("Total xG", f"{xg_total:.2f}")
-        m4.metric("xG pr. afslutning", f"{xg_per_shot:.2f}")
-        
-        m5, m6 = st.columns(2)
-        m5.metric("Skud på mål", on_target)
-        m6.metric("Mål-ratio", f"{goal_ratio:.1f}%")
+        st.metric("Afslutninger", shots)
+        st.metric("Mål", goals)
+        st.metric("Total xG", f"{xg_total:.2f}")
 
-        with st.expander("Se skudliste"):
-            res_df = df_plot.copy()
-            res_df['RESULTAT'] = df_plot['SHOTISGOAL'].apply(lambda x: "⚽ MÅL" if is_true(x) else "Skud")
-            st.dataframe(res_df[['MINUTE', 'SPILLER_NAVN', 'MODSTANDER', 'RESULTAT']], hide_index=True)
+        with st.expander("Se skudliste"):
+            res_df = df_plot[['SHOT_NR', 'MINUTE', 'SPILLER_NAVN']].copy()
+            res_df['MÅL'] = df_plot['SHOTISGOAL'].apply(lambda x: "⚽" if is_true(x) else "")
+            st.dataframe(res_df, hide_index=True)
 
-    with layout_venstre:
-        # BANEN
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
-        fig, ax = pitch.draw(figsize=(8, 7))
-        ax.set_ylim(40, 101) # Zoom ind på angrebssiden
+    with layout_venstre:
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
+        fig, ax = pitch.draw(figsize=(6, 5))
+        
+        for _, row in df_plot.iterrows():
+            goal = is_true(row.get('SHOTISGOAL', False))
+            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
+                       s=150 if goal else 80, 
+                       color=HIF_RED if not goal else 'gold',
+                       edgecolors='white', zorder=3)
+        
+        st.pyplot(fig)
 
-        # Plot kun hvis der er data (sikkerhed mod tomme lister)
-        if not df_plot.empty:
-            for _, row in df_plot.iterrows():
-                goal = is_true(row.get('SHOTISGOAL', False))
-                on_tgt = is_true(row.get('SHOTONTARGET', False))
-                
-                # Sikkerheds-check på xG for markørstørrelse
-                val_xg = float(row['SHOTXG']) if pd.notna(row['SHOTXG']) else 0.05
-                marker_size = (val_xg * 500) + 100
-                
-                ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                           s=marker_size, 
-                           color='gold' if goal else (HIF_RED if on_tgt else 'white'),
-                           edgecolors='black', 
-                           linewidth=1,
-                           alpha=0.8,
-                           zorder=3)
-        
-        st.pyplot(fig)
-        st.caption("🟡 Mål | 🔴 På mål | ⚪ Forbi/Blokeret | Størrelse = xG")
+Kan du sikre at denne også er korrekt? Den kode jeg sender her, er layoutmæssigt rigtigt. 
