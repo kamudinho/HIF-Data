@@ -81,7 +81,7 @@ def vis_side(df_events, df_spillere, hold_map):
         
         def custom_metric(label, value):
             st.markdown(f"""
-                <div style="margin-bottom: 8px; border-left: 3px solid {HIF_RED}; padding-left: 12px; line-height: 1.2;">
+                <div style="margin-bottom: 16px; border-left: 3px solid {HIF_RED}; padding-left: 12px; line-height: 1.2;">
                     <p style="margin:0; font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px;">{label}</p>
                     <p style="margin:0; font-size: 22px; font-weight: 700; color: #222;">{value}</p>
                 </div>
