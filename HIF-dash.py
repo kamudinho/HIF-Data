@@ -35,7 +35,7 @@ st.markdown("""
 
         /* 5. Gør selectbox og radio mere kompakte */
         div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
-            margin-bottom: -5px !important;
+            margin-bottom: 2px !important;
         }
     </style>
 """, unsafe_allow_html=True)
