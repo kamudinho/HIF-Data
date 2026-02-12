@@ -117,7 +117,7 @@ with st.sidebar:
     elif hoved_omraade == "Scouting":
         selected = option_menu(
             menu_title=None,
-            options=["Scouting-database", "Sammenligning"],
+            options=["Indtast scoutrapport", "Scouting-database", "Sammenligning"],
             icons=["search", "search"], # Dine valgte ikoner
             styles={"nav-link-selected": {"background-color": "#cc0000"}}
         )
@@ -148,5 +148,8 @@ elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
 elif selected == "Scouting-database":
+    import tools.scout_db as sdb
+    sdb.vis_side(spillere)
+elif selected == "Indtast scoutrapport":
     import tools.scout_input as si
     si.vis_side(spillere)
