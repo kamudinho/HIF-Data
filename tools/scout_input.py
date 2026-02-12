@@ -19,7 +19,6 @@ POS_MAP = {
 def save_to_github(new_row_df):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    
     r = requests.get(url, headers=headers)
     
     if r.status_code == 200:
@@ -37,17 +36,30 @@ def save_to_github(new_row_df):
         "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
         "sha": sha if sha else ""
     }
-    
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
 def vis_side(df_spillere):
-    # CSS til at fjerne unødvendig luft og styre tekstfelter
+    # CSS til at stramme layoutet og fikse tekst-overlap
     st.markdown("""
         <style>
-            [data-testid="stVerticalBlock"] { gap: 0.4rem !important; }
-            .stTextArea textarea { height: 120px !important; }
-            .stSelectSlider { margin-bottom: -15px !important; }
+            [data-testid="stVerticalBlock"] { gap: 0.2rem !important; }
+            .stTextArea textarea { height: 100px !important; }
+            /* Fjern ekstra margin i bunden af sliders */
+            div[data-testid="stSelectSlider"] { margin-bottom: -25px !important; }
+            /* Gør titlerne lidt mere tydelige */
+            .section-title {
+                font-size: 13px; 
+                font-weight: bold; 
+                margin-top: 15px; 
+                margin-bottom: 5px;
+                color: #31333F;
+            }
+            .param-label {
+                font-size: 12px;
+                margin-bottom: -10px;
+                color: #555;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -71,7 +83,6 @@ def vis_side(df_spillere):
         system_names = sorted(df_spillere['NAVN'].unique().tolist())
         manual_names = sorted(scouted_names['Navn'].unique().tolist())
         alle_navne = sorted(list(set(system_names + manual_names)))
-
         with c1:
             valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne)
             navn = valgt_navn
@@ -94,56 +105,68 @@ def vis_side(df_spillere):
 
     # --- SCOUTING FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
-        st.markdown("<p style='font-size: 13px; font-weight: bold; margin-bottom: -5px;'>Fysiske & Mentale Parametre (1-6)</p>", unsafe_allow_html=True)
+        st.markdown("<p class='section-title'>Fysiske & Mentale Parametre (1-6)</p>", unsafe_allow_html=True)
         
-        # Række 1: 4 parametre
+        # Række 1
         r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-        with r1c1: beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
-        with r1c2: fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
-        with r1c3: aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
-        with r1c4: attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
+        with r1c1: 
+            st.markdown("<p class='param-label'>Beslutsomhed</p>", unsafe_allow_html=True)
+            beslut = st.select_slider("beslut", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r1c2: 
+            st.markdown("<p class='param-label'>Fart</p>", unsafe_allow_html=True)
+            fart = st.select_slider("fart", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r1c3: 
+            st.markdown("<p class='param-label'>Aggresivitet</p>", unsafe_allow_html=True)
+            aggres = st.select_slider("aggres", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r1c4: 
+            st.markdown("<p class='param-label'>Attitude</p>", unsafe_allow_html=True)
+            attitude = st.select_slider("attitude", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
 
-        # Række 2: 4 parametre
+        # Række 2
         r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-        with r2c1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
-        with r2c2: leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=3)
-        with r2c3: teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=3)
-        with r2c4: intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
+        with r2c1: 
+            st.markdown("<p class='param-label'>Udholdenhed</p>", unsafe_allow_html=True)
+            udhold = st.select_slider("udhold", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r2c2: 
+            st.markdown("<p class='param-label'>Lederegenskaber</p>", unsafe_allow_html=True)
+            leder = st.select_slider("leder", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r2c3: 
+            st.markdown("<p class='param-label'>Teknik</p>", unsafe_allow_html=True)
+            teknik = st.select_slider("teknik", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        with r2c4: 
+            st.markdown("<p class='param-label'>Spilintelligens</p>", unsafe_allow_html=True)
+            intel = st.select_slider("intel", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
 
-        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
         
-        # Status og Potentiale
         m1, m2, m3 = st.columns([1, 1, 2])
         with m1: status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         with m2: potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
-        # Kvalitativ Vurdering (3 på linje)
-        st.markdown("<p style='font-size: 13px; font-weight: bold; margin-bottom: -5px;'>Kvalitativ Vurdering</p>", unsafe_allow_html=True)
+        st.markdown("<p class='section-title'>Kvalitativ Vurdering</p>", unsafe_allow_html=True)
         tc1, tc2, tc3 = st.columns(3)
-        with tc1: styrker = st.text_area("Styrker", placeholder="Spillerens styrker...")
-        with tc2: udvikling = st.text_area("Udviklingsområder", placeholder="Hvad skal forbedres?")
-        with tc3: vurdering = st.text_area("Samlet vurdering", placeholder="Konklusion...")
+        with tc1: 
+            st.markdown("<p class='param-label'>Styrker</p>", unsafe_allow_html=True)
+            styrker = st.text_area("styrker", placeholder="Spillerens styrker...", label_visibility="collapsed")
+        with tc2: 
+            st.markdown("<p class='param-label'>Udviklingsområder</p>", unsafe_allow_html=True)
+            udvikling = st.text_area("udvikling", placeholder="Hvad skal forbedres?", label_visibility="collapsed")
+        with tc3: 
+            st.markdown("<p class='param-label'>Samlet vurdering</p>", unsafe_allow_html=True)
+            vurdering = st.text_area("vurdering", placeholder="Konklusion...", label_visibility="collapsed")
 
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn and p_id:
                 avg_rating = round(sum([beslut, fart, aggres, attitude, udhold, leder, teknik, intel]) / 8, 1)
-                
                 ny_data = pd.DataFrame([[
                     p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
-                    avg_rating, status, potentiale, 
-                    styrker, udvikling, vurdering,
+                    avg_rating, status, potentiale, styrker, udvikling, vurdering,
                     beslut, fart, aggres, attitude, udhold, leder, teknik, intel
-                ]], columns=[
-                    "ID", "Dato", "Navn", "Klub", "Position", 
-                    "Rating_Avg", "Status", "Potentiale", 
-                    "Styrker", "Udvikling", "Vurdering",
-                    "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"
-                ])
+                ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
                 
                 res = save_to_github(ny_data)
                 if res in [200, 201]:
                     st.success("Rapport gemt!")
-                    # Vi venter ikke på rerun her, så brugeren kan se success-beskeden
                 else: 
                     st.error(f"Fejl ved gem: {res}")
             else: 
