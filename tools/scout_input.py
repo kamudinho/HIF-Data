@@ -111,8 +111,8 @@ def vis_side(df_spillere):
         # Række 2
         r2_1, r2_2, r2_3, r2_4 = st.columns(4)
         with r2_1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
-        with r2_2: leder = st.select_slider("Leder", options=[1,2,3,4,5,6], value=3)
-        with r2_3: teknik = st.select_slider("Teknik", options=[1,2,3,4,5,6], value=3)
+        with r2_2: leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=3)
+        with r2_3: teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=3)
         with r2_4: intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
 
         st.divider()
