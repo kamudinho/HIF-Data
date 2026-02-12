@@ -38,8 +38,16 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    # Enkel overskrift
-    st.write(f"#### Opret Scoutingrapport")
+    # CSS der kun strammer op uden at ødelægge labels
+    st.markdown("""
+        <style>
+            [data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
+            .stSlider { margin-bottom: -10px !important; }
+            .stTextArea textarea { height: 110px !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.write("#### Opret Scoutingrapport")
     
     # --- DATA HENTNING ---
     try:
@@ -49,11 +57,11 @@ def vis_side(df_spillere):
     except:
         scouted_names = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
-    kilde_type = st.radio("Vælg metode", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True)
+    kilde_type = st.radio("Metode", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True, label_visibility="collapsed")
     
     p_id, navn, klub, pos_val = "", "", "", ""
 
-    # --- BASIS INFORMATION ---
+    # --- BASIS INFORMATION (3 kolonner) ---
     c1, c2, c3 = st.columns([2, 1, 1])
     if kilde_type == "Find i system / Tidligere scoutet":
         system_names = sorted(df_spillere['NAVN'].unique().tolist())
@@ -74,41 +82,42 @@ def vis_side(df_spillere):
         with c2: pos_val = st.text_input("Position", value=pos_default)
         with c3: klub = st.text_input("Klub", value=klub_default)
     else:
-        with c1: navn = st.text_input("Spillernavn")
-        with c2: pos_val = st.text_input("Position")
-        with c3: klub = st.text_input("Klub")
+        with c1: navn = st.text_input("Spillernavn", placeholder="Navn...")
+        with c2: pos_val = st.text_input("Position", placeholder="f.eks. CB")
+        with c3: klub = st.text_input("Klub", placeholder="Klub...")
         p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
 
     # --- FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         
-        # Vi bruger 2 kolonner med 4 parametre i hver for at sikre læsbarhed
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
-            fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
-            aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
-            attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
-        
-        with col_right:
-            udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
-            leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=3)
-            teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=3)
-            intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
+        # Række 1: 4 kolonner
+        r1_1, r1_2, r1_3, r1_4 = st.columns(4)
+        with r1_1: beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
+        with r1_2: fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
+        with r1_3: aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
+        with r1_4: attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
+
+        # Række 2: 4 kolonner
+        r2_1, r2_2, r2_3, r2_4 = st.columns(4)
+        with r2_1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
+        with r2_2: leder = st.select_slider("Leder", options=[1,2,3,4,5,6], value=3)
+        with r2_3: teknik = st.select_slider("Teknik", options=[1,2,3,4,5,6], value=3)
+        with r2_4: intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
 
         st.divider()
         
         # Status og Potentiale
-        m1, m2 = st.columns(2)
+        m1, m2, m_empty = st.columns([1, 1, 2])
         with m1: status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         with m2: potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         st.write("**Vurdering**")
-        styrker = st.text_area("Styrker")
-        udvikling = st.text_area("Udviklingsområder")
-        vurdering = st.text_area("Samlet vurdering")
+        # Tre kolonner til tekstboksene
+        t1, t2, t3 = st.columns(3)
+        with t1: styrker = st.text_area("Styrker")
+        with t2: udvikling = st.text_area("Udviklingsområder")
+        with t3: vurdering = st.text_area("Samlet vurdering")
 
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn and p_id:
