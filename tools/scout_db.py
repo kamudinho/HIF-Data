@@ -40,28 +40,28 @@ def vis_side():
         if st.session_state.f_status: f_df = f_df[f_df['Status'].isin(st.session_state.f_status)]
         f_df = f_df[f_df['Rating_Avg'] >= st.session_state.f_rating]
 
-        # --- KLARGØR DATA ---
-        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False).copy()
+        # --- MASTER-TABEL ---
+        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
         
-        # Vi opretter en rigtig kolonne der hedder "Vis" med teksten "Klik"
-        latest_reports['Vis'] = "Klik her"
-
-        # --- TABEL ---
-        # Nu inkluderer vi 'Vis' som den første kolonne i listen
+        # TABEL-KONFIGURATION
         event = st.dataframe(
-            latest_reports[["Vis", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
+            latest_reports[["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
             use_container_width=True, 
             hide_index=True, 
             on_select="rerun", 
             selection_mode="single-row",
             column_config={
-                "Vis": st.column_config.TextColumn("Vis", width="small"),
+                # HER OMDØBER VI SYSTEMETS VALG-KOLONNE
+                "_selected": st.column_config.CheckboxColumn(
+                    "Vis", 
+                    width="small"
+                ),
                 "Rating_Avg": st.column_config.NumberColumn("Snit", format="%.1f"),
                 "Dato": st.column_config.DateColumn("Senest")
             }
         )
 
-        # --- DIALOG (PROFIL) ---
+        # --- DIALOG (MODAL) ---
         if len(event.selection.rows) > 0:
             @st.dialog("Spillerprofil", width="large")
             def vis_profil(player_data, full_df):
@@ -91,10 +91,10 @@ def vis_side():
 
                 with tab3:
                     if len(historik) < 2:
-                        st.info("Kræver mindst to rapporter.")
+                        st.info("Kræver flere rapporter.")
                     else:
                         param_liste = ["Rating_Avg", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-                        v_o = st.selectbox("Område", options=param_liste)
+                        v_o = st.selectbox("Parameter", options=param_liste)
                         fig = px.line(historik, x='Dato', y=v_o, markers=True, range_y=[1, 6.5])
                         st.plotly_chart(fig, use_container_width=True)
 
