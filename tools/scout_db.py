@@ -29,60 +29,57 @@ def vis_side():
         else:
             filtered_db = db
 
-        # 3. Den "Lukkede" Tabel (Oversigt)
-        vis_cols = ["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]
-        st.dataframe(
-            filtered_db[vis_cols],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
-                "Navn": st.column_config.TextColumn("Navn", width="medium"),
-            }
-        )
+        # 3. Den "Foldbare" Tabel
+        # Vi laver en header-række for at det ligner en tabel
+        h1, h2, h3, h4, h5 = st.columns([2, 1, 1, 1, 1])
+        h1.markdown("**Navn**")
+        h2.markdown("**Klub**")
+        h3.markdown("**Pos**")
+        h4.markdown("**Rating**")
+        h5.markdown("**Status**")
+        st.markdown("---")
 
-        # 4. "Åbn" spilleren
-        # Vi lader brugeren vælge fra de filtrerede navne
-        selected_name = st.selectbox(
-            "Klik her for at åbne detaljer på en spiller fra tabellen",
-            options=["Vælg spiller for at se detaljer..."] + filtered_db['Navn'].tolist()
-        )
-
-        if selected_name != "Vælg spiller for at se detaljer...":
-            # Hent den valgte spillers data
-            s = filtered_db[filtered_db['Navn'] == selected_name].iloc[0]
-            
-            st.markdown(f"### 📄 Rapport: {s['Navn']}")
-            
-            # Parametre i 4 kolonner
-            st.markdown("**Parametre (1-6)**")
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Beslutsomhed", s['Beslutsomhed'])
-            p2.metric("Fart", s['Fart'])
-            p3.metric("Aggresivitet", s['Aggresivitet'])
-            p4.metric("Attitude", s['Attitude'])
-            
-            p5, p6, p7, p8 = st.columns(4)
-            p5.metric("Udholdenhed", s['Udholdenhed'])
-            p6.metric("Leder", s['Lederegenskaber'])
-            p7.metric("Teknik", s['Teknik'])
-            p8.metric("Intelligens", s['Spilintelligens'])
-
-            st.markdown("---")
-            
-            # Kvalitative noter i 3 kolonner med fast bredde
-            t1, t2, t3 = st.columns(3)
-            with t1:
-                st.subheader("💪 Styrker")
-                st.info(s['Styrker'] if str(s['Styrker']) != 'nan' else "Ingen noter")
-            with t2:
-                st.subheader("🛠️ Udvikling")
-                st.warning(s['Udvikling'] if str(s['Udvikling']) != 'nan' else "Ingen noter")
-            with t3:
-                st.subheader("📋 Vurdering")
-                st.success(s['Vurdering'] if str(s['Vurdering']) != 'nan' else "Ingen noter")
+        if filtered_db.empty:
+            st.info("Ingen spillere fundet.")
+        else:
+            for _, s in filtered_db.iterrows():
+                # Her skaber vi "rækken" som en expander
+                # Vi formaterer titlen så den ligner en tabelrække
+                titel = f"{s['Navn'].ljust(20)} | {s['Klub']} | {s['Position']} | ⭐ {s['Rating_Avg']} | {s['Status']}"
                 
-            st.caption(f"Spiller ID: {s['ID']} | Sidst opdateret: {s['Dato']}")
+                with st.expander(titel):
+                    # --- INDHOLDET NÅR MAN ÅBNER ---
+                    st.markdown(f"**Detaljeret rapport for {s['Navn']}** (ID: {s['ID']})")
+                    
+                    # Parametre i 4 kolonner
+                    st.write("---")
+                    p1, p2, p3, p4 = st.columns(4)
+                    p1.metric("Beslutsomhed", s['Beslutsomhed'])
+                    p2.metric("Fart", s['Fart'])
+                    p3.metric("Aggresivitet", s['Aggresivitet'])
+                    p4.metric("Attitude", s['Attitude'])
+                    
+                    p5, p6, p7, p8 = st.columns(4)
+                    p5.metric("Udholdenhed", s['Udholdenhed'])
+                    p6.metric("Leder", s['Lederegenskaber'])
+                    p7.metric("Teknik", s['Teknik'])
+                    p8.metric("Intelligens", s['Spilintelligens'])
+
+                    st.write("---")
+                    
+                    # Tekstbokse i 3 kolonner (Styrker, Udvikling, Vurdering)
+                    t1, t2, t3 = st.columns(3)
+                    with t1:
+                        st.markdown("**Styrker**")
+                        st.info(s['Styrker'] if str(s['Styrker']) != 'nan' else "-")
+                    with t2:
+                        st.markdown("**Udvikling**")
+                        st.warning(s['Udvikling'] if str(s['Udvikling']) != 'nan' else "-")
+                    with t3:
+                        st.markdown("**Vurdering**")
+                        st.success(s['Vurdering'] if str(s['Vurdering']) != 'nan' else "-")
+                    
+                    st.caption(f"Rapport dato: {s['Dato']} | Potentiale: {s['Potentiale']}")
 
     except Exception as e:
-        st.info("Ingen data fundet i systemet.")
+        st.info("Ingen data fundet.")
