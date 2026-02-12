@@ -32,20 +32,34 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    st.markdown("### ✍️ Opret Scoutingrapport")
+    st.markdown("### Opret Scoutingrapport")
     
     kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True)
     
+    # Initialiser variabler
+    p_id = ""
+    navn = ""
+    klub = ""
+
     if kilde_type == "Find i system":
+        # Sørg for at kolonnenavnene matcher din Excel (NAVN og PLAYER_WYID)
         valgt_navn = st.selectbox("Vælg Spiller", sorted(df_spillere['NAVN'].unique()))
         spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
+        
+        # Hent WYID og Klub fra systemet
         p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
         navn = valgt_navn
-        klub = "Hvidovre IF"
+        # Hvis du har en 'KLUB' kolonne i din spillere-excel, bruger vi den, ellers default 'Hvidovre IF'
+        klub = spiller_info.get('HOLD', 'Hvidovre IF') 
+        
+        st.info(f"🔗 Koblet til systemet: ID {p_id} | Klub: {klub}")
     else:
         col_m1, col_m2 = st.columns(2)
-        with col_m1: navn = st.text_input("Spillernavn")
-        with col_m2: klub = st.text_input("Klub")
+        with col_m1: 
+            navn = st.text_input("Spillernavn")
+        with col_m2: 
+            klub = st.text_input("Klub")
+        # Generer et manuelt ID
         p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
 
     with st.form("scout_form", clear_on_submit=True):
@@ -61,16 +75,24 @@ def vis_side(df_spillere):
         noter = st.text_area("Kommentarer")
 
         if st.form_submit_button("Gem rapport"):
-            if navn:
+            if navn and p_id:
+                # Opret rækken med alle informationer inkl. ID og Klub
                 ny_data = pd.DataFrame([[
-                    p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, 
-                    pos, rating, status, potentiale, noter
+                    p_id, 
+                    datetime.now().strftime("%Y-%m-%d"), 
+                    navn, 
+                    klub, 
+                    pos, 
+                    rating, 
+                    status, 
+                    potentiale, 
+                    noter
                 ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating", "Status", "Potentiale", "Noter"])
                 
                 res = save_to_github(ny_data)
                 if res in [200, 201]:
-                    st.success(f"Rapport for {navn} er gemt i databasen!")
+                    st.success(f"Rapport for {navn} (ID: {p_id}) er gemt!")
                 else:
                     st.error(f"Fejl ved gem: {res}")
             else:
-                st.error("Navn mangler")
+                st.error("Navn eller ID mangler")
