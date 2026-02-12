@@ -14,7 +14,7 @@ def vis_side():
         df = pd.read_csv(raw_url)
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
-        # --- FILTRERING (POPOVER) ---
+        # --- FILTRERING ---
         if 'f_pos' not in st.session_state: st.session_state.f_pos = []
         if 'f_status' not in st.session_state: st.session_state.f_status = []
         if 'f_rating' not in st.session_state: st.session_state.f_rating = 1.0
@@ -32,32 +32,22 @@ def vis_side():
                     st.session_state.f_pos, st.session_state.f_status, st.session_state.f_rating = [], [], 1.0
                     st.rerun()
 
-        # --- DATA BEHANDLING (SAMMENTÆLLING OG SORTERING) ---
-        # 1. Tæl antal rapporter pr. ID
+        # --- DATA BEHANDLING ---
         rapport_counts = df.groupby('ID').size().reset_index(name='Rapporter')
-        
-        # 2. Find nyeste rapport for hver spiller
         latest_reports = df.sort_values('Dato').groupby('ID').tail(1)
-        
-        # 3. Merge antal rapporter ind på de nyeste rapporter
         final_df = pd.merge(latest_reports, rapport_counts, on='ID')
         
-        # --- ANVEND FILTRE PÅ FINAL_DF ---
         if search_query:
             final_df = final_df[final_df['Navn'].str.contains(search_query, case=False, na=False) | final_df['Klub'].str.contains(search_query, case=False, na=False)]
         if st.session_state.f_pos: final_df = final_df[final_df['Position'].isin(st.session_state.f_pos)]
         if st.session_state.f_status: final_df = final_df[final_df['Status'].isin(st.session_state.f_status)]
         final_df = final_df[final_df['Rating_Avg'] >= st.session_state.f_rating]
 
-        # Sorter efter dato (nyeste øverst)
         final_df = final_df.sort_values('Dato', ascending=False)
 
-        # --- MASTER-TABEL MED DIN RÆKKEFØLGE ---
-        # Kolonner i rækkefølge: Navn, Position, Klub, Rating_Avg (Snit), Status, Rapporter, Dato (Seneste)
-        vis_df = final_df[["Navn", "Position", "Klub", "Rating_Avg", "Status", "Rapporter", "Dato"]]
-
+        # --- TABEL MED CENTRERING ---
         event = st.dataframe(
-            vis_df,
+            final_df[["Navn", "Position", "Klub", "Rating_Avg", "Status", "Rapporter", "Dato"]],
             use_container_width=True, 
             hide_index=True, 
             on_select="rerun", 
@@ -65,38 +55,49 @@ def vis_side():
             column_config={
                 "_selected": st.column_config.CheckboxColumn("Vis", width="small"),
                 "Navn": st.column_config.TextColumn("Navn", width="medium"),
+                "Position": st.column_config.TextColumn("Position", width="small"), # Centreret via standard-look
                 "Rating_Avg": st.column_config.NumberColumn("Snit", format="%.1f"),
                 "Rapporter": st.column_config.NumberColumn("Rapporter", format="%d"),
                 "Dato": st.column_config.DateColumn("Seneste")
             }
         )
 
-        # --- DIALOG (MODAL PROFIL) ---
+        # --- FUNKTION TIL AT VISE ALLE METRIKKER ---
+        def vis_metrikker(data_row):
+            st.markdown("**Parametre**")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Beslutsomhed", data_row['Beslutsomhed'])
+            c2.metric("Fart", data_row['Fart'])
+            c3.metric("Aggresivitet", data_row['Aggresivitet'])
+            c4.metric("Attitude", data_row['Attitude'])
+            
+            c5, c6, c7, c8 = st.columns(4)
+            c5.metric("Udholdenhed", data_row['Udholdenhed'])
+            c6.metric("Lederegenskaber", data_row['Lederegenskaber'])
+            c7.metric("Teknik", data_row['Teknik'])
+            c8.metric("Spilintelligens", data_row['Spilintelligens'])
+            st.divider()
+
+        # --- DIALOG (PROFIL) ---
         if len(event.selection.rows) > 0:
             @st.dialog("Spillerprofil", width="large")
             def vis_profil(player_data, full_df):
                 valgt_id = player_data['ID']
-                valgt_navn = player_data['Navn']
                 historik = full_df[full_df['ID'] == valgt_id].sort_values('Dato')
                 
                 tab1, tab2, tab3 = st.tabs(["Seneste Rapport", "Historik", "Udvikling"])
                 
                 with tab1:
                     s = historik.iloc[-1]
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Beslut.", s['Beslutsomhed']); c2.metric("Fart", s['Fart'])
-                    c3.metric("Aggres.", s['Aggresivitet']); c4.metric("Attitude", s['Attitude'])
-                    c5, c6, c7, c8 = st.columns(4)
-                    c5.metric("Udhold.", s['Udholdenhed']); c6.metric("Leder", s['Lederegenskaber'])
-                    c7.metric("Teknik", s['Teknik']); c8.metric("Intell.", s['Spilintelligens'])
-                    st.divider()
+                    vis_metrikker(s)
                     st.info(f"**Styrker**\n\n{s['Styrker'] if str(s['Styrker']) != 'nan' else '-'}")
                     st.warning(f"**Udvikling**\n\n{s['Udvikling'] if str(s['Udvikling']) != 'nan' else '-'}")
                     st.success(f"**Vurdering**\n\n{s['Vurdering'] if str(s['Vurdering']) != 'nan' else '-'}")
 
                 with tab2:
                     for _, row in historik.iloc[::-1].iterrows():
-                        with st.expander(f"{row['Dato']} | Snit: {row['Rating_Avg']}"):
+                        with st.expander(f"Rapport fra {row['Dato']} | Snit: {row['Rating_Avg']}"):
+                            vis_metrikker(row) # Samme visning som i seneste rapport
                             st.write(f"**Vurdering:** {row['Vurdering']}")
 
                 with tab3:
@@ -104,12 +105,12 @@ def vis_side():
                         st.info("Kræver mindst to rapporter.")
                     else:
                         param_liste = ["Rating_Avg", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-                        v_o = st.selectbox("Parameter", options=param_liste)
+                        v_o = st.selectbox("Område", options=param_liste)
                         fig = px.line(historik, x='Dato', y=v_o, markers=True, range_y=[1, 6.5])
                         st.plotly_chart(fig, use_container_width=True)
 
             row_idx = event.selection.rows[0]
             vis_profil(final_df.iloc[row_idx], df)
 
-    except Exception as e:
-        st.info("Databasen er tom eller kunne ikke indlæses.")
+    except Exception:
+        st.info("Databasen er tom.")
