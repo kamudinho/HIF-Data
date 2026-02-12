@@ -147,9 +147,9 @@ elif selected == "Heatmaps":
 elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
-elif selected == "Scouting-database":
+elif selected == "Database":
     import tools.scout_db as sdb
-    sdb.vis_side(spillere)
-elif selected == "Indtast scoutrapport":
+    sdb.vis_side()
+elif selected == "Scoutrapport":
     import tools.scout_input as si
     si.vis_side(spillere)
