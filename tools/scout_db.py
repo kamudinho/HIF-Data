@@ -87,31 +87,60 @@ def vis_side():
                     st.plotly_chart(fig, use_container_width=True)
 
                 with tab4:
-                    if s_df.empty or p_data['ID'] not in s_df['ID'].values:
-                        st.info("Ingen sæsonstatistik fundet for denne spiller i /data/sæsonoverblik.csv")
-                    else:
-                        spiller_stats = s_df[s_df['ID'] == p_data['ID']].sort_values('Sæson', ascending=False)
-                        
-                        st.markdown("**Kampdata fra tidligere sæsoner**")
-                        
-                        # Vi viser de kolonner du bad om: Kampe, Minutter, Mål, Assists, Dueller
-                        # Jeg antager at de hedder præcis det i din CSV
-                        st.dataframe(
-                            spiller_stats[["Sæson", "Kampe", "Minutter", "Mål", "Assists", "Dueller"]],
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "Sæson": st.column_config.TextColumn("Sæson"),
-                                "Minutter": st.column_config.NumberColumn("Min.", format="%d"),
-                                "Dueller": st.column_config.TextColumn("Dueller %") # Hvis det er tekst som "54%"
-                            }
-                        )
-                        
-                        # Lille opsummering i boks
-                        total_maal = spiller_stats['Mål'].sum()
-                        total_kampe = spiller_stats['Kampe'].sum()
-                        st.success(f"**Total karriere (HIF data):** {total_kampe} kampe / {total_maal} mål")
+    if s_df.empty:
+        st.info("Kunne ikke finde filen: data/sæsonoverblik.csv")
+    else:
+        # Vi sikrer os at begge ID-kolonner behandles som strenge for at undgå match-fejl
+        s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
+        valgt_id = str(p_data['ID'])
+        
+        # Filtrer data baseret på PLAYER_WYID
+        spiller_stats = s_df[s_df['PLAYER_WYID'] == valgt_id].copy()
+        
+        if spiller_stats.empty:
+            st.warning(f"Ingen kampdata fundet i systemet for PLAYER_WYID: {valgt_id}")
+            # Lille hjælper til fejlfinding
+            if st.checkbox("Vis alle tilgængelige ID'er i filen"):
+                st.write(s_df['PLAYER_WYID'].unique())
+        else:
+            st.markdown(f"**Officiel Kampstatistik (Wyscout Data)**")
+            
+            # Vi udvælger de kolonner du bad om fra din lange liste
+            # Bemærk: 'KAMPE' og 'MINUTESONFIELD' matcher dine kolonnenavne
+            vis_df = spiller_stats[[
+                "KAMPE", 
+                "MINUTESONFIELD", 
+                "GOALS", 
+                "ASSISTS", 
+                "DUELS", 
+                "DUELSWON"
+            ]].copy()
+            
+            # Beregn duelseffektivitet i % hvis du vil have det mere læseligt
+            try:
+                vis_df['DUEL_%'] = (vis_df['DUELSWON'] / vis_df['DUELS'] * 100).round(1).astype(str) + '%'
+            except:
+                vis_df['DUEL_%'] = "N/A"
 
+            st.dataframe(
+                vis_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "KAMPE": st.column_config.NumberColumn("Kampe", format="%d"),
+                    "MINUTESONFIELD": st.column_config.NumberColumn("Minutter", format="%d"),
+                    "GOALS": st.column_config.NumberColumn("Mål", format="%d"),
+                    "ASSISTS": st.column_config.NumberColumn("Assists", format="%d"),
+                    "DUELS": st.column_config.NumberColumn("Dueller (Total)", format="%d"),
+                    "DUEL_%": st.column_config.TextColumn("Vundne %")
+                }
+            )
+            
+            # Avanceret overblik (Eksempel på hvordan vi kan bruge din store datamængde)
+            with st.expander("Se udvidet data (Passes, XG, osv.)"):
+                adv_cols = ["PASSES", "SUCCESSFULPASSES", "XGSHOT", "XGASSIST", "INTERCEPTIONS"]
+                eksisterende = [c for c in adv_cols if c in spiller_stats.columns]
+                st.write(spiller_stats[eksisterende])
             vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df)
 
     except Exception as e:
