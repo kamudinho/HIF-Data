@@ -40,39 +40,35 @@ def vis_side():
         if st.session_state.f_status: f_df = f_df[f_df['Status'].isin(st.session_state.f_status)]
         f_df = f_df[f_df['Rating_Avg'] >= st.session_state.f_rating]
 
-        # --- KLARGØR TABEL MED IKON ---
-        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False).copy()
+        # --- MASTER-TABEL ---
+        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
         
-        # Vi tilføjer en kolonne med et "Profil" ikon (tekst-baseret for stabilitet)
-        latest_reports['Info'] = "📄" 
-
-        # --- TABELVISNING ---
+        # Vi omdøber kolonnen for valg via column_config
         event = st.dataframe(
-            latest_reports[["Info", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
+            latest_reports[["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
             use_container_width=True, 
             hide_index=True, 
             on_select="rerun", 
-            selection_mode="single-row", # Dette fungerer som klik-trigger
+            selection_mode="single-row",
             column_config={
-                "Info": st.column_config.TextColumn("Vis", width="small"),
+                "_selected": st.column_config.CheckboxColumn("Vis", width="small"), # Omdøber checkboks-kolonnen
                 "Rating_Avg": st.column_config.NumberColumn("Snit", format="%.1f"),
                 "Dato": st.column_config.DateColumn("Senest")
             }
         )
 
-        # --- MODAL / OVERLAY PROFIL ---
+        # --- DIALOG (MODAL) ---
         if len(event.selection.rows) > 0:
-            # Her åbner vi en dialog (modal), som svæver over tabellen
             @st.dialog("Spillerprofil", width="large")
-            def show_player_profile(player_data, full_df):
+            def vis_profil(player_data, full_df):
                 valgt_id = player_data['ID']
                 valgt_navn = player_data['Navn']
                 
                 historik = full_df[full_df['ID'] == valgt_id].sort_values('Dato')
                 
-                t1, t2, t3 = st.tabs(["Rapport", "Historik", "Udvikling"])
+                tab1, tab2, tab3 = st.tabs(["Rapport", "Historik", "Udvikling"])
                 
-                with t1:
+                with tab1:
                     s = historik.iloc[-1]
                     c1, c2, c3, c4 = st.columns(4)
                     c1.metric("Beslut.", s['Beslutsomhed']); c2.metric("Fart", s['Fart'])
@@ -84,24 +80,26 @@ def vis_side():
                     st.info(f"**Styrker**\n\n{s['Styrker'] if str(s['Styrker']) != 'nan' else '-'}")
                     st.warning(f"**Udvikling**\n\n{s['Udvikling'] if str(s['Udvikling']) != 'nan' else '-'}")
                     st.success(f"**Vurdering**\n\n{s['Vurdering'] if str(s['Vurdering']) != 'nan' else '-'}")
+                    st.caption(f"ID: {s['ID']} | Potentiale: {s['Potentiale']}")
 
-                with t2:
+                with tab2:
                     for _, row in historik.iloc[::-1].iterrows():
                         with st.expander(f"{row['Dato']} | Snit: {row['Rating_Avg']}"):
                             st.write(f"**Vurdering:** {row['Vurdering']}")
 
-                with t3:
+                with tab3:
                     if len(historik) < 2:
-                        st.write("Kræver flere rapporter.")
+                        st.info("Kræver mindst to rapporter for at vise trend.")
                     else:
-                        områder = ["Rating_Avg", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-                        v_o = st.selectbox("Parameter", options=områder)
+                        param_liste = ["Rating_Avg", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
+                        v_o = st.selectbox("Vælg område", options=param_liste)
                         fig = px.line(historik, x='Dato', y=v_o, markers=True, range_y=[1, 6.5])
+                        fig.update_layout(height=350, margin=dict(l=0, r=0, t=30, b=0))
                         st.plotly_chart(fig, use_container_width=True)
 
-            # Trigger dialogen med det samme når rækken vælges
+            # Åbn dialogen med data fra den valgte række
             row_idx = event.selection.rows[0]
-            show_player_profile(latest_reports.iloc[row_idx], df)
+            vis_profil(latest_reports.iloc[row_idx], df)
 
-    except Exception as e:
+    except Exception:
         st.info("Databasen er tom.")
