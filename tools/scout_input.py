@@ -38,12 +38,13 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    # CSS der kun strammer op uden at ødelægge labels
+    # CSS til at stramme layoutet op
     st.markdown("""
         <style>
             [data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
             .stSlider { margin-bottom: -10px !important; }
             .stTextArea textarea { height: 110px !important; }
+            .id-label { font-size: 12px; color: #666; margin-top: -15px; margin-bottom: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -61,12 +62,14 @@ def vis_side(df_spillere):
     
     p_id, navn, klub, pos_val = "", "", "", ""
 
-    # --- BASIS INFORMATION (3 kolonner) ---
+    # --- BASIS INFORMATION ---
     c1, c2, c3 = st.columns([2, 1, 1])
+    
     if kilde_type == "Find i system / Tidligere scoutet":
         system_names = sorted(df_spillere['NAVN'].unique().tolist())
         manual_names = sorted(scouted_names['Navn'].unique().tolist())
         alle_navne = sorted(list(set(system_names + manual_names)))
+        
         with c1:
             valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne)
             navn = valgt_navn
@@ -79,26 +82,33 @@ def vis_side(df_spillere):
             else:
                 info = scouted_names[scouted_names['Navn'] == valgt_navn].iloc[0]
                 p_id, pos_default, klub_default = info['ID'], info['Position'], info['Klub']
+            
+            # VIS ID TYDELIGT
+            st.markdown(f"<p class='id-label'>ID: {p_id}</p>", unsafe_allow_html=True)
+            
         with c2: pos_val = st.text_input("Position", value=pos_default)
         with c3: klub = st.text_input("Klub", value=klub_default)
+        
     else:
-        with c1: navn = st.text_input("Spillernavn", placeholder="Navn...")
+        with c1: 
+            navn = st.text_input("Spillernavn", placeholder="Navn...")
+            p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
+            st.markdown(f"<p class='id-label'>ID: {p_id} (Auto-genereret)</p>", unsafe_allow_html=True)
         with c2: pos_val = st.text_input("Position", placeholder="f.eks. CB")
         with c3: klub = st.text_input("Klub", placeholder="Klub...")
-        p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
 
     # --- FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         
-        # Række 1: 4 kolonner
+        # Række 1
         r1_1, r1_2, r1_3, r1_4 = st.columns(4)
         with r1_1: beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
         with r1_2: fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
         with r1_3: aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
         with r1_4: attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
 
-        # Række 2: 4 kolonner
+        # Række 2
         r2_1, r2_2, r2_3, r2_4 = st.columns(4)
         with r2_1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
         with r2_2: leder = st.select_slider("Leder", options=[1,2,3,4,5,6], value=3)
@@ -107,13 +117,11 @@ def vis_side(df_spillere):
 
         st.divider()
         
-        # Status og Potentiale
         m1, m2, m_empty = st.columns([1, 1, 2])
         with m1: status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         with m2: potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         st.write("**Vurdering**")
-        # Tre kolonner til tekstboksene
         t1, t2, t3 = st.columns(3)
         with t1: styrker = st.text_area("Styrker")
         with t2: udvikling = st.text_area("Udviklingsområder")
