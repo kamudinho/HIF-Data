@@ -6,24 +6,24 @@ import uuid
 # Stier til dine filer
 REPO = "Kamudinho/HIF-data"
 SCOUT_FILE = "scouting_db.csv"
-STATS_FILE = "data/sæsonoverblik.csv" # Din nye fil
+STATS_FILE = "data/sæsonoverblik.csv" 
 
 def vis_side():
     st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
     
     try:
-        # Hent Scouting Data
+        # 1. Hent Scouting Data
         scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{SCOUT_FILE}?nocache={uuid.uuid4()}"
         df = pd.read_csv(scout_url)
         df['Dato_Str'] = df['Dato'].astype(str)
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
-        # Hent Sæsonstatistik Data (Kampdata)
+        # 2. Hent Sæsonstatistik Data
         try:
             stats_url = f"https://raw.githubusercontent.com/{REPO}/main/{STATS_FILE}?nocache={uuid.uuid4()}"
             stats_df = pd.read_csv(stats_url)
         except:
-            stats_df = pd.DataFrame() # Tom hvis filen mangler
+            stats_df = pd.DataFrame()
 
         # --- FILTRERING ---
         if 'f_pos' not in st.session_state: st.session_state.f_pos = []
@@ -47,7 +47,7 @@ def vis_side():
         if st.session_state.f_pos:
             final_df = final_df[final_df['Position'].isin(st.session_state.f_pos)]
 
-        # --- TABEL ---
+        # --- HOVEDTABEL ---
         tabel_hoejde = (len(final_df) * 35) + 40
         event = st.dataframe(
             final_df[["Navn", "Position", "Klub", "Rating_Avg", "Status", "Rapporter", "Dato"]],
@@ -59,13 +59,25 @@ def vis_side():
             }
         )
 
+        # Hjælpefunktion til metrikker
+        def vis_metrikker(row):
+            m_cols = st.columns(4)
+            metrics = [
+                ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
+                ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
+                ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
+                ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
+            ]
+            for i, (label, col) in enumerate(metrics):
+                m_cols[i % 4].metric(label, row[col])
+
         # --- DIALOG (PROFIL) ---
         if len(event.selection.rows) > 0:
             @st.dialog("Spillerprofil", width="large")
             def vis_profil(p_data, full_df, s_df):
                 st.markdown(f"### {p_data['Navn']} | {p_data['Position']}")
                 st.markdown(f"**{p_data['Klub']}**")
-                st.caption(f"Spiller ID: {p_data['ID']}")
+                st.caption(f"Spiller ID / PLAYER_WYID: {p_data['ID']}")
                 st.divider()
 
                 historik = full_df[full_df['ID'] == p_data['ID']].sort_values('Dato')
@@ -73,75 +85,54 @@ def vis_side():
                 
                 with tab1:
                     s = historik.iloc[-1]
-                    # Metrikker her (forkortet for overblik)
-                    st.info(f"**Vurdering:** {s['Vurdering']}")
+                    vis_metrikker(s)
+                    st.info(f"**Vurdering:**\n\n{s['Vurdering']}")
 
                 with tab2:
                     for _, row in historik.iloc[::-1].iterrows():
-                        with st.expander(f"Rapport fra {row['Dato']}"):
-                            st.write(row['Vurdering'])
+                        with st.expander(f"Rapport fra {row['Dato']} (Rating: {row['Rating_Avg']})"):
+                            vis_metrikker(row)
+                            st.write(f"**Vurdering:** {row['Vurdering']}")
 
                 with tab3:
-                    fig = px.line(historik, x='Dato_Str', y='Rating_Avg', markers=True, range_y=[1, 6.5])
-                    fig.update_xaxes(type='category')
+                    fig = px.line(historik, x='Dato_Str', y='Rating_Avg', markers=True, range_y=[1, 7])
+                    fig.update_xaxes(type='category', title="Dato")
                     st.plotly_chart(fig, use_container_width=True)
 
                 with tab4:
-    if s_df.empty:
-        st.info("Kunne ikke finde filen: data/sæsonoverblik.csv")
-    else:
-        # Vi sikrer os at begge ID-kolonner behandles som strenge for at undgå match-fejl
-        s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
-        valgt_id = str(p_data['ID'])
-        
-        # Filtrer data baseret på PLAYER_WYID
-        spiller_stats = s_df[s_df['PLAYER_WYID'] == valgt_id].copy()
-        
-        if spiller_stats.empty:
-            st.warning(f"Ingen kampdata fundet i systemet for PLAYER_WYID: {valgt_id}")
-            # Lille hjælper til fejlfinding
-            if st.checkbox("Vis alle tilgængelige ID'er i filen"):
-                st.write(s_df['PLAYER_WYID'].unique())
-        else:
-            st.markdown(f"**Officiel Kampstatistik (Wyscout Data)**")
-            
-            # Vi udvælger de kolonner du bad om fra din lange liste
-            # Bemærk: 'KAMPE' og 'MINUTESONFIELD' matcher dine kolonnenavne
-            vis_df = spiller_stats[[
-                "KAMPE", 
-                "MINUTESONFIELD", 
-                "GOALS", 
-                "ASSISTS", 
-                "DUELS", 
-                "DUELSWON"
-            ]].copy()
-            
-            # Beregn duelseffektivitet i % hvis du vil have det mere læseligt
-            try:
-                vis_df['DUEL_%'] = (vis_df['DUELSWON'] / vis_df['DUELS'] * 100).round(1).astype(str) + '%'
-            except:
-                vis_df['DUEL_%'] = "N/A"
+                    if s_df.empty:
+                        st.info("Filen data/sæsonoverblik.csv blev ikke fundet.")
+                    else:
+                        # Matcher ID mod PLAYER_WYID
+                        s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
+                        spiller_stats = s_df[s_df['PLAYER_WYID'] == str(p_data['ID'])].copy()
+                        
+                        if spiller_stats.empty:
+                            st.warning(f"Ingen kampdata fundet for PLAYER_WYID: {p_data['ID']}")
+                        else:
+                            st.markdown("**Kampdata (Wyscout)**")
+                            vis_cols = ["KAMPE", "MINUTESONFIELD", "GOALS", "ASSISTS", "DUELS", "DUELSWON"]
+                            # Sikrer at vi kun tager de kolonner der findes
+                            eksisterende = [c for c in vis_cols if c in spiller_stats.columns]
+                            
+                            st.dataframe(
+                                spiller_stats[eksisterende],
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    "MINUTESONFIELD": "Minutter",
+                                    "GOALS": "Mål",
+                                    "DUELSWON": "Dueller vundne"
+                                }
+                            )
+                            
+                            # Eksempel på avanceret data
+                            with st.expander("Se avanceret data (xG, Interceptions, osv.)"):
+                                adv_cols = ["XGSHOT", "XGASSIST", "INTERCEPTIONS", "PROGRESSIVEPASSES"]
+                                eks_adv = [c for c in adv_cols if c in spiller_stats.columns]
+                                st.write(spiller_stats[eks_adv])
 
-            st.dataframe(
-                vis_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "KAMPE": st.column_config.NumberColumn("Kampe", format="%d"),
-                    "MINUTESONFIELD": st.column_config.NumberColumn("Minutter", format="%d"),
-                    "GOALS": st.column_config.NumberColumn("Mål", format="%d"),
-                    "ASSISTS": st.column_config.NumberColumn("Assists", format="%d"),
-                    "DUELS": st.column_config.NumberColumn("Dueller (Total)", format="%d"),
-                    "DUEL_%": st.column_config.TextColumn("Vundne %")
-                }
-            )
-            
-            # Avanceret overblik (Eksempel på hvordan vi kan bruge din store datamængde)
-            with st.expander("Se udvidet data (Passes, XG, osv.)"):
-                adv_cols = ["PASSES", "SUCCESSFULPASSES", "XGSHOT", "XGASSIST", "INTERCEPTIONS"]
-                eksisterende = [c for c in adv_cols if c in spiller_stats.columns]
-                st.write(spiller_stats[eksisterende])
             vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df)
 
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Der skete en fejl: {e}")
