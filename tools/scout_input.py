@@ -58,7 +58,7 @@ def vis_side(df_spillere):
     except:
         scouted_names = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
-    kilde_type = st.radio("Metode", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True, label_visibility="collapsed")
+    kilde_type = st.radio("Metode", ["Find i systemet", "Opret ny spiller"], horizontal=True, label_visibility="collapsed")
     
     p_id, navn, klub, pos_val = "", "", "", ""
 
