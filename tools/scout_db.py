@@ -6,7 +6,7 @@ import uuid
 # Stier til dine filer
 REPO = "Kamudinho/HIF-data"
 SCOUT_FILE = "scouting_db.csv"
-STATS_FILE = "data/playerseasons.csv" 
+STATS_FILE = "data/sæsonstatistik.csv" 
 
 def vis_side():
     st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
@@ -18,7 +18,7 @@ def vis_side():
         df['Dato_Str'] = df['Dato'].astype(str)
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
-        # 2. Hent Sæsonstatistik Data
+        # 2. Hent Sæsonstatistik Data (Wyscout eksport)
         try:
             stats_url = f"https://raw.githubusercontent.com/{REPO}/main/{STATS_FILE}?nocache={uuid.uuid4()}"
             stats_df = pd.read_csv(stats_url)
@@ -101,47 +101,52 @@ def vis_side():
 
                 with tab4:
                     if s_df.empty:
-                        st.info("Filen data/sæsonoverblik.csv blev ikke fundet.")
+                        st.info("Sæsonstatistik data kunne ikke indlæses.")
                     else:
-                        # Vi sikrer match på ID (PLAYER_WYID)
                         s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
                         valgt_id = str(p_data['ID'])
-                        
-                        # Filtrer data for den specifikke spiller
                         spiller_historik = s_df[s_df['PLAYER_WYID'] == valgt_id].copy()
                         
                         if spiller_historik.empty:
-                            st.warning(f"Ingen historik fundet for PLAYER_WYID: {valgt_id}")
+                            st.warning(f"Ingen kampdata fundet for PLAYER_WYID: {valgt_id}")
                         else:
                             st.markdown(f"**Sæsonoverblik: {p_data['Navn']}**")
                             
-                            # Vi viser de rå data pr. sæson uden at tælle dem sammen
-                            # Kolonnerne her skal matche navnene i din SQL-udtræk/CSV
-                            vis_cols = ["seasonname", "TEAMNAME", "KAMPE", "MINUTESONFIELD", "GOALS", "ASSISTS", "SHOTS", "DUELS"]
-                            
-                            # Tjekker hvilke af de ønskede kolonner der findes i din fil
+                            # Kolonner fra din SQL eksport (STORE BOGSTAVER)
+                            vis_cols = ["SEASONNAME", "TEAMNAME", "MATCHES", "MINUTESTAGGED", "GOALS", "ASSISTS", "SHOTS", "DUELS"]
                             eksisterende = [c for c in vis_cols if c in spiller_historik.columns]
                             
-                            # Vis tabellen - sorteret efter sæsonnavn (nyeste øverst)
+                            # Tabelvisning
                             st.dataframe(
-                                spiller_historik[eksisterende].sort_values('seasonname', ascending=False),
+                                spiller_historik[eksisterende].sort_values('SEASONNAME', ascending=False),
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
-                                    "seasonname": st.column_config.TextColumn("Sæson"),
-                                    "TEAMNAME": st.column_config.TextColumn("Hold"),
-                                    "KAMPE": st.column_config.NumberColumn("K", format="%d"),
-                                    "MINUTESONFIELD": st.column_config.NumberColumn("Min", format="%d"),
-                                    "GOALS": st.column_config.NumberColumn("Mål"),
-                                    "ASSISTS": st.column_config.NumberColumn("A"),
-                                    "DUELS": st.column_config.NumberColumn("Dueller")
+                                    "SEASONNAME": "Sæson",
+                                    "TEAMNAME": "Hold",
+                                    "MATCHES": "K",
+                                    "MINUTESTAGGED": "Min",
+                                    "GOALS": "Mål",
+                                    "ASSISTS": "A",
+                                    "SHOTS": "Skud",
+                                    "DUELS": "Dueller"
                                 }
                             )
-                            
-                            # En lille opsummering af karrieren i bunden (valgfrit)
-                            t_kampe = spiller_historik['KAMPE'].sum()
-                            t_maal = spiller_historik['GOALS'].sum()
-                            st.caption(f"Samlet i databasen: {t_kampe} kampe og {t_maal} mål.")
+
+                            # --- GRAF OVER KARRIEREUDVIKLING ---
+                            st.divider()
+                            st.markdown("**Mål & Assists over sæsoner**")
+                            # Vi sorterer for at få grafen til at gå fra venstre mod højre
+                            graf_data = spiller_historik.sort_values('SEASONNAME')
+                            fig_career = px.bar(
+                                graf_data, 
+                                x='SEASONNAME', 
+                                y=['GOALS', 'ASSISTS'],
+                                barmode='group',
+                                labels={'value': 'Antal', 'SEASONNAME': 'Sæson', 'variable': 'Type'},
+                                color_discrete_map={'GOALS': '#1f77b4', 'ASSISTS': '#ff7f0e'}
+                            )
+                            st.plotly_chart(fig_career, use_container_width=True)
 
             vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df)
 
