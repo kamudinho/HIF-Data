@@ -6,7 +6,7 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "scouting_db.csv"
 
 def vis_side():
-    st.markdown("### 📋 Scouting Database")
+    st.markdown("### Database")
     
     try:
         # Hent data med cache-buster for at sikre vi ser det nyeste
@@ -19,7 +19,7 @@ def vis_side():
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "Rating": st.column_config.NumberColumn(format="%d ⭐"),
+                "Rating": st.column_config.NumberColumn(format="%d"),
                 "Dato": st.column_config.DateColumn()
             }
         )
