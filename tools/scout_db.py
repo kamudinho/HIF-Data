@@ -9,53 +9,78 @@ def vis_side():
     st.markdown("<p style='font-size: 16px; font-weight: bold;'>Scouting Database</p>", unsafe_allow_html=True)
     
     try:
+        # 1. Hent data
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         df = pd.read_csv(raw_url)
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
-        # 1. SØGEFELT
-        search_query = st.text_input("🔍 Søg i databasen", placeholder="Navn, klub eller position...")
-        if search_query:
-            df = df[df['Navn'].str.contains(search_query, case=False, na=False) | 
-                    df['Klub'].str.contains(search_query, case=False, na=False)]
-
-        # 2. UNIK SPILLER-OVERSIGT (Viser kun den nyeste rapport pr. spiller i tabellen)
-        # Vi grupperer efter ID og tager den nyeste dato
-        latest_reports = df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
-
-        st.markdown("**Seneste rapporter pr. spiller**")
+        # --- SØGEFILTRE ØVERST ---
+        c1, c2, c3 = st.columns([2, 1, 1])
         
-        # Vi bruger st.dataframe til det hurtige overblik
+        with c1:
+            search_query = st.text_input("Søg spiller/klub", placeholder="Indtast navn...", label_visibility="collapsed")
+        
+        with c2:
+            # Dynamisk liste over positioner i DB
+            pos_options = ["Alle positioner"] + sorted(df['Position'].unique().tolist())
+            filter_pos = st.selectbox("Position", options=pos_options, label_visibility="collapsed")
+            
+        with c3:
+            # Status filter
+            status_options = ["Alle status"] + sorted(df['Status'].unique().tolist())
+            filter_status = st.selectbox("Status", options=status_options, label_visibility="collapsed")
+
+        # --- FILTRERING LOGIK ---
+        filtered_df = df.copy()
+        
+        if search_query:
+            filtered_df = filtered_df[filtered_df['Navn'].str.contains(search_query, case=False, na=False) | 
+                                    filtered_df['Klub'].str.contains(search_query, case=False, na=False)]
+        
+        if filter_pos != "Alle positioner":
+            filtered_df = filtered_df[filtered_df['Position'] == filter_pos]
+            
+        if filter_status != "Alle status":
+            filtered_df = filtered_df[filtered_df['Status'] == filter_status]
+
+        # 2. MASTER-TABEL (Kun nyeste rapport pr. spiller)
+        # Vi grupperer efter ID for at undgå dubletter i oversigten
+        latest_reports = filtered_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
+
+        st.markdown(f"<p style='font-size: 12px; color: gray;'>Viser {len(latest_reports)} spillere</p>", unsafe_allow_html=True)
+        
         vis_cols = ["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]
         selected_rows = st.dataframe(
             latest_reports[vis_cols],
             use_container_width=True,
             hide_index=True,
-            on_select="rerun", # Gør det muligt at vælge rækken direkte (Streamlit 1.35+)
+            on_select="rerun",
             selection_mode="single-row",
-            column_config={"Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f")}
+            column_config={
+                "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
+                "Dato": st.column_config.DateColumn("Dato")
+            }
         )
 
-        # 3. DETALJE-VISNING (Hvis en række vælges)
+        # 3. DETALJE-VISNING (Åbner når række vælges)
         if len(selected_rows.selection.rows) > 0:
             idx = selected_rows.selection.rows[0]
             valgt_id = latest_reports.iloc[idx]['ID']
             valgt_navn = latest_reports.iloc[idx]['Navn']
             
-            # Hent alle rapporter på denne specifikke spiller
+            # Hent historik for denne spiller
             spiller_historik = df[df['ID'] == valgt_id].sort_values('Dato', ascending=False)
             
-            st.markdown(f"---")
-            st.markdown(f"### 🛡️ Spillerprofil: {valgt_navn}")
+            st.markdown("---")
+            st.subheader(f"Profil: {valgt_navn}")
             
-            # Faner: Nyeste rapport vs. Historik
-            tab1, tab2 = st.tabs(["Seneste Vurdering", f"Historik ({len(spiller_historik)} rapporter)"])
+            tab1, tab2 = st.tabs(["Seneste Rapport", f"Historik ({len(spiller_historik)})"])
             
             with tab1:
-                s = spiller_historik.iloc[0] # Den nyeste
+                s = spiller_historik.iloc[0]
                 
-                # Parametre
-                st.markdown("**Parametre (1-6)**")
+                # Parametre (1-6)
+                st.markdown("**Parametre**")
                 p1, p2, p3, p4 = st.columns(4)
                 p1.metric("Beslut.", s['Beslutsomhed'])
                 p2.metric("Fart", s['Fart'])
@@ -69,7 +94,8 @@ def vis_side():
                 p8.metric("Intell.", s['Spilintelligens'])
 
                 st.markdown("---")
-                # Tekstbokse med automatisk højde (info/warning/success)
+                
+                # Tekstbokse
                 t1, t2, t3 = st.columns(3)
                 with t1:
                     st.markdown("**Styrker**")
@@ -82,11 +108,10 @@ def vis_side():
                     st.success(s['Vurdering'] if str(s['Vurdering']) != 'nan' else "-")
 
             with tab2:
-                # Vis en simpel liste over gamle rapporter
                 for i, row in spiller_historik.iterrows():
-                    with st.expander(f"Rapport fra {row['Dato']} - Rating: {row['Rating_Avg']} ({row['Status']})"):
+                    with st.expander(f"Rapport: {row['Dato']} | ⭐ {row['Rating_Avg']} | {row['Status']}"):
                         st.write(f"**Vurdering:** {row['Vurdering']}")
                         st.write(f"**Potentiale:** {row['Potentiale']}")
 
     except Exception as e:
-        st.info("Søg efter en spiller eller vælg en række for at se detaljer.")
+        st.info("Databasen er tom eller kunne ikke hentes.")
