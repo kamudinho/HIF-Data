@@ -34,55 +34,65 @@ def save_to_github(new_row_df):
 def vis_side(df_spillere):
     st.markdown("### Opret Scoutingrapport")
     
-    kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True)
+    kilde_type = st.radio("Type", ["Find i system", "Opret manuelt"], horizontal=True, label_visibility="collapsed")
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     
     # Initialiser variabler
     p_id = ""
     navn = ""
     klub = ""
+    pos_val = ""
 
+    # --- 1. LINJE: BASIS INFO ---
     if kilde_type == "Find i system":
-        # Sørg for at kolonnenavnene matcher din Excel (NAVN og PLAYER_WYID)
-        valgt_navn = st.selectbox("Vælg Spiller", sorted(df_spillere['NAVN'].unique()))
-        spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
-        
-        # Hent WYID og Klub fra systemet
-        p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
-        navn = valgt_navn
-        # Hvis du har en 'KLUB' kolonne i din spillere-excel, bruger vi den, ellers default 'Hvidovre IF'
-        klub = spiller_info.get('HOLD', 'Hvidovre IF') 
-        
-        st.info(f"🔗 Koblet til systemet: ID {p_id} | Klub: {klub}")
+        c1, c2, c3 = st.columns([2, 1, 1])
+        with c1:
+            valgt_navn = st.selectbox("Vælg Spiller", sorted(df_spillere['NAVN'].unique()))
+            spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
+            
+            navn = valgt_navn
+            p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
+        with c2:
+            # Forsøger at hente position fra systemet hvis den findes
+            pos_default = spiller_info.get('POSITION', '')
+            pos_val = st.text_input("Position", value=pos_default)
+        with c3:
+            klub_default = spiller_info.get('HOLD', 'Hvidovre IF')
+            klub = st.text_input("Klub", value=klub_default)
+            
+        st.caption(f"WYID: {p_id}")
+
     else:
-        col_m1, col_m2 = st.columns(2)
-        with col_m1: 
-            navn = st.text_input("Spillernavn")
-        with col_m2: 
-            klub = st.text_input("Klub")
-        # Generer et manuelt ID
+        c1, c2, c3 = st.columns([2, 1, 1])
+        with c1:
+            navn = st.text_input("Spillernavn", placeholder="Indtast navn...")
+        with c2:
+            pos_val = st.text_input("Position", placeholder="f.eks. CB")
+        with c3:
+            klub = st.text_input("Klub", placeholder="Nuværende klub...")
+        
         p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
 
+    # --- 2. LINJE: RATING OG STATUS ---
     with st.form("scout_form", clear_on_submit=True):
         f1, f2, f3 = st.columns(3)
         with f1:
-            pos = st.text_input("Position")
             rating = st.slider("Rating (1-10)", 1, 10, 5)
         with f2:
             status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         with f3:
             potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
-        noter = st.text_area("Kommentarer")
+        noter = st.text_area("Kommentarer / Scouting noter")
 
-        if st.form_submit_button("Gem rapport"):
+        if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn and p_id:
-                # Opret rækken med alle informationer inkl. ID og Klub
                 ny_data = pd.DataFrame([[
                     p_id, 
                     datetime.now().strftime("%Y-%m-%d"), 
                     navn, 
                     klub, 
-                    pos, 
+                    pos_val, 
                     rating, 
                     status, 
                     potentiale, 
@@ -91,8 +101,8 @@ def vis_side(df_spillere):
                 
                 res = save_to_github(ny_data)
                 if res in [200, 201]:
-                    st.success(f"Rapport for {navn} (ID: {p_id}) er gemt!")
+                    st.success(f"✅ Rapport for {navn} gemt!")
                 else:
-                    st.error(f"Fejl ved gem: {res}")
+                    st.error(f"❌ Fejl: {res}")
             else:
-                st.error("Navn eller ID mangler")
+                st.error("Udfyld venligst de nødvendige felter.")
