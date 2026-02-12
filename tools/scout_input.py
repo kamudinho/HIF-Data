@@ -9,25 +9,39 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "scouting_db.csv"
 
+# Oversætter fra POS-tal til tekst
+POS_MAP = {
+    1: "MM",
+    2: "HB",
+    3: "CB",
+    4: "CB",
+    5: "VB",
+    6: "DM",
+    8: "CM",
+    7: "Højre kant",
+    11: "Venstre kant",
+    9: "Angriber",
+    10: "Offensiv midtbane"
+}
+
 def vis_side(df_spillere):
-    st.markdown("### ✍️ Opret Scoutingrapport")
+    # --- Overskrift med specifik størrelse (16px) ---
+    st.markdown("<p style='font-size: 16px; font-weight: bold; margin-bottom: 5px;'>Opret Scoutingrapport</p>", unsafe_allow_html=True)
     
-    # --- 1. HENT EKSISTERENDE SCOUT-DATA FOR AT FINDE MANUELLE SPILLERE ---
+    # --- 1. HENT EKSISTERENDE SCOUT-DATA ---
     try:
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         db_scout = pd.read_csv(raw_url)
-        # Hent unikke navne fra databasen som ikke findes i df_spillere
         scouted_names = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
     except:
         scouted_names = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
     kilde_type = st.radio("Type", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True, label_visibility="collapsed")
-    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
     
     p_id, navn, klub, pos_val = "", "", "", ""
 
     if kilde_type == "Find i system / Tidligere scoutet":
-        # Kombiner navne fra Excel og fra tidligere scouting-rapporter
         system_names = sorted(df_spillere['NAVN'].unique().tolist())
         manual_names = sorted(scouted_names['Navn'].unique().tolist())
         alle_navne = sorted(list(set(system_names + manual_names)))
@@ -37,11 +51,15 @@ def vis_side(df_spillere):
             valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne)
             navn = valgt_navn
             
-            # Tjek om spilleren er i Excel eller er en manuelt oprettet én
             if valgt_navn in system_names:
                 spiller_info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
                 p_id = str(spiller_info['PLAYER_WYID']).split('.')[0]
-                pos_default = spiller_info.get('POSITION', '')
+                
+                # --- POSITION OVERSÆTTELSE ---
+                pos_raw = spiller_info.get('POS', '')
+                # Tjekker om pos_raw er et tal i vores map, ellers behold rå værdi
+                pos_default = POS_MAP.get(int(pos_raw) if str(pos_raw).replace('.0','').isdigit() else pos_raw, str(pos_raw))
+                
                 klub_default = spiller_info.get('HOLD', 'Hvidovre IF')
             else:
                 spiller_info = scouted_names[scouted_names['Navn'] == valgt_navn].iloc[0]
@@ -57,7 +75,6 @@ def vis_side(df_spillere):
         st.caption(f"ID: {p_id}")
 
     else:
-        # Manuel oprettelse af en helt ny spiller
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1: navn = st.text_input("Spillernavn", placeholder="Navn på ny spiller...")
         with c2: pos_val = st.text_input("Position", placeholder="f.eks. CB")
