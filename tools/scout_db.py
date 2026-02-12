@@ -6,7 +6,7 @@ import uuid
 # Stier til dine filer
 REPO = "Kamudinho/HIF-data"
 SCOUT_FILE = "scouting_db.csv"
-STATS_FILE = "data/sæsonoverblik.csv" 
+STATS_FILE = "data/playerseasons.csv" 
 
 def vis_side():
     st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
@@ -101,7 +101,7 @@ def vis_side():
 
                 with tab4:
                     if s_df.empty:
-                        st.info("Filen data/sæsonoverblik.csv blev ikke fundet.")
+                        st.info("Filen data/playerseasons.csv blev ikke fundet.")
                     else:
                         # Matcher ID mod PLAYER_WYID
                         s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
