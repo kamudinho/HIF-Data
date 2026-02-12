@@ -5,9 +5,41 @@ import base64
 from datetime import datetime
 import uuid
 
+# Hent hemmeligheder fra Streamlit Cloud
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "scouting_db.csv"
+
+def save_to_github(new_row_df):
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    
+    # 1. Forsøg at hente eksisterende fil for at få SHA (påkrævet af GitHub for opdateringer)
+    r = requests.get(url, headers=headers)
+    
+    if r.status_code == 200:
+        content = r.json()
+        sha = content['sha']
+        # Dekod gammel CSV og tilføj den nye række
+        old_csv = base64.b64decode(content['content']).decode('utf-8')
+        # Vi sikrer os at rækken formateres korrekt med semikolon som separator hvis nødvendigt, 
+        # men standard CSV bruger komma:
+        new_row_str = ",".join([f'"{str(x)}"' for x in new_row_df.values[0]])
+        updated_csv = old_csv.strip() + "\n" + new_row_str
+    else:
+        # Hvis filen ikke findes, opretter vi den med headers
+        sha = None
+        updated_csv = ",".join(new_row_df.columns) + "\n" + ",".join([f'"{str(x)}"' for x in new_row_df.values[0]])
+
+    # 2. Forbered payload til GitHub
+    payload = {
+        "message": f"Scouting: {new_row_df['Navn'].values[0]}",
+        "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
+        "sha": sha if sha else ""
+    }
+    
+    res = requests.put(url, json=payload, headers=headers)
+    return res.status_code
 
 POS_MAP = {1: "MM", 2: "HB", 3: "CB", 4: "CB", 5: "VB", 6: "DM", 8: "CM", 7: "Højre kant", 11: "Venstre kant", 9: "Angriber", 10: "Offensiv midtbane"}
 
