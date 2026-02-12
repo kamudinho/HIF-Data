@@ -117,7 +117,7 @@ with st.sidebar:
     elif hoved_omraade == "Scouting":
         selected = option_menu(
             menu_title=None,
-            options=["Indtast scoutrapport", "Scouting-database", "Sammenligning"],
+            options=["Scoutrapport", "Database", "Sammenligning"],
             icons=["search", "search"], # Dine valgte ikoner
             styles={"nav-link-selected": {"background-color": "#cc0000"}}
         )
