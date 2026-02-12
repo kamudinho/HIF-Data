@@ -2,116 +2,121 @@ import streamlit as st
 import pandas as pd
 import uuid
 
+# Samme konfiguration som i din input-fil
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "scouting_db.csv"
 
 def vis_side():
-    st.markdown("<p style='font-size: 16px; font-weight: bold;'>Scouting Database</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
     
     try:
-        # 1. Hent data
+        # 1. Hent data fra GitHub
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         df = pd.read_csv(raw_url)
+        
+        # Konverter dato og sorter
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
         # --- SØGEFILTRE ØVERST ---
-        c1, c2, c3 = st.columns([2, 1, 1])
+        # Vi laver en række med 3 kolonner: Søgefelt (bred), Position (smal), Status (smal)
+        filter_col1, filter_col2, filter_col3 = st.columns([2, 1, 1])
         
-        with c1:
-            search_query = st.text_input("Søg spiller/klub", placeholder="Indtast navn...", label_visibility="collapsed")
+        with filter_col1:
+            search_query = st.text_input("Søg", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
         
-        with c2:
-            # Dynamisk liste over positioner i DB
-            pos_options = ["Alle positioner"] + sorted(df['Position'].unique().tolist())
-            filter_pos = st.selectbox("Position", options=pos_options, label_visibility="collapsed")
+        with filter_col2:
+            pos_list = ["Alle Positioner"] + sorted(df['Position'].dropna().unique().tolist())
+            filter_pos = st.selectbox("Position", options=pos_list, label_visibility="collapsed")
             
-        with c3:
-            # Status filter
-            status_options = ["Alle status"] + sorted(df['Status'].unique().tolist())
-            filter_status = st.selectbox("Status", options=status_options, label_visibility="collapsed")
+        with filter_col3:
+            status_list = ["Alle Status"] + sorted(df['Status'].dropna().unique().tolist())
+            filter_status = st.selectbox("Status", options=status_list, label_visibility="collapsed")
 
         # --- FILTRERING LOGIK ---
-        filtered_df = df.copy()
-        
+        f_df = df.copy()
         if search_query:
-            filtered_df = filtered_df[filtered_df['Navn'].str.contains(search_query, case=False, na=False) | 
-                                    filtered_df['Klub'].str.contains(search_query, case=False, na=False)]
+            f_df = f_df[f_df['Navn'].str.contains(search_query, case=False, na=False) | 
+                        f_df['Klub'].str.contains(search_query, case=False, na=False)]
         
-        if filter_pos != "Alle positioner":
-            filtered_df = filtered_df[filtered_df['Position'] == filter_pos]
+        if filter_pos != "Alle Positioner":
+            f_df = f_df[f_df['Position'] == filter_pos]
             
-        if filter_status != "Alle status":
-            filtered_df = filtered_df[filtered_df['Status'] == filter_status]
+        if filter_status != "Alle Status":
+            f_df = f_df[f_df['Status'] == filter_status]
 
-        # 2. MASTER-TABEL (Kun nyeste rapport pr. spiller)
-        # Vi grupperer efter ID for at undgå dubletter i oversigten
-        latest_reports = filtered_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
+        # --- TABELVISNING (Kun nyeste rapport pr. spiller) ---
+        # Vi grupperer efter ID og tager den nyeste, så tabellen er ren
+        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
 
-        st.markdown(f"<p style='font-size: 12px; color: gray;'>Viser {len(latest_reports)} spillere</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 12px; color: gray; margin-bottom: 5px;'>Viser {len(latest_reports)} unikke spillere</p>", unsafe_allow_html=True)
         
+        # Interaktiv tabel
         vis_cols = ["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]
-        selected_rows = st.dataframe(
+        event = st.dataframe(
             latest_reports[vis_cols],
             use_container_width=True,
             hide_index=True,
             on_select="rerun",
             selection_mode="single-row",
             column_config={
-                "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
-                "Dato": st.column_config.DateColumn("Dato")
+                "Rating_Avg": st.column_config.NumberColumn("⭐ Snit", format="%.1f"),
+                "Dato": st.column_config.DateColumn("Senest"),
+                "Navn": st.column_config.TextColumn("Navn", width="medium")
             }
         )
 
-        # 3. DETALJE-VISNING (Åbner når række vælges)
-        if len(selected_rows.selection.rows) > 0:
-            idx = selected_rows.selection.rows[0]
-            valgt_id = latest_reports.iloc[idx]['ID']
-            valgt_navn = latest_reports.iloc[idx]['Navn']
+        # --- DETALJE-VISNING (Åbner når man klikker på en række) ---
+        if len(event.selection.rows) > 0:
+            row_idx = event.selection.rows[0]
+            valgt_id = latest_reports.iloc[row_idx]['ID']
+            valgt_navn = latest_reports.iloc[row_idx]['Navn']
             
-            # Hent historik for denne spiller
-            spiller_historik = df[df['ID'] == valgt_id].sort_values('Dato', ascending=False)
+            # Find alt historik for denne spiller
+            historik = df[df['ID'] == valgt_id].sort_values('Dato', ascending=False)
             
             st.markdown("---")
-            st.subheader(f"Profil: {valgt_navn}")
+            st.subheader(f"Spillerprofil: {valgt_navn}")
             
-            tab1, tab2 = st.tabs(["Seneste Rapport", f"Historik ({len(spiller_historik)})"])
+            tab_nyeste, tab_historik = st.tabs(["Seneste Rapport", f"Historik ({len(historik)})"])
             
-            with tab1:
-                s = spiller_historik.iloc[0]
+            with tab_nyeste:
+                s = historik.iloc[0]
                 
                 # Parametre (1-6)
-                st.markdown("**Parametre**")
-                p1, p2, p3, p4 = st.columns(4)
-                p1.metric("Beslut.", s['Beslutsomhed'])
-                p2.metric("Fart", s['Fart'])
-                p3.metric("Aggres.", s['Aggresivitet'])
-                p4.metric("Attitude", s['Attitude'])
+                st.markdown("**Tekniske & Fysiske Stats**")
+                p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+                p_col1.metric("Beslut.", s['Beslutsomhed'])
+                p_col2.metric("Fart", s['Fart'])
+                p_col3.metric("Aggres.", s['Aggresivitet'])
+                p_col4.metric("Attitude", s['Attitude'])
                 
-                p5, p6, p7, p8 = st.columns(4)
-                p5.metric("Udhold.", s['Udholdenhed'])
-                p6.metric("Leder", s['Lederegenskaber'])
-                p7.metric("Teknik", s['Teknik'])
-                p8.metric("Intell.", s['Spilintelligens'])
+                p_col5, p_col6, p_col7, p_col8 = st.columns(4)
+                p_col5.metric("Udhold.", s['Udholdenhed'])
+                p_col6.metric("Leder", s['Lederegenskaber'])
+                p_col7.metric("Teknik", s['Teknik'])
+                p_col8.metric("Intell.", s['Spilintelligens'])
 
                 st.markdown("---")
                 
-                # Tekstbokse
-                t1, t2, t3 = st.columns(3)
-                with t1:
+                # Kvalitative noter i 3 bokse
+                t_col1, t_col2, t_col3 = st.columns(3)
+                with t_col1:
                     st.markdown("**Styrker**")
                     st.info(s['Styrker'] if str(s['Styrker']) != 'nan' else "-")
-                with t2:
+                with t_col2:
                     st.markdown("**Udvikling**")
                     st.warning(s['Udvikling'] if str(s['Udvikling']) != 'nan' else "-")
-                with t3:
+                with t_col3:
                     st.markdown("**Vurdering**")
                     st.success(s['Vurdering'] if str(s['Vurdering']) != 'nan' else "-")
+                
+                st.caption(f"ID: {s['ID']} | Potentiale: {s['Potentiale']}")
 
-            with tab2:
-                for i, row in spiller_historik.iterrows():
-                    with st.expander(f"Rapport: {row['Dato']} | ⭐ {row['Rating_Avg']} | {row['Status']}"):
+            with tab_historik:
+                for i, row in historik.iterrows():
+                    with st.expander(f"Rapport fra {row['Dato']} | Snit: {row['Rating_Avg']}"):
                         st.write(f"**Vurdering:** {row['Vurdering']}")
-                        st.write(f"**Potentiale:** {row['Potentiale']}")
+                        st.write(f"**Klub på det tidspunkt:** {row['Klub']}")
 
-    except Exception as e:
-        st.info("Databasen er tom eller kunne ikke hentes.")
+    except Exception:
+        st.info("💡 Databasen er tom. Gå til 'Input' for at oprette din første scoutingrapport.")
