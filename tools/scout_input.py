@@ -48,7 +48,7 @@ def vis_side(df_spillere):
         </style>
     """, unsafe_allow_html=True)
 
-    st.write("#### Opret Scoutingrapport")
+    st.write("#### Scoutrapport")
     
     # --- DATA HENTNING ---
     try:
@@ -65,7 +65,7 @@ def vis_side(df_spillere):
     # --- BASIS INFORMATION ---
     c1, c2, c3 = st.columns([2, 1, 1])
     
-    if kilde_type == "Find i system / Tidligere scoutet":
+    if kilde_type == "Find i systemet":
         system_names = sorted(df_spillere['NAVN'].unique().tolist())
         manual_names = sorted(scouted_names['Navn'].unique().tolist())
         alle_navne = sorted(list(set(system_names + manual_names)))
@@ -103,17 +103,17 @@ def vis_side(df_spillere):
         
         # Række 1
         r1_1, r1_2, r1_3, r1_4 = st.columns(4)
-        with r1_1: beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
-        with r1_2: fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
-        with r1_3: aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
-        with r1_4: attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
+        with r1_1: beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=1)
+        with r1_2: fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=1)
+        with r1_3: aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=1)
+        with r1_4: attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=1)
 
         # Række 2
         r2_1, r2_2, r2_3, r2_4 = st.columns(4)
-        with r2_1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
-        with r2_2: leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=3)
-        with r2_3: teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=3)
-        with r2_4: intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
+        with r2_1: udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=1)
+        with r2_2: leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=1)
+        with r2_3: teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=1)
+        with r2_4: intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=1)
 
         st.divider()
         
