@@ -14,7 +14,7 @@ def vis_side():
         df = pd.read_csv(raw_url)
         df['Dato'] = pd.to_datetime(df['Dato']).dt.date
         
-        # --- FILTRERING (POPOVER) ---
+        # --- FILTRERING ---
         if 'f_pos' not in st.session_state: st.session_state.f_pos = []
         if 'f_status' not in st.session_state: st.session_state.f_status = []
         if 'f_rating' not in st.session_state: st.session_state.f_rating = 1.0
@@ -40,30 +40,33 @@ def vis_side():
         if st.session_state.f_status: f_df = f_df[f_df['Status'].isin(st.session_state.f_status)]
         f_df = f_df[f_df['Rating_Avg'] >= st.session_state.f_rating]
 
-        # --- MASTER-TABEL ---
-        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False)
+        # --- KLARGØR DATA ---
+        latest_reports = f_df.sort_values('Dato').groupby('ID').tail(1).sort_values('Dato', ascending=False).copy()
         
-        # Vi omdøber kolonnen for valg via column_config
+        # Vi opretter en rigtig kolonne der hedder "Vis" med teksten "Klik"
+        latest_reports['Vis'] = "Klik her"
+
+        # --- TABEL ---
+        # Nu inkluderer vi 'Vis' som den første kolonne i listen
         event = st.dataframe(
-            latest_reports[["Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
+            latest_reports[["Vis", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status"]],
             use_container_width=True, 
             hide_index=True, 
             on_select="rerun", 
             selection_mode="single-row",
             column_config={
-                "_selected": st.column_config.CheckboxColumn("Vis", width="small"), # Omdøber checkboks-kolonnen
+                "Vis": st.column_config.TextColumn("Vis", width="small"),
                 "Rating_Avg": st.column_config.NumberColumn("Snit", format="%.1f"),
                 "Dato": st.column_config.DateColumn("Senest")
             }
         )
 
-        # --- DIALOG (MODAL) ---
+        # --- DIALOG (PROFIL) ---
         if len(event.selection.rows) > 0:
             @st.dialog("Spillerprofil", width="large")
             def vis_profil(player_data, full_df):
                 valgt_id = player_data['ID']
                 valgt_navn = player_data['Navn']
-                
                 historik = full_df[full_df['ID'] == valgt_id].sort_values('Dato')
                 
                 tab1, tab2, tab3 = st.tabs(["Rapport", "Historik", "Udvikling"])
@@ -80,7 +83,6 @@ def vis_side():
                     st.info(f"**Styrker**\n\n{s['Styrker'] if str(s['Styrker']) != 'nan' else '-'}")
                     st.warning(f"**Udvikling**\n\n{s['Udvikling'] if str(s['Udvikling']) != 'nan' else '-'}")
                     st.success(f"**Vurdering**\n\n{s['Vurdering'] if str(s['Vurdering']) != 'nan' else '-'}")
-                    st.caption(f"ID: {s['ID']} | Potentiale: {s['Potentiale']}")
 
                 with tab2:
                     for _, row in historik.iloc[::-1].iterrows():
@@ -89,15 +91,13 @@ def vis_side():
 
                 with tab3:
                     if len(historik) < 2:
-                        st.info("Kræver mindst to rapporter for at vise trend.")
+                        st.info("Kræver mindst to rapporter.")
                     else:
                         param_liste = ["Rating_Avg", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-                        v_o = st.selectbox("Vælg område", options=param_liste)
+                        v_o = st.selectbox("Område", options=param_liste)
                         fig = px.line(historik, x='Dato', y=v_o, markers=True, range_y=[1, 6.5])
-                        fig.update_layout(height=350, margin=dict(l=0, r=0, t=30, b=0))
                         st.plotly_chart(fig, use_container_width=True)
 
-            # Åbn dialogen med data fra den valgte række
             row_idx = event.selection.rows[0]
             vis_profil(latest_reports.iloc[row_idx], df)
 
