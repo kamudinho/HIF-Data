@@ -101,36 +101,47 @@ def vis_side():
 
                 with tab4:
                     if s_df.empty:
-                        st.info("Filen data/playerseasons.csv blev ikke fundet.")
+                        st.info("Filen data/sæsonoverblik.csv blev ikke fundet.")
                     else:
-                        # Matcher ID mod PLAYER_WYID
+                        # Vi sikrer match på ID (PLAYER_WYID)
                         s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str)
-                        spiller_stats = s_df[s_df['PLAYER_WYID'] == str(p_data['ID'])].copy()
+                        valgt_id = str(p_data['ID'])
                         
-                        if spiller_stats.empty:
-                            st.warning(f"Ingen kampdata fundet for PLAYER_WYID: {p_data['ID']}")
+                        # Filtrer data for den specifikke spiller
+                        spiller_historik = s_df[s_df['PLAYER_WYID'] == valgt_id].copy()
+                        
+                        if spiller_historik.empty:
+                            st.warning(f"Ingen historik fundet for PLAYER_WYID: {valgt_id}")
                         else:
-                            st.markdown("**Kampdata (Wyscout)**")
-                            vis_cols = ["KAMPE", "MINUTESONFIELD", "GOALS", "ASSISTS", "DUELS", "DUELSWON"]
-                            # Sikrer at vi kun tager de kolonner der findes
-                            eksisterende = [c for c in vis_cols if c in spiller_stats.columns]
+                            st.markdown(f"**Sæsonoverblik: {p_data['Navn']}**")
                             
+                            # Vi viser de rå data pr. sæson uden at tælle dem sammen
+                            # Kolonnerne her skal matche navnene i din SQL-udtræk/CSV
+                            vis_cols = ["seasonname", "TEAMNAME", "KAMPE", "MINUTESONFIELD", "GOALS", "ASSISTS", "SHOTS", "DUELS"]
+                            
+                            # Tjekker hvilke af de ønskede kolonner der findes i din fil
+                            eksisterende = [c for c in vis_cols if c in spiller_historik.columns]
+                            
+                            # Vis tabellen - sorteret efter sæsonnavn (nyeste øverst)
                             st.dataframe(
-                                spiller_stats[eksisterende],
+                                spiller_historik[eksisterende].sort_values('seasonname', ascending=False),
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
-                                    "MINUTESONFIELD": "Minutter",
-                                    "GOALS": "Mål",
-                                    "DUELSWON": "Dueller vundne"
+                                    "seasonname": st.column_config.TextColumn("Sæson"),
+                                    "TEAMNAME": st.column_config.TextColumn("Hold"),
+                                    "KAMPE": st.column_config.NumberColumn("K", format="%d"),
+                                    "MINUTESONFIELD": st.column_config.NumberColumn("Min", format="%d"),
+                                    "GOALS": st.column_config.NumberColumn("Mål"),
+                                    "ASSISTS": st.column_config.NumberColumn("A"),
+                                    "DUELS": st.column_config.NumberColumn("Dueller")
                                 }
                             )
                             
-                            # Eksempel på avanceret data
-                            with st.expander("Se avanceret data (xG, Interceptions, osv.)"):
-                                adv_cols = ["XGSHOT", "XGASSIST", "INTERCEPTIONS", "PROGRESSIVEPASSES"]
-                                eks_adv = [c for c in adv_cols if c in spiller_stats.columns]
-                                st.write(spiller_stats[eks_adv])
+                            # En lille opsummering af karrieren i bunden (valgfrit)
+                            t_kampe = spiller_historik['KAMPE'].sum()
+                            t_maal = spiller_historik['GOALS'].sum()
+                            st.caption(f"Samlet i databasen: {t_kampe} kampe og {t_maal} mål.")
 
             vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df)
 
