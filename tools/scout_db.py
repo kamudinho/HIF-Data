@@ -6,7 +6,7 @@ import uuid
 # Stier til dine filer
 REPO = "Kamudinho/HIF-data"
 SCOUT_FILE = "scouting_db.csv"
-STATS_FILE = "data/playerseasons.csv" 
+STATS_FILE = "data/sæsonstatistik.csv" 
 
 def vis_side():
     st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
