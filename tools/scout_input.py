@@ -109,11 +109,21 @@ def vis_side(df_spillere):
             potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         st.markdown("**Kvalitativ Vurdering**")
-        styrker = st.text_area("Styrker", placeholder="Hvad gør spilleren god?")
-        udvikling = st.text_area("Udviklingsområder", placeholder="Hvad skal forbedres?")
-        vurdering = st.text_area("Samlet vurdering", placeholder="Konklusion på scoutingen...")
+        # Lav tre kolonner til tekstfelterne
+        col_txt1, col_txt2, col_txt3 = st.columns(3)
+        
+        with col_txt1:
+            styrker = st.text_area("Styrker", placeholder="Hvad gør spilleren god?", height=150)
+        
+        with col_txt2:
+            udvikling = st.text_area("Udviklingsområder", placeholder="Hvad skal forbedres?", height=150)
+            
+        with col_txt3:
+            vurdering = st.text_area("Samlet vurdering", placeholder="Konklusion...", height=150)
 
+        # Gem-knappen under kolonnerne
         if st.form_submit_button("Gem rapport", use_container_width=True):
+            
             if navn and p_id:
                 # Beregn et gennemsnit af de 8 parametre som en overordnet rating
                 avg_rating = round(sum([beslut, fart, aggres, attitude, udhold, leder, teknik, intel]) / 8, 1)
