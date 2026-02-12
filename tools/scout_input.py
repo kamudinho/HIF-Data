@@ -38,36 +38,8 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    # CSS til at styre layoutet stramt og fjerne standard labels
-    st.markdown("""
-        <style>
-            /* Fjern luft mellem elementer */
-            [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-            
-            /* Style for overskrifter */
-            .section-header {
-                font-size: 14px;
-                font-weight: bold;
-                margin-top: 20px;
-                margin-bottom: 10px;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 5px;
-            }
-            
-            /* Style for parameter-navne over sliders */
-            .param-text {
-                font-size: 12px;
-                font-weight: 500;
-                margin-bottom: -15px;
-                color: #31333F;
-            }
-
-            /* Fix højde på tekstfelter */
-            .stTextArea textarea { height: 120px !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<p style='font-size: 16px; font-weight: bold;'>Opret Scoutingrapport</p>", unsafe_allow_html=True)
+    # Enkel overskrift
+    st.write(f"#### Opret Scoutingrapport")
     
     # --- DATA HENTNING ---
     try:
@@ -77,7 +49,7 @@ def vis_side(df_spillere):
     except:
         scouted_names = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
-    kilde_type = st.radio("Type", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True, label_visibility="collapsed")
+    kilde_type = st.radio("Vælg metode", ["Find i system / Tidligere scoutet", "Opret helt ny"], horizontal=True)
     
     p_id, navn, klub, pos_val = "", "", "", ""
 
@@ -102,63 +74,42 @@ def vis_side(df_spillere):
         with c2: pos_val = st.text_input("Position", value=pos_default)
         with c3: klub = st.text_input("Klub", value=klub_default)
     else:
-        with c1: navn = st.text_input("Spillernavn", placeholder="Navn...")
-        with c2: pos_val = st.text_input("Position", placeholder="f.eks. CB")
-        with c3: klub = st.text_input("Klub", placeholder="Klub...")
+        with c1: navn = st.text_input("Spillernavn")
+        with c2: pos_val = st.text_input("Position")
+        with c3: klub = st.text_input("Klub")
         p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
 
-    # --- SCOUTING FORMULAR ---
+    # --- FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
-        st.markdown("<p class='section-header'>Fysiske & Mentale Parametre (1-6)</p>", unsafe_allow_html=True)
+        st.write("**Parametre (1-6)**")
         
-        # Række 1
-        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-        with r1c1:
-            st.markdown("<p class='param-text'>Beslutsomhed</p>", unsafe_allow_html=True)
-            beslut = st.select_slider("s1", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r1c2:
-            st.markdown("<p class='param-text'>Fart</p>", unsafe_allow_html=True)
-            fart = st.select_slider("s2", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r1c3:
-            st.markdown("<p class='param-text'>Aggresivitet</p>", unsafe_allow_html=True)
-            aggres = st.select_slider("s3", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r1c4:
-            st.markdown("<p class='param-text'>Attitude</p>", unsafe_allow_html=True)
-            attitude = st.select_slider("s4", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
+        # Vi bruger 2 kolonner med 4 parametre i hver for at sikre læsbarhed
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            beslut = st.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=3)
+            fart = st.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
+            aggres = st.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=3)
+            attitude = st.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
+        
+        with col_right:
+            udhold = st.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=3)
+            leder = st.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=3)
+            teknik = st.select_slider("Tekniske færdigheder", options=[1,2,3,4,5,6], value=3)
+            intel = st.select_slider("Spilintelligens", options=[1,2,3,4,5,6], value=3)
 
-        # Række 2
-        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-        with r2c1:
-            st.markdown("<p class='param-text'>Udholdenhed</p>", unsafe_allow_html=True)
-            udhold = st.select_slider("s5", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r2c2:
-            st.markdown("<p class='param-text'>Lederegenskaber</p>", unsafe_allow_html=True)
-            leder = st.select_slider("s6", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r2c3:
-            st.markdown("<p class='param-text'>Teknik</p>", unsafe_allow_html=True)
-            teknik = st.select_slider("s7", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-        with r2c4:
-            st.markdown("<p class='param-text'>Spilintelligens</p>", unsafe_allow_html=True)
-            intel = st.select_slider("s8", options=[1,2,3,4,5,6], value=3, label_visibility="collapsed")
-
-        st.markdown("<p class='section-header'>Vurdering & Status</p>", unsafe_allow_html=True)
-        m1, m2, m3 = st.columns([1, 1, 2])
+        st.divider()
+        
+        # Status og Potentiale
+        m1, m2 = st.columns(2)
         with m1: status = st.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         with m2: potentiale = st.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
-        st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
-        tc1, tc2, tc3 = st.columns(3)
-        with tc1: 
-            st.markdown("<p class='param-text'>Styrker</p>", unsafe_allow_html=True)
-            styrker = st.text_area("t1", placeholder="Spillerens styrker...", label_visibility="collapsed")
-        with tc2: 
-            st.markdown("<p class='param-text'>Udviklingsområder</p>", unsafe_allow_html=True)
-            udvikling = st.text_area("t2", placeholder="Hvad skal forbedres?", label_visibility="collapsed")
-        with tc3: 
-            st.markdown("<p class='param-text'>Samlet vurdering</p>", unsafe_allow_html=True)
-            vurdering = st.text_area("t3", placeholder="Konklusion...", label_visibility="collapsed")
+        st.write("**Vurdering**")
+        styrker = st.text_area("Styrker")
+        udvikling = st.text_area("Udviklingsområder")
+        vurdering = st.text_area("Samlet vurdering")
 
-        st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn and p_id:
                 avg_rating = round(sum([beslut, fart, aggres, attitude, udhold, leder, teknik, intel]) / 8, 1)
