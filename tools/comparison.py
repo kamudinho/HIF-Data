@@ -26,15 +26,18 @@ def vis_side(spillere, player_events, df_scout):
 
     # --- HJÆLPEFUNKTION TIL DATA ---
     def hent_data(navn):
-        # 1. Find ID
+        # 1. Find PLAYER_WYID på spilleren fra spillerlisten
         p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
         
         # 2. Hent Stats (Wyscout)
         stats = player_events[player_events['PLAYER_WYID'] == p_id].iloc[0]
         
         # 3. Hent Scouting (Nyeste rapport)
-        # Vi sikrer os at ID sammenlignes korrekt som strenge
-        scout_match = df_scout[df_scout['ID'].astype(str) == str(p_id)].sort_values('Dato', ascending=False)
+        # Vi sikrer os at kolonnenavnene er rene og bruger PLAYER_WYID som nøgle
+        df_scout.columns = [str(c).strip() for c in df_scout.columns]
+        
+        # Vi filtrerer på PLAYER_WYID i scouting-databasen
+        scout_match = df_scout[df_scout['PLAYER_WYID'].astype(str) == str(p_id)].sort_values('Dato', ascending=False)
         
         if not scout_match.empty:
             nyeste = scout_match.iloc[0]
@@ -72,7 +75,7 @@ def vis_side(spillere, player_events, df_scout):
             st.metric("PASNINGER", int(row1['PASSES']))
             st.metric("EROBRINGER", int(row1['RECOVERIES']))
         
-        st.write("") # Luft
+        st.write("") 
         st.success(f"**Styrker**\n\n{scout1['s']}")
         st.warning(f"**Udvikling**\n\n{scout1['u']}")
         st.info(f"**Vurdering**\n\n{scout1['v']}")
@@ -102,7 +105,7 @@ def vis_side(spillere, player_events, df_scout):
         fig.update_layout(
             polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 100])),
             showlegend=False, 
-            height=450, 
+            height=400, 
             margin=dict(l=40, r=40, t=40, b=40)
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -118,7 +121,7 @@ def vis_side(spillere, player_events, df_scout):
             st.metric("PASNINGER", int(row2['PASSES']))
             st.metric("EROBRINGER", int(row2['RECOVERIES']))
 
-        st.write("") # Luft
+        st.write("") 
         st.success(f"**Styrker**\n\n{scout2['s']}")
         st.warning(f"**Udvikling**\n\n{scout2['u']}")
         st.info(f"**Vurdering**\n\n{scout2['v']}")
