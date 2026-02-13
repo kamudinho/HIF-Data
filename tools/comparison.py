@@ -135,20 +135,22 @@ def vis_side(spillere, player_events, df_scout):
             st.metric("PASNINGER", int(row2.get('PASSES', 0)))
             st.metric("EROBRINGER", int(row2.get('RECOVERIES', 0)))
 
-    # --- 6. BUND SEKTION: TABS (Trukket helt op) ---
-    # Ingen divider her - vi går direkte til tabs
+   # --- 6. BUND SEKTION: TABS (Optimeret afstand) ---
+    st.write("") # Tilføjer en enkelt linje luft efter radaren
     sc1, sc2 = st.columns(2)
 
     with sc1:
-        st.markdown(f"<p style='color: #df003b; font-weight: bold; margin-bottom: -10px;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
-        t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
+        # Vi bruger 5px margin i stedet for -10px for at undgå overlap
+        st.markdown(f"<p style='color: #df003b; font-weight: bold; margin-bottom: 5px;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
         with t1: st.info(scout1['s'])
         with t2: st.warning(scout1['u'])
         with t3: st.success(scout1['v'])
 
     with sc2:
-        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right; margin-bottom: -10px;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
-        t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
-        with t1: st.info(scout1['s']) # Rettet fra scout1 til scout2 hvis det var en copy-paste fejl før
-        with t2: st.warning(scout1['u'])
-        with t3: st.success(scout1['v'])
+        # Højrejusteret tekst med korrekt afstand
+        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right; margin-bottom: 5px;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        with t1: st.info(scout2['s']) # Rettet til scout2 her
+        with t2: st.warning(scout2['u'])
+        with t3: st.success(scout2['v'])
