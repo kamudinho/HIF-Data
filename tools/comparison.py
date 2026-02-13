@@ -86,7 +86,7 @@ def vis_side(spillere, player_events, df_scout):
         url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
         standard_url = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         
-        w = 100 
+        w = 130 
         
         try:
             response = requests.head(url, timeout=1)
