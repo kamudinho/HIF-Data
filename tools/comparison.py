@@ -25,50 +25,58 @@ def vis_side(spillere, player_events, df_scout):
                                label_visibility="collapsed")
 
     def hent_data(navn):
-        # 1. Find PLAYER_WYID på spilleren fra spillerlisten
-        p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
-        
-        # 2. Hent Stats (Wyscout)
-        # Vi tjekker om player_events bruger store bogstaver i kolonnerne
-        p_id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in player_events.columns else 'player_wyid'
-        stats = player_events[player_events[p_id_col] == p_id].iloc[0]
-        
-        # 3. Scouting data - Vi antager kolonnerne ER gjort til store i main.py
-        # Men vi gør det lige igen for en sikkerheds skyld lokalt
-        df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
-        
-        # 4. Find matches (Nu leder vi efter 'ID' i store bogstaver)
-        search_id = str(int(p_id)) if pd.notna(p_id) else "NONE"
-        
-        # Vi leder efter p_id i 'ID' kolonnen
-        scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
-        
-        if not scout_match.empty:
-            # Sorter efter DATO (store bogstaver)
-            scout_match = scout_match.sort_values('DATO', ascending=False)
-            nyeste = scout_match.iloc[0]
-            
-            # Hent værdier med store bogstaver
-            pot = nyeste.get('POTENTIALE', '')
-            udv = nyeste.get('UDVIKLING', '')
-            
-            pot_str = str(pot) if pd.notna(pot) and pot != "" else ""
-            udv_str = str(udv) if pd.notna(udv) and udv != "" else ""
-            
-            kombineret_udv = ""
-            if pot_str: kombineret_udv += f"**Potentiale:** {pot_str}\n\n"
-            if udv_str: kombineret_udv += f"**Udvikling:** {udv_str}"
-            if not kombineret_udv: kombineret_udv = "Ingen data"
+    # 1. Find PLAYER_WYID på spilleren fra spillerlisten
+    p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
+    
+    # 2. Hent Stats (Wyscout)
+    stats = player_events[player_events['PLAYER_WYID'] == p_id].iloc[0]
+    
+    # 3. TVUNGEN RENSNING af df_scout (Dette løser KeyError)
+    # Vi tvinger alle overskrifter til at være store bogstaver og fjerner usynlige tegn
+    df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
+    
+    # 4. TJEK: Hvis 'ID' mangler efter rensning, prøv at finde den kolonne der ligner mest
+    if 'ID' not in df_scout.columns:
+        # Hvis vi overhovedet ikke kan finde 'ID', returnerer vi tom data i stedet for at crashe
+        return stats, {'s': 'Data fejl', 'u': 'Kolonne ID ikke fundet i CSV', 'v': 'Tjek CSV struktur'}
 
-            scout_dict = {
-                's': nyeste.get('STYRKER', 'Ingen data'),
-                'u': kombineret_udv,
-                'v': nyeste.get('VURDERING', 'Ingen data')
-            }
-        else:
-            scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen scouting fundet'}
-            
-        return stats, scout_dict
+    # 5. Find matches
+    # Vi sikrer os at p_id behandles som et rent heltal (uden .0), hvis det er muligt
+    try:
+        search_id = str(int(float(p_id)))
+    except:
+        search_id = str(p_id)
+
+    # Filtrering
+    scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
+    
+    if not scout_match.empty:
+        # Sorter efter DATO (Vi ved den nu er i store bogstaver)
+        if 'DATO' in df_scout.columns:
+            scout_match = scout_match.sort_values('DATO', ascending=False)
+        
+        nyeste = scout_match.iloc[0]
+        
+        # Hent tekstfelter (sikret mod missing values med .get og pd.notna)
+        pot = nyeste.get('POTENTIALE', '')
+        udv = nyeste.get('UDVIKLING', '')
+        
+        pot_str = str(pot) if pd.notna(pot) and pot != "nan" else ""
+        udv_str = str(udv) if pd.notna(udv) and udv != "nan" else ""
+        
+        komb_udv = ""
+        if pot_str: komb_udv += f"**Potentiale:** {pot_str}\n\n"
+        if udv_str: komb_udv += f"**Udvikling:** {udv_str}"
+
+        scout_dict = {
+            's': nyeste.get('STYRKER', 'Ingen data'),
+            'u': komb_udv if komb_udv else "Ingen data",
+            'v': nyeste.get('VURDERING', 'Ingen data')
+        }
+    else:
+        scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen scouting fundet på denne spiller'}
+        
+    return stats, scout_dict
 
     # Hent data for begge spillere
     row1, scout1 = hent_data(s1_navn)
