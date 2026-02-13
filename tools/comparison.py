@@ -149,15 +149,14 @@ def vis_side(spillere, player_events, df_scout):
         vis_spiller_metrics(row1, s1_navn, side="venstre")
 
     with c2:
-        # INFO BOKS TIL RADAR DEFINITIONER
-        with st.expander("ℹ️ Definitioner af kategorier"):
-            d1, d2 = st.columns(2)
-            # Her tager vi de 8 keys fra radar_defs og viser deres help-tekst
-            keys = list(radar_defs.keys())
-            for i, k in enumerate(keys):
-                target = d1 if i < 4 else d2
-                target.write(f"❓ **{k}**", help=radar_defs[k])
+        # Opretter to under-kolonner: en bred til overskrift/luft og en meget smal til ikonet
+        inf_col1, inf_col2 = st.columns([0.9, 0.1])
         
+        with inf_col2:
+            # Placerer et tooltip-ikon helt ude til højre
+            st.markdown("### ℹ️", help="\n\n".join([f"**{k}**: {v}" for k, v in radar_defs.items()]))
+
+        # Selve radaren fylder nu resten af pladsen under ikonet
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with c3:
