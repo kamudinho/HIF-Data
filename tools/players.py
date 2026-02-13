@@ -61,7 +61,7 @@ def vis_side(df_spillere):
     df_viz['FOD'] = df_viz['FOD'].fillna("-")
 
     # --- 3. SØGEFUNKTION ---
-    search = st.text_input("🔍 Søg efter spiller, position eller navn:", "")
+    search = st.text_input("Søg efter spiller, position eller navn:", "")
     if search:
         mask = (
             df_viz['POS_NAVN'].str.contains(search, case=False, na=False) |
@@ -99,7 +99,7 @@ def vis_side(df_spillere):
         df_viz.style.apply(highlight_contract, axis=None),
         column_order=list(kolonner_konfig.keys()),
         column_config={
-            "POS_NAVN": st.column_config.TextColumn("Position", width="medium"),
+            "POS_NAVN": st.column_config.TextColumn("Position"),
             "NAVN": st.column_config.TextColumn("Navn", width="large"),
             "BIRTH_STR": st.column_config.TextColumn("Fødselsdato"),
             "HEIGHT_STR": st.column_config.TextColumn("Højde"),
