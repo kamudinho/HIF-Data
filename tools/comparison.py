@@ -4,151 +4,133 @@ import plotly.graph_objects as go
 
 def vis_side(spillere, player_events, df_scout):
     if spillere is None or player_events is None or df_scout is None:
-        st.error("Kunne ikke indlæse de nødvendige data til sammenligning.")
+        st.error("Kunne ikke indlæse data.")
         return
 
-    # Forbered navneliste
-    df_spillere = spillere.copy()
-    df_spillere['Full_Name'] = df_spillere['FIRSTNAME'] + " " + df_spillere['LASTNAME']
-    navne_liste = sorted(df_spillere['Full_Name'].unique())
-
-    # --- TOP SEKTION: VALG AF SPILLERE ---
-    col_sel1, col_sel2 = st.columns(2)
-
-    with col_sel1:
-        st.markdown("<h4 style='color: #df003b;'>Spiller 1</h4>", unsafe_allow_html=True)
-        s1_navn = st.selectbox("Vælg P1", navne_liste, index=0, label_visibility="collapsed")
-
-    with col_sel2:
-        st.markdown("<h4 style='color: #0056a3; text-align: right;'>Spiller 2</h4>", unsafe_allow_html=True)
-        s2_navn = st.selectbox("Vælg P2", navne_liste, index=1 if len(navne_liste) > 1 else 0,
-                               label_visibility="collapsed")
-
-    def hent_data(navn):
-    # 1. Find PLAYER_WYID på spilleren fra spillerlisten
-    p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
+    # --- 1. FORBERED DEN KOMBINEREDE NAVNELISTE ---
+    # HIF Spillere fra Excel
+    df_hif = spillere.copy()
+    df_hif['Full_Name'] = df_hif['FIRSTNAME'] + " " + df_hif['LASTNAME']
     
-    # 2. Hent Stats (Wyscout)
-    stats = player_events[player_events['PLAYER_WYID'] == p_id].iloc[0]
-    
-    # 3. TVUNGEN RENSNING af df_scout (Dette løser KeyError)
-    # Vi tvinger alle overskrifter til at være store bogstaver og fjerner usynlige tegn
+    # Scouting Spillere fra CSV (Vi tvinger kolonner til upper for en sikkerheds skyld)
     df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
     
-    # 4. TJEK: Hvis 'ID' mangler efter rensning, prøv at finde den kolonne der ligner mest
-    if 'ID' not in df_scout.columns:
-        # Hvis vi overhovedet ikke kan finde 'ID', returnerer vi tom data i stedet for at crashe
-        return stats, {'s': 'Data fejl', 'u': 'Kolonne ID ikke fundet i CSV', 'v': 'Tjek CSV struktur'}
-
-    # 5. Find matches
-    # Vi sikrer os at p_id behandles som et rent heltal (uden .0), hvis det er muligt
-    try:
-        search_id = str(int(float(p_id)))
-    except:
-        search_id = str(p_id)
-
-    # Filtrering
-    scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
+    # Lav en liste over alle unikke navne fra begge kilder
+    hif_navne = df_hif[['Full_Name', 'PLAYER_WYID']].rename(columns={'Full_Name': 'Navn', 'PLAYER_WYID': 'ID'})
+    scout_navne = df_scout[['NAVN', 'ID']].rename(columns={'NAVN': 'Navn', 'ID': 'ID'})
     
-    if not scout_match.empty:
-        # Sorter efter DATO (Vi ved den nu er i store bogstaver)
-        if 'DATO' in df_scout.columns:
-            scout_match = scout_match.sort_values('DATO', ascending=False)
-        
-        nyeste = scout_match.iloc[0]
-        
-        # Hent tekstfelter (sikret mod missing values med .get og pd.notna)
-        pot = nyeste.get('POTENTIALE', '')
-        udv = nyeste.get('UDVIKLING', '')
-        
-        pot_str = str(pot) if pd.notna(pot) and pot != "nan" else ""
-        udv_str = str(udv) if pd.notna(udv) and udv != "nan" else ""
-        
-        komb_udv = ""
-        if pot_str: komb_udv += f"**Potentiale:** {pot_str}\n\n"
-        if udv_str: komb_udv += f"**Udvikling:** {udv_str}"
+    # Saml dem og fjern dubletter baseret på ID
+    samlet_df = pd.concat([hif_navne, scout_navne]).drop_duplicates(subset=['ID'])
+    navne_liste = sorted(samlet_df['Navn'].unique())
 
-        scout_dict = {
-            's': nyeste.get('STYRKER', 'Ingen data'),
-            'u': komb_udv if komb_udv else "Ingen data",
-            'v': nyeste.get('VURDERING', 'Ingen data')
-        }
-    else:
-        scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen scouting fundet på denne spiller'}
+    # --- 2. VALG AF SPILLERE ---
+    col_sel1, col_sel2 = st.columns(2)
+    with col_sel1:
+        s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
+    with col_sel2:
+        s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
+
+    # --- 3. HJÆLPEFUNKTION TIL AT HENTE DATA ---
+    def hent_spiller_data(navn):
+        # Find ID
+        p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
+        search_id = str(int(float(p_id))) if pd.notna(p_id) else "0"
+
+        # A) Hent Stats (Wyscout) - hvis de findes
+        stats_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id)]
+        if not stats_match.empty:
+            stats = stats_match.iloc[0]
+        else:
+            # Dummy stats hvis spilleren kun er i scouting-db
+            stats = {k: 0 for k in ['GOALS', 'SHOTS', 'PASSES', 'RECOVERIES', 'FORWARDPASSES', 'KAMPE', 'MINUTESONFIELD', 'TOUCHINBOX']}
         
-    return stats, scout_dict
+        # B) Hent Scouting Tekst
+        scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
+        if not scout_match.empty:
+            nyeste = scout_match.sort_values('DATO', ascending=False).iloc[0]
+            
+            pot = nyeste.get('POTENTIALE', '')
+            udv = nyeste.get('UDVIKLING', '')
+            pot_str = str(pot) if pd.notna(pot) and pot != "nan" else ""
+            udv_str = str(udv) if pd.notna(udv) and udv != "nan" else ""
+            
+            komb_udv = ""
+            if pot_str: komb_udv += f"**Potentiale:** {pot_str}\n\n"
+            if udv_str: komb_udv += f"**Udvikling:** {udv_str}"
 
-    # Hent data for begge spillere
-    row1, scout1 = hent_data(s1_navn)
-    row2, scout2 = hent_data(s2_navn)
+            scout_dict = {
+                's': nyeste.get('STYRKER', 'Ingen data'),
+                'u': komb_udv if komb_udv else "Ingen data",
+                'v': nyeste.get('VURDERING', 'Ingen data')
+            }
+        else:
+            scout_dict = {'s': 'Ingen scouting data', 'u': 'Ingen scouting data', 'v': 'Ingen vurdering fundet'}
+            
+        return stats, scout_dict
 
-    # Global max til radar-skalering
-    stats_to_track = ['GOALS', 'FORWARDPASSES', 'SHOTS', 'RECOVERIES', 'PASSES', 'KAMPE', 'MINUTESONFIELD', 'TOUCHINBOX']
-    max_stats = {s: (player_events[s].max() if player_events[s].max() > 0 else 1) for s in stats_to_track}
+    row1, scout1 = hent_spiller_data(s1_navn)
+    row2, scout2 = hent_spiller_data(s2_navn)
 
+    # --- 4. RADAR CHART LOGIK ---
+    stats_to_track = ['GOALS', 'FORWARDPASSES', 'SHOTS', 'RECOVERIES', 'PASSES', 'TOUCHINBOX']
+    # Beregn max værdier for skalering (undgå division med 0)
+    max_stats = {s: (player_events[s].max() if s in player_events and player_events[s].max() > 0 else 1) for s in stats_to_track}
+
+    def get_radar_values(row):
+        vals = []
+        for s in stats_to_track:
+            val = row.get(s, 0)
+            max_val = max_stats[s]
+            vals.append((val / max_val) * 100 if max_val > 0 else 0)
+        return vals + [vals[0]]
+
+    categories = ['Mål', 'Fremad. pass', 'Skud', 'Erobringer', 'Pasninger', 'Felt-berør.']
+    categories_closed = categories + [categories[0]]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(r=get_radar_values(row1), theta=categories_closed, fill='toself', name=s1_navn, line_color='#df003b'))
+    fig.add_trace(go.Scatterpolar(r=get_radar_values(row2), theta=categories_closed, fill='toself', name=s2_navn, line_color='#0056a3'))
+    
+    fig.update_layout(
+        polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 100])),
+        showlegend=False, height=450, margin=dict(l=50, r=50, t=50, b=50)
+    )
+
+    # --- 5. VISNING AF METRICS OG RADAR ---
     st.divider()
+    c1, c2, c3 = st.columns([1.2, 2, 1.2])
 
-    # --- LAYOUT: 3 KOLONNER ---
-    c1, c2, c3 = st.columns([1.5, 2, 1.5])
-
-    # SPILLER 1 (VENSTRE - RØD)
     with c1:
         st.markdown(f"<h3 style='color: #df003b;'>{s1_navn}</h3>", unsafe_allow_html=True)
-        s1_m1, s1_m2 = st.columns(2)
-        with s1_m1:
-            st.metric("MÅL", int(row1['GOALS']))
-            st.metric("SKUD", int(row1['SHOTS']))
-        with s1_m2:
-            st.metric("PASNINGER", int(row1['PASSES']))
-            st.metric("EROBRINGER", int(row1['RECOVERIES']))
-        
-        st.write("") 
-        st.success(f"**Styrker**\n\n{scout1['s']}")
-        st.warning(f"**Udvikling**\n\n{scout1['u']}")
-        st.info(f"**Vurdering**\n\n{scout1['v']}")
+        st.metric("MÅL", int(row1.get('GOALS', 0)))
+        st.metric("SKUD", int(row1.get('SHOTS', 0)))
+        st.metric("PASNINGER", int(row1.get('PASSES', 0)))
+        st.metric("EROBRINGER", int(row1.get('RECOVERIES', 0)))
 
-    # RADAR (MIDTEN)
     with c2:
-        def get_radar_values(row):
-            vals = [
-                (row['GOALS'] / max_stats['GOALS']) * 100,
-                (row['FORWARDPASSES'] / max_stats['FORWARDPASSES']) * 100,
-                (row['SHOTS'] / max_stats['SHOTS']) * 100,
-                (row['RECOVERIES'] / max_stats['RECOVERIES']) * 100,
-                (row['PASSES'] / max_stats['PASSES']) * 100,
-                (row['KAMPE'] / max_stats['KAMPE']) * 100,
-                (row['MINUTESONFIELD'] / max_stats['MINUTESONFIELD']) * 100,
-                (row['TOUCHINBOX'] / max_stats['TOUCHINBOX']) * 100
-            ]
-            return vals + [vals[0]]
-
-        categories = ['Mål', 'Fremad. pass', 'Skud', 'Erobringer', 'Pasninger', 'Kampe', 'Minutter', 'Felt-berør.']
-        categories_closed = categories + [categories[0]]
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=get_radar_values(row1), theta=categories_closed, fill='toself', name=s1_navn, line_color='#df003b'))
-        fig.add_trace(go.Scatterpolar(r=get_radar_values(row2), theta=categories_closed, fill='toself', name=s2_navn, line_color='#0056a3'))
-        
-        fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 100])),
-            showlegend=False, 
-            height=400, 
-            margin=dict(l=40, r=40, t=40, b=40)
-        )
         st.plotly_chart(fig, use_container_width=True)
 
-    # SPILLER 2 (HØJRE - BLÅ)
     with c3:
         st.markdown(f"<h3 style='color: #0056a3; text-align: right;'>{s2_navn}</h3>", unsafe_allow_html=True)
-        s2_m1, s2_m2 = st.columns(2)
-        with s2_m1:
-            st.metric("MÅL", int(row2['GOALS']))
-            st.metric("SKUD", int(row2['SHOTS']))
-        with s2_m2:
-            st.metric("PASNINGER", int(row2['PASSES']))
-            st.metric("EROBRINGER", int(row2['RECOVERIES']))
+        st.metric("MÅL", int(row2.get('GOALS', 0)))
+        st.metric("SKUD", int(row2.get('SHOTS', 0)))
+        st.metric("PASNINGER", int(row2.get('PASSES', 0)))
+        st.metric("EROBRINGER", int(row2.get('RECOVERIES', 0)))
 
-        st.write("") 
-        st.success(f"**Styrker**\n\n{scout2['s']}")
-        st.warning(f"**Udvikling**\n\n{scout2['u']}")
-        st.info(f"**Vurdering**\n\n{scout2['v']}")
+    # --- 6. BUND SEKTION: TABS TIL SCOUTING ---
+    st.divider()
+    sc1, sc2 = st.columns(2)
+
+    with sc1:
+        st.markdown(f"<p style='color: #df003b; font-weight: bold;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
+        with t1: st.info(scout1['s'])
+        with t2: st.warning(scout1['u'])
+        with t3: st.success(scout1['v'])
+
+    with sc2:
+        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
+        with t1: st.info(scout2['s'])
+        with t2: st.warning(scout2['u'])
+        with t3: st.success(scout2['v'])
