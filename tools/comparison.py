@@ -87,7 +87,7 @@ def vis_side(spillere, player_events, df_scout):
     fig.add_trace(go.Scatterpolar(r=get_radar_values(tech2), theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
     
     fig.update_layout(
-        polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 10])), # SKALA 0-10
+        polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])), # SKALA 0-10
         showlegend=False, height=400, margin=dict(l=40, r=40, t=20, b=20)
     )
 
