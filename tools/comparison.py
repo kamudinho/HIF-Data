@@ -33,26 +33,40 @@ def vis_side(spillere, player_events, df_scout):
     # --- 3. HJÆLPEFUNKTION TIL AT HENTE DATA ---
     def hent_spiller_data(navn):
         # Find ID
-        p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
-        search_id = str(int(float(p_id))) if pd.notna(p_id) else "0"
+        try:
+            p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
+        except:
+            return {k: 0 for k in ['GOALS', 'SHOTS', 'PASSES', 'RECOVERIES']}, {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Spiller ikke fundet'}
 
-        # A) Hent Stats (Wyscout) - hvis de findes
-        stats_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id)]
+        # Sikker konvertering af ID til streng (håndterer både 1234, 1234.0 og "1234")
+        def clean_id(val):
+            if pd.isna(val) or val == "": return "0"
+            try:
+                # Forsøg at fjerne .0 hvis det er en float gemt som streng
+                return str(int(float(val)))
+            except:
+                return str(val).strip()
+
+        search_id = clean_id(p_id)
+
+        # A) Hent Stats (Wyscout)
+        stats_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id, na=False)]
         if not stats_match.empty:
             stats = stats_match.iloc[0]
         else:
-            # Dummy stats hvis spilleren kun er i scouting-db
             stats = {k: 0 for k in ['GOALS', 'SHOTS', 'PASSES', 'RECOVERIES', 'FORWARDPASSES', 'KAMPE', 'MINUTESONFIELD', 'TOUCHINBOX']}
         
         # B) Hent Scouting Tekst
-        scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
+        # Vi tjekker mod 'ID' kolonnen i df_scout
+        scout_match = df_scout[df_scout['ID'].astype(str).apply(clean_id) == search_id]
+        
         if not scout_match.empty:
             nyeste = scout_match.sort_values('DATO', ascending=False).iloc[0]
             
             pot = nyeste.get('POTENTIALE', '')
             udv = nyeste.get('UDVIKLING', '')
-            pot_str = str(pot) if pd.notna(pot) and pot != "nan" else ""
-            udv_str = str(udv) if pd.notna(udv) and udv != "nan" else ""
+            pot_str = str(pot) if pd.notna(pot) and str(pot).lower() != "nan" else ""
+            udv_str = str(udv) if pd.notna(udv) and str(udv).lower() != "nan" else ""
             
             komb_udv = ""
             if pot_str: komb_udv += f"**Potentiale:** {pot_str}\n\n"
@@ -67,7 +81,6 @@ def vis_side(spillere, player_events, df_scout):
             scout_dict = {'s': 'Ingen scouting data', 'u': 'Ingen scouting data', 'v': 'Ingen vurdering fundet'}
             
         return stats, scout_dict
-
     row1, scout1 = hent_spiller_data(s1_navn)
     row2, scout2 = hent_spiller_data(s2_navn)
 
