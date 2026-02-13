@@ -7,16 +7,16 @@ def vis_side(spillere, player_events, df_scout):
         st.error("Kunne ikke indlæse data.")
         return
 
-    # --- 1. DEFINITIONER (Ordbogen) ---
+    # --- 1. DEFINITIONER (Bestemmer rækkefølgen på radaren) ---
     radar_defs = {
+        'Tekniske færdigheder': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
         'Beslutsomhed': 'Evnen til at træffe hurtige, korrekte valg under pres.',
         'Fart': 'Acceleration og topfart med og uden bold.',
         'Aggressivitet': 'Vished i dueller og fysisk tilstedeværelse.',
         'Attitude': 'Mentalitet, arbejdsrate og kropssprog.',
         'Udholdenhed': 'Evnen til at præstere på højt niveau i 90 minutter.',
         'Lederevner': 'Kommunikation og evne til at guide medspillere.',
-        'Teknik': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
-        'Spil-int.': 'Forståelse for positionering og læsning af spillet.'
+        'Spilintelligens': 'Forståelse for positionering og læsning af spillet.'
     }
 
     # --- 2. FORBERED DATA ---
@@ -50,7 +50,7 @@ def vis_side(spillere, player_events, df_scout):
         elif any(x in pos for x in ["MID", "MIDTBANE"]):
             return [("PAS %", "PASSACC"), ("FREM PAS", "FORWARDPASSES"), ("EROBR.", "RECOVERIES"), 
                     ("CHANCER", "ASSISTS"), ("DUEL %", "DEFDUELSWON"), ("xG", "XG")]
-        else:
+        else: # Angreb/Fløj
             return [("MÅL", "GOALS"), ("SKUD", "SHOTS"), ("xG", "XG"), 
                     ("BERØR. FELT", "TOUCHINBOX"), ("DRIBLE %", "DRIBBLESWON"), ("ASSISTS", "ASSISTS")]
 
@@ -62,10 +62,13 @@ def vis_side(spillere, player_events, df_scout):
         s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_spiller_data(navn):
+        # Tomme standard-værdier hvis alt fejler
+        empty_tech = {'TEKNIK': 0, 'BESLUTSOMHED': 0, 'FART': 0, 'AGGRESIVITET': 0, 'ATTITUDE': 0, 'UDHOLDENHED': 0, 'LEDEREGENSKABER': 0, 'SPILINTELLIGENS': 0}
+        
         try:
             p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
         except:
-            return {}, {}, {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
+            return {}, {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen data'}, empty_tech
 
         def clean_id(val):
             if pd.isna(val) or val == "": return "0"
@@ -73,16 +76,29 @@ def vis_side(spillere, player_events, df_scout):
             except: return str(val).strip()
 
         search_id = clean_id(p_id)
+        
+        # A) Wyscout Stats
         stats_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id, na=False)]
         stats = stats_match.iloc[0].to_dict() if not stats_match.empty else {}
         
+        # B) Scouting Data
         scout_match = df_scout[df_scout['ID'].astype(str).apply(clean_id) == search_id]
-        tech_stats = {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
+        tech_stats = empty_tech.copy()
         scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen vurdering fundet'}
 
         if not scout_match.empty:
             nyeste = scout_match.sort_values('DATO', ascending=False).iloc[0]
-            for k in tech_stats.keys(): tech_stats[k] = nyeste.get(k, 0)
+            # Map Excel-kolonner til vores radar-keys
+            tech_stats = {
+                'TEKNIK': nyeste.get('TEKNIK', 0),
+                'BESLUTSOMHED': nyeste.get('BESLUTSOMHED', 0),
+                'FART': nyeste.get('FART', 0),
+                'AGGRESIVITET': nyeste.get('AGGRESIVITET', 0),
+                'ATTITUDE': nyeste.get('ATTITUDE', 0),
+                'UDHOLDENHED': nyeste.get('UDHOLDENHED', 0),
+                'LEDEREGENSKABER': nyeste.get('LEDEREGENSKABER', 0),
+                'SPILINTELLIGENS': nyeste.get('SPILINTELLIGENS', 0)
+            }
             scout_dict = {
                 's': nyeste.get('STYRKER', 'Ingen data'),
                 'u': f"**Potentiale:** {nyeste.get('POTENTIALE','')}\n\n**Udvikling:** {nyeste.get('UDVIKLING','')}",
@@ -93,12 +109,13 @@ def vis_side(spillere, player_events, df_scout):
     row1, scout1, tech1 = hent_spiller_data(s1_navn)
     row2, scout2, tech2 = hent_spiller_data(s2_navn)
 
-    # --- 5. RADAR CHART ---
+    # --- 5. RADAR CHART LOGIK ---
     categories = list(radar_defs.keys())
-    cols_in_df = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+    # Kolonne-nøglerne her skal matche dem i tech_stats ordbogen ovenfor
+    cols_to_map = ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']
 
     def get_radar_values(t_stats):
-        vals = [t_stats.get(c, 0) for c in cols_in_df]
+        vals = [t_stats.get(c, 0) for c in cols_to_map]
         return vals + [vals[0]]
 
     fig = go.Figure()
@@ -111,29 +128,27 @@ def vis_side(spillere, player_events, df_scout):
             radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=9)),
             angularaxis=dict(tickfont=dict(size=10), rotation=90, direction="clockwise")
         ),
-        showlegend=False, height=480, margin=dict(l=70, r=70, t=30, b=30), autosize=True
+        showlegend=False, height=480, margin=dict(l=75, r=75, t=20, b=20), autosize=True
     )
 
-    # --- 6. VISNING ---
+    # --- 6. VISNING AF METRICS ---
     def vis_spiller_metrics(row, navn, side="venstre"):
         color = "#df003b" if side == "venstre" else "#0056a3"
         align = "left" if side == "venstre" else "right"
         st.markdown(f"<h4 style='color: {color}; text-align: {align}; margin-bottom: 5px;'>{navn}</h4>", unsafe_allow_html=True)
         
-        # BASIS (2x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>BASIS STATS</p>", unsafe_allow_html=True)
+        # 2x2 Basis
         b1, b2 = st.columns(2)
         with b1:
-            st.metric("KAMPE", int(row.get('KAMPE', 0)), help="Antal kampe spillet")
+            st.metric("KAMPE", int(row.get('KAMPE', 0)))
             st.metric("GULE", int(row.get('YELLOWCARDS', 0)))
         with b2:
-            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)), help="Minutter på banen")
+            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
             st.metric("RØDE", int(row.get('REDCARDS', 0)))
             
         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
         
-        # PERFORMANCE (3x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>PERFORMANCE (WY)</p>", unsafe_allow_html=True)
+        # 3x2 Performance
         pos_metrics = get_position_metrics(navn)
         p1, p2 = st.columns(2)
         for i, (label, key) in enumerate(pos_metrics):
@@ -142,6 +157,7 @@ def vis_side(spillere, player_events, df_scout):
             with target_col:
                 st.metric(label, int(val) if pd.notna(val) else 0)
 
+    # Hovedlayout
     st.write("")
     c1, c2, c3 = st.columns([1.8, 3, 1.8])
 
@@ -149,22 +165,17 @@ def vis_side(spillere, player_events, df_scout):
         vis_spiller_metrics(row1, s1_navn, side="venstre")
 
     with c2:
-        # INFO BOKS TIL RADAR DEFINITIONER
-        with st.expander("Definitioner af kategorier"):
-            d1, d2 = st.columns(2)
-            # Her tager vi de 8 keys fra radar_defs og viser deres help-tekst
-            keys = list(radar_defs.keys())
-            for i, k in enumerate(keys):
-                target = d1 if i < 4 else d2
-                target.write(f"❓ **{k}**", help=radar_defs[k])
-        
+        # Spørgsmålstegn med tooltip
+        h1, h2 = st.columns([0.95, 0.05])
+        with h2:
+            st.write("❓", help="\n\n".join([f"**{k}**: {v}" for k, v in radar_defs.items()]))
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with c3:
         vis_spiller_metrics(row2, s2_navn, side="højre")
 
     # --- 7. TABS ---
-    st.write("") 
+    st.write("---") 
     sc1, sc2 = st.columns(2)
     with sc1:
         st.markdown(f"<p style='color: #df003b; font-weight: bold;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
