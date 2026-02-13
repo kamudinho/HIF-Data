@@ -73,12 +73,17 @@ def vis_side(spillere, player_events, df_scout):
             st.image(std, width=int(w*0.92))
 
     def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
+        # Vi definerer en fælles tekst-stil for at sikre ens højde og font
+        label_style = "margin:0; color:gray; font-size:14px; line-height:1.2;"
+        name_style = f"margin:0; color:{color}; line-height:1.1;"
+
         if side == "venstre":
             c_img, c_txt = st.columns([1, 2])
-            with c_img: vis_spiller_billede(pid)
+            with c_img: 
+                vis_spiller_billede(pid)
             with c_txt: 
-                st.markdown(f"<h3 style='color:{color}; margin-bottom:0;'>{navn}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<p style='color:gray; font-size:14px;'>{pos} | {klub}</p>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='{name_style}'>{navn}</h3>", unsafe_allow_html=True)
+                st.markdown(f"<p style='{label_style}'>{pos} | {klub}</p>", unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             m1, m2, m3 = st.columns(3)
@@ -86,17 +91,18 @@ def vis_side(spillere, player_events, df_scout):
             m2.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
             m3.metric("MÅL", int(float(stats.get('GOALS', 0))))
         
-        else: # Højrestillet spejlvendt layout
+        else: 
             c_txt, c_img = st.columns([2, 1])
             with c_txt: 
-                st.markdown(f"<h3 style='text-align:right; color:{color}; margin-bottom:0;'>{navn}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align:right; color:gray; font-size:14px;'>{pos} | {klub}</p>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='{name_style} text-align:right;'>{navn}</h3>", unsafe_allow_html=True)
+                st.markdown(f"<p style='{label_style} text-align:right;'>{pos} | {klub}</p>", unsafe_allow_html=True)
             with c_img: 
                 vis_spiller_billede(pid)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            # Metrics for spiller 2 skal også flugte til højre i kolonnen
+
             m_col1, m_col2, m_col3 = st.columns(3)
+
             with m_col1: st.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
             with m_col2: st.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
             with m_col3: st.metric("MÅL", int(float(stats.get('GOALS', 0))))
