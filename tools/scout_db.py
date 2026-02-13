@@ -96,17 +96,25 @@ def vis_side():
                 nyeste = historik.iloc[-1]
                 vis_metrikker(nyeste)
                 
-                # Styrker og Udviklingspotentiale bokse
-                st.write("") 
-                col_styrke, col_potentiale = st.columns(2)
-                with col_styrke:
-                    st.success("**Styrker**")
-                    st.write(nyeste.get('Styrker', 'Ingen data indtastet'))
-                with col_potentiale:
-                    st.warning("**Udviklingspotentiale**")
-                    st.write(nyeste.get('Udvikling', 'Ingen data indtastet'))
+                st.write("") # Lidt luft
                 
-                st.info(f"**Seneste Vurdering:**\n\n{nyeste['Vurdering']}")
+                # Tre kolonner på samme linje
+                col_s, col_u, col_v = st.columns(3)
+                
+                with col_s:
+                    st.success("**Styrker**")
+                    styrker_tekst = nyeste.get('Styrker', '')
+                    st.write(styrker_tekst if pd.notna(styrker_tekst) else "Ingen data")
+                    
+                with col_u:
+                    st.warning("**Udviklingspotentiale**")
+                    udv_tekst = nyeste.get('Udvikling', '')
+                    st.write(udv_tekst if pd.notna(udv_tekst) else "Ingen data")
+                    
+                with col_v:
+                    st.info("**Vurdering**")
+                    vurdering_tekst = nyeste.get('Vurdering', '')
+                    st.write(vurdering_tekst if pd.notna(vurdering_tekst) else "Ingen data")
 
             with tab2:
                 for _, row in historik.iloc[::-1].iterrows():
