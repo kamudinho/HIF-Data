@@ -164,6 +164,7 @@ elif selected == "Heatmaps":
     hm.vis_side(df_events, 4, hold_map)
 elif selected == "Sammenligning":
     import tools.comparison as comp
+    st.write("DEBUG - Kolonner i df_scout:", list(df_scout.columns))
     comp.vis_side(spillere, player_events, df_scout)
 elif selected == "Database":
     import tools.scout_db as sdb
