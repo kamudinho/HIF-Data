@@ -93,9 +93,9 @@ def vis_side(spillere, player_events, df_scout):
             if response.status_code == 200:
                 st.image(url, width=w)
             else:
-                st.image(standard_url, width=int(w * 0.75))
+                st.image(standard_url, width=int(w * 0.60))
         except:
-            st.image(standard_url, width=int(w * 0.75))
+            st.image(standard_url, width=int(w * 0.60))
 
     def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
         if side == "venstre":
