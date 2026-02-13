@@ -73,39 +73,41 @@ def vis_side(spillere, player_events, df_scout):
             st.image(std, width=int(w*0.92))
 
     def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
-        # Vi definerer en fælles tekst-stil for at sikre ens højde og font
-        label_style = "margin:0; color:gray; font-size:14px; line-height:1.2;"
-        name_style = f"margin:0; color:{color}; line-height:1.1;"
+        # Definerer en fast stil for at sikre 100% ensartethed i font og højde
+        name_style = f"margin:0; padding:0; color:{color}; line-height:1.0; font-size:24px; font-weight:bold;"
+        info_style = "margin:0; padding:0; color:gray; font-size:14px; line-height:1.0;"
 
         if side == "venstre":
+            # Spiller 1: Billede til venstre, tekst til højre
             c_img, c_txt = st.columns([1, 2])
             with c_img: 
                 vis_spiller_billede(pid)
             with c_txt: 
-                st.markdown(f"<h3 style='{name_style}'>{navn}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<p style='{label_style}'>{pos} | {klub}</p>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:left;'><p style='{name_style}'>{navn}</p><p style='{info_style}'>{pos} | {klub}</p></div>", unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            m1, m2, m3 = st.columns(3)
+            # Metrics flugter til venstre under spiller 1
+            m1, m2, m3 = st.columns([1,1,1])
             m1.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
             m2.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
             m3.metric("MÅL", int(float(stats.get('GOALS', 0))))
         
-        else: 
+        else:
+            # Spiller 2: Tekst til venstre (højrestillet), billede til højre
             c_txt, c_img = st.columns([2, 1])
             with c_txt: 
-                st.markdown(f"<h3 style='{name_style} text-align:right;'>{navn}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<p style='{label_style} text-align:right;'>{pos} | {klub}</p>", unsafe_allow_html=True)
+                # Her tvinger vi teksten helt til højre i kolonnen
+                st.markdown(f"<div style='text-align:right;'><p style='{name_style}'>{navn}</p><p style='{info_style}'>{pos} | {klub}</p></div>", unsafe_allow_html=True)
             with c_img: 
                 vis_spiller_billede(pid)
             
             st.markdown("<br>", unsafe_allow_html=True)
-
-            m_col1, m_col2, m_col3 = st.columns(3)
-
-            with m_col1: st.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
-            with m_col2: st.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
-            with m_col3: st.metric("MÅL", int(float(stats.get('GOALS', 0))))
+            # Her skaber vi 3 smalle kolonner til højre for at tvinge metrics helt ud til kanten
+            # Vi bruger 3 tomme spacer-kolonner først for at skubbe dem
+            _, m1, m2, m3 = st.columns([0.5, 1, 1, 1])
+            with m1: st.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
+            with m2: st.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
+            with m3: st.metric("MÅL", int(float(stats.get('GOALS', 0))))
 
     # --- LAYOUT ---
     col1, col2, col3 = st.columns([2.5, 3, 2.5])
