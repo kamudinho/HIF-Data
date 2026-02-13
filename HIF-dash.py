@@ -80,16 +80,28 @@ if "main_data" not in st.session_state:
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
 # --- 5. DIN ORIGINALE SIDEBAR NAVIGATION ---
+# --- 5. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
+    # Centreret logo i toppen af menuen
+    st.markdown(
+        """
+        <div style='text-align: center; padding-bottom: 20px;'>
+            <img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
     
     hoved_omraade = option_menu(
         menu_title=None,
         options=["Truppen", "Analyse", "Scouting"],
         icons=["people", "graph-up", "search"],
         menu_icon="cast", default_index=0,
-        styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
-    )
+        styles={
+            "container": {"background-color": "#f0f2f6"},
+            "nav-link-selected": {"background-color": "#003366"}
+        }
+    )    
     
     selected = "Oversigt" 
     
