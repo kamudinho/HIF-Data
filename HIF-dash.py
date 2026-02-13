@@ -2,6 +2,8 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import os
 import pandas as pd
+import uuid 
+
 
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
@@ -63,26 +65,30 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 
+
 @st.cache_resource
 def load_hif_data():
     try:
-        # Excel data (Wyscout stats)
+        # Excel data
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents')
         
-        # Scouting data (Fra GitHub CSV i stedet for Excel)
-        scout_url = "https://raw.githubusercontent.com/DIN_BRUGER/DIN_REPO/main/scouting_db.csv" # INDSÆT DIN URL HER
+        # Scouting data - Samme logik som dit Dashboard (Raw URL + nocache)
         try:
-            sc = pd.read_csv(scout_url)
+            # Brug dine eksisterende REPO og FILE_PATH variabler
+            # nocache sikrer, at du ser nye rapporter med det samme uden at Streamlit gemmer gammel data
+            scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
+            sc = pd.read_csv(scout_url, sep=None, engine='python')
+            
             # Rens kolonner: Fjern mellemrum og tving til STORE bogstaver
             sc.columns = [str(c).strip().upper() for c in sc.columns]
-        except:
-            st.warning("Kunne ikke hente scouting_db.csv fra GitHub. Bruger tom data.")
+        except Exception as e:
+            st.warning(f"Kunne ikke hente scouting_db.csv: {e}")
             sc = pd.DataFrame()
         
-        # Eventdata (Parquet)
+        # Eventdata
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
             ev.columns = [str(c).strip().upper() for c in ev.columns]
@@ -93,7 +99,7 @@ def load_hif_data():
         return ev, ka, h_map, sp, pe, sc
         
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
+        st.error(f"Kritisk fejl ved indlæsning: {e}")
         return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
 if "main_data" not in st.session_state:
