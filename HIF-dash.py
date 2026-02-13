@@ -2,47 +2,26 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import os
 import pandas as pd
-import uuid 
+import requests
+import uuid
 
-
-# --- 1. KONFIGURATION ---
+# --- 1. KONFIGURATION & STYLES ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
+# (Dine eksisterende styles her - forkortet for overblik)
 st.markdown("""
     <style>
-        /* 1. Vis menuen (header), men gør baggrunden gennemsigtig */
-        header {
-            visibility: visible !important;
-            background: rgba(0,0,0,0) !important;
-            height: 3rem !important; /* Giver plads til menu-knappen */
-        }
-
-        /* 2. Ryk selve indholdet helt op til toppen */
-        .block-container {
-            padding-top: 0rem !important;
-            margin-top: 2rem !important; /* Trækker indholdet op bag den gennemsigtige header */
-            padding-bottom: 1rem !important;
-        }
-
-        /* 3. Fix for Sidebar Logo - sørg for det ikke bliver cuttet */
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 1.5rem !important;
-            padding-bottom: 1.5rem !important;
-        }
-
-        /* 4. Gør afstanden mellem widgets mindre */
-        [data-testid="stVerticalBlock"] {
-            gap: 0.5rem !important;
-        }
-
-        /* 5. Gør selectbox og radio mere kompakte */
-        div[data-testid="stSelectbox"], div[data-testid="stRadio"] {
-            margin-bottom: 2px !important;
-        }
+        header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
+        .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
+        [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGIN SYSTEM ---
+# --- 2. GITHUB INDSTILLINGER (Sørg for disse er korrekte) ---
+REPO = "Kamudinho/HIF-data"
+FILE_PATH = "scouting_db.csv"
+
+# --- 3. LOGIN SYSTEM ---
 USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]:
@@ -60,11 +39,10 @@ if not st.session_state["logged_in"]:
                 else: st.error("Ugyldig kode")
     st.stop()
 
-# --- 3. DATA LOADING ---
+# --- 4. DATA LOADING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 XLSX_PATH = os.path.join(BASE_DIR, 'HIF-data.xlsx')
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
-
 
 @st.cache_resource
 def load_hif_data():
@@ -75,20 +53,16 @@ def load_hif_data():
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents')
         
-        # Scouting data - Samme logik som dit Dashboard (Raw URL + nocache)
+        # Scouting data - Samme logik som dit Dashboard
         try:
-            # Brug dine eksisterende REPO og FILE_PATH variabler
-            # nocache sikrer, at du ser nye rapporter med det samme uden at Streamlit gemmer gammel data
             scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
             sc = pd.read_csv(scout_url, sep=None, engine='python')
-            
-            # Rens kolonner: Fjern mellemrum og tving til STORE bogstaver
+            # Tving kolonner til store bogstaver for ensartethed
             sc.columns = [str(c).strip().upper() for c in sc.columns]
         except Exception as e:
             st.warning(f"Kunne ikke hente scouting_db.csv: {e}")
-            sc = pd.DataFrame()
+            sc = pd.DataFrame(columns=['ID', 'DATO', 'STYRKER', 'POTENTIALE', 'UDVIKLING', 'VURDERING'])
         
-        # Eventdata
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
             ev.columns = [str(c).strip().upper() for c in ev.columns]
@@ -97,16 +71,16 @@ def load_hif_data():
         
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         return ev, ka, h_map, sp, pe, sc
-        
     except Exception as e:
-        st.error(f"Kritisk fejl ved indlæsning: {e}")
+        st.error(f"Fejl: {e}")
         return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-        
+
 if "main_data" not in st.session_state:
     st.session_state["main_data"] = load_hif_data()
+
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
-# --- 4. SIDEBAR NAVIGATION ---
+# --- 5. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     
@@ -117,30 +91,25 @@ with st.sidebar:
         menu_icon="cast", default_index=0,
         styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
     )
-        
+    
+    selected = "Oversigt" # Default
+    
     if hoved_omraade == "Truppen":
-        selected = option_menu(
-            menu_title=None,
-            options=["Oversigt", "Forecast", "Spillerstats", "Top 5"],
-            icons=["people", "people", "people", "people"], # Dine valgte ikoner
-            styles={"nav-link-selected": {"background-color": "#cc0000"}}
-        )
+        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+                               icons=["people", "people", "people", "people"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(
-            menu_title=None,
-            options=["Zoneinddeling", "Afslutninger", "Heatmaps"],
-            icons=["graph-up", "graph-up", "graph-up"], # Dine valgte ikoner
-            styles={"nav-link-selected": {"background-color": "#cc0000"}}
-        )
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps"], 
+                               icons=["graph-up", "graph-up", "graph-up"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
-        selected = option_menu(
-            menu_title=None,
-            options=["Scoutrapport", "Database", "Sammenligning"],
-            icons=["search", "search"], # Dine valgte ikoner
-            styles={"nav-link-selected": {"background-color": "#cc0000"}}
-        )
+        selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                               icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
-# --- 5. ROUTING ---
+# --- 6. ROUTING ---
+# Debugging (fjern når det virker)
+if selected == "Sammenligning":
+    st.write(f"DEBUG - Antal rækker i df_scout: {len(df_scout)}")
+    st.write(f"DEBUG - Kolonner: {list(df_scout.columns)}")
+
 if selected == "Oversigt":
     import tools.players as players
     players.vis_side(spillere)
@@ -164,7 +133,6 @@ elif selected == "Heatmaps":
     hm.vis_side(df_events, 4, hold_map)
 elif selected == "Sammenligning":
     import tools.comparison as comp
-    st.write("DEBUG - Kolonner i df_scout:", list(df_scout.columns))
     comp.vis_side(spillere, player_events, df_scout)
 elif selected == "Database":
     import tools.scout_db as sdb
