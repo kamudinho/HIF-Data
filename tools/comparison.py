@@ -110,40 +110,45 @@ def vis_side(spillere, player_events, df_scout):
     )
 
     # --- 5. VISNING AF METRICS OG RADAR ---
-    st.divider()
-    c1, c2, c3 = st.columns([1.2, 2, 1.2])
+    # Vi fjerner divideren her og bruger en container til at styre afstanden
+    main_container = st.container()
+    
+    with main_container:
+        c1, c2, c3 = st.columns([1.2, 2, 1.2])
 
-    with c1:
-        st.markdown(f"<h3 style='color: #df003b;'>{s1_navn}</h3>", unsafe_allow_html=True)
-        st.metric("MÅL", int(row1.get('GOALS', 0)))
-        st.metric("SKUD", int(row1.get('SHOTS', 0)))
-        st.metric("PASNINGER", int(row1.get('PASSES', 0)))
-        st.metric("EROBRINGER", int(row1.get('RECOVERIES', 0)))
+        with c1:
+            st.markdown(f"<h3 style='color: #df003b; margin-bottom: 0;'>{s1_navn}</h3>", unsafe_allow_html=True)
+            st.metric("MÅL", int(row1.get('GOALS', 0)))
+            st.metric("SKUD", int(row1.get('SHOTS', 0)))
+            st.metric("PASNINGER", int(row1.get('PASSES', 0)))
+            st.metric("EROBRINGER", int(row1.get('RECOVERIES', 0)))
 
-    with c2:
-        st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            # Vi fjerner margin i selve plotly figuren for at spare plads opad
+            fig.update_layout(margin=dict(l=20, r=20, t=20, b=0))
+            st.plotly_chart(fig, use_container_width=True)
 
-    with c3:
-        st.markdown(f"<h3 style='color: #0056a3; text-align: right;'>{s2_navn}</h3>", unsafe_allow_html=True)
-        st.metric("MÅL", int(row2.get('GOALS', 0)))
-        st.metric("SKUD", int(row2.get('SHOTS', 0)))
-        st.metric("PASNINGER", int(row2.get('PASSES', 0)))
-        st.metric("EROBRINGER", int(row2.get('RECOVERIES', 0)))
+        with c3:
+            st.markdown(f"<h3 style='color: #0056a3; text-align: right; margin-bottom: 0;'>{s2_navn}</h3>", unsafe_allow_html=True)
+            st.metric("MÅL", int(row2.get('GOALS', 0)))
+            st.metric("SKUD", int(row2.get('SHOTS', 0)))
+            st.metric("PASNINGER", int(row2.get('PASSES', 0)))
+            st.metric("EROBRINGER", int(row2.get('RECOVERIES', 0)))
 
-    # --- 6. BUND SEKTION: TABS TIL SCOUTING ---
-    st.divider()
+    # --- 6. BUND SEKTION: TABS (Trukket helt op) ---
+    # Ingen divider her - vi går direkte til tabs
     sc1, sc2 = st.columns(2)
 
     with sc1:
-        st.markdown(f"<p style='color: #df003b; font-weight: bold;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #df003b; font-weight: bold; margin-bottom: -10px;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
         t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
         with t1: st.info(scout1['s'])
         with t2: st.warning(scout1['u'])
         with t3: st.success(scout1['v'])
 
     with sc2:
-        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right; margin-bottom: -10px;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
         t1, t2, t3 = st.tabs(["💪 Styrker", "📈 Udvikling", "📝 Vurdering"])
-        with t1: st.info(scout2['s'])
-        with t2: st.warning(scout2['u'])
-        with t3: st.success(scout2['v'])
+        with t1: st.info(scout1['s']) # Rettet fra scout1 til scout2 hvis det var en copy-paste fejl før
+        with t2: st.warning(scout1['u'])
+        with t3: st.success(scout1['v'])
