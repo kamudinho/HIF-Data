@@ -66,12 +66,23 @@ PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 @st.cache_resource
 def load_hif_data():
     try:
+        # Excel data (Wyscout stats)
         ho = pd.read_excel(XLSX_PATH, sheet_name='Hold')
         sp = pd.read_excel(XLSX_PATH, sheet_name='Spillere')
         ka = pd.read_excel(XLSX_PATH, sheet_name='Kampdata')
         pe = pd.read_excel(XLSX_PATH, sheet_name='Playerevents')
-        sc = pd.read_excel(XLSX_PATH, sheet_name='Playerscouting')
         
+        # Scouting data (Fra GitHub CSV i stedet for Excel)
+        scout_url = "https://raw.githubusercontent.com/DIN_BRUGER/DIN_REPO/main/scouting_db.csv" # INDSÆT DIN URL HER
+        try:
+            sc = pd.read_csv(scout_url)
+            # Rens kolonner: Fjern mellemrum og tving til STORE bogstaver
+            sc.columns = [str(c).strip().upper() for c in sc.columns]
+        except:
+            st.warning("Kunne ikke hente scouting_db.csv fra GitHub. Bruger tom data.")
+            sc = pd.DataFrame()
+        
+        # Eventdata (Parquet)
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
             ev.columns = [str(c).strip().upper() for c in ev.columns]
@@ -80,10 +91,11 @@ def load_hif_data():
         
         h_map = dict(zip(ho['TEAM_WYID'], ho['Hold']))
         return ev, ka, h_map, sp, pe, sc
+        
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
         return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
+        
 if "main_data" not in st.session_state:
     st.session_state["main_data"] = load_hif_data()
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
