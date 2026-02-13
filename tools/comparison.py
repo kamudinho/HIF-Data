@@ -72,38 +72,37 @@ def vis_side(spillere, player_events, df_scout):
     row1, scout1, tech1 = hent_spiller_data(s1_navn)
     row2, scout2, tech2 = hent_spiller_data(s2_navn)
 
-    # --- 5. RADAR CHART (Kantet grid + Hover) ---
-    categories = list(radar_defs.keys())
-    hover_texts = [radar_defs[cat] for cat in categories]
+    # --- 5. RADAR CHART (Kantet, Rent Look med korrekte navne) ---
+    categories = list(radar_defs.keys()) # Her henter den "Tekniske færdigheder" fra din ordbog
+    
+    # Her fortæller vi koden, hvilke kolonner i Excel den skal parre med kategorierne i radaren
     cols_in_df = ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']
 
     fig = go.Figure()
     
     # Spiller 1
     fig.add_trace(go.Scatterpolar(
-        r=[tech1.get(c, 0) for c in cols_in_df]+[tech1.get(cols_in_df[0], 0)], 
-        theta=categories+[categories[0]], 
+        r=[tech1.get(c, 0) for c in cols_in_df] + [tech1.get(cols_in_df[0], 0)], 
+        theta=categories + [categories[0]], 
         fill='toself', 
         name=s1_navn, 
         line_color='#df003b', 
-        text=hover_texts+[hover_texts[0]], 
-        hoverinfo="text+r"
+        hoverinfo="theta+r" 
     ))
     
     # Spiller 2
     fig.add_trace(go.Scatterpolar(
-        r=[tech2.get(c, 0) for c in cols_in_df]+[tech2.get(cols_in_df[0], 0)], 
-        theta=categories+[categories[0]], 
+        r=[tech2.get(c, 0) for c in cols_in_df] + [tech2.get(cols_in_df[0], 0)], 
+        theta=categories + [categories[0]], 
         fill='toself', 
         name=s2_navn, 
         line_color='#0056a3', 
-        text=hover_texts+[hover_texts[0]], 
-        hoverinfo="text+r"
+        hoverinfo="theta+r" 
     ))
     
     fig.update_layout(
         polar=dict(
-            gridshape='linear', # <--- DETTE GØR DEN KANTET I STEDET FOR RUND
+            gridshape='linear', 
             radialaxis=dict(
                 visible=True, 
                 range=[0, 6], 
@@ -113,13 +112,15 @@ def vis_side(spillere, player_events, df_scout):
             angularaxis=dict(
                 direction="clockwise", 
                 rotation=90,
-                gridcolor="lightgray"
+                gridcolor="lightgray",
+                tickfont=dict(size=10) # Gør teksten på kategorierne nem at læse
             )
         ),
         showlegend=False, 
         height=480, 
-        margin=dict(l=70, r=70, t=30, b=30)
+        margin=dict(l=80, r=80, t=30, b=30)
     )
+    
     # --- 6. VISNING (DIT ORIGINALE LAYOUT) ---
     def vis_metrics(row, navn, color, side):
         align = "left" if side == "venstre" else "right"
