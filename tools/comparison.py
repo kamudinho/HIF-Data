@@ -15,8 +15,8 @@ def vis_side(spillere, player_events, df_scout):
         'Attitude': 'Mentalitet, arbejdsrate og kropssprog.',
         'Udholdenhed': 'Evnen til at præstere på højt niveau i 90 minutter.',
         'Lederevner': 'Kommunikation og evne til at guide medspillere.',
-        'Teknik': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
-        'Spil-int.': 'Forståelse for positionering og læsning af spillet.'
+        'Tekniske færdigheder': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
+        'Spilintelligens.': 'Forståelse for positionering og læsning af spillet.'
     }
 
     # --- 2. FORBERED DATA ---
@@ -121,7 +121,6 @@ def vis_side(spillere, player_events, df_scout):
         st.markdown(f"<h4 style='color: {color}; text-align: {align}; margin-bottom: 5px;'>{navn}</h4>", unsafe_allow_html=True)
         
         # BASIS (2x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>BASIS STATS</p>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         with b1:
             st.metric("KAMPE", int(row.get('KAMPE', 0)), help="Antal kampe spillet")
@@ -133,7 +132,6 @@ def vis_side(spillere, player_events, df_scout):
         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
         
         # PERFORMANCE (3x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>PERFORMANCE (WY)</p>", unsafe_allow_html=True)
         pos_metrics = get_position_metrics(navn)
         p1, p2 = st.columns(2)
         for i, (label, key) in enumerate(pos_metrics):
