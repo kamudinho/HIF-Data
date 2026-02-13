@@ -117,10 +117,31 @@ def vis_side():
                     st.info(f"**Vurdering**\n\n{content_v}")
 
             with tab2:
+                # Vi løber baglæns gennem alle rapporter (nyeste øverst)
                 for _, row in historik.iloc[::-1].iterrows():
                     with st.expander(f"Rapport fra {row['Dato']} (Rating: {row['Rating_Avg']})"):
+                        # Vis tallene som heltal først
                         vis_metrikker(row)
-                        st.write(f"**Vurdering:** {row['Vurdering']}")
+                        
+                        st.write("") # Luft
+                        
+                        # Tre kolonner med boks-style inde i expanderen
+                        col_s, col_u, col_v = st.columns(3)
+                        
+                        with col_s:
+                            s_txt = row.get('Styrker', '')
+                            c_s = s_txt if pd.notna(s_txt) and s_txt != "" else "Ingen data"
+                            st.success(f"**Styrker**\n\n{c_s}")
+                            
+                        with col_u:
+                            u_txt = row.get('Udvikling', '')
+                            c_u = u_txt if pd.notna(u_txt) and u_txt != "" else "Ingen data"
+                            st.warning(f"**Udvikling**\n\n{c_u}")
+                            
+                        with col_v:
+                            v_txt = row.get('Vurdering', '')
+                            c_v = v_txt if pd.notna(v_txt) and v_txt != "" else "Ingen data"
+                            st.info(f"**Vurdering**\n\n{c_v}")
 
             with tab3:
                 # Grafen
