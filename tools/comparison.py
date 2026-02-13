@@ -110,23 +110,54 @@ def vis_side(spillere, player_events, df_scout):
 
     # --- 5. VISNING AF METRICS OG RADAR ---
     st.write("")
-    c1, c2, c3 = st.columns([1.2, 2, 1.2])
+    c1, c2, c3 = st.columns([1.5, 2, 1.5]) # Vi gør sidekolonnerne lidt bredere til grid'et
 
+    def vis_spiller_metrics(row, navn, side="venstre"):
+        # Farve og alignment baseret på side
+        color = "#df003b" if side == "venstre" else "#0056a3"
+        align = "left" if side == "venstre" else "right"
+        
+        # Overskrift
+        st.markdown(f"<h4 style='color: {color}; text-align: {align}; margin-bottom: 10px;'>{navn}</h4>", unsafe_allow_html=True)
+        
+        # BLOK 1: BASIS (2x2 Grid)
+        st.markdown(f"<p style='font-size: 0.8rem; font-weight: bold; text-align: {align}; margin-bottom: 5px;'>BASIS STATS</p>", unsafe_allow_html=True)
+        b1, b2 = st.columns(2)
+        with b1:
+            st.metric("KAMPE", int(row.get('KAMPE', 0)))
+            st.metric("GULE", int(row.get('YELLOWCARDS', 0)))
+        with b2:
+            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
+            st.metric("RØDE", int(row.get('REDCARDS', 0)))
+            
+        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+        
+        # BLOK 2: POSITIONSSPECIFIK (3x2 Grid for at spare plads)
+        st.markdown(f"<p style='font-size: 0.8rem; font-weight: bold; text-align: {align}; margin-bottom: 5px;'>PERFORMANCE</p>", unsafe_allow_html=True)
+        
+        # Hent dynamiske kategorier
+        pos_metrics = get_position_metrics(navn) # Den funktion vi lavede før
+        
+        p1, p2 = st.columns(2)
+        for i, (label, key) in enumerate(pos_metrics):
+            val = row.get(key, 0)
+            # Vi fordeler de 6 metrics i de to kolonner (3 i hver)
+            target_col = p1 if i % 2 == 0 else p2
+            with target_col:
+                st.metric(label, int(val) if pd.notna(val) else 0)
+
+    # --- SELVE VISNINGEN ---
     with c1:
-        st.markdown(f"<h4 style='color: #df003b; margin-bottom: 0;'>{s1_navn}</h4>", unsafe_allow_html=True)
-        for label, key in metrics_s1:
-            # Vi bruger .get() med 0 som default, hvis kolonnen ikke findes i Excel
-            val = row1.get(key, 0)
-            st.metric(f"{label} (WY)", int(val) if pd.notna(val) else 0)
+        vis_spiller_metrics(row1, s1_navn, side="venstre")
 
     with c2:
+        # Vi justerer radaren så den passer i højden med de mange metrics
+        fig.update_layout(height=500, margin=dict(l=20, r=20, t=20, b=20))
         st.plotly_chart(fig, use_container_width=True)
 
     with c3:
-        st.markdown(f"<h4 style='color: #0056a3; text-align: right; margin-bottom: 0;'>{s2_navn}</h4>", unsafe_allow_html=True)
-        for label, key in metrics_s2:
-            val = row2.get(key, 0)
-            st.metric(f"{label} (WY)", int(val) if pd.notna(val) else 0)
+        vis_spiller_metrics(row2, s2_navn, side="højre")
+        
     # --- 6. BUND SEKTION: TABS ---
     st.write("") 
     sc1, sc2 = st.columns(2)
