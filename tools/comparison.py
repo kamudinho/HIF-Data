@@ -18,7 +18,6 @@ def map_position(pos_code):
         "10": "Offensiv Midt",
         "11": "Venstre Kant"
     }
-    # Returner oversættelse hvis koden findes, ellers returner den rå kode
     s_code = str(pos_code).split('.')[0]
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
@@ -42,10 +41,12 @@ def vis_side(spillere, player_events, df_scout):
         st.warning("Ingen spillere fundet i databaserne.")
         return
 
-    # Valg af spillere
+    # --- 2. SELECTBOX SEKTION MED PADDING ---
+    st.markdown("<div style='padding-top: 10px; padding-bottom: 30px;'>", unsafe_allow_html=True)
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
     with col_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     def hent_info(navn):
         p_match = df_p[df_p['NAVN'] == navn]
@@ -60,7 +61,6 @@ def vis_side(spillere, player_events, df_scout):
             row = p_match.iloc[0]
             pid = str(row['PLAYER_WYID']).split('.')[0].strip()
             klub = row.get('TEAMNAME', 'Hvidovre IF')
-            # Oversæt positionen her
             pos = map_position(row.get('POS', 'Ukendt'))
             
             if not player_events.empty:
@@ -86,7 +86,6 @@ def vis_side(spillere, player_events, df_scout):
 
         return pid, klub, pos, stats_data, tech, scout_texts
 
-    # Hent data for begge spillere
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
 
@@ -128,14 +127,14 @@ def vis_side(spillere, player_events, df_scout):
             with m2: st.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
             with m3: st.metric("MÅL", int(float(stats.get('GOALS', 0))))
 
-    # --- HOVED LAYOUT ---
+    # --- 3. HOVED LAYOUT ---
     col1, col2, col3 = st.columns([3, 3, 3])
     
     with col1: 
         vis_profil_kolonne(s1_navn, res1[0], res1[1], res1[2], res1[3], "venstre", "#df003b")
     
     with col2:
-        # Skub radar chartet ned så det passer med de tætte navne-headers
+        # Flytter radarchart lidt ned så det flugter med center af profiler
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
         
         categories = ['Beslutsomhed', 'Fart', 'Aggressivitet', 'Attitude', 'Udholdenhed', 'Lederevner', 'Teknik', 'Spil-int.']
@@ -158,7 +157,7 @@ def vis_side(spillere, player_events, df_scout):
     with col3: 
         vis_profil_kolonne(s2_navn, res2[0], res2[1], res2[2], res2[3], "højre", "#0056a3")
 
-    # --- SCOUTING TABS I BUNDEN ---
+    # --- 4. SCOUTING TABS ---
     st.write("---")
     sc1, sc2 = st.columns(2)
     with sc1:
