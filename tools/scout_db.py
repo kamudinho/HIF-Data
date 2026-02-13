@@ -89,30 +89,39 @@ def vis_side():
                 # .format(0.0f) sikrer at det vises som heltal
                 m_cols[i % 4].metric(label, f"{int(row[col])}")
 
-        # --- DIALOG (PROFIL) ---
-        if len(event.selection.rows) > 0:
-            @st.dialog("Spillerprofil", width="large")
+        @st.dialog("Spillerprofil", width="large")
             def vis_profil(p_data, full_df, s_df, avg_line):
                 st.markdown(f"### {p_data['Navn']} | {p_data['Position']}")
                 st.markdown(f"**{p_data['Klub']}**")
                 st.divider()
 
-                historik = full_df[full_df['ID'] == p_data['ID']].sort_values('Dato')
+                # Hent alle rapporter for denne spiller og sortér efter dato
+                historik = full_df[full_df['ID'] == p_data['ID']].sort_values('Dato', ascending=True)
+                
                 tab1, tab2, tab3, tab4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstatistik"])
                 
                 with tab1:
-                    vis_metrikker(historik.iloc[-1])
-                    st.info(f"**Vurdering:**\n\n{historik.iloc[-1]['Vurdering']}")
+                    # Vis den nyeste rapport (sidste række i historikken)
+                    nyeste = historik.iloc[-1]
+                    vis_metrikker(nyeste)
+                    st.info(f"**Seneste Vurdering:**\n\n{nyeste['Vurdering']}")
+
+                with tab2:
+                    # HER ER HISTORIEN: Vi løber baglæns gennem alle rapporter (nyeste øverst)
+                    for _, row in historik.iloc[::-1].iterrows():
+                        with st.expander(f"Rapport fra {row['Dato']} (Rating: {row['Rating_Avg']})"):
+                            vis_metrikker(row) # Viser tallene som heltal jf. din funktion
+                            st.write(f"**Vurdering:** {row['Vurdering']}")
 
                 with tab3:
+                    # Graf uden gridlines og med HIF-snit
                     fig = go.Figure()
-                    # Spillerens linje
                     fig.add_trace(go.Scatter(
                         x=historik['Dato_Str'], y=historik['Rating_Avg'],
                         mode='lines+markers', name=p_data['Navn'],
                         line=dict(color='#1f77b4', width=3)
                     ))
-                    # HIF Gennemsnitslinje
+                    
                     if not pd.isna(avg_line):
                         fig.add_hline(y=avg_line, line_dash="dash", line_color="red", 
                                       annotation_text="HIF Snit", annotation_position="top left")
@@ -121,12 +130,12 @@ def vis_side():
                         yaxis=dict(range=[1, 7], showgrid=False),
                         xaxis=dict(showgrid=False),
                         plot_bgcolor='rgba(0,0,0,0)',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        margin=dict(l=20, r=20, t=40, b=20)
+                        paper_bgcolor='rgba(0,0,0,0)'
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
                 with tab4:
+                    # Sæsonstatistik (Wyscout data)
                     if s_df.empty:
                         st.info("Ingen kampdata tilgængelig.")
                     else:
