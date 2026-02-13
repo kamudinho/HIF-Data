@@ -9,21 +9,19 @@ def vis_side(spillere, player_events, df_scout):
 
     # --- 1. DEFINITIONER (Rækkefølgen her styrer radaren) ---
     radar_defs = {
-        'Tekniske færdigheder': 'TEKNIK',
-        'Beslutsomhed': 'BESLUTSOMHED',
-        'Fart': 'FART',
-        'Aggressivitet': 'AGGRESIVITET',
-        'Attitude': 'ATTITUDE',
-        'Udholdenhed': 'UDHOLDENHED',
-        'Lederevner': 'LEDEREGENSKABER',
-        'Spilintelligens': 'SPILINTELLIGENS'
+        'Tekniske færdigheder': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
+        'Beslutsomhed': 'Evnen til at træffe hurtige, korrekte valg under pres.',
+        'Fart': 'Acceleration og topfart med og uden bold.',
+        'Aggressivitet': 'Vished i dueller og fysisk tilstedeværelse.',
+        'Attitude': 'Mentalitet, arbejdsrate og kropssprog.',
+        'Udholdenhed': 'Evnen til at præstere på højt niveau i 90 minutter.',
+        'Lederevner': 'Kommunikation og evne til at dirigere medspillere.',
+        'Spilintelligens': 'Forståelse for positionering og evne til at læse spillet.'
     }
 
-    # --- 2. FORBERED DATA ---
+    # --- 2. FORBERED DATA (Beholdes præcis som før) ---
     df_hif = spillere.copy()
     df_hif['Full_Name'] = df_hif['FIRSTNAME'] + " " + df_hif['LASTNAME']
-    
-    # Gør kolonnenavne i scout-filen ensartede (STORE BOGSTAVER)
     df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
     
     hif_navne = df_hif[['Full_Name', 'PLAYER_WYID']].rename(columns={'Full_Name': 'Navn', 'PLAYER_WYID': 'ID'})
@@ -32,7 +30,7 @@ def vis_side(spillere, player_events, df_scout):
     samlet_df = pd.concat([hif_navne, scout_navne]).drop_duplicates(subset=['ID'])
     navne_liste = sorted(samlet_df['Navn'].unique())
 
-    # --- 3. HJÆLPEFUNKTIONER (Metrics logik) ---
+    # --- 3. HJÆLPEFUNKTIONER (Original logik) ---
     def get_position_metrics(navn):
         try:
             pos = ""
@@ -60,90 +58,38 @@ def vis_side(spillere, player_events, df_scout):
         try:
             p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
             search_id = str(int(float(p_id))) if pd.notna(p_id) else "0"
-            
-            # Basis info
-            klub = "Ukendt klub"
-            pos = "Ukendt"
-            if navn in df_hif['Full_Name'].values:
-                klub = "Hillerød Fodbold"; pos = df_hif[df_hif['Full_Name'] == navn]['POSITION'].iloc[0]
-            elif navn in df_scout['NAVN'].values:
-                match = df_scout[df_scout['NAVN'] == navn].iloc[0]
-                klub = match.get('KLUB', 'Scouted klub'); pos = match.get('POSITION', 'Ukendt')
-
-            # Wyscout Stats
-            stats_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id, na=False)]
-            stats = stats_match.iloc[0].to_dict() if not stats_match.empty else {}
-
-            # Scouting Data & Radar Mapping
+            stats = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(search_id, na=False)].iloc[0].to_dict()
             scout_match = df_scout[df_scout['ID'].astype(str).str.replace('.0','',regex=False) == search_id]
-            tech_vals = []
-            scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen vurdering', 'klub': klub, 'pos': pos}
-
+            tech_stats = {k: 0 for k in ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']}
+            scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen vurdering'}
             if not scout_match.empty:
                 nyeste = scout_match.sort_values('DATO', ascending=False).iloc[0]
-                # Vi mapper radaren direkte her
-                for label, excel_col in radar_defs.items():
-                    val = nyeste.get(excel_col, 0)
-                    tech_vals.append(float(val) if pd.notna(val) else 0.0)
-                
-                scout_dict.update({
-                    's': nyeste.get('STYRKER', 'Ingen data'),
-                    'u': f"**Potentiale:** {nyeste.get('POTENTIALE','')}\n\n**Udvikling:** {nyeste.get('UDVIKLING','')}",
-                    'v': nyeste.get('VURDERING', 'Ingen data')
-                })
-            else:
-                tech_vals = [0.0] * len(radar_defs)
-
-            return stats, scout_dict, tech_vals
-        except:
-            return {}, {'s': 'Fejl', 'u': 'Fejl', 'v': 'Fejl', 'klub': 'Ukendt', 'pos': 'Ukendt'}, [0.0]*len(radar_defs)
+                tech_stats = { 'TEKNIK': nyeste.get('TEKNIK', 0), 'BESLUTSOMHED': nyeste.get('BESLUTSOMHED', 0), 'FART': nyeste.get('FART', 0), 'AGGRESIVITET': nyeste.get('AGGRESIVITET', 0), 'ATTITUDE': nyeste.get('ATTITUDE', 0), 'UDHOLDENHED': nyeste.get('UDHOLDENHED', 0), 'LEDEREGENSKABER': nyeste.get('LEDEREGENSKABER', 0), 'SPILINTELLIGENS': nyeste.get('SPILINTELLIGENS', 0) }
+                scout_dict = {'s': nyeste.get('STYRKER', 'Ingen data'), 'u': f"**Potentiale:** {nyeste.get('POTENTIALE','')}\n\n**Udvikling:** {nyeste.get('UDVIKLING','')}", 'v': nyeste.get('VURDERING', 'Ingen data')}
+            return stats, scout_dict, tech_stats
+        except: return {}, {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen data'}, {k: 0 for k in ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']}
 
     row1, scout1, tech1 = hent_spiller_data(s1_navn)
     row2, scout2, tech2 = hent_spiller_data(s2_navn)
 
-    # --- 5. RADAR CHART (Linear, Gridlines, Ingen tal-labels) ---
+    # --- 5. RADAR CHART (MED HOVER FORKLARING) ---
     categories = list(radar_defs.keys())
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(
-        r=tech1 + [tech1[0]], 
-        theta=categories + [categories[0]], 
-        fill='toself', name=s1_navn, line_color='#df003b', 
-        hoverinfo="theta+r", hovertemplate="%{theta}: %{r}<extra></extra>"
-    ))
-    fig.add_trace(go.Scatterpolar(
-        r=tech2 + [tech2[0]], 
-        theta=categories + [categories[0]], 
-        fill='toself', name=s2_navn, line_color='#0056a3', 
-        hoverinfo="theta+r", hovertemplate="%{theta}: %{r}<extra></extra>"
-    ))
-    
-    fig.update_layout(
-        polar=dict(
-            gridshape='linear', 
-            radialaxis=dict(
-                visible=True, range=[0, 6], 
-                tickvals=[1, 2, 3, 4, 5, 6], showticklabels=False,
-                gridcolor="rgba(128, 128, 128, 0.4)"
-            ),
-            angularaxis=dict(direction="clockwise", rotation=90, gridcolor="rgba(128, 128, 128, 0.4)", tickfont=dict(size=10))
-        ),
-        showlegend=False, height=480, margin=dict(l=80, r=80, t=30, b=30)
-    )
+    hover_texts = [radar_defs[cat] for cat in categories]
+    cols_in_df = ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']
 
-    # --- 6. VISNING ---
-    def vis_metrics(row, scout_info, navn, color, side):
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(r=[tech1.get(c, 0) for c in cols_in_df]+[tech1.get(cols_in_df[0], 0)], theta=categories+[categories[0]], fill='toself', name=s1_navn, line_color='#df003b', text=hover_texts+[hover_texts[0]], hoverinfo="text+r"))
+    fig.add_trace(go.Scatterpolar(r=[tech2.get(c, 0) for c in cols_in_df]+[tech2.get(cols_in_df[0], 0)], theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3', text=hover_texts+[hover_texts[0]], hoverinfo="text+r"))
+    
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=480, margin=dict(l=70, r=70, t=30, b=30))
+
+    # --- 6. VISNING (DIT ORIGINALE LAYOUT) ---
+    def vis_metrics(row, navn, color, side):
         align = "left" if side == "venstre" else "right"
-        st.markdown(f"<h4 style='color:{color}; text-align:{align}; margin-bottom: 0px;'>{navn}</h4>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color:gray; font-size:13px; text-align:{align}; margin-top: 0px;'>{scout_info['pos']} | {scout_info['klub']}</p>", unsafe_allow_html=True)
-        
+        st.markdown(f"<h4 style='color:{color}; text-align:{align};'>{navn}</h4>", unsafe_allow_html=True)
         col_a, col_b = st.columns(2)
-        with col_a:
-            st.metric("KAMPE", int(row.get('KAMPE', 0)))
-            st.metric("GULE", int(row.get('YELLOWCARDS', 0)))
-        with col_b:
-            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
-            st.metric("RØDE", int(row.get('REDCARDS', 0)))
+        col_a.metric("KAMPE", int(row.get('KAMPE', 0)))
+        col_b.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
         st.write("---")
         p1, p2 = st.columns(2)
         for i, (label, key) in enumerate(get_position_metrics(navn)):
@@ -151,9 +97,9 @@ def vis_side(spillere, player_events, df_scout):
             target.metric(label, int(row.get(key, 0)) if pd.notna(row.get(key, 0)) else 0)
 
     c1, c2, c3 = st.columns([1.8, 3, 1.8])
-    with c1: vis_metrics(row1, scout1, s1_navn, "#df003b", "venstre")
+    with c1: vis_metrics(row1, s1_navn, "#df003b", "venstre")
     with c2: st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    with c3: vis_metrics(row2, scout2, s2_navn, "#0056a3", "højre")
+    with c3: vis_metrics(row2, s2_navn, "#0056a3", "højre")
 
     # --- 7. TABS ---
     st.write("---")
