@@ -105,11 +105,6 @@ with st.sidebar:
                                icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
 # --- 6. ROUTING ---
-# Debugging (fjern når det virker)
-if selected == "Sammenligning":
-    st.write(f"DEBUG - Antal rækker i df_scout: {len(df_scout)}")
-    st.write(f"DEBUG - Kolonner: {list(df_scout.columns)}")
-
 if selected == "Oversigt":
     import tools.players as players
     players.vis_side(spillere)
