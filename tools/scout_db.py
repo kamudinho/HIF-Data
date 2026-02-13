@@ -86,12 +86,11 @@ def vis_side():
         # --- PROFIL DIALOG ---
         @st.dialog("Spillerprofil", width="large")
         def vis_profil(p_data, full_df, s_df, avg_line):
-            st.markdown(f"### {p_data['Navn']} | {p_data['Position']}")
-            st.markdown(f"**{p_data['Klub']}**")
+            st.markdown(f"### {p_data['Navn']} | {p_data['Position']}") | (f"**{p_data['Klub']}**")
             st.divider()
 
             historik = full_df[full_df['ID'] == p_data['ID']].sort_values('Dato', ascending=True)
-            tab1, tab2, tab3, tab4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstatistik"])
+            tab1, tab2, tab3, tab4 = st.tabs(["Seneste rapport", "Historik", "Udvikling", "Sæsonstatistik"])
             
             with tab1:
                 nyeste = historik.iloc[-1]
