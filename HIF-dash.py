@@ -12,6 +12,7 @@ st.markdown("""
     <style>
         header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
         .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
+        [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -31,12 +32,11 @@ if not st.session_state["logged_in"]:
             if st.form_submit_button("Log ind", use_container_width=True):
                 if u in USER_DB and USER_DB[u] == p:
                     st.session_state["logged_in"] = True
-                    st.session_state["user"] = u
                     st.rerun()
                 else: st.error("Ugyldig kode")
     st.stop()
 
-# --- 4. DATA LOADING (OPDATERET TIL DATA MAPPE & CSV) ---
+# --- 4. DATA LOADING (OPDATERET TIL DATA MAPPE) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 
@@ -44,43 +44,34 @@ PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 def load_hif_data():
     try:
         RAW_URL = f"https://raw.githubusercontent.com/{REPO}/main/data/"
-        
         def read_github_csv(file_name):
             url = f"{RAW_URL}{file_name}?nocache={uuid.uuid4()}"
             df = pd.read_csv(url, sep=None, engine='python')
             df.columns = [str(c).strip().upper() for c in df.columns]
             return df
 
-        # Hent Master-filer
         sp = read_github_csv("players.csv")
         ho = read_github_csv("teams.csv")
         sc = read_github_csv("scouting_db.csv")
-        
-        try:
-            pe = read_github_csv("season_stats.csv")
-        except:
-            pe = pd.DataFrame()
+        try: pe = read_github_csv("season_stats.csv")
+        except: pe = pd.DataFrame()
 
-        # Rens ID'er for alle dataframes (vigtigt for integrationen)
+        # Rens ID'er
         for df in [sp, pe, sc, ho]:
             for col in ['PLAYER_WYID', 'ID', 'TEAM_WYID']:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.split('.').str[0]
 
-        # Hold-mapping
         h_map = dict(zip(ho['TEAM_WYID'], ho['TEAMNAME']))
         
-        # Hent event-data (Parquet)
         if os.path.exists(PARQUET_PATH):
             ev = pd.read_parquet(PARQUET_PATH)
             ev.columns = [str(c).strip().upper() for c in ev.columns]
-        else:
-            ev = pd.DataFrame()
+        else: ev = pd.DataFrame()
 
         return ev, pd.DataFrame(), h_map, sp, pe, sc
-        
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
+        st.error(f"Fejl: {e}")
         return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 if "main_data" not in st.session_state:
@@ -88,17 +79,29 @@ if "main_data" not in st.session_state:
 
 df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
 
-# --- 5. SIDEBAR NAVIGATION (Uændret) ---
+# --- 5. DIN ORIGINALE SIDEBAR NAVIGATION ---
 with st.sidebar:
-    hoved_omraade = option_menu(None, options=["Truppen", "Analyse", "Scouting"], icons=["people", "graph-up", "search"], default_index=0)
+    st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     
-    selected = "Oversigt"
+    hoved_omraade = option_menu(
+        menu_title=None,
+        options=["Truppen", "Analyse", "Scouting"],
+        icons=["people", "graph-up", "search"],
+        menu_icon="cast", default_index=0,
+        styles={"container": {"background-color": "#f0f2f6"}, "nav-link-selected": {"background-color": "#003366"}}
+    )
+    
+    selected = "Oversigt" 
+    
     if hoved_omraade == "Truppen":
-        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=["people"]*4)
+        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+                               icons=["people", "people", "people", "people"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps"], icons=["graph-up"]*3)
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps"], 
+                               icons=["graph-up", "graph-up", "graph-up"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
-        selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=["pencil-square", "database", "arrow-left-right"])
+        selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                               icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
 # --- 6. ROUTING ---
 if selected == "Oversigt":
@@ -122,7 +125,7 @@ elif selected == "Afslutninger":
 elif selected == "Heatmaps":
     import tools.heatmaps as hm
     hm.vis_side(df_events, 4, hold_map)
-if selected == "Sammenligning":
+elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
 elif selected == "Database":
