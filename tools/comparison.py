@@ -7,9 +7,21 @@ def vis_side(spillere, player_events, df_scout):
         st.error("Kunne ikke indlæse data.")
         return
 
-    # --- 1. POSITIONSLOGIK (Skal defineres tidligt) ---
+    # --- 1. DEFINITIONER (Hover-tekst / Hjælp) ---
+    radar_defs = {
+        'Beslutsomhed': 'Evnen til at træffe hurtige, korrekte valg under pres.',
+        'Fart': 'Acceleration og topfart med og uden bold.',
+        'Aggressivitet': 'Vished i dueller og fysisk tilstedeværelse.',
+        'Attitude': 'Mentalitet, arbejdsrate og kropssprog.',
+        'Udholdenhed': 'Evnen til at præstere på højt niveau i 90 minutter.',
+        'Lederevner': 'Kommunikation og evne til at guide medspillere.',
+        'Teknik': 'Boldbehandling, førsteberøringer og pasningskvalitet.',
+        'Spil-int.': 'Forståelse for positionering og læsning af spillet.'
+    }
+
+    # --- 2. HJÆLPEFUNKTIONER ---
     def get_position_metrics(navn):
-        # Tjekker position i begge dataframes
+        """Returnerer 6 relevante metrics baseret på spillerens position."""
         try:
             pos = ""
             if navn in df_hif['Full_Name'].values:
@@ -17,9 +29,8 @@ def vis_side(spillere, player_events, df_scout):
             elif navn in df_scout['NAVN'].values:
                 pos = df_scout[df_scout['NAVN'] == navn]['POSITION'].iloc[0].upper()
         except:
-            pos = "UNKNOWN"
+            pos = "ANGREB"
 
-        # Definition af 6 metrics per position
         if any(x in pos for x in ["GK", "MÅLMAND"]):
             return [("REDNINGER", "SAVES"), ("CLEAN SH.", "CLEANSHEETS"), ("UDSPARK %", "PASSACC"), 
                     ("EROBR.", "RECOVERIES"), ("DUEL %", "DEFDUELSWON"), ("PASNINGER", "PASSES")]
@@ -29,11 +40,11 @@ def vis_side(spillere, player_events, df_scout):
         elif any(x in pos for x in ["MID", "MIDTBANE"]):
             return [("PAS %", "PASSACC"), ("FREM PAS", "FORWARDPASSES"), ("EROBR.", "RECOVERIES"), 
                     ("CHANCER", "ASSISTS"), ("DUEL %", "DEFDUELSWON"), ("xG", "XG")]
-        else: # Angribere / Fløje
+        else: # Angribere
             return [("MÅL", "GOALS"), ("SKUD", "SHOTS"), ("xG", "XG"), 
                     ("BERØR. FELT", "TOUCHINBOX"), ("DRIBLE %", "DRIBBLESWON"), ("ASSISTS", "ASSISTS")]
 
-    # --- 2. FORBERED NAVNELISTE ---
+    # --- 3. FORBERED DATA ---
     df_hif = spillere.copy()
     df_hif['Full_Name'] = df_hif['FIRSTNAME'] + " " + df_hif['LASTNAME']
     df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
@@ -44,14 +55,13 @@ def vis_side(spillere, player_events, df_scout):
     samlet_df = pd.concat([hif_navne, scout_navne]).drop_duplicates(subset=['ID'])
     navne_liste = sorted(samlet_df['Navn'].unique())
 
-    # --- 3. VALG AF SPILLERE ---
+    # --- 4. VALG AF SPILLERE ---
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
     with col_sel2:
         s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
-    # --- 4. DATA HENTNING ---
     def hent_spiller_data(navn):
         try:
             p_id = samlet_df[samlet_df['Navn'] == navn]['ID'].iloc[0]
@@ -85,7 +95,7 @@ def vis_side(spillere, player_events, df_scout):
     row2, scout2, tech2 = hent_spiller_data(s2_navn)
 
     # --- 5. RADAR CHART ---
-    categories = ['Beslutsomhed', 'Fart', 'Aggressivitet', 'Attitude', 'Udholdenhed', 'Lederevner', 'Teknik', 'Spil-int.']
+    categories = list(radar_help.keys())
     cols_in_df = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
 
     def get_radar_values(t_stats):
@@ -105,39 +115,51 @@ def vis_side(spillere, player_events, df_scout):
         showlegend=False, height=480, margin=dict(l=70, r=70, t=30, b=30), autosize=True
     )
 
-    # --- 6. METRIC GRID VISNING ---
+    # --- 6. VISNING AF METRICS ---
     def vis_spiller_metrics(row, navn, side="venstre"):
         color = "#df003b" if side == "venstre" else "#0056a3"
         align = "left" if side == "venstre" else "right"
         st.markdown(f"<h4 style='color: {color}; text-align: {align}; margin-bottom: 5px;'>{navn}</h4>", unsafe_allow_html=True)
         
-        # BASIS (2x2)
+        # BASIS STATS (2x2)
         st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>BASIS STATS</p>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         with b1:
-            st.metric("KAMPE", int(row.get('KAMPE', 0)))
+            st.metric("KAMPE", int(row.get('KAMPE', 0)), help="Antal kampe spillet i perioden")
             st.metric("GULE", int(row.get('YELLOWCARDS', 0)))
         with b2:
-            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
+            st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)), help="Samlet antal minutter på banen")
             st.metric("RØDE", int(row.get('REDCARDS', 0)))
             
         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
         
-        # PERFORMANCE (3x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>PERFORMANCE</p>", unsafe_allow_html=True)
+        # PERFORMANCE STATS (3x2)
+        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>PERFORMANCE (WY)</p>", unsafe_allow_html=True)
         pos_metrics = get_position_metrics(navn)
         p1, p2 = st.columns(2)
         for i, (label, key) in enumerate(pos_metrics):
             val = row.get(key, 0)
             target_col = p1 if i % 2 == 0 else p2
             with target_col:
-                st.metric(label, int(val) if pd.notna(val) else 0)
+                st.metric(label, int(val) if pd.notna(val) else 0, help=f"Data for {label} hentet fra Wyscout")
 
-    # Grid layout
+    # Layout Grid
     c1, c2, c3 = st.columns([1.8, 3, 1.8])
-    with c1: vis_spiller_metrics(row1, s1_navn, side="venstre")
-    with c2: st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    with c3: vis_spiller_metrics(row2, s2_navn, side="højre")
+
+    with c1:
+        vis_spiller_metrics(row1, s1_navn, side="venstre")
+
+    with c2:
+        # Hover definitioner for radaren
+        with st.expander("ℹ️ Definitioner af parametre"):
+            cols = st.columns(2)
+            for i, (k, v) in enumerate(radar_defs.items()):
+                target = cols[0] if i < 4 else cols[1]
+                target.markdown(f"**{k}:** {v}")
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    with c3:
+        vis_spiller_metrics(row2, s2_navn, side="højre")
 
     # --- 7. BUND SEKTION: TABS ---
     st.write("") 
