@@ -119,7 +119,7 @@ def vis_side():
                     
                     fig.update_layout(
                         height=300, 
-                        yaxis=dict(range=[1, 7], showgrid=False),
+                        yaxis=dict(range=[1, 6], showgrid=False),
                         xaxis=dict(showgrid=False),
                         plot_bgcolor='rgba(0,0,0,0)',
                         paper_bgcolor='rgba(0,0,0,0)',
