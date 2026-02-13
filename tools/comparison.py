@@ -100,7 +100,7 @@ def vis_side(spillere, player_events, df_scout):
             st.markdown(f"<h4 style='color: #df003b; margin-bottom: 0;'>{s1_navn}</h4>", unsafe_allow_html=True)
             st.metric("MÅL (WY)", int(row1.get('GOALS', 0)))
             st.metric("SKUD (WY)", int(row1.get('SHOTS', 0)))
-            st.metric("PASNINGER (WY)", int(row1.get('PASSES', 0)))
+            st.metric("MINUTTER (WY)", int(row1.get('MINUTESTAGGED', 0)))
             st.metric("EROBRINGER (WY)", int(row1.get('RECOVERIES', 0)))
 
         with c2:
@@ -118,14 +118,14 @@ def vis_side(spillere, player_events, df_scout):
     sc1, sc2 = st.columns(2)
 
     with sc1:
-        st.markdown(f"<p style='color: #df003b; font-weight: bold; margin-bottom: 5px;'>Scout-noter: {s1_navn}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #df003b; font-weight: bold; margin-bottom: 5px;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
         t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
         with t1: st.info(scout1['s'])
         with t2: st.warning(scout1['u'])
         with t3: st.success(scout1['v'])
 
     with sc2:
-        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right; margin-bottom: 5px;'>Scout-noter: {s2_navn}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right; margin-bottom: 5px;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
         t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
         with t1: st.info(scout2['s'])
         with t2: st.warning(scout2['u'])
