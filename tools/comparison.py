@@ -86,26 +86,55 @@ def vis_side(spillere, player_events, df_scout):
     row1, scout1, tech1 = hent_spiller_data(s1_navn)
     row2, scout2, tech2 = hent_spiller_data(s2_navn)
 
-    # --- 5. RADAR CHART (Med Gridlines, uden tal) ---
+    # --- 5. RADAR CHART (Genskabte værdier + tydelig grid) ---
     categories = list(radar_defs.keys())
     cols_in_df = ['TEKNIK', 'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'SPILINTELLIGENS']
 
     fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(r=[tech1.get(c, 0) for c in cols_in_df] + [tech1.get(cols_in_df[0], 0)], theta=categories + [categories[0]], fill='toself', name=s1_navn, line_color='#df003b', hoverinfo="theta+r" ))
-    fig.add_trace(go.Scatterpolar(r=[tech2.get(c, 0) for c in cols_in_df] + [tech2.get(cols_in_df[0], 0)], theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3', hoverinfo="theta+r" ))
+    
+    # Spiller 1
+    fig.add_trace(go.Scatterpolar(
+        r=[tech1.get(c, 0) for c in cols_in_df] + [tech1.get(cols_in_df[0], 0)], 
+        theta=categories + [categories[0]], 
+        fill='toself', 
+        name=s1_navn, 
+        line_color='#df003b', 
+        hoverinfo="theta+r",
+        hovertemplate="%{theta}: %{r}<extra></extra>" # Sikrer at værdien altid vises
+    ))
+    
+    # Spiller 2
+    fig.add_trace(go.Scatterpolar(
+        r=[tech2.get(c, 0) for c in cols_in_df] + [tech2.get(cols_in_df[0], 0)], 
+        theta=categories + [categories[0]], 
+        fill='toself', 
+        name=s2_navn, 
+        line_color='#0056a3', 
+        hoverinfo="theta+r",
+        hovertemplate="%{theta}: %{r}<extra></extra>"
+    ))
     
     fig.update_layout(
         polar=dict(
             gridshape='linear', 
             radialaxis=dict(
-                visible=True, range=[0, 6], 
-                tickvals=[1, 2, 3, 4, 5, 6], # Definerer linjerne
-                ticktext=["", "", "", "", "", ""], # Fjerner teksten/tallene
-                gridcolor="rgba(128, 128, 128, 0.4)", # Tydeligere gridlines
+                visible=True, 
+                range=[0, 6], 
+                tickvals=[1, 2, 3, 4, 5, 6],
+                showticklabels=False, # Skjuler tallene på selve stregen, men beholder grid-linjerne
+                gridcolor="rgba(128, 128, 128, 0.5)", 
+                gridwidth=1
             ),
-            angularaxis=dict(direction="clockwise", rotation=90, gridcolor="rgba(128, 128, 128, 0.4)", tickfont=dict(size=10))
+            angularaxis=dict(
+                direction="clockwise", 
+                rotation=90, 
+                gridcolor="rgba(128, 128, 128, 0.5)",
+                tickfont=dict(size=10)
+            )
         ),
-        showlegend=False, height=480, margin=dict(l=80, r=80, t=30, b=30)
+        showlegend=False, 
+        height=480, 
+        margin=dict(l=80, r=80, t=30, b=30)
     )
 
     # --- 6. VISNING ---
