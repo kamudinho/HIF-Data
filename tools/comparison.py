@@ -154,7 +154,7 @@ def vis_side(spillere, player_events, df_scout):
         
         with inf_col2:
             # Placerer et tooltip-ikon helt ude til højre
-            st.markdown("### ℹ️", help="\n\n".join([f"**{k}**: {v}" for k, v in radar_defs.items()]))
+            st.markdown("###", help="\n\n".join([f"**{k}**: {v}" for k, v in radar_defs.items()]))
 
         # Selve radaren fylder nu resten af pladsen under ikonet
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
