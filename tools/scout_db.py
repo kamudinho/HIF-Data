@@ -105,7 +105,7 @@ def vis_side():
                         st.write(f"**Vurdering:** {row['Vurdering']}")
 
             with tab3:
-                    # 1. Grafen med justeret højde
+                    # 1. Grafen med justeret højde (300px)
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=historik['Dato_Str'], y=historik['Rating_Avg'],
@@ -118,7 +118,7 @@ def vis_side():
                                       annotation_text="HIF Snit", annotation_position="top left")
                     
                     fig.update_layout(
-                        height=300,  # Her justeres højden (f.eks. fra standard 450 til 300)
+                        height=300, 
                         yaxis=dict(range=[1, 7], showgrid=False),
                         xaxis=dict(showgrid=False),
                         plot_bgcolor='rgba(0,0,0,0)',
@@ -127,7 +127,7 @@ def vis_side():
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # 2. Udviklingsanalyse (Tekst)
+                    # 2. Den tekstuelle analyse (Genindsat)
                     if len(historik) > 1:
                         st.divider()
                         nyeste = historik.iloc[-1]
@@ -143,32 +143,39 @@ def vis_side():
                             diff = int(nyeste[m]) - int(forrige[m])
                             forskelle.append({'navn': m, 'diff': diff})
                         
+                        # Sortér så de største spring er øverst
                         forskelle = sorted(forskelle, key=lambda x: x['diff'], reverse=True)
                         
                         fremgang = [f"{f['navn']} (+{f['diff']})" for f in forskelle if f['diff'] > 0]
                         tilbagegang = [f"{f['navn']} ({f['diff']})" for f in forskelle if f['diff'] < 0]
 
+                        # Overordnet status
                         rating_diff = nyeste['Rating_Avg'] - forrige['Rating_Avg']
-                        status_tekst = "stabil"
-                        if rating_diff > 0: status_tekst = f"opadgående (+{rating_diff:.1f})"
-                        elif rating_diff < 0: status_tekst = f"nedadgående (-{abs(rating_diff):.1f})"
+                        if rating_diff > 0:
+                            status_tekst = f"opadgående med en stigning på {rating_diff:.1f}"
+                        elif rating_diff < 0:
+                            status_tekst = f"nedadgående med et fald på {abs(rating_diff):.1f}"
+                        else:
+                            status_tekst = "stabil"
                         
-                        st.markdown(f"**Tendens: {status_tekst}**")
+                        st.markdown(f"**Udviklingsanalyse**")
+                        st.write(f"Spillerens overordnede niveau vurderes som **{status_tekst}** siden sidste rapport.")
 
+                        # Specifikke metrikker i kolonner
                         col_f, col_t = st.columns(2)
                         with col_f:
                             if fremgang:
-                                st.write("**Fremgang:**")
+                                st.write("**Største fremgang:**")
                                 for f in fremgang[:2]:
                                     st.write(f"- {f}")
                         
                         with col_t:
                             if tilbagegang:
-                                st.write("**Tilbagegang:**")
+                                st.write("**Største fald:**")
                                 for t in tilbagegang[:2]:
                                     st.write(f"- {t}")
                     else:
-                        st.info("Der kræves mindst to rapporter for at lave en sammenligning.")
+                        st.info("Der kræves mindst to rapporter for at kunne beskrive den tekniske udvikling.")
                         
             with tab4:
                 if s_df.empty:
