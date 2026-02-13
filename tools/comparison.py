@@ -105,40 +105,62 @@ def vis_side(spillere, player_events, df_scout):
         showlegend=False, height=480, margin=dict(l=70, r=70, t=30, b=30), autosize=True
     )
 
-    # --- 6. METRIC GRID VISNING ---
-    def vis_spiller_metrics(row, navn, side="venstre"):
-        color = "#df003b" if side == "venstre" else "#0056a3"
+    # --- 6. VISNING (Nu med spillerbilleder) ---
+    def vis_metrics(row, scout_info, navn, color, side, p_id):
         align = "left" if side == "venstre" else "right"
-        st.markdown(f"<h4 style='color: {color}; text-align: {align}; margin-bottom: 5px;'>{navn}</h4>", unsafe_allow_html=True)
         
-        # BASIS (2x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>BASIS STATS</p>", unsafe_allow_html=True)
-        b1, b2 = st.columns(2)
-        with b1:
+        # Generer Wyscout URL baseret på ID
+        # Vi sikrer os at ID er et rent tal uden .0
+        clean_id = str(int(float(p_id))) if pd.notna(p_id) else "0"
+        img_url = f"https://cdn5.wyscout.com/photos/players/public/g-{clean_id}_100x130.png"
+        
+        # Layout for billede og navn
+        if side == "venstre":
+            col_img, col_txt = st.columns([1, 2])
+            with col_img:
+                st.image(img_url, width=80)
+            with col_txt:
+                st.markdown(f"<h4 style='color:{color}; margin-bottom: 0px;'>{navn}</h4>", unsafe_allow_html=True)
+                st.markdown(f"<p style='color:gray; font-size:13px; margin-top: 0px;'>{scout_info['pos']} | {scout_info['klub']}</p>", unsafe_allow_html=True)
+        else:
+            col_txt, col_img = st.columns([2, 1])
+            with col_txt:
+                st.markdown(f"<h4 style='color:{color}; text-align:right; margin-bottom: 0px;'>{navn}</h4>", unsafe_allow_html=True)
+                st.markdown(f"<p style='color:gray; font-size:13px; text-align:right; margin-top: 0px;'>{scout_info['pos']} | {scout_info['klub']}</p>", unsafe_allow_html=True)
+            with col_img:
+                st.image(img_url, width=80)
+        
+        # Metrics sektionen (Gule/Røde kort osv.)
+        col_a, col_b = st.columns(2)
+        with col_a:
             st.metric("KAMPE", int(row.get('KAMPE', 0)))
             st.metric("GULE", int(row.get('YELLOWCARDS', 0)))
-        with b2:
+        with col_b:
             st.metric("MIN.", int(row.get('MINUTESONFIELD', 0)))
             st.metric("RØDE", int(row.get('REDCARDS', 0)))
             
-        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+        st.write("---")
         
-        # PERFORMANCE (3x2)
-        st.markdown(f"<p style='font-size: 0.7rem; font-weight: bold; text-align: {align}; margin:0;'>PERFORMANCE</p>", unsafe_allow_html=True)
-        pos_metrics = get_position_metrics(navn)
+        # Positionsspecifikke metrics
         p1, p2 = st.columns(2)
-        for i, (label, key) in enumerate(pos_metrics):
-            val = row.get(key, 0)
-            target_col = p1 if i % 2 == 0 else p2
-            with target_col:
-                st.metric(label, int(val) if pd.notna(val) else 0)
+        for i, (label, key) in enumerate(get_position_metrics(navn)):
+            target = p1 if i % 2 == 0 else p2
+            target.metric(label, int(row.get(key, 0)) if pd.notna(row.get(key, 0)) else 0)
 
-    # Grid layout
-    c1, c2, c3 = st.columns([1.8, 3, 1.8])
-    with c1: vis_spiller_metrics(row1, s1_navn, side="venstre")
-    with c2: st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    with c3: vis_spiller_metrics(row2, s2_navn, side="højre")
+    # --- SELVE PLACERINGEN AF KOLONNERNE ---
+    c1, c2, c3 = st.columns([2.2, 3, 2.2]) # Jeg har gjort siderne lidt bredere for at give plads til billedet
+    
+    # Hent ID'erne til billederne
+    id1 = samlet_df[samlet_df['Navn'] == s1_navn]['ID'].iloc[0]
+    id2 = samlet_df[samlet_df['Navn'] == s2_navn]['ID'].iloc[0]
 
+    with c1: 
+        vis_metrics(row1, scout1, s1_navn, "#df003b", "venstre", id1)
+    with c2: 
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    with c3: 
+        vis_metrics(row2, scout2, s2_navn, "#0056a3", "højre", id2)
+        
     # --- 7. BUND SEKTION: TABS ---
     st.write("") 
     sc1, sc2 = st.columns(2)
