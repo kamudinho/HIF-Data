@@ -150,12 +150,26 @@ def vis_side(spillere, player_events, df_scout):
         vis_spiller_metrics(row1, s1_navn, side="venstre")
 
     with c2:
-        # Hover definitioner for radaren
-        with st.expander("ℹ️ Definitioner af parametre"):
-            cols = st.columns(2)
-            for i, (k, v) in enumerate(radar_defs.items()):
-                target = cols[0] if i < 4 else cols[1]
-                target.markdown(f"**{k}:** {v}")
+        # 1. Små info-bokse med forklaringer
+        with st.expander("ℹ️ Definition af de 8 kategorier"):
+            st.markdown("<p style='font-size: 0.8rem; color: gray;'>Hold musen over (?) for definition</p>", unsafe_allow_html=True)
+            
+            # Vi opdeler forklaringerne i 2 kolonner inde i expanderen
+            def_col1, def_col2 = st.columns(2)
+            
+            # Her bruger vi 'help' på labels, så de fungerer som "ordbog"
+            with def_col1:
+                st.write(f"❓ **Beslutsomhed**", help=radar_defs['Beslutsomhed'])
+                st.write(f"❓ **Fart**", help=radar_defs['Fart'])
+                st.write(f"❓ **Aggressivitet**", help=radar_defs['Aggressivitet'])
+                st.write(f"❓ **Attitude**", help=radar_defs['Attitude'])
+            with def_col2:
+                st.write(f"❓ **Udholdenhed**", help=radar_defs['Udholdenhed'])
+                st.write(f"❓ **Lederevner**", help=radar_defs['Lederevner'])
+                st.write(f"❓ **Teknik**", help=radar_defs['Teknik'])
+                st.write(f"❓ **Spil-int.**", help=radar_defs['Spil-int.'])
+
+        # 2. Selve radaren
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with c3:
