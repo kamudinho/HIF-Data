@@ -147,9 +147,32 @@ def vis_side(spillere, player_events, df_scout):
         vis_spiller_metrics(row1, s1_navn, side="venstre")
 
     with c2:
-        # Spørgsmålstegn placeret direkte i midten over grafen med tooltip
-        st.markdown(f"<div style='text-align: right;' title='{chr(10).join([f'{k}: {v}' for k, v in radar_defs.items()])}'>❓</div>", unsafe_allow_html=True)
+        # Vi laver en lille kolonne-struktur for at tvinge spørgsmålstegnet helt op i højre hjørne
+        h_col1, h_col2 = st.columns([0.95, 0.05])
+        with h_col2:
+            # Dette opretter et standard Streamlit spørgsmålstegn med din ordbog
+            st.write("", help="\n\n".join([f"**{k}**: {v}" for k, v in radar_defs.items()]))
+        
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    with c3:
+        vis_spiller_metrics(row2, s2_navn, side="højre")
+
+    # --- 7. TABS (Scouting detaljer) ---
+    st.write("") 
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        st.markdown(f"<p style='color: #df003b; font-weight: bold;'>Scouting: {s1_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        with t1: st.info(scout1['s'])
+        with t2: st.warning(scout1['u'])
+        with t3: st.success(scout1['v'])
+    with sc2:
+        st.markdown(f"<p style='color: #0056a3; font-weight: bold; text-align: right;'>Scouting: {s2_navn}</p>", unsafe_allow_html=True)
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        with t1: st.info(scout2['s'])
+        with t2: st.warning(scout2['u'])
+        with t3: st.success(scout2['v'])
 
     with c3:
         vis_spiller_metrics(row2, s2_navn, side="højre")
