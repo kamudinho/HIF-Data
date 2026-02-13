@@ -24,7 +24,6 @@ def vis_side(spillere, player_events, df_scout):
         s2_navn = st.selectbox("Vælg P2", navne_liste, index=1 if len(navne_liste) > 1 else 0,
                                label_visibility="collapsed")
 
-    # --- HJÆLPEFUNKTION TIL DATA ---
     def hent_data(navn):
         # 1. Find PLAYER_WYID på spilleren fra spillerlisten
         p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
@@ -32,18 +31,26 @@ def vis_side(spillere, player_events, df_scout):
         # 2. Hent Stats (Wyscout)
         stats = player_events[player_events['PLAYER_WYID'] == p_id].iloc[0]
         
-        # 3. Hent Scouting (Nyeste rapport)
-        # Vi sikrer os at kolonnenavnene er rene og bruger PLAYER_WYID som nøgle
+        # 3. Rens kolonnenavne
         df_scout.columns = [str(c).strip() for c in df_scout.columns]
         
-        # Vi filtrerer på PLAYER_WYID i scouting-databasen
-        scout_match = df_scout[df_scout['PLAYER_WYID'].astype(str) == str(p_id)].sort_values('Dato', ascending=False)
+        # 4. Find matches i df_scout (hvor kolonnen hedder 'ID')
+        scout_match = df_scout[df_scout['ID'].astype(str) == str(p_id)]
         
         if not scout_match.empty:
+            scout_match = scout_match.sort_values('Dato', ascending=False)
             nyeste = scout_match.iloc[0]
+            
+            # Vi henter både Potentiale og Udvikling
+            pot = nyeste.get('Potentiale', '')
+            udv = nyeste.get('Udvikling', '')
+            
+            # Kombiner dem til én tekstblok hvis begge findes
+            kombineret_udv = f"**Potentiale:** {pot}\n\n**Udvikling:** {udv}" if pot and udv else (pot or udv or "Ingen data")
+
             scout_dict = {
                 's': nyeste.get('Styrker', 'Ingen data'),
-                'u': nyeste.get('Udvikling', 'Ingen data'),
+                'u': kombineret_udv,
                 'v': nyeste.get('Vurdering', 'Ingen data')
             }
         else:
