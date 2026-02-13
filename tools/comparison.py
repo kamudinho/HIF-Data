@@ -86,31 +86,47 @@ def vis_side(spillere, player_events, df_scout):
         showlegend=False, height=420, margin=dict(l=50, r=50, t=30, b=30)
     )
 
+    # --- 4.5 POSITIONSLOGIK TIL METRICS ---
+    def get_position_metrics(navn):
+        # Find positionen i spillere-filen
+        try:
+            pos = df_hif[df_hif['Full_Name'] == navn]['POSITION'].iloc[0].upper()
+        except:
+            # Hvis spilleren er fra scouting-db og ikke har en position i Excel
+            pos = "UNKNOWN"
+
+        # Definition af metrics per position
+        if "GK" in pos or "MÅLMAND" in pos:
+            return [("KAMPE", "KAMPE"), ("MINUTTER", "MINUTESONFIELD"), ("EROBRINGER", "RECOVERIES"), ("PASNINGER", "PASSES")]
+        elif "DEF" in pos or "FORSVAR" in pos:
+            return [("EROBRINGER", "RECOVERIES"), ("DUELER %", "DEFDUELSWON"), ("PASNINGER", "PASSES"), ("FREMAD. PAS", "FORWARDPASSES")]
+        elif "MID" in pos or "MIDTBANE" in pos:
+            return [("PASNINGER", "PASSES"), ("FREMAD. PAS", "FORWARDPASSES"), ("EROBRINGER", "RECOVERIES"), ("CHANCER SKABT", "ASSISTS")]
+        else: # Angribere / Fløje
+            return [("MÅL", "GOALS"), ("SKUD", "SHOTS"), ("BERØR. FELT", "TOUCHINBOX"), ("KAMPE", "KAMPE")]
+
+    metrics_s1 = get_position_metrics(s1_navn)
+    metrics_s2 = get_position_metrics(s2_navn)
+
     # --- 5. VISNING AF METRICS OG RADAR ---
     st.write("")
     c1, c2, c3 = st.columns([1.2, 2, 1.2])
 
-    # Ensartede Wyscout Metrics for begge spillere
-    metrics_list = [
-        ("MÅL", "GOALS"),
-        ("SKUD", "SHOTS"),
-        ("PASNINGER", "PASSES"),
-        ("EROBRINGER", "RECOVERIES")
-    ]
-
     with c1:
         st.markdown(f"<h4 style='color: #df003b; margin-bottom: 0;'>{s1_navn}</h4>", unsafe_allow_html=True)
-        for label, key in metrics_list:
-            st.metric(f"{label} (WY)", int(row1.get(key, 0)))
+        for label, key in metrics_s1:
+            # Vi bruger .get() med 0 som default, hvis kolonnen ikke findes i Excel
+            val = row1.get(key, 0)
+            st.metric(f"{label} (WY)", int(val) if pd.notna(val) else 0)
 
     with c2:
         st.plotly_chart(fig, use_container_width=True)
 
     with c3:
         st.markdown(f"<h4 style='color: #0056a3; text-align: right; margin-bottom: 0;'>{s2_navn}</h4>", unsafe_allow_html=True)
-        for label, key in metrics_list:
-            st.metric(f"{label} (WY)", int(row2.get(key, 0)))
-
+        for label, key in metrics_s2:
+            val = row2.get(key, 0)
+            st.metric(f"{label} (WY)", int(val) if pd.notna(val) else 0)
     # --- 6. BUND SEKTION: TABS ---
     st.write("") 
     sc1, sc2 = st.columns(2)
