@@ -29,34 +29,31 @@ def vis_side(spillere, player_events, df_scout):
         p_id = df_spillere[df_spillere['Full_Name'] == navn]['PLAYER_WYID'].iloc[0]
         
         # 2. Hent Stats (Wyscout)
-        stats = player_events[player_events['PLAYER_WYID'] == p_id].iloc[0]
+        # Vi tjekker om player_events bruger store bogstaver i kolonnerne
+        p_id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in player_events.columns else 'player_wyid'
+        stats = player_events[player_events[p_id_col] == p_id].iloc[0]
         
-        # 3. Rens kolonnenavne EKSTREMT grundigt
-        # Vi fjerner skjulte tegn, mellemrum og tvinger alt til STORE bogstaver
+        # 3. Scouting data - Vi antager kolonnerne ER gjort til store i main.py
+        # Men vi gør det lige igen for en sikkerheds skyld lokalt
         df_scout.columns = [str(c).strip().upper() for c in df_scout.columns]
         
-        # 4. Find matches (Vi leder nu efter 'ID' i store bogstaver)
-        # Vi sikrer os at p_id også er en ren streng
-        search_id = str(p_id).split('.')[0] # Fjerner evt. .0 hvis det er læst som float
-        scout_match = df_scout[df_scout['ID'].astype(str).str.contains(search_id, na=False)]
+        # 4. Find matches (Nu leder vi efter 'ID' i store bogstaver)
+        search_id = str(int(p_id)) if pd.notna(p_id) else "NONE"
+        
+        # Vi leder efter p_id i 'ID' kolonnen
+        scout_match = df_scout[df_scout['ID'].astype(str) == search_id]
         
         if not scout_match.empty:
-            # Sorter efter Dato (Vi tvinger også DATO til store bogstaver)
-            if 'DATO' in df_scout.columns:
-                scout_match = scout_match.sort_values('DATO', ascending=False)
-            
+            # Sorter efter DATO (store bogstaver)
+            scout_match = scout_match.sort_values('DATO', ascending=False)
             nyeste = scout_match.iloc[0]
             
-            # Vi bruger .get() med store bogstaver for at matche vores rensning
+            # Hent værdier med store bogstaver
             pot = nyeste.get('POTENTIALE', '')
             udv = nyeste.get('UDVIKLING', '')
-            styrker = nyeste.get('STYRKER', 'Ingen data')
-            vurdering = nyeste.get('VURDERING', 'Ingen data')
             
-            # Formatering af Udvikling & Potentiale
-            # Vi tjekker om de er valide strenge (ikke nan)
-            pot_str = str(pot) if pd.notna(pot) else ""
-            udv_str = str(udv) if pd.notna(udv) else ""
+            pot_str = str(pot) if pd.notna(pot) and pot != "" else ""
+            udv_str = str(udv) if pd.notna(udv) and udv != "" else ""
             
             kombineret_udv = ""
             if pot_str: kombineret_udv += f"**Potentiale:** {pot_str}\n\n"
@@ -64,9 +61,9 @@ def vis_side(spillere, player_events, df_scout):
             if not kombineret_udv: kombineret_udv = "Ingen data"
 
             scout_dict = {
-                's': styrker if pd.notna(styrker) else "Ingen data",
+                's': nyeste.get('STYRKER', 'Ingen data'),
                 'u': kombineret_udv,
-                'v': vurdering if pd.notna(vurdering) else "Ingen data"
+                'v': nyeste.get('VURDERING', 'Ingen data')
             }
         else:
             scout_dict = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen scouting fundet'}
