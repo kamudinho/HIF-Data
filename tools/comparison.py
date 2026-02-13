@@ -102,7 +102,7 @@ def vis_side(spillere, player_events, df_scout):
             c_txt, c_img = st.columns([2, 1])
             with c_txt: 
                 st.markdown(f"<h3 style='text-align:right; color:{color}; margin-bottom:0;'>{navn}</h3>", unsafe_allow_html=True)
-                st.caption(f"<p style='text-align:right; color:gray;'>{pos} | {klub}</p>", unsafe_allow_html=True)
+                st.caption(f"{pos} | {klub}")
             with c_img: vis_spiller_billede(pid)
 
         st.markdown("<br>", unsafe_allow_html=True)
