@@ -82,14 +82,20 @@ def vis_side(spillere, player_events, df_scout):
     id2, k2, pos2, st2, t2, txt2 = hent_info(s2_navn)
 
     # --- HJÆLPEFUNKTIONER TIL VISNING ---
-    def vis_spiller_billede(pid, w=110):
+    def vis_spiller_billede(pid, side="venstre"):
         url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
         standard_url = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
+        
+        w = 100 
+        
         try:
             response = requests.head(url, timeout=1)
-            st.image(url if response.status_code == 200 else standard_url, width=w)
+            if response.status_code == 200:
+                st.image(url, width=w)
+            else:
+                st.image(standard_url, width=int(w * 0.92))
         except:
-            st.image(standard_url, width=w)
+            st.image(standard_url, width=int(w * 0.92))
 
     def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
         if side == "venstre":
