@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import os
 
-def vis_side():
+def vis_side(spillere=None): 
     st.title("⚽ Videoanalyse fra matches.csv")
-
-    # 1. Sti til data (justeret til din mappe-struktur)
+    
+    # Resten af din kode herunder...
     csv_path = 'data/matches.csv'
     video_dir = 'videos'
 
