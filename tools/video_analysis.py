@@ -4,69 +4,59 @@ import os
 import re
 
 def vis_side(spillere):
-    st.title("🎥 Videoanalyse & Kampdata")
+    st.title("🎥 HIF Videoanalyse")
 
     csv_path = 'data/matches.csv'
     video_dir = 'videos'
 
-    # 1. Hent og rens CSV data
+    # 1. Hent og klargør CSV
     if os.path.exists(csv_path):
-        # Vi læser filen uden at gætte på separatorer først
-        df = pd.read_csv(csv_path, sep=None, engine='python')
+        # Vi læser CSV og tvinger EVENT_WYID til at være tekst uden usynlige tegn
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip().upper() for c in df.columns] # Gør kolonner store og rene
         
-        # Rens kolonnenavne (fjern mellemrum og gør dem store)
-        df.columns = [c.strip().upper() for c in df.columns]
-        
-        # VIGTIGT: Rens EVENT_WYID kolonnen for ALT andet end tal
         if 'EVENT_WYID' in df.columns:
             df['EVENT_WYID_CLEAN'] = df['EVENT_WYID'].astype(str).apply(lambda x: re.sub(r'\D', '', x))
         else:
-            st.error("Kolonnen 'EVENT_WYID' blev ikke fundet i CSV-filen.")
-            st.write("Fundne kolonner:", list(df.columns))
+            st.error("Fejl: Kolonnen 'EVENT_WYID' mangler i din CSV!")
             return
     else:
-        st.error(f"Kunne ikke finde {csv_path}")
+        st.error(f"Kunne ikke finde filen: {csv_path}")
         return
 
-    # 2. Hent og rens videofiler
+    # 2. Hent videofiler og rens deres navne for usynlige tegn
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
         
         if video_filer:
-            # Vi laver en ordbog, der mapper det rensede ID til det faktiske filnavn
-            video_map = {}
-            for f in video_filer:
-                clean_id = re.sub(r'\D', '', f) # Fjerner .mp4 OG de usynlige tegn
-                video_map[clean_id] = f
-
-            valgt_clean_id = st.selectbox(
-                "Vælg sekvens:", 
-                options=list(video_map.keys()),
-                format_func=lambda x: f"Sekvens ID: {x}"
-            )
+            # Vi mapper 'rent_id' -> 'originalt_filnavn' for at ramme de korrupte GitHub-navne
+            video_map = {re.sub(r'\D', '', f): f for f in video_filer}
             
-            # 3. Find match i CSV
-            match_data = df[df['EVENT_WYID_CLEAN'] == valgt_clean_id]
+            # Lav en pæn liste til dropdown (kun de rene numre)
+            valgt_id = st.selectbox("Vælg sekvens (Event ID):", options=list(video_map.keys()))
+            
+            # 3. Find data i CSV
+            match_data = df[df['EVENT_WYID_CLEAN'] == valgt_id]
 
             if not match_data.empty:
                 row = match_data.iloc[0]
                 
-                st.markdown(f"### 🏟️ {row.get('MATCHLABEL', 'Kamp-info')}")
+                # VISNING AF DATA
+                st.markdown(f"### 🏟️ {row['MATCHLABEL']}")
                 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Resultat", row.get('SCORE', 'N/A'))
-                c2.metric("xG", row.get('SHOTXG', '0.00'))
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Resultat", row.get('RESULT', 'N/A'))
+                c2.metric("xG", f"{float(row.get('SHOTXG', 0)):.2f}")
                 c3.metric("Kropsdel", row.get('SHOTBODYPART', 'N/A'))
+                c4.metric("Mål", "JA" if str(row.get('SHOTISGOAL')).lower() == 'true' else "NEJ")
                 
-                st.write(f"**Dato:** {row.get('DATE', 'N/A')} | **Venue:** {row.get('VENUE', 'N/A')}")
+                st.info(f"📅 **Dato:** {row.get('DATE')}  |  📍 **Side:** {row.get('SIDE')}")
             else:
-                st.warning(f"ID {valgt_clean_id} ikke fundet i matches.csv")
-                if st.checkbox("Vis rå data fra CSV"):
-                    st.write(df[['EVENT_WYID', 'EVENT_WYID_CLEAN']].head())
-            
+                st.warning(f"Ingen data fundet i CSV for ID: {valgt_id}")
+
             # 4. Afspil Video (bruger det originale filnavn fra mappet)
-            st.video(os.path.join(video_dir, video_map[valgt_clean_id]))
+            st.video(os.path.join(video_dir, video_map[valgt_id]))
         else:
             st.info("Ingen .mp4 filer fundet i /videos mappen.")
     else:
-        st.error(f"Mappen '{video_dir}' blev ikke fundet.")
+        st.error("Mappen /videos blev ikke fundet.")
