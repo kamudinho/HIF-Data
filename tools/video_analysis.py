@@ -2,49 +2,52 @@ import streamlit as st
 import pandas as pd
 import os
 
-def vis_side(spillere=None): 
-    st.title("⚽ Videoanalyse fra matches.csv")
-    
-    # Resten af din kode herunder...
+def vis_side(spillere):
+    st.title("🎥 Videoanalyse & Kampdata")
+
+    # 1. Stier
     csv_path = 'data/matches.csv'
     video_dir = 'videos'
 
-    if not os.path.exists(csv_path):
-        st.error(f"Kunne ikke finde filen: {csv_path}")
+    # 2. Hent CSV data
+    if os.path.exists(csv_path):
+        # Vi tvinger EVENT_WYID til at være tekst (string) for at undgå komma-fejl
+        df = pd.read_csv(csv_path)
+        df['EVENT_WYID'] = df['EVENT_WYID'].astype(str).str.strip()
+    else:
+        st.error("Kunne ikke finde data/matches.csv")
         return
 
-    # 2. Læs CSV
-    df = pd.read_csv(csv_path)
-
-    # 3. Find videoer
+    # 3. Find og vis videoer
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
         
         if video_filer:
             valgt_video = st.selectbox("Vælg sekvens:", video_filer)
             
-            # Træk ID ud (f.eks. fra '154647763.mp4' til '154647763')
-            event_id_fra_fil = valgt_video.replace(".mp4", "")
+            # Her kobler vi: Vi fjerner '.mp4' så vi har det rene ID
+            id_fra_video = valgt_video.replace(".mp4", "").strip()
+            
+            # Find rækken i CSV hvor ID matcher
+            match_data = df[df['EVENT_WYID'] == id_fra_video]
 
-            # 4. Slå op i CSV (vi tvinger begge til tekst for at matche)
-            match_row = df[df['EVENT_WYID'].astype(str) == str(event_id_fra_fil)]
-
-            if not match_row.empty:
-                data = match_row.iloc[0]
+            if not match_data.empty:
+                row = match_data.iloc[0]
                 
-                # Vis data i pæne kasser
+                # VIS DATA PÆNT
+                st.markdown(f"### 🏟️ {row['MATCHLABEL']}")
+                
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Kamp", data['MATCHLABEL'])
-                c2.metric("Resultat", data['SCORE'])
-                c3.metric("xG", data['SHOTXG'])
+                c1.metric("Resultat", row['SCORE'])
+                c2.metric("xG", f"{row['SHOTXG']:.2f}")
+                c3.metric("Afslutning", row['SHOTBODYPART'])
                 
-                st.write(f"**Dato:** {data['DATE']} | **Kropsdel:** {data['SHOTBODYPART']}")
+                st.write(f"**Dato:** {row['DATE']} | **Side:** {row['SIDE']}")
             else:
-                st.warning(f"Video-ID {event_id_fra_fil} findes ikke i matches.csv")
-
-            # 5. Vis Video
-            st.video(os.path.join(video_dir, valgt_video))
+                st.warning(f"Kunne ikke finde data i CSV for video-ID: {id_fra_video}")
+            
+            # 4. Afspil Video
+            video_stien = os.path.join(video_dir, valgt_video)
+            st.video(video_stien)
         else:
-            st.info("Ingen .mp4 filer fundet i /videos mappen.")
-    else:
-        st.error("Mappen /videos blev ikke fundet.")
+            st.info("Upload videoer til /videos mappen på GitHub (navngivet efter EVENT_WYID)")
