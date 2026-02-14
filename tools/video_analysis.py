@@ -2,48 +2,49 @@ import streamlit as st
 import pandas as pd
 import os
 
-def hent_data_fra_csv(event_id):
-    # Læs CSV-filen fra din data-mappe
-    df = pd.read_csv('data/matches.csv')
-    
-    # Find den række hvor EVENT_WYID matcher (vi sikrer os at de er samme type)
-    match_data = df[df['EVENT_WYID'].astype(str) == str(event_id)]
-    
-    if not match_data.empty:
-        return match_data.iloc[0] # Returner den første (og eneste) række fundet
-    return None
+def vis_side():
+    st.title("⚽ Videoanalyse fra matches.csv")
 
-def vis_side(spillere):
-    st.title("⚽ Kampanalyse (Lokal Data)")
+    # 1. Sti til data (justeret til din mappe-struktur)
+    csv_path = 'data/matches.csv'
+    video_dir = 'videos'
 
-    # Find videoer i din mappe
-    video_dir = "videos"
-    video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
+    if not os.path.exists(csv_path):
+        st.error(f"Kunne ikke finde filen: {csv_path}")
+        return
 
-    if video_filer:
-        valgt_video = st.selectbox("Vælg sekvens:", video_filer)
+    # 2. Læs CSV
+    df = pd.read_csv(csv_path)
+
+    # 3. Find videoer
+    if os.path.exists(video_dir):
+        video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
         
-        # Træk EVENT_WYID ud af filnavnet (f.eks. "154647763.mp4")
-        event_id = valgt_video.replace(".mp4", "")
-        
-        # Hent data fra din CSV
-        data = hent_data_fra_csv(event_id)
-        
-        if data is not None:
-            # Vis kamp-info i kolonner
-            col1, col2 = st.columns(2)
-            with col1:
-                st.info(f"🏟️ **{data['MATCHLABEL']}**")
-                st.write(f"**Dato:** {data['DATE']}")
-                st.write(f"**Resultat:** {data['SCORE']}")
-            with col2:
-                st.success(f"🎯 **Statistik for sekvens**")
-                st.write(f"**Afslutning:** {data['SHOTBODYPART']}")
-                st.write(f"**xG:** {data['SHOTXG']}")
-                st.write(f"**Mål:** {'Ja' if str(data['SHOTISGOAL']).lower() == 'true' else 'Nej'}")
-        
-        # Vis selve videoen
-        video_stien = os.path.join(video_dir, valgt_video)
-        st.video(video_stien)
+        if video_filer:
+            valgt_video = st.selectbox("Vælg sekvens:", video_filer)
+            
+            # Træk ID ud (f.eks. fra '154647763.mp4' til '154647763')
+            event_id_fra_fil = valgt_video.replace(".mp4", "")
+
+            # 4. Slå op i CSV (vi tvinger begge til tekst for at matche)
+            match_row = df[df['EVENT_WYID'].astype(str) == str(event_id_fra_fil)]
+
+            if not match_row.empty:
+                data = match_row.iloc[0]
+                
+                # Vis data i pæne kasser
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Kamp", data['MATCHLABEL'])
+                c2.metric("Resultat", data['SCORE'])
+                c3.metric("xG", data['SHOTXG'])
+                
+                st.write(f"**Dato:** {data['DATE']} | **Kropsdel:** {data['SHOTBODYPART']}")
+            else:
+                st.warning(f"Video-ID {event_id_fra_fil} findes ikke i matches.csv")
+
+            # 5. Vis Video
+            st.video(os.path.join(video_dir, valgt_video))
+        else:
+            st.info("Ingen .mp4 filer fundet i /videos mappen.")
     else:
-        st.warning("Ingen videoer fundet i /videos mappen.")
+        st.error("Mappen /videos blev ikke fundet.")
