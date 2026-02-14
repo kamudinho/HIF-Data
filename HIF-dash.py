@@ -107,13 +107,16 @@ with st.sidebar:
     
     if hoved_omraade == "Truppen":
         selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
-                               icons=["people", "people", "people", "people"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+                               icons=["people", "people", "people", "people"], 
+                               styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps"], 
-                               icons=["graph-up", "graph-up", "graph-up"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], 
+                           icons=["graph-up", "graph-up", "graph-up", "play-btn"], 
+                           styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
         selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
-                               icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+                               icons=["pencil-square", "database", "arrow-left-right"], 
+                               styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
 # --- 6. ROUTING ---
 if selected == "Oversigt":
@@ -137,6 +140,9 @@ elif selected == "Afslutninger":
 elif selected == "Heatmaps":
     import tools.heatmaps as hm
     hm.vis_side(df_events, 4, hold_map)
+elif selected == "Video":
+    import tools.video_analysis as va
+    va.vis_side(spillere)
 elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
