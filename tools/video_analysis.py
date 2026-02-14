@@ -55,7 +55,6 @@ def vis_side(spillere):
     for idx, row in display_df.iterrows():
         c1, c2, c3, c4, c5, c6 = st.columns([1, 4, 2, 1, 1, 2])
         
-        # Knap til at åbne Popup (Modal)
         if c1.button("▶️", key=f"btn_{row['RENS_ID']}"):
             vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
             
@@ -65,8 +64,16 @@ def vis_side(spillere):
         maal = "⚽ JA" if str(row.get('SHOTISGOAL')).lower() == 'true' else "❌"
         c4.write(maal)
         
-        xg = row.get('SHOTXG', 0)
-        c5.write(f"{float(xg):.2f}")
+        # SIKKER KONVERTERING AF xG
+        try:
+            # Vi fjerner eventuelle kommaer og erstatter med punktum, før vi konverterer
+            xg_raw = str(row.get('SHOTXG', '0')).replace(',', '.')
+            xg_val = float(xg_raw)
+            c5.write(f"{xg_val:.2f}")
+        except (ValueError, TypeError):
+            # Hvis dataen er ødelagt eller tom, skriver vi 0.00
+            c5.write("0.00")
+            
         c6.write(f"`{row['RENS_ID']}`")
 
 # 5. Funktionen der laver din Pop-up (Modal)
