@@ -1,53 +1,58 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 
 def vis_side(spillere):
     st.title("🎥 Videoanalyse & Kampdata")
 
-    # 1. Stier
     csv_path = 'data/matches.csv'
     video_dir = 'videos'
 
-    # 2. Hent CSV data
     if os.path.exists(csv_path):
-        # Vi tvinger EVENT_WYID til at være tekst (string) for at undgå komma-fejl
+        # Vi læser CSV. Hvis dine kommaer driller i filen, 
+        # tvinger vi den til at læse EVENT_WYID korrekt.
         df = pd.read_csv(csv_path)
-        df['EVENT_WYID'] = df['EVENT_WYID'].astype(str).str.strip()
+        
+        # RENSNING AF KOLONNER:
+        # Vi fjerner alt rod og sørger for at EVENT_WYID er en ren talkæde
+        df['EVENT_WYID'] = df['EVENT_WYID'].astype(str).apply(lambda x: re.sub(r'\D', '', x))
     else:
-        st.error("Kunne ikke finde data/matches.csv")
+        st.error(f"Kunne ikke finde {csv_path}")
         return
 
-    # 3. Find og vis videoer
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
         
         if video_filer:
             valgt_video = st.selectbox("Vælg sekvens:", video_filer)
             
-            # Her kobler vi: Vi fjerner '.mp4' så vi har det rene ID
-            id_fra_video = valgt_video.replace(".mp4", "").strip()
+            # Rens ID fra filnavnet (fjern .mp4 og eventuelle usynlige tegn)
+            id_fra_video = re.sub(r'\D', '', valgt_video)
             
-            # Find rækken i CSV hvor ID matcher
+            # Søg i din dataframe
             match_data = df[df['EVENT_WYID'] == id_fra_video]
 
             if not match_data.empty:
                 row = match_data.iloc[0]
                 
-                # VIS DATA PÆNT
-                st.markdown(f"### 🏟️ {row['MATCHLABEL']}")
+                # Hvis dine kolonner er forskudt i CSV, kan vi kalde dem ved nummer i stedet for navn
+                # row.iloc[0] = Matchlabel, row.iloc[1] = Score, osv.
+                
+                st.markdown(f"### 🏟️ {row.get('MATCHLABEL', 'Kamp-info')}")
                 
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Resultat", row['SCORE'])
-                c2.metric("xG", f"{row['SHOTXG']:.2f}")
-                c3.metric("Afslutning", row['SHOTBODYPART'])
+                # Vi bruger .get() for en sikkerheds skyld hvis navnet driller
+                c1.metric("Resultat", row.get('DATE', 'N/A')) # Fordi din score pt. ligger i Date
+                c2.metric("xG", f"{row.get('SHOTXG', 0)}")
+                c3.metric("Side", row.get('SIDE', 'N/A'))
                 
-                st.write(f"**Dato:** {row['DATE']} | **Side:** {row['SIDE']}")
+                st.write(f"**ID:** {id_fra_video}")
             else:
-                st.warning(f"Kunne ikke finde data i CSV for video-ID: {id_fra_video}")
+                st.warning(f"ID {id_fra_video} ikke fundet i CSV.")
+                # Hjælp til selvhjælp:
+                if st.checkbox("Se hvad der står i din CSV"):
+                    st.write("Første 5 ID'er i din CSV-fil:")
+                    st.write(df['EVENT_WYID'].head())
             
-            # 4. Afspil Video
-            video_stien = os.path.join(video_dir, valgt_video)
-            st.video(video_stien)
-        else:
-            st.info("Upload videoer til /videos mappen på GitHub (navngivet efter EVENT_WYID)")
+            st.video(os.path.join(video_dir, valgt_video))
