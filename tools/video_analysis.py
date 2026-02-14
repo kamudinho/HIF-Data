@@ -13,41 +13,43 @@ def vis_side(spillere):
         st.error(f"CSV ikke fundet på {csv_path}")
         return
 
-    # Læs og rens CSV med det samme
+    # 1. Læs CSV og tving EVENT_WYID til at være rene tal-strenge
     df = pd.read_csv(csv_path)
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # Rens EVENT_WYID for alt andet end tal og fjern alt usynligt
-    df['EVENT_WYID_CLEAN'] = df['EVENT_WYID'].astype(str).str.extract('(\d+)').astype(str)
+    # Vi bruger regex \d+ til kun at trække tallene ud fra CSV-kolonnen
+    df['EVENT_WYID_CLEAN'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x)))
 
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
         
         if video_filer:
-            # Rens filnavne: Vi tager KUN de første 9 cifre, hvis de driller
+            # 2. Lav et "Vaske-map" for videoerne
+            # Vi tager filnavnet '154648614‎.mp4' og trækker KUN tallene ud
             video_map = {}
             for f in video_filer:
                 clean_id = "".join(re.findall(r'\d+', f))
                 video_map[clean_id] = f
             
+            # Lav dropdown baseret på de rensede ID'er
             valgt_id = st.selectbox("Vælg sekvens:", options=list(video_map.keys()))
             
-            # DIAGNOSE (Slet disse når det virker)
-            st.write(f"DEBUG: Søger efter ID '{valgt_id}'")
-            st.write(f"DEBUG: Findes i CSV? {valgt_id in df['EVENT_WYID_CLEAN'].values}")
-
+            # 3. Find matchet i CSV
             match_data = df[df['EVENT_WYID_CLEAN'] == valgt_id]
 
             if not match_data.empty:
                 row = match_data.iloc[0]
-                st.markdown(f"### 🏟️ {row['MATCHLABEL']}")
+                st.markdown(f"### 🏟️ {row.get('MATCHLABEL', 'Kamp-info')}")
                 
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Resultat", row.get('RESULT', 'N/A'))
-                c2.metric("xG", row.get('SHOTXG', '0.00'))
+                c2.metric("xG", f"{float(row.get('SHOTXG', 0)):.2f}")
                 c3.metric("Mål", "JA" if str(row.get('SHOTISGOAL')).lower() == 'true' else "NEJ")
                 
+                # Afspil videoen ved at bruge det originale "beskidte" filnavn fra mappet
                 st.video(os.path.join(video_dir, video_map[valgt_id]))
             else:
                 st.error(f"❌ ID {valgt_id} blev ikke fundet i CSV.")
-                st.write("Tilgængelige ID'er i din CSV:", df['EVENT_WYID_CLEAN'].unique()[:5])
+                st.write("ID'er i din CSV:", df['EVENT_WYID_CLEAN'].unique())
+        else:
+            st.info("Ingen .mp4 filer fundet.")
