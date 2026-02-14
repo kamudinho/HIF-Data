@@ -110,7 +110,7 @@ with st.sidebar:
                                icons=["people", "people", "people", "people"], 
                                styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-    selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], 
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], 
                            icons=["graph-up", "graph-up", "graph-up", "play-btn"], 
                            styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
