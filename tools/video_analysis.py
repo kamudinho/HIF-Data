@@ -4,90 +4,90 @@ import os
 import re
 
 def vis_side(spillere):
-    st.title("⚽ HIF Videoanalyse")
+    st.title("⚽ Analyse-dashboard")
+    st.write("Klik på ▶️ for at se videoen og detaljer for den enkelte afslutning.")
 
-    # 1. Stier
     csv_path = 'data/matches.csv'
     video_dir = 'videos'
 
-    # 2. Indlæs og rens CSV-data
-    if os.path.exists(csv_path):
-        try:
-            # 'utf-8-sig' hjælper med danske tegn og fjerner Excel-skjulte tegn i starten
-            df = pd.read_csv(csv_path, sep=None, engine='python', encoding='utf-8-sig')
-            
-            # Rens kolonnenavne (fjerner alt rod og gør dem store)
-            df.columns = [re.sub(r'\W+', '', c).upper() for c in df.columns]
-            
-            # Lav en renset ID-kolonne til opslag (kun tal)
-            if 'EVENT_WYID' in df.columns:
-                df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x)))
-            else:
-                st.error("Kunne ikke finde kolonnen 'EVENT_WYID' i din CSV.")
-                st.write("Jeg fandt disse kolonner:", list(df.columns))
-                return
-        except Exception as e:
-            st.error(f"Fejl ved indlæsning af CSV: {e}")
-            return
-    else:
-        st.error(f"Fandt ikke matches.csv på stien: {csv_path}")
+    if not os.path.exists(csv_path):
+        st.error("Kunne ikke finde matches.csv")
         return
 
-    # 3. Håndter videofiler
+    # 1. Indlæs og rens data
+    df = pd.read_csv(csv_path, encoding='utf-8-sig', sep=None, engine='python')
+    df.columns = [re.sub(r'\W+', '', c).upper() for c in df.columns]
+    
+    # Lav rensede ID'er til match mod videofiler
+    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x)))
+
+    # 2. Find alle tilgængelige videoer i mappen
+    video_map = {}
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
+        for f in video_filer:
+            # Fjern .mp4 før rensning for at undgå det ekstra 4-tal
+            clean_id = "".join(re.findall(r'\d+', os.path.splitext(f)[0]))
+            video_map[clean_id] = f
+
+    # 3. Forbered data til tabellen
+    # Vi markerer rækker, hvor vi faktisk har en video
+    df['VIDEO_STATUS'] = df['RENS_ID'].apply(lambda x: "▶️ Se video" if x in video_map else "Mangler ❌")
+
+    # 4. Vis tabellen (Vi viser kun de vigtigste kolonner for overblik)
+    # Vi bruger st.dataframe eller st.data_editor, men for knapper bruger vi kolonner
+    st.subheader("Alle afslutninger")
+    
+    # Overskrifter
+    cols = st.columns([1, 4, 2, 1, 1, 2])
+    cols[0].write("**Video**")
+    cols[1].write("**Kamp**")
+    cols[2].write("**Kropsdel**")
+    cols[3].write("**Mål**")
+    cols[4].write("**xG**")
+    cols[5].write("**ID**")
+    st.divider()
+
+    # Loop gennem de første X rækker (eller filtrer efter behov)
+    # For performance viser vi her de 50 første rækker, eller dem med video
+    display_df = df[df['VIDEO_STATUS'] == "▶️ Se video"].head(50)
+
+    for idx, row in display_df.iterrows():
+        c1, c2, c3, c4, c5, c6 = st.columns([1, 4, 2, 1, 1, 2])
         
-        if video_filer:
-            # Vi bygger et map, der fjerner .mp4 FØR vi renser for usynlige tegn
-            video_map = {}
-            for f in video_filer:
-                filnavn_uden_type = os.path.splitext(f)[0] # Fjerner .mp4 (og dermed 4-tallet)
-                clean_id = "".join(re.findall(r'\d+', filnavn_uden_type)) # Fjerner usynlige tegn
-                video_map[clean_id] = f
-
-            # Dropdown menu med de rene ID'er fra din videomappe
-            valgt_id = st.selectbox("Vælg sekvens (Event ID):", options=list(video_map.keys()))
+        # Knap til at åbne Popup (Modal)
+        if c1.button("▶️", key=f"btn_{row['RENS_ID']}"):
+            vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
             
-            # 4. Find matchet i dine 5500 rækker
-            match_data = df[df['RENS_ID'] == valgt_id]
+        c2.write(row.get('MATCHLABEL', 'N/A'))
+        c3.write(row.get('SHOTBODYPART', 'N/A'))
+        
+        maal = "⚽ JA" if str(row.get('SHOTISGOAL')).lower() == 'true' else "❌"
+        c4.write(maal)
+        
+        xg = row.get('SHOTXG', 0)
+        c5.write(f"{float(xg):.2f}")
+        c6.write(f"`{row['RENS_ID']}`")
 
-            if not match_data.empty:
-                row = match_data.iloc[0]
-                
-                # Overskrift med kampen
-                st.markdown(f"### 🏟️ {row.get('MATCHLABEL', 'Kamp-data')}")
-                
-                # Tre kolonner med stats
-                c1, c2, c3 = st.columns(3)
-                
-                # Vi bruger .get() så koden aldrig fejler, hvis en kolonne mangler
-                res = row.get('RESULT', row.get('SCORE', 'N/A'))
-                c1.metric("Resultat", res)
-                
-                xg_val = row.get('SHOTXG', 0.00)
-                try:
-                    c2.metric("xG", f"{float(xg_val):.2f}")
-                except:
-                    c2.metric("xG", xg_val)
-                
-                c3.metric("Kropsdel", row.get('SHOTBODYPART', 'N/A'))
-                
-                st.write(f"📅 **Dato:** {row.get('DATE', 'N/A')}  |  📍 **Side:** {row.get('SIDE', 'N/A')}")
-                
-                st.divider()
-                
-                # 5. Afspil videoen (vi bruger det originale filnavn fra mappet)
-                video_sti = os.path.join(video_dir, video_map[valgt_id])
-                st.video(video_sti)
-            else:
-                st.error(f"❌ ID {valgt_id} findes i din videomappe, men blev ikke fundet i de 5500 rækker i CSV'en.")
-                # Fejlfinding: Vis hvad der faktisk står i CSV
-                if st.checkbox("Vis diagnose-data fra CSV"):
-                    st.write("Søgte efter ID:", valgt_id)
-                    st.write("Første 5 rensede ID'er i CSV:", df['RENS_ID'].head().tolist())
-        else:
-            st.info(f"Mappen '{video_dir}' er tom. Upload dine .mp4 filer til GitHub.")
+# 5. Funktionen der laver din Pop-up (Modal)
+@st.dialog("Videoanalyse")
+def vis_video_popup(data, filnavn, video_dir):
+    st.subheader(f"{data['MATCHLABEL']}")
+    
+    if filnavn:
+        video_sti = os.path.join(video_dir, filnavn)
+        st.video(video_sti)
     else:
-        st.error(f"Mappen '{video_dir}' blev ikke fundet i dit repository.")
+        st.warning("Videofilen blev ikke fundet i mappen.")
 
-# Denne funktion kaldes fra din hovedfil (HIF-dash.py)
+    st.write("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Resultat:** {data.get('RESULT', 'N/A')}")
+        st.write(f"**Side:** {data.get('SIDE', 'N/A')}")
+    with col2:
+        st.write(f"**xG Værdi:** {data.get('SHOTXG', '0.00')}")
+        st.write(f"**Kropsdel:** {data.get('SHOTBODYPART', 'N/A')}")
+    
+    if st.button("Luk"):
+        st.rerun()
