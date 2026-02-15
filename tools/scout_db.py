@@ -53,19 +53,21 @@ def vis_spiller_billede(pid, w=110):
 # --- 2. PROFIL DIALOG (MED ALLE TABS) ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
-    id_col = find_col(full_df, 'PLAYER_WYID')
+    # Vi bruger PLAYER_WYID som den primære nøgle nu
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     
-    # Hent historikken for spilleren
-    historik = full_df[full_df[id_col].astype(str).str.contains(clean_p_id, na=False)].sort_values('DATO_DT', ascending=True)
+    # Hent historikken (Vi bruger kolonnen PLAYER_WYID som vi rensede i vis_side)
+    historik = full_df[full_df['PLAYER_WYID'].astype(str) == clean_p_id].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
         st.error("Data ikke fundet.")
         return
 
     nyeste = historik.iloc[-1]
-    seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
-    scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
+    # Vi bruger de UPPERCASE navne som din hovedfil gennemtvinger
+    seneste_dato = hent_vaerdi_robust(nyeste, 'DATO')
+    scout_navn = hent_vaerdi_robust(nyeste, 'SCOUT')
+    rating_col = 'RATING_AVG'
 
     # Header sektion
     head_col1, head_col2 = st.columns([1, 4])
@@ -80,26 +82,37 @@ def vis_profil(p_data, full_df, s_df):
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radarchart"])
     
     with tab1:
-        vis_metrikker(nyeste)
+        vis_metrikker(nyeste) # Sørg for at denne funktion også bruger UPPERCASE internt
         vis_bokse_kolonner(nyeste)
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            h_scout = hent_vaerdi_robust(row, 'Scout')
-            h_dato = hent_vaerdi_robust(row, 'Dato')
-            h_rate = hent_vaerdi_robust(row, 'Rating_Avg')
+            h_scout = hent_vaerdi_robust(row, 'SCOUT')
+            h_dato = hent_vaerdi_robust(row, 'DATO')
+            h_rate = hent_vaerdi_robust(row, 'RATING_AVG')
             with st.expander(f"Rapport: {h_dato} | Scout: {h_scout} | Rating: {h_rate}"):
                 vis_metrikker(row)
                 vis_bokse_kolonner(row)
 
     with tab3:
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='markers+lines', line_color='#df003b'))
-        fig_line.update_layout(height=450, yaxis=dict(range=[1, 6]), title="Rating over tid")
+        fig_line.add_trace(go.Scatter(
+            x=historik['DATO_DT'], 
+            y=historik[rating_col], 
+            mode='markers+lines', 
+            line_color='#df003b'
+        ))
+        fig_line.update_layout(
+            height=450, 
+            yaxis=dict(range=[1, 6], title="Rating"), 
+            xaxis=dict(title="Dato"),
+            title="Rating over tid"
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        display_stats = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id, na=False)].copy()
+        # Matcher på den rensede PLAYER_WYID i season_stats
+        display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         if not display_stats.empty:
             st.dataframe(display_stats.drop(columns=['PLAYER_WYID'], errors='ignore'), use_container_width=True, hide_index=True)
         else:
@@ -107,23 +120,50 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab5:
         cl, cm, cr = st.columns([1.5, 4, 2.5])
+        # Vi definerer label og den faktiske kolonne (UPPERCASE)
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
-        v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
+        cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+        
+        # Henter værdierne robust
+        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
         v_closed = v + [v[0]]
         
         with cl:
             st.markdown(f"*{seneste_dato}*")
             st.caption(f"Scout: {scout_navn}")
             for cat, val in zip(categories, v):
-                st.markdown(f"**{cat}:** `{val}`")
+                # Farvekode værdien for overblik
+                color = "#df003b" if val >= 4 else "#555"
+                st.markdown(f"**{cat}:** <span style='color:{color}; font-family:monospace;'>{val}</span>", unsafe_allow_html=True)
+        
         with cm:
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed, 
+                theta=categories + [categories[0]], 
+                fill='toself', 
+                line_color='#df003b',
+                fillcolor='rgba(223, 0, 59, 0.3)' # Transparent rød fyld
+            ))
             fig_radar.update_layout(
-                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
-                showlegend=False, height=450
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True, 
+                        range=[0, 5], 
+                        tickvals=[1, 2, 3, 4, 5],
+                        showticklabels=True
+                    ),
+                    angularaxis=dict(
+                        rotation=90,
+                        direction="clockwise"
+                    )
+                ), 
+                showlegend=False, 
+                height=450,
+                margin=dict(l=60, r=60, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
+            
         with cr:
             vis_bokse_lodret(nyeste)
 
