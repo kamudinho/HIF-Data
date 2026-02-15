@@ -116,7 +116,7 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 "Beslutsomhed": "BESLUTSOMHED", "Fart": "FART",
                 "Aggresivitet": "AGGRESIVITET", "Attitude": "ATTITUDE",
                 "Udholdenhed": "UDHOLDENHED", "Lederegenskaber": "LEDEREGENSKABER",
-                "Teknik": "TEKNISKE FÆRDIGHEDER", "Spilintelligens": "SPILINTELLIGENS"
+                "Teknik": "TEKNIK", "Spilintelligens": "SPILINTELLIGENS"
             }
             # Mindre selectbox (label_visibility="collapsed" sparer vertikal plads)
             valgt_label = st.selectbox("Parameter", options=list(metrics_map.keys()), index=0, label_visibility="collapsed")
@@ -211,7 +211,7 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with tab5:
         # 1. Forbered data
-        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Tekniske færdigheder', 'Spilintelligens']
         cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
         
         # Hent værdier fra nyeste rapport
