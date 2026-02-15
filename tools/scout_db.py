@@ -126,6 +126,7 @@ def vis_profil(p_data, full_df, s_df):
             vis_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (OPDATERET MED DYNAMISK FILTER-TITEL) ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -143,32 +144,34 @@ def vis_side():
 
     st.subheader("Scouting Database")
     
-    # SØGNING OG DYNAMISK POPOVER
-    col_s, col_p = st.columns([4, 1.2]) # Lidt mere plads til knappen
+    # 1. TÆL FILTRE (Vi tjekker session_state før vi tegner popover)
+    # Vi bruger .get() for at undgå fejl første gang siden indlæses
+    valgt_status = st.session_state.get("filter_status", [])
+    valgt_scout = st.session_state.get("filter_scout", [])
     
+    antal = len(valgt_status) + len(valgt_scout)
+    filter_label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
+
+    # 2. SØGNING OG POPOVER
+    col_s, col_p = st.columns([4, 1.2]) 
     with col_s:
-        search = st.text_input("Søg...", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
-
-    # Vi skal bruge en midlertidig løsning til at tælle filtre før popover tegnes helt
-    # Streamlit kører fra top til bund, så vi fanger værdierne her:
-    if 'filter_status' not in st.session_state: st.session_state.filter_status = []
-    if 'filter_scout' not in st.session_state: st.session_state.filter_scout = []
-
-    antal = len(st.session_state.filter_status) + len(st.session_state.filter_scout)
-    label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
-
+        search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     with col_p:
-        with st.popover(label, use_container_width=True):
+        # Her bruger vi den dynamiske label
+        with st.popover(filter_label, use_container_width=True):
             s_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
+            # Vi tilføjer 'key', så Streamlit husker valget og kan tælle det øverst
             valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
             
             sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
             valgt_scout = st.multiselect("Scout", options=sc_opts, key="filter_scout")
 
-    # Filtrering
+    # 3. FILTRERINGSLOGIK
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
+    
+    # Vi bruger de variabler vi fik fra session_state/multiselect
     if valgt_status:
         f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
     if valgt_scout:
@@ -176,7 +179,7 @@ def vis_side():
 
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
-    st.dataframe(
+    event = st.dataframe(
         f_df[vis_cols],
         use_container_width=True, 
         hide_index=True, 
