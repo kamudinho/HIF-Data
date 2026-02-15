@@ -143,8 +143,35 @@ def vis_profil(p_data, full_df, s_df):
                 st.markdown(f"**{cat}:** <span style='color:{color};'>{val}</span>", unsafe_allow_html=True)
         with cm:
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b', fillcolor='rgba(223, 0, 59, 0.3)'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])), showlegend=False, height=450)
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed, 
+                theta=categories + [categories[0]], 
+                fill='toself', 
+                line_color='#df003b',
+                fillcolor='rgba(223, 0, 59, 0.3)',
+                marker=dict(size=8)
+            ))
+            
+            fig_radar.update_layout(
+                polar=dict(
+                    gridshape='linear',  # DETTE GØR DEN 8-KANTET
+                    radialaxis=dict(
+                        visible=True, 
+                        range=[0, 5], 
+                        tickvals=[1, 2, 3, 4, 5],
+                        gridcolor="lightgrey",
+                        showticklabels=True
+                    ),
+                    angularaxis=dict(
+                        gridcolor="lightgrey",
+                        rotation=90,
+                        direction="clockwise"
+                    )
+                ), 
+                showlegend=False, 
+                height=450,
+                margin=dict(l=60, r=60, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
         with cr:
             vis_bokse_lodret(nyeste)
