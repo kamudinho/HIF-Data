@@ -21,9 +21,9 @@ def hent_vaerdi_robust(row, col_name):
     return "" if pd.isna(val) else val
 
 def map_position(row):
-    # Hent værdier fra alle potentielle kilder
-    pos_val = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
-    position_col_val = str(hent_vaerdi_robust(row, 'Position')).strip().split('.')[0]
+    # Hent rå værdier
+    pos_raw = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
+    db_pos_raw = str(hent_vaerdi_robust(row, 'Position')).strip().split('.')[0]
     role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
     
     pos_dict = {
@@ -38,26 +38,26 @@ def map_position(row):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
-    # 1. Tjek om der er et tal i 'POS' (fra players.csv)
-    if pos_val in pos_dict:
-        return pos_dict[pos_val]
+    # PRIORITET 1: Findes der et tal i 'Position' (fra scouting_db)?
+    if db_pos_raw in pos_dict:
+        return pos_dict[db_pos_raw]
+
+    # PRIORITET 2: Findes der et tal i 'POS' (fra players.csv)?
+    if pos_raw in pos_dict:
+        return pos_dict[pos_raw]
     
-    # 2. Tjek om der er et tal i 'Position' (fra scouting_db.csv)
-    if position_col_val in pos_dict:
-        return pos_dict[position_col_val]
-        
-    # 3. Fallback til ROLECODE3 (GKP, DEF, MID, FWD)
+    # PRIORITET 3: Er 'Position' kolonnen i forvejen udfyldt med pæn tekst?
+    # (Vi tjekker at det ikke bare er et tal eller 'nan')
+    db_text = str(hent_vaerdi_robust(row, 'Position')).strip()
+    if len(db_text) > 2 and db_text.lower() not in ["nan", "none"] and not db_text.isdigit():
+        return db_text
+
+    # PRIORITET 4: Fallback til ROLECODE3 (f.eks. "DEF" -> "Forsvarsspiller")
     if role_val in role_dict:
         return role_dict[role_val]
-    
-    # 4. Hvis det er rå tekst i 'Position' (f.eks. "Fisker" eller "Stopper")
-    # Vi tjekker at det ikke bare er "nan" eller tallet vi lige har fejlet med
-    raw_pos = hent_vaerdi_robust(row, 'Position')
-    if raw_pos and str(raw_pos).lower() not in ["nan", "none", ""]:
-        return raw_pos
         
     return "Ukendt"
-
+    
 # --- VISNINGSFUNKTIONER ---
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
