@@ -53,7 +53,6 @@ def vis_scout_bokse(row):
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
-    # Sikr at vi sammenligner strenge uden " 
     clean_p_id = str(p_data['ID']).replace('"', '').strip()
     historik = full_df[full_df[id_col].astype(str).str.replace('"', '').str.strip() == clean_p_id].sort_values('DATO_DT', ascending=True)
     
@@ -65,10 +64,13 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion med Info til venstre og Billede til højre
-    head_left, head_right = st.columns([4, 1])
+    # --- NYT LAYOUT: Billede til venstre, Tekst til højre ---
+    head_left, head_right = st.columns([1, 4]) # Vi bytter rundt her
     
     with head_left:
+        vis_spiller_billede(clean_p_id, w=120) # Lidt større billede nu det er i fokus
+
+    with head_right:
         st.markdown(f"""
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
             <p style='color: gray; font-size: 18px; margin-top:0;'>
