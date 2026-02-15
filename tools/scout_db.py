@@ -50,11 +50,14 @@ def vis_spiller_billede(pid, w=110):
     except:
         st.image(std, width=w)
 
-# --- 2. PROFIL DIALOG ---
+# --- 2. PROFIL DIALOG (MED ALLE TABS) ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
+    id_col = find_col(full_df, 'PLAYER_WYID')
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
-    historik = full_df[full_df['PLAYER_WYID'].astype(str) == clean_p_id].sort_values('DATO', ascending=True)
+    
+    # Hent historikken for spilleren
+    historik = full_df[full_df[id_col].astype(str).str.contains(clean_p_id, na=False)].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
         st.error("Data ikke fundet.")
@@ -64,6 +67,7 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
+    # Header sektion
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -72,41 +76,32 @@ def vis_profil(p_data, full_df, s_df):
         st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
         st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
+    # Tabs sektion
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radarchart"])
     
     with tab1:
-        m_cols = st.columns(4)
-        metrics = [
-            ("Beslutsomhed", "BESLUTSOMHED"), ("Fart", "FART"), 
-            ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
-            ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
-            ("Teknik", "TEKNIK"), ("Spilintelligens", "SPILINTELLIGENS")
-        ]
-        for i, (label, col) in enumerate(metrics):
-            val = rens_metrik_vaerdi(nyeste.get(col, 0))
-            m_cols[i % 4].metric(label, f"{val}")
-        
-        st.divider()
-        c1, c2, c3 = st.columns(3)
-        with c1: st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', 'Ingen data')}")
-        with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', 'Ingen data')}")
-        with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', 'Ingen data')}")
+        vis_metrikker(nyeste)
+        vis_bokse_kolonner(nyeste)
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            with st.expander(f"Rapport: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
-                st.write(f"**Vurdering:** {row.get('VURDERING')}")
+            h_scout = hent_vaerdi_robust(row, 'Scout')
+            h_dato = hent_vaerdi_robust(row, 'Dato')
+            h_rate = hent_vaerdi_robust(row, 'Rating_Avg')
+            with st.expander(f"Rapport: {h_dato} | Scout: {h_scout} | Rating: {h_rate}"):
+                vis_metrikker(row)
+                vis_bokse_kolonner(row)
 
     with tab3:
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(x=historik['DATO'], y=historik['RATING_AVG'], mode='markers+lines', line_color='#df003b'))
+        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='markers+lines', line_color='#df003b'))
         fig_line.update_layout(height=450, yaxis=dict(range=[1, 6]), title="Rating over tid")
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+        display_stats = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id, na=False)].copy()
         if not display_stats.empty:
-            st.dataframe(display_stats, use_container_width=True, hide_index=True)
+            st.dataframe(display_stats.drop(columns=['PLAYER_WYID'], errors='ignore'), use_container_width=True, hide_index=True)
         else:
             st.info("Ingen statistisk data fundet for denne spiller.")
 
