@@ -106,9 +106,61 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 with hc3: st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
 
     with tab3:
+        # 1. Lav layout med dropdown øverst til højre
+        col_title, col_select = st.columns([3, 1])
+        
+        with col_title:
+            st.markdown("### Udvikling over tid")
+            
+        with col_select:
+            # Liste over mulige metrics (Rating + de 8 kategorier)
+            metrics_options = {
+                "Gennemsnit": "RATING_AVG",
+                "Beslutsomhed": "BESLUTSOMHED",
+                "Fart": "FART",
+                "Aggresivitet": "AGGRESIVITET",
+                "Attitude": "ATTITUDE",
+                "Udholdenhed": "UDHOLDENHED",
+                "Lederegenskaber": "LEDEREGENSKABER",
+                "Teknik": "TEKNIK",
+                "Spilintelligens": "SPILINTELLIGENS"
+            }
+            
+            valgt_label = st.selectbox("Vælg parameter", options=list(metrics_options.keys()), index=0)
+            valgt_kolonne = metrics_options[valgt_label]
+
+        # 2. Generer grafen baseret på valget
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='markers+lines', line_color='#df003b'))
-        fig_line.update_layout(height=400, yaxis=dict(range=[1, 6], title="Rating"))
+        
+        fig_line.add_trace(go.Scatter(
+            x=historik['DATO_DT'], 
+            y=historik[valgt_kolonne], 
+            mode='markers+lines', 
+            line=dict(color='#df003b', width=3),
+            marker=dict(size=10, symbol='circle'),
+            name=valgt_label,
+            hovertemplate="<b>Dato:</b> %{x}<br><b>Værdi:</b> %{y}<extra></extra>"
+        ))
+
+        # 3. Styling af layout
+        fig_line.update_layout(
+            height=450,
+            margin=dict(l=20, r=20, t=20, b=20),
+            xaxis=dict(
+                title="Dato for rapport",
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.2)'
+            ),
+            yaxis=dict(
+                title=valgt_label,
+                range=[0.5, 5.5] if valgt_kolonne != "RATING_AVG" else [0.5, 6.5], # Juster range efter behov
+                tickvals=[1, 2, 3, 4, 5],
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.2)'
+            ),
+            plot_bgcolor='white'
+        )
+        
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:        
