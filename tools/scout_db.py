@@ -16,11 +16,11 @@ POS_MAP = {
 }
 
 def vis_side():
-    st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
     
     try:
         # 1. Hent Data
-        scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{SCOUT_FILE}?nocache={uuid.uuid4()}"
+        scout_url = f"https://raw.githubusercontent.com/{REPO}/data/{SCOUT_FILE}?nocache={uuid.uuid4()}"
         df = pd.read_csv(scout_url, sep=None, engine='python')
         
         df['Position'] = df['Position'].map(POS_MAP).fillna(df['Position'])
