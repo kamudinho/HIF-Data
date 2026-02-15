@@ -176,7 +176,7 @@ def vis_side(spillere, player_events):
             yaxis_title="",
             template="plotly_white",
             height=max(750, len(df_plot) * 35), # Lidt mere plads pr. række
-            margin=dict(r=100) # Giver plads i højre side til tekst uden for barerne
+            margin=dict(r=80) # Giver plads i højre side til tekst uden for barerne
         )
         
         st.plotly_chart(fig, use_container_width=True)
