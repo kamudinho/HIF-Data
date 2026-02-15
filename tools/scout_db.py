@@ -117,7 +117,7 @@ def vis_profil(p_data, full_df, s_df):
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
                 polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
-                showlegend=False, height=450
+                showlegend=False, height=500
             )
             st.plotly_chart(fig_radar, use_container_width=True)
         with cr:
