@@ -22,35 +22,47 @@ def hent_vaerdi_robust(row, col_name):
 
 # FORBEDRET: Mapper positioner med ekstra tjek for dine specifikke kolonnenavne
 def map_position(row):
-    # Vi tjekker alle tænkelige navne for position og rolle
-    pos_val = str(hent_vaerdi_robust(row, 'pos') or hent_vaerdi_robust(row, 'position') or "").strip()
-    role_val = str(hent_vaerdi_robust(row, 'rolecode3') or hent_vaerdi_robust(row, 'role') or "").strip().upper()
+    # Hent værdier og rens dem
+    # Vi tvinger POS til at være en streng, så "3" matcher "3" i ordbogen
+    pos_val = str(hent_vaerdi_robust(row, 'pos')).strip()
+    role_val = str(hent_vaerdi_robust(row, 'rolecode3')).strip().upper()
     
+    # Ordbog for tal-koder fra din POS kolonne
     pos_dict = {
-        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
-        "4": "Stopper", "5": "Stopper", "6": "Defensiv Midt",
-        "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
-        "10": "Offensiv Midt", "11": "Venstre Kant",
-        "GKP": "Målmand", "DEF": "Forsvarsspiller", "MID": "Midtbane", "FWD": "Angriber"
+        "1": "Målmand",
+        "2": "Højre Back",
+        "3": "Venstre Back",
+        "4": "Stopper",
+        "5": "Stopper",
+        "6": "Defensiv Midt",
+        "7": "Højre Kant",
+        "8": "Central Midt",
+        "9": "Angriber",
+        "10": "Offensiv Midt",
+        "11": "Venstre Kant"
     }
     
+    # Ordbog for ROLECODE3 (GKP, DEF, MID, FWD)
     role_dict = {
-        "GKP": "Målmand", "DEF": "Forsvarsspiller",
-        "MID": "Midtbane", "FWD": "Angriber"
+        "GKP": "Målmand",
+        "DEF": "Forsvarsspiller",
+        "MID": "Midtbane",
+        "FWD": "Angriber"
     }
 
-    # 1. Tjek talkode eller direkte kode (GKP/DEF) i POS kolonnen
+    # 1. PRIORITET: Tjek om der er et tal i POS kolonnen
     if pos_val in pos_dict:
         return pos_dict[pos_val]
     
-    # 2. Tjek ROLECODE3 kolonnen
+    # 2. PRIORITET: Hvis POS er tom eller ukendt, tjek ROLECODE3
     if role_val in role_dict:
         return role_dict[role_val]
     
-    # 3. Hvis POS er tekst og ikke bare et tal/nan
-    if len(pos_val) > 2 and pos_val.lower() not in ["nan", "none"]:
+    # 3. PRIORITET: Hvis der står tekst i POS i forvejen (f.eks. "Højre Back")
+    if len(pos_val) > 3 and pos_val.lower() not in ["nan", "none"]:
         return pos_val
     
+    # Fallback hvis intet findes
     return "Ukendt"
 
 # --- 2. PROFIL DIALOG OG VISNING ---
