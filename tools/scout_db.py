@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import requests
 
-# --- 1. ROBUSTE HJÆLPEFUNKTIONER ---
+# --- 1. HJÆLPEFUNKTIONER ---
 def find_col(df, target):
     cols = {str(c).strip().lower(): str(c) for c in df.columns}
     return cols.get(target.strip().lower())
@@ -56,7 +56,6 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -77,20 +76,21 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            s_navn_hist = hent_vaerdi_robust(row, 'Scout')
-            dato_str = hent_vaerdi_robust(row, 'Dato')
-            rating_str = hent_vaerdi_robust(row, 'Rating_Avg')
+            s_navn = str(hent_vaerdi_robust(row, 'Scout')).upper()
+            dato_h = str(hent_vaerdi_robust(row, 'Dato'))
+            rat_h = str(hent_vaerdi_robust(row, 'Rating_Avg'))
             
-            # Vi bruger HTML-lignende spacing (mange faste mellemrum) for at skubbe Scout til højre
-            # Da Streamlit expander labels er plain text, er dette den mest stabile måde:
-            scout_display = f" | Scout: **{s_navn_hist}**" if s_navn_hist else ""
-            label = f"Rapport fra {dato_str} (Rating: {rating_str}){scout_display}"
+            # TEKNIK: Vi skaber en label med manuel afstand for at simulere "højrestillet"
+            # Vi bruger en usynlig separator (mellemrum) til at skubbe teksten
+            venstre_tekst = f"📅 {dato_h}  |  ⭐ {rat_h}"
+            højre_tekst = f"SCOUT: {s_navn}"
             
-            with st.expander(label):
+            # Vi fylder ud med prikker/mellemrum (Streamlit trimmer ofte whitespace, så vi bruger prikker eller pipes)
+            full_label = f"{venstre_tekst} {'═' * (60 - len(venstre_tekst))} {højre_tekst}"
+            
+            with st.expander(full_label):
                 vis_metrikker(row)
-                # Herinde kan vi styre layoutet præcist med kolonner, hvis det ønskes
-                st.markdown(f"<div style='text-align: right;'>Scout: <b>{s_navn_hist or 'Ukendt'}</b></div>", unsafe_allow_html=True)
-                
+                st.write("---")
                 c1, c2, c3 = st.columns(3)
                 with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
                 with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
@@ -111,7 +111,7 @@ def vis_profil(p_data, full_df, s_df):
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
-        # --- 3 KOLONNER LAYOUT: INFO | RADAR (MIDTEN) | SCOUT TEKST ---
+        # --- 3 KOLONNER LAYOUT ---
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
@@ -119,9 +119,9 @@ def vis_profil(p_data, full_df, s_df):
         c_left, c_mid, c_right = st.columns([1.2, 2.5, 1.5])
         
         with c_left:
-            st.markdown(f"### Info")
-            st.caption(f"Dato: {seneste_dato}")
-            st.caption(f"Scout: {scout_navn or 'Ukendt'}")
+            st.markdown("### Info")
+            st.write(f"**Dato:** {seneste_dato}")
+            st.write(f"**Scout:** **{scout_navn}**")
             st.write("---")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
@@ -131,17 +131,15 @@ def vis_profil(p_data, full_df, s_df):
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
                 polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
-                showlegend=False, 
-                height=450, 
-                margin=dict(l=40, r=40, t=20, b=20)
+                showlegend=False, height=500, margin=dict(l=40, r=40, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
             
         with c_right:
             st.markdown("### Vurdering")
-            st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker') or 'Ingen data'}")
-            st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling') or 'Ingen data'}")
-            st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering') or 'Ingen data'}")
+            st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
+            st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
+            st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -167,15 +165,14 @@ def vis_side():
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
-    search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
+    search = st.text_input("Søg...", placeholder="Navn eller klub", label_visibility="collapsed")
     
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout:
-        vis_cols.append(c_scout)
+    if c_scout: vis_cols.append(c_scout)
     
     event = st.dataframe(
         f_df[vis_cols],
