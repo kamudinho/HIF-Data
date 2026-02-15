@@ -29,28 +29,27 @@ def find_zone(x, y):
         if b["x_min"] <= x <= b["x_max"] and b["y_min"] <= y <= b["y_max"]:
             return zone
     return "Udenfor"
-
+    
 def vis_side(df_input, df_spillere, hold_map=None):
-    HIF_ID = "38331" # Tekst-format for at matche rensningen
+    HIF_ID = 38331 
     HIF_RED = '#d31313'
     
     if df_input is None or df_input.empty:
         st.warning("Ingen hændelsesdata fundet (df_input er tom).")
-        # debug: st.write(df_input)
         return
 
     df_s = df_input.copy()
-    # Rens kolonner med det samme
     df_s.columns = [str(c).upper().strip() for c in df_s.columns]
     
-    # Tjek om TEAM_WYID findes og om ID'et findes i data
+    # MEGET ROBUST FILTRERING
     if 'TEAM_WYID' in df_s.columns:
-        # Konverter til tekst så '38331' matcher '38331.0'
-        df_s['TEAM_WYID'] = df_s['TEAM_WYID'].astype(str).str.split('.').str[0]
-        df_s = df_s[df_s['TEAM_WYID'] == HIF_ID].copy()
+        # Konverterer alt til tal, fjerner NaN, og tjekker mod HIF_ID
+        df_s['TEAM_WYID_NUM'] = pd.to_numeric(df_s['TEAM_WYID'], errors='coerce')
+        df_s = df_s[df_s['TEAM_WYID_NUM'] == HIF_ID].copy()
 
     if df_s.empty:
-        st.warning(f"Ingen data fundet for hold ID {HIF_ID}. Tjek om TEAM_WYID i matches.csv er korrekt.")
+        st.warning(f"Data findes, men ingen rækker matcher TEAM_WYID {HIF_ID}")
+        # st.write("Eksisterende Team IDs i filen:", df_input.iloc[:, -1].unique()) # Debug linje
         return
 
     # --- 1. DATA-PROCESSERING ---
