@@ -1,101 +1,93 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 import os
 import re
+from mplsoccer import VerticalPitch
 
-def vis_side(spillere_indput):
-    st.title("HIF Analyse-dashboard")
-    
-    # 1. Konfiguration af stier
-    csv_path = 'data/matches.csv'
-    players_path = 'data/players.csv'
+# --- 1. VIDEO POPUP FUNKTION ---
+@st.dialog("Videoanalyse")
+def vis_video_modal(event_id):
     video_dir = 'videos'
+    clean_id = "".join(re.findall(r'\d+', str(event_id).replace('.0', '')))
+    video_fil = f"{clean_id}.mp4"
+    video_sti = os.path.join(video_dir, video_fil)
 
-    # Tjek om match-data eksisterer
+    if os.path.exists(video_sti):
+        st.video(video_sti)
+    else:
+        st.error(f"Kunne ikke finde videofilen for ID: {clean_id}")
+
+# --- 2. HOVEDFUNKTION ---
+def vis_side(df_events, df_spillere, hold_map):
+    HIF_RED = '#d31313'
+
+    # DATA-PROCESSERING
+    csv_path = 'shotevents.csv'
     if not os.path.exists(csv_path):
-        st.error(f"Kunne ikke finde datafilen: {csv_path}")
+        st.error("shotevents.csv mangler!")
         return
 
-    # 2. Indlæs kampsdata
-    df = pd.read_csv(csv_path, encoding='utf-8-sig', sep=None, engine='python')
-    df.columns = [c.strip().upper() for c in df.columns]
+    df = pd.read_csv(csv_path)
+    df.columns = [c.upper() for c in df.columns]
 
-    # 3. Indlæs og map spillernavne (players.csv)
-    navne_map = {}
-    if os.path.exists(players_path):
-        p_df = pd.read_csv(players_path, encoding='utf-8-sig', sep=None, engine='python')
-        p_df.columns = [c.strip().upper() for c in p_df.columns]
+    # Mapping af spillernavne fra players.csv
+    navne_dict = dict(zip(df_spillere['PLAYER_WYID'].astype(str).str.replace('.0','', regex=False), df_spillere['NAVN']))
+    df['SPILLER_NAVN'] = df['PLAYER_WYID'].astype(str).str.replace('.0','', regex=False).map(navne_dict).fillna("Ukendt")
+
+    # --- FILTRERING: VIS KUN MÅL SOM STANDARD ---
+    # Vi filtrerer så vi kun ser mål (SHOTISGOAL = True)
+    df_goals = df[df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', 't'])].copy().reset_index(drop=True)
+    df_goals['SHOT_NR'] = df_goals.index + 1
+
+    st.title("Alle Sæsonens Mål")
+
+    layout_venstre, layout_hoejre = st.columns([2, 1])
+
+    with layout_hoejre:
+        st.write("### Målliste")
         
-        # Sørg for at vi har en NAVN kolonne (kombiner for- og efternavn hvis nødvendigt)
-        if 'NAVN' not in p_df.columns and 'FIRSTNAME' in p_df.columns:
-            p_df['NAVN'] = p_df['FIRSTNAME'].fillna('') + ' ' + p_df['LASTNAME'].fillna('')
-        
-        # Rens PLAYER_WYID for at undgå .0 decimaler
-        p_df['PLAYER_WYID_CLEAN'] = p_df['PLAYER_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
-        navne_map = dict(zip(p_df['PLAYER_WYID_CLEAN'], p_df['NAVN']))
+        # Popover med tabel over alle mål
+        with st.popover("Se alle mål-detaljer", use_container_width=True):
+            h = st.columns([1, 3, 2, 2])
+            h[0].write("**Nr.**")
+            h[1].write("**Spiller / Kamp**")
+            h[2].write("**Score**")
+            h[3].write("**Video**")
+            st.divider()
 
-    # 4. Rens hændelses-ID'er og spiller-ID'er i hoved-data
-    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
-    df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
-    
-    # Tilføj spillernavn som en kolonne
-    df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna(df['PLAYER_WYID'])
-
-    # 5. Find videoer (VIGTIGT: Fjern .mp4 før rensning for tal)
-    video_map = {}
-    if os.path.exists(video_dir):
-        for f in os.listdir(video_dir):
-            if f.lower().endswith('.mp4'):
-                # splitext splitter '158304714.mp4' til ('158304714', '.mp4')
-                filnavn_uden_endelse = os.path.splitext(f)[0]
+            for idx, row in df_goals.iterrows():
+                r = st.columns([1, 3, 2, 2])
+                r[0].write(f"{int(row['SHOT_NR'])}")
+                r[1].write(f"**{row['SPILLER_NAVN']}**\n{row['MATCHLABEL']}")
+                r[2].write(row['SCORE'])
                 
-                # Nu fjerner vi kun tal fra selve navnet (så vi ikke snupper 4-tallet fra .mp4)
-                clean_id = "".join(re.findall(r'\d+', filnavn_uden_endelse))
-                video_map[clean_id] = f
+                # Unik knap til video
+                if r[3].button("Se video", key=f"goal_btn_{idx}_{row['EVENT_WYID']}"):
+                    vis_video_modal(row['EVENT_WYID'])
 
-    # 6. Filtrer data så vi kun viser rækker, hvor der findes en video
-    tabel_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
-    
-    if tabel_df.empty:
-        st.warning("Ingen matchende videoer fundet i mappen.")
-        # Lille hjælp til fejlfinding
-        if st.checkbox("Vis teknisk info (Hvorfor virker det ikke?)"):
-            st.write(f"Antal filer i /videos: {len(os.listdir(video_dir)) if os.path.exists(video_dir) else 0}")
-            st.write("Første 5 ID'er i din CSV:", df['RENS_ID'].head().tolist())
-        return
+        # Hurtige stats
+        st.divider()
+        st.metric("Total antal mål", len(df_goals))
+        st.metric("Gns. xG pr. mål", f"{df_goals['SHOTXG'].mean():.2f}")
 
-    # 7. Visning af den "helt almindelige" tabel
-    st.subheader("Alle sekvenser med video")
-    
-    # Vælg de kolonner vi vil vise
-    vis_cols = ['EVENT_WYID', 'SPILLER', 'MATCHLABEL', 'SHOTBODYPART', 'SHOTISGOAL', 'SHOTXG', 'DATE', 'VENUE']
-    
-    st.dataframe(
-        tabel_df[vis_cols],
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "EVENT_WYID": "ID",
-            "SPILLER": "Spiller",
-            "MATCHLABEL": "Kamp",
-            "SHOTBODYPART": "Kropsdel",
-            "SHOTISGOAL": "Maal",
-            "SHOTXG": "xG",
-            "DATE": "Dato",
-            "VENUE": "Bane"
-        }
-    )
+    with layout_venstre:
+        # Bane-tegning
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
+        fig, ax = pitch.draw(figsize=(6, 5))
+        ax.set_ylim(45, 102) 
 
-    # 8. Vælg video via ID
-    st.write("---")
-    valgt_event = st.selectbox(
-        "Vælg et ID fra tabellen for at se video:", 
-        options=tabel_df['EVENT_WYID'].unique(),
-        format_func=lambda x: str(x).replace(',', '').replace('.', '') # Fjerner tusindtalsseparatorer i visning
-    )
-
-    if valgt_event:
-        sid = "".join(re.findall(r'\d+', str(valgt_event).split('.')[0]))
-        if sid in video_map:
-            st.write(f"Afspiller video for: {tabel_df[tabel_df['EVENT_WYID']==valgt_event]['SPILLER'].values[0]}")
-            st.video(os.path.join(video_dir, video_map[sid]))
+        # Tegn alle mål på banen
+        for _, row in df_goals.iterrows():
+            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
+                       s=200, 
+                       color='gold', 
+                       edgecolors='black', 
+                       linewidth=1, 
+                       alpha=0.9, zorder=3)
+            
+            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
+                    color='black', ha='center', va='center', 
+                    fontsize=6, fontweight='bold', zorder=4)
+        
+        st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
