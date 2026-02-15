@@ -23,7 +23,7 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(row.get(col, 0))
         m_cols[i % 4].metric(label, f"{val}")
 
-# --- 2. PROFIL DIALOG (Med optimeret Grafik-kort) ---
+# --- 2. PROFIL DIALOG ---
 @st.dialog(" ", width="large")
 def vis_profil(p_data, full_df, s_df, hif_avg):
     st.subheader(f"{p_data['NAVN']} | {p_data['POSITION']} | {p_data['KLUB']}")
@@ -59,9 +59,7 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
             st.dataframe(sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "GOAL"]], use_container_width=True, hide_index=True)
 
     with tab5:
-        # --- SCOUTING CARD DESIGN ---
         m_navne = ["Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-        # Vi lukker cirklen ved at tilføje det første punkt igen (giver 8 kanter)
         m_værdier = [rens_metrik_vaerdi(nyeste.get(m.upper(), nyeste.get(m, 0))) for m in m_navne]
         m_værdier += [m_værdier[0]]
         m_navne_lukket = m_navne + [m_navne[0]]
@@ -71,32 +69,34 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
             r=m_værdier,
             theta=m_navne_lukket,
             fill='toself',
-            fillcolor='rgba(204, 0, 0, 0.3)',
+            fillcolor='rgba(204, 0, 0, 0.2)',
             line=dict(color='#cc0000', width=2),
             name=p_data['NAVN']
         ))
 
+        # Rettet update_layout for at undgå ValueError
         fig_radar.update_layout(
             polar=dict(
-                radialaxis=dict(visible=True, range=[0, 7], tickfont_size=10),
-                gridshape='polygon' # <--- Dette gør den 8-kantet i stedet for rund
+                radialaxis=dict(visible=True, range=[0, 7]),
+                gridshape='polygon'
             ),
-            title=dict(
-                text=f"<b>{p_data['NAVN']}</b><br><span style='font-size:14px;'>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}</span>",
-                x=0.5, font=dict(size=20)
-            ),
-            annotations=[dict(
-                x=0.5, y=-0.15, showarrow=False,
-                text=f"<i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i>",
-                xref="paper", yref="paper"
-            )],
-            height=600,
-            margin=dict(t=100, b=50, l=50, r=50)
+            showlegend=False,
+            title={
+                'text': f"<b>{p_data['NAVN']}</b><br><span style='font-size:14px;'>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}</span>",
+                'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'
+            },
+            height=600
         )
+        
+        # Annotation tilføjet separat for at være sikker
+        fig_radar.add_annotation(
+            text=f"<i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i>",
+            xref="paper", yref="paper", x=0.5, y=-0.1, showarrow=False
+        )
+        
         st.plotly_chart(fig_radar, use_container_width=True)
-        st.caption("Tip: Højreklik på grafen eller brug Plotly-menuen øverst til højre for at gemme som PNG.")
 
-# --- 3. HOVEDFUNKTION MED PAGINERING ---
+# --- 3. HOVEDFUNKTION ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -128,33 +128,41 @@ def vis_side():
     
     hif_avg = df[df['KLUB'].str.contains('Hvidovre', case=False, na=False)]['RATING_AVG'].mean()
 
-    # --- PAGINERING LOGIK ---
+    # --- VISNING AF TABEL ---
     items_per_page = 20
-    total_pages = int(np.ceil(len(f_df) / items_per_page)) if len(f_df) > 0 else 1
+    total_pages = max(1, int(np.ceil(len(f_df) / items_per_page)))
     
     if 'scout_page' not in st.session_state: st.session_state.scout_page = 1
-    
-    # Vis kun side-vælger hvis der er mere end 1 side
-    if total_pages > 1:
-        page_cols = st.columns([1, 2, 1])
-        with page_cols[1]:
-            st.session_state.scout_page = st.number_input(f"Side (af {total_pages})", min_value=1, max_value=total_pages, value=st.session_state.scout_page)
+    # Sikr at vi ikke er på en side der ikke findes efter filtrering
+    if st.session_state.scout_page > total_pages: st.session_state.scout_page = total_pages
 
     start_idx = (st.session_state.scout_page - 1) * items_per_page
-    end_idx = start_idx + items_per_page
-    page_df = f_df.iloc[start_idx:end_idx]
+    page_df = f_df.iloc[start_idx : start_idx + items_per_page]
 
-    # --- VISNING AF TABEL (Uden scroll) ---
     tabel_hoejde = (len(page_df) * 35) + 40
     event = st.dataframe(
         page_df[["NAVN", "POSITION", "KLUB", "RATING_AVG", "STATUS", "RAPPORTER", "DATO"]],
         use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-        height=tabel_hoejde, # Dynamisk højde så scroll forsvinder
+        height=tabel_hoejde,
         column_config={
             "RATING_AVG": st.column_config.NumberColumn("Snit", format="%.1f"),
             "DATO": st.column_config.DateColumn("Seneste")
         }
     )
+
+    # --- DISKRET SIDEVÆLGER I BUNDEN ---
+    if total_pages > 1:
+        st.write("") # Margin
+        _, p_col, _ = st.columns([4, 1, 4])
+        with p_col:
+            st.session_state.scout_page = st.number_input(
+                f"Side 1-{total_pages}", 
+                min_value=1, 
+                max_value=total_pages, 
+                value=st.session_state.scout_page,
+                label_visibility="collapsed" # Gør den meget diskret
+            )
+            st.caption(f"Side {st.session_state.scout_page} af {total_pages}", help="Indtast sidetal for at skifte")
 
     if len(event.selection.rows) > 0:
         vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
