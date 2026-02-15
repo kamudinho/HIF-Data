@@ -56,10 +56,8 @@ def vis_side(spillere_df):
     @st.dialog("Videoanalyse", width="large")
     def vis_analyse(data, v_map, v_dir):
         # KUN den ønskede linje som overskrift
-        st.subheader(data['DYNAMIC_TITLE'])
-        st.divider()
 
-        tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
+        tab1, tab2 = st.tabs(["Video", "Statistik"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
