@@ -19,14 +19,13 @@ def vis_side(spillere_df):
     video_dir = os.path.join(BASE_DIR, 'videos')
 
     if not os.path.exists(match_path):
-        st.error("Data mangler: Kunne ikke finde matches.csv")
+        st.error("Data mangler")
         return
 
-    # Indlæs data
+    # Indlæs og map data
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # Map navne
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', 'Ukendt')))
     
@@ -51,35 +50,38 @@ def vis_side(spillere_df):
         st.info("Ingen videoer fundet.")
         return
 
-    # --- 3. TABEL-LAYOUT ---
-    # Vi bygger overskrifterne
+    # --- 3. TABEL-LAYOUT (Mindre video) ---
     st.markdown("---")
-    h_col1, h_col2, h_col3, h_col4 = st.columns([2, 3, 1, 3])
+    # Vi justerer tallene her [3, 4, 1, 2] for at gøre video-kolonnen (den sidste) mindre
+    h_col1, h_col2, h_col3, h_col4 = st.columns([3, 4, 1, 2])
     h_col1.write("**Spiller**")
     h_col2.write("**Kamp**")
     h_col3.write("**xG**")
-    h_col4.write("**Video (Klik 🔎 for stor)**")
+    h_col4.write("**Video**")
     st.divider()
 
-    # Loop gennem data og lav rækker
     for idx, row in tabel_df.iterrows():
-        c1, c2, c3, c4 = st.columns([2, 3, 1, 3])
+        # Samme kolonne-forhold som overskriften
+        c1, c2, c3, c4 = st.columns([3, 4, 1, 2])
         
-        # Kolonne 1-3: Information
         c1.write(f"**{row['SPILLER']}**")
         c2.write(row['MATCHLABEL'])
         c3.write(str(row.get('SHOTXG', '-')))
         
-        # Kolonne 4: Video og Forstør-knap
         with c4:
             v_fil = video_map.get(row['RENS_ID'])
             video_sti = os.path.join(video_dir, v_fil)
             
-            # Lille video-preview
+            # Lille video preview
             st.video(video_sti)
             
-            # Knap lige under videoen til at forstørre
-            if st.button("🔎 Forstør", key=f"zoom_{row['RENS_ID']}_{idx}", use_container_width=True):
+            # Checkbox i stedet for knap
+            # Vi bruger st.rerun() for at nulstille checkboxen efter brug
+            forstoer = st.checkbox("Forstør", key=f"chk_{row['RENS_ID']}_{idx}")
+            if forstoer:
                 vis_stort_format(video_sti, row['SPILLER'], row['MATCHLABEL'])
+                # Dette lille trick nulstiller checkboxen når dialogen lukkes
+                if not st.session_state.get('modal_open', False):
+                    st.rerun()
         
         st.divider()
