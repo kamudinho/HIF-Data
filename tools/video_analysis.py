@@ -52,11 +52,9 @@ def vis_side(spillere_df):
     )
 
     # --- 5. MODAL VINDUE MED TABS OG DEN ENE LINJE ---
-    @st.dialog("Video", width="large")
     def vis_analyse(data, v_map, v_dir):
         # KUN den ønskede linje som overskrift
         st.subheader(data['DYNAMIC_TITLE'])
-        st.divider()
 
         tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
