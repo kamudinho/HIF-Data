@@ -20,7 +20,7 @@ st.markdown("""
 REPO = "Kamudinho/HIF-data"
 
 # --- 3. LOGIN SYSTEM ---
-USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
+USER_DB = {"kasper": "kasper", "ceo": "ceo", "mr": "mr", "kd": "kd", "cg": "cg"}
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
