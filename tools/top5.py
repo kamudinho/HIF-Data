@@ -9,37 +9,38 @@ def vis_side(spillere_df, player_events_df):
     p_events.columns = [c.upper() for c in p_events.columns]
     s_info.columns = [c.upper() for c in s_info.columns]
 
-    # Robust ID-håndtering: Konverter PLAYER_WYID til tekst og fjern .0
+    # Robust ID-håndtering
     for d in [p_events, s_info]:
         id_col = next((c for c in ['PLAYER_WYID', 'WYID'] if c in d.columns), None)
         if id_col:
             d[id_col] = d[id_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # Find ID kolonner igen efter rens
     left_id = next((col for col in ['PLAYER_WYID', 'WYID'] if col in s_info.columns), None)
     right_id = next((col for col in ['PLAYER_WYID', 'WYID'] if col in p_events.columns), None)
 
-    # 2. Positions mapping
+    # --- NY NAVNE-LOGIK: Hent fra s_info (players.csv) ---
+    if 'FIRSTNAME' in s_info.columns and 'LASTNAME' in s_info.columns:
+        s_info['NAVN_FINAL'] = (s_info['FIRSTNAME'].fillna('') + " " + s_info['LASTNAME'].fillna('')).str.title()
+    elif 'NAVN' in s_info.columns:
+        s_info['NAVN_FINAL'] = s_info['NAVN'].str.title()
+    else:
+        s_info['NAVN_FINAL'] = "Ukendt Spiller"
+
+    # Positions mapping
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     if 'ROLECODE3' in s_info.columns:
         s_info['POS_DISPLAY'] = s_info['ROLECODE3'].map(pos_map).fillna(s_info['ROLECODE3'])
     else:
         s_info['POS_DISPLAY'] = '-'
 
-    # 3. Merge data (vi tager kun de nødvendige kolonner fra s_info)
+    # 3. Merge data - Nu tager vi både NAVN_FINAL og POS_DISPLAY fra spiller-filen
     df = pd.merge(
         p_events, 
-        s_info[[left_id, 'POS_DISPLAY']], 
+        s_info[[left_id, 'POS_DISPLAY', 'NAVN_FINAL']], 
         left_on=right_id, 
         right_on=left_id, 
         how='inner'
     )
-
-    # Opret NAVN_FINAL (vi bruger data fra p_events delen af merget)
-    if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
-        df['NAVN_FINAL'] = (df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')).str.title()
-    else:
-        df['NAVN_FINAL'] = "Ukendt Spiller"
 
     # KPI Definitioner
     KPI_MAP = {
@@ -64,13 +65,8 @@ def vis_side(spillere_df, player_events_df):
     with c2: visning = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True)
     st.divider()
 
-    # Logik til visning af tabeller
     kpis = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     
-    if not kpis:
-        st.warning("Ingen data tilgængelig for denne kategori.")
-        return
-
     for i in range(0, len(kpis), 3):
         cols = st.columns(3)
         for idx, kpi in enumerate(kpis[i:i+3]):
@@ -78,16 +74,13 @@ def vis_side(spillere_df, player_events_df):
                 temp_df = df.copy()
                 temp_df[kpi] = pd.to_numeric(temp_df[kpi], errors='coerce').fillna(0)
                 
-                # --- RETTELSE HER ---
-                # Find minutter kolonnen robust
+                # Find minutter
                 if 'MINUTESONFIELD' in temp_df.columns:
                     mins = pd.to_numeric(temp_df['MINUTESONFIELD'], errors='coerce').fillna(0)
                 elif 'MINUTESTAGGED' in temp_df.columns:
                     mins = pd.to_numeric(temp_df['MINUTESTAGGED'], errors='coerce').fillna(0)
                 else:
-                    # Hvis ingen af delene findes, laver vi en række af 0'er for at undgå crash
                     mins = pd.Series(0, index=temp_df.index)
-                # ---------------------
 
                 if visning == "Pr. 90":
                     temp_df['VAL'] = np.where(mins > 0, (temp_df[kpi] / mins * 90), 0)
@@ -97,7 +90,6 @@ def vis_side(spillere_df, player_events_df):
                 # Find Top 5
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=False).head(5)
 
-                # HTML Tabel Generering (Resten af din kode...)
                 header_style = "text-align:center; padding:4px; border-bottom:1px solid #ddd; background:#f8f9fb;"
                 cell_style = "text-align:center; padding:4px; border-bottom:1px solid #eee;"
                 
