@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-import requests
 
 # --- 1. ROBUSTE HJÆLPEFUNKTIONER ---
 def find_col(df, target):
@@ -18,18 +17,6 @@ def rens_metrik_vaerdi(val):
 def hent_vaerdi_robust(row, col_name):
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
-
-def vis_spiller_billede(pid, w=100):
-    """Henter spillerbillede fra Wyscout CDN."""
-    # Fjern eventuelle citationstegn fra ID
-    pid_clean = str(pid).replace('"', '').replace("'", "").strip()
-    url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
-    std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    try:
-        resp = requests.head(url, timeout=0.8)
-        st.image(url if resp.status_code == 200 else std, width=w if resp.status_code == 200 else int(w*0.92))
-    except:
-        st.image(std, width=int(w*0.92))
 
 def vis_metrikker(row):
     m_cols = st.columns(4)
@@ -53,33 +40,22 @@ def vis_scout_bokse(row):
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
-    # Sikr at vi sammenligner strenge uden " 
-    clean_p_id = str(p_data['ID']).replace('"', '').strip()
-    historik = full_df[full_df[id_col].astype(str).str.replace('"', '').str.strip() == clean_p_id].sort_values('DATO_DT', ascending=True)
-    
-    if historik.empty:
-        st.error("Kunne ikke finde data på denne spiller.")
-        return
-
+    historik = full_df[full_df[id_col].astype(str) == str(p_data['ID'])].sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
+    
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
-    scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
+    scout_navn = hent_vaerdi_robust(nyeste, 'Scout') # Leder efter kolonne 'Scout'
 
-    # Top sektion med Info til venstre og Billede til højre
-    head_left, head_right = st.columns([4, 1])
-    
-    with head_left:
-        st.markdown(f"""
+    st.markdown(f"""
+        <div style='text-align: center;'>
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
-            <p style='color: gray; font-size: 18px; margin-top:0;'>
+            <p style='color: gray; font-size: 16px; margin-top:0;'>
                 {p_data.get('KLUB', '')} | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}<br>
-                <span style='font-size: 14px;'><b>Seneste rapport: {seneste_dato}</b> {f'| Scout: {scout_navn}' if scout_navn else ''}</span>
+                <b>Seneste rapport: {seneste_dato}</b> {f'| Scout: {scout_navn}' if scout_navn else ''}
             </p>
-        """, unsafe_allow_html=True)
+        </div>
+    """, unsafe_allow_html=True)
     
-    with head_right:
-        vis_spiller_billede(clean_p_id, w=110)
-
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
     
     with tab1:
@@ -108,7 +84,8 @@ def vis_profil(p_data, full_df, s_df):
     with tab4:
         if s_df.empty: st.info("Ingen kampdata fundet.")
         else:
-            sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+            sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == str(p_data['ID'])].copy()
+            # SKJULER PLAYER_WYID ved at definere kolonne-rækkefølge uden den
             cols_to_show = [c for c in sp_stats.columns if c != 'PLAYER_WYID']
             st.dataframe(sp_stats, use_container_width=True, hide_index=True, column_order=cols_to_show)
 
@@ -138,20 +115,19 @@ def vis_profil(p_data, full_df, s_df):
             st.plotly_chart(fig_radar, use_container_width=True)
             
         with col_right:
-            vis_scout_bokse(nyeste)
+            st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker') or 'Ingen data'}")
+            st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling') or 'Ingen data'}")
+            st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering') or 'Ingen data'}")
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
     if "main_data" not in st.session_state:
-        st.error("Data ikke fundet i session_state.")
+        st.error("Data ikke fundet.")
         return
     
-    # Hent data fra session_state (forventer stats på index 4 og scout_df på index 5)
-    all_data = st.session_state["main_data"]
-    stats_df = all_data[4]
-    df = all_data[5].copy()
+    data = st.session_state["main_data"]
+    stats_df, df = data[4], data[5].copy()
 
-    # Find kolonner
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -159,53 +135,43 @@ def vis_side():
     c_pos = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
-    c_scout = find_col(df, 'scout')
+    c_scout = find_col(df, 'scout') # Tjekker om kolonnen eksisterer
 
-    # Præparér data
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
 
     st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
 
-    # Søgefelt
-    search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
-    
-    # Gruppér for at få seneste status pr. spiller i oversigten
+    search = st.text_input("Søg", placeholder="Søg...", label_visibility="collapsed")
     f_df = df.groupby(c_id).tail(1).copy()
     
     if search:
-        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | 
-                    f_df[c_klub].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
-    # Klargør tabelvisning
-    disp_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout: disp_cols.append(c_scout)
+    # Definér kolonner til hovedtabellen - inkluder Scout hvis den findes
+    cols_to_display = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
+    if c_scout: cols_to_display.insert(4, c_scout)
     
-    page_display = f_df[disp_cols].rename(columns={
-        c_navn: "NAVN", c_pos: "POS", c_klub: "KLUB", 
-        c_rating: "RATING", c_status: "STATUS", c_dato: "DATO"
+    page_display = f_df[cols_to_display].rename(columns={
+        c_navn: "NAVN", c_pos: "POSITION", c_klub: "KLUB", 
+        c_rating: "RATING_AVG", c_status: "STATUS", c_dato: "DATO"
     })
     if c_scout: page_display = page_display.rename(columns={c_scout: "SCOUT"})
 
     event = st.dataframe(
         page_display,
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row",
-        column_config={"RATING": st.column_config.NumberColumn("Rating", format="%.1f")}
+        use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
+        column_config={"RATING_AVG": st.column_config.NumberColumn("Snit", format="%.1f")}
     )
 
-    # Hvis en række vælges, åbn profilen
     if len(event.selection.rows) > 0:
-        idx = event.selection.rows[0]
-        p_row = f_df.iloc[idx]
+        row_idx = event.selection.rows[0]
         p_data = {
-            'ID': p_row[c_id],
-            'NAVN': p_row[c_navn],
-            'KLUB': p_row[c_klub],
-            'POSITION': p_row[c_pos],
-            'RATING_AVG': p_row[c_rating]
+            'ID': f_df.iloc[row_idx][c_id], 
+            'NAVN': f_df.iloc[row_idx][c_navn], 
+            'KLUB': f_df.iloc[row_idx][c_klub], 
+            'POSITION': f_df.iloc[row_idx][c_pos], 
+            'RATING_AVG': f_df.iloc[row_idx][c_rating]
         }
         vis_profil(p_data, df, stats_df)
