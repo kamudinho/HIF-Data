@@ -11,7 +11,7 @@ def rens_dansk_tekst(tekst):
     return tekst
 
 def vis_side(spillere_df):
-    # --- 1. DATA & SETUP ---
+    # --- 1. SETUP ---
     BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
     video_dir = os.path.join(BASE_DIR, 'videos')
@@ -20,7 +20,6 @@ def vis_side(spillere_df):
 
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
-    
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].apply(rens_dansk_tekst)
     
@@ -28,22 +27,16 @@ def vis_side(spillere_df):
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', 'Ukendt')))
     
-    df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
-    df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna("Ukendt")
+    df['SPILLER'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].map(navne_map).fillna("Ukendt")
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
 
-    video_map = {}
-    if os.path.exists(video_dir):
-        for f in os.listdir(video_dir):
-            if f.lower().endswith('.mp4'):
-                vid_id = "".join(re.findall(r'\d+', os.path.splitext(f)[0]))
-                video_map[vid_id] = f
+    video_map = { "".join(re.findall(r'\d+', os.path.splitext(f)[0])): f 
+                 for f in (os.listdir(video_dir) if os.path.exists(video_dir) else []) if f.lower().endswith('.mp4') }
 
     final_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
     def lav_titel(row):
-        is_goal = str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes']
-        event = "Mål" if is_goal else "Afslutning"
+        event = "Mål" if str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes'] else "Afslutning"
         return f"{event} vs. {row.get('MATCHLABEL', 'Ukendt kamp')}"
 
     final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
@@ -54,44 +47,36 @@ def vis_side(spillere_df):
         use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row"
     )
 
-    # --- 3. MODAL VINDUE MED NAV PÅ SAMME LINJE ---
+    # --- 3. MODAL VINDUE ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # Initialiser valg af fane i session_state hvis det ikke findes
-        if "active_tab" not in st.session_state:
-            st.session_state.active_tab = "Video"
+        if "vid_tab" not in st.session_state: st.session_state.vid_tab = True
 
-        # Lav 3 kolonner: [Overskrift, Knap1, Knap2]
-        # Forholdet [6, 1, 1] sørger for at overskriften får plads, og knapperne ryger helt til højre
-        head_col, btn_col1, btn_col2 = st.columns([6, 1.2, 1.2])
+        # Layout: Overskrift og "tekst-tabs"
+        c1, c2, c3 = st.columns([6, 1, 1])
         
-        with head_col:
-            st.subheader(data['DYNAMIC_TITLE'])
+        with c1:
+            st.markdown(f"### {data['DYNAMIC_TITLE']}")
         
-        with btn_col1:
-            if st.button("🎥 Video", use_container_width=True):
-                st.session_state.active_tab = "Video"
+        # Vi bruger små gennemsigtige knapper eller styling for at få det til at ligne tekst
+        with c2:
+            if st.button("🎥 Video", variant="ghost"):
+                st.session_state.vid_tab = True
                 st.rerun()
-        
-        with btn_col2:
-            if st.button("📊 Stats", use_container_width=True):
-                st.session_state.active_tab = "Stats"
+        with c3:
+            if st.button("📊 Stats", variant="ghost"):
+                st.session_state.vid_tab = False
                 st.rerun()
 
-        # Vis indhold baseret på hvilken knap der er trykket
-        if st.session_state.active_tab == "Video":
+        if st.session_state.vid_tab:
             v_fil = v_map.get(data['RENS_ID'])
-            video_sti = os.path.join(v_dir, v_fil)
-            st.video(video_sti, autoplay=True)
-
-        else: # Stats fane
+            st.video(os.path.join(v_dir, v_fil), autoplay=True)
+        else:
             st.write(f"**Spiller:** {data['SPILLER']}")
-            c1, c2, c3 = st.columns(3)
-            if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
-            if 'SHOTBODYPART' in data: c2.metric("Del", f"{data['SHOTBODYPART']}")
-            if 'MATCHPERIOD' in data: c3.metric("Halvleg", f"{data['MATCHPERIOD']}")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("xG", f"{data.get('SHOTXG', 0):.2f}")
+            m2.metric("Del", f"{data.get('SHOTBODYPART', 'N/A')}")
+            m3.metric("H", f"{data.get('MATCHPERIOD', 'N/A')}")
 
-    # --- 4. TRIGGER ---
     if len(event.selection.rows) > 0:
-        selected_row = final_df.iloc[event.selection.rows[0]]
-        vis_analyse(selected_row, video_map, video_dir)
+        vis_analyse(final_df.iloc[event.selection.rows[0]], video_map, video_dir)
