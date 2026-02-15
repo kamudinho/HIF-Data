@@ -112,23 +112,40 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab5:
         cl, cm, cr = st.columns([1.5, 4, 2.5])
-        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        # Liste over præcis de navne der står i din CSV (efter UPPERCASE konvertering)
         cat_cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-        v = [rens_metrik_vaerdi(nyeste.get(c, 0)) for c in cat_cols]
-        v_closed = v + [v[0]]
         
-        with cl:
-            st.markdown(f"*{seneste_dato}*")
-            for cat, val in zip(categories, v):
-                st.markdown(f"**{cat}:** `{val}`")
+        # Vi sikrer os at vi har rigtige tal her
+        v = []
+        for c in cat_cols:
+            val = rens_metrik_vaerdi(nyeste.get(c, 0))
+            v.append(val)
+        
+        # Luk cirklen ved at tilføje første værdi til sidst
+        v_closed = v + [v[0]]
+        theta_labels = [c.capitalize() for c in cat_cols] + [cat_cols[0].capitalize()]
+        
         with cm:
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed, 
+                theta=theta_labels, 
+                fill='toself', 
+                line_color='#df003b',
+                name='Spillerens Niveau'
+            ))
+            fig_radar.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True, 
+                        range=[0, 5], # Da din rating går til 5
+                        tickvals=[1, 2, 3, 4, 5]
+                    )
+                ), 
+                showlegend=False,
+                margin=dict(l=40, r=40, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
-        with cr:
-            st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
-            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
