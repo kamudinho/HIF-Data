@@ -3,88 +3,77 @@ import pandas as pd
 import os
 import re
 
+# --- 1. POPUP FUNKTION (FORSTØRRET VIDEO) ---
+@st.dialog("Videoanalyse", width="large")
+def forstoer_video(video_sti, spiller, kamp, xg):
+    st.video(video_sti)
+    st.write(f"**Spiller:** {spiller}")
+    st.write(f"**Kamp:** {kamp} | **xG:** {xg}")
+
 def vis_side(spillere_df):
     st.title("HIF Videoanalyse")
     
-    # --- 1. OPSÆTNING AF STIER ---
+    # --- 2. OPSÆTNING AF STIER ---
     BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
     video_dir = os.path.join(BASE_DIR, 'videos')
 
     if not os.path.exists(match_path):
-        st.error(f"Kunne ikke finde matches.csv i {match_path}")
+        st.error(f"Kunne ikke finde matches.csv")
         return
 
-    # --- 2. DATA-HENTNING OG RENSNING ---
-    # Vi indlæser matches.csv som indeholder alle kamps- og skuddata
+    # --- 3. DATA-HENTNING OG RENSNING ---
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
 
-    # Vi renser spillere_df (som kommer fra din hovedfil) for at kunne mappe navne
+    # Map navne fra hovedfilens spillere_df
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+    navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', 'Ukendt')))
     
-    # Lav navne-map (ID -> NAVN)
-    if 'NAVN' in spillere_df.columns:
-        navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df['NAVN']))
-    else:
-        fn = spillere_df.get('FIRSTNAME', '').fillna('')
-        ln = spillere_df.get('LASTNAME', '').fillna('')
-        spillere_df['FULL_NAME'] = (fn + ' ' + ln).str.strip()
-        navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df['FULL_NAME']))
-
-    # Rens ID'er i match-data så de matcher både spillere og videofiler
     df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna(df['PLAYER_WYID'])
-    # RENS_ID fjerner alt andet end tal fra EVENT_WYID (ID'et der matcher videoen)
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
 
-    # --- 3. VIDEO-HENTNING (Fixer .mp4 fejlen) ---
+    # --- 4. VIDEO-HENTNING (Fixer .mp4 fejlen) ---
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
             if f.lower().endswith('.mp4'):
-                # VIGTIGT: Vi splitter filendelsen .mp4 fra FØR vi finder tal
                 filnavn_uden_endelse = os.path.splitext(f)[0]
                 clean_id = "".join(re.findall(r'\d+', filnavn_uden_endelse))
                 video_map[clean_id] = f
 
-    # --- 4. FILTRERING ---
-    # Find kun rækker hvor der rent faktisk findes en video
+    # --- 5. FILTRERING ---
     tabel_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
     
-    # Sidebar toggle til at filtrere på mål
     kun_maal = st.sidebar.toggle("Vis kun mål", value=True)
     if kun_maal and 'SHOTISGOAL' in tabel_df.columns:
-        # Tjekker bredt for sand/falsk værdier
         tabel_df = tabel_df[tabel_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', '1.0', 't', 'yes'])]
 
     if tabel_df.empty:
-        st.info("Ingen videoer fundet der matcher dine kriterier.")
+        st.info("Ingen videoer fundet.")
         return
 
-    # --- 5. VISNING I GRID (4 PR. RÆKKE) ---
-    st.write(f"Viser {len(tabel_df)} sekvenser")
+    # --- 6. VISNING I GRID (4 PR. RÆKKE) ---
+    st.write(f"Viser {len(tabel_df)} mål. Klik på 'Forstør' for at se i stort format.")
     
-    # Vi bruger et loop til at opdele vores dataframe i bidder af 4
     for i in range(0, len(tabel_df), 4):
         cols = st.columns(4)
         batch = tabel_df.iloc[i:i+4]
         
         for index, (idx, row) in enumerate(batch.iterrows()):
             with cols[index]:
-                # Hent videostien
                 v_fil = video_map.get(row['RENS_ID'])
                 video_sti = os.path.join(video_dir, v_fil)
                 
-                # Overskrift (Spillernavn)
+                # Vis en lille video som thumbnail
                 st.markdown(f"**{row['SPILLER']}**")
+                st.video(video_sti) # Denne kan stadig spilles i lille format
                 
-                # Selve videoen (den vises direkte som en thumbnail man kan trykke play på)
-                st.video(video_sti)
+                # Forstør-knap der trigger @st.dialog
+                xg_text = row.get('SHOTXG', 'N/A')
+                if st.button(f"🔎 Forstør", key=f"btn_{row['RENS_ID']}_{idx}", use_container_width=True):
+                    forstoer_video(video_sti, row['SPILLER'], row['MATCHLABEL'], xg_text)
                 
-                # Info-tekst under videoen
                 st.caption(f"{row['MATCHLABEL']}")
-                if 'SHOTXG' in row:
-                    st.caption(f"xG: {row['SHOTXG']}")
-                
-                st.markdown("<br>", unsafe_allow_html=True) # Luft til næste række
+                st.markdown("<br>", unsafe_allow_html=True)
