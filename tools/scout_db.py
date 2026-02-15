@@ -21,6 +21,8 @@ def hent_vaerdi_robust(row, col_name):
     return "" if pd.isna(val) else val
 
 def map_position(row):
+    # Vi bruger hent_vaerdi_robust til at finde 'POS' og 'ROLECODE3'
+    # Det sikrer at vi fanger dem selvom der er forskel på Store/Små bogstaver
     pos_raw = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
     role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
     
@@ -36,11 +38,19 @@ def map_position(row):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
+    # TJEK 1: Finder vi et tal i POS? (F.eks. "3")
     if pos_raw in pos_dict:
         return pos_dict[pos_raw]
+    
+    # TJEK 2: Hvis POS fejlede, hvad siger ROLECODE3? (F.eks. "DEF")
     if role_val in role_dict:
         return role_dict[role_val]
-    return pos_raw if (len(pos_raw) > 2 and pos_raw.lower() != "nan") else "Ukendt"
+    
+    # TJEK 3: Er POS måske allerede tekst?
+    if len(pos_raw) > 2 and pos_raw.lower() not in ["nan", "none"]:
+        return pos_raw
+        
+    return "Ukendt"
 
 # --- VISNINGSFUNKTIONER ---
 def vis_spiller_billede(pid, w=110):
