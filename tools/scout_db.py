@@ -75,7 +75,7 @@ def vis_profil(p_data, full_df, s_df):
         st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
         st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radarchart"])
     
     with tab1:
         vis_metrikker(nyeste)
