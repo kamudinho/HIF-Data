@@ -6,7 +6,8 @@ import re
 def vis_side(spillere_df):
     st.title("HIF Videoanalyse")
     
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # 1. Stier (Relativt til rodmappen)
+    BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
     video_dir = os.path.join(BASE_DIR, 'videos')
 
@@ -14,19 +15,21 @@ def vis_side(spillere_df):
         st.error(f"Fil mangler: {match_path}")
         return
 
-    # 1. Indlæs
+    # 2. Indlæs matches.csv
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
 
-    # 2. Map Navne (Robust)
+    # 3. Map Navne (Vi bruger PLAYER_WYID fra spillere_df)
+    # Sørg for at ID'er er strenge uden .0
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
     navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', spillere_df.get('FIRSTNAME', 'Ukendt'))))
 
-    # 3. Rens ID'er
+    # 4. Rens ID'er i dataframe
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
-    df['SPILLER'] = df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False).map(navne_map).fillna("Ukendt")
+    df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+    df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna("Ukendt")
 
-    # 4. Video Map
+    # 5. Find videoer i mappen (Fixer .mp4 fejlen)
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
@@ -35,24 +38,26 @@ def vis_side(spillere_df):
                 vid_id = "".join(re.findall(r'\d+', rent_navn))
                 video_map[vid_id] = f
 
-    # 5. Filtrer til videoer der findes
+    # 6. Filtrer til rækker der faktisk har en video
     data_med_video = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
-    # --- DEBUG INFO ---
+    # Sidebar info til kontrol
+    st.sidebar.markdown(f"**Status:**")
     st.sidebar.write(f"Videoer i mappe: {len(video_map)}")
-    st.sidebar.write(f"Rækker med video-match: {len(data_med_video)}")
+    st.sidebar.write(f"Match i CSV: {len(data_med_video)}")
 
-    # Toggle filter
-    kun_maal = st.toggle("Vis kun mål", value=False) # Start med False for at se om det virker
+    # Toggle filter (start med alle aktioner for at teste)
+    kun_maal = st.toggle("Vis kun mål", value=False)
     
-    if kun_maal:
+    if kun_maal and 'SHOTISGOAL' in data_med_video.columns:
         data_med_video = data_med_video[data_med_video['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', '1.0', 't', 'yes'])].copy()
 
     if data_med_video.empty:
-        st.warning("Ingen rækker at vise. Prøv at slå 'Vis kun mål' fra.")
+        st.warning("Ingen rækker fundet. Prøv at slå 'Vis kun mål' fra.")
     else:
-        # 6. TEGN TABELLEN MANUELT
-        # Vi laver overskrifter
+        # 7. Vis manuel tabel
+        st.markdown("---")
+        # Overskrifter
         h = st.columns([2, 3, 1, 2])
         h[0].write("**Spiller**")
         h[1].write("**Kamp**")
@@ -68,11 +73,13 @@ def vis_side(spillere_df):
             c2.write(row['MATCHLABEL'])
             c3.write(str(row.get('SHOTXG', '-')))
             
-            # POP-OVER MED UNIK KEY
-            # Vi kombinerer index og ID for at være 100% sikre på unikhed
-            with c4.popover("Se video", key=f"pop_{idx}_{row['RENS_ID']}", use_container_width=True):
+            # POP-OVER (Fjernet use_container_width for bagudkompatibilitet)
+            # Vi bruger både idx og RENS_ID for at garantere en unik key
+            with c4.popover("Se video", key=f"v_pop_{idx}_{row['RENS_ID']}"):
                 v_fil = video_map.get(row['RENS_ID'])
                 if v_fil:
+                    st.write(f"**{row['SPILLER']}**")
+                    st.write(f"*{row['MATCHLABEL']}*")
                     st.video(os.path.join(video_dir, v_fil))
                 else:
-                    st.write("Video ikke fundet")
+                    st.error("Video ikke fundet")
