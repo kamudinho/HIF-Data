@@ -6,7 +6,7 @@ import uuid
 
 # Konfiguration
 REPO = "Kamudinho/HIF-data"
-SCOUT_FILE = "scouting_db.csv"
+SCOUT_FILE = "data/scouting_db.csv"
 STATS_FILE = "data/season_stats.csv" 
 
 POS_MAP = {
