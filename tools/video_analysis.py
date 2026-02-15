@@ -4,18 +4,14 @@ import os
 import re
 
 def rens_dansk_tekst(tekst):
-    """Retter fejl i tegnkodning (encoding) for danske bogstaver."""
+    """Retter fejl i tegnkodning for danske bogstaver."""
     if not isinstance(tekst, str):
         return tekst
     fejl_map = {
-        "√∏": "ø",
-        "√¶": "æ",
-        "√•": "å",
-        "√ò": "Ø",
-        "√Ü": "Æ",
-        "√Ö": "Å"
+        "√∏": "ø", "√¶": "æ", "√•": "å",
+        "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å"
     }
-    for fejl, ret skal i fejl_map.items():
+    for fejl, ret in fejl_map.items():
         tekst = tekst.replace(fejl, ret)
     return tekst
 
@@ -32,7 +28,7 @@ def vis_side(spillere_df):
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # Rens alle tekst-kolonner for encoding-fejl
+    # Rens alle tekst-kolonner
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].apply(rens_dansk_tekst)
     
@@ -54,11 +50,9 @@ def vis_side(spillere_df):
 
     final_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
-    # Logik til den rene titel
     def lav_titel(row):
         is_goal = str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes']
         event = "Mål" if is_goal else "Afslutning"
-        # Her er kampnavnet nu renset (Helsingør i stedet for Helsing√∏r)
         return f"{event} vs. {row.get('MATCHLABEL', 'Ukendt kamp')}"
 
     final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
@@ -72,9 +66,10 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE ---
-    @st.dialog(width="large")
+    # --- 5. MODAL VINDUE (Nu med tom titel i toppen) ---
+    @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
+        # Dette er nu den ENESTE overskrift i vinduet
         st.subheader(data['DYNAMIC_TITLE'])
         st.divider()
 
