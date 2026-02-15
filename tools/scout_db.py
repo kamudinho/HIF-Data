@@ -146,18 +146,22 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.info("Ingen statistisk data fundet.")
 
     with tab5:
-        # 1. Forbered data - TEKNIK øverst (starten af listen)
-        categories = ['Tekniske færdigheder', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Beslutsomhed', 'Spilintelligens']
-        cols = ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']
+        # 1. Præcis rækkefølge: Teknik kl. 12, derefter clockwise
+        categories = [
+            'Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 
+            'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude'
+        ]
+        cols = [
+            'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 
+            'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE'
+        ]
         
-        # Hent værdier fra nyeste rapport
+        # Hent og luk cirklen
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        
-        # Luk cirklen ved at tilføje første værdi til sidst
         v_closed = v + [v[0]]
         cat_closed = categories + [categories[0]]
 
-        # 2. Layout: 3 kolonner
+        # 2. Layout
         col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
 
         with col_left:
@@ -165,12 +169,10 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
             st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
             st.divider()
-            # Liste med værdier (viser dem i samme rækkefølge som radaren)
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
 
         with col_mid:
-            # Radar Chart med lineær grid (8-kant)
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(
                 r=v_closed,
@@ -184,22 +186,22 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             fig_radar.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        tickfont=dict(size=11),
-                        rotation=90,      # Sørger for at det første punkt (Teknik) er øverst
+                        tickfont=dict(size=10),
+                        rotation=90,      # Teknik øverst
                         direction="clockwise",
                         gridcolor="lightgrey"
                     ),
                     radialaxis=dict(
                         visible=True,
-                        range=[0, 6],     # Skala op til 6
+                        range=[0, 6],
                         tickvals=[1, 2, 3, 4, 5, 6],
                         gridcolor="lightgrey"
                     ),
-                    gridshape='linear'    # 8-kant form
+                    gridshape='linear'    # 8-kant
                 ),
                 showlegend=False,
                 height=450,
-                margin=dict(l=50, r=50, t=30, b=30)
+                margin=dict(l=60, r=60, t=30, b=30)
             )
             st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
 
