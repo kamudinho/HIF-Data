@@ -6,7 +6,7 @@ from mplsoccer import VerticalPitch
 from matplotlib.patches import Rectangle
 import matplotlib.colors as mcolors
 
-def vis_side(df_input, df_spillere):
+def vis_side(df_input, df_spillere, hold_map=None)
     HIF_ID = 38331
     HIF_RED = '#d31313'
 
