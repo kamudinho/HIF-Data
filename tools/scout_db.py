@@ -1,153 +1,178 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
+import os
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+import requests
 import uuid
 
-# Konfiguration
-REPO = "Kamudinho/HIF-data"
-SCOUT_FILE = "data/scouting_db.csv"
-STATS_FILE = "data/season_stats.csv" 
+# --- 1. KONFIGURATION & STYLES ---
+st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-POS_MAP = {
-    1: "Målmand", 2: "HB", 3: "CB", 4: "VB", 
-    5: "DM", 6: "CM", 7: "OM", 8: "HW", 
-    9: "VW", 10: "ST"
-}
+st.markdown("""
+    <style>
+        header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
+        .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
+        [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. GITHUB INDSTILLINGER ---
+REPO = "Kamudinho/HIF-data"
+
+# --- 3. LOGIN SYSTEM ---
+USER_DB = {"kasper": "1234", "ceo": "2650", "mr": "2650", "kd": "2650", "cg": "2650"}
+if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br><div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='120'></div>", unsafe_allow_html=True)
+        with st.form("login"):
+            u = st.text_input("Bruger").lower().strip()
+            p = st.text_input("Kode", type="password")
+            if st.form_submit_button("Log ind", use_container_width=True):
+                if u in USER_DB and USER_DB[u] == p:
+                    st.session_state["logged_in"] = True
+                    st.rerun()
+                else: st.error("Ugyldig kode")
+    st.stop()
+
+# --- 4. DATA LOADING MED CENTRAL RENSNING ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PARQUET_PATH = os.path.join(BASE_DIR, 'eventdata.parquet')
 
 def rens_dansk_tekst(tekst):
+    """Renser mærkelige tegn og oversætter fod-tags centralt."""
     if not isinstance(tekst, str): return tekst
     fejl_map = {
         "√∏": "ø", "√¶": "æ", "√•": "å", 
         "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å",
         "left_foot": "Venstre fod", 
-        "right_foot": "Højre fod"
+        "right_foot": "Højre fod",
+        "Left foot": "Venstre fod",
+        "Right foot": "Højre fod"
     }
     for fejl, ret in fejl_map.items():
         tekst = tekst.replace(fejl, ret)
     return tekst
-    
-def rens_metrik_vaerdi(val):
-    """Sikrer at vi altid har et heltal, selv hvis data er NaN eller mærkelig."""
+
+@st.cache_resource
+def load_hif_data():
     try:
-        if pd.isna(val): return 0
-        return int(float(val))
-    except:
-        return 0
-
-def vis_metrikker(row):
-    m_cols = st.columns(4)
-    metrics = [
-        ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
-        ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
-        ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
-        ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
-    ]
-    for i, (label, col) in enumerate(metrics):
-        val = rens_metrik_vaerdi(row.get(col, 0))
-        m_cols[i % 4].metric(label, f"{val}")
-
-def vis_side():
-    st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
-    
-    try:
-        # 1. Hent Data
-        scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{SCOUT_FILE}?nocache={uuid.uuid4()}"
-        df = pd.read_csv(scout_url, sep=None, engine='python')
+        RAW_URL = f"https://raw.githubusercontent.com/{REPO}/main/data/"
         
-        df['Position'] = df['Position'].map(POS_MAP).fillna(df['Position'])
-        df['Dato_Str'] = df['Dato'].astype(str)
-        df['Dato'] = pd.to_datetime(df['Dato']).dt.date
-        
-        try:
-            stats_url = f"https://raw.githubusercontent.com/{REPO}/main/{STATS_FILE}?nocache={uuid.uuid4()}"
-            stats_df = pd.read_csv(stats_url, sep=None, engine='python')
-        except:
-            stats_df = pd.DataFrame()
-
-        # --- FILTRERING ---
-        if 'f_rating' not in st.session_state: st.session_state.f_rating = (1.0, 7.0)
-        
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            search = st.text_input("Søg", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
-        with c2:
-            with st.popover("Filtre"):
-                st.session_state.f_pos = st.multiselect("Positioner", options=sorted(df['Position'].unique().tolist()))
-                st.session_state.f_rating = st.slider("Rating (Snit)", 1.0, 7.0, st.session_state.f_rating, step=0.1)
-
-        # --- DATA BEHANDLING ---
-        hif_avg = df[df['Klub'].str.contains('Hvidovre', case=False, na=False)]['Rating_Avg'].mean()
-
-        rapport_counts = df.groupby('ID').size().reset_index(name='Rapporter')
-        latest_reports = df.sort_values('Dato').groupby('ID').tail(1)
-        final_df = pd.merge(latest_reports, rapport_counts, on='ID')
-        
-        if search:
-            final_df = final_df[final_df['Navn'].str.contains(search, case=False) | final_df['Klub'].str.contains(search, case=False)]
-        if 'f_pos' in st.session_state and st.session_state.f_pos:
-            final_df = final_df[final_df['Position'].isin(st.session_state.f_pos)]
-        
-        final_df = final_df[(final_df['Rating_Avg'] >= st.session_state.f_rating[0]) & 
-                            (final_df['Rating_Avg'] <= st.session_state.f_rating[1])]
-
-        # --- HOVEDTABEL ---
-        tabel_hoejde = (len(final_df) * 35) + 40
-        event = st.dataframe(
-            final_df[["Navn", "Position", "Klub", "Rating_Avg", "Status", "Rapporter", "Dato"]],
-            use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-            height=tabel_hoejde,
-            column_config={
-                "Rating_Avg": st.column_config.NumberColumn("Snit", format="%.1f"),
-                "Dato": st.column_config.DateColumn("Seneste")
-            }
-        )
-
-        # --- PROFIL DIALOG ---
-        @st.dialog("Spillerprofil", width="large")
-        def vis_profil(p_data, full_df, s_df, avg_line):
-            st.markdown(f"### {p_data['Navn']} | {p_data['Position']} | {p_data['Klub']}")
-            st.divider()
-
-            historik = full_df[full_df['ID'] == p_data['ID']].sort_values('Dato', ascending=True)
-            tab1, tab2, tab3, tab4 = st.tabs(["Seneste rapport", "Historik", "Udvikling", "Sæsonstatistik"])
+        def read_github_csv(file_name):
+            url = f"{RAW_URL}{file_name}?nocache={uuid.uuid4()}"
+            df = pd.read_csv(url, sep=None, engine='python')
             
-            with tab1:
-                nyeste = historik.iloc[-1]
-                vis_metrikker(nyeste)
-                st.write("")
-                col_s, col_u, col_v = st.columns(3)
-                
-                with col_s:
-                    s_txt = nyeste.get('Styrker', '')
-                    st.success(f"**Styrker**\n\n{s_txt if pd.notna(s_txt) else 'Ingen data'}")
-                with col_u:
-                    u_txt = nyeste.get('Udvikling', '')
-                    st.warning(f"**Udvikling**\n\n{u_txt if pd.notna(u_txt) else 'Ingen data'}")
-                with col_v:
-                    v_txt = nyeste.get('Vurdering', '')
-                    st.info(f"**Vurdering**\n\n{v_txt if pd.notna(v_txt) else 'Ingen data'}")
+            # Rens alle tekst-kolonner før vi returnerer DF
+            for col in df.select_dtypes(include=['object']).columns:
+                df[col] = df[col].apply(rens_dansk_tekst)
+            
+            df.columns = [str(c).strip().upper() for c in df.columns]
+            return df
 
-            with tab2:
-                for _, row in historik.iloc[::-1].iterrows():
-                    with st.expander(f"Rapport fra {row['Dato']} (Rating: {row['Rating_Avg']})"):
-                        vis_metrikker(row)
+        sp = read_github_csv("players.csv")
+        ho = read_github_csv("teams.csv")
+        sc = read_github_csv("scouting_db.csv")
+        try: pe = read_github_csv("season_stats.csv")
+        except: pe = pd.DataFrame()
 
-            with tab3:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=historik['Dato_Str'], y=historik['Rating_Avg'], mode='lines+markers', name="Rating"))
-                fig.update_layout(height=300, yaxis=dict(range=[1, 7]), margin=dict(l=10, r=10, t=30, b=10))
-                st.plotly_chart(fig, use_container_width=True)
+        # Rens ID'er og fjern decimaler
+        for df in [sp, pe, sc, ho]:
+            for col in ['PLAYER_WYID', 'ID', 'TEAM_WYID', 'WYID']:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.split('.').str[0]
 
-            with tab4:
-                if s_df.empty:
-                    st.info("Ingen kampdata.")
-                else:
-                    sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == str(p_data['ID'])].copy()
-                    st.dataframe(sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "GOAL"]], use_container_width=True, hide_index=True)
+        h_map = dict(zip(ho['TEAM_WYID'], ho['TEAMNAME']))
+        
+        # Hent event-data hvis de findes
+        if os.path.exists(PARQUET_PATH):
+            ev = pd.read_parquet(PARQUET_PATH)
+            ev.columns = [str(c).strip().upper() for c in ev.columns]
+            for col in ev.select_dtypes(include=['object']).columns:
+                ev[col] = ev[col].apply(rens_dansk_tekst)
+        else: 
+            ev = pd.DataFrame()
 
-        if len(event.selection.rows) > 0:
-            vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
-
+        return ev, pd.DataFrame(), h_map, sp, pe, sc
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved indlæsning af data: {e}")
+        return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+if "main_data" not in st.session_state:
+    st.session_state["main_data"] = load_hif_data()
+
+df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
+
+# --- 5. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.markdown(
+        """
+        <div style='text-align: center; padding-bottom: 20px;'>
+            <img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    hoved_omraade = option_menu(
+        menu_title=None,
+        options=["Truppen", "Analyse", "Scouting"],
+        icons=["people", "graph-up", "search"],
+        menu_icon="cast", default_index=0,
+        styles={
+            "container": {"background-color": "#f0f2f6"},
+            "nav-link-selected": {"background-color": "#003366"}
+        }
+    )    
+    
+    selected = "Oversigt" 
+    
+    if hoved_omraade == "Truppen":
+        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+                               icons=["people", "people", "people", "people"], 
+                               styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "Analyse":
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], 
+                           icons=["graph-up", "graph-up", "graph-up", "play-btn"], 
+                           styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "Scouting":
+        selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                               icons=["pencil-square", "database", "arrow-left-right"], 
+                               styles={"nav-link-selected": {"background-color": "#cc0000"}})
+
+# --- 6. ROUTING ---
+if selected == "Oversigt":
+    import tools.players as players
+    players.vis_side(spillere)
+elif selected == "Forecast":
+    import tools.squad as squad
+    squad.vis_side(spillere)
+elif selected == "Spillerstats":
+    import tools.stats as stats
+    stats.vis_side(spillere, player_events)
+elif selected == "Top 5":
+    import tools.top5 as top5
+    top5.vis_side(spillere, player_events)
+elif selected == "Zoneinddeling":
+    import tools.player_goalzone as pgz
+    pgz.vis_side(df_events, spillere, hold_map)
+elif selected == "Afslutninger":
+    import tools.player_shots as ps
+    ps.vis_side(df_events, spillere, hold_map)
+elif selected == "Heatmaps":
+    import tools.heatmaps as hm
+    hm.vis_side(df_events, 4, hold_map)
+elif selected == "Video":
+    import tools.video_analysis as va
+    va.vis_side(spillere)
+elif selected == "Sammenligning":
+    import tools.comparison as comp
+    comp.vis_side(spillere, player_events, df_scout)
+elif selected == "Database":
+    import tools.scout_db as sdb
+    sdb.vis_side()
+elif selected == "Scoutrapport":
+    import tools.scout_input as si
+    si.vis_side(spillere)
