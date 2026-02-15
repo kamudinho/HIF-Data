@@ -25,7 +25,6 @@ def vis_side(spillere_df):
     if 'NAVN' in spillere_df.columns:
         navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df['NAVN']))
     else:
-        # Hvis NAVN ikke findes, kombinerer vi for- og efternavn
         fn = spillere_df.get('FIRSTNAME', '').fillna('')
         ln = spillere_df.get('LASTNAME', '').fillna('')
         spillere_df['FULL_NAME'] = (fn + ' ' + ln).str.strip()
@@ -36,7 +35,7 @@ def vis_side(spillere_df):
     df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna(df['PLAYER_WYID'])
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
 
-    # 4. Find videoer (uden .mp4 fejlen)
+    # 4. Find videoer
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
@@ -45,20 +44,29 @@ def vis_side(spillere_df):
                 clean_id = "".join(re.findall(r'\d+', rent_navn))
                 video_map[clean_id] = f
 
-    # 5. Filtrer til kun rækker med video og kun MÅL som start
+    # 5. Filtrer til kun rækker med video
     tabel_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
-    
-    # Filtrer for mål (SHOTISGOAL skal være True/1)
-    tabel_df = tabel_df[tabel_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', 't'])].copy()
 
     if tabel_df.empty:
-        st.warning("Ingen mål med tilhørende video fundet.")
+        st.warning("Ingen videoer fundet i mappen, der matcher ID'erne i matches.csv.")
+        return
+
+    # --- NY FILTRERINGSMULIGHED ---
+    st.write("### Filtrér visning")
+    kun_maal = st.toggle("Vis kun mål", value=True)
+
+    if kun_maal:
+        # Robust tjek for 'True', '1', '1.0' osv.
+        tabel_df = tabel_df[tabel_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', '1.0', 't'])].copy()
+
+    if tabel_df.empty:
+        st.info("Ingen mål fundet med video. Prøv at slå 'Vis kun mål' fra for at se alle aktioner.")
         return
 
     # 6. Visning med Popover per række
-    st.subheader(f"Fundet {len(tabel_df)} mål med video")
+    st.subheader(f"Viser {len(tabel_df)} aktioner")
 
-    # Overskrift til vores "manuelle" tabel
+    # Tabel-headere
     h1, h2, h3, h4 = st.columns([2, 3, 1, 2])
     h1.write("**Spiller**")
     h2.write("**Kamp**")
@@ -66,7 +74,7 @@ def vis_side(spillere_df):
     h4.write("**Video**")
     st.divider()
 
-    # Loop igennem målene og lav en række for hvert
+    # Loop igennem rækkerne
     for idx, row in tabel_df.iterrows():
         c1, c2, c3, c4 = st.columns([2, 3, 1, 2])
         
@@ -74,12 +82,12 @@ def vis_side(spillere_df):
         c2.write(row['MATCHLABEL'])
         c3.write(str(row.get('SHOTXG', '-')))
         
-        # Popover i kolonne 4
-        with c4.popover("Afspil Video", use_container_width=True):
+        # Unik key for hver popover baseret på RENS_ID
+        with c4.popover("📽️ Se Video", use_container_width=True):
             sid = row['RENS_ID']
             video_fil = video_map.get(sid)
             if video_fil:
-                st.write(f"**Aktion:** {row['MATCHLABEL']}")
+                st.write(f"**{row['SPILLER']}** - {row['MATCHLABEL']}")
                 st.video(os.path.join(video_dir, video_fil))
             else:
-                st.error("Videofilen kunne ikke findes.")
+                st.error("Fil mangler")
