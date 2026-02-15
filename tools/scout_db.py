@@ -15,6 +15,7 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def hent_vaerdi_robust(row, col_name):
+    # Konverter row til dict med små bogstaver for sikker søgning
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
@@ -42,9 +43,10 @@ def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
     historik = full_df[full_df[id_col].astype(str) == str(p_data['ID'])].sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
-    seneste_dato = nyeste['Dato'] # Henter dato-teksten fra nyeste rapport
+    
+    # FIX: Brug robust hentning af datoen for at undgå KeyError
+    seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
 
-    # Overskrift med dato
     st.markdown(f"""
         <div style='text-align: center;'>
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
@@ -72,6 +74,7 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab3:
         fig_line = go.Figure()
+        # Brug DATO_DT som vi ved er oprettet i vis_side()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='lines+markers', line_color='#df003b'))
         fig_line.update_layout(height=300, yaxis=dict(range=[1, 6]), margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_line, use_container_width=True)
@@ -120,9 +123,15 @@ def vis_side():
     data = st.session_state["main_data"]
     stats_df, df = data[4], data[5].copy()
 
-    c_id, c_dato, c_navn, c_klub, c_pos, c_rating = find_col(df, 'id'), find_col(df, 'dato'), find_col(df, 'navn'), find_col(df, 'klub'), find_col(df, 'position'), find_col(df, 'rating_avg')
+    c_id = find_col(df, 'id')
+    c_dato = find_col(df, 'dato')
+    c_navn = find_col(df, 'navn')
+    c_klub = find_col(df, 'klub')
+    c_pos = find_col(df, 'position')
+    c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
 
+    # Sikr konvertering til dato og tal
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
@@ -145,5 +154,11 @@ def vis_side():
 
     if len(event.selection.rows) > 0:
         row_idx = event.selection.rows[0]
-        p_data = {'ID': f_df.iloc[row_idx][c_id], 'NAVN': f_df.iloc[row_idx][c_navn], 'KLUB': f_df.iloc[row_idx][c_klub], 'POSITION': f_df.iloc[row_idx][c_pos], 'RATING_AVG': f_df.iloc[row_idx][c_rating]}
+        p_data = {
+            'ID': f_df.iloc[row_idx][c_id], 
+            'NAVN': f_df.iloc[row_idx][c_navn], 
+            'KLUB': f_df.iloc[row_idx][c_klub], 
+            'POSITION': f_df.iloc[row_idx][c_pos], 
+            'RATING_AVG': f_df.iloc[row_idx][c_rating]
+        }
         vis_profil(p_data, df, stats_df)
