@@ -78,18 +78,26 @@ def vis_side(spillere_df, player_events_df):
                 temp_df = df.copy()
                 temp_df[kpi] = pd.to_numeric(temp_df[kpi], errors='coerce').fillna(0)
                 
-                # Beregn værdi baseret på visning
+                # --- RETTELSE HER ---
+                # Find minutter kolonnen robust
+                if 'MINUTESONFIELD' in temp_df.columns:
+                    mins = pd.to_numeric(temp_df['MINUTESONFIELD'], errors='coerce').fillna(0)
+                elif 'MINUTESTAGGED' in temp_df.columns:
+                    mins = pd.to_numeric(temp_df['MINUTESTAGGED'], errors='coerce').fillna(0)
+                else:
+                    # Hvis ingen af delene findes, laver vi en række af 0'er for at undgå crash
+                    mins = pd.Series(0, index=temp_df.index)
+                # ---------------------
+
                 if visning == "Pr. 90":
-                    mins = pd.to_numeric(temp_df.get('MINUTESONFIELD', 0), errors='coerce').fillna(0)
                     temp_df['VAL'] = np.where(mins > 0, (temp_df[kpi] / mins * 90), 0)
                 else:
                     temp_df['VAL'] = temp_df[kpi]
 
-                # Find Top 5 (Losses og Fouls er "omvendt" - færrest er bedst, men her viser vi flest som standard)
-                # Hvis du vil have færrest, så ændr ascending til True for de to.
+                # Find Top 5
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=False).head(5)
 
-                # HTML Tabel Generering (HIF Stil)
+                # HTML Tabel Generering (Resten af din kode...)
                 header_style = "text-align:center; padding:4px; border-bottom:1px solid #ddd; background:#f8f9fb;"
                 cell_style = "text-align:center; padding:4px; border-bottom:1px solid #eee;"
                 
@@ -115,7 +123,6 @@ def vis_side(spillere_df, player_events_df):
                                 <td style="{cell_style}"><b>{val_str}</b></td>
                             </tr>"""
                 
-                # Fyld ud til 5 rækker
                 for _ in range(5 - len(top5)):
                     html += f"<tr><td style='{cell_style}'>&nbsp;</td><td style='{cell_style}'>&nbsp;</td><td style='{cell_style}'>&nbsp;</td></tr>"
                 
