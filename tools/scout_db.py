@@ -61,7 +61,7 @@ def map_position(row):
     if role_raw in role_map:
         return role_map[role_raw]
         
-    return "Ukendt"
+    return "-"
     
 # --- VISNINGSFUNKTIONER ---
 def vis_spiller_billede(pid, w=110):
