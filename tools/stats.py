@@ -159,6 +159,6 @@ def vis_side(spillere, player_events):
             xaxis_title=f"{valg_label.capitalize()} - {visning}",
             yaxis_title="",
             template="plotly_white",
-            height=max(600, len(df_plot) * 30) # Dynamisk højde baseret på antal spillere
+            height=max(800, len(df_plot) * 30) # Dynamisk højde baseret på antal spillere
         )
         st.plotly_chart(fig, use_container_width=True)
