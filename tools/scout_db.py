@@ -118,7 +118,7 @@ def vis_profil(p_data, full_df, s_df):
             st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling') or 'Ingen data'}")
             st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering') or 'Ingen data'}")
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (Med Popover-filter og Fix) ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -128,38 +128,69 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    c_id, c_dato, c_navn, c_klub, c_pos, c_rating, c_status, c_scout = [find_col(df, x) for x in ['id', 'dato', 'navn', 'klub', 'position', 'rating_avg', 'status', 'scout']]
+    # Find kolonner
+    cols = {x: find_col(df, x) for x in ['id', 'dato', 'navn', 'klub', 'position', 'rating_avg', 'status', 'scout']}
+    c_id, c_dato, c_navn, c_klub, c_pos, c_rating, c_status, c_scout = cols.values()
 
+    # Præparér data
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
 
-    f1, f2, f3 = st.columns([2, 1, 1])
-    with f1: search = st.text_input("Søg...", label_visibility="collapsed")
-    with f2: valgt_status = st.multiselect("Status", options=sorted(df[c_status].unique().tolist()))
-    with f3: valgt_scout = st.multiselect("Scout", options=sorted(df[c_scout].unique().tolist()))
+    # --- SØGEFELT OG POPOVER FILTER ---
+    col_search, col_filter = st.columns([4, 1])
+    
+    with col_search:
+        search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
+    
+    with col_filter:
+        with st.popover("Filtrér"):
+            st.markdown("**Indstillinger**")
+            # Her fikser vi NaN-fejlen ved at bruge .dropna()
+            status_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
+            valgt_status = st.multiselect("Status", options=status_opts)
+            
+            scout_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
+            valgt_scout = st.multiselect("Scout", options=scout_opts)
 
+    # Filtreringslogik
     f_df = df.groupby(c_id).tail(1).copy()
-    if search: f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
-    if valgt_status: f_df = f_df[f_df[c_status].isin(valgt_status)]
-    if valgt_scout: f_df = f_df[f_df[c_scout].isin(valgt_scout)]
+    
+    if search:
+        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | 
+                    f_df[c_klub].str.contains(search, case=False, na=False)]
+    if valgt_status:
+        f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
+    if valgt_scout:
+        f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
 
+    # Tabelvisning
     disp_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
-    # VI SÆTTER HEIGHT MEGET HØJT SÅ DEN IKKE SCROLLER INTERNT
+    # height=None eller dynamisk højde fjerner scroll i tabellen
     event = st.dataframe(
         f_df[disp_cols],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=min(len(f_df) * 37 + 100, 1200), # Dynamisk højde op til 1200px
-        column_config={c_rating: st.column_config.NumberColumn("Rating", format="%.1f")}
+        height=min(len(f_df) * 35 + 100, 1500), # Sætter højden så den folder sig ud
+        column_config={
+            c_rating: st.column_config.NumberColumn("Rating", format="%.1f"),
+            c_dato: st.column_config.DateColumn("Dato")
+        }
     )
 
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
-        vis_profil({'ID': p_row[c_id], 'NAVN': p_row[c_navn], 'KLUB': p_row[c_klub], 'POSITION': p_row[c_pos], 'RATING_AVG': p_row[c_rating]}, df, stats_df)
+        p_data = {
+            'ID': p_row[c_id],
+            'NAVN': p_row[c_navn],
+            'KLUB': p_row[c_klub],
+            'POSITION': p_row[c_pos],
+            'RATING_AVG': p_row[c_rating]
+        }
+        vis_profil(p_data, df, stats_df)
