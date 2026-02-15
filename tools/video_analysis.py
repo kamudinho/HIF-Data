@@ -11,7 +11,7 @@ def rens_dansk_tekst(tekst):
     return tekst
 
 def vis_side(spillere_df):
-    # --- 1. SETUP ---
+    # --- 1. SETUP & DATA ---
     BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
     video_dir = os.path.join(BASE_DIR, 'videos')
@@ -50,33 +50,29 @@ def vis_side(spillere_df):
     # --- 3. MODAL VINDUE ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        if "vid_tab" not in st.session_state: st.session_state.vid_tab = True
-
-        # Layout: Overskrift og "tekst-tabs"
-        c1, c2, c3 = st.columns([6, 1, 1])
+        # Navigation på samme linje som titlen ved hjælp af radio-knap i horisontal mode
+        # Vi gemmer den i kolonner for at tvinge den til højre
+        col_titel, col_nav = st.columns([3, 1])
         
-        with c1:
-            st.markdown(f"### {data['DYNAMIC_TITLE']}")
-        
-        # Vi bruger små gennemsigtige knapper eller styling for at få det til at ligne tekst
-        with c2:
-            if st.button("🎥 Video", variant="ghost"):
-                st.session_state.vid_tab = True
-                st.rerun()
-        with c3:
-            if st.button("📊 Stats", variant="ghost"):
-                st.session_state.vid_tab = False
-                st.rerun()
+        with col_titel:
+            st.markdown(f"#### {data['DYNAMIC_TITLE']}")
+            
+        with col_nav:
+            # En horisontal radio-knap fungerer som tabs men er mere stabil end knapper
+            mode = st.radio("Vælg", ["🎥 Video", "📊 Stats"], label_visibility="collapsed", horizontal=True)
 
-        if st.session_state.vid_tab:
+        if mode == "🎥 Video":
             v_fil = v_map.get(data['RENS_ID'])
-            st.video(os.path.join(v_dir, v_fil), autoplay=True)
+            video_path = os.path.join(v_dir, v_fil)
+            st.video(video_path, autoplay=True)
         else:
             st.write(f"**Spiller:** {data['SPILLER']}")
             m1, m2, m3 = st.columns(3)
             m1.metric("xG", f"{data.get('SHOTXG', 0):.2f}")
             m2.metric("Del", f"{data.get('SHOTBODYPART', 'N/A')}")
-            m3.metric("H", f"{data.get('MATCHPERIOD', 'N/A')}")
+            m3.metric("Halvleg", f"{data.get('MATCHPERIOD', 'N/A')}")
 
+    # --- 4. TRIGGER ---
     if len(event.selection.rows) > 0:
-        vis_analyse(final_df.iloc[event.selection.rows[0]], video_map, video_dir)
+        selected_row = final_df.iloc[event.selection.rows[0]]
+        vis_analyse(selected_row, video_map, video_dir)
