@@ -84,12 +84,12 @@ def vis_side(spillere_df):
             st.subheader(data['DYNAMIC_TITLE'])
         
         with btn_col1:
-            if st.button("🎥 Video"):
+            if st.button("Video"):
                 st.session_state.active_tab = "Video"
                 st.rerun()
         
         with btn_col2:
-            if st.button("📊 Stats"):
+            if st.button("Stats"):
                 st.session_state.active_tab = "Stats"
                 st.rerun()
 
