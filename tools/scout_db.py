@@ -21,14 +21,14 @@ def hent_vaerdi_robust(row, col_name):
     return "" if pd.isna(val) else val
 
 def map_position(row):
-    # 1. Hent rå værdier
+    """Oversætter koder (1-11) eller tekst til pæne danske positionsnavne."""
     db_text = str(hent_vaerdi_robust(row, 'Position')).strip()
     pos_raw = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
     role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
     
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
-        "4": "Stopper", "5": "Stopper", "6": "Defensiv Midt",
+        "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
         "10": "Offensiv Midt", "11": "Venstre Kant"
     }
@@ -38,25 +38,22 @@ def map_position(row):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
-    # PRIORITET 1: Findes der et TAL i 'Position' kolonnen fra databasen?
+    # 1. Numerisk kode i 'Position' (fra DB)
     db_pos_only_digit = db_text.split('.')[0]
     if db_pos_only_digit in pos_dict:
         return pos_dict[db_pos_only_digit]
 
-    # PRIORITET 2: Findes der et TAL i 'POS' kolonnen fra players.csv?
+    # 2. Numerisk kode i 'POS' (fra players.csv)
     if pos_raw in pos_dict:
         return pos_dict[pos_raw]
     
-    # PRIORITET 3: Hvis der står pæn TEKST i databasen (f.eks. "Stopper")
+    # 3. Pæn tekst i databasen
     if len(db_text) > 2 and db_text.lower() not in ["nan", "none", "ukendt"]:
         if not db_pos_only_digit.isdigit():
             return db_text
 
-    # PRIORITET 4: Fallback til ROLECODE3 (GKP, DEF, MID, FWD)
-    if role_val in role_dict:
-        return role_dict[role_val]
-        
-    return "Ukendt"
+    # 4. Fallback til ROLECODE3
+    return role_dict.get(role_val, "Ukendt")
 
 # --- VISNINGSFUNKTIONER ---
 def vis_spiller_billede(pid, w=110):
@@ -92,11 +89,13 @@ def vis_bokse_kolonner(row):
     with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
     with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
-# --- 2. PROFIL DIALOG ---
+# --- 2. PROFIL DIALOG (MED ALLE TABS) ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
     clean_p_id = str(p_data['ID']).split('.')[0].strip()
+    
+    # Hent historikken for spilleren
     historik = full_df[full_df[id_col].astype(str).str.contains(clean_p_id, na=False)].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
@@ -107,6 +106,7 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
+    # Header sektion
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -115,6 +115,7 @@ def vis_profil(p_data, full_df, s_df):
         st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
         st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
+    # Tabs sektion
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radarchart"])
     
     with tab1:
@@ -171,29 +172,26 @@ def vis_side():
         st.error("Data ikke fundet i session_state.")
         return
     
-    # 1. HENT DATA
     all_data = st.session_state["main_data"]
     players_df = all_data[0].copy() 
     stats_df = all_data[4].copy()   
     db_df = all_data[5].copy()      
 
-    # 2. IDENTIFICER OG RENS ID-KOLONNER
     c_id = find_col(db_df, 'id')
     p_id = find_col(players_df, 'player_wyid') or 'PLAYER_WYID'
 
+    # ID RENSNING OG MERGE
     if p_id in players_df.columns and c_id in db_df.columns:
-        # Ultra-robust ID rensning
         db_df[c_id] = db_df[c_id].astype(str).str.replace('"', '').str.replace("'", "").str.split('.').str[0].str.strip()
         players_df[p_id] = players_df[p_id].astype(str).str.replace('"', '').str.replace("'", "").str.split('.').str[0].str.strip()
 
         info_cols = [p_id, 'POS', 'ROLECODE3']
         spiller_info = players_df[[c for c in info_cols if c in players_df.columns]].drop_duplicates(subset=[p_id])
-        
         df = db_df.merge(spiller_info, left_on=c_id, right_on=p_id, how='left')
     else:
         df = db_df.copy()
 
-    # 3. FIND KOLONNENAVNE
+    # KOLONNE IDENTIFIKATION
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
     c_klub = find_col(df, 'klub')
@@ -202,24 +200,24 @@ def vis_side():
     c_status = find_col(df, 'status')
     c_scout = find_col(df, 'scout')
 
-    # 4. DATABEHANDLING
+    # DATA FORMATERING
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # Kør mapping funktionen
+    # POSITION MAPPING
     df[c_pos_visning] = df.apply(map_position, axis=1)
     df = df.sort_values('DATO_DT')
 
-    # 5. UI & FILTRE
+    # UI & FILTER
     st.subheader("Scouting Database")
     
     valgt_status = st.session_state.get("filter_status", [])
     valgt_pos = st.session_state.get("filter_pos", [])
     rating_range = st.session_state.get("filter_rating", (0.0, 5.0))
     
-    antal = len(valgt_status) + len(valgt_pos)
-    if rating_range != (0.0, 5.0): antal += 1
-    filter_label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
+    antal_filtre = len(valgt_status) + len(valgt_pos)
+    if rating_range != (0.0, 5.0): antal_filtre += 1
+    filter_label = f"Filtrér ({antal_filtre})" if antal_filtre > 0 else "Filtrér"
 
     col_s, col_p = st.columns([4, 1.2]) 
     with col_s:
@@ -234,22 +232,18 @@ def vis_side():
             st.divider()
             rating_range = st.slider("Rating Interval", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
 
-    # 6. FILTRERING TIL VISNING
+    # FILTRERING
     f_df = df.groupby(c_id).tail(1).copy()
-    
     if search:
         mask = f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)
         f_df = f_df[mask]
-    
     if valgt_status:
         f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
-    
     if valgt_pos:
         f_df = f_df[f_df[c_pos_visning].isin(valgt_pos)]
-        
     f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
-    # 7. VISNING AF TABEL
+    # HOVEDTABEL
     vis_cols = [c_navn, c_pos_visning, c_klub, c_rating, c_status, c_dato, c_scout]
     event = st.dataframe(
         f_df[vis_cols],
@@ -265,7 +259,7 @@ def vis_side():
         }
     )
 
-    # 8. HÅNDTER VALG
+    # VIS DIALOG VED VALG
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
