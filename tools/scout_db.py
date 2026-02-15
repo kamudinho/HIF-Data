@@ -78,12 +78,19 @@ def vis_profil(p_data, full_df, s_df):
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
             s_navn_hist = hent_vaerdi_robust(row, 'Scout')
-            label = f"Rapport fra {hent_vaerdi_robust(row, 'Dato')} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
-            if s_navn_hist: label += f" Scout: {s_navn_hist}"
+            dato_str = hent_vaerdi_robust(row, 'Dato')
+            rating_str = hent_vaerdi_robust(row, 'Rating_Avg')
+            
+            # Vi bruger HTML-lignende spacing (mange faste mellemrum) for at skubbe Scout til højre
+            # Da Streamlit expander labels er plain text, er dette den mest stabile måde:
+            scout_display = f" | Scout: **{s_navn_hist}**" if s_navn_hist else ""
+            label = f"Rapport fra {dato_str} (Rating: {rating_str}){scout_display}"
             
             with st.expander(label):
                 vis_metrikker(row)
-                st.caption(f"Scout: {s_navn_hist or 'Ukendt'}")
+                # Herinde kan vi styre layoutet præcist med kolonner, hvis det ønskes
+                st.markdown(f"<div style='text-align: right;'>Scout: <b>{s_navn_hist or 'Ukendt'}</b></div>", unsafe_allow_html=True)
+                
                 c1, c2, c3 = st.columns(3)
                 with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
                 with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
