@@ -112,40 +112,25 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab5:
         cl, cm, cr = st.columns([1.5, 4, 2.5])
-        # Liste over præcis de navne der står i din CSV (efter UPPERCASE konvertering)
-        cat_cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-        
-        # Vi sikrer os at vi har rigtige tal her
-        v = []
-        for c in cat_cols:
-            val = rens_metrik_vaerdi(nyeste.get(c, 0))
-            v.append(val)
-        
-        # Luk cirklen ved at tilføje første værdi til sidst
+        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
-        theta_labels = [c.capitalize() for c in cat_cols] + [cat_cols[0].capitalize()]
         
+        with cl:
+            st.markdown(f"*{seneste_dato}*")
+            st.caption(f"Scout: {scout_navn}")
+            for cat, val in zip(categories, v):
+                st.markdown(f"**{cat}:** `{val}`")
         with cm:
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(
-                r=v_closed, 
-                theta=theta_labels, 
-                fill='toself', 
-                line_color='#df003b',
-                name='Spillerens Niveau'
-            ))
+            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True, 
-                        range=[0, 5], # Da din rating går til 5
-                        tickvals=[1, 2, 3, 4, 5]
-                    )
-                ), 
-                showlegend=False,
-                margin=dict(l=40, r=40, t=20, b=20)
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
+                showlegend=False, height=450
             )
             st.plotly_chart(fig_radar, use_container_width=True)
+        with cr:
+            vis_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
