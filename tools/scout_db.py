@@ -15,7 +15,6 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def hent_vaerdi_robust(row, col_name):
-    # Konverter row til dict med små bogstaver for sikker søgning
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
@@ -44,15 +43,15 @@ def vis_profil(p_data, full_df, s_df):
     historik = full_df[full_df[id_col].astype(str) == str(p_data['ID'])].sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
     
-    # FIX: Brug robust hentning af datoen for at undgå KeyError
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
+    scout_navn = hent_vaerdi_robust(nyeste, 'Scout') # Leder efter kolonne 'Scout'
 
     st.markdown(f"""
         <div style='text-align: center;'>
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
             <p style='color: gray; font-size: 16px; margin-top:0;'>
                 {p_data.get('KLUB', '')} | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}<br>
-                <b>Seneste rapport: {seneste_dato}</b>
+                <b>Seneste rapport: {seneste_dato}</b> {f'| Scout: {scout_navn}' if scout_navn else ''}
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -67,14 +66,17 @@ def vis_profil(p_data, full_df, s_df):
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
             dato_str = str(hent_vaerdi_robust(row, 'Dato'))
-            with st.expander(f"Rapport fra {dato_str} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"):
+            s_navn = hent_vaerdi_robust(row, 'Scout')
+            label = f"Rapport fra {dato_str} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
+            if s_navn: label += f" - Scout: {s_navn}"
+            
+            with st.expander(label):
                 vis_metrikker(row)
                 st.write("")
                 vis_scout_bokse(row)
 
     with tab3:
         fig_line = go.Figure()
-        # Brug DATO_DT som vi ved er oprettet i vis_side()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='lines+markers', line_color='#df003b'))
         fig_line.update_layout(height=300, yaxis=dict(range=[1, 6]), margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_line, use_container_width=True)
@@ -83,7 +85,9 @@ def vis_profil(p_data, full_df, s_df):
         if s_df.empty: st.info("Ingen kampdata fundet.")
         else:
             sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == str(p_data['ID'])].copy()
-            st.dataframe(sp_stats, use_container_width=True, hide_index=True)
+            # SKJULER PLAYER_WYID ved at definere kolonne-rækkefølge uden den
+            cols_to_show = [c for c in sp_stats.columns if c != 'PLAYER_WYID']
+            st.dataframe(sp_stats, use_container_width=True, hide_index=True, column_order=cols_to_show)
 
     with tab5:
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
@@ -94,6 +98,7 @@ def vis_profil(p_data, full_df, s_df):
         
         with col_left:
             st.markdown(f"### Værdier\n*{seneste_dato}*")
+            if scout_navn: st.caption(f"Scout: {scout_navn}")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
         
@@ -130,8 +135,8 @@ def vis_side():
     c_pos = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
+    c_scout = find_col(df, 'scout') # Tjekker om kolonnen eksisterer
 
-    # Sikr konvertering til dato og tal
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
@@ -144,10 +149,18 @@ def vis_side():
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
-    page_display = f_df.rename(columns={c_navn: "NAVN", c_pos: "POSITION", c_klub: "KLUB", c_rating: "RATING_AVG", c_status: "STATUS", c_dato: "DATO"})
+    # Definér kolonner til hovedtabellen - inkluder Scout hvis den findes
+    cols_to_display = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
+    if c_scout: cols_to_display.insert(4, c_scout)
+    
+    page_display = f_df[cols_to_display].rename(columns={
+        c_navn: "NAVN", c_pos: "POSITION", c_klub: "KLUB", 
+        c_rating: "RATING_AVG", c_status: "STATUS", c_dato: "DATO"
+    })
+    if c_scout: page_display = page_display.rename(columns={c_scout: "SCOUT"})
 
     event = st.dataframe(
-        page_display[["NAVN", "POSITION", "KLUB", "RATING_AVG", "STATUS", "DATO"]],
+        page_display,
         use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
         column_config={"RATING_AVG": st.column_config.NumberColumn("Snit", format="%.1f")}
     )
