@@ -62,6 +62,7 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
+    # Top sektion: Billede til venstre
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -89,20 +90,22 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        # Forbered statistik
+        # Statistik med "Empty" række hvis ingen data
         display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         display_stats = display_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
         
         if display_stats.empty:
-            # Lav en tom række så overskrifterne vises
-            empty_data = {col: ["Ingen data"] for col in display_stats.columns}
-            if not empty_data: # Hvis s_df var helt tom fra start
-                empty_data = {"Info": ["Ingen kampdata fundet"]}
-            display_stats = pd.DataFrame(empty_data)
+            if not s_df.empty:
+                # Opret række med "Ingen data" for hver kolonne der normalt findes
+                empty_row = {col: "Ingen data" for col in s_df.columns if col != 'PLAYER_WYID'}
+                display_stats = pd.DataFrame([empty_row])
+            else:
+                display_stats = pd.DataFrame({"Info": ["Ingen kampdata fundet"]})
         
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
+        # Radar Chart sektionen
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
@@ -129,6 +132,7 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
+    # Find alle kolonner
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -136,7 +140,7 @@ def vis_side():
     c_pos = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
-    c_scout = find_col(df, 'scout')
+    c_scout = find_col(df, 'scout') # Kolonnen vi skal huske!
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
@@ -149,11 +153,16 @@ def vis_side():
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
+    # HER TILFØJES SCOUT TIL OVERSIGTEN
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout: vis_cols.append(c_scout)
+    if c_scout:
+        vis_cols.append(c_scout)
+    
+    # Omdøb for pænere visning i tabellen
+    page_display = f_df[vis_cols].copy()
     
     event = st.dataframe(
-        f_df[vis_cols],
+        page_display,
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
