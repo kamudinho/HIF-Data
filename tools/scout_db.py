@@ -79,7 +79,7 @@ def vis_profil(p_data, full_df, s_df):
         for _, row in historik.iloc[::-1].iterrows():
             s_navn_hist = hent_vaerdi_robust(row, 'Scout')
             label = f"Rapport fra {hent_vaerdi_robust(row, 'Dato')} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
-            if s_navn_hist: label += f" - Scout: {s_navn_hist}"
+            if s_navn_hist: label += f" Scout: {s_navn_hist}"
             
             with st.expander(label):
                 vis_metrikker(row)
@@ -125,7 +125,7 @@ def vis_profil(p_data, full_df, s_df):
             fig_radar.update_layout(
                 polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
                 showlegend=False, 
-                height=550, 
+                height=450, 
                 margin=dict(l=40, r=40, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
