@@ -80,15 +80,16 @@ def vis_profil(p_data, full_df, s_df):
             dato_h = str(hent_vaerdi_robust(row, 'Dato'))
             rat_h = str(hent_vaerdi_robust(row, 'Rating_Avg'))
             
-            # TEKNIK: Vi skaber en label med manuel afstand for at simulere "højrestillet"
-            # Vi bruger en usynlig separator (mellemrum) til at skubbe teksten
-            venstre_tekst = f"📅 {dato_h}  |  ⭐ {rat_h}"
-            højre_tekst = f"SCOUT: {s_navn}"
+            # Rent look: Dato og Rating til venstre, Scout til højre
+            # Vi bruger \u00A0 (non-breaking space) til at skubbe teksten
+            venstre = f"Rapport: {dato_h}  |  Rating: {rat_h}"
+            højre = f"SCOUT: {s_navn}"
             
-            # Vi fylder ud med prikker/mellemrum (Streamlit trimmer ofte whitespace, så vi bruger prikker eller pipes)
-            full_label = f"{venstre_tekst} {'═' * (60 - len(venstre_tekst))} {højre_tekst}"
+            # Vi beregner ca. 50 mellemrum for at skubbe den ud til siden
+            padding = "\u00A0" * 60 
+            label = f"{venstre}{padding}{højre}"
             
-            with st.expander(full_label):
+            with st.expander(label):
                 vis_metrikker(row)
                 st.write("---")
                 c1, c2, c3 = st.columns(3)
