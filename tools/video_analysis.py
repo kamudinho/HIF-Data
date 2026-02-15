@@ -53,7 +53,7 @@ def vis_side(spillere_df):
     )
 
     # --- 5. MODAL VINDUE (Dekoratøren her er vigtig!) ---
-    @st.dialog("Videoanalyse", width="large")
+    @st.dialog()
     def vis_analyse(data, v_map, v_dir):
         # KUN den ønskede linje som overskrift
 
