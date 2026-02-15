@@ -4,27 +4,20 @@ import os
 import re
 
 def rens_dansk_tekst(tekst):
-    """Retter fejl i tegnkodning for danske bogstaver."""
-    if not isinstance(tekst, str):
-        return tekst
-    fejl_map = {
-        "√∏": "ø", "√¶": "æ", "√•": "å",
-        "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å"
-    }
+    if not isinstance(tekst, str): return tekst
+    fejl_map = {"√∏": "ø", "√¶": "æ", "√•": "å", "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å"}
     for fejl, ret in fejl_map.items():
         tekst = tekst.replace(fejl, ret)
     return tekst
 
 def vis_side(spillere_df):
-    # --- 1. OPSÆTNING ---
+    # --- 1. DATA & SETUP ---
     BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
     video_dir = os.path.join(BASE_DIR, 'videos')
 
-    if not os.path.exists(match_path):
-        return
+    if not os.path.exists(match_path): return
 
-    # --- 2. DATA ---
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
@@ -39,7 +32,6 @@ def vis_side(spillere_df):
     df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna("Ukendt")
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
 
-    # --- 3. VIDEO MAPPING ---
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
@@ -56,38 +48,50 @@ def vis_side(spillere_df):
 
     final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
 
-    # --- 4. TABEL ---
+    # --- 2. TABEL ---
     event = st.dataframe(
         final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "SHOTBODYPART"]],
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row"
+        use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE (Klassisk og stabil) ---
+    # --- 3. MODAL VINDUE MED NAV PÅ SAMME LINJE ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # Overskrift
-        st.subheader(data['DYNAMIC_TITLE'])
+        # Initialiser valg af fane i session_state hvis det ikke findes
+        if "active_tab" not in st.session_state:
+            st.session_state.active_tab = "Video"
+
+        # Lav 3 kolonner: [Overskrift, Knap1, Knap2]
+        # Forholdet [6, 1, 1] sørger for at overskriften får plads, og knapperne ryger helt til højre
+        head_col, btn_col1, btn_col2 = st.columns([6, 1.2, 1.2])
         
-        # Tabs
-        tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
+        with head_col:
+            st.subheader(data['DYNAMIC_TITLE'])
         
-        with tab1:
+        with btn_col1:
+            if st.button("🎥 Video", use_container_width=True):
+                st.session_state.active_tab = "Video"
+                st.rerun()
+        
+        with btn_col2:
+            if st.button("📊 Stats", use_container_width=True):
+                st.session_state.active_tab = "Stats"
+                st.rerun()
+
+        # Vis indhold baseret på hvilken knap der er trykket
+        if st.session_state.active_tab == "Video":
             v_fil = v_map.get(data['RENS_ID'])
             video_sti = os.path.join(v_dir, v_fil)
-            # Vi bruger container width for at sikre at den fylder vinduet
             st.video(video_sti, autoplay=True)
 
-        with tab2:
+        else: # Stats fane
             st.write(f"**Spiller:** {data['SPILLER']}")
             c1, c2, c3 = st.columns(3)
             if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
             if 'SHOTBODYPART' in data: c2.metric("Del", f"{data['SHOTBODYPART']}")
             if 'MATCHPERIOD' in data: c3.metric("Halvleg", f"{data['MATCHPERIOD']}")
 
-    # --- 6. TRIGGER ---
+    # --- 4. TRIGGER ---
     if len(event.selection.rows) > 0:
         selected_row = final_df.iloc[event.selection.rows[0]]
         vis_analyse(selected_row, video_map, video_dir)
