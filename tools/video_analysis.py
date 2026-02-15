@@ -12,22 +12,30 @@ def vis_side(spillere_df):
     video_dir = os.path.join(BASE_DIR, 'videos')
 
     if not os.path.exists(match_path):
-        st.error("Kunne ikke finde matches.csv")
+        st.error(f"Kunne ikke finde matches.csv på stien: {match_path}")
         return
 
-    # --- 2. DATA HENTNING & MAPPING ---
+    # --- 2. DATA HENTNING ---
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
+    # Rens kolonnenavne (fjern mellemrum og gør dem store)
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # Map navne fra spillere_df (ligesom i scouting_db)
+    # Map navne fra spillere_df
+    spillere_df = spillere_df.copy()
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', 'Ukendt')))
     
     df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna("Ukendt")
-    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
+    
+    # RENS_ID til video-match
+    if 'EVENT_WYID' in df.columns:
+        df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
+    else:
+        st.error("Kolonnen 'EVENT_WYID' mangler i matches.csv")
+        return
 
-    # Find videoer i mappen
+    # --- 3. VIDEO MAPPING ---
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
@@ -35,59 +43,57 @@ def vis_side(spillere_df):
                 vid_id = "".join(re.findall(r'\d+', os.path.splitext(f)[0]))
                 video_map[vid_id] = f
 
-    # Filtrer så vi kun viser rækker, hvor der faktisk findes en video
+    # Filtrer data
     final_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
-    # Sidebar filter
-    kun_maal = st.sidebar.toggle("Vis kun mål", value=True)
-    if kun_maal and 'SHOTISGOAL' in final_df.columns:
-        final_df = final_df[final_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', '1.0', 't', 'yes'])]
+    if final_df.empty:
+        st.info("Ingen videoer fundet i mappen /videos, der matcher data i matches.csv")
+        return
 
-    # --- 3. HOVEDTABEL (Selection Mode) ---
-    # Vi bruger st.dataframe præcis som i din scouting_db
+    # --- 4. DYNAMISK KOLONNEVALG (Sikrer mod KeyError) ---
+    # Vi tjekker hvilke kolonner der rent faktisk findes i din CSV
+    mulige_kolonner = {
+        "SPILLER": "Navn",
+        "MATCHLABEL": "Kamp",
+        "SHOTXG": "xG",
+        "EVENTNAME": "Type",
+        "SUBEVENTNAME": "Detalje"
+    }
+    
+    # Find kun de kolonner der findes i CSV'en
+    eksisterende_kolonner = [k for k in mulige_kolonner.keys() if k in final_df.columns]
+    
+    # --- 5. HOVEDTABEL ---
     event = st.dataframe(
-        final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "EVENTNAME"]],
+        final_df[eksisterende_kolonner],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        column_config={
-            "SPILLER": "Navn",
-            "MATCHLABEL": "Kamp",
-            "SHOTXG": st.column_config.NumberColumn("xG", format="%.2f"),
-            "EVENTNAME": "Type"
-        }
+        column_config={k: mulige_kolonner[k] for k in eksisterende_kolonner if k == "SHOTXG"} # Formatér kun xG hvis den findes
     )
 
-    # --- 4. ANALYSE DIALOG (POPUP) ---
-    @st.dialog("Videoanalyse & Detaljer", width="large")
+    # --- 6. ANALYSE DIALOG ---
+    @st.dialog("Videoanalyse", width="large")
     def vis_analyse(data, v_map, v_dir):
-        st.markdown(f"### {data['SPILLER']} | {data['MATCHLABEL']}")
+        st.markdown(f"### {data['SPILLER']}")
+        if 'MATCHLABEL' in data: st.write(f"**Kamp:** {data['MATCHLABEL']}")
         st.divider()
 
-        tab1, tab2 = st.tabs(["🎥 Video", "📊 Situationsbillede"])
+        tab1, tab2 = st.tabs(["🎥 Video", "📊 Detaljer"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
             video_sti = os.path.join(v_dir, v_fil)
-            if os.path.exists(video_sti):
-                st.video(video_sti, autoplay=True)
-            else:
-                st.warning("Videofilen kunne ikke findes.")
-            
-            st.info(f"**Detaljer:** Event Type: {data.get('EVENTNAME', 'N/A')} | xG: {data.get('SHOTXG', 'N/A')}")
+            st.video(video_sti, autoplay=True)
 
         with tab2:
-            # Her kan du loade et specifikt billede (f.svg eller .png) hvis de findes
-            # Indtil videre bruger vi et placeholder stadion billede
-            st.image("https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1000", 
-                     caption="Positionering ved afslutning")
-            st.write("**Statistik for aktionen:**")
+            st.write("Statistik for denne aktion:")
             col1, col2 = st.columns(2)
-            col1.metric("Distance", f"{data.get('SHOTDISTANCE', 'N/A')}m")
-            col2.metric("Vinkel", f"{data.get('SHOTANGLE', 'N/A')}°")
+            if 'SHOTXG' in data: col1.metric("xG", f"{data['SHOTXG']:.2f}")
+            if 'EVENTNAME' in data: col2.write(f"**Type:** {data['EVENTNAME']}")
 
-    # Tjek om en række er valgt og åbn dialogen
+    # Vis profil hvis række vælges
     if len(event.selection.rows) > 0:
         selected_row = final_df.iloc[event.selection.rows[0]]
         vis_analyse(selected_row, video_map, video_dir)
