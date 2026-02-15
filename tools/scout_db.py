@@ -48,7 +48,7 @@ def vis_spiller_billede(pid, w=110):
 def vis_metrikker(row):
     m_cols = st.columns(4)
     metrics = [
-        ("Teknik", "TEKNIK"), ("Fart", "FART"), 
+        ("Tekniske færdigheder", "TEKNIK"), ("Fart", "FART"), 
         ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
         ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
         ("Beslutsomhed", "BESLUTSOMHED"), ("Spilintelligens", "SPILINTELLIGENS")
