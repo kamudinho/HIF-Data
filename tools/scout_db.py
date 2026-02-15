@@ -113,7 +113,7 @@ def vis_side():
     with c2:
         with st.popover("Filtre"):
             f_pos = st.multiselect("Positioner", options=sorted(df['POSITION'].unique().tolist()) if 'POSITION' in df.columns else [])
-            f_rating = st.slider("Rating", 1.0, 7.0, (1.0, 7.0), step=0.1)
+            f_rating = st.slider("Rating", 1.0, 6.0, (1.0, 6.0), step=0.1)
 
     # Data behandling
     if df.empty:
