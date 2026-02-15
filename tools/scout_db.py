@@ -51,7 +51,7 @@ def vis_profil(p_data, full_df, s_df):
     with tab3:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO'], y=historik['RATING_AVG'], mode='lines+markers', line_color='#cc0000'))
-        fig_line.update_layout(height=300, yaxis=dict(range=[1, 7]), margin=dict(l=10, r=10, t=30, b=10))
+        fig_line.update_layout(height=300, yaxis=dict(range=[0, 6]), margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
