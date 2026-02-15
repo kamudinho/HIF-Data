@@ -109,8 +109,6 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         # 1. Lav layout med dropdown øverst til højre
         col_title, col_select = st.columns([3, 1])
         
-        with col_title:
-            st.markdown("### Udvikling over tid")
             
         with col_select:
             # Liste over mulige metrics (Rating + de 8 kategorier)
