@@ -66,13 +66,13 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE (Nu med tom titel i toppen) ---
+    # --- 5. MODAL VINDUE (INGEN DIVIDERS) ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # Dette er nu den ENESTE overskrift i vinduet
+        # Overskrift uden divider under
         st.subheader(data['DYNAMIC_TITLE'])
-        st.divider()
-
+        
+        # Tabs uden ekstra luft eller linjer
         tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
         with tab1:
