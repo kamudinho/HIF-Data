@@ -212,13 +212,13 @@ def vis_side():
         selection_mode="single-row", 
         height=700,
         column_config={
-            "NAVN": st.column_config.TextColumn("NAVN"),
-            "POSITION_VISNING": st.column_config.TextColumn("POSITION", alignment="center"),
-            "KLUB": st.column_config.TextColumn("KLUB", alignment="center"),
-            "RATING_AVG": st.column_config.NumberColumn("RATING", format="%.1f", alignment="center"),
-            "STATUS": st.column_config.TextColumn("VURDERING", alignment="center"),
-            "DATO": st.column_config.TextColumn("DATO", alignment="center"),
-            "SCOUT": st.column_config.TextColumn("SCOUT", alignment="center"),
+            "NAVN": st.column_config.TextColumn(label="NAVN"),
+            "POSITION_VISNING": st.column_config.TextColumn(label="POSITION", alignment="center"),
+            "KLUB": st.column_config.TextColumn(label="KLUB", alignment="center"),
+            "RATING_AVG": st.column_config.NumberColumn(label="RATING", format="%.1f", alignment="center"),
+            "STATUS": st.column_config.TextColumn(label="VURDERING", alignment="center"),
+            "DATO": st.column_config.TextColumn(label="DATO", alignment="center"),
+            "SCOUT": st.column_config.TextColumn(label="SCOUT", alignment="center"),
         }
     )
 
