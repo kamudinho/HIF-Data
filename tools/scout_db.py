@@ -148,15 +148,33 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         
         st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
 
-    with tab4:        
-        # 1. Saml data
+    with tab4:
+        st.markdown("### 📊 Statistisk Historik")
+        
+        # 1. Saml data fra aktuel og tidligere sæsoner
         curr = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         df_stats = pd.concat([curr, old], ignore_index=True)
 
         if not df_stats.empty:
-            # 2. Definer hvilke stats der skal have en %-beregning
-            # Format: 'Visningsnavn': ('Total_kolonne', 'Succes_kolonne')
+            # 2. Forbered display dataframe
+            display_stats = pd.DataFrame()
+            
+            # BASIS INFO
+            if 'SEASONNAME' in df_stats.columns: display_stats['Sæson'] = df_stats['SEASONNAME']
+            if 'TEAMNAME' in df_stats.columns: display_stats['Hold'] = df_stats['TEAMNAME']
+            display_stats['Kampe'] = df_stats['MATCHES'].fillna(0).astype(int)
+            display_stats['Minutter'] = df_stats['MINUTESTAGGED'].fillna(0).astype(int)
+
+            # MÅL & ASSISTS
+            display_stats['Mål'] = df_stats['GOALS'].fillna(0).astype(int)
+            display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
+
+            # KORT (Placeret efter assists og før passes)
+            display_stats['Gule'] = df_stats['YELLOWCARDS'].fillna(0).astype(int)
+            display_stats['Røde'] = df_stats['REDCARDS'].fillna(0).astype(int)
+
+            # 3. AVANCEREDE STATS (Med procent-beregning)
             stat_map = {
                 'Passes': ('PASSES', 'SUCCESSFULPASSES'),
                 'Forward Passes': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'),
@@ -165,16 +183,6 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 'Duels': ('DUELS', 'DUELSWON')
             }
 
-            # 3. Lav en ny dataframe til visning
-            display_stats = pd.DataFrame()
-            
-            # Tilføj basis-info først
-            if 'SEASONNAME' in df_stats.columns: display_stats['Sæson'] = df_stats['SEASONNAME']
-            if 'TEAMNAME' in df_stats.columns: display_stats['Hold'] = df_stats['TEAMNAME']
-            display_stats['Kampe'] = df_stats['MATCHES']
-            display_stats['Minutter'] = df_stats['MINUTESTAGGED']
-
-            # 4. Beregn procenter og formater tekst: "Total (XX %)"
             for label, (total_col, success_col) in stat_map.items():
                 if total_col in df_stats.columns and success_col in df_stats.columns:
                     def format_pct(row):
@@ -187,24 +195,11 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                     
                     display_stats[label] = df_stats.apply(format_pct, axis=1)
 
-            # 5. Tilføj de resterende stats (mål, assists, etc.)
-            andre_stats = {
-                'GOALS': 'Mål',
-                'ASSISTS': 'Assists',
-                'TOUCHINBOX': 'Touch i felt',
-                'YELLOWCARD': 'Gule',
-                'REDCARDS': 'Røde'
-            }
-            
-            for col, label in andre_stats.items():
-                if col in df_stats.columns:
-                    display_stats[label] = df_stats[col].fillna(0).astype(int)
-
             # Sorter efter nyeste sæson
             if 'Sæson' in display_stats.columns:
                 display_stats = display_stats.sort_values('Sæson', ascending=False)
 
-            # 6. Vis tabellen
+            # 4. Vis tabellen
             st.dataframe(display_stats, use_container_width=True, hide_index=True)
         else:
             st.info("Ingen statistisk data fundet.")
