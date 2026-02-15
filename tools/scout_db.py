@@ -41,12 +41,6 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
-def vis_scout_bokse_vertikal(row):
-    """Viser scout-bokse stablet ovenpå hinanden."""
-    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
-    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
-    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
-
 # --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
@@ -62,6 +56,7 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
+    # Top sektion
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -88,7 +83,7 @@ def vis_profil(p_data, full_df, s_df):
             
             with st.expander(label):
                 vis_metrikker(row)
-                st.write(f"**Scout:** {s_navn_hist or 'Ukendt'}")
+                st.caption(f"Scout: {s_navn_hist or 'Ukendt'}")
                 c1, c2, c3 = st.columns(3)
                 with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
                 with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
@@ -109,33 +104,37 @@ def vis_profil(p_data, full_df, s_df):
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
-        # --- NYT LAYOUT FOR GRAFIK CARD ---
+        # --- 3 KOLONNER LAYOUT: INFO | RADAR (MIDTEN) | SCOUT TEKST ---
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
         
-        col_side, col_radar = st.columns([1, 2.5]) # Sidekolonne til tekst, radar i midten/højre
+        c_left, c_mid, c_right = st.columns([1.2, 2.5, 1.5])
         
-        with col_side:
+        with c_left:
             st.markdown(f"### Info")
-            st.write(f"**Dato:** {seneste_dato}")
-            st.write(f"**Scout:** {scout_navn or 'Ukendt'}")
+            st.caption(f"Dato: {seneste_dato}")
+            st.caption(f"Scout: {scout_navn or 'Ukendt'}")
             st.write("---")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
-            st.write("---")
-            vis_scout_bokse_vertikal(nyeste) # Styrker osv ovenpå hinanden
         
-        with col_radar:
+        with c_mid:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
                 polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
                 showlegend=False, 
-                height=700, # Radar fylder nu godt nedad
-                margin=dict(l=50, r=50, t=50, b=50)
+                height=550, 
+                margin=dict(l=40, r=40, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
+            
+        with c_right:
+            st.markdown("### Vurdering")
+            st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker') or 'Ingen data'}")
+            st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling') or 'Ingen data'}")
+            st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering') or 'Ingen data'}")
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -168,7 +167,8 @@ def vis_side():
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout: vis_cols.append(c_scout)
+    if c_scout:
+        vis_cols.append(c_scout)
     
     event = st.dataframe(
         f_df[vis_cols],
