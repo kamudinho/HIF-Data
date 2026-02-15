@@ -48,10 +48,10 @@ def vis_spiller_billede(pid, w=110):
 def vis_metrikker(row):
     m_cols = st.columns(4)
     metrics = [
-        ("Beslutsomhed", "BESLUTSOMHED"), ("Fart", "FART"), 
+        ("Teknik", "TEKNIK"), ("Fart", "FART"), 
         ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
         ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
-        ("Teknik", "TEKNIK"), ("Spilintelligens", "SPILINTELLIGENS")
+        ("Beslutsomhed", "BESLUTSOMHED"), ("Spilintelligens", "SPILINTELLIGENS")
     ]
     for i, (label, col) in enumerate(metrics):
         val = rens_metrik_vaerdi(row.get(col, 0))
@@ -211,8 +211,8 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with tab5:
         # 1. Forbered data
-        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Tekniske færdigheder', 'Spilintelligens']
-        cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+        categories = ['Tekniske færdigheder', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Beslutsomhed', 'Spilintelligens']
+        cols = ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']
         
         # Hent værdier fra nyeste rapport
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
