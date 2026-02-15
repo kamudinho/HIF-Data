@@ -4,8 +4,6 @@ import os
 import re
 
 def vis_side(spillere_df):
-    st.markdown("<p style='font-size: 18px; font-weight: bold; margin-bottom: 20px;'>HIF Videoanalyse</p>", unsafe_allow_html=True)
-    
     # --- 1. OPSÆTNING AF STIER ---
     BASE_DIR = os.getcwd()
     match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
@@ -41,32 +39,31 @@ def vis_side(spillere_df):
                 vid_id = "".join(re.findall(r'\d+', os.path.splitext(f)[0]))
                 video_map[vid_id] = f
 
-    # Filtrer data til kun rækker med video
+    # Filtrer data
     final_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
     # --- 4. DYNAMISK TITEL LOGIK ---
-    # Vi laver en hjælpe-kolonne til visning i popup
     def lav_titel(row):
-        event = "Mål" if str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes'] else "Afslutning"
+        is_goal = str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes']
+        event = "Mål" if is_goal else "Afslutning"
         match = row.get('MATCHLABEL', 'Ukendt kamp')
         return f"{event} vs. {match}"
 
-    final_df['VIDEO_TITEL'] = final_df.apply(lav_titel, axis=1)
+    final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
 
     # --- 5. HOVEDTABEL ---
-    # Vi definerer de kolonner vi gerne vil have med (hvis de findes)
     kolonne_map = {
         "SPILLER": "Navn",
         "MATCHLABEL": "Kamp",
-        "TEAMNAME": "Hold",
-        "PERIOD": "Halvleg",
-        "EVENTSEC": "Sekund",
         "SHOTXG": "xG",
-        "EVENTNAME": "Type"
+        "FOOT": "Fod",
+        "PERIOD": "H",
+        "EVENTSEC": "Sekund"
     }
     
     eksisterende = [k for k in kolonne_map.keys() if k in final_df.columns]
     
+    # Vis tabellen
     event = st.dataframe(
         final_df[eksisterende],
         use_container_width=True, 
@@ -75,21 +72,20 @@ def vis_side(spillere_df):
         selection_mode="single-row",
         column_config={
             "SHOTXG": st.column_config.NumberColumn("xG", format="%.2f"),
-            "EVENTSEC": st.column_config.NumberColumn("Sekund", format="%d"),
-            "PERIOD": "H",
-            "TEAMNAME": "Hold"
+            "EVENTSEC": st.column_config.NumberColumn("Sek", format="%d")
         }
     )
 
     # --- 6. ANALYSE DIALOG (POPUP) ---
-    @st.dialog("Videoanalyse", width="large")
+    # Vi lader titlen være tom i selve dekoratøren for at styre den præcist indeni
+    @st.dialog("Detaljer", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # Her bruger vi din nye ønskede overskrift
-        st.markdown(f"### {data['VIDEO_TITEL']}")
-        st.markdown(f"**Spiller:** {data['SPILLER']}")
+        # DIN ØNSKEDE RENE TITEL
+        st.subheader(data['DYNAMIC_TITLE'])
+        st.write(f"**Spiller:** {data['SPILLER']}")
         st.divider()
 
-        tab1, tab2 = st.tabs(["🎥 Video", "📊 Detaljer"])
+        tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
@@ -97,15 +93,14 @@ def vis_side(spillere_df):
             st.video(video_sti, autoplay=True)
 
         with tab2:
-            st.write("**Information om aktionen:**")
             c1, c2, c3 = st.columns(3)
             if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
-            if 'PERIOD' in data: c2.metric("Halvleg", f"{data['PERIOD']}")
-            if 'EVENTSEC' in data: c3.metric("Tid (sek)", f"{int(data['EVENTSEC'])}")
+            if 'FOOT' in data: c2.metric("Fod", f"{data['FOOT']}")
+            if 'PERIOD' in data: c3.metric("Halvleg", f"{data['PERIOD']}")
             
             st.write("---")
             st.write(f"**Hold:** {data.get('TEAMNAME', 'N/A')}")
-            st.write(f"**Event:** {data.get('EVENTNAME', 'N/A')}")
+            st.write(f"**Tidspunkt:** {int(data.get('EVENTSEC', 0))} sekunder inde i halvlegen.")
 
     # Vis dialog hvis række vælges
     if len(event.selection.rows) > 0:
