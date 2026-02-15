@@ -182,7 +182,9 @@ def vis_side():
     p_id = find_col(players_df, 'player_wyid') or 'PLAYER_WYID'
 
     # 3. FIX: TVING TYPER TIL STRING FØR MERGE (Løser ValueError)
+    # Inde i vis_side under punkt 3:
     if p_id in players_df.columns and c_id in db_df.columns:
+        # Fjern .0 og gør til tekst så "123.0" bliver til "123"
         db_df[c_id] = db_df[c_id].astype(str).str.split('.').str[0].str.strip()
         players_df[p_id] = players_df[p_id].astype(str).str.split('.').str[0].str.strip()
 
