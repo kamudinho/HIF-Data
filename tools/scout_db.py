@@ -6,8 +6,8 @@ import numpy as np
 # --- 1. HJÆLPEFUNKTIONER ---
 def rens_metrik_vaerdi(val):
     try:
-        if pd.isna(val): return 0
-        return int(float(val))
+        if pd.isna(val) or val == "": return 0
+        return float(val)
     except:
         return 0
 
@@ -21,7 +21,7 @@ def vis_metrikker(row):
     ]
     for i, (label, col) in enumerate(metrics):
         val = rens_metrik_vaerdi(row.get(col, 0))
-        m_cols[i % 4].metric(label, f"{val}")
+        m_cols[i % 4].metric(label, f"{int(val)}")
 
 # --- 2. PROFIL DIALOG ---
 @st.dialog(" ", width="large")
@@ -60,41 +60,35 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
 
     with tab5:
         m_navne = ["Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
+        # Tving værdier til floats og luk polygonen
         m_værdier = [rens_metrik_vaerdi(nyeste.get(m.upper(), nyeste.get(m, 0))) for m in m_navne]
-        m_værdier += [m_værdier[0]]
-        m_navne_lukket = m_navne + [m_navne[0]]
+        m_værdier.append(m_værdier[0])
+        m_theta = m_navne + [m_navne[0]]
 
         fig_radar = go.Figure()
         fig_radar.add_trace(go.Scatterpolar(
             r=m_værdier,
-            theta=m_navne_lukket,
+            theta=m_theta,
             fill='toself',
             fillcolor='rgba(204, 0, 0, 0.2)',
-            line=dict(color='#cc0000', width=2),
-            name=p_data['NAVN']
+            line=dict(color='#cc0000', width=2)
         ))
 
-        # Rettet update_layout for at undgå ValueError
+        # Simpel layout for at undgå ValueError
         fig_radar.update_layout(
             polar=dict(
                 radialaxis=dict(visible=True, range=[0, 7]),
                 gridshape='polygon'
             ),
             showlegend=False,
-            title={
-                'text': f"<b>{p_data['NAVN']}</b><br><span style='font-size:14px;'>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}</span>",
-                'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'
-            },
-            height=600
+            height=500,
+            margin=dict(t=80, b=40, l=40, r=40),
+            title=f"<b>{p_data['NAVN']}</b><br>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}"
         )
         
-        # Annotation tilføjet separat for at være sikker
-        fig_radar.add_annotation(
-            text=f"<i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i>",
-            xref="paper", yref="paper", x=0.5, y=-0.1, showarrow=False
-        )
-        
+        # Tilføj vurdering i bunden
         st.plotly_chart(fig_radar, use_container_width=True)
+        st.markdown(f"<div style='text-align: center; color: gray;'><i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i></div>", unsafe_allow_html=True)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -126,14 +120,11 @@ def vis_side():
         f_df = f_df[f_df['POSITION'].isin(f_pos)]
     f_df = f_df[(f_df['RATING_AVG'] >= f_rating[0]) & (f_df['RATING_AVG'] <= f_rating[1])]
     
-    hif_avg = df[df['KLUB'].str.contains('Hvidovre', case=False, na=False)]['RATING_AVG'].mean()
-
     # --- VISNING AF TABEL ---
     items_per_page = 20
     total_pages = max(1, int(np.ceil(len(f_df) / items_per_page)))
     
     if 'scout_page' not in st.session_state: st.session_state.scout_page = 1
-    # Sikr at vi ikke er på en side der ikke findes efter filtrering
     if st.session_state.scout_page > total_pages: st.session_state.scout_page = total_pages
 
     start_idx = (st.session_state.scout_page - 1) * items_per_page
@@ -152,17 +143,18 @@ def vis_side():
 
     # --- DISKRET SIDEVÆLGER I BUNDEN ---
     if total_pages > 1:
-        st.write("") # Margin
-        _, p_col, _ = st.columns([4, 1, 4])
-        with p_col:
-            st.session_state.scout_page = st.number_input(
-                f"Side 1-{total_pages}", 
-                min_value=1, 
-                max_value=total_pages, 
-                value=st.session_state.scout_page,
-                label_visibility="collapsed" # Gør den meget diskret
-            )
-            st.caption(f"Side {st.session_state.scout_page} af {total_pages}", help="Indtast sidetal for at skifte")
+        st.write("---")
+        col_prev, col_text, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("← Forrige", disabled=(st.session_state.scout_page <= 1), use_container_width=True):
+                st.session_state.scout_page -= 1
+                st.rerun()
+        with col_text:
+            st.markdown(f"<p style='text-align: center; padding-top: 5px;'>Side {st.session_state.scout_page} af {total_pages}</p>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("Næste →", disabled=(st.session_state.scout_page >= total_pages), use_container_width=True):
+                st.session_state.scout_page += 1
+                st.rerun()
 
     if len(event.selection.rows) > 0:
-        vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
+        vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df, 0)
