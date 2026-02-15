@@ -43,6 +43,7 @@ def vis_side(spillere_df):
     final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
 
     # --- 4. TABEL ---
+    # Vi bruger de rigtige kolonnenavne her
     event = st.dataframe(
         final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "SHOTBODYPART"]],
         use_container_width=True, 
@@ -51,10 +52,12 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE MED TABS OG DEN ENE LINJE ---
+    # --- 5. MODAL VINDUE (Dekoratøren her er vigtig!) ---
+    @st.dialog("Videoanalyse", width="large")
     def vis_analyse(data, v_map, v_dir):
         # KUN den ønskede linje som overskrift
         st.subheader(data['DYNAMIC_TITLE'])
+        st.divider()
 
         tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
@@ -67,9 +70,11 @@ def vis_side(spillere_df):
             st.write(f"**Spiller:** {data['SPILLER']}")
             c1, c2, c3 = st.columns(3)
             if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
-            if 'FOOT' in data: c2.metric("Fod", f"{data['SHOTBODYPART']}")
-            if 'PERIOD' in data: c3.metric("Halvleg", f"{data['MATCHPERIOD']}")
+            # Vi bruger SHOTBODYPART og MATCHPERIOD så de matcher din CSV
+            if 'SHOTBODYPART' in data: c2.metric("Del", f"{data['SHOTBODYPART']}")
+            if 'MATCHPERIOD' in data: c3.metric("Halvleg", f"{data['MATCHPERIOD']}")
 
+    # --- 6. TRIGGER ---
     if len(event.selection.rows) > 0:
         selected_row = final_df.iloc[event.selection.rows[0]]
         vis_analyse(selected_row, video_map, video_dir)
