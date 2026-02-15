@@ -93,7 +93,7 @@ def vis_profil(p_data, full_df, s_df):
     with tab3:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='markers+lines', line_color='#df003b'))
-        fig_line.update_layout(height=350, yaxis=dict(range=[1, 6]))
+        fig_line.update_layout(height=450, yaxis=dict(range=[1, 6]))
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
@@ -117,7 +117,7 @@ def vis_profil(p_data, full_df, s_df):
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
                 polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
-                showlegend=False, height=500
+                showlegend=False, height=450
             )
             st.plotly_chart(fig_radar, use_container_width=True)
         with cr:
