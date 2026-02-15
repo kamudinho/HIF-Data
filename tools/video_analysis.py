@@ -3,6 +3,22 @@ import pandas as pd
 import os
 import re
 
+def rens_dansk_tekst(tekst):
+    """Retter fejl i tegnkodning (encoding) for danske bogstaver."""
+    if not isinstance(tekst, str):
+        return tekst
+    fejl_map = {
+        "√∏": "ø",
+        "√¶": "æ",
+        "√•": "å",
+        "√ò": "Ø",
+        "√Ü": "Æ",
+        "√Ö": "Å"
+    }
+    for fejl, ret skal i fejl_map.items():
+        tekst = tekst.replace(fejl, ret)
+    return tekst
+
 def vis_side(spillere_df):
     # --- 1. OPSÆTNING ---
     BASE_DIR = os.getcwd()
@@ -15,6 +31,10 @@ def vis_side(spillere_df):
     # --- 2. DATA ---
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
+    
+    # Rens alle tekst-kolonner for encoding-fejl
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].apply(rens_dansk_tekst)
     
     spillere_df = spillere_df.copy()
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
@@ -34,16 +54,16 @@ def vis_side(spillere_df):
 
     final_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
-    # Logik til den ene linje
+    # Logik til den rene titel
     def lav_titel(row):
         is_goal = str(row.get('SHOTISGOAL', '')).lower() in ['true', '1', '1.0', 't', 'yes']
         event = "Mål" if is_goal else "Afslutning"
+        # Her er kampnavnet nu renset (Helsingør i stedet for Helsing√∏r)
         return f"{event} vs. {row.get('MATCHLABEL', 'Ukendt kamp')}"
 
     final_df['DYNAMIC_TITLE'] = final_df.apply(lav_titel, axis=1)
 
     # --- 4. TABEL ---
-    # Vi bruger de rigtige kolonnenavne her
     event = st.dataframe(
         final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "SHOTBODYPART"]],
         use_container_width=True, 
@@ -52,12 +72,13 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE (Dekoratøren her er vigtig!) ---
-    @st.dialog("VIDEO", width="medium")
+    # --- 5. MODAL VINDUE ---
+    @st.dialog(width="large")
     def vis_analyse(data, v_map, v_dir):
-        # KUN den ønskede linje som overskrift
+        st.subheader(data['DYNAMIC_TITLE'])
+        st.divider()
 
-        tab1, tab2 = st.tabs(["Video", "Statistik"])
+        tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
@@ -68,7 +89,6 @@ def vis_side(spillere_df):
             st.write(f"**Spiller:** {data['SPILLER']}")
             c1, c2, c3 = st.columns(3)
             if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
-            # Vi bruger SHOTBODYPART og MATCHPERIOD så de matcher din CSV
             if 'SHOTBODYPART' in data: c2.metric("Del", f"{data['SHOTBODYPART']}")
             if 'MATCHPERIOD' in data: c3.metric("Halvleg", f"{data['MATCHPERIOD']}")
 
