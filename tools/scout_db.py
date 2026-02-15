@@ -16,21 +16,22 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def hent_vaerdi_robust(row, col_name):
-    # Denne leder i rækken efter kolonnenavnet uanset case
+    # Leder i rækken efter kolonnen uanset store/små bogstaver
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
-# NY OG FORBEDRET: Mapper positioner korrekt
+# FORBEDRET: Mapper positioner med ekstra tjek for dine specifikke kolonnenavne
 def map_position(row):
-    # Vi leder efter værdierne uanset om kolonnen hedder "POS", "pos", "ROLECODE3" eller "rolecode3"
-    pos_val = str(hent_vaerdi_robust(row, 'pos')).strip()
-    role_val = str(hent_vaerdi_robust(row, 'rolecode3')).strip().upper()
+    # Vi tjekker alle tænkelige navne for position og rolle
+    pos_val = str(hent_vaerdi_robust(row, 'pos') or hent_vaerdi_robust(row, 'position') or "").strip()
+    role_val = str(hent_vaerdi_robust(row, 'rolecode3') or hent_vaerdi_robust(row, 'role') or "").strip().upper()
     
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
         "4": "Stopper", "5": "Stopper", "6": "Defensiv Midt",
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
-        "10": "Offensiv Midt", "11": "Venstre Kant"
+        "10": "Offensiv Midt", "11": "Venstre Kant",
+        "GKP": "Målmand", "DEF": "Forsvarsspiller", "MID": "Midtbane", "FWD": "Angriber"
     }
     
     role_dict = {
@@ -38,25 +39,21 @@ def map_position(row):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
-    # Logik-rækkefølge:
-    # 1. Er det en talkode vi kender?
+    # 1. Tjek talkode eller direkte kode (GKP/DEF) i POS kolonnen
     if pos_val in pos_dict:
         return pos_dict[pos_val]
     
-    # 2. Er det en Rolle-kode vi kender?
+    # 2. Tjek ROLECODE3 kolonnen
     if role_val in role_dict:
         return role_dict[role_val]
     
-    # 3. Er det tekst i POS (mere end 3 tegn)?
-    if len(pos_val) > 3 and pos_val.lower() not in ["nan", "none"]:
+    # 3. Hvis POS er tekst og ikke bare et tal/nan
+    if len(pos_val) > 2 and pos_val.lower() not in ["nan", "none"]:
         return pos_val
     
-    # Fallback
-    return pos_val if pos_val not in ["nan", "", "None"] else "Ukendt"
+    return "Ukendt"
 
-# --- 2. PROFIL DIALOG OG ANDRE FUNKTIONER (FORTSÆTTER UÆNDRET) ---
-# ... (vis_spiller_billede, vis_metrikker, vis_bokse_lodret, vis_bokse_kolonner, vis_profil)
-
+# --- 2. PROFIL DIALOG OG VISNING ---
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
@@ -170,7 +167,7 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Find de rigtige kolonner
+    # Find kolonner dynamisk
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -182,13 +179,14 @@ def vis_side():
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # BRUGER map_position på hele rækken
+    # KØRER MAP_POSITION - den tjekker nu bredt efter kolonnenavne
     df['POS_PAEN'] = df.apply(map_position, axis=1)
     
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
     
+    # Filtre
     valgt_status = st.session_state.get("filter_status", [])
     valgt_scout = st.session_state.get("filter_scout", [])
     valgt_pos = st.session_state.get("filter_pos", [])
@@ -215,6 +213,7 @@ def vis_side():
             st.divider()
             rating_range = st.slider("Rating", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
 
+    # Filtreringslogik
     f_df = df.groupby(c_id).tail(1).copy()
     
     if search:
@@ -228,6 +227,7 @@ def vis_side():
     
     f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
+    # Oversigt
     vis_cols = [c_navn, 'POS_PAEN', c_klub, c_rating, c_status, c_dato, c_scout]
     
     event = st.dataframe(
