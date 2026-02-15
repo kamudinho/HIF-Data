@@ -164,14 +164,68 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.info("Ingen statistisk data fundet.")
 
     with tab5:
+        # 1. Forbered data
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
         
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])), showlegend=False, height=400)
-        st.plotly_chart(fig_radar, use_container_width=True)
+        # Hent værdier fra nyeste rapport
+        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
+        # Luk cirklen ved at tilføje første værdi til sidst
+        v_closed = v + [v[0]]
+        cat_closed = categories + [categories[0]]
+
+        # 2. Layout: 3 kolonner
+        cl, cm, cr = st.columns([1.5, 4, 2.5])
+
+        with cl:
+            st.markdown(f"### Detaljer")
+            st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
+            st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
+            st.divider()
+            # Vis værdier med farveindikation
+            for cat, val in zip(categories, v):
+                color = "#df003b" if val >= 4 else "#eee"
+                st.markdown(f"**{cat}:** `{val}`")
+
+        with cm:
+            # Radar Chart med lineær grid (8-kant)
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed,
+                theta=cat_closed,
+                fill='toself',
+                line=dict(color='#df003b', width=2),
+                fillcolor='rgba(223, 0, 59, 0.3)',
+                marker=dict(size=8, color='#df003b')
+            ))
+
+            fig_radar.update_layout(
+                polar=dict(
+                    angularaxis=dict(
+                        tickfont=dict(size=11),
+                        rotation=90,
+                        direction="clockwise",
+                        gridcolor="grey"
+                    ),
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 5],
+                        tickvals=[1, 2, 3, 4, 5],
+                        gridcolor="grey"
+                    ),
+                    gridshape='linear'  # DETTE GØR DEN TIL EN 8-KANT (IKKE CIRKEL)
+                ),
+                showlegend=False,
+                height=450,
+                margin=dict(l=40, r=40, t=20, b=20)
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
+
+        with cr:
+            st.markdown("### Bemærkninger")
+            st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
+            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
+            st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
