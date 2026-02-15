@@ -41,7 +41,6 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
-# NY: Denne funktion sikrer stablingen
 def vis_bokse_lodret(row):
     st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
     st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
@@ -122,11 +121,9 @@ def vis_profil(p_data, full_df, s_df):
             )
             st.plotly_chart(fig_radar, use_container_width=True)
         with cr:
-            # HER STABLES DE LODRET
             vis_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
-# --- 3. HOVEDFUNKTION (OPDATERET MED DYNAMISK FILTER-TITEL) ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -144,38 +141,59 @@ def vis_side():
 
     st.subheader("Scouting Database")
     
-    # 1. TÆL FILTRE (Vi tjekker session_state før vi tegner popover)
-    # Vi bruger .get() for at undgå fejl første gang siden indlæses
+    # 1. HENT FILTRE FRA SESSION STATE FOR TÆLLING
     valgt_status = st.session_state.get("filter_status", [])
     valgt_scout = st.session_state.get("filter_scout", [])
+    valgt_pos = st.session_state.get("filter_pos", [])
+    rating_range = st.session_state.get("filter_rating", (0.0, 5.0))
     
-    antal = len(valgt_status) + len(valgt_scout)
+    # Tæl aktive filtre (Rating tæller hvis den ikke er standard 0-5)
+    antal = len(valgt_status) + len(valgt_scout) + len(valgt_pos)
+    if rating_range != (0.0, 5.0):
+        antal += 1
+        
     filter_label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
 
-    # 2. SØGNING OG POPOVER
     col_s, col_p = st.columns([4, 1.2]) 
     with col_s:
         search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     with col_p:
-        # Her bruger vi den dynamiske label
         with st.popover(filter_label, use_container_width=True):
-            s_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
-            # Vi tilføjer 'key', så Streamlit husker valget og kan tælle det øverst
+            # Status Filter
+            s_opts = sorted([str(x) for x in df[c_status].dropna().unique() if str(x).strip() != ""])
             valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
             
-            sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
+            # Position Filter (NY)
+            p_opts = sorted([str(x) for x in df[c_pos].dropna().unique() if str(x).strip() != ""])
+            valgt_pos = st.multiselect("Position", options=p_opts, key="filter_pos")
+            
+            # Scout Filter
+            sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique() if str(x).strip() != ""])
             valgt_scout = st.multiselect("Scout", options=sc_opts, key="filter_scout")
 
+            st.divider()
+            # Rating Filter (NY - Slider)
+            st.write("Rating Interval")
+            rating_range = st.slider("Vælg minimum og maksimum", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
+
     # 3. FILTRERINGSLOGIK
+    # Vi tager den nyeste rapport pr. spiller
     f_df = df.groupby(c_id).tail(1).copy()
+    
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
     
-    # Vi bruger de variabler vi fik fra session_state/multiselect
     if valgt_status:
         f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
+        
+    if valgt_pos:
+        f_df = f_df[f_df[c_pos].astype(str).isin(valgt_pos)]
+        
     if valgt_scout:
         f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
+        
+    # Rating filter (mellem min og max fra slider)
+    f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
@@ -186,10 +204,22 @@ def vis_side():
         on_select="rerun", 
         selection_mode="single-row",
         height=1000, 
-        column_config={c_rating: st.column_config.NumberColumn("Rating", format="%.1f")}
+        column_config={
+            c_rating: st.column_config.NumberColumn("Rating", format="%.1f"),
+            c_dato: st.column_config.DateColumn("Dato", format="DD/MM/YYYY")
+        }
     )
 
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
-        vis_profil({'ID': p_row[c_id], 'NAVN': p_row[c_navn], 'KLUB': p_row[c_klub], 'POSITION': p_row[c_pos], 'RATING_AVG': p_row[c_rating]}, df, stats_df)
+        vis_profil({
+            'ID': p_row[c_id], 
+            'NAVN': p_row[c_navn], 
+            'KLUB': p_row[c_klub], 
+            'POSITION': p_row[c_pos], 
+            'RATING_AVG': p_row[c_rating]
+        }, df, stats_df)
+
+if __name__ == "__main__":
+    vis_side()
