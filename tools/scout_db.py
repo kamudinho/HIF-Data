@@ -114,13 +114,20 @@ def vis_profil(p_data, full_df, s_df):
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
         with cm:
+            v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
+            v_closed = v + [v[0]]
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=450)
+            fig_radar.update_layout(
+                polar=dict(
+                    gridshape='linear', # DENNE LINJE GØR DEN KANTET
+                    radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)
+                ), 
+                showlegend=False, 
+                height=450
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
-        with cr:
-            vis_scout_bokse(nyeste, lodret=True)
-
+            
 # --- HOVEDFUNKTION ---
 def vis_side():
     if "main_data" not in st.session_state:
