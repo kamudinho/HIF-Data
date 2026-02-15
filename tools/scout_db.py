@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 # --- 1. HJÆLPEFUNKTIONER ---
 def rens_metrik_vaerdi(val):
-    """Sikrer at vi altid har et heltal til metrikker."""
     try:
         if pd.isna(val): return 0
         return int(float(val))
@@ -12,7 +12,6 @@ def rens_metrik_vaerdi(val):
         return 0
 
 def vis_metrikker(row):
-    """Viser de 8 kerne-metrikker i et grid."""
     m_cols = st.columns(4)
     metrics = [
         ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
@@ -24,19 +23,17 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(row.get(col, 0))
         m_cols[i % 4].metric(label, f"{val}")
 
-# --- 2. PROFIL DIALOG (POP-UP) ---
+# --- 2. PROFIL DIALOG (Med optimeret Grafik-kort) ---
 @st.dialog(" ", width="large")
 def vis_profil(p_data, full_df, s_df, hif_avg):
     st.subheader(f"{p_data['NAVN']} | {p_data['POSITION']} | {p_data['KLUB']}")
-    st.divider()
-
-    historik = full_df[full_df['ID'] == p_data['ID']].sort_values('DATO', ascending=True)
     
-    # Tabs uden ikoner som ønsket
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik"])
+    historik = full_df[full_df['ID'] == p_data['ID']].sort_values('DATO', ascending=True)
+    nyeste = historik.iloc[-1]
+    
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
     
     with tab1:
-        nyeste = historik.iloc[-1]
         vis_metrikker(nyeste)
         st.write("")
         c1, c2, c3 = st.columns(3)
@@ -51,89 +48,113 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
 
     with tab3:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=historik['DATO'], y=historik['RATING_AVG'], mode='lines+markers', name="Rating"))
+        fig.add_trace(go.Scatter(x=historik['DATO'], y=historik['RATING_AVG'], mode='lines+markers', line_color='#cc0000'))
         fig.update_layout(height=300, yaxis=dict(range=[1, 7]), margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
     with tab4:
-        if s_df.empty:
-            st.info("Ingen kampdata fundet.")
+        if s_df.empty: st.info("Ingen kampdata fundet.")
         else:
             sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == str(p_data['ID'])].copy()
             st.dataframe(sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "GOAL"]], use_container_width=True, hide_index=True)
 
     with tab5:
-        # Radardiagram over færdigheder
-        nyeste = historik.iloc[-1]
+        # --- SCOUTING CARD DESIGN ---
         m_navne = ["Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
+        # Vi lukker cirklen ved at tilføje det første punkt igen (giver 8 kanter)
         m_værdier = [rens_metrik_vaerdi(nyeste.get(m.upper(), nyeste.get(m, 0))) for m in m_navne]
-        
-        fig_radar = go.Figure(data=go.Scatterpolar(
+        m_værdier += [m_værdier[0]]
+        m_navne_lukket = m_navne + [m_navne[0]]
+
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
             r=m_værdier,
-            theta=m_navne,
+            theta=m_navne_lukket,
             fill='toself',
-            line_color='#cc0000'
+            fillcolor='rgba(204, 0, 0, 0.3)',
+            line=dict(color='#cc0000', width=2),
+            name=p_data['NAVN']
         ))
+
         fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 7])),
-            showlegend=False,
-            height=400
+            polar=dict(
+                radialaxis=dict(visible=True, range=[0, 7], tickfont_size=10),
+                gridshape='polygon' # <--- Dette gør den 8-kantet i stedet for rund
+            ),
+            title=dict(
+                text=f"<b>{p_data['NAVN']}</b><br><span style='font-size:14px;'>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}</span>",
+                x=0.5, font=dict(size=20)
+            ),
+            annotations=[dict(
+                x=0.5, y=-0.15, showarrow=False,
+                text=f"<i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i>",
+                xref="paper", yref="paper"
+            )],
+            height=600,
+            margin=dict(t=100, b=50, l=50, r=50)
         )
         st.plotly_chart(fig_radar, use_container_width=True)
+        st.caption("Tip: Højreklik på grafen eller brug Plotly-menuen øverst til højre for at gemme som PNG.")
 
-# --- 3. HOVEDFUNKTION TIL SIDEN ---
+# --- 3. HOVEDFUNKTION MED PAGINERING ---
 def vis_side():
     if "main_data" not in st.session_state:
-        st.error("Data ikke fundet. Genindlæs siden.")
+        st.error("Data ikke fundet.")
         return
     
-    # Udpak data fra HIF-dash.py
-    # ev, _, h_map, spillere, stats_df, df_scout
     _, _, _, _, stats_df, df = st.session_state["main_data"]
 
     st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
 
-    # --- FILTRERING ---
+    # Filtrering
     c1, c2 = st.columns([3, 1])
     with c1:
-        search = st.text_input("Søg", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
+        search = st.text_input("Søg", placeholder="Navn eller klub...", label_visibility="collapsed")
     with c2:
         with st.popover("Filtre"):
             f_pos = st.multiselect("Positioner", options=sorted(df['POSITION'].unique().tolist()))
-            f_rating = st.slider("Rating (Snit)", 1.0, 7.0, (1.0, 7.0), step=0.1)
+            f_rating = st.slider("Rating", 1.0, 7.0, (1.0, 7.0), step=0.1)
 
-    # --- DATA BEHANDLING ---
-    # Find nyeste rapport pr. spiller
+    # Data behandling
     rapport_counts = df.groupby('ID').size().reset_index(name='RAPPORTER')
     latest_reports = df.sort_values('DATO').groupby('ID').tail(1)
-    final_df = pd.merge(latest_reports, rapport_counts, on='ID')
+    f_df = pd.merge(latest_reports, rapport_counts, on='ID')
     
-    # Anvend filtre
     if search:
-        final_df = final_df[final_df['NAVN'].str.contains(search, case=False) | final_df['KLUB'].str.contains(search, case=False)]
+        f_df = f_df[f_df['NAVN'].str.contains(search, case=False) | f_df['KLUB'].str.contains(search, case=False)]
     if f_pos:
-        final_df = final_df[final_df['POSITION'].isin(f_pos)]
+        f_df = f_df[f_df['POSITION'].isin(f_pos)]
+    f_df = f_df[(f_df['RATING_AVG'] >= f_rating[0]) & (f_df['RATING_AVG'] <= f_rating[1])]
     
-    final_df = final_df[(final_df['RATING_AVG'] >= f_rating[0]) & (final_df['RATING_AVG'] <= f_rating[1])]
-
-    # Beregn HIF gennemsnit til reference
     hif_avg = df[df['KLUB'].str.contains('Hvidovre', case=False, na=False)]['RATING_AVG'].mean()
 
-    # --- TABEL ---
-    tabel_hoejde = (len(final_df) * 35) + 45
+    # --- PAGINERING LOGIK ---
+    items_per_page = 20
+    total_pages = int(np.ceil(len(f_df) / items_per_page)) if len(f_df) > 0 else 1
+    
+    if 'scout_page' not in st.session_state: st.session_state.scout_page = 1
+    
+    # Vis kun side-vælger hvis der er mere end 1 side
+    if total_pages > 1:
+        page_cols = st.columns([1, 2, 1])
+        with page_cols[1]:
+            st.session_state.scout_page = st.number_input(f"Side (af {total_pages})", min_value=1, max_value=total_pages, value=st.session_state.scout_page)
+
+    start_idx = (st.session_state.scout_page - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    page_df = f_df.iloc[start_idx:end_idx]
+
+    # --- VISNING AF TABEL (Uden scroll) ---
+    tabel_hoejde = (len(page_df) * 35) + 40
     event = st.dataframe(
-        final_df[["NAVN", "POSITION", "KLUB", "RATING_AVG", "STATUS", "RAPPORTER", "DATO"]],
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row",
-        height=min(tabel_hoejde, 600),
+        page_df[["NAVN", "POSITION", "KLUB", "RATING_AVG", "STATUS", "RAPPORTER", "DATO"]],
+        use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
+        height=tabel_hoejde, # Dynamisk højde så scroll forsvinder
         column_config={
             "RATING_AVG": st.column_config.NumberColumn("Snit", format="%.1f"),
             "DATO": st.column_config.DateColumn("Seneste")
         }
     )
 
-    # --- ÅBN PROFIL VED VALG ---
     if len(event.selection.rows) > 0:
-        vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
+        vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
