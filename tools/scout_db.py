@@ -80,11 +80,8 @@ def vis_profil(p_data, full_df, s_df):
             dato_h = str(hent_vaerdi_robust(row, 'Dato'))
             rat_h = str(hent_vaerdi_robust(row, 'Rating_Avg'))
             
-            # Rent look uden ikoner. Scout skubbes til højre med faste mellemrum.
-            venstre = f"Rapport: {dato_h} | Rating: {rat_h}"
-            højre = f"Scout: {s_navn}"
-            # Antallet af mellemrum kan justeres her (80 passer ofte til 'large' dialog)
-            label = f"{venstre}{' ' * 80}{højre}"
+            # Ren tekst-label med masser af mellemrum for at skubbe Scout til højre
+            label = f"Rapport: {dato_h} | Rating: {rat_h}{' ' * 70}Scout: {s_navn}"
             
             with st.expander(label):
                 vis_metrikker(row)
@@ -109,13 +106,11 @@ def vis_profil(p_data, full_df, s_df):
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
-        # TRE KOLONNER: INFO | RADAR | VURDERING
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
         
         c_left, c_mid, c_right = st.columns([1.2, 2.5, 1.5])
-        
         with c_left:
             st.markdown("### Info")
             st.write(f"**Dato:** {seneste_dato}")
@@ -123,16 +118,11 @@ def vis_profil(p_data, full_df, s_df):
             st.write("---")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
-        
         with c_mid:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(
-                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
-                showlegend=False, height=500, margin=dict(l=40, r=40, t=20, b=20)
-            )
+            fig_radar.update_layout(polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), showlegend=False, height=500)
             st.plotly_chart(fig_radar, use_container_width=True)
-            
         with c_right:
             st.markdown("### Vurdering")
             st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
@@ -149,6 +139,7 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
+    # Kolonne-identifikation
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -163,14 +154,28 @@ def vis_side():
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
-    search = st.text_input("Søg...", placeholder="Navn eller klub", label_visibility="collapsed")
     
+    # --- FILTRE TILBAGE ---
+    f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
+    with f_col1:
+        search = st.text_input("Søg spiller eller klub", placeholder="Navn/Klub...")
+    with f_col2:
+        valgt_status = st.multiselect("Status", options=sorted(df[c_status].unique().tolist())) if c_status else []
+    with f_col3:
+        valgt_scout = st.multiselect("Scout", options=sorted(df[c_scout].unique().tolist())) if c_scout else []
+
+    # Filtrering
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
+    if valgt_status:
+        f_df = f_df[f_df[c_status].isin(valgt_status)]
+    if valgt_scout:
+        f_df = f_df[f_df[c_scout].isin(valgt_scout)]
 
-    vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout: vis_cols.append(c_scout)
+    # Kolonner til visning (Inkl. Scout)
+    vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
+    vis_cols = [c for c in vis_cols if c is not None] # Sikkerhed
     
     event = st.dataframe(
         f_df[vis_cols],
