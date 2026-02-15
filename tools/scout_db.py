@@ -116,7 +116,7 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 "Beslutsomhed": "BESLUTSOMHED", "Fart": "FART",
                 "Aggresivitet": "AGGRESIVITET", "Attitude": "ATTITUDE",
                 "Udholdenhed": "UDHOLDENHED", "Lederegenskaber": "LEDEREGENSKABER",
-                "Teknik": "TEKNIK", "Spilintelligens": "SPILINTELLIGENS"
+                "Teknik": "TEKNISKE FÆRDIGHEDER", "Spilintelligens": "SPILINTELLIGENS"
             }
             # Mindre selectbox (label_visibility="collapsed" sparer vertikal plads)
             valgt_label = st.selectbox("Parameter", options=list(metrics_map.keys()), index=0, label_visibility="collapsed")
