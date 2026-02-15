@@ -144,21 +144,39 @@ def vis_side(spillere, player_events):
         hover_tmpl = "<b>%{y}</b><br>"+visning+": %{x:.2f}<br>Succes: %{customdata:.1f}%<extra></extra>"
         custom_data_val = df_plot['PCT']
 
-    # 5. Vis Graf
+   # 5. Vis Graf
     if not df_plot.empty:
         fig = px.bar(
-            df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL',
+            df_plot, 
+            x='VAL', 
+            y='NAVN', 
+            orientation='h', 
+            text='LABEL',
             color_discrete_sequence=[BAR_COLOR],
             custom_data=[custom_data_val] if custom_data_val is not None else None,
             labels={'NAVN': 'Spiller', 'VAL': f"{valg_label} ({visning})"}
         )
         
-        fig.update_traces(hovertemplate=hover_tmpl, textposition='inside', textfont=dict(color='white'))
+        fig.update_traces(
+            hovertemplate=hover_tmpl,
+            # 'auto' placerer tekst udenfor hvis baren er for lille
+            textposition='auto', 
+            # Styr skriftstørrelsen her (insidetextanchor sikrer tekst starter fra bunden af baren)
+            textfont=dict(size=12, color='black'), 
+            insidetextfont=dict(color='white'), # Hvid tekst når den er INDE i baren
+            cliponaxis=False # Sikrer at tekst uden for baren ikke klippes
+        )
+        
         fig.update_layout(
-            yaxis={'categoryorder': 'total ascending'},
+            yaxis={
+                'categoryorder': 'total ascending',
+                'tickfont': dict(size=14) # HER tilpasses skriftstørrelsen på navnene
+            },
             xaxis_title=f"{valg_label.capitalize()} - {visning}",
             yaxis_title="",
             template="plotly_white",
-            height=max(750, len(df_plot) * 30) # Dynamisk højde baseret på antal spillere
+            height=max(800, len(df_plot) * 35), # Lidt mere plads pr. række
+            margin=dict(r=100) # Giver plads i højre side til tekst uden for barerne
         )
+        
         st.plotly_chart(fig, use_container_width=True)
