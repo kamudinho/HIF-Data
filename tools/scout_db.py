@@ -143,16 +143,29 @@ def vis_side():
 
     st.subheader("Scouting Database")
     
-    col_s, col_p = st.columns([4, 1])
+    # SØGNING OG DYNAMISK POPOVER
+    col_s, col_p = st.columns([4, 1.2]) # Lidt mere plads til knappen
+    
     with col_s:
-        search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
-    with col_p:
-        with st.popover("Filtrér"):
-            s_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
-            valgt_status = st.multiselect("Status", options=s_opts)
-            sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
-            valgt_scout = st.multiselect("Scout", options=sc_opts)
+        search = st.text_input("Søg...", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
 
+    # Vi skal bruge en midlertidig løsning til at tælle filtre før popover tegnes helt
+    # Streamlit kører fra top til bund, så vi fanger værdierne her:
+    if 'filter_status' not in st.session_state: st.session_state.filter_status = []
+    if 'filter_scout' not in st.session_state: st.session_state.filter_scout = []
+
+    antal = len(st.session_state.filter_status) + len(st.session_state.filter_scout)
+    label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
+
+    with col_p:
+        with st.popover(label, use_container_width=True):
+            s_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
+            valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
+            
+            sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
+            valgt_scout = st.multiselect("Scout", options=sc_opts, key="filter_scout")
+
+    # Filtrering
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
@@ -163,7 +176,7 @@ def vis_side():
 
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
-    event = st.dataframe(
+    st.dataframe(
         f_df[vis_cols],
         use_container_width=True, 
         hide_index=True, 
