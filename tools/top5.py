@@ -2,23 +2,24 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-def vis_side(spillere_df, player_events_df):
-    # 1. Klargør kopier og rens kolonnenavne
-    p_events = player_events_df.copy()
+def vis_side(spillere_df, stats_df):
+    # 1. Klargør kopier og rens kolonnenavne (Gør alt til UPPERCASE for at undgå fejl)
     s_info = spillere_df.copy()
-    p_events.columns = [c.upper() for c in p_events.columns]
-    s_info.columns = [c.upper() for c in s_info.columns]
+    s_stats = stats_df.copy()
+    
+    s_info.columns = [c.upper().strip() for c in s_info.columns]
+    s_stats.columns = [c.upper().strip() for c in s_stats.columns]
 
-    # Robust ID-håndtering
-    for d in [p_events, s_info]:
+    # 2. Robust ID-håndtering (Konverter PLAYER_WYID til tekst og fjern .0)
+    for d in [s_info, s_stats]:
         id_col = next((c for c in ['PLAYER_WYID', 'WYID'] if c in d.columns), None)
         if id_col:
             d[id_col] = d[id_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
     left_id = next((col for col in ['PLAYER_WYID', 'WYID'] if col in s_info.columns), None)
-    right_id = next((col for col in ['PLAYER_WYID', 'WYID'] if col in p_events.columns), None)
+    right_id = next((col for col in ['PLAYER_WYID', 'WYID'] if col in s_stats.columns), None)
 
-    # --- NY NAVNE-LOGIK: Hent fra s_info (players.csv) ---
+    # 3. Navne-logik: Hent de pæne navne fra spiller-filen
     if 'FIRSTNAME' in s_info.columns and 'LASTNAME' in s_info.columns:
         s_info['NAVN_FINAL'] = (s_info['FIRSTNAME'].fillna('') + " " + s_info['LASTNAME'].fillna('')).str.title()
     elif 'NAVN' in s_info.columns:
@@ -26,47 +27,55 @@ def vis_side(spillere_df, player_events_df):
     else:
         s_info['NAVN_FINAL'] = "Ukendt Spiller"
 
-    # Positions mapping
+    # 4. Positions mapping
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     if 'ROLECODE3' in s_info.columns:
         s_info['POS_DISPLAY'] = s_info['ROLECODE3'].map(pos_map).fillna(s_info['ROLECODE3'])
     else:
         s_info['POS_DISPLAY'] = '-'
 
-    # 3. Merge data - Nu tager vi både NAVN_FINAL og POS_DISPLAY fra spiller-filen
+    # 5. Merge: Kobler sæson-statistikken sammen med navn og position fra spiller-filen
     df = pd.merge(
-        p_events, 
+        s_stats, 
         s_info[[left_id, 'POS_DISPLAY', 'NAVN_FINAL']], 
         left_on=right_id, 
         right_on=left_id, 
         how='inner'
     )
 
-    # KPI Definitioner
+    # KPI Definitioner (Sørg for at disse matcher kolonneoverskrifterne i season_stats.csv)
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'TOTAL_GOALS': 'Målinvolveringer',
         'SHOTS': 'Skud', 'XGSHOT': 'xG', 'PASSES': 'Pasninger',
         'KEYPASSES': 'Nøglepasninger', 'DRIBBLES': 'Driblinger', 'CROSSES': 'Indlæg',
         'INTERCEPTIONS': 'Interceptions', 'TACKLES': 'Tacklinger', 'LOSSES': 'Boldtab', 'FOULS': 'Frispark'
     }
+    
     CATEGORIES = {
         'Generelt': ['GOALS', 'ASSISTS', 'TOTAL_GOALS', 'SHOTS', 'XGSHOT', 'PASSES'],
         'Offensivt': ['GOALS', 'ASSISTS', 'TOTAL_GOALS', 'XGSHOT', 'KEYPASSES', 'DRIBBLES'],
         'Defensivt': ['INTERCEPTIONS', 'TACKLES', 'LOSSES', 'FOULS']
     }
 
+    # Beregn Målinvolveringer hvis den ikke findes i filen
     if 'TOTAL_GOALS' not in df.columns:
         df['TOTAL_GOALS'] = pd.to_numeric(df.get('GOALS', 0), errors='coerce').fillna(0) + \
                             pd.to_numeric(df.get('ASSISTS', 0), errors='coerce').fillna(0)
 
-    # UI
+    # --- UI ---
     c1, c2 = st.columns(2)
     with c1: valgt_kat = st.selectbox("Vælg Kategori", list(CATEGORIES.keys()))
     with c2: visning = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True)
     st.divider()
 
+    # Find de relevante KPI'er der faktisk findes i dataen
     kpis = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     
+    if not kpis:
+        st.warning(f"Ingen af de valgte statistikker blev fundet i season_stats.csv. Tilgængelige kolonner: {list(df.columns)[:10]}...")
+        return
+
+    # Tegn tabellerne i rækker af 3
     for i in range(0, len(kpis), 3):
         cols = st.columns(3)
         for idx, kpi in enumerate(kpis[i:i+3]):
@@ -74,22 +83,19 @@ def vis_side(spillere_df, player_events_df):
                 temp_df = df.copy()
                 temp_df[kpi] = pd.to_numeric(temp_df[kpi], errors='coerce').fillna(0)
                 
-                # Find minutter
-                if 'MINUTESONFIELD' in temp_df.columns:
-                    mins = pd.to_numeric(temp_df['MINUTESONFIELD'], errors='coerce').fillna(0)
-                elif 'MINUTESTAGGED' in temp_df.columns:
-                    mins = pd.to_numeric(temp_df['MINUTESTAGGED'], errors='coerce').fillna(0)
-                else:
-                    mins = pd.Series(0, index=temp_df.index)
+                # Identificer minutter kolonnen i season_stats (typisk MINUTESTAGGED eller MINUTESONFIELD)
+                mins_col = next((c for c in ['MINUTESTAGGED', 'MINUTESONFIELD', 'MINUTES'] if c in temp_df.columns), None)
+                mins = pd.to_numeric(temp_df[mins_col], errors='coerce').fillna(0) if mins_col else pd.Series(0, index=temp_df.index)
 
                 if visning == "Pr. 90":
                     temp_df['VAL'] = np.where(mins > 0, (temp_df[kpi] / mins * 90), 0)
                 else:
                     temp_df['VAL'] = temp_df[kpi]
 
-                # Find Top 5
+                # Top 5 spillere (Vi udelukker spillere med 0 i den pågældende stat)
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=False).head(5)
 
+                # HTML Design
                 header_style = "text-align:center; padding:4px; border-bottom:1px solid #ddd; background:#f8f9fb;"
                 cell_style = "text-align:center; padding:4px; border-bottom:1px solid #eee;"
                 
@@ -115,6 +121,7 @@ def vis_side(spillere_df, player_events_df):
                                 <td style="{cell_style}"><b>{val_str}</b></td>
                             </tr>"""
                 
+                # Udfyld tomme rækker hvis der er færre end 5 spillere
                 for _ in range(5 - len(top5)):
                     html += f"<tr><td style='{cell_style}'>&nbsp;</td><td style='{cell_style}'>&nbsp;</td><td style='{cell_style}'>&nbsp;</td></tr>"
                 
