@@ -71,13 +71,21 @@ def load_hif_data():
         sp = read_github_csv("players.csv")
         ho = read_github_csv("teams.csv")
         sc = read_github_csv("scouting_db.csv")
+        
+        # Nyeste sæson stats
         try: pe = read_github_csv("season_stats.csv")
         except: pe = pd.DataFrame()
+            
+        # Historiske sæsoner stats
+        try: fs = read_github_csv("former_seasons.csv")
+        except: fs = pd.DataFrame()
 
-        for d in [sp, pe, sc, ho]:
+        # Rens ID'er for alle relevante dataframes
+        for d in [sp, pe, sc, ho, fs]:
+            if d.empty: continue
             for col in ['PLAYER_WYID', 'ID', 'TEAM_WYID', 'WYID']:
                 if col in d.columns:
-                    d[col] = d[col].astype(str).str.split('.').str[0]
+                    d[col] = d[col].astype(str).str.split('.').str[0].str.strip()
 
         h_map = dict(zip(ho['TEAM_WYID'], ho['TEAMNAME']))
         
@@ -89,15 +97,19 @@ def load_hif_data():
         else: 
             ev = pd.DataFrame()
 
-        return ev, pd.DataFrame(), h_map, sp, pe, sc
+        # Returner 7 elementer: events, kamp_df, hold_map, spillere, current_stats, scouting, former_stats
+        return ev, pd.DataFrame(), h_map, sp, pe, sc, fs
     except Exception as e:
         st.error(f"Fejl ved indlæsning: {e}")
-        return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        # Returnerer tomme objekter ved fejl for at undgå crash
+        return pd.DataFrame(), pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
+# Indlæs data til session state
 if "main_data" not in st.session_state:
     st.session_state["main_data"] = load_hif_data()
 
-df_events, kamp, hold_map, spillere, player_events, df_scout = st.session_state["main_data"]
+# Udpak data til variabler
+df_events, kamp, hold_map, spillere, player_events, df_scout, former_events = st.session_state["main_data"]
 
 # --- 5. SIDEBAR NAVIGATION ---
 with st.sidebar:
@@ -113,9 +125,9 @@ with st.sidebar:
     
     selected = "Oversigt" 
     if hoved_omraade == "Truppen":
-        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=["people"]*4, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=["people", "magic", "bar-chart-line", "trophy"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], icons=["graph-up", "graph-up", "graph-up", "play-btn"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], icons=["grid-3x3", "target", "map", "play-btn"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
         selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
@@ -128,6 +140,7 @@ elif selected == "Forecast":
     squad.vis_side(spillere)
 elif selected == "Spillerstats":
     import tools.stats as stats
+    # Her kan du nu tilføje former_events hvis stats-modulet understøtter det
     stats.vis_side(spillere, player_events)
 elif selected == "Top 5":
     import tools.top5 as top5
