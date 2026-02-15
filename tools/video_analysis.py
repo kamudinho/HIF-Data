@@ -65,25 +65,19 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE (OPTIMERET PLADS) ---
+    # --- 5. MODAL VINDUE (Klassisk og stabil) ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # CSS hack: Fjerner polstring i dialog-boksen så videoen kan blive større
-        st.markdown("""
-            <style>
-                [data-testid="stDialog"] div:first-child { padding: 10px; }
-                .stTabs [data-baseweb="tab-panel"] { padding-top: 10px; }
-            </style>
-        """, unsafe_allow_html=True)
-
+        # Overskrift
         st.subheader(data['DYNAMIC_TITLE'])
         
+        # Tabs
         tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
             video_sti = os.path.join(v_dir, v_fil)
-            # Vi sikrer os at videoen bruger 100% bredde
+            # Vi bruger container width for at sikre at den fylder vinduet
             st.video(video_sti, autoplay=True)
 
         with tab2:
