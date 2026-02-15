@@ -76,18 +76,15 @@ def vis_profil(p_data, full_df, s_df):
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            s_navn = str(hent_vaerdi_robust(row, 'Scout')).upper()
+            s_navn = str(hent_vaerdi_robust(row, 'Scout'))
             dato_h = str(hent_vaerdi_robust(row, 'Dato'))
             rat_h = str(hent_vaerdi_robust(row, 'Rating_Avg'))
             
-            # Rent look: Dato og Rating til venstre, Scout til højre
-            # Vi bruger \u00A0 (non-breaking space) til at skubbe teksten
-            venstre = f"Rapport: {dato_h}  |  Rating: {rat_h}"
-            højre = f"SCOUT: {s_navn}"
-            
-            # Vi beregner ca. 50 mellemrum for at skubbe den ud til siden
-            padding = "\u00A0" * 60 
-            label = f"{venstre}{padding}{højre}"
+            # Rent look uden ikoner. Scout skubbes til højre med faste mellemrum.
+            venstre = f"Rapport: {dato_h} | Rating: {rat_h}"
+            højre = f"Scout: {s_navn}"
+            # Antallet af mellemrum kan justeres her (80 passer ofte til 'large' dialog)
+            label = f"{venstre}{' ' * 80}{højre}"
             
             with st.expander(label):
                 vis_metrikker(row)
@@ -107,12 +104,12 @@ def vis_profil(p_data, full_df, s_df):
         display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         display_stats = display_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
         if display_stats.empty:
-            empty_row = {col: "Ingen data" for col in s_df.columns if col != 'PLAYER_WYID'}
+            empty_row = {col: "Empty" for col in s_df.columns if col != 'PLAYER_WYID'}
             display_stats = pd.DataFrame([empty_row])
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
-        # --- 3 KOLONNER LAYOUT ---
+        # TRE KOLONNER: INFO | RADAR | VURDERING
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
