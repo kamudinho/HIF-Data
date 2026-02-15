@@ -19,17 +19,16 @@ def hent_vaerdi_robust(row, col_name):
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
-def vis_spiller_billede(pid, w=100):
+def vis_spiller_billede(pid, w=120):
     """Henter spillerbillede fra Wyscout CDN."""
-    # Fjern eventuelle citationstegn fra ID
     pid_clean = str(pid).replace('"', '').replace("'", "").strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     try:
         resp = requests.head(url, timeout=0.8)
-        st.image(url if resp.status_code == 200 else std, width=w if resp.status_code == 200 else int(w*0.92))
+        st.image(url if resp.status_code == 200 else std, width=w)
     except:
-        st.image(std, width=int(w*0.92))
+        st.image(std, width=w)
 
 def vis_metrikker(row):
     m_cols = st.columns(4)
@@ -64,13 +63,11 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # --- NYT LAYOUT: Billede til venstre, Tekst til højre ---
-    head_left, head_right = st.columns([1, 4]) # Vi bytter rundt her
-    
-    with head_left:
-        vis_spiller_billede(clean_p_id, w=120) # Lidt større billede nu det er i fokus
-
-    with head_right:
+    # Top sektion: Billede til VENSTRE, tekst til HØJRE
+    head_col1, head_col2 = st.columns([1, 3])
+    with head_col1:
+        vis_spiller_billede(clean_p_id, w=120)
+    with head_col2:
         st.markdown(f"""
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
             <p style='color: gray; font-size: 18px; margin-top:0;'>
@@ -78,9 +75,6 @@ def vis_profil(p_data, full_df, s_df):
                 <span style='font-size: 14px;'><b>Seneste rapport: {seneste_dato}</b> {f'| Scout: {scout_navn}' if scout_navn else ''}</span>
             </p>
         """, unsafe_allow_html=True)
-    
-    with head_right:
-        vis_spiller_billede(clean_p_id, w=110)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
     
@@ -92,68 +86,45 @@ def vis_profil(p_data, full_df, s_df):
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
             dato_str = str(hent_vaerdi_robust(row, 'Dato'))
-            s_navn = hent_vaerdi_robust(row, 'Scout')
             label = f"Rapport fra {dato_str} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
-            if s_navn: label += f" - Scout: {s_navn}"
-            
             with st.expander(label):
                 vis_metrikker(row)
-                st.write("")
                 vis_scout_bokse(row)
 
     with tab3:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='lines+markers', line_color='#df003b'))
-        fig_line.update_layout(height=300, yaxis=dict(range=[1, 6]), margin=dict(l=10, r=10, t=30, b=10))
+        fig_line.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
         if s_df.empty: st.info("Ingen kampdata fundet.")
         else:
             sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-            cols_to_show = [c for c in sp_stats.columns if c != 'PLAYER_WYID']
-            st.dataframe(sp_stats, use_container_width=True, hide_index=True, column_order=cols_to_show)
+            st.dataframe(sp_stats, use_container_width=True, hide_index=True, height=400) # Fast højde for at undgå scroll
 
     with tab5:
+        # Grafik card (Radar) som før...
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
-        
-        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
-        
-        with col_left:
-            st.markdown(f"### Værdier\n*{seneste_dato}*")
-            if scout_navn: st.caption(f"Scout: {scout_navn}")
-            for cat, val in zip(categories, v):
-                st.markdown(f"**{cat}:** `{val}`")
-        
-        with col_mid:
+        c_l, c_m, c_r = st.columns([1.5, 4, 2.5])
+        with c_m:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(
-                polar=dict(
-                    gridshape='linear', 
-                    radialaxis=dict(visible=True, range=[0, 6], showticklabels=False, gridcolor="lightgray")
-                ),
-                showlegend=False, height=450, margin=dict(l=40, r=40, t=20, b=20)
-            )
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=400)
             st.plotly_chart(fig_radar, use_container_width=True)
-            
-        with col_right:
-            vis_scout_bokse(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
     if "main_data" not in st.session_state:
-        st.error("Data ikke fundet i session_state.")
+        st.error("Data ikke fundet.")
         return
     
-    # Hent data fra session_state (forventer stats på index 4 og scout_df på index 5)
     all_data = st.session_state["main_data"]
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Find kolonner
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -161,53 +132,29 @@ def vis_side():
     c_pos = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
-    c_scout = find_col(df, 'scout')
 
-    # Præparér data
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-    df = df.sort_values('DATO_DT')
-
-    st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
-
-    # Søgefelt
+    
+    st.subheader("Scouting Database")
     search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     
-    # Gruppér for at få seneste status pr. spiller i oversigten
     f_df = df.groupby(c_id).tail(1).copy()
-    
     if search:
-        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | 
-                    f_df[c_klub].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
-    # Klargør tabelvisning
-    disp_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout: disp_cols.append(c_scout)
-    
-    page_display = f_df[disp_cols].rename(columns={
-        c_navn: "NAVN", c_pos: "POS", c_klub: "KLUB", 
-        c_rating: "RATING", c_status: "STATUS", c_dato: "DATO"
-    })
-    if c_scout: page_display = page_display.rename(columns={c_scout: "SCOUT"})
-
+    # HER RETTES SCROLL-PROBLEMET:
+    # Vi sætter height=600 eller lignende, så tabellen fylder skærmen ud.
     event = st.dataframe(
-        page_display,
+        f_df[[c_navn, c_pos, c_klub, c_rating, c_status, c_dato]],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        column_config={"RATING": st.column_config.NumberColumn("Rating", format="%.1f")}
+        height=600 # <--- Dette fjerner scroll i selve containeren
     )
 
-    # Hvis en række vælges, åbn profilen
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
-        p_data = {
-            'ID': p_row[c_id],
-            'NAVN': p_row[c_navn],
-            'KLUB': p_row[c_klub],
-            'POSITION': p_row[c_pos],
-            'RATING_AVG': p_row[c_rating]
-        }
-        vis_profil(p_data, df, stats_df)
+        vis_profil({'ID': p_row[c_id], 'NAVN': p_row[c_navn], 'KLUB': p_row[c_klub], 'POSITION': p_row[c_pos], 'RATING_AVG': p_row[c_rating]}, df, stats_df)
