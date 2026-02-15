@@ -1,93 +1,82 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
 import re
 from mplsoccer import VerticalPitch
 
-# --- 1. VIDEO POPUP FUNKTION ---
-@st.dialog("Videoanalyse")
-def vis_video_modal(event_id):
+def vis_side(dummy_input):
+    st.title("HIF Mål-oversigt")
+    
+    # 1. Stier
+    match_path = 'data/matches.csv'
+    player_path = 'data/players.csv'
     video_dir = 'videos'
-    clean_id = "".join(re.findall(r'\d+', str(event_id).replace('.0', '')))
-    video_fil = f"{clean_id}.mp4"
-    video_sti = os.path.join(video_dir, video_fil)
 
-    if os.path.exists(video_sti):
-        st.video(video_sti)
-    else:
-        st.error(f"Kunne ikke finde videofilen for ID: {clean_id}")
-
-# --- 2. HOVEDFUNKTION ---
-def vis_side(df_events, df_spillere, hold_map):
-    HIF_RED = '#d31313'
-
-    # DATA-PROCESSERING
-    csv_path = 'shotevents.csv'
-    if not os.path.exists(csv_path):
-        st.error("shotevents.csv mangler!")
+    if not os.path.exists(match_path):
+        st.error(f"Mangler {match_path}")
         return
 
-    df = pd.read_csv(csv_path)
-    df.columns = [c.upper() for c in df.columns]
+    # 2. Indlæs og map navne
+    df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
+    df.columns = [c.strip().upper() for c in df.columns]
 
-    # Mapping af spillernavne fra players.csv
-    navne_dict = dict(zip(df_spillere['PLAYER_WYID'].astype(str).str.replace('.0','', regex=False), df_spillere['NAVN']))
-    df['SPILLER_NAVN'] = df['PLAYER_WYID'].astype(str).str.replace('.0','', regex=False).map(navne_dict).fillna("Ukendt")
+    if os.path.exists(player_path):
+        p_df = pd.read_csv(player_path, encoding='utf-8-sig', sep=None, engine='python')
+        p_df.columns = [c.strip().upper() for c in p_df.columns]
+        # Mapper PLAYER_WYID (som tekst) til NAVN
+        navne_map = dict(zip(p_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False), p_df['NAVN']))
+    else:
+        navne_map = {}
 
-    # --- FILTRERING: VIS KUN MÅL SOM STANDARD ---
-    # Vi filtrerer så vi kun ser mål (SHOTISGOAL = True)
-    df_goals = df[df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', 't'])].copy().reset_index(drop=True)
-    df_goals['SHOT_NR'] = df_goals.index + 1
+    # Indsæt spillernavne i match-data
+    df['SPILLER'] = df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False).map(navne_map).fillna(df['PLAYER_WYID'])
 
-    st.title("Alle Sæsonens Mål")
+    # 3. Find videoer (uden at stjæle 4-tallet fra .mp4)
+    video_map = {}
+    if os.path.exists(video_dir):
+        for f in os.listdir(video_dir):
+            if f.lower().endswith('.mp4'):
+                # Fjerner .mp4 FØR rensning for tal
+                rent_navn = os.path.splitext(f)[0]
+                clean_id = "".join(re.findall(r'\d+', rent_navn))
+                video_map[clean_id] = f
 
-    layout_venstre, layout_hoejre = st.columns([2, 1])
+    # 4. Rens CSV ID'er og filtrer til dem med video
+    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
+    tabel_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
-    with layout_hoejre:
-        st.write("### Målliste")
-        
-        # Popover med tabel over alle mål
-        with st.popover("Se alle mål-detaljer", use_container_width=True):
-            h = st.columns([1, 3, 2, 2])
-            h[0].write("**Nr.**")
-            h[1].write("**Spiller / Kamp**")
-            h[2].write("**Score**")
-            h[3].write("**Video**")
-            st.divider()
+    # 5. Visning - Vi starter med alle mål på banen
+    st.subheader("Sæsonens mål")
+    
+    # Filtrer så vi kun viser mål i tabellen og på banen
+    maal_df = tabel_df[tabel_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', 't'])].copy()
+    maal_df['NR'] = range(1, len(maal_df) + 1)
 
-            for idx, row in df_goals.iterrows():
-                r = st.columns([1, 3, 2, 2])
-                r[0].write(f"{int(row['SHOT_NR'])}")
-                r[1].write(f"**{row['SPILLER_NAVN']}**\n{row['MATCHLABEL']}")
-                r[2].write(row['SCORE'])
+    col1, col2 = st.columns([2, 1])
+
+    with col2:
+        # Liste over mål
+        with st.popover("Se målliste", use_container_width=True):
+            for idx, row in maal_df.iterrows():
+                c_id, c_navn, c_btn = st.columns([1, 3, 2])
+                c_id.write(f"#{row['NR']}")
+                c_navn.write(f"**{row['SPILLER']}**\n{row['MATCHLABEL']}")
                 
-                # Unik knap til video
-                if r[3].button("Se video", key=f"goal_btn_{idx}_{row['EVENT_WYID']}"):
-                    vis_video_modal(row['EVENT_WYID'])
+                # Video knap
+                if c_btn.button("Se", key=f"btn_{row['RENS_ID']}"):
+                    st.session_state['active_video'] = os.path.join(video_dir, video_map[row['RENS_ID']])
 
-        # Hurtige stats
-        st.divider()
-        st.metric("Total antal mål", len(df_goals))
-        st.metric("Gns. xG pr. mål", f"{df_goals['SHOTXG'].mean():.2f}")
+        if 'active_video' in st.session_state:
+            st.video(st.session_state['active_video'])
 
-    with layout_venstre:
-        # Bane-tegning
+    with col1:
+        # Bane med alle mål
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
-        fig, ax = pitch.draw(figsize=(6, 5))
-        ax.set_ylim(45, 102) 
-
-        # Tegn alle mål på banen
-        for _, row in df_goals.iterrows():
-            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=200, 
-                       color='gold', 
-                       edgecolors='black', 
-                       linewidth=1, 
-                       alpha=0.9, zorder=3)
-            
-            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['SHOT_NR'])), 
-                    color='black', ha='center', va='center', 
-                    fontsize=6, fontweight='bold', zorder=4)
+        fig, ax = pitch.draw()
         
-        st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
+        for _, row in maal_df.iterrows():
+            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], s=150, color='gold', edgecolors='white', zorder=3)
+            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(row['NR']), 
+                    color='black', ha='center', va='center', fontsize=6, fontweight='bold')
+        
+        st.pyplot(fig)
