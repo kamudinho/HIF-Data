@@ -106,59 +106,47 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 with hc3: st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
 
     with tab3:
-        # 1. Lav layout med dropdown øverst til højre
-        col_title, col_select = st.columns([3, 1])
-        
-            
-        with col_select:
-            # Liste over mulige metrics (Rating + de 8 kategorier)
-            metrics_options = {
+        # Kompakt header med dropdown på samme linje
+        h_col1, h_col2 = st.columns([2, 1])
+        with h_col1:
+            st.markdown("#### Udviklingskurve (1-6)")
+        with h_col2:
+            metrics_map = {
                 "Gennemsnit": "RATING_AVG",
-                "Beslutsomhed": "BESLUTSOMHED",
-                "Fart": "FART",
-                "Aggresivitet": "AGGRESIVITET",
-                "Attitude": "ATTITUDE",
-                "Udholdenhed": "UDHOLDENHED",
-                "Lederegenskaber": "LEDEREGENSKABER",
-                "Teknik": "TEKNIK",
-                "Spilintelligens": "SPILINTELLIGENS"
+                "Beslutsomhed": "BESLUTSOMHED", "Fart": "FART",
+                "Aggresivitet": "AGGRESIVITET", "Attitude": "ATTITUDE",
+                "Udholdenhed": "UDHOLDENHED", "Lederegenskaber": "LEDEREGENSKABER",
+                "Teknik": "TEKNIK", "Spilintelligens": "SPILINTELLIGENS"
             }
-            
-            valgt_kolonne = metrics_options[valgt_label]
+            # Mindre selectbox (label_visibility="collapsed" sparer vertikal plads)
+            valgt_label = st.selectbox("Parameter", options=list(metrics_map.keys()), index=0, label_visibility="collapsed")
+            valgt_col = metrics_map[valgt_label]
 
-        # 2. Generer grafen baseret på valget
+        # Graf-opbygning
         fig_line = go.Figure()
-        
         fig_line.add_trace(go.Scatter(
             x=historik['DATO_DT'], 
-            y=historik[valgt_kolonne], 
+            y=historik[valgt_col], 
             mode='markers+lines', 
-            line=dict(color='#df003b', width=3),
-            marker=dict(size=10, symbol='circle'),
-            name=valgt_label,
-            hovertemplate="<b>Dato:</b> %{x}<br><b>Værdi:</b> %{y}<extra></extra>"
+            line=dict(color='#df003b', width=2),
+            marker=dict(size=8),
+            name=valgt_label
         ))
 
-        # 3. Styling af layout
         fig_line.update_layout(
-            height=450,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(
-                title="Dato for rapport",
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.2)'
-            ),
+            height=300, # Reduceret højde for at spare plads
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(gridcolor='rgba(200, 200, 200, 0.1)'),
             yaxis=dict(
-                title=valgt_label,
-                range=[0.5, 5.5] if valgt_kolonne != "RATING_AVG" else [0.5, 6.5], # Juster range efter behov
-                tickvals=[1, 2, 3, 4, 5],
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.2)'
+                range=[0.8, 6.2], # Viser skalaen fra 1-6 tydeligt
+                tickvals=[1, 2, 3, 4, 5, 6],
+                gridcolor='rgba(200, 200, 200, 0.1)'
             ),
-            plot_bgcolor='white'
+            plot_bgcolor='white',
+            hovermode="x unified"
         )
         
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
 
     with tab4:        
         # 1. Saml data
