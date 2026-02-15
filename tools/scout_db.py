@@ -20,7 +20,6 @@ def hent_vaerdi_robust(row, col_name):
     val = row_dict.get(col_name.strip().lower(), "")
     return "" if pd.isna(val) else val
 
-# Oversættelse af POS-tal direkte i POS kolonnen
 def map_position(row):
     pos_raw = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
     role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
@@ -66,13 +65,18 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
+def vis_bokse_lodret(row):
+    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+
 def vis_bokse_kolonner(row):
     c1, c2, c3 = st.columns(3)
     with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
     with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
     with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
-# --- 2. PROFIL DIALOG ---
+# --- 2. PROFIL DIALOG (NU MED ALLE TABS) ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
@@ -96,10 +100,54 @@ def vis_profil(p_data, full_df, s_df):
         st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radarchart"])
+    
     with tab1:
         vis_metrikker(nyeste)
         vis_bokse_kolonner(nyeste)
-    # (Resten af fanerne følger din logik...)
+
+    with tab2:
+        for _, row in historik.iloc[::-1].iterrows():
+            h_scout = hent_vaerdi_robust(row, 'Scout')
+            h_dato = hent_vaerdi_robust(row, 'Dato')
+            h_rate = hent_vaerdi_robust(row, 'Rating_Avg')
+            with st.expander(f"Rapport: {h_dato} | Scout: {h_scout} | Rating: {h_rate}"):
+                vis_metrikker(row)
+                vis_bokse_kolonner(row)
+
+    with tab3:
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='markers+lines', line_color='#df003b'))
+        fig_line.update_layout(height=450, yaxis=dict(range=[1, 6]), title="Rating over tid")
+        st.plotly_chart(fig_line, use_container_width=True)
+
+    with tab4:
+        display_stats = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id, na=False)].copy()
+        if not display_stats.empty:
+            st.dataframe(display_stats.drop(columns=['PLAYER_WYID'], errors='ignore'), use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen statistisk data fundet for denne spiller.")
+
+    with tab5:
+        cl, cm, cr = st.columns([1.5, 4, 2.5])
+        categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
+        v_closed = v + [v[0]]
+        
+        with cl:
+            st.markdown(f"*{seneste_dato}*")
+            st.caption(f"Scout: {scout_navn}")
+            for cat, val in zip(categories, v):
+                st.markdown(f"**{cat}:** `{val}`")
+        with cm:
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
+            fig_radar.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
+                showlegend=False, height=450
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
+        with cr:
+            vis_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -116,14 +164,13 @@ def vis_side():
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # VI BRUGER POS DIREKTE (oversætter tal til tekst i den eksisterende kolonne)
+    # BRUGER DIN POS DIREKTE
     df[c_pos] = df.apply(map_position, axis=1)
     
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
     
-    # FILTRE
     valgt_status = st.session_state.get("filter_status", [])
     valgt_pos = st.session_state.get("filter_pos", [])
     rating_range = st.session_state.get("filter_rating", (0.0, 5.0))
@@ -139,15 +186,11 @@ def vis_side():
         with st.popover(filter_label, use_container_width=True):
             s_opts = sorted([str(x) for x in df[c_status].dropna().unique() if str(x).strip() != ""])
             valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
-            
-            # Filteret kigger nu i den opdaterede POS kolonne
             p_opts = sorted([str(x) for x in df[c_pos].unique() if str(x).strip() != ""])
             valgt_pos = st.multiselect("Position", options=p_opts, key="filter_pos")
-
             st.divider()
             rating_range = st.slider("Rating Interval", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
 
-    # FILTRERINGSLOGIK
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
@@ -157,7 +200,6 @@ def vis_side():
         f_df = f_df[f_df[c_pos].isin(valgt_pos)]
     f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
-    # TABEL
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     event = st.dataframe(
         f_df[vis_cols],
