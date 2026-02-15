@@ -11,11 +11,6 @@ def rens_metrik_vaerdi(val):
         return int(float(str(val).replace(',', '.')))
     except: return 0
 
-def hent_vaerdi_robust(row, col_name):
-    col_upper = col_name.strip().upper()
-    val = row.get(col_upper, "")
-    return "" if pd.isna(val) else val
-
 def map_position(row):
     db_pos = str(row.get('POSITION', '')).strip().split('.')[0]
     csv_pos = str(row.get('POS', '')).strip().split('.')[0]
@@ -57,12 +52,7 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(row.get(col, 0))
         m_cols[i % 4].metric(label, f"{val}")
 
-def vis_bokse_lodret(row):
-    st.success(f"**Styrker**\n\n{row.get('STYRKER', '-')}")
-    st.warning(f"**Udvikling**\n\n{row.get('UDVIKLING', '-')}")
-    st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
-
-# --- 3. PROFIL DIALOG (Opdateret med historisk statistik) ---
+# --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, fs_df):
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
@@ -87,26 +77,21 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         vis_metrikker(nyeste)
         st.divider()
         c1, c2, c3 = st.columns(3)
-        with c1: st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', 'Ingen data')}")
-        with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', 'Ingen data')}")
-        with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', 'Ingen data')}")
+        with c1: st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
+        with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
+        with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
     with tab2:
-        # Vi kører igennem historikken (nyeste først)
         for _, row in historik.iloc[::-1].iterrows():
             with st.expander(f"Rapport: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
-                # Vis tallene øverst (ligesom i Tab 1)
                 vis_metrikker(row)
                 st.divider()
-                
-                # Vis boksene i 3 kolonner (ligesom i Tab 1)
                 hc1, hc2, hc3 = st.columns(3)
                 with hc1: st.success(f"**Styrker**\n\n{row.get('STYRKER', '-')}")
                 with hc2: st.warning(f"**Udvikling**\n\n{row.get('UDVIKLING', '-')}")
                 with hc3: st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
 
     with tab3:
-        # Kompakt header med dropdown på samme linje
         h_col1, h_col2 = st.columns([2, 1])
         with h_col1:
             st.markdown("#### Udviklingskurve (1-6)")
@@ -118,63 +103,33 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 "Udholdenhed": "UDHOLDENHED", "Lederegenskaber": "LEDEREGENSKABER",
                 "Teknik": "TEKNIK", "Spilintelligens": "SPILINTELLIGENS"
             }
-            # Mindre selectbox (label_visibility="collapsed" sparer vertikal plads)
             valgt_label = st.selectbox("Parameter", options=list(metrics_map.keys()), index=0, label_visibility="collapsed")
             valgt_col = metrics_map[valgt_label]
 
-        # Graf-opbygning
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(
-            x=historik['DATO_DT'], 
-            y=historik[valgt_col], 
-            mode='markers+lines', 
-            line=dict(color='#df003b', width=2),
-            marker=dict(size=8),
-            name=valgt_label
-        ))
-
-        fig_line.update_layout(
-            height=300, # Reduceret højde for at spare plads
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis=dict(gridcolor='rgba(200, 200, 200, 0.1)'),
-            yaxis=dict(
-                range=[0.8, 6.2], # Viser skalaen fra 1-6 tydeligt
-                tickvals=[1, 2, 3, 4, 5, 6],
-                gridcolor='rgba(200, 200, 200, 0.1)'
-            ),
-            plot_bgcolor='white',
-            hovermode="x unified"
-        )
-        
+        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[valgt_col], mode='markers+lines', line=dict(color='#df003b', width=2), marker=dict(size=8)))
+        fig_line.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(range=[0.8, 6.2], tickvals=[1, 2, 3, 4, 5, 6]), plot_bgcolor='white', hovermode="x unified")
         st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
 
     with tab4:
         st.markdown("### 📊 Statistisk Historik")
-        
-        # 1. Saml data fra aktuel og tidligere sæsoner
         curr = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         df_stats = pd.concat([curr, old], ignore_index=True)
 
         if not df_stats.empty:
-            # 2. Forbered display dataframe
             display_stats = pd.DataFrame()
-            
-            # BASIS INFO
             if 'SEASONNAME' in df_stats.columns: display_stats['Sæson'] = df_stats['SEASONNAME']
             if 'TEAMNAME' in df_stats.columns: display_stats['Hold'] = df_stats['TEAMNAME']
             display_stats['Kampe'] = df_stats['MATCHES'].fillna(0).astype(int)
             display_stats['Minutter'] = df_stats['MINUTESTAGGED'].fillna(0).astype(int)
-
-            # MÅL & ASSISTS
             display_stats['Mål'] = df_stats['GOALS'].fillna(0).astype(int)
             display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
-
-            # KORT (Placeret efter assists og før passes)
+            
+            # Her er rettelsen til kort-fejlen
             display_stats['Gule'] = df_stats['YELLOWCARD'].fillna(0).astype(int)
             display_stats['Røde'] = df_stats['REDCARDS'].fillna(0).astype(int)
 
-            # 3. AVANCEREDE STATS (Med procent-beregning)
             stat_map = {
                 'Passes': ('PASSES', 'SUCCESSFULPASSES'),
                 'Forward Passes': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'),
@@ -182,86 +137,30 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 'Progressive Passes': ('PROGRESSIVEPASSES', 'SUCCESSFULPROGRESSIVEPASSES'),
                 'Duels': ('DUELS', 'DUELSWON')
             }
-
             for label, (total_col, success_col) in stat_map.items():
                 if total_col in df_stats.columns and success_col in df_stats.columns:
-                    def format_pct(row):
-                        tot = row[total_col]
-                        suc = row[success_col]
-                        if tot > 0:
-                            pct = (suc / tot) * 100
-                            return f"{int(tot)} ({int(pct)}%)"
-                        return f"{int(tot)} (0%)"
-                    
-                    display_stats[label] = df_stats.apply(format_pct, axis=1)
+                    display_stats[label] = df_stats.apply(lambda r: f"{int(r[total_col])} ({int((r[success_col]/r[total_col])*100)}%)" if r[total_col] > 0 else f"{int(r[total_col])} (0%)", axis=1)
 
-            # Sorter efter nyeste sæson
-            if 'Sæson' in display_stats.columns:
-                display_stats = display_stats.sort_values('Sæson', ascending=False)
-
-            # 4. Vis tabellen
-            st.dataframe(display_stats, use_container_width=True, hide_index=True)
+            st.dataframe(display_stats.sort_values('Sæson', ascending=False) if 'Sæson' in display_stats.columns else display_stats, use_container_width=True, hide_index=True)
         else:
             st.info("Ingen statistisk data fundet.")
 
     with tab5:
-        # 1. Forbered data
         categories = ['Tekniske færdigheder', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Beslutsomhed', 'Spilintelligens']
         cols = ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']
-        
-        # Hent værdier fra nyeste rapport
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        # Luk cirklen ved at tilføje første værdi til sidst
-        v_closed = v + [v[0]]
-        cat_closed = categories + [categories[0]]
-
-        # 2. Layout: 3 kolonner
+        
         cl, cm, cr = st.columns([1.5, 4, 2.5])
-
         with cl:
-            st.markdown(f"### Detaljer")
-            st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
-            st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
+            st.markdown("### Detaljer")
+            st.caption(f"**Dato:** {nyeste.get('DATO', '-')}\n\n**Scout:** {nyeste.get('SCOUT', '-')}")
             st.divider()
-            # Vis værdier med farveindikation
             for cat, val in zip(categories, v):
-                color = "#df003b" if val >= 4 else "#eee"
                 st.markdown(f"**{cat}:** `{val}`")
-
         with cm:
-            # Radar Chart med lineær grid (8-kant)
-            fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(
-                r=v_closed,
-                theta=cat_closed,
-                fill='toself',
-                line=dict(color='#df003b', width=2),
-                fillcolor='rgba(223, 0, 59, 0.3)',
-                marker=dict(size=8, color='#df003b')
-            ))
-
-            fig_radar.update_layout(
-                polar=dict(
-                    angularaxis=dict(
-                        tickfont=dict(size=11),
-                        rotation=90,
-                        direction="clockwise",
-                        gridcolor="grey"
-                    ),
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 6],
-                        tickvals=[1, 2, 3, 4, 5, 6],
-                        gridcolor="grey"
-                    ),
-                    gridshape='linear'  # DETTE GØR DEN TIL EN 8-KANT (IKKE CIRKEL)
-                ),
-                showlegend=False,
-                height=450,
-                margin=dict(l=40, r=40, t=20, b=20)
-            )
+            fig_radar = go.Figure(go.Scatterpolar(r=v+[v[0]], theta=categories+[categories[0]], fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)'))
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6], tickvals=[1,2,3,4,5,6], gridcolor="grey"), gridshape='linear'), showlegend=False, height=450)
             st.plotly_chart(fig_radar, use_container_width=True)
-
         with cr:
             st.markdown("### Bemærkninger")
             st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
@@ -274,53 +173,28 @@ def vis_side():
         st.error("Data ikke fundet.")
         return
     
-    # Udpak alle 7 elementer (former_stats er nr. 6)
     _, _, _, spillere_df, stats_df, scout_df, former_stats = st.session_state["main_data"]
 
-    # Rens ID'er
     scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-
-    s_info = spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID')
-    df = scout_df.merge(s_info, on='PLAYER_WYID', how='left')
     
+    df = scout_df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
+    search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
     
-    # Simple Filtre
-    col_s, col_p = st.columns([4, 1.2])
-    with col_s:
-        search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
-    with col_p:
-        with st.popover("Filtrér", use_container_width=True):
-            valgt_status = st.multiselect("Status", options=sorted(df['STATUS'].dropna().unique()))
-            rating_range = st.slider("Rating", 0.0, 5.0, (0.0, 5.0), 0.1)
-
     f_df = df.groupby('PLAYER_WYID').tail(1).copy()
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
-    if valgt_status: f_df = f_df[f_df['STATUS'].isin(valgt_status)]
-    f_df = f_df[(f_df['RATING_AVG'] >= rating_range[0]) & (f_df['RATING_AVG'] <= rating_range[1])]
-
+    
     display_df = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
     display_df.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'VURDERING', 'DATO', 'SCOUT']
 
-    event = st.dataframe(
-        display_df, 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row", 
-        height=600
-    )
+    event = st.dataframe(display_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", height=600)
 
     if len(event.selection.rows) > 0:
-        idx = event.selection.rows[0]
-        p_row = f_df.iloc[idx]
-        vis_profil({
-            'PLAYER_WYID': p_row['PLAYER_WYID'], 'NAVN': p_row['NAVN'], 'KLUB': p_row['KLUB'], 
-            'POSITION': p_row['POSITION_VISNING'], 'RATING_AVG': p_row['RATING_AVG']
-        }, df, stats_df, former_stats)
+        p_row = f_df.iloc[event.selection.rows[0]]
+        vis_profil(p_row, df, stats_df, former_stats)
