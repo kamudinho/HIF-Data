@@ -21,11 +21,13 @@ def hent_vaerdi_robust(row, col_name):
     return "" if pd.isna(val) else val
 
 def map_position(row):
-    """Oversætter koder (1-11) eller tekst til pæne danske positionsnavne."""
+    # 1. Hent rå værdier og rens dem
+    # Vi tjekker både 'Position' (fra din database) og 'POS' (fra players.csv)
     db_text = str(hent_vaerdi_robust(row, 'Position')).strip()
     pos_raw = str(hent_vaerdi_robust(row, 'POS')).strip().split('.')[0]
-    role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
+    role_raw = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
     
+    # Ordbog for tal (1-11)
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
         "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
@@ -33,28 +35,34 @@ def map_position(row):
         "10": "Offensiv Midt", "11": "Venstre Kant"
     }
     
-    role_dict = {
-        "GKP": "Målmand", "DEF": "Forsvarsspiller",
-        "MID": "Midtbane", "FWD": "Angriber"
+    # Ordbog for de rå koder vi ser på dit billede
+    role_map = {
+        "GKP": "Målmand",
+        "DEF": "Forsvarsspiller",
+        "MID": "Midtbane",
+        "FWD": "Angriber"
     }
 
-    # 1. Numerisk kode i 'Position' (fra DB)
-    db_pos_only_digit = db_text.split('.')[0]
-    if db_pos_only_digit in pos_dict:
-        return pos_dict[db_pos_only_digit]
-
-    # 2. Numerisk kode i 'POS' (fra players.csv)
+    # --- PRIORITET 1: Tjek efter tal (fra begge kilder) ---
     if pos_raw in pos_dict:
         return pos_dict[pos_raw]
     
-    # 3. Pæn tekst i databasen
-    if len(db_text) > 2 and db_text.lower() not in ["nan", "none", "ukendt"]:
-        if not db_pos_only_digit.isdigit():
+    db_pos_digit = db_text.split('.')[0]
+    if db_pos_digit in pos_dict:
+        return pos_dict[db_pos_digit]
+
+    # --- PRIORITET 2: Hvis der er skrevet specifik tekst (f.eks. "Stopper" eller "Fisker") ---
+    # Vi ignorerer koderne DEF, MID osv. her, da de håndteres i næste step
+    if len(db_text) > 2 and db_text.upper() not in ["NAN", "NONE", "UKENDT"] + list(role_map.keys()):
+        if not db_pos_digit.isdigit():
             return db_text
 
-    # 4. Fallback til ROLECODE3
-    return role_dict.get(role_val, "Ukendt")
-
+    # --- PRIORITET 3: Oversæt de rå koder (DEF -> Forsvarsspiller) ---
+    if role_raw in role_map:
+        return role_map[role_raw]
+        
+    return "Ukendt"
+    
 # --- VISNINGSFUNKTIONER ---
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
