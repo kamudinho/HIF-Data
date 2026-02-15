@@ -19,10 +19,11 @@ def hent_vaerdi_robust(row, col_name):
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
-# NY: Mapper positioner ud fra tal, tekst eller ROLECODE3
-def map_position(row, c_pos):
-    pos_val = str(hent_vaerdi_robust(row, c_pos)).strip()
-    role_val = str(hent_vaerdi_robust(row, 'ROLECODE3')).strip().upper()
+# OPDATERET: Mapper positioner korrekt ud fra dine kolonnenavne (POS og ROLECODE3)
+def map_position(row):
+    # Vi henter direkte fra rækken for at være sikker
+    pos_val = str(row.get('POS', '')).strip()
+    role_val = str(row.get('ROLECODE3', '')).strip().upper()
     
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -36,13 +37,19 @@ def map_position(row, c_pos):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
+    # 1. Prioritet: Tal-kode i POS
     if pos_val in pos_dict:
         return pos_dict[pos_val]
     
-    if len(pos_val) > 3 and pos_val.lower() not in ["fisker"]:
+    # 2. Prioritet: ROLECODE3 (GKP, DEF, MID, FWD)
+    if role_val in role_dict:
+        return role_dict[role_val]
+    
+    # 3. Fallback: Hvis POS allerede er tekst (f.eks. "Højre Back")
+    if len(pos_val) > 3:
         return pos_val
     
-    return role_dict.get(role_val, pos_val if pos_val != "" else "Ukendt")
+    return pos_val if pos_val != "" else "Ukendt"
 
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
@@ -158,13 +165,21 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    c_id, c_dato, c_navn, c_klub, c_pos, c_rating, c_status, c_scout = [find_col(df, x) for x in ['id', 'dato', 'navn', 'klub', 'position', 'rating_avg', 'status', 'scout']]
+    # Vi definerer kolonnerne. Bemærk vi leder specifikt efter 'pos'
+    c_id = find_col(df, 'id')
+    c_dato = find_col(df, 'dato')
+    c_navn = find_col(df, 'navn')
+    c_klub = find_col(df, 'klub')
+    c_pos = find_col(df, 'pos') # Ændret fra 'position' til 'pos'
+    c_rating = find_col(df, 'rating_avg')
+    c_status = find_col(df, 'status')
+    c_scout = find_col(df, 'scout')
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # NY: Opretter den pæne positionsvisning med map_position hjælpefunktionen
-    df['POS_PAEN'] = df.apply(lambda r: map_position(r, c_pos), axis=1)
+    # NY POS LOGIK: Mapper positioner
+    df['POS_PAEN'] = df.apply(map_position, axis=1)
     
     df = df.sort_values('DATO_DT')
 
@@ -176,20 +191,17 @@ def vis_side():
     rating_range = st.session_state.get("filter_rating", (0.0, 5.0))
     
     antal = len(valgt_status) + len(valgt_scout) + len(valgt_pos)
-    if rating_range != (0.0, 5.0):
-        antal += 1
-        
+    if rating_range != (0.0, 5.0): antal += 1
     filter_label = f"Filtrér ({antal})" if antal > 0 else "Filtrér"
 
     col_s, col_p = st.columns([4, 1.2]) 
     with col_s:
-        search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
+        search = st.text_input("Søg...", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
     with col_p:
         with st.popover(filter_label, use_container_width=True):
             s_opts = sorted([str(x) for x in df[c_status].dropna().unique() if str(x).strip() != ""])
             valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
             
-            # Position Filter bruger nu den pæne kolonne
             p_opts = sorted([str(x) for x in df['POS_PAEN'].unique() if str(x).strip() != ""])
             valgt_pos = st.multiselect("Position", options=p_opts, key="filter_pos")
             
@@ -197,26 +209,21 @@ def vis_side():
             valgt_scout = st.multiselect("Scout", options=sc_opts, key="filter_scout")
 
             st.divider()
-            st.write("Rating Interval")
-            rating_range = st.slider("Vælg minimum og maksimum", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
+            rating_range = st.slider("Rating", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
 
     f_df = df.groupby(c_id).tail(1).copy()
     
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
-    
     if valgt_status:
         f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
-        
     if valgt_pos:
         f_df = f_df[f_df['POS_PAEN'].isin(valgt_pos)]
-        
     if valgt_scout:
         f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
-        
+    
     f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
-    # Her vises 'POS_PAEN' i tabellen i stedet for den rå kode
     vis_cols = [c_navn, 'POS_PAEN', c_klub, c_rating, c_status, c_dato, c_scout]
     
     event = st.dataframe(
