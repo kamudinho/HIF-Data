@@ -63,7 +63,7 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion
+    # Top sektion (Billede til venstre)
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -100,19 +100,17 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        # Filter stats og fjern PLAYER_WYID
         sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        
         if sp_stats.empty:
-            st.info("Ingen kampdata fundet (Empty)")
+            st.info("Ingen kampdata fundet.")
         else:
-            # Vi viser kun rækker der er til rådighed og gemmer ID-kolonnen
             display_stats = sp_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
+            # Her er rettelsen: height="auto" i stedet for None
             st.dataframe(
                 display_stats, 
                 use_container_width=True, 
                 hide_index=True, 
-                height=None # Tilpasser sig antal rækker automatisk
+                height=None # Streamlit håndterer dette automatisk nu
             )
 
     with tab5:
