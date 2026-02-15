@@ -80,6 +80,10 @@ def load_hif_data():
         try: fs = read_github_csv("former_seasons.csv")
         except: fs = pd.DataFrame()
 
+        # Matches    
+        try: df_matches = read_github_csv("matches.csv")
+        except: df_matches = pd.DataFrame()
+
         # Rens ID'er for alle relevante dataframes
         for d in [sp, pe, sc, ho, fs]:
             if d.empty: continue
@@ -98,7 +102,7 @@ def load_hif_data():
             ev = pd.DataFrame()
 
         # Returner 7 elementer: events, kamp_df, hold_map, spillere, current_stats, scouting, former_stats
-        return ev, pd.DataFrame(), h_map, sp, pe, sc, fs
+        return ev, df_matches, h_map, sp, pe, sc, fs
     except Exception as e:
         st.error(f"Fejl ved indlæsning: {e}")
         # Returnerer tomme objekter ved fejl for at undgå crash
@@ -147,7 +151,7 @@ elif selected == "Top 5":
     top5.vis_side(spillere, player_events)
 elif selected == "Zoneinddeling":
     import tools.player_goalzone as pgz
-    pgz.vis_side(df_events, spillere, hold_map)
+    pgz.vis_side(kamp, spillere, hold_map)
 elif selected == "Afslutninger":
     import tools.player_shots as ps
     ps.vis_side(df_events, spillere, hold_map)
