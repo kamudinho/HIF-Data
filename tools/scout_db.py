@@ -169,8 +169,11 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
             st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
             st.divider()
+            
+            # Liste med værdier - nu med rød tekst for bedre læsbarhed
             for cat, val in zip(categories, v):
-                st.markdown(f"**{cat}:** `{val}`")
+                # Vi bruger HTML/CSS til at tvinge farven til HIF-rød (#df003b)
+                st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold; font-size:1.1em;'>{val}</span>", unsafe_allow_html=True)
 
         with col_mid:
             fig_radar = go.Figure()
@@ -180,13 +183,13 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 fill='toself',
                 line=dict(color='#df003b', width=2),
                 fillcolor='rgba(223, 0, 59, 0.3)',
-                marker=dict(size=6, color='#df003b')
+                marker=dict(size=8, color='#df003b')
             ))
 
             fig_radar.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        tickfont=dict(size=10),
+                        tickfont=dict(size=10, color="black"),
                         rotation=90,      # Teknik øverst
                         direction="clockwise",
                         gridcolor="lightgrey"
@@ -195,7 +198,8 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                         visible=True,
                         range=[0, 6],
                         tickvals=[1, 2, 3, 4, 5, 6],
-                        gridcolor="lightgrey"
+                        gridcolor="lightgrey",
+                        tickfont=dict(color="grey")
                     ),
                     gridshape='linear'    # 8-kant
                 ),
