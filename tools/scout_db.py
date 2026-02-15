@@ -129,7 +129,7 @@ def vis_profil(p_data, full_df, s_df):
             st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
             st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (RETTET MOD TYPEERROR) ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -149,33 +149,50 @@ def vis_side():
     c_status = find_col(df, 'status')
     c_scout = find_col(df, 'scout')
 
+    # Konverter dato og rating
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
     
-    # --- FILTRE TILBAGE ---
+    # --- FILTRE MED ROBUST SORTERING ---
     f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
+    
     with f_col1:
         search = st.text_input("Søg spiller eller klub", placeholder="Navn/Klub...")
+    
     with f_col2:
-        valgt_status = st.multiselect("Status", options=sorted(df[c_status].unique().tolist())) if c_status else []
+        # Robust håndtering af Status-liste
+        status_options = []
+        if c_status and c_status in df.columns:
+            status_options = sorted([str(x) for x in df[c_status].dropna().unique()])
+        valgt_status = st.multiselect("Status", options=status_options)
+        
     with f_col3:
-        valgt_scout = st.multiselect("Scout", options=sorted(df[c_scout].unique().tolist())) if c_scout else []
+        # Robust håndtering af Scout-liste (LØSNING PÅ TYPEERROR)
+        scout_options = []
+        if c_scout and c_scout in df.columns:
+            # Dropna fjerner tomme celler, str(x) sikrer alt er tekst, sorted virker nu.
+            scout_options = sorted([str(x) for x in df[c_scout].dropna().unique()])
+        valgt_scout = st.multiselect("Scout", options=scout_options)
 
-    # Filtrering
+    # Filtrering af dataframe
     f_df = df.groupby(c_id).tail(1).copy()
+    
     if search:
-        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | 
+                    f_df[c_klub].str.contains(search, case=False, na=False)]
+    
     if valgt_status:
-        f_df = f_df[f_df[c_status].isin(valgt_status)]
+        f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
+        
     if valgt_scout:
-        f_df = f_df[f_df[c_scout].isin(valgt_scout)]
+        f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
 
-    # Kolonner til visning (Inkl. Scout)
+    # Kolonner til visning i tabellen
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
-    vis_cols = [c for c in vis_cols if c is not None] # Sikkerhed
+    vis_cols = [c for c in vis_cols if c is not None and c in f_df.columns]
     
     event = st.dataframe(
         f_df[vis_cols],
@@ -190,4 +207,10 @@ def vis_side():
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
-        vis_profil({'ID': p_row[c_id], 'NAVN': p_row[c_navn], 'KLUB': p_row[c_klub], 'POSITION': p_row[c_pos], 'RATING_AVG': p_row[c_rating]}, df, stats_df)
+        vis_profil({
+            'ID': p_row[c_id], 
+            'NAVN': p_row[c_navn], 
+            'KLUB': p_row[c_klub], 
+            'POSITION': p_row[c_pos], 
+            'RATING_AVG': p_row[c_rating]
+        }, df, stats_df)
