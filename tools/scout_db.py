@@ -15,6 +15,18 @@ POS_MAP = {
     9: "VW", 10: "ST"
 }
 
+def rens_dansk_tekst(tekst):
+    if not isinstance(tekst, str): return tekst
+    fejl_map = {
+        "√∏": "ø", "√¶": "æ", "√•": "å", 
+        "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å",
+        "left_foot": "Venstre fod", 
+        "right_foot": "Højre fod"
+    }
+    for fejl, ret in fejl_map.items():
+        tekst = tekst.replace(fejl, ret)
+    return tekst
+    
 def rens_metrik_vaerdi(val):
     """Sikrer at vi altid har et heltal, selv hvis data er NaN eller mærkelig."""
     try:
