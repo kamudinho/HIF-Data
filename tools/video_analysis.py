@@ -71,24 +71,51 @@ def vis_side(spillere):
     t_cols[5].write("**ID**")
     st.divider()
 
-    for idx, row in video_df.iterrows():
-        c = st.columns([1, 4, 2, 1, 1, 2])
+    # --- TABEL LOOPET ---
+for idx, row in video_df.iterrows():
+    c = st.columns([1, 4, 2, 1, 1, 2])
+    
+    if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
+        vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
         
-        if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
-            vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
-            
-        c[1].write(row.get('MATCHLABEL', 'N/A'))
+    c[1].write(row.get('MATCHLABEL', 'N/A'))
+    
+    # 1. KROPSDEL: Vi henter værdien fra SHOTSBODYPART (f.eks. left_foot)
+    c[2].write(row.get('SHOTSBODYPART', 'N/A'))
+    
+    # 2. MÅL: Vi henter værdien fra SHOTISGOAL (True/False)
+    er_maal = str(row.get('SHOTISGOAL')).lower() == 'true'
+    c[3].write("⚽ JA" if er_maal else "❌ NEJ")
+    
+    # 3. xG: Vi henter værdien fra SHOTXG (Selve tallet)
+    xg_val = row.get('SHOTXG', '0.00')
+    c[4].write(f"{xg_val}")
+    
+    c[5].write(f"`{row['RENS_ID']}`")
+
+# --- POPUP VINDUE ---
+@st.dialog("Videoanalyse")
+def vis_video_popup(data, filnavn, video_dir):
+    st.subheader(f"{data.get('MATCHLABEL', 'Kamp-data')}")
+    
+    if filnavn:
+        st.video(os.path.join(video_dir, filnavn))
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Side:** {data.get('SIDE', 'N/A')}")
+        # Kropsdel ligger i SHOTSBODYPART
+        st.write(f"**Kropsdel:** {data.get('SHOTSBODYPART', 'N/A')}")
         
-        # NY MAPPING EFTER FJERNELSE AF RESULT:
-        # Kropsdel ligger nu i 'SIDE'
-        c[2].write(row.get('SIDE', 'N/A'))
+    with col2:
+        # Mål ligger i SHOTISGOAL
+        er_maal = str(data.get('SHOTISGOAL', 'false')).lower() == 'true'
+        st.write(f"**Mål:** {'✅ JA' if er_maal else '❌ NEJ'}")
         
-        # Mål (True/False) ligger nu i 'SHOTSBODYPART'
-        er_maal = str(row.get('SHOTSBODYPART')).lower() == 'true'
-        c[3].write("⚽ JA" if er_maal else "❌")
+        # xG ligger i SHOTXG
+        st.metric("xG Værdi", f"{data.get('SHOTXG', '0.00')}")
         
-        # xG-værdi ligger nu i 'SHOTISGOAL'
-        xg_val = row.get('SHOTISGOAL', '0.00')
-        c[4].write(f"{xg_val}")
-        
-        c[5].write(f"`{row['RENS_ID']}`")
+        # Dato ligger i DATE (eller kolonnen efter SHOTXG)
+        st.write(f"📅 **Dato:** {data.get('DATE', 'N/A')}")
