@@ -108,15 +108,43 @@ def vis_side(df_input, df_spillere, hold_map=None):
         max_v = zone_counts.max() if not zone_counts.empty else 1
         cmap = mcolors.LinearSegmentedColormap.from_list('HIF', ['#ffffff', HIF_RED])
 
+        # Beregn totalt antal skud for at kunne lave procenter
+        total_shots_in_plot = len(df_plot)
+
         for name, b in ZONE_BOUNDARIES.items():
             if b["y_min"] < 40 and name == "Zone 8": continue
+            
             count = zone_counts.get(name, 0)
+            
+            # 1. Beregn procentdel
+            pct = (count / total_shots_in_plot * 100) if total_shots_in_plot > 0 else 0
+            
+            # Tegn zonen (Heatmap farve)
             rect = Rectangle((b["x_min"], b["y_min"]), b["x_max"]-b["x_min"], b["y_max"]-b["y_min"], 
                              facecolor=cmap(count/max_v), alpha=0.4 if count > 0 else 0.1, zorder=1)
             ax.add_patch(rect)
+            
             if count > 0:
-                ax.text(b["x_min"] + (b["x_max"]-b["x_min"])/2, b["y_min"] + (b["y_max"]-b["y_min"])/2,
-                        str(int(count)), ha='center', va='center', fontsize=12, fontweight='bold', zorder=3)
+                mid_x = b["x_min"] + (b["x_max"]-b["x_min"])/2
+                mid_y = b["y_min"] + (b["y_max"]-b["y_min"])/2
+                
+                # 2. Vis Antal (Stort tal øverst i zonen)
+                ax.text(mid_x, mid_y + 1.5, str(int(count)), 
+                        ha='center', va='center', fontsize=11, fontweight='bold', zorder=3)
+                
+                # 3. Vis Procent (Lige under antallet)
+                ax.text(mid_x, mid_y, f"{pct:.1f}%", 
+                        ha='center', va='center', fontsize=8, color='#333333', zorder=3)
+                
+                # 4. Find og vis Topscorer/Top-aktion i zonen (Nederst i zonen)
+                zone_data = df_plot[df_plot['ZONE_ID'] == name]
+                if not zone_data.empty and 'SPILLER_NAVN' in zone_data.columns:
+                    top_player = zone_data['SPILLER_NAVN'].value_counts().idxmax()
+                    # Forkort navnet (kun efternavn) for at spare plads
+                    short_name = top_player.split()[-1].upper()
+                    
+                    ax.text(mid_x, mid_y - 1.5, short_name, 
+                            ha='center', va='center', fontsize=7, fontweight='black', 
+                            color=HIF_RED, alpha=0.9, zorder=3)
 
-        st.pyplot(fig)
-        plt.close(fig)
+        st.pyplot(fig, bbox_inches='tight', pad_inches=0)
