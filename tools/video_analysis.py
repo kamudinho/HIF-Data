@@ -28,7 +28,6 @@ def vis_side(spillere_df):
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # Rens alle tekst-kolonner
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].apply(rens_dansk_tekst)
     
@@ -66,18 +65,25 @@ def vis_side(spillere_df):
         selection_mode="single-row"
     )
 
-    # --- 5. MODAL VINDUE (INGEN DIVIDERS) ---
+    # --- 5. MODAL VINDUE (OPTIMERET PLADS) ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # Overskrift uden divider under
+        # CSS hack: Fjerner polstring i dialog-boksen så videoen kan blive større
+        st.markdown("""
+            <style>
+                [data-testid="stDialog"] div:first-child { padding: 10px; }
+                .stTabs [data-baseweb="tab-panel"] { padding-top: 10px; }
+            </style>
+        """, unsafe_allow_html=True)
+
         st.subheader(data['DYNAMIC_TITLE'])
         
-        # Tabs uden ekstra luft eller linjer
         tab1, tab2 = st.tabs(["🎥 Video", "📊 Statistik"])
         
         with tab1:
             v_fil = v_map.get(data['RENS_ID'])
             video_sti = os.path.join(v_dir, v_fil)
+            # Vi sikrer os at videoen bruger 100% bredde
             st.video(video_sti, autoplay=True)
 
         with tab2:
