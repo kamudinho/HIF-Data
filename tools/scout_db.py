@@ -16,14 +16,15 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def hent_vaerdi_robust(row, col_name):
+    # Denne leder i rækken efter kolonnenavnet uanset case
     row_dict = {str(k).strip().lower(): v for k, v in row.items()}
     return row_dict.get(col_name.strip().lower(), "")
 
-# OPDATERET: Mapper positioner korrekt ud fra dine kolonnenavne (POS og ROLECODE3)
+# NY OG FORBEDRET: Mapper positioner korrekt
 def map_position(row):
-    # Vi henter direkte fra rækken for at være sikker
-    pos_val = str(row.get('POS', '')).strip()
-    role_val = str(row.get('ROLECODE3', '')).strip().upper()
+    # Vi leder efter værdierne uanset om kolonnen hedder "POS", "pos", "ROLECODE3" eller "rolecode3"
+    pos_val = str(hent_vaerdi_robust(row, 'pos')).strip()
+    role_val = str(hent_vaerdi_robust(row, 'rolecode3')).strip().upper()
     
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -37,19 +38,24 @@ def map_position(row):
         "MID": "Midtbane", "FWD": "Angriber"
     }
 
-    # 1. Prioritet: Tal-kode i POS
+    # Logik-rækkefølge:
+    # 1. Er det en talkode vi kender?
     if pos_val in pos_dict:
         return pos_dict[pos_val]
     
-    # 2. Prioritet: ROLECODE3 (GKP, DEF, MID, FWD)
+    # 2. Er det en Rolle-kode vi kender?
     if role_val in role_dict:
         return role_dict[role_val]
     
-    # 3. Fallback: Hvis POS allerede er tekst (f.eks. "Højre Back")
-    if len(pos_val) > 3:
+    # 3. Er det tekst i POS (mere end 3 tegn)?
+    if len(pos_val) > 3 and pos_val.lower() not in ["nan", "none"]:
         return pos_val
     
-    return pos_val if pos_val != "" else "Ukendt"
+    # Fallback
+    return pos_val if pos_val not in ["nan", "", "None"] else "Ukendt"
+
+# --- 2. PROFIL DIALOG OG ANDRE FUNKTIONER (FORTSÆTTER UÆNDRET) ---
+# ... (vis_spiller_billede, vis_metrikker, vis_bokse_lodret, vis_bokse_kolonner, vis_profil)
 
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
@@ -84,7 +90,6 @@ def vis_bokse_kolonner(row):
     with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
     with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
-# --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
@@ -165,12 +170,11 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Vi definerer kolonnerne. Bemærk vi leder specifikt efter 'pos'
+    # Find de rigtige kolonner
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
     c_klub = find_col(df, 'klub')
-    c_pos = find_col(df, 'pos') # Ændret fra 'position' til 'pos'
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
     c_scout = find_col(df, 'scout')
@@ -178,7 +182,7 @@ def vis_side():
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # NY POS LOGIK: Mapper positioner
+    # BRUGER map_position på hele rækken
     df['POS_PAEN'] = df.apply(map_position, axis=1)
     
     df = df.sort_values('DATO_DT')
