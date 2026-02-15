@@ -31,7 +31,6 @@ def vis_metrikker(row):
         m_cols[i % 4].metric(label, f"{val}")
 
 def vis_scout_bokse(row):
-    """Viser de tre farvede infobokse."""
     c1, c2, c3 = st.columns(3)
     with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
     with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
@@ -40,12 +39,21 @@ def vis_scout_bokse(row):
 # --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
-    st.markdown(f"<div style='text-align: center;'><h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>"
-                f"<p style='color: gray; font-size: 18px;'>{p_data.get('KLUB', '')} | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}</p></div>", unsafe_allow_html=True)
-    
     id_col = find_col(full_df, 'id')
     historik = full_df[full_df[id_col].astype(str) == str(p_data['ID'])].sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
+    seneste_dato = nyeste['Dato'] # Henter dato-teksten fra nyeste rapport
+
+    # Overskrift med dato
+    st.markdown(f"""
+        <div style='text-align: center;'>
+            <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
+            <p style='color: gray; font-size: 16px; margin-top:0;'>
+                {p_data.get('KLUB', '')} | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}<br>
+                <b>Seneste rapport: {seneste_dato}</b>
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
     
@@ -79,11 +87,10 @@ def vis_profil(p_data, full_df, s_df):
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
         
-        # Layout: Tal til venstre | Radar i midten | Bokse til højre
         col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
         
         with col_left:
-            st.markdown("### Værdier")
+            st.markdown(f"### Værdier\n*{seneste_dato}*")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
         
@@ -93,12 +100,7 @@ def vis_profil(p_data, full_df, s_df):
             fig_radar.update_layout(
                 polar=dict(
                     gridshape='linear', 
-                    radialaxis=dict(
-                        visible=True, 
-                        range=[0, 6], 
-                        showticklabels=False, # Skjuler tal på aksen, men viser linjer
-                        gridcolor="lightgray"
-                    )
+                    radialaxis=dict(visible=True, range=[0, 6], showticklabels=False, gridcolor="lightgray")
                 ),
                 showlegend=False, height=450, margin=dict(l=40, r=40, t=20, b=20)
             )
@@ -127,7 +129,6 @@ def vis_side():
 
     st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
 
-    # Filter
     search = st.text_input("Søg", placeholder="Søg...", label_visibility="collapsed")
     f_df = df.groupby(c_id).tail(1).copy()
     
