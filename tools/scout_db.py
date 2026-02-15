@@ -160,3 +160,23 @@ def vis_side():
             'ID': row['ID'], 'NAVN': row['NAVN'], 'KLUB': row['KLUB'], 
             'POSITION': row['POSITION_VISNING'], 'RATING_AVG': row['RATING_AVG']
         }, df, stats_df)
+
+# --- DEBUG MODUL: Tjek for manglende ID-matches ---
+    with st.expander("🛠️ Debug: ID-Match Kontrol"):
+        # Find spillere i scouting_db som IKKE fik et match i players.csv
+        # Det sker hvis 'PLAYER_WYID' (som kommer fra players.csv) er tom
+        mangler_info = df[df['PLAYER_WYID'].isna()]
+        
+        if not mangler_info.empty:
+            st.warning(f"Der er {len(mangler_info)} spillere, der ikke findes i players.csv")
+            st.write("Disse spillere mangler POS og ROLECODE3 data:")
+            st.dataframe(mangler_info[['ID', 'NAVN', 'KLUB']], use_container_width=True)
+            
+            st.info("""
+            **Hvorfor mangler de?**
+            1. ID'et i scouting_db findes ikke i din players.csv.
+            2. Der er ekstra mellemrum i din CSV-fil (f.eks. ' 765998').
+            3. Spilleren er ny og er endnu ikke blevet eksporteret til players.csv.
+            """)
+        else:
+            st.success("✅ Alle spillere i din scouting-database blev fundet i players.csv!")
