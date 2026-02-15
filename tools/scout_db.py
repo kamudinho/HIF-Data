@@ -171,57 +171,55 @@ def vis_side():
         st.error("Data ikke fundet i session_state.")
         return
     
-    # 1. HENT DATA FRA SESSION STATE
+    # 1. HENT DATA
     all_data = st.session_state["main_data"]
-    players_df = all_data[0].copy() # Hvidovre spillere (POS, ROLECODE3)
+    players_df = all_data[0].copy() # players.csv
     stats_df = all_data[4].copy()   # Statistik
-    db_df = all_data[5].copy()      # scouting_db.csv (Position, Rapporter)
+    db_df = all_data[5].copy()      # scouting_db.csv
 
-    # 2. IDENTIFICER ID-KOLONNER FOR MERGE
+    # 2. IDENTIFICER ID-KOLONNER
     c_id = find_col(db_df, 'id')
     p_id = find_col(players_df, 'player_wyid') or 'PLAYER_WYID'
 
-    # 3. MERGE: Hent POS og ROLECODE3 ind i databasen baseret på ID
+    # 3. FIX: TVING TYPER TIL STRING FØR MERGE (Løser ValueError)
     if p_id in players_df.columns and c_id in db_df.columns:
-        # Vi tager kun de nødvendige info-kolonner fra spillerlisten
+        db_df[c_id] = db_df[c_id].astype(str).str.split('.').str[0].str.strip()
+        players_df[p_id] = players_df[p_id].astype(str).str.split('.').str[0].str.strip()
+
+        # Forbered info til merge
         info_cols = [p_id, 'POS', 'ROLECODE3']
         spiller_info = players_df[[c for c in info_cols if c in players_df.columns]].drop_duplicates(subset=[p_id])
         
-        # Merge data sammen
+        # Merge data
         df = db_df.merge(spiller_info, left_on=c_id, right_on=p_id, how='left')
     else:
         df = db_df.copy()
 
-    # 4. FIND RELEVANTE KOLONNENAVNE
+    # 4. FIND KOLONNENAVNE
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
     c_klub = find_col(df, 'klub')
-    c_pos_visning = find_col(df, 'position') # Kolonnen 'Position' i scouting_db
+    c_pos_visning = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
     c_scout = find_col(df, 'scout')
 
     # 5. DATABEHANDLING OG MAPPING
-    # Konvertér datoer og tal
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # Kør den robuste mapping-funktion
-    # Den kigger nu i både 'POS', 'Position' (tal) og 'ROLECODE3'
+    # Kør den robuste mapping (den kigger nu i POS, Position og ROLECODE3)
     df[c_pos_visning] = df.apply(map_position, axis=1)
     
-    # Sortér så de nyeste rapporter er nederst (vigtigt for .tail(1) gruppering)
     df = df.sort_values('DATO_DT')
 
     # 6. UI: OVERSKRIFT OG SØGNING
     st.subheader("Scouting Database")
     
-    # Hent filter-tilstande fra session_state
     valgt_status = st.session_state.get("filter_status", [])
     valgt_pos = st.session_state.get("filter_pos", [])
     rating_range = st.session_state.get("filter_rating", (0.0, 5.0))
     
-    # Beregn antal aktive filtre til knappen
     antal_filtre = len(valgt_status) + len(valgt_pos)
     if rating_range != (0.0, 5.0): antal_filtre += 1
     filter_label = f"Filtrér ({antal_filtre})" if antal_filtre > 0 else "Filtrér"
@@ -232,7 +230,6 @@ def vis_side():
     
     with col_p:
         with st.popover(filter_label, use_container_width=True):
-            # Dynamiske muligheder baseret på data
             s_opts = sorted([str(x) for x in df[c_status].dropna().unique() if str(x).strip() != ""])
             valgt_status = st.multiselect("Status", options=s_opts, key="filter_status")
             
@@ -242,8 +239,7 @@ def vis_side():
             st.divider()
             rating_range = st.slider("Rating Interval", 0.0, 5.0, (0.0, 5.0), step=0.1, key="filter_rating")
 
-    # 7. FILTRERING AF DATA
-    # Vi tager kun den nyeste rapport pr. spiller til oversigten
+    # 7. FILTRERING
     f_df = df.groupby(c_id).tail(1).copy()
     
     if search:
@@ -259,7 +255,7 @@ def vis_side():
         
     f_df = f_df[(f_df[c_rating] >= rating_range[0]) & (f_df[c_rating] <= rating_range[1])]
 
-    # 8. VISNING AF DATAFRAME
+    # 8. TABEL
     vis_cols = [c_navn, c_pos_visning, c_klub, c_rating, c_status, c_dato, c_scout]
     
     event = st.dataframe(
@@ -276,12 +272,11 @@ def vis_side():
         }
     )
 
-    # 9. HÅNDTERING AF VALGT SPILLER (ÅBN PROFIL)
+    # 9. DIALOG
     if len(event.selection.rows) > 0:
         idx = event.selection.rows[0]
         p_row = f_df.iloc[idx]
         
-        # Vi sender de nødvendige data til profil-dialogen
         vis_profil({
             'ID': p_row[c_id], 
             'NAVN': p_row[c_navn], 
