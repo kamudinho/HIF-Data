@@ -20,7 +20,6 @@ def hent_vaerdi_robust(row, col_name):
     return row_dict.get(col_name.strip().lower(), "")
 
 def vis_spiller_billede(pid, w=120):
-    """Henter spillerbillede fra Wyscout CDN."""
     pid_clean = str(pid).replace('"', '').replace("'", "").strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
@@ -63,33 +62,23 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion (Billede til venstre)
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
     with head_col2:
-        st.markdown(f"""
-            <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
-            <p style='color: gray; font-size: 18px; margin-top:0;'>
-                {p_data.get('KLUB', '')} | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}<br>
-                <span style='font-size: 14px;'><b>Seneste rapport: {seneste_dato}</b> {f'| Scout: {scout_navn}' if scout_navn else ''}</span>
-            </p>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<h2>{p_data.get('NAVN', 'Ukendt')}</h2>", unsafe_allow_html=True)
+        st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
+        st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Grafik Card"])
     
     with tab1:
         vis_metrikker(nyeste)
-        st.write("")
         vis_scout_bokse(nyeste)
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            dato_str = str(hent_vaerdi_robust(row, 'Dato'))
-            s_navn = hent_vaerdi_robust(row, 'Scout')
-            label = f"Rapport fra {dato_str} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
-            if s_navn: label += f" - Scout: {s_navn}"
-            with st.expander(label):
+            with st.expander(f"Rapport fra {hent_vaerdi_robust(row, 'Dato')} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"):
                 vis_metrikker(row)
                 vis_scout_bokse(row)
 
@@ -100,18 +89,18 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        if sp_stats.empty:
-            st.info("Ingen kampdata fundet.")
-        else:
-            display_stats = sp_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
-            # Her er rettelsen: height="auto" i stedet for None
-            st.dataframe(
-                display_stats, 
-                use_container_width=True, 
-                hide_index=True, 
-                height=None # Streamlit håndterer dette automatisk nu
-            )
+        # Forbered statistik
+        display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+        display_stats = display_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
+        
+        if display_stats.empty:
+            # Lav en tom række så overskrifterne vises
+            empty_data = {col: ["Ingen data"] for col in display_stats.columns}
+            if not empty_data: # Hvis s_df var helt tom fra start
+                empty_data = {"Info": ["Ingen kampdata fundet"]}
+            display_stats = pd.DataFrame(empty_data)
+        
+        st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
@@ -120,7 +109,6 @@ def vis_profil(p_data, full_df, s_df):
         cl, cm, cr = st.columns([1.5, 4, 2.5])
         with cl:
             st.markdown(f"### Værdier\n*{seneste_dato}*")
-            if scout_navn: st.caption(f"Scout: {scout_navn}")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
         with cm:
@@ -154,7 +142,7 @@ def vis_side():
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     df = df.sort_values('DATO_DT')
 
-    st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
+    st.subheader("Scouting Database")
     search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     
     f_df = df.groupby(c_id).tail(1).copy()
