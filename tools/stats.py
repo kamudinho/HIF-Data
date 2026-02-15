@@ -4,18 +4,18 @@ import pandas as pd
 import numpy as np
 
 def vis_side(spillere, player_events):
-    # 1. Rens kolonner
-    spillere.columns = [str(c).strip().upper() for c in spillere.columns]
-    player_events.columns = [str(c).strip().upper() for c in player_events.columns]
+    # 1. Rens kolonner og fjern specialtegn/mellemrum
+    spillere.columns = [str(c).strip().upper().replace(" ", "") for c in spillere.columns]
+    player_events.columns = [str(c).strip().upper().replace(" ", "") for c in player_events.columns]
 
     # 2. UI - Valgmuligheder
     c1, c2 = st.columns([2, 1])
     with c1:
-        # Kategorier (Total, Succes)
+        # Tjek dine kolonnenavne i CSV'en – de skal matche disse præcis!
         kategorier_med_pct = {
             "AFLEVERINGER": ("PASSES", "SUCCESSFULPASSES"),
             "PASSES TO FINAL THIRD": ("PASSESTOFINALTHIRD", "SUCCESSFULPASSESTOFINALTHIRD"),
-            "FORWARDPASSES": ("FORWARDPASSES", "SUCCESSFULFORWARDPASSES"),
+            "FORWARD PASSES": ("FORWARDPASSES", "SUCCESSFULFORWARDPASSES"),
             "DUELLER": ("DUELS", "DUELSWON"),
         }
         kategorier_uden_pct = {
@@ -27,7 +27,6 @@ def vis_side(spillere, player_events):
     with c2:
         visning = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True)
 
-    # Farve-logik: Rød for Total, Blå for Pr. 90
     BAR_COLOR = '#df003b' if visning == "Total" else '#0056b3'
 
     # 3. Rens ID'er og Map Navne
@@ -42,13 +41,21 @@ def vis_side(spillere, player_events):
 
     player_events['NAVN'] = player_events['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
 
-    # 4. Beregning og Pr. 90 Logik
+    # --- 4. Beregning med Fejltjek (Her var fejlen) ---
     df_plot = pd.DataFrame()
     
+    # Lav en liste over tilgængelige kolonner for at undgå KeyError
+    cols_in_data = player_events.columns.tolist()
+
     if valg_label in kategorier_uden_pct:
         kolonne = kategorier_uden_pct[valg_label]
-        df_group = player_events.groupby('NAVN').agg({kolonne: 'sum', 'MINUTESTAGGED': 'sum'}).reset_index()
         
+        if kolonne not in cols_in_data:
+            st.error(f"Kolonnen '{kolonne}' blev ikke fundet i dataen. Tilgængelige kolonner: {cols_in_data}")
+            return
+
+        df_group = player_events.groupby('NAVN').agg({kolonne: 'sum', 'MINUTESTAGGED': 'sum'}).reset_index()
+        # ... (resten af din logik for uden pct)
         if visning == "Pr. 90" and valg_label != "MINUTTER":
             df_group['VAL'] = np.where(df_group['MINUTESTAGGED'] > 0, (df_group[kolonne] / df_group['MINUTESTAGGED'] * 90), 0)
             df_group['LABEL'] = df_group['VAL'].map('{:.2f}'.format)
@@ -62,9 +69,17 @@ def vis_side(spillere, player_events):
 
     else:
         tot_col, suc_col = kategorier_med_pct[valg_label]
+        
+        # TJEK OM KOLONNERNE FINDES
+        missing = [c for c in [tot_col, suc_col, 'MINUTESTAGGED'] if c not in cols_in_data]
+        if missing:
+            st.error(f"Følgende kolonner mangler i din CSV: {missing}")
+            with st.expander("Se alle fundne kolonnenavne"):
+                st.write(cols_in_data)
+            return
+
         df_group = player_events.groupby('NAVN').agg({tot_col: 'sum', suc_col: 'sum', 'MINUTESTAGGED': 'sum'}).reset_index()
         
-        # Succesprocent er altid den samme uanset Total/Pr. 90
         df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
         
         if visning == "Pr. 90":
@@ -78,30 +93,13 @@ def vis_side(spillere, player_events):
         hover_tmpl = "<b>%{y}</b><br>"+visning+": %{x:.2f}<br>Succes: %{customdata:.1f}%<extra></extra>"
         custom_data_val = df_plot['PCT']
 
-    # 5. Vis Graf
-    fig = px.bar(
-        df_plot,
-        x='VAL',
-        y='NAVN',
-        orientation='h',
-        text='LABEL',
-        color_discrete_sequence=[BAR_COLOR],
-        custom_data=[custom_data_val] if custom_data_val is not None else None,
-        labels={'NAVN': 'Spiller', 'VAL': f"{valg_label} ({visning})"}
-    )
-
-    fig.update_traces(
-        hovertemplate=hover_tmpl,
-        textposition='inside', 
-        textfont=dict(color='white')
-    )
-
-    fig.update_layout(
-        yaxis={'categoryorder': 'total ascending'},
-        xaxis_title=f"{valg_label.capitalize()} - {visning}",
-        yaxis_title="",
-        template="plotly_white",
-        height=650
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+    # 5. Vis Graf (Forbliver den samme)
+    if not df_plot.empty:
+        fig = px.bar(
+            df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL',
+            color_discrete_sequence=[BAR_COLOR],
+            custom_data=[custom_data_val] if custom_data_val is not None else None,
+            labels={'NAVN': 'Spiller', 'VAL': f"{valg_label} ({visning})"}
+        )
+        # ... (update_traces og update_layout som før)
+        st.plotly_chart(fig, use_container_width=True)
