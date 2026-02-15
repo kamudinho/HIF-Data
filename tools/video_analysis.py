@@ -5,10 +5,15 @@ import re
 
 # --- 1. DIALOG TIL FORSTØRRET VISNING ---
 @st.dialog("Videoanalyse - Stor skærm", width="large")
-def vis_stort_format(video_sti, spiller, info):
+def vis_stort_format(video_sti, spiller, info, key_to_reset):
     st.video(video_sti, autoplay=True)
     st.subheader(spiller)
     st.write(info)
+    # Når brugeren klikker på "Luk" eller udenfor boksen i Streamlit, 
+    # skal vi sikre os at siden genindlæses for at nulstille checkboxen.
+    if st.button("Luk og nulstil"):
+        st.session_state[key_to_reset] = False
+        st.rerun()
 
 def vis_side(spillere_df):
     st.title("HIF Videoanalyse")
@@ -19,13 +24,14 @@ def vis_side(spillere_df):
     video_dir = os.path.join(BASE_DIR, 'videos')
 
     if not os.path.exists(match_path):
-        st.error("Data mangler")
+        st.error("Data mangler: Kunne ikke finde data/matches.csv")
         return
 
-    # Indlæs og map data
+    # Indlæs data
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
+    # Map navne
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
     navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df.get('NAVN', 'Ukendt')))
     
@@ -50,9 +56,9 @@ def vis_side(spillere_df):
         st.info("Ingen videoer fundet.")
         return
 
-    # --- 3. TABEL-LAYOUT (Mindre video) ---
+    # --- 3. TABEL-LAYOUT ---
     st.markdown("---")
-    # Vi justerer tallene her [3, 4, 1, 2] for at gøre video-kolonnen (den sidste) mindre
+    # Vi bruger [3, 4, 1, 2] for at få en mindre video-kolonne til højre
     h_col1, h_col2, h_col3, h_col4 = st.columns([3, 4, 1, 2])
     h_col1.write("**Spiller**")
     h_col2.write("**Kamp**")
@@ -61,7 +67,6 @@ def vis_side(spillere_df):
     st.divider()
 
     for idx, row in tabel_df.iterrows():
-        # Samme kolonne-forhold som overskriften
         c1, c2, c3, c4 = st.columns([3, 4, 1, 2])
         
         c1.write(f"**{row['SPILLER']}**")
@@ -72,16 +77,20 @@ def vis_side(spillere_df):
             v_fil = video_map.get(row['RENS_ID'])
             video_sti = os.path.join(video_dir, v_fil)
             
-            # Lille video preview
+            # Lille preview video
             st.video(video_sti)
             
-            # Checkbox i stedet for knap
-            # Vi bruger st.rerun() for at nulstille checkboxen efter brug
-            forstoer = st.checkbox("Forstør", key=f"chk_{row['RENS_ID']}_{idx}")
+            # Checkbox logik med automatisk reset
+            cb_key = f"chk_{row['RENS_ID']}_{idx}"
+            
+            # Initialiser session_state hvis den ikke findes
+            if cb_key not in st.session_state:
+                st.session_state[cb_key] = False
+                
+            # Tegn checkboxen baseret på session_state
+            forstoer = st.checkbox("Forstør", key=cb_key)
+            
             if forstoer:
-                vis_stort_format(video_sti, row['SPILLER'], row['MATCHLABEL'])
-                # Dette lille trick nulstiller checkboxen når dialogen lukkes
-                if not st.session_state.get('modal_open', False):
-                    st.rerun()
+                vis_stort_format(video_sti, row['SPILLER'], row['MATCHLABEL'], cb_key)
         
         st.divider()
