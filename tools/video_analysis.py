@@ -5,8 +5,7 @@ import re
 
 def rens_dansk_tekst(tekst):
     if not isinstance(tekst, str): return tekst
-    fejl_map = {"√∏": "ø", "√¶": "æ", "√•": "å", "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å"}
-    fejl_map = {"left_foot": "Venstre fod", "right_foot": "Højre fod"}
+    fejl_map = {"√∏": "ø", "√¶": "æ", "√•": "å", "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å", "left_foot": "Venstre fod", "right_foot": "Højre fod"}
     for fejl, ret in fejl_map.items():
         tekst = tekst.replace(fejl, ret)
     return tekst
