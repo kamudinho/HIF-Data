@@ -51,27 +51,30 @@ def vis_side(spillere):
     st.divider()
 
     # Loop gennem data og map efter din nye struktur
-    for idx, row in video_df.iterrows():
-        c = st.columns([1, 3, 1, 2, 1, 1])
+    # Loop gennem data og map efter din faktiske CSV-rækkefølge:
+for idx, row in video_df.iterrows():
+    c = st.columns([1, 3, 1, 2, 1, 1])
+    
+    # 1. VIDEO (Knap)
+    if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
+        vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
         
-        # Knap til popup
-        if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
-            vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
-            
-        c[1].write(row.get('MATCHLABEL', 'N/A'))
-        c[2].write(row.get('RESULT', 'N/A'))
-        
-        # OVERSÆTTELSE AF KOLONNER (Jvf. din beskrivelse):
-        # Kropsdel ligger i 'SHOTBODYPART'
-        c[3].write(row.get('SHOTBODYPART', 'N/A'))
-        
-        # Mål (True/False) ligger i 'SHOTISGOAL'
-        er_maal = str(row.get('SHOTISGOAL')).lower() == 'true'
-        c[4].write("⚽ JA" if er_maal else "❌")
-        
-        # xG værdi ligger i 'SHOTXG'
-        xg_val = row.get('SHOTXG', '0.00')
-        c[5].write(f"{xg_val}")
+    # 2. KAMP (MATCHLABEL)
+    c[1].write(row.get('MATCHLABEL', 'N/A'))
+    
+    # 3. RESULTAT (RESULT)
+    c[2].write(row.get('RESULT', 'N/A'))
+    
+    # 4. KROPSDEL (SIDE) - Her ligger f.eks. 'left_foot' eller 'right_foot'
+    c[3].write(row.get('SIDE', 'N/A'))
+    
+    # 5. MÅL (SHOTBODYPART) - Her ligger True/False i din fil
+    er_maal = str(row.get('SHOTBODYPART')).lower() == 'true'
+    c[4].write("⚽ JA" if er_maal else "❌ NEJ")
+    
+    # 6. xG (SHOTISGOAL) - Her ligger selve xG-tallet (f.eks. 0.02127)
+    xg_val = row.get('SHOTISGOAL', '0.00')
+    c[5].write(f"{xg_val}")
 
 # 4. Popup vinduet med korrekt oversættelse
 @st.dialog("Videoanalyse")
