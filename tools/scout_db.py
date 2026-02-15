@@ -153,7 +153,7 @@ def vis_profil(p_data, full_df, s_df):
             ))
             fig_radar.update_layout(
                 polar=dict(
-                    gridshape='linear', # Sikrer 8-kantet form
+                    gridshape='linear', 
                     radialaxis=dict(visible=True, range=[0, 5], gridcolor="lightgrey")
                 ), 
                 showlegend=False, 
@@ -201,24 +201,24 @@ def vis_side():
     if valgt_pos: f_df = f_df[f_df['POSITION_VISNING'].isin(valgt_pos)]
     f_df = f_df[(f_df['RATING_AVG'] >= rating_range[0]) & (f_df['RATING_AVG'] <= rating_range[1])]
 
-    # VISNING AF TABEL MED NYE NAVNE OG CENTRERING
-    vis_cols = ['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']
-    
+    # --- FEJLSIKKER TABELVISNING ---
+    # Vi forbereder data med de korrekte navne her
+    display_df = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
+    display_df = display_df.rename(columns={
+        "POSITION_VISNING": "POSITION",
+        "RATING_AVG": "RATING",
+        "STATUS": "VURDERING"
+    })
+
     event = st.dataframe(
-        f_df[vis_cols], 
+        display_df, 
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row", 
         height=700,
         column_config={
-            "NAVN": st.column_config.TextColumn(label="NAVN"),
-            "POSITION_VISNING": st.column_config.TextColumn(label="POSITION", alignment="center"),
-            "KLUB": st.column_config.TextColumn(label="KLUB", alignment="center"),
-            "RATING_AVG": st.column_config.NumberColumn(label="RATING", format="%.1f", alignment="center"),
-            "STATUS": st.column_config.TextColumn(label="VURDERING", alignment="center"),
-            "DATO": st.column_config.TextColumn(label="DATO", alignment="center"),
-            "SCOUT": st.column_config.TextColumn(label="SCOUT", alignment="center"),
+            "RATING": st.column_config.NumberColumn(format="%.1f")
         }
     )
 
