@@ -20,7 +20,6 @@ def hent_vaerdi_robust(row, col_name):
     return row_dict.get(col_name.strip().lower(), "")
 
 def vis_spiller_billede(pid, w=110):
-    """Henter og viser spillerbillede fra Wyscout CDN."""
     pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
@@ -42,11 +41,11 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
-def vis_scout_bokse(row):
-    c1, c2, c3 = st.columns(3)
-    with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
-    with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
-    with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+# NY: Hjælper til at stable bokse lodret
+def vis_scout_bokse_lodret(row):
+    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
 # --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
@@ -67,7 +66,7 @@ def vis_profil(p_data, full_df, s_df):
     with head_left:
         vis_spiller_billede(clean_p_id, w=115)
     with head_right:
-        st.markdown(f"<h2>{p_data.get('NAVN', 'Ukendt')}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='margin-top:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>", unsafe_allow_html=True)
         st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
         st.caption(f"Seneste rapport: {seneste_dato} | Scout: {scout_navn}")
 
@@ -76,7 +75,11 @@ def vis_profil(p_data, full_df, s_df):
     with tab1:
         vis_metrikker(nyeste)
         st.write("")
-        vis_scout_bokse(nyeste)
+        # Her bruger vi 3 kolonner som før for overblik
+        c1, c2, c3 = st.columns(3)
+        with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
+        with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
+        with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
@@ -86,7 +89,10 @@ def vis_profil(p_data, full_df, s_df):
             with st.expander(label):
                 vis_metrikker(row)
                 st.write("")
-                vis_scout_bokse(row)
+                c1, c2, c3 = st.columns(3)
+                with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
+                with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
+                with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering')}")
 
     with tab3:
         fig_line = go.Figure()
@@ -100,10 +106,11 @@ def vis_profil(p_data, full_df, s_df):
             st.dataframe(sp_stats.drop(columns=['PLAYER_WYID']), use_container_width=True, hide_index=True)
 
     with tab5:
-        # Radar layout
+        # Layout: Info (Venstre) | Radar (Midte) | BOKSE STABLET (Højre)
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
+        
         c_l, c_m, c_r = st.columns([1.5, 4, 2.5])
         with c_l:
             st.markdown(f"### Værdier\n*{seneste_dato}*")
@@ -112,10 +119,14 @@ def vis_profil(p_data, full_df, s_df):
         with c_m:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
+            fig_radar.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
+                showlegend=False, height=450, margin=dict(l=40, r=40, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
         with c_r:
-            vis_scout_bokse(nyeste)
+            # HER STABLES DE OVENPÅ HINANDEN
+            vis_scout_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -127,7 +138,6 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Find kolonner
     c_id, c_dato, c_navn, c_klub, c_pos, c_rating, c_status, c_scout = [find_col(df, x) for x in ['id', 'dato', 'navn', 'klub', 'position', 'rating_avg', 'status', 'scout']]
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
@@ -136,7 +146,6 @@ def vis_side():
 
     st.subheader("Scouting Database")
 
-    # --- FILTRE ER TILBAGE HER ---
     f1, f2, f3 = st.columns([2, 1, 1])
     with f1:
         search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
@@ -147,7 +156,6 @@ def vis_side():
         scout_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
         valgt_scout = st.multiselect("Scout", options=scout_opts)
 
-    # Filtrering
     f_df = df.groupby(c_id).tail(1).copy()
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
@@ -156,15 +164,16 @@ def vis_side():
     if valgt_scout:
         f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
 
-    # Kolonner i oversigten
     disp_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
+    # height=None fjerner den interne scrollbar i tabellen
     event = st.dataframe(
         f_df[disp_cols],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
+        height=None, 
         column_config={c_rating: st.column_config.NumberColumn("Rating", format="%.1f")}
     )
 
