@@ -102,34 +102,66 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         fig_line.update_layout(height=400, yaxis=dict(range=[1, 6], title="Rating"))
         st.plotly_chart(fig_line, use_container_width=True)
 
-    with tab4:
-        st.markdown("### Historik")
-        
-        # 1. Hent data fra begge kilder
+    with tab4:        
+        # 1. Saml data
         curr = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        
-        # 2. Læg dem sammen til én tabel
-        # Vi bruger pd.concat for at lægge rækkerne under hinanden
-        samlet_stats = pd.concat([curr, old], ignore_index=True)
+        df_stats = pd.concat([curr, old], ignore_index=True)
 
-        if not samlet_stats.empty:
-            # 3. Rensning: Fjern PLAYER_WYID og dubletter hvis de findes
-            samlet_stats = samlet_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
+        if not df_stats.empty:
+            # 2. Definer hvilke stats der skal have en %-beregning
+            # Format: 'Visningsnavn': ('Total_kolonne', 'Succes_kolonne')
+            stat_map = {
+                'Passes': ('PASSES', 'SUCCESSFULPASSES'),
+                'Forward Passes': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'),
+                'Final Third Passes': ('PASSESTOFINALTHIRD', 'SUCCESSFULPASSESTOFINALTHIRD'),
+                'Progressive Passes': ('PROGRESSIVEPASSES', 'SUCCESSFULPROGRESSIVEPASSES'),
+                'Duels': ('DUELS', 'DUELSWON')
+            }
+
+            # 3. Lav en ny dataframe til visning
+            display_stats = pd.DataFrame()
             
-            # 4. Sortering: Hvis du har en SEASONNAME kolonne, bruger vi den. 
-            # Ellers vises de bare i rækkefølgen: Nyeste (curr) først, derefter gamle (old).
-            if 'SEASONNAME' in samlet_stats.columns:
-                samlet_stats = samlet_stats.sort_values('SEASONNAME', ascending=False)
+            # Tilføj basis-info først
+            if 'SEASONNAME' in df_stats.columns: display_stats['Sæson'] = df_stats['SEASONNAME']
+            if 'TEAMNAME' in df_stats.columns: display_stats['Hold'] = df_stats['TEAMNAME']
+            display_stats['Kampe'] = df_stats['MATCHES']
+            display_stats['Minutter'] = df_stats['MINUTESTAGGED']
+
+            # 4. Beregn procenter og formater tekst: "Total (XX %)"
+            for label, (total_col, success_col) in stat_map.items():
+                if total_col in df_stats.columns and success_col in df_stats.columns:
+                    def format_pct(row):
+                        tot = row[total_col]
+                        suc = row[success_col]
+                        if tot > 0:
+                            pct = (suc / tot) * 100
+                            return f"{int(tot)} ({int(pct)}%)"
+                        return f"{int(tot)} (0%)"
+                    
+                    display_stats[label] = df_stats.apply(format_pct, axis=1)
+
+            # 5. Tilføj de resterende stats (mål, assists, etc.)
+            andre_stats = {
+                'GOALS': 'Mål',
+                'ASSISTS': 'Assists',
+                'TOUCHINBOX': 'Touch i felt',
+                'YELLOWCARD': 'Gule',
+                'REDCARDS': 'Røde'
+            }
             
-            # 5. Vis den samlede tabel
-            st.dataframe(
-                samlet_stats, 
-                use_container_width=True, 
-                hide_index=True
-            )
+            for col, label in andre_stats.items():
+                if col in df_stats.columns:
+                    display_stats[label] = df_stats[col].fillna(0).astype(int)
+
+            # Sorter efter nyeste sæson
+            if 'Sæson' in display_stats.columns:
+                display_stats = display_stats.sort_values('Sæson', ascending=False)
+
+            # 6. Vis tabellen
+            st.dataframe(display_stats, use_container_width=True, hide_index=True)
         else:
-            st.info("Ingen statistisk data fundet for denne spiller.")
+            st.info("Ingen statistisk data fundet.")
 
     with tab5:
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
