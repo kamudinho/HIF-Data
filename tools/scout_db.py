@@ -73,14 +73,14 @@ def vis_side():
 
         # Metrik funktion
         def vis_metrikker(row):
-    m_cols = st.columns(4)
-    metrics = [
+            m_cols = st.columns(4)
+            metrics = [
         ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
         ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
         ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
         ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
-    ]
-    for i, (label, col) in enumerate(metrics):
+        ]
+            for i, (label, col) in enumerate(metrics):
         # Hent værdi og håndter manglende data (NaN)
         val = row.get(col, 0)
         # Hvis værdien er NaN eller ikke eksisterer, sæt til 0
