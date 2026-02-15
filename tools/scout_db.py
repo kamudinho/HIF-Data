@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import requests
 
-# --- 1. HJÆLPEFUNKTIONER ---
+# --- 1. ROBUSTE HJÆLPEFUNKTIONER ---
 def find_col(df, target):
     cols = {str(c).strip().lower(): str(c) for c in df.columns}
     return cols.get(target.strip().lower())
@@ -41,6 +41,12 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
+# NY: Hjælper til at stable bokse lodret
+def vis_scout_bokse_lodret(row):
+    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+
 # --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
@@ -49,14 +55,13 @@ def vis_profil(p_data, full_df, s_df):
     historik = full_df[full_df[id_col].astype(str).str.contains(clean_p_id, na=False)].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
-        st.error("Ingen data fundet.")
+        st.error("Kunne ikke finde data på denne spiller.")
         return
 
     nyeste = historik.iloc[-1]
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion: Billede til VENSTRE, Info til HØJRE
     head_left, head_right = st.columns([1, 4])
     with head_left:
         vis_spiller_billede(clean_p_id, w=115)
@@ -70,23 +75,29 @@ def vis_profil(p_data, full_df, s_df):
     with tab1:
         vis_metrikker(nyeste)
         st.write("")
-        st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
-        st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
-        st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
+        # Her bruger vi 3 kolonner som før for overblik
+        c1, c2, c3 = st.columns(3)
+        with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
+        with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
+        with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            label = f"Rapport: {hent_vaerdi_robust(row, 'Dato')} | Scout: {hent_vaerdi_robust(row, 'Scout')}"
+            dato_str = str(hent_vaerdi_robust(row, 'Dato'))
+            s_navn = hent_vaerdi_robust(row, 'Scout')
+            label = f"Rapport: {dato_str} | Rating: {hent_vaerdi_robust(row, 'Rating_Avg')} | Scout: {s_navn}"
             with st.expander(label):
                 vis_metrikker(row)
-                st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
-                st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
-                st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering')}")
+                st.write("")
+                c1, c2, c3 = st.columns(3)
+                with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
+                with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
+                with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering')}")
 
     with tab3:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='lines+markers', line_color='#df003b'))
-        fig_line.update_layout(height=300, yaxis=dict(range=[1, 6]))
+        fig_line.update_layout(height=300, yaxis=dict(range=[1, 6]), margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
@@ -95,27 +106,27 @@ def vis_profil(p_data, full_df, s_df):
             st.dataframe(sp_stats.drop(columns=['PLAYER_WYID']), use_container_width=True, hide_index=True)
 
     with tab5:
-        # Layout: Værdier | Radar | BOKSE STABLET
-        c_v, c_r, c_b = st.columns([1.5, 3.5, 2.5])
+        # Layout: Info (Venstre) | Radar (Midte) | BOKSE STABLET (Højre)
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
+        v_closed = v + [v[0]]
         
-        with c_v:
+        c_l, c_m, c_r = st.columns([1.5, 4, 2.5])
+        with c_l:
             st.markdown(f"### Værdier\n*{seneste_dato}*")
-            for cat in categories:
-                val = rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, cat))
+            for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
-        with c_r:
-            v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
-            v_closed = v + [v[0]]
+        with c_m:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=400)
+            fig_radar.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
+                showlegend=False, height=450, margin=dict(l=40, r=40, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
-        with c_b:
-            # HER STABLES BOKSENE LODRET
-            st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker') or 'Ingen data'}")
-            st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling') or 'Ingen data'}")
-            st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering') or 'Ingen data'}")
+        with c_r:
+            # HER STABLES DE OVENPÅ HINANDEN
+            vis_scout_bokse_lodret(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -135,33 +146,34 @@ def vis_side():
 
     st.subheader("Scouting Database")
 
-    # POP-OVER FILTER (Som vi aftalte!)
-    col_s, col_p = st.columns([4, 1])
-    with col_s:
-        search = st.text_input("Søg...", label_visibility="collapsed")
-    with col_p:
-        with st.popover("Filtrér"):
-            # .dropna() fixer din TypeError
-            status_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
-            valgt_status = st.multiselect("Status", options=status_opts)
-            scout_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
-            valgt_scout = st.multiselect("Scout", options=scout_opts)
+    f1, f2, f3 = st.columns([2, 1, 1])
+    with f1:
+        search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
+    with f2:
+        status_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
+        valgt_status = st.multiselect("Status", options=status_opts)
+    with f3:
+        scout_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
+        valgt_scout = st.multiselect("Scout", options=scout_opts)
 
     f_df = df.groupby(c_id).tail(1).copy()
-    if search: f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
-    if valgt_status: f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
-    if valgt_scout: f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
+    if search:
+        f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
+    if valgt_status:
+        f_df = f_df[f_df[c_status].astype(str).isin(valgt_status)]
+    if valgt_scout:
+        f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
 
     disp_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
-    # HØJ HEIGHT fjerner scroll i tabellen
+    # height=None fjerner den interne scrollbar i tabellen
     event = st.dataframe(
         f_df[disp_cols],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=1000, 
+        height=None, 
         column_config={c_rating: st.column_config.NumberColumn("Rating", format="%.1f")}
     )
 
