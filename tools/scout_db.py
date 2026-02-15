@@ -73,20 +73,20 @@ def vis_side():
 
         # Metrik funktion
         def vis_metrikker(row):
-            m_cols = st.columns(4)
-            metrics = [
+    m_cols = st.columns(4)
+    metrics = [
         ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
         ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
         ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
         ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
-            ]
-        for i, (label, col) in enumerate(metrics):
+    ]
+    for i, (label, col) in enumerate(metrics):
         # Hent værdi og håndter manglende data (NaN)
         val = row.get(col, 0)
         # Hvis værdien er NaN eller ikke eksisterer, sæt til 0
         clean_val = int(pd.to_numeric(val, errors='coerce')) if pd.notna(val) else 0
         m_cols[i % 4].metric(label, f"{clean_val}")
-
+        
         # --- PROFIL DIALOG ---
         @st.dialog("Spillerprofil", width="large")
         def vis_profil(p_data, full_df, s_df, avg_line):
