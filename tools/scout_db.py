@@ -157,8 +157,8 @@ def vis_profil(p_data, full_df, s_df):
                     gridshape='linear',  # DETTE GØR DEN 8-KANTET
                     radialaxis=dict(
                         visible=True, 
-                        range=[0, 5], 
-                        tickvals=[1, 2, 3, 4, 5],
+                        range=[0, 6], 
+                        
                         gridcolor="lightgrey",
                         showticklabels=True
                     ),
