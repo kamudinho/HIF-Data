@@ -103,22 +103,32 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        # VISNING AF STATISTIK FRA BEGGE FILER
-        st.markdown("### 📊 Statistisk Historik")
+        st.markdown("### Historik")
         
-        # 1. Nuværende sæson
+        # 1. Hent data fra begge kilder
         curr = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        if not curr.empty:
-            st.write("**Nuværende Sæson**")
-            st.dataframe(curr.drop(columns=['PLAYER_WYID'], errors='ignore'), use_container_width=True, hide_index=True)
-        
-        # 2. Tidligere sæsoner
         old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        if not old.empty:
-            st.write("**Tidligere Sæsoner**")
-            st.dataframe(old.drop(columns=['PLAYER_WYID'], errors='ignore'), use_container_width=True, hide_index=True)
+        
+        # 2. Læg dem sammen til én tabel
+        # Vi bruger pd.concat for at lægge rækkerne under hinanden
+        samlet_stats = pd.concat([curr, old], ignore_index=True)
+
+        if not samlet_stats.empty:
+            # 3. Rensning: Fjern PLAYER_WYID og dubletter hvis de findes
+            samlet_stats = samlet_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
             
-        if curr.empty and old.empty:
+            # 4. Sortering: Hvis du har en SEASONNAME kolonne, bruger vi den. 
+            # Ellers vises de bare i rækkefølgen: Nyeste (curr) først, derefter gamle (old).
+            if 'SEASONNAME' in samlet_stats.columns:
+                samlet_stats = samlet_stats.sort_values('SEASONNAME', ascending=False)
+            
+            # 5. Vis den samlede tabel
+            st.dataframe(
+                samlet_stats, 
+                use_container_width=True, 
+                hide_index=True
+            )
+        else:
             st.info("Ingen statistisk data fundet for denne spiller.")
 
     with tab5:
