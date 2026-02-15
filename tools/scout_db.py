@@ -6,10 +6,10 @@ import numpy as np
 # --- 1. HJÆLPEFUNKTIONER ---
 def rens_metrik_vaerdi(val):
     try:
-        if pd.isna(val) or val == "": return 0
+        if pd.isna(val) or val == "": return 0.0
         return float(val)
     except:
-        return 0
+        return 0.0
 
 def vis_metrikker(row):
     m_cols = st.columns(4)
@@ -25,8 +25,14 @@ def vis_metrikker(row):
 
 # --- 2. PROFIL DIALOG ---
 @st.dialog(" ", width="large")
-def vis_profil(p_data, full_df, s_df, hif_avg):
-    st.subheader(f"{p_data['NAVN']} | {p_data['POSITION']} | {p_data['KLUB']}")
+def vis_profil(p_data, full_df, s_df):
+    # Overskrift bygget i Streamlit i stedet for Plotly for at undgå fejl
+    st.markdown(f"""
+        <div style='text-align: center;'>
+            <h2 style='margin-bottom: 0;'>{p_data['NAVN']}</h2>
+            <p style='font-size: 18px; color: gray;'>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     historik = full_df[full_df['ID'] == p_data['ID']].sort_values('DATO', ascending=True)
     nyeste = historik.iloc[-1]
@@ -59,9 +65,10 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
             st.dataframe(sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "GOAL"]], use_container_width=True, hide_index=True)
 
     with tab5:
+        # DATA TIL RADAR
         m_navne = ["Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-        # Tving værdier til floats og luk polygonen
         m_værdier = [rens_metrik_vaerdi(nyeste.get(m.upper(), nyeste.get(m, 0))) for m in m_navne]
+        # Luk cirklen
         m_værdier.append(m_værdier[0])
         m_theta = m_navne + [m_navne[0]]
 
@@ -74,21 +81,19 @@ def vis_profil(p_data, full_df, s_df, hif_avg):
             line=dict(color='#cc0000', width=2)
         ))
 
-        # Simpel layout for at undgå ValueError
+        # Meget simpelt layout uden titler eller komplekse dicts
         fig_radar.update_layout(
             polar=dict(
-                radialaxis=dict(visible=True, range=[0, 7]),
-                gridshape='polygon'
+                gridshape='polygon',
+                radialaxis=dict(visible=True, range=[0, 7])
             ),
             showlegend=False,
             height=500,
-            margin=dict(t=80, b=40, l=40, r=40),
-            title=f"<b>{p_data['NAVN']}</b><br>{p_data['KLUB']} | {p_data['POSITION']} | Snit: {p_data['RATING_AVG']}"
+            margin=dict(t=30, b=30, l=30, r=30)
         )
         
-        # Tilføj vurdering i bunden
         st.plotly_chart(fig_radar, use_container_width=True)
-        st.markdown(f"<div style='text-align: center; color: gray;'><i>Vurdering: {nyeste.get('VURDERING', 'N/A')}</i></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; background-color: #f0f2f6; padding: 20px; border-radius: 10px;'><b>Vurdering:</b><br>{nyeste.get('VURDERING', 'N/A')}</div>", unsafe_allow_html=True)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -98,6 +103,7 @@ def vis_side():
     
     _, _, _, _, stats_df, df = st.session_state["main_data"]
 
+    # Top bar
     st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Database</p>", unsafe_allow_html=True)
 
     # Filtrering
@@ -120,7 +126,7 @@ def vis_side():
         f_df = f_df[f_df['POSITION'].isin(f_pos)]
     f_df = f_df[(f_df['RATING_AVG'] >= f_rating[0]) & (f_df['RATING_AVG'] <= f_rating[1])]
     
-    # --- VISNING AF TABEL ---
+    # --- PAGINERING ---
     items_per_page = 20
     total_pages = max(1, int(np.ceil(len(f_df) / items_per_page)))
     
@@ -130,6 +136,7 @@ def vis_side():
     start_idx = (st.session_state.scout_page - 1) * items_per_page
     page_df = f_df.iloc[start_idx : start_idx + items_per_page]
 
+    # Tabelvisning
     tabel_hoejde = (len(page_df) * 35) + 40
     event = st.dataframe(
         page_df[["NAVN", "POSITION", "KLUB", "RATING_AVG", "STATUS", "RAPPORTER", "DATO"]],
@@ -141,20 +148,20 @@ def vis_side():
         }
     )
 
-    # --- DISKRET SIDEVÆLGER I BUNDEN ---
+    # DISKRETE KNAPPER I BUNDEN
     if total_pages > 1:
-        st.write("---")
-        col_prev, col_text, col_next = st.columns([1, 2, 1])
-        with col_prev:
+        st.write("")
+        c_prev, c_text, c_next = st.columns([1, 2, 1])
+        with c_prev:
             if st.button("← Forrige", disabled=(st.session_state.scout_page <= 1), use_container_width=True):
                 st.session_state.scout_page -= 1
                 st.rerun()
-        with col_text:
-            st.markdown(f"<p style='text-align: center; padding-top: 5px;'>Side {st.session_state.scout_page} af {total_pages}</p>", unsafe_allow_html=True)
-        with col_next:
+        with c_text:
+            st.markdown(f"<p style='text-align: center; margin-top: 5px;'>Side {st.session_state.scout_page} af {total_pages}</p>", unsafe_allow_html=True)
+        with c_next:
             if st.button("Næste →", disabled=(st.session_state.scout_page >= total_pages), use_container_width=True):
                 st.session_state.scout_page += 1
                 st.rerun()
 
     if len(event.selection.rows) > 0:
-        vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df, 0)
+        vis_profil(page_df.iloc[event.selection.rows[0]], df, stats_df)
