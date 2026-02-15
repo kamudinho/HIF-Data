@@ -175,7 +175,7 @@ def vis_side(spillere, player_events):
             xaxis_title=f"{valg_label.capitalize()} - {visning}",
             yaxis_title="",
             template="plotly_white",
-            height=max(800, len(df_plot) * 35), # Lidt mere plads pr. række
+            height=max(750, len(df_plot) * 35), # Lidt mere plads pr. række
             margin=dict(r=100) # Giver plads i højre side til tekst uden for barerne
         )
         
