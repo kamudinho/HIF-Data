@@ -124,7 +124,6 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 "Spilintelligens": "SPILINTELLIGENS"
             }
             
-            valgt_label = st.selectbox("Vælg parameter", options=list(metrics_options.keys()), index=0)
             valgt_kolonne = metrics_options[valgt_label]
 
         # 2. Generer grafen baseret på valget
