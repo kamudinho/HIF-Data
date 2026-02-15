@@ -5,7 +5,6 @@ import re
 
 def rens_dansk_tekst(tekst):
     if not isinstance(tekst, str): return tekst
-    # Kombineret map så intet bliver overskrevet
     fejl_map = {
         "√∏": "ø", "√¶": "æ", "√•": "å", 
         "√ò": "Ø", "√Ü": "Æ", "√Ö": "Å",
@@ -58,7 +57,7 @@ def vis_side(spillere_df):
     # --- 3. MODAL VINDUE ---
     @st.dialog(" ", width="large")
     def vis_analyse(data, v_map, v_dir):
-        # CSS HACK: Gør knapperne til ren tekst
+        # CSS HACK: Knapper til ren tekst uden ikoner
         st.markdown("""
             <style>
                 div[data-testid="stColumn"] button {
@@ -66,11 +65,12 @@ def vis_side(spillere_df):
                     background-color: transparent !important;
                     color: inherit !important;
                     padding: 0px !important;
-                    text-decoration: underline;
+                    text-decoration: none;
+                    font-size: 16px;
                 }
                 div[data-testid="stColumn"] button:hover {
                     color: #ff4b4b !important;
-                    text-decoration: none;
+                    text-decoration: underline;
                 }
             </style>
         """, unsafe_allow_html=True)
@@ -78,30 +78,40 @@ def vis_side(spillere_df):
         if "active_tab" not in st.session_state:
             st.session_state.active_tab = "Video"
 
-        head_col, btn_col1, btn_col2 = st.columns([6, 1.2, 1.2])
+        # 4 kolonner for at få plads til Grafik også
+        head_col, btn1, btn2, btn3 = st.columns([5, 1, 1, 1])
         
         with head_col:
-            st.subheader(data['DYNAMIC_TITLE'])
+            st.markdown(f"#### {data['DYNAMIC_TITLE']}")
         
-        with btn_col1:
+        with btn1:
             if st.button("Video"):
                 st.session_state.active_tab = "Video"
                 st.rerun()
-        
-        with btn_col2:
+        with btn2:
             if st.button("Stats"):
                 st.session_state.active_tab = "Stats"
                 st.rerun()
+        with btn3:
+            if st.button("Grafik"):
+                st.session_state.active_tab = "Grafik"
+                st.rerun()
 
+        # --- INDHOLD BASERET PÅ VALG ---
         if st.session_state.active_tab == "Video":
             v_fil = v_map.get(data['RENS_ID'])
             st.video(os.path.join(v_dir, v_fil), autoplay=True)
-        else:
+            
+        elif st.session_state.active_tab == "Stats":
             st.write(f"**Spiller:** {data['SPILLER']}")
             c1, c2, c3 = st.columns(3)
             c1.metric("xG", f"{data.get('SHOTXG', 0):.2f}")
             c2.metric("Del", f"{data.get('SHOTBODYPART', 'N/A')}")
             c3.metric("Halvleg", f"{data.get('MATCHPERIOD', 'N/A')}")
+            
+        elif st.session_state.active_tab == "Grafik":
+            st.info("Her kan du indsætte banegrafik eller skudkort.")
+            # Her kan du senere tilføje f.eks. st.image(skudkort_sti)
 
     if len(event.selection.rows) > 0:
         vis_analyse(final_df.iloc[event.selection.rows[0]], video_map, video_dir)
