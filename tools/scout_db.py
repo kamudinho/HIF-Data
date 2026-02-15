@@ -20,7 +20,7 @@ def vis_side():
     
     try:
         # 1. Hent Data
-        scout_url = f"https://raw.githubusercontent.com/{REPO}/main/data/{SCOUT_FILE}?nocache={uuid.uuid4()}"
+        scout_url = f"https://raw.githubusercontent.com/{REPO}/main/{SCOUT_FILE}?nocache={uuid.uuid4()}"
         df = pd.read_csv(scout_url, sep=None, engine='python')
         
         df['Position'] = df['Position'].map(POS_MAP).fillna(df['Position'])
