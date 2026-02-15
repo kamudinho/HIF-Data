@@ -209,8 +209,8 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                     ),
                     radialaxis=dict(
                         visible=True,
-                        range=[0, 5],
-                        tickvals=[1, 2, 3, 4, 5],
+                        range=[0, 6],
+                        tickvals=[1, 2, 3, 4, 5, 6],
                         gridcolor="grey"
                     ),
                     gridshape='linear'  # DETTE GØR DEN TIL EN 8-KANT (IKKE CIRKEL)
