@@ -80,7 +80,7 @@ def vis_profil(p_data, full_df, s_df):
         fig_radar.update_layout(
             polar=dict(
                 gridshape='linear', # Lineær giver den kantede form
-                radialaxis=dict(visible=True, range=[0, 7])
+                radialaxis=dict(visible=True, range=[0, 6])
             ),
             showlegend=False, 
             height=450, 
