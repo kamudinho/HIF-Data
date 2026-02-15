@@ -44,7 +44,7 @@ def vis_side(spillere_df):
 
     # --- 4. TABEL ---
     event = st.dataframe(
-        final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "FOOT"]],
+        final_df[["SPILLER", "MATCHLABEL", "SHOTXG", "BODYPART"]],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
@@ -69,7 +69,7 @@ def vis_side(spillere_df):
             st.write(f"**Spiller:** {data['SPILLER']}")
             c1, c2, c3 = st.columns(3)
             if 'SHOTXG' in data: c1.metric("xG", f"{data['SHOTXG']:.2f}")
-            if 'FOOT' in data: c2.metric("Fod", f"{data['FOOT']}")
+            if 'FOOT' in data: c2.metric("Fod", f"{data['BODYPART']}")
             if 'PERIOD' in data: c3.metric("Halvleg", f"{data['PERIOD']}")
 
     if len(event.selection.rows) > 0:
