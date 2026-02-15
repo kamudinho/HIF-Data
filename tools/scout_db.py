@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import requests
 
-# --- HJÆLPEFUNKTIONER ---
+# --- 1. HJÆLPEFUNKTIONER ---
 def find_col(df, target):
     cols = {str(c).strip().lower(): str(c) for c in df.columns}
     return cols.get(target.strip().lower())
@@ -41,18 +41,19 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
-def vis_scout_bokse(row, lodret=False):
-    if lodret:
-        st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
-        st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
-        st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
-    else:
-        c1, c2, c3 = st.columns(3)
-        with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
-        with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
-        with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+# NY: Denne funktion sikrer stablingen
+def vis_bokse_lodret(row):
+    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
-# --- PROFIL DIALOG ---
+def vis_bokse_kolonner(row):
+    c1, c2, c3 = st.columns(3)
+    with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+
+# --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df):
     id_col = find_col(full_df, 'id')
@@ -79,17 +80,16 @@ def vis_profil(p_data, full_df, s_df):
     
     with tab1:
         vis_metrikker(nyeste)
-        vis_scout_bokse(nyeste)
+        vis_bokse_kolonner(nyeste)
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            # SCOUT ER NU TILFØJET TIL EXPANDER LABEL
             h_scout = hent_vaerdi_robust(row, 'Scout')
             h_dato = hent_vaerdi_robust(row, 'Dato')
             h_rate = hent_vaerdi_robust(row, 'Rating_Avg')
             with st.expander(f"Rapport: {h_dato} | Scout: {h_scout} | Rating: {h_rate}"):
                 vis_metrikker(row)
-                vis_scout_bokse(row)
+                vis_bokse_kolonner(row)
 
     with tab3:
         fig_line = go.Figure()
@@ -110,25 +110,22 @@ def vis_profil(p_data, full_df, s_df):
         
         with cl:
             st.markdown(f"### Værdier\n*{seneste_dato}*")
-            st.caption(f"Scout: {scout_navn}") # SCOUT TILFØJET HER
+            st.caption(f"Scout: {scout_navn}")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
         with cm:
-            v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
-            v_closed = v + [v[0]]
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
             fig_radar.update_layout(
-                polar=dict(
-                    gridshape='linear', # DENNE LINJE GØR DEN KANTET
-                    radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)
-                ), 
-                showlegend=False, 
-                height=450
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), 
+                showlegend=False, height=450
             )
             st.plotly_chart(fig_radar, use_container_width=True)
-            
-# --- HOVEDFUNKTION ---
+        with cr:
+            # HER STABLES DE LODRET
+            vis_bokse_lodret(nyeste)
+
+# --- 3. HOVEDFUNKTION ---
 def vis_side():
     if "main_data" not in st.session_state:
         st.error("Data ikke fundet.")
@@ -138,7 +135,6 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Find kolonner og rens
     c_id, c_dato, c_navn, c_klub, c_pos, c_rating, c_status, c_scout = [find_col(df, x) for x in ['id', 'dato', 'navn', 'klub', 'position', 'rating_avg', 'status', 'scout']]
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
@@ -152,7 +148,6 @@ def vis_side():
         search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     with col_p:
         with st.popover("Filtrér"):
-            # DROPNA() for at undgå fejl ved tomme celler
             s_opts = sorted([str(x) for x in df[c_status].dropna().unique()])
             valgt_status = st.multiselect("Status", options=s_opts)
             sc_opts = sorted([str(x) for x in df[c_scout].dropna().unique()])
@@ -166,7 +161,6 @@ def vis_side():
     if valgt_scout:
         f_df = f_df[f_df[c_scout].astype(str).isin(valgt_scout)]
 
-    # HER ER SCOUT-KOLONNEN MED I OVERSIGTEN
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato, c_scout]
     
     event = st.dataframe(
