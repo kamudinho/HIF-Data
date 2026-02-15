@@ -108,7 +108,7 @@ def vis_profil(p_data, full_df, s_df):
         v_closed = v + [v[0]]
         
         with cl:
-            st.markdown(f"###n*{seneste_dato}*")
+            st.markdown(f"*{seneste_dato}*")
             st.caption(f"Scout: {scout_navn}")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
