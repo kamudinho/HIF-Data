@@ -21,15 +21,21 @@ def map_position(pos_code):
     s_code = str(pos_code).split('.')[0]
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
-def vis_side(spillere, player_events, df_scout):
-    # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
+# --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
     df_p = spillere.copy()
     if 'NAVN' not in df_p.columns and not df_p.empty:
         df_p['NAVN'] = df_p['FIRSTNAME'].fillna('') + " " + df_p['LASTNAME'].fillna('')
     
     df_s = df_scout.copy()
+    # Tjek om vi skal bruge PLAYER_WYID i stedet for ID
+    if 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
+        df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
+    
     if 'NAVN' not in df_s.columns:
         df_s['NAVN'] = "Ukendt navn"
+
+    # Nu er vi sikre på at ID findes (eller vi laver en tom kolonne hvis alt fejler)
+    if 'ID' not in df_s.columns: df_s['ID'] = "0"
 
     p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame()
     s_list = df_s[['NAVN', 'ID']] if not df_s.empty else pd.DataFrame()
