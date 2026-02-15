@@ -164,7 +164,7 @@ def vis_side():
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
     # Her opretter vi den pæne position ud fra POS-tallet
-    df['POS_PAEN'] = df.apply(map_position, axis=1)
+    df['POS'] = df.apply(map_position, axis=1)
     
     df = df.sort_values('DATO_DT')
 
