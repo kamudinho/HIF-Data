@@ -149,19 +149,44 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         categories = ['Tekniske færdigheder', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Beslutsomhed', 'Spilintelligens']
         cols = ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        
-        cl, cm, cr = st.columns([1.5, 4, 2.5])
-        with cl:
+        v_closed = v + [v[0]]  # Lukker 8-kanten
+        cat_closed = categories + [categories[0]]
+
+        # 2. Layout: 3 kolonner
+        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
+
+        with col_left:
             st.markdown("### Detaljer")
-            st.caption(f"**Dato:** {nyeste.get('DATO', '-')}\n\n**Scout:** {nyeste.get('SCOUT', '-')}")
+            st.write(f"**Dato:** {nyeste.get('DATO', '-')}")
+            st.write(f"**Scout:** {nyeste.get('SCOUT', '-')}")
             st.divider()
+            # Liste med værdier
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
-        with cm:
-            fig_radar = go.Figure(go.Scatterpolar(r=v+[v[0]], theta=categories+[categories[0]], fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6], tickvals=[1,2,3,4,5,6], gridcolor="grey"), gridshape='linear'), showlegend=False, height=450)
+
+        with col_mid:
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed,
+                theta=cat_closed,
+                fill='toself',
+                line=dict(color='#df003b', width=2),
+                fillcolor='rgba(223, 0, 59, 0.3)'
+            ))
+
+            fig_radar.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 6], gridcolor="lightgrey", tickvals=[1,2,3,4,5]),
+                    angularaxis=dict(gridcolor="lightgrey"),
+                    gridshape='linear'  # <--- Gør den til en 8-kant
+                ),
+                showlegend=False,
+                height=450,
+                margin=dict(l=50, r=50, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
-        with cr:
+
+        with col_right:
             st.markdown("### Bemærkninger")
             st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
