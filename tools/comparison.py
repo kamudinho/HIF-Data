@@ -6,39 +6,37 @@ import requests
 def map_position(pos_code):
     """Oversætter numeriske positionskoder til dansk tekst."""
     pos_map = {
-        "1": "Målmand",
-        "2": "Højre Back",
-        "3": "Venstre Back",
-        "4": "Midtstopper",
-        "5": "Midtstopper",
-        "6": "Defensiv Midt",
-        "7": "Højre Kant",
-        "8": "Central Midt",
-        "9": "Angriber",
-        "10": "Offensiv Midt",
-        "11": "Venstre Kant"
+        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
+        "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
+        "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
+        "10": "Offensiv Midt", "11": "Venstre Kant"
     }
     s_code = str(pos_code).split('.')[0]
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
-# --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
+def vis_side(spillere, player_events, df_scout):
+    # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
     df_p = spillere.copy()
     if 'NAVN' not in df_p.columns and not df_p.empty:
         df_p['NAVN'] = df_p['FIRSTNAME'].fillna('') + " " + df_p['LASTNAME'].fillna('')
     
     df_s = df_scout.copy()
-    # Tjek om vi skal bruge PLAYER_WYID i stedet for ID
+    
+    # SIKKERHED: Sørg for at df_s har de rigtige kolonnenavne
     if 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
         df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
     
     if 'NAVN' not in df_s.columns:
         df_s['NAVN'] = "Ukendt navn"
 
-    # Nu er vi sikre på at ID findes (eller vi laver en tom kolonne hvis alt fejler)
-    if 'ID' not in df_s.columns: df_s['ID'] = "0"
-
-    p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame()
-    s_list = df_s[['NAVN', 'ID']] if not df_s.empty else pd.DataFrame()
+    # Lav lister til kombination (kun hvis kolonnerne findes)
+    p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame(columns=['NAVN', 'ID'])
+    
+    # Her fejlede den før - nu tjekker vi om 'ID' findes i df_s
+    if 'ID' in df_s.columns:
+        s_list = df_s[['NAVN', 'ID']]
+    else:
+        s_list = pd.DataFrame(columns=['NAVN', 'ID'])
     
     combined_names = pd.concat([p_list, s_list]).drop_duplicates(subset=['NAVN'])
     navne_liste = sorted(combined_names['NAVN'].unique())
@@ -47,7 +45,7 @@ def map_position(pos_code):
         st.warning("Ingen spillere fundet i databaserne.")
         return
 
-    # --- 2. SELECTBOX SEKTION MED PADDING ---
+    # --- 2. SELECTBOX SEKTION ---
     st.markdown("<div style='padding-top: 10px; padding-bottom: 30px;'>", unsafe_allow_html=True)
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
@@ -70,12 +68,14 @@ def map_position(pos_code):
             pos = map_position(row.get('POS', 'Ukendt'))
             
             if not player_events.empty:
-                st_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid)]
+                # SIKKERHED: Håndter match på ID strengt
+                st_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
                 if not st_match.empty:
                     stats_data = st_match.iloc[0].to_dict()
 
         if not s_match.empty:
-            n = s_match.sort_values('DATO', ascending=False).iloc[0]
+            # Tag den nyeste rapport hvis der er flere
+            n = s_match.sort_values(df_s.columns[0], ascending=False).iloc[0] 
             if pid == "0":
                 pid = str(n.get('ID', '0')).split('.')[0].strip()
                 klub = n.get('KLUB', 'Eget emne')
@@ -101,9 +101,9 @@ def map_position(pos_code):
         std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         try:
             resp = requests.head(url, timeout=0.8)
-            st.image(url if resp.status_code == 200 else std, width=w if resp.status_code == 200 else int(w*0.92))
+            st.image(url if resp.status_code == 200 else std, width=w)
         except:
-            st.image(std, width=int(w*0.92))
+            st.image(std, width=w)
 
     def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
         name_style = f"margin:0; padding:0; color:{color}; line-height:1.0; font-size:24px; font-weight:bold;"
@@ -120,7 +120,6 @@ def map_position(pos_code):
             m1.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
             m2.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
             m3.metric("MÅL", int(float(stats.get('GOALS', 0))))
-        
         else:
             c_txt, c_img = st.columns([2, 1])
             with c_txt: 
@@ -135,40 +134,36 @@ def map_position(pos_code):
 
     # --- 3. HOVED LAYOUT ---
     col1, col2, col3 = st.columns([3, 3, 3])
-    
-    with col1: 
-        vis_profil_kolonne(s1_navn, res1[0], res1[1], res1[2], res1[3], "venstre", "#df003b")
+    with col1: vis_profil_kolonne(s1_navn, res1[0], res1[1], res1[2], res1[3], "venstre", "#df003b")
     
     with col2:
-        # Flytter radarchart lidt ned så det flugter med center af profiler
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-        
         categories = ['Beslutsomhed', 'Fart', 'Aggressivitet', 'Attitude', 'Udholdenhed', 'Lederevner', 'Teknik', 'Spil-int.']
-        fig = go.Figure()
         
         def get_vals(t):
-            v = [t[k] for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']]
+            keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+            v = [t.get(k, 0) for k in keys]
             v.append(v[0])
             return v
 
+        fig = go.Figure()
         fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories + [categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
         fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
         
         fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
+            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 5])),
             showlegend=False, height=420, margin=dict(l=40, r=40, t=20, b=20)
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    with col3: 
-        vis_profil_kolonne(s2_navn, res2[0], res2[1], res2[2], res2[3], "højre", "#0056a3")
+    with col3: vis_profil_kolonne(s2_navn, res2[0], res2[1], res2[2], res2[3], "højre", "#0056a3")
 
     # --- 4. SCOUTING TABS ---
     st.write("---")
     sc1, sc2 = st.columns(2)
     with sc1:
-        t_a, t_b, t_c = st.tabs(["Styrker", "Udvikling", "Vurdering"])
-        t_a.info(res1[5]['s']); t_b.warning(res1[5]['u']); t_c.success(res1[5]['v'])
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        t1.info(res1[5]['s']); t2.warning(res1[5]['u']); t3.success(res1[5]['v'])
     with sc2:
-        t_a, t_b, t_c = st.tabs(["Styrker", "Udvikling", "Vurdering"])
-        t_a.info(res2[5]['s']); t_b.warning(res2[5]['u']); t_c.success(res2[5]['v'])
+        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        t1.info(res2[5]['s']); t2.warning(res2[5]['u']); t3.success(res2[5]['v'])
