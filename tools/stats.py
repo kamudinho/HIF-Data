@@ -28,22 +28,77 @@ def vis_side(spillere, player_events):
 
     BAR_COLOR = '#df003b' if visning == "Total" else '#0056b3'
 
-    # --- 3. Rens ID'er og FILTRERING (KUN HVIDOVRE) ---
+   # --- 3. Rens ID'er og FILTRERING (KUN HVIDOVRE) ---
+    # Sikr os at ID'er er strenge og uden .0
     spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     player_events['PLAYER_WYID'] = player_events['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # Lav et navn-felt i spillere-df
+    # Opret NAVN i spillere-filen hvis den ikke findes
     if 'NAVN' not in spillere.columns:
         spillere['NAVN'] = (spillere['FIRSTNAME'].fillna('') + " " + spillere['LASTNAME'].fillna('')).str.strip()
 
-    # Merge player_events med spillere (Inner join sikrer, at kun kendte spillere overlever)
-    # Dette fjerner automatisk alle spillere fra ligaen, som ikke er i din Hvidovre-fil
+    # VIGTIGT: Vi laver en kopi af truppen med kun de to nødvendige kolonner
+    truppen = spillere[['PLAYER_WYID', 'NAVN']].copy()
+
+    # Merge player_events med truppen
+    # Vi bruger 'left' join her for at fejlsøge, og filtrerer bagefter
     df_hif = pd.merge(
         player_events, 
-        spillere[['PLAYER_WYID', 'NAVN']], 
+        truppen, 
         on='PLAYER_WYID', 
-        how='inner'
+        how='inner'  # Beholder kun de spillere der findes i din spillere-fil
     )
+
+    # Tjek om vi overhovedet har data tilbage efter merge
+    if df_hif.empty:
+        st.warning("Ingen match fundet mellem statistikker og spillerlisten. Tjek om PLAYER_WYID findes i begge filer.")
+        return
+
+    # --- 4. Beregning ---
+    df_plot = pd.DataFrame()
+
+    if valg_label in kategorier_uden_pct:
+        kolonne = kategorier_uden_pct[valg_label]
+        
+        # Vi grupperer på 'NAVN' (som vi lige har flettet ind fra spillere-filen)
+        df_group = df_hif.groupby('NAVN', as_index=False).agg({
+            kolonne: 'sum', 
+            'MINUTESTAGGED': 'sum'
+        })
+        
+        if visning == "Pr. 90" and valg_label != "MINUTTER":
+            df_group['VAL'] = np.where(df_group['MINUTESTAGGED'] > 0, (df_group[kolonne] / df_group['MINUTESTAGGED'] * 90), 0)
+            df_group['LABEL'] = df_group['VAL'].map('{:.2f}'.format)
+        else:
+            df_group['VAL'] = df_group[kolonne]
+            df_group['LABEL'] = df_group['VAL'].astype(int).astype(str)
+            
+        df_plot = df_group.sort_values(by='VAL', ascending=False)
+        hover_tmpl = "<b>%{y}</b><br>" + visning + ": %{x}<extra></extra>"
+        custom_data_val = None
+
+    else:
+        tot_col, suc_col = kategorier_med_pct[valg_label]
+        
+        # Beregn pr. række før vi grupperer (mere sikkert)
+        df_group = df_hif.groupby('NAVN', as_index=False).agg({
+            tot_col: 'sum', 
+            suc_col: 'sum', 
+            'MINUTESTAGGED': 'sum'
+        })
+        
+        df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
+        
+        if visning == "Pr. 90":
+            df_group['VAL'] = np.where(df_group['MINUTESTAGGED'] > 0, (df_group[tot_col] / df_group['MINUTESTAGGED'] * 90), 0)
+            df_group['LABEL'] = df_group.apply(lambda r: f"{r['VAL']:.2f} ({r['PCT']:.1f}%)", axis=1)
+        else:
+            df_group['VAL'] = df_group[tot_col]
+            df_group['LABEL'] = df_group.apply(lambda r: f"{int(r['VAL'])} ({r['PCT']:.1f}%)", axis=1)
+            
+        df_plot = df_group.sort_values(by='VAL', ascending=False)
+        hover_tmpl = "<b>%{y}</b><br>"+visning+": %{x:.2f}<br>Succes: %{customdata:.1f}%<extra></extra>"
+        custom_data_val = df_plot['PCT']
 
     # --- 4. Beregning med Fejltjek ---
     df_plot = pd.DataFrame()
