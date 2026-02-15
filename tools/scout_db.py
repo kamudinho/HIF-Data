@@ -41,11 +41,11 @@ def vis_metrikker(row):
         val = rens_metrik_vaerdi(hent_vaerdi_robust(row, col))
         m_cols[i % 4].metric(label, f"{val}")
 
-def vis_scout_bokse(row):
-    c1, c2, c3 = st.columns(3)
-    with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
-    with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
-    with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
+def vis_scout_bokse_vertikal(row):
+    """Viser scout-bokse stablet ovenpå hinanden."""
+    st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker') or 'Ingen data'}")
+    st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling') or 'Ingen data'}")
+    st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering') or 'Ingen data'}")
 
 # --- 2. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
@@ -62,7 +62,6 @@ def vis_profil(p_data, full_df, s_df):
     seneste_dato = hent_vaerdi_robust(nyeste, 'Dato')
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
-    # Top sektion: Billede til venstre
     head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
         vis_spiller_billede(clean_p_id, w=115)
@@ -75,13 +74,25 @@ def vis_profil(p_data, full_df, s_df):
     
     with tab1:
         vis_metrikker(nyeste)
-        vis_scout_bokse(nyeste)
+        st.write("---")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(nyeste, 'Styrker')}")
+        with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(nyeste, 'Udvikling')}")
+        with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(nyeste, 'Vurdering')}")
 
     with tab2:
         for _, row in historik.iloc[::-1].iterrows():
-            with st.expander(f"Rapport fra {hent_vaerdi_robust(row, 'Dato')} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"):
+            s_navn_hist = hent_vaerdi_robust(row, 'Scout')
+            label = f"Rapport fra {hent_vaerdi_robust(row, 'Dato')} (Rating: {hent_vaerdi_robust(row, 'Rating_Avg')})"
+            if s_navn_hist: label += f" - Scout: {s_navn_hist}"
+            
+            with st.expander(label):
                 vis_metrikker(row)
-                vis_scout_bokse(row)
+                st.write(f"**Scout:** {s_navn_hist or 'Ukendt'}")
+                c1, c2, c3 = st.columns(3)
+                with c1: st.success(f"**Styrker**\n\n{hent_vaerdi_robust(row, 'Styrker')}")
+                with c2: st.warning(f"**Udvikling**\n\n{hent_vaerdi_robust(row, 'Udvikling')}")
+                with c3: st.info(f"**Vurdering**\n\n{hent_vaerdi_robust(row, 'Vurdering')}")
 
     with tab3:
         fig_line = go.Figure()
@@ -90,37 +101,41 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
-        # Statistik med "Empty" række hvis ingen data
         display_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
         display_stats = display_stats.drop(columns=['PLAYER_WYID'], errors='ignore')
-        
         if display_stats.empty:
-            if not s_df.empty:
-                # Opret række med "Ingen data" for hver kolonne der normalt findes
-                empty_row = {col: "Ingen data" for col in s_df.columns if col != 'PLAYER_WYID'}
-                display_stats = pd.DataFrame([empty_row])
-            else:
-                display_stats = pd.DataFrame({"Info": ["Ingen kampdata fundet"]})
-        
+            empty_row = {col: "Ingen data" for col in s_df.columns if col != 'PLAYER_WYID'}
+            display_stats = pd.DataFrame([empty_row])
         st.dataframe(display_stats, use_container_width=True, hide_index=True)
 
     with tab5:
-        # Radar Chart sektionen
+        # --- NYT LAYOUT FOR GRAFIK CARD ---
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
-        cl, cm, cr = st.columns([1.5, 4, 2.5])
-        with cl:
-            st.markdown(f"### Værdier\n*{seneste_dato}*")
+        
+        col_side, col_radar = st.columns([1, 2.5]) # Sidekolonne til tekst, radar i midten/højre
+        
+        with col_side:
+            st.markdown(f"### Info")
+            st.write(f"**Dato:** {seneste_dato}")
+            st.write(f"**Scout:** {scout_navn or 'Ukendt'}")
+            st.write("---")
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** `{val}`")
-        with cm:
+            st.write("---")
+            vis_scout_bokse_vertikal(nyeste) # Styrker osv ovenpå hinanden
+        
+        with col_radar:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)), showlegend=False, height=450)
+            fig_radar.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
+                showlegend=False, 
+                height=700, # Radar fylder nu godt nedad
+                margin=dict(l=50, r=50, t=50, b=50)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
-        with cr:
-            vis_scout_bokse(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -132,7 +147,6 @@ def vis_side():
     stats_df = all_data[4]
     df = all_data[5].copy()
 
-    # Find alle kolonner
     c_id = find_col(df, 'id')
     c_dato = find_col(df, 'dato')
     c_navn = find_col(df, 'navn')
@@ -140,7 +154,7 @@ def vis_side():
     c_pos = find_col(df, 'position')
     c_rating = find_col(df, 'rating_avg')
     c_status = find_col(df, 'status')
-    c_scout = find_col(df, 'scout') # Kolonnen vi skal huske!
+    c_scout = find_col(df, 'scout')
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
@@ -153,16 +167,11 @@ def vis_side():
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
-    # HER TILFØJES SCOUT TIL OVERSIGTEN
     vis_cols = [c_navn, c_pos, c_klub, c_rating, c_status, c_dato]
-    if c_scout:
-        vis_cols.append(c_scout)
-    
-    # Omdøb for pænere visning i tabellen
-    page_display = f_df[vis_cols].copy()
+    if c_scout: vis_cols.append(c_scout)
     
     event = st.dataframe(
-        page_display,
+        f_df[vis_cols],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
