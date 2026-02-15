@@ -2,81 +2,82 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from mplsoccer import VerticalPitch
 
-def vis_side(dummy_input):
-    st.title("HIF Mål-oversigt")
+def vis_side(spillere_df):
+    st.title("HIF Videoanalyse")
     
-    # 1. Stier
-    match_path = 'data/matches.csv'
-    player_path = 'data/players.csv'
-    video_dir = 'videos'
+    # 1. Konfiguration af stier (Husk at 'data' mappen skal findes)
+    # Da din app kører fra rod-mappen, skal vi pege rigtigt på filerne
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    match_path = os.path.join(BASE_DIR, 'data', 'matches.csv')
+    video_dir = os.path.join(BASE_DIR, 'videos')
 
+    # 2. Tjek om matches.csv findes
     if not os.path.exists(match_path):
-        st.error(f"Mangler {match_path}")
+        st.error(f"Kunne ikke finde datafilen: {match_path}")
+        # Debug hjælp: viser hvad der faktisk findes i data-mappen
+        data_folder = os.path.join(BASE_DIR, 'data')
+        if os.path.exists(data_folder):
+            st.write("Filer i data-mappen:", os.listdir(data_folder))
         return
 
-    # 2. Indlæs og map navne
+    # 3. Indlæs match-data (skud/begivenheder)
     df = pd.read_csv(match_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
 
-    if os.path.exists(player_path):
-        p_df = pd.read_csv(player_path, encoding='utf-8-sig', sep=None, engine='python')
-        p_df.columns = [c.strip().upper() for c in p_df.columns]
-        # Mapper PLAYER_WYID (som tekst) til NAVN
-        navne_map = dict(zip(p_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False), p_df['NAVN']))
+    # 4. Sammenkobling med spillernavne (fra spillere_df sendt fra hovedfilen)
+    # Vi sikrer os at PLAYER_WYID er tekst uden .0
+    spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+    
+    # Lav opslagsværket (Map ID -> Navn)
+    # Vi bruger 'NAVN' eller kombinerer 'FIRSTNAME'/'LASTNAME'
+    if 'NAVN' in spillere_df.columns:
+        navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df['NAVN']))
     else:
-        navne_map = {}
+        spillere_df['FULL_NAME'] = spillere_df['FIRSTNAME'].fillna('') + ' ' + spillere_df['LASTNAME'].fillna('')
+        navne_map = dict(zip(spillere_df['PLAYER_WYID'], spillere_df['FULL_NAME']))
 
-    # Indsæt spillernavne i match-data
-    df['SPILLER'] = df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False).map(navne_map).fillna(df['PLAYER_WYID'])
+    # Rens ID'er i match-data
+    df['PLAYER_RENS'] = df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+    df['SPILLER'] = df['PLAYER_RENS'].map(navne_map).fillna(df['PLAYER_WYID'])
+    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
 
-    # 3. Find videoer (uden at stjæle 4-tallet fra .mp4)
+    # 5. Find videoer (Fixer .mp4 fejlen ved at fjerne endelsen før rensning)
     video_map = {}
     if os.path.exists(video_dir):
         for f in os.listdir(video_dir):
             if f.lower().endswith('.mp4'):
-                # Fjerner .mp4 FØR rensning for tal
-                rent_navn = os.path.splitext(f)[0]
-                clean_id = "".join(re.findall(r'\d+', rent_navn))
+                rent_navn = os.path.splitext(f)[0] # Fjerner .mp4
+                clean_id = "".join(re.findall(r'\d+', rent_navn)) # Finder ID
                 video_map[clean_id] = f
 
-    # 4. Rens CSV ID'er og filtrer til dem med video
-    df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x.split('.')[0])))
+    # 6. Filtrer til kun rækker med video
     tabel_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
-
-    # 5. Visning - Vi starter med alle mål på banen
-    st.subheader("Sæsonens mål")
     
-    # Filtrer så vi kun viser mål i tabellen og på banen
-    maal_df = tabel_df[tabel_df['SHOTISGOAL'].astype(str).str.lower().isin(['true', '1', 't'])].copy()
-    maal_df['NR'] = range(1, len(maal_df) + 1)
+    if tabel_df.empty:
+        st.warning("Ingen matchende videoer fundet i mappen 'videos/'.")
+        return
 
-    col1, col2 = st.columns([2, 1])
+    # 7. Visning
+    st.subheader("Sæsonens mål & aktioner")
+    
+    # Vis tabel
+    vis_cols = ['EVENT_WYID', 'SPILLER', 'MATCHLABEL', 'SHOTISGOAL', 'SHOTXG', 'SCORE']
+    # Vi filtrerer kolonnerne så vi kun viser dem der faktisk findes
+    findes_cols = [c for c in vis_cols if c in tabel_df.columns]
+    
+    st.dataframe(tabel_df[findes_cols], use_container_width=True, hide_index=True)
 
-    with col2:
-        # Liste over mål
-        with st.popover("Se målliste", use_container_width=True):
-            for idx, row in maal_df.iterrows():
-                c_id, c_navn, c_btn = st.columns([1, 3, 2])
-                c_id.write(f"#{row['NR']}")
-                c_navn.write(f"**{row['SPILLER']}**\n{row['MATCHLABEL']}")
-                
-                # Video knap
-                if c_btn.button("Se", key=f"btn_{row['RENS_ID']}"):
-                    st.session_state['active_video'] = os.path.join(video_dir, video_map[row['RENS_ID']])
+    # 8. Video-vælger
+    st.write("---")
+    valgt_event = st.selectbox(
+        "Vælg en aktion for at se video", 
+        options=tabel_df['EVENT_WYID'].unique(),
+        format_func=lambda x: f"ID: {str(x).split('.')[0]}"
+    )
 
-        if 'active_video' in st.session_state:
-            st.video(st.session_state['active_video'])
-
-    with col1:
-        # Bane med alle mål
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
-        fig, ax = pitch.draw()
-        
-        for _, row in maal_df.iterrows():
-            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], s=150, color='gold', edgecolors='white', zorder=3)
-            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(row['NR']), 
-                    color='black', ha='center', va='center', fontsize=6, fontweight='bold')
-        
-        st.pyplot(fig)
+    if valgt_event:
+        sid = "".join(re.findall(r'\d+', str(valgt_event).split('.')[0]))
+        if sid in video_map:
+            video_sti = os.path.join(video_dir, video_map[sid])
+            st.video(video_sti)
