@@ -171,7 +171,7 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
 
             # KORT (Placeret efter assists og før passes)
-            display_stats['Gule'] = df_stats['YELLOWCARDS'].fillna(0).astype(int)
+            display_stats['Gule'] = df_stats['YELLOWCARD'].fillna(0).astype(int)
             display_stats['Røde'] = df_stats['REDCARDS'].fillna(0).astype(int)
 
             # 3. AVANCEREDE STATS (Med procent-beregning)
