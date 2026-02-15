@@ -92,9 +92,18 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', 'Ingen data')}")
 
     with tab2:
+        # Vi kører igennem historikken (nyeste først)
         for _, row in historik.iloc[::-1].iterrows():
             with st.expander(f"Rapport: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
+                # Vis tallene øverst (ligesom i Tab 1)
                 vis_metrikker(row)
+                st.divider()
+                
+                # Vis boksene i 3 kolonner (ligesom i Tab 1)
+                hc1, hc2, hc3 = st.columns(3)
+                with hc1: st.success(f"**Styrker**\n\n{row.get('STYRKER', '-')}")
+                with hc2: st.warning(f"**Udvikling**\n\n{row.get('UDVIKLING', '-')}")
+                with hc3: st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
 
     with tab3:
         fig_line = go.Figure()
