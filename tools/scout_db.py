@@ -64,9 +64,9 @@ def vis_profil(p_data, full_df, s_df):
     scout_navn = hent_vaerdi_robust(nyeste, 'Scout')
 
     # Top sektion: Billede til VENSTRE, tekst til HØJRE
-    head_col1, head_col2 = st.columns([1, 3])
+    head_col1, head_col2 = st.columns([1, 4])
     with head_col1:
-        vis_spiller_billede(clean_p_id, w=120)
+        vis_spiller_billede(clean_p_id, w=115)
     with head_col2:
         st.markdown(f"""
             <h2 style='margin-bottom:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>
@@ -94,26 +94,39 @@ def vis_profil(p_data, full_df, s_df):
     with tab3:
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[find_col(full_df, 'rating_avg')], mode='lines+markers', line_color='#df003b'))
-        fig_line.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
+        fig_line.update_layout(height=350, margin=dict(l=10, r=10, t=30, b=10), yaxis=dict(range=[1, 6]))
         st.plotly_chart(fig_line, use_container_width=True)
 
     with tab4:
         if s_df.empty: st.info("Ingen kampdata fundet.")
         else:
             sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-            st.dataframe(sp_stats, use_container_width=True, hide_index=True, height=400) # Fast højde for at undgå scroll
+            st.dataframe(sp_stats, use_container_width=True, hide_index=True, height=450)
 
     with tab5:
-        # Grafik card (Radar) som før...
+        # --- GENINDSAT GRAFIK CARD (RADAR) ---
         categories = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
         v = [rens_metrik_vaerdi(hent_vaerdi_robust(nyeste, k)) for k in categories]
         v_closed = v + [v[0]]
-        c_l, c_m, c_r = st.columns([1.5, 4, 2.5])
-        with c_m:
+        
+        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
+        
+        with col_left:
+            st.markdown(f"### Værdier\n*{seneste_dato}*")
+            for cat, val in zip(categories, v):
+                st.markdown(f"**{cat}:** `{val}`")
+        
+        with col_mid:
             fig_radar = go.Figure()
             fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=categories + [categories[0]], fill='toself', line_color='#df003b'))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=400)
+            fig_radar.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], showticklabels=False)),
+                showlegend=False, height=450, margin=dict(l=40, r=40, t=20, b=20)
+            )
             st.plotly_chart(fig_radar, use_container_width=True)
+            
+        with col_right:
+            vis_scout_bokse(nyeste)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side():
@@ -135,7 +148,8 @@ def vis_side():
 
     df['DATO_DT'] = pd.to_datetime(df[c_dato], errors='coerce')
     df[c_rating] = pd.to_numeric(df[c_rating].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-    
+    df = df.sort_values('DATO_DT')
+
     st.subheader("Scouting Database")
     search = st.text_input("Søg spiller eller klub", placeholder="Søg...", label_visibility="collapsed")
     
@@ -143,15 +157,14 @@ def vis_side():
     if search:
         f_df = f_df[f_df[c_navn].str.contains(search, case=False, na=False) | f_df[c_klub].str.contains(search, case=False, na=False)]
 
-    # HER RETTES SCROLL-PROBLEMET:
-    # Vi sætter height=600 eller lignende, så tabellen fylder skærmen ud.
+    # Tabel med fast højde for at undgå scrolling af hele siden
     event = st.dataframe(
         f_df[[c_navn, c_pos, c_klub, c_rating, c_status, c_dato]],
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=600 # <--- Dette fjerner scroll i selve containeren
+        height=700 # Giver masser af plads til listen
     )
 
     if len(event.selection.rows) > 0:
