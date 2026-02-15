@@ -147,30 +147,17 @@ def vis_profil(p_data, full_df, s_df):
                 r=v_closed, 
                 theta=categories + [categories[0]], 
                 fill='toself', 
-                line_color='#df003b',
+                line_color='#df003b', 
                 fillcolor='rgba(223, 0, 59, 0.3)',
                 marker=dict(size=8)
             ))
-            
             fig_radar.update_layout(
                 polar=dict(
-                    gridshape='linear',  # DETTE GØR DEN 8-KANTET
-                    radialaxis=dict(
-                        visible=True, 
-                        range=[0, 6], 
-                        
-                        gridcolor="lightgrey",
-                        showticklabels=True
-                    ),
-                    angularaxis=dict(
-                        gridcolor="lightgrey",
-                        rotation=90,
-                        direction="clockwise"
-                    )
+                    gridshape='linear', # Sikrer 8-kantet form
+                    radialaxis=dict(visible=True, range=[0, 5], gridcolor="lightgrey")
                 ), 
                 showlegend=False, 
-                height=450,
-                margin=dict(l=60, r=60, t=20, b=20)
+                height=450
             )
             st.plotly_chart(fig_radar, use_container_width=True)
         with cr:
@@ -184,7 +171,7 @@ def vis_side():
     
     _, _, _, spillere_df, stats_df, scout_df = st.session_state["main_data"]
 
-    # Ultra-rens
+    # Ultra-rens ID'er
     scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
@@ -196,6 +183,8 @@ def vis_side():
     df = df.sort_values('DATO_DT')
 
     st.subheader("Scouting Database")
+    
+    # Filtre
     col_s, col_p = st.columns([4, 1.2])
     with col_s:
         search = st.text_input("Søg...", placeholder="Søg spiller eller klub...", label_visibility="collapsed")
@@ -212,11 +201,25 @@ def vis_side():
     if valgt_pos: f_df = f_df[f_df['POSITION_VISNING'].isin(valgt_pos)]
     f_df = f_df[(f_df['RATING_AVG'] >= rating_range[0]) & (f_df['RATING_AVG'] <= rating_range[1])]
 
+    # VISNING AF TABEL MED NYE NAVNE OG CENTRERING
     vis_cols = ['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']
+    
     event = st.dataframe(
-        f_df[vis_cols], use_container_width=True, hide_index=True, 
-        on_select="rerun", selection_mode="single-row", height=700,
-        column_config={"RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f")}
+        f_df[vis_cols], 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row", 
+        height=700,
+        column_config={
+            "NAVN": st.column_config.TextColumn("NAVN"),
+            "POSITION_VISNING": st.column_config.TextColumn("POSITION", alignment="center"),
+            "KLUB": st.column_config.TextColumn("KLUB", alignment="center"),
+            "RATING_AVG": st.column_config.NumberColumn("RATING", format="%.1f", alignment="center"),
+            "STATUS": st.column_config.TextColumn("VURDERING", alignment="center"),
+            "DATO": st.column_config.TextColumn("DATO", alignment="center"),
+            "SCOUT": st.column_config.TextColumn("SCOUT", alignment="center"),
+        }
     )
 
     if len(event.selection.rows) > 0:
