@@ -15,6 +15,26 @@ POS_MAP = {
     9: "VW", 10: "ST"
 }
 
+def rens_metrik_vaerdi(val):
+    """Sikrer at vi altid har et heltal, selv hvis data er NaN eller mærkelig."""
+    try:
+        if pd.isna(val): return 0
+        return int(float(val))
+    except:
+        return 0
+
+def vis_metrikker(row):
+    m_cols = st.columns(4)
+    metrics = [
+        ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
+        ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
+        ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
+        ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
+    ]
+    for i, (label, col) in enumerate(metrics):
+        val = rens_metrik_vaerdi(row.get(col, 0))
+        m_cols[i % 4].metric(label, f"{val}")
+
 def vis_side():
     st.markdown("<p style='font-size: 14px; font-weight: bold; margin-bottom: 20px;'>Scouting Dashboard</p>", unsafe_allow_html=True)
     
@@ -53,7 +73,7 @@ def vis_side():
         
         if search:
             final_df = final_df[final_df['Navn'].str.contains(search, case=False) | final_df['Klub'].str.contains(search, case=False)]
-        if st.session_state.f_pos:
+        if 'f_pos' in st.session_state and st.session_state.f_pos:
             final_df = final_df[final_df['Position'].isin(st.session_state.f_pos)]
         
         final_df = final_df[(final_df['Rating_Avg'] >= st.session_state.f_rating[0]) & 
@@ -71,22 +91,6 @@ def vis_side():
             }
         )
 
-        # Metrik funktion
-        def vis_metrikker(row):
-            m_cols = st.columns(4)
-            metrics = [
-            ("Beslutsomhed", "Beslutsomhed"), ("Fart", "Fart"), 
-            ("Aggresivitet", "Aggresivitet"), ("Attitude", "Attitude"),
-            ("Udholdenhed", "Udholdenhed"), ("Lederegenskaber", "Lederegenskaber"), 
-            ("Teknik", "Teknik"), ("Spilintelligens", "Spilintelligens")
-            ]
-            for i, (label, col) in enumerate(metrics):
-        # Hent værdi og håndter manglende data (NaN)
-            val = row.get(col, 0)
-        # Hvis værdien er NaN eller ikke eksisterer, sæt til 0
-            clean_val = int(pd.to_numeric(val, errors='coerce')) if pd.notna(val) else 0
-            m_cols[i % 4].metric(label, f"{clean_val}")
-        
         # --- PROFIL DIALOG ---
         @st.dialog("Spillerprofil", width="large")
         def vis_profil(p_data, full_df, s_df, avg_line):
@@ -99,120 +103,36 @@ def vis_side():
             with tab1:
                 nyeste = historik.iloc[-1]
                 vis_metrikker(nyeste)
-                
-                st.write("") # Lidt luft under tallene
-                
-                # Tre kolonner på samme linje
+                st.write("")
                 col_s, col_u, col_v = st.columns(3)
                 
                 with col_s:
-                    styrker_tekst = nyeste.get('Styrker', '')
-                    content_s = styrker_tekst if pd.notna(styrker_tekst) and styrker_tekst != "" else "Ingen data"
-                    st.success(f"**Styrker**\n\n{content_s}")
-                    
+                    s_txt = nyeste.get('Styrker', '')
+                    st.success(f"**Styrker**\n\n{s_txt if pd.notna(s_txt) else 'Ingen data'}")
                 with col_u:
-                    udv_tekst = nyeste.get('Udvikling', '')
-                    content_u = udv_tekst if pd.notna(udv_tekst) and udv_tekst != "" else "Ingen data"
-                    st.warning(f"**Udviklingspotentiale**\n\n{content_u}")
-                    
+                    u_txt = nyeste.get('Udvikling', '')
+                    st.warning(f"**Udvikling**\n\n{u_txt if pd.notna(u_txt) else 'Ingen data'}")
                 with col_v:
-                    vurdering_tekst = nyeste.get('Vurdering', '')
-                    content_v = vurdering_tekst if pd.notna(vurdering_tekst) and vurdering_tekst != "" else "Ingen data"
-                    st.info(f"**Vurdering**\n\n{content_v}")
+                    v_txt = nyeste.get('Vurdering', '')
+                    st.info(f"**Vurdering**\n\n{v_txt if pd.notna(v_txt) else 'Ingen data'}")
 
             with tab2:
-                # Vi løber baglæns gennem alle rapporter (nyeste øverst)
                 for _, row in historik.iloc[::-1].iterrows():
                     with st.expander(f"Rapport fra {row['Dato']} (Rating: {row['Rating_Avg']})"):
-                        # Vis tallene som heltal først
                         vis_metrikker(row)
-                        
-                        st.write("") # Luft
-                        
-                        # Tre kolonner med boks-style inde i expanderen
-                        col_s, col_u, col_v = st.columns(3)
-                        
-                        with col_s:
-                            s_txt = row.get('Styrker', '')
-                            c_s = s_txt if pd.notna(s_txt) and s_txt != "" else "Ingen data"
-                            st.success(f"**Styrker**\n\n{c_s}")
-                            
-                        with col_u:
-                            u_txt = row.get('Udvikling', '')
-                            c_u = u_txt if pd.notna(u_txt) and u_txt != "" else "Ingen data"
-                            st.warning(f"**Udvikling**\n\n{c_u}")
-                            
-                        with col_v:
-                            v_txt = row.get('Vurdering', '')
-                            c_v = v_txt if pd.notna(v_txt) and v_txt != "" else "Ingen data"
-                            st.info(f"**Vurdering**\n\n{c_v}")
 
             with tab3:
-                # Grafen
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=historik['Dato_Str'], y=historik['Rating_Avg'],
-                    mode='lines+markers', name=p_data['Navn'],
-                    line=dict(color='#1f77b4', width=3)
-                ))
-                
-                if not pd.isna(avg_line):
-                    fig.add_hline(y=avg_line, line_dash="dash", line_color="red", 
-                                  annotation_text="HIF Snit", annotation_position="top left")
-                
-                fig.update_layout(
-                    height=300, 
-                    yaxis=dict(range=[1, 7], showgrid=False),
-                    xaxis=dict(showgrid=False),
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=10, r=10, t=30, b=10)
-                )
+                fig.add_trace(go.Scatter(x=historik['Dato_Str'], y=historik['Rating_Avg'], mode='lines+markers', name="Rating"))
+                fig.update_layout(height=300, yaxis=dict(range=[1, 7]), margin=dict(l=10, r=10, t=30, b=10))
                 st.plotly_chart(fig, use_container_width=True)
-
-                if len(historik) > 1:
-                    st.divider()
-                    nyeste_h = historik.iloc[-1]
-                    forrige_h = historik.iloc[-2]
-                    
-                    metrik_navne = ["Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"]
-                    forskelle = []
-                    for m in metrik_navne:
-                        diff = int(nyeste_h[m]) - int(forrige_h[m])
-                        forskelle.append({'navn': m, 'diff': diff})
-                    
-                    forskelle = sorted(forskelle, key=lambda x: x['diff'], reverse=True)
-                    fremgang = [f"{f['navn']} (+{f['diff']})" for f in forskelle if f['diff'] > 0]
-                    tilbagegang = [f"{f['navn']} ({f['diff']})" for f in forskelle if f['diff'] < 0]
-
-                    rating_diff = nyeste_h['Rating_Avg'] - forrige_h['Rating_Avg']
-                    status_tekst = "stabil"
-                    if rating_diff > 0: status_tekst = f"opadgående (+{rating_diff:.1f})"
-                    elif rating_diff < 0: status_tekst = f"nedadgående (-{abs(rating_diff):.1f})"
-                    
-                    st.markdown(f"**Udviklingsanalyse: {status_tekst}**")
-                    cf, ct = st.columns(2)
-                    with cf:
-                        if fremgang:
-                            st.write("**Fremgang:**")
-                            for f in fremgang[:2]: st.write(f"- {f}")
-                    with ct:
-                        if tilbagegang:
-                            st.write("**Tilbagegang:**")
-                            for t in tilbagegang[:2]: st.write(f"- {t}")
-                else:
-                    st.info("Kræver to rapporter for analyse.")
 
             with tab4:
                 if s_df.empty:
                     st.info("Ingen kampdata.")
                 else:
-                    s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.strip()
-                    sp_stats = s_df[s_df['PLAYER_WYID'] == str(p_data['ID']).strip()].copy()
-                    st.dataframe(
-                        sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "MINUTESPLAYED", "GOAL"]].sort_values('SEASONNAME', ascending=False),
-                        use_container_width=True, hide_index=True
-                    )
+                    sp_stats = s_df[s_df['PLAYER_WYID'].astype(str) == str(p_data['ID'])].copy()
+                    st.dataframe(sp_stats[["SEASONNAME", "TEAMNAME", "APPEARANCES", "GOAL"]], use_container_width=True, hide_index=True)
 
         if len(event.selection.rows) > 0:
             vis_profil(final_df.iloc[event.selection.rows[0]], df, stats_df, hif_avg)
