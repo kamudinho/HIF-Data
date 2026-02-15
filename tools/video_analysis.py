@@ -10,29 +10,33 @@ def vis_video_popup(data, filnavn, video_dir):
     
     if filnavn:
         st.video(os.path.join(video_dir, filnavn))
+    else:
+        st.warning("Videofilen kunne ikke findes.")
     
     st.divider()
     
     col1, col2 = st.columns(2)
     with col1:
-        # Nu hvor RESULT er væk, rykker data én plads til venstre:
-        # SIDE indeholder nu RESULT/Score-info (home/away)
-        st.write(f"**Side (H/A):** {data.get('RESULT', 'N/A')}") 
-        # SHOTSBODYPART indeholder nu kropsdel (f.eks. left_foot)
-        st.write(f"**Kropsdel:** {data.get('SIDE', 'N/A')}")
+        st.write(f"**Side (H/A):** {data.get('SIDE', 'N/A')}")
+        # Kropsdel ligger i SHOTSBODYPART
+        st.write(f"**Kropsdel:** {data.get('SHOTSBODYPART', 'N/A')}")
         
     with col2:
-        # SHOTISGOAL indeholder nu True/False for mål
-        er_maal = str(data.get('SHOTSBODYPART', 'false')).lower() == 'true'
+        # Mål-status ligger i SHOTISGOAL
+        er_maal = str(data.get('SHOTISGOAL', 'false')).lower() == 'true'
         st.write(f"**Mål:** {'✅ JA' if er_maal else '❌ NEJ'}")
         
-        # SHOTXG indeholder nu selve xG-værdien
-        st.metric("xG Værdi", f"{data.get('SHOTISGOAL', '0.00')}")
+        # xG-tallet ligger i SHOTXG
+        xg_val = data.get('SHOTXG', '0.00')
+        st.metric("xG Værdi", f"{xg_val}")
         
-        # DATE indeholder nu datoen
-        st.write(f"📅 **Dato:** {data.get('SHOTXG', 'N/A')}")
+        # Datoen ligger i DATE
+        st.write(f"📅 **Dato:** {data.get('DATE', 'N/A')}")
 
-# 2. Hovedfunktionen
+    if st.button("Luk"):
+        st.rerun()
+
+# 2. Hovedfunktionen der viser siden
 def vis_side(spillere):
     st.title("⚽ HIF Analyse-dashboard")
     
@@ -40,14 +44,17 @@ def vis_side(spillere):
     video_dir = 'videos'
 
     if not os.path.exists(csv_path):
-        st.error("Kunne ikke finde matches.csv")
+        st.error(f"Kunne ikke finde filen: {csv_path}")
         return
 
+    # Indlæs og rens CSV
     df = pd.read_csv(csv_path, encoding='utf-8-sig', sep=None, engine='python')
     df.columns = [c.strip().upper() for c in df.columns]
     
+    # Rens ID'er
     df['RENS_ID'] = df['EVENT_WYID'].astype(str).apply(lambda x: "".join(re.findall(r'\d+', x)))
 
+    # Map videoer fra mappen
     video_map = {}
     if os.path.exists(video_dir):
         video_filer = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
@@ -55,13 +62,16 @@ def vis_side(spillere):
             clean_id = "".join(re.findall(r'\d+', os.path.splitext(f)[0]))
             video_map[clean_id] = f
 
+    # Filtrer så vi kun ser rækker med video
     video_df = df[df['RENS_ID'].isin(video_map.keys())].copy()
 
     if video_df.empty:
-        st.info("Ingen matchende videoer fundet.")
+        st.info("Ingen matchende videoer fundet i mappen.")
         return
 
-    # TABEL-VISNING
+    st.subheader("Oversigt over afslutninger")
+    
+    # Overskrifter til tabellen
     t_cols = st.columns([1, 4, 2, 1, 1, 2])
     t_cols[0].write("**Video**")
     t_cols[1].write("**Kamp**")
@@ -71,51 +81,26 @@ def vis_side(spillere):
     t_cols[5].write("**ID**")
     st.divider()
 
-    # --- TABEL LOOPET ---
-for idx, row in video_df.iterrows():
-    c = st.columns([1, 4, 2, 1, 1, 2])
-    
-    if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
-        vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
+    # DETTE LOOP ER NU INDRYKKET KORREKT INDE I FUNKTIONEN
+    for idx, row in video_df.iterrows():
+        c = st.columns([1, 4, 2, 1, 1, 2])
         
-    c[1].write(row.get('MATCHLABEL', 'N/A'))
-    
-    # 1. KROPSDEL: Vi henter værdien fra SHOTSBODYPART (f.eks. left_foot)
-    c[2].write(row.get('SHOTSBODYPART', 'N/A'))
-    
-    # 2. MÅL: Vi henter værdien fra SHOTISGOAL (True/False)
-    er_maal = str(row.get('SHOTISGOAL')).lower() == 'true'
-    c[3].write("⚽ JA" if er_maal else "❌ NEJ")
-    
-    # 3. xG: Vi henter værdien fra SHOTXG (Selve tallet)
-    xg_val = row.get('SHOTXG', '0.00')
-    c[4].write(f"{xg_val}")
-    
-    c[5].write(f"`{row['RENS_ID']}`")
-
-# --- POPUP VINDUE ---
-@st.dialog("Videoanalyse")
-def vis_video_popup(data, filnavn, video_dir):
-    st.subheader(f"{data.get('MATCHLABEL', 'Kamp-data')}")
-    
-    if filnavn:
-        st.video(os.path.join(video_dir, filnavn))
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Side:** {data.get('SIDE', 'N/A')}")
-        # Kropsdel ligger i SHOTSBODYPART
-        st.write(f"**Kropsdel:** {data.get('SHOTSBODYPART', 'N/A')}")
+        # 1. Video knap
+        if c[0].button("▶️", key=f"btn_{row['RENS_ID']}"):
+            vis_video_popup(row, video_map.get(row['RENS_ID']), video_dir)
+            
+        # 2. Kamp (MATCHLABEL)
+        c[1].write(row.get('MATCHLABEL', 'N/A'))
         
-    with col2:
-        # Mål ligger i SHOTISGOAL
-        er_maal = str(data.get('SHOTISGOAL', 'false')).lower() == 'true'
-        st.write(f"**Mål:** {'✅ JA' if er_maal else '❌ NEJ'}")
+        # 3. Kropsdel (Nu fra SHOTSBODYPART jf. din struktur)
+        c[2].write(row.get('SHOTSBODYPART', 'N/A'))
         
-        # xG ligger i SHOTXG
-        st.metric("xG Værdi", f"{data.get('SHOTXG', '0.00')}")
+        # 4. Mål (Nu fra SHOTISGOAL jf. din struktur)
+        er_maal = str(row.get('SHOTISGOAL')).lower() == 'true'
+        c[3].write("⚽ JA" if er_maal else "❌")
         
-        # Dato ligger i DATE (eller kolonnen efter SHOTXG)
-        st.write(f"📅 **Dato:** {data.get('DATE', 'N/A')}")
+        # 5. xG (Nu fra SHOTXG jf. din struktur)
+        c[4].write(str(row.get('SHOTXG', '0.00')))
+        
+        # 6. ID
+        c[5].write(f"`{row['RENS_ID']}`")
