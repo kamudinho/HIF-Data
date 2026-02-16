@@ -6,7 +6,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 def _get_snowflake_conn():
-    """Bruger samme robuste RSA-metode som din test-fil."""
+    """Bruger RSA-metode til sikker forbindelse."""
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_pem = s["private_key"]
@@ -14,7 +14,6 @@ def _get_snowflake_conn():
         if isinstance(p_key_pem, str):
             p_key_pem = p_key_pem.strip()
 
-        # Manuel dekodning af RSA nøglen (Præcis som din test-fil)
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode(),
             password=None, 
@@ -27,7 +26,6 @@ def _get_snowflake_conn():
             encryption_algorithm=serialization.NoEncryption()
         )
         
-        # Vi bruger st.connection med den færdigbehandlede nøgle
         return st.connection(
             "snowflake",
             type="snowflake",
@@ -37,7 +35,7 @@ def _get_snowflake_conn():
             warehouse=s["warehouse"],
             database=s["database"],
             schema=s["schema"],
-            private_key=p_key_der # Den magiske DER-nøgle
+            private_key=p_key_der
         )
     except Exception as e:
         st.error(f"❌ Snowflake Connection Error: {e}")
@@ -69,14 +67,21 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
 
     if conn:
         try:
-            # A: HOLD NAVNE
+            # A: HOLD NAVNE (RETTET LOGIK)
             q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
             df_teams_sn = conn.query(q_teams)
-            if not df_teams_sn.empty:
-                hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
             
+            if df_teams_sn is not None and not df_teams_sn.empty:
+                # Vi bruger .tolist() for at sikre at vi zipper de rå værdier og ikke hele kolonner
+                sn_ids = df_teams_sn['TEAM_WYID'].astype(str).tolist()
+                sn_names = df_teams_sn['TEAMNAME'].astype(str).tolist()
+                hold_map = dict(zip(sn_ids, sn_names))
+            
+            # Tilføj/opdater med navne fra GitHub CSV
             if not df_teams_csv.empty:
-                hold_map.update(dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME'])))
+                csv_ids = df_teams_csv['TEAM_WYID'].astype(str).tolist()
+                csv_names = df_teams_csv['TEAMNAME'].astype(str).tolist()
+                hold_map.update(dict(zip(csv_ids, csv_names)))
 
             # B: SHOT EVENTS
             q_shots = """
