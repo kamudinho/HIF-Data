@@ -124,7 +124,7 @@ elif sel == "Scoutrapport":
 
 elif sel == "Sammenligning":
     import tools.comparison as comp
-    comp.vis_side(dp["players"], dp["season_stats"], dp["scouting"])
+    comp.vis_side(dp["scouting"], dp["players"], dp["season_stats"])
 
 # --- GRUPPE: ADMIN ---
 elif sel == "Brugerstyring":
