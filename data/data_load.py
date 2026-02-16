@@ -83,6 +83,9 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             """
             df_team_matches = conn.query(q_teammatches)
 
+            # SÆT DEN IND HER:
+            st.sidebar.write(f"DEBUG: Snowflake hentede {len(df_team_matches)} kampe")
+
             # E: PLAYERSTATS (Trup Performance - Din store query)
             q_playerstats = f"""
                 SELECT DISTINCT
