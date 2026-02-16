@@ -13,7 +13,6 @@ st.markdown("""
         header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
         .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
         [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
-        /* Fjern Streamlit ikoner og støj for et rent look */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
     </style>
@@ -37,14 +36,12 @@ if not st.session_state["logged_in"]:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
                     st.rerun()
-                else: 
-                    st.error("Ugyldig bruger eller kode")
+                else: st.error("Ugyldig bruger eller kode")
     st.stop()
 
 # --- 3. DATA LOADING ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
-        # Henter alt fra Snowflake og GitHub via din data_load.py
         st.session_state["data_package"] = load_all_data()
 
 dp = st.session_state["data_package"]
@@ -54,25 +51,16 @@ with st.sidebar:
     st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {st.session_state['user'].upper()}</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    # Hovedkategorier
     hoved_options = ["TRUPPEN", "ANALYSE", "SCOUTING"]
     if st.session_state["user"] == "kasper":
         hoved_options.append("ADMIN")
 
     hoved_omraade = option_menu(
-        menu_title=None,
-        options=hoved_options,
-        icons=None, # Ikoner fjernet
-        menu_icon=None,
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important", "background-color": "#fafafa"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "text-transform": "uppercase"},
-            "nav-link-selected": {"background-color": "#003366"},
-        }
+        menu_title=None, options=hoved_options, icons=None, menu_icon=None, default_index=0,
+        styles={"container": {"background-color": "#fafafa"}, "nav-link-selected": {"background-color": "#003366"}}
     )    
     
-    selected = "OVERSIGT" 
+    selected = "" 
     if hoved_omraade == "TRUPPEN":
         selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
@@ -82,23 +70,52 @@ with st.sidebar:
     elif hoved_omraade == "ADMIN":
         selected = "Brugerstyring"
 
-# --- 5. ROUTING ---
+# --- 5. ROUTING (GENOPRETTELSE AF ALLE SIDER) ---
 if selected == "Oversigt":
     import tools.players as players
     players.vis_side(dp["players"])
+
+elif selected == "Forecast":
+    import tools.squad as squad
+    squad.vis_side(dp["players"])
 
 elif selected == "Spillerstats":
     import tools.stats as stats
     stats.vis_side(dp["players"], dp["season_stats"])
 
+elif selected == "Top 5":
+    import tools.top5 as top5
+    top5.vis_side(dp["players"], dp["season_stats"])
+
+elif selected == "Zoneinddeling":
+    import tools.player_goalzone as pgz
+    # Her sender vi de nødvendige data fra pakken
+    pgz.vis_side(dp.get("matches", pd.DataFrame()), dp["players"], dp["hold_map"])
+
+elif selected == "Afslutninger":
+    import tools.player_shots as ps
+    ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
+
+elif selected == "Heatmaps":
+    import tools.heatmaps as hm
+    hm.vis_side(dp["pass_events"], dp["hold_map"])
+
 elif selected == "Modstanderanalyse":
     import tools.modstanderanalyse as ma
-    # Her sender vi shotevents og hold_map direkte fra din pakke
     ma.vis_side(dp["shotevents"], dp["hold_map"])
+
+elif selected == "Database":
+    import tools.scout_db as sdb
+    sdb.vis_side(dp["scouting"])
+
+elif selected == "Sammenligning":
+    import tools.comparison as comp
+    comp.vis_side(dp["players"], dp["season_stats"], dp["scouting"])
+
+elif selected == "Scoutrapport":
+    import tools.scout_input as si
+    si.vis_side(dp["players"])
 
 elif selected == "Brugerstyring":
     import tools.admin as admin
     admin.vis_side()
-
-# Tilføj her de øvrige elif statements for dine tools (Heatmaps, Database, etc.)
-# Husk altid at sende dp["relevante_data"] med som argument!
