@@ -129,5 +129,6 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
         "playerstats": df_playerstats,
         "hold_map": hold_map,
         "players": df_players_gh,
-        "scouting": df_scout_gh
+        "scouting": df_scout_gh,
+        "teams_csv": df_teams_csv
     }
