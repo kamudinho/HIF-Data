@@ -2,41 +2,47 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-def vis_side(df_team_matches, df_teams_csv):
+# Vi ændrer input-navnet fra df_teams_csv til hold_map
+def vis_side(df_team_matches, hold_map):
     st.caption("Modstanderanalyse (Snowflake Direkte)")
 
-    # 1. Tjek om Snowflake overhovedet har sendt data
+    # 1. Tjek data
     if df_team_matches is None or df_team_matches.empty:
-        st.error("Ingen data modtaget fra Snowflake. Tjek din data_load.py og Snowflake-forbindelse.")
+        st.error("Ingen data modtaget fra Snowflake.")
         return
 
-    # 2. Lav en holdvælger baseret KUN på hvad der findes i Snowflake-data
-    # Vi kigger på kolonnen 'TEAM_WYID' (eller hvad Snowflake nu kalder den)
+    # 2. Lav navne-vælger i stedet for ID-vælger
     if 'TEAM_WYID' in df_team_matches.columns:
-        # Her finder vi alle unikke hold-ID'er i din Snowflake tabel
         tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
         
-        valgt_id = st.selectbox(
-            "Vælg Team ID (Direkte fra Snowflake):",
-            options=tilgaengelige_ids
+        # Lav en liste af navne baseret på hold_map
+        # Vi gemmer koblingen i en ordbog: { "Navn": ID }
+        navne_dict = {}
+        for tid in tilgaengelige_ids:
+            navn = hold_map.get(str(tid), f"Ukendt ({tid})")
+            navne_dict[navn] = tid
+        
+        valgt_navn = st.selectbox(
+            "Vælg modstander:",
+            options=sorted(navne_dict.keys())
         )
+        
+        # Find det ID der hører til det valgte navn
+        valgt_id = navne_dict[valgt_navn]
 
-        # 3. Filtrer data baseret på det valgte ID
+        # 3. Filtrer data
         df_filtreret = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
     else:
-        st.error(f"Kolonnen 'TEAM_WYID' mangler. Tilgængelige kolonner er: {list(df_team_matches.columns)}")
-        # Vi viser de rå data her, så du kan se hvad der foregår
-        st.write("Rå data fra Snowflake:", df_team_matches.head())
+        st.error("Kolonnen 'TEAM_WYID' mangler.")
         return
 
-    # 4. Vis resultater
-    st.success(f"Viser data for ID: {valgt_id}")
+    # 4. Vis resultater med Navn
+    st.success(f"Viser data for: {valgt_navn}")
     
     col1, col2 = st.columns(2)
     col1.metric("Antal kampe fundet", len(df_filtreret))
     if 'XG' in df_filtreret.columns:
         col2.metric("Gns. xG", round(df_filtreret['XG'].mean(), 2))
 
-    # Vis tabellen med alt data vi har på det hold
-    st.subheader("Kampdata")
+    st.subheader(f"Kampdata for {valgt_navn}")
     st.dataframe(df_filtreret, use_container_width=True)
