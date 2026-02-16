@@ -79,16 +79,16 @@ def vis_side(spillere_df, stats_df):
                 <div style="background:white; border:1px solid #eee; border-radius:8px; padding:12px; margin-bottom:15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.02);">
                     <h4 style="color:#333; margin:0 0 10px 0; border-bottom: 2px solid #df003b; padding-bottom:3px;">{KPI_MAP.get(kpi, kpi)}</h4>
                     <table style="width:100%; font-size:13px; border-collapse:collapse;">
-                        <tr style="color:#888; text-align:left; font-size:10px; text-transform:uppercase;">
-                            <th>Pos</th><th>Spiller</th><th style="text-align:right;">{visning}</th>
+                        <tr style="color:#888; text-align:center; font-size:10px; text-transform:uppercase;">
+                            <th>Pos</th><th>Spiller</th><th style="text-align:center;">{visning}</th>
                         </tr>"""
                 for _, r in top5.iterrows():
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                         <tr style="border-bottom:1px solid #f9f9f9;">
-                            <td style="padding:7px 0; color:#666;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:7px 0; font-weight:500;">{r['NAVN']}</td>
-                            <td style="padding:7px 0; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
+                            <td style="padding:10px 0; color:#666;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:10px 0; font-weight:500;">{r['NAVN']}</td>
+                            <td style="padding:10px 0; text-align:center; font-weight:bold; color:#df003b;">{v}</td>
                         </tr>"""
                 html += "</table></div>"
                 st.write(html, unsafe_allow_html=True)
