@@ -17,13 +17,21 @@ def vis_side(df_team_matches, df_teams_csv):
         options=hold_valgmuligheder['TEAMNAME'].unique()
     )
 
-    # Find ID og navn
-    valgt_id = hold_valgmuligheder[hold_valgmuligheder['TEAMNAME'] == valgt_navn]['TEAM_WYID'].values[0]
+    # 1. Hent ID fra din CSV (Sikre os det er en string og fjern evt. decimaler)
+    valgt_id = str(int(hold_valgmuligheder[hold_valgmuligheder['TEAMNAME'] == valgt_navn]['TEAM_WYID'].values[0]))
 
-    # 3. Filtrer data fra Snowflake
-    # Vi tjekker om kolonnen TEAM_WYID findes for at undgå KeyError
-    if 'TEAM_WYID' not in df_team_matches.columns:
-        st.error(f"Kolonnen 'TEAM_WYID' mangler i data. Fundne kolonner: {list(df_team_matches.columns)}")
+    # 2. Tjek om kolonnen findes i Snowflake-data
+    if 'TEAM_WYID' in df_team_matches.columns:
+    # Vi tvinger alle ID'er i Snowflake til at være strings uden decimaler, før vi sammenligner
+    # Dette løser problemet hvis Snowflake sender '38331.0' eller lignende
+    df_team_matches['TEAM_WYID_STR'] = df_team_matches['TEAM_WYID'].astype(float).fillna(0).astype(int).astype(str)
+    
+    df_filtreret = df_team_matches[df_team_matches['TEAM_WYID_STR'] == valgt_id].copy()
+    
+    # Ryd op (fjern hjælpe-kolonnen igen)
+    df_team_matches.drop(columns=['TEAM_WYID_STR'], inplace=True)
+    else:
+    st.error(f"Kolonnen 'TEAM_WYID' findes ikke i Snowflake-data. Kolonner: {list(df_team_matches.columns)}")
         return
 
     df_filtreret = df_team_matches[df_team_matches['TEAM_WYID'].astype(str) == str(valgt_id)].copy()
