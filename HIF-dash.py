@@ -131,7 +131,7 @@ with st.sidebar:
     if hoved_omraade == "Truppen":
         selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=["people", "magic", "bar-chart-line", "trophy"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video", "Modstanderanalyse"], 
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video", "Modstanderanalyse", "Snowflake Test"], 
                               icons=["grid-3x3", "target", "map", "play-btn", "cloud"], 
                               styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
@@ -166,6 +166,9 @@ elif selected == "Video":
 elif selected == "Modstanderanalyse":
     import tools.modstanderanalyse as ma_test
     ma_test.vis_side()
+elif selected == "Snowflake Test":
+    import tools.snowflake_test as st_test
+    st_test.vis_side()
 elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
