@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
 import requests
 
-# --- 1. HJÆLPEFUNKTIONER (Uændret) ---
+# --- 1. HJÆLPEFUNKTIONER ---
 def rens_metrik_vaerdi(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
@@ -12,41 +11,34 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def map_position(row):
-    db_pos = str(row.get('POSITION', '')).strip().split('.')[0]
-    csv_pos = str(row.get('POS', '')).strip().split('.')[0]
-    role_raw = str(row.get('ROLECODE3', '')).strip().upper()
-    
+    # Prøver først kolonnen fra players.csv, dernæst fra scouting_db.csv
+    csv_pos = str(row.get('POS', row.get('POSITION', 'Ukendt'))).strip().split('.')[0]
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
         "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
         "10": "Offensiv Midt", "11": "Venstre Kant"
     }
-    
-    role_map = {"GKP": "Målmand", "DEF": "Forsvarsspiller", "MID": "Midtbane", "FWD": "Angriber"}
-
-    if csv_pos in pos_dict: return pos_dict[csv_pos]
-    if db_pos in pos_dict: return pos_dict[db_pos]
-    return role_map.get(role_raw, "Ukendt")
+    # Hvis det er en kode (1-11), map den. Ellers brug teksten direkte (f.eks. "Stopper")
+    return pos_dict.get(csv_pos, csv_pos)
 
 def vis_spiller_billede(pid, w=110):
-    pid_clean = str(pid).split('.')[0].replace('"', '').replace("'", "").strip()
+    pid_clean = str(pid).split('.')[0].strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     try:
         resp = requests.head(url, timeout=0.8)
         st.image(url if resp.status_code == 200 else std, width=w)
-    except:
-        st.image(std, width=w)
+    except: st.image(std, width=w)
 
-# --- 2. LAYOUT FUNKTIONER (Uændret) ---
+# --- 2. LAYOUT FUNKTIONER ---
 def vis_metrikker(row):
     m_cols = st.columns(4)
     metrics = [
-        ("Tekniske færdigheder", "TEKNIK"), ("Fart", "FART"), 
+        ("Teknik", "TEKNIK"), ("Fart", "FART"), 
         ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
-        ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
-        ("Beslutsomhed", "BESLUTSOMHED"), ("Spilintelligens", "SPILINTELLIGENS")
+        ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), 
+        ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")
     ]
     for i, (label, col) in enumerate(metrics):
         val = rens_metrik_vaerdi(row.get(col, 0))
@@ -55,25 +47,20 @@ def vis_metrikker(row):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, fs_df):
-    clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
-    historik = full_df[full_df['PLAYER_WYID'].astype(str) == clean_p_id].sort_values('DATO_DT', ascending=True)
-    
-    if historik.empty:
-        st.error("Data ikke fundet.")
-        return
-
+    clean_p_id = str(p_data['PLAYER_WYID'])
+    # Hent alle historiske rapporter for denne spiller
+    historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
     
     head_col1, head_col2 = st.columns([1, 4])
-    with head_col1:
-        vis_spiller_billede(clean_p_id, w=115)
+    with head_col1: vis_spiller_billede(clean_p_id, w=115)
     with head_col2:
-        st.markdown(f"<h2 style='margin-top:0;'>{p_data.get('NAVN', 'Ukendt')}</h2>", unsafe_allow_html=True)
-        st.markdown(f"**{p_data.get('KLUB', '')}** | {p_data.get('POSITION', '')} | Snit: {p_data.get('RATING_AVG', 0)}")
+        st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
+        st.markdown(f"**{nyeste.get('KLUB', '')}** | {nyeste.get('POSITION_VISNING', '')} | Snit: {nyeste.get('RATING_AVG', 0)}")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
+    t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
-    with tab1:
+    with t1:
         vis_metrikker(nyeste)
         st.divider()
         c1, c2, c3 = st.columns(3)
@@ -81,137 +68,71 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
-    with tab2:
+    with t2:
         for _, row in historik.iloc[::-1].iterrows():
-            with st.expander(f"Rapport: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
+            with st.expander(f"Dato: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
                 vis_metrikker(row)
-                st.divider()
-                hc1, hc2, hc3 = st.columns(3)
-                with hc1: st.success(f"**Styrker**\n\n{row.get('STYRKER', '-')}")
-                with hc2: st.warning(f"**Udvikling**\n\n{row.get('UDVIKLING', '-')}")
-                with hc3: st.info(f"**Vurdering**\n\n{row.get('VURDERING', '-')}")
 
-    with tab3:
-        h_col1, h_col2 = st.columns([2, 1])
-        with h_col1:
-            st.markdown("#### Udviklingskurve (1-6)")
-        with h_col2:
-            metrics_map = {
-                "Gennemsnit": "RATING_AVG",
-                "Beslutsomhed": "BESLUTSOMHED", "Fart": "FART",
-                "Aggresivitet": "AGGRESIVITET", "Attitude": "ATTITUDE",
-                "Udholdenhed": "UDHOLDENHED", "Lederegenskaber": "LEDEREGENSKABER",
-                "Teknik": "TEKNIK", "Spilintelligens": "SPILINTELLIGENS"
-            }
-            valgt_label = st.selectbox("Parameter", options=list(metrics_map.keys()), index=0, label_visibility="collapsed")
-            valgt_col = metrics_map[valgt_label]
-
+    with t3:
+        # Udviklingskurve baseret på historik-rækkerne i scouting_db.csv
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik[valgt_col], mode='markers+lines', line=dict(color='#df003b', width=2), marker=dict(size=8)))
-        fig_line.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(range=[0.8, 6.2], tickvals=[1, 2, 3, 4, 5, 6]), plot_bgcolor='white', hovermode="x unified")
-        st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
+        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='markers+lines', line=dict(color='#df003b')))
+        fig_line.update_layout(height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
+        st.plotly_chart(fig_line, use_container_width=True)
 
-    with tab4:
-        st.markdown("### 📊 Statistisk Historik")
-        # Filtrer Snowflake stats for spilleren
-        df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        
-        # Hvis der findes historiske stats (fs_df), læg dem sammen
-        if not fs_df.empty:
-            old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-            df_stats = pd.concat([df_stats, old], ignore_index=True)
-
+    with t4:
+        # Snowflake stats
+        df_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id].copy()
         if not df_stats.empty:
-            display_stats = pd.DataFrame()
-            if 'SEASONNAME' in df_stats.columns: display_stats['Sæson'] = df_stats['SEASONNAME']
-            if 'TEAMNAME' in df_stats.columns: display_stats['Hold'] = df_stats['TEAMNAME']
-            display_stats['Kampe'] = df_stats['MATCHES'].fillna(0).astype(int)
-            display_stats['Minutter'] = df_stats['MINUTESTAGGED'].fillna(0).astype(int)
-            display_stats['Mål'] = df_stats['GOALS'].fillna(0).astype(int)
-            
-            # --- NY: xG DATA ---
-            if 'XG' in df_stats.columns:
-                display_stats['xG'] = df_stats['XG'].fillna(0).round(2)
-            
-            display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
-            display_stats['Gule'] = df_stats['YELLOWCARD'].fillna(0).astype(int)
-            display_stats['Røde'] = df_stats['REDCARDS'].fillna(0).astype(int)
+            st.dataframe(df_stats[['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']], use_container_width=True, hide_index=True)
+        else: st.info("Ingen Snowflake data fundet for denne spiller.")
 
-            stat_map = {
-                'Passes': ('PASSES', 'SUCCESSFULPASSES'),
-                'Forward Passes': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'),
-                'Final Third Passes': ('PASSESTOFINALTHIRD', 'SUCCESSFULPASSESTOFINALTHIRD'),
-                'Progressive Passes': ('PROGRESSIVEPASSES', 'SUCCESSFULPROGRESSIVEPASSES'),
-                'Duels': ('DUELS', 'DUELSWON')
-            }
-            for label, (total_col, success_col) in stat_map.items():
-                if total_col in df_stats.columns and success_col in df_stats.columns:
-                    display_stats[label] = df_stats.apply(lambda r: f"{int(r[total_col])} ({int((r[success_col]/r[total_col])*100)}%)" if r[total_col] > 0 else f"{int(r[total_col])} (0%)", axis=1)
-
-            st.dataframe(display_stats.sort_values('Sæson', ascending=False) if 'Sæson' in display_stats.columns else display_stats, use_container_width=True, hide_index=True)
-        else:
-            st.info("Ingen statistisk data fundet.")
-
-    with tab5:
-        categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
+    with t5:
+        # Radar baseret på de subjektive scout-tal
+        categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
-        
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        v_closed = v + [v[0]]
-        cat_closed = categories + [categories[0]]
-
-        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
-        with col_left:
-            st.markdown("### Detaljer")
-            st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
-            st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
-            st.divider()
-            for cat, val in zip(categories, v):
-                st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold; font-size:1.1em;'>{val}</span>", unsafe_allow_html=True)
-
-        with col_mid:
-            fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)', marker=dict(size=8, color='#df003b')))
-            fig_radar.update_layout(
-                polar=dict(angularaxis=dict(tickfont=dict(size=10, color="black"), rotation=90, direction="clockwise", gridcolor="lightgrey"),
-                radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6], gridcolor="lightgrey", tickfont=dict(color="grey")), gridshape='linear'),
-                showlegend=False, height=450, margin=dict(l=60, r=60, t=30, b=30)
-            )
-            st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
-
-        with col_right:
-            st.markdown("### Bemærkninger")
-            st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
-            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
-            st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
+        fig_radar = go.Figure(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', line=dict(color='#df003b')))
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
+        st.plotly_chart(fig_radar, use_container_width=True)
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df):
-    # Sørg for at PLAYER_WYID er renset og streng-type
-    scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-    spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-    stats_df['PLAYER_WYID'] = stats_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+    # Standardisering
+    for d in [scout_df, spillere_df, stats_df]:
+        if d is not None and not d.empty:
+            d.columns = [c.upper() for c in d.columns]
     
-    # Merge med spillere for at få positioner
-    df = scout_df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
+    # ID Rensning
+    def clean(df):
+        if df is not None and 'PLAYER_WYID' in df.columns:
+            df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+        return df
+
+    scout_df = clean(scout_df)
+    spillere_df = clean(spillere_df)
+    stats_df = clean(stats_df)
+
+    # Merge og Position
+    df = scout_df.copy()
+    if 'PLAYER_WYID' in spillere_df.columns:
+        df = df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
+    
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
-    df = df.sort_values('DATO_DT')
-
-    st.subheader("Scouting Database")
-    search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
     
-    # Vis kun nyeste rapport i tabellen
-    f_df = df.groupby('PLAYER_WYID').tail(1).copy()
+    st.subheader("Scouting Database")
+    
+    # Find den nyeste rapport pr. spiller til oversigten
+    f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
+    
+    search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
-    display_df = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
-    display_df.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'VURDERING', 'DATO', 'SCOUT']
-
-    event = st.dataframe(display_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", height=600)
+    disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
+    event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     if len(event.selection.rows) > 0:
         p_row = f_df.iloc[event.selection.rows[0]]
-        # Vi sender en tom DataFrame som fs_df (historiske stats), da alt nu ligger i Snowflake stats_df
         vis_profil(p_row, df, stats_df, pd.DataFrame())
