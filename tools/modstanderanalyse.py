@@ -60,7 +60,6 @@ def vis_side():
                     ax=ax,
                     clip=((0, 100), (0, 100)) 
                 )
-                st.info("💡 Heatmap viser de zoner, hvor modstanderen oftest opererer på jeres banehalvdel.")
             else:
                 st.warning("Ingen pasningsdata fundet for denne kamp.")
 
