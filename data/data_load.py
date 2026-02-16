@@ -111,12 +111,12 @@ def load_all_data(season_ids=[191807]): # Tilføjet standard-værdi så den ikke
             df.columns = [c.upper() for c in df.columns]
 
     # 3. RETURNER PAKKEN (RETTEDE NAVNE)
-    return {
-        "shotevents": df_shots,      # RETTET: før stod der df_modstander
-        "pass_events": df_passes,    # Tilføjet så Heatmaps virker
-        "season_stats": df_season_stats,
-        "players": df_players,
-        "teams": df_teams,
-        "scouting": df_scout,
-        "hold_map": dict(zip(df_teams['TEAM_WYID'].astype(str), df_teams['TEAMNAME'])) if not df_teams.empty else {}
-    }
+    # I bunden af load_all_data funktionen:
+return {
+    "shotevents": df_combined_eller_passes, # Her skal din q_passes data ligge!
+    "hold_map": hold_map,
+    "players": df_players,
+    "season_stats": df_stats,
+    "matches": df_matches,
+    "scouting": df_scout
+}
