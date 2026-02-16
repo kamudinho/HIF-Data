@@ -15,40 +15,35 @@ def vis_side():
         
         kamp_data = df[df['MATCHLABEL'] == valgt_kamp]
         
+        # Metrics i toppen
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Offensive Aktioner", len(kamp_data))
-        with col2:
-            st.metric("Egne Skud", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']))
-        with col3:
-            st.metric("Skud imod", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot_against']))
+        col1.metric("Aktioner", len(kamp_data))
+        col2.metric("Egne Skud", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']))
+        col3.metric("Skud imod", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot_against']))
 
-        vis_type = st.radio(
-            "Vælg visuel analyse:", 
-            ["Heatmap (Tendenser)", "Scatter (Enkelte aktioner)"], 
-            horizontal=True
-        )
+        vis_type = st.radio("Visning:", ["Heatmap", "Scatter"], horizontal=True)
 
-        # 1. 'vertical=True' gør banen lodret
+        # 1. Vertikal bane (Wyscout-koordinater: X er længden, Y er bredden)
         pitch = Pitch(
             pitch_type='wyscout', 
             pitch_color='white', 
             line_color='#555555',
             linewidth=2,
-            vertical=True  
+            vertical=True  # Modstanderens mål er i toppen (X=100)
         )
         
-        # 2. Mindre figsize og byttet om på bredde/højde (f.eks. 5 bred, 7 høj)
-        fig, ax = pitch.draw(figsize=(5, 7))
+        # 2. Lille størrelse (4 bred, 6 høj)
+        fig, ax = pitch.draw(figsize=(4, 6))
         fig.patch.set_facecolor('white')
 
-        if vis_type == "Heatmap (Tendenser)":
+        if vis_type == "Heatmap":
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
             if not passes.empty:
-                # Ved vertical=True skal x og y byttes i sns.kdeplot for at det matcher banen
+                # VIGTIGT: I vertikal mode skal Y-koordinaten (bredden) på X-aksen 
+                # og X-koordinaten (længden) på Y-aksen for at ramme banen korrekt.
                 sns.kdeplot(
+                    x=passes['LOCATIONY'], 
                     y=passes['LOCATIONX'],
-                    x=passes['LOCATIONY'],
                     fill=True,
                     alpha=.6,
                     n_levels=15,
@@ -57,29 +52,23 @@ def vis_side():
                     clip=((0, 100), (0, 100)) 
                 )
         else:
+            # Scatter (mplsoccer håndterer selv vertical=True automatisk her)
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
-            # pitch.scatter håndterer selv vertical=True, så vi sender bare x, y som normalt
-            pitch.scatter(
-                passes['LOCATIONX'], passes['LOCATIONY'], 
-                ax=ax, color='#3498db', alpha=0.4, s=30, 
-                label='Offensiv pasning'
-            )
+            pitch.scatter(passes.LOCATIONX, passes.LOCATIONY, ax=ax, 
+                          color='#3498db', alpha=0.4, s=20, label='Pasning')
             
             shots = kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']
-            pitch.scatter(
-                shots['LOCATIONX'], shots['LOCATIONY'], 
-                ax=ax, color='#e74c3c', s=120, 
-                edgecolors='black', marker='o', label='Skud'
-            )
-            ax.legend(facecolor='white', edgecolor='black', loc='upper left', fontsize=8)
+            pitch.scatter(shots.LOCATIONX, shots.LOCATIONY, ax=ax, 
+                          color='#e74c3c', s=80, edgecolors='black', label='Skud')
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, fontsize=8)
 
-        # Centrer billedet i Streamlit ved hjælp af kolonner
-        col_left, col_mid, col_right = st.columns([1, 2, 1])
-        with col_mid:
+        # Centrer det lille billede
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c2:
             st.pyplot(fig)
 
     except Exception as e:
-        st.error(f"Fejl ved indlæsning af data: {e}")
+        st.error(f"Fejl: {e}")
 
 if __name__ == "__main__":
     vis_side()
