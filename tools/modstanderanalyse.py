@@ -5,6 +5,12 @@ import plotly.express as px
 # Vi ændrer input-navnet fra df_teams_csv til hold_map
 def vis_side(df_team_matches, hold_map):
     st.caption("Modstanderanalyse (Snowflake Direkte)")
+    
+    # DEBUG: Se hvad hold_map egentlig indeholder
+    with st.expander("Debug: Tjek Hold Map"):
+        st.write(f"Antal hold i map: {len(hold_map)}")
+        st.write("Er 38331 i map?", "38331" in hold_map)
+        st.write("Første 5 hold i map:", list(hold_map.items())[:5])
 
     # 1. Tjek data
     if df_team_matches is None or df_team_matches.empty:
