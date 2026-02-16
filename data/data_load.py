@@ -48,7 +48,7 @@ def load_all_data():
         from data.season_show import SEASONNAM, TEAM_WYID, COMPETITION_WYID
     except ImportError:
         # Fallback hvis filen ikke findes
-        SEASONNAM, TEAM_WYID, COMPETITION_WYID = "2024/2025", 38331, 3134
+        SEASONNAME, TEAM_WYID, COMPETITION_WYID = "2025/2026", 38331, 3134
 
     # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
