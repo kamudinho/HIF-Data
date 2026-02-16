@@ -8,20 +8,17 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere_df, stats_df):
-    # --- 1. CSS INJECTION (Fjerner de sidste barrierer for højrestilling) ---
+    # --- 1. CSS INJECTION (Layout & Centrering) ---
     st.markdown("""
         <style>
-            /* Fjern padding i kolonne-beholdere så vi kan ramme kanten */
             [data-testid="column"] {
                 display: flex;
                 flex-direction: column;
                 justify-content: flex-start;
             }
-            /* Tving segmented control til at flugte helt til højre i sin beholder */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
             }
-            /* Gør knapperne kompakte */
             div[data-testid="stSegmentedControl"] {
                 width: fit-content !important;
                 margin-left: auto !important;
@@ -46,7 +43,6 @@ def vis_side(spillere_df, stats_df):
     s_info['PLAYER_WYID'] = s_info['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     s_stats['PLAYER_WYID'] = s_stats['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # 4. Merge & Rens
     df = pd.merge(s_stats, s_info[['PLAYER_WYID', 'NAVN', 'ROLECODE3']], on='PLAYER_WYID', how='inner')
     if 'MINUTESONFIELD' in df.columns:
         df = df.sort_values('MINUTESONFIELD', ascending=False).drop_duplicates(subset=['PLAYER_WYID'])
@@ -58,12 +54,11 @@ def vis_side(spillere_df, stats_df):
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     df['POS_DISPLAY'] = df['ROLECODE3'].map(pos_map).fillna(df['ROLECODE3'])
 
-    # --- 5. KNAPPER (Med det nye kolonne-gap fix) ---
-    c1, c2 = st.columns([1, 1], gap="large") # 'gap' fjerner det tætte mellemrum
+    # --- 4. KNAPPER ---
+    c1, c2 = st.columns([1, 1], gap="large")
     with c1:
         valgt_kat = st.pills("Kategori", ["Offensivt", "Generelt"], default="Offensivt", label_visibility="collapsed")
     with c2:
-        # Segmented control presses nu mod højre af CSS'en i toppen
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
     KPI_MAP = {
@@ -78,7 +73,7 @@ def vis_side(spillere_df, stats_df):
 
     st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
-    # --- 6. RENDER KOMPAKTE TABELLER ---
+    # --- 5. RENDER KOMPAKTE TABELLER ---
     cols = st.columns(3)
     for i, kpi in enumerate(kpis):
         if kpi in df.columns:
@@ -99,19 +94,19 @@ def vis_side(spillere_df, stats_df):
                         <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:14px; text-transform:uppercase; font-weight:700;">{KPI_MAP.get(kpi, kpi)}</h4>
                     </div>
                     <table style="width:100%; font-size:14px; border-collapse:collapse; font-family:sans-serif;">
-                        <tr style="color:#888; text-align:left; font-size:10px; text-transform:uppercase; background:#fafafa; border-bottom: 1px solid #eee;">
-                            <th style="padding:4px 10px; width:40px;">Pos</th>
-                            <th style="padding:4px 10px;">Spiller</th>
-                            <th style="padding:4px 10px; text-align:right;">{visning}</th>
+                        <tr style="color:#888; font-size:10px; text-transform:uppercase; background:#fafafa; border-bottom: 1px solid #eee;">
+                            <th style="padding:4px 5px; width:45px; text-align:center;">Pos</th>
+                            <th style="padding:4px 10px; text-align:left;">Spiller</th>
+                            <th style="padding:4px 5px; width:60px; text-align:center;">{visning}</th>
                         </tr>"""
                 
                 for _, r in top5.iterrows():
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                         <tr style="border-bottom:1px solid #f9f9f9;">
-                            <td style="padding:4px 10px; color:#666; font-size:12px;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:4px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">{r['NAVN']}</td>
-                            <td style="padding:4px 10px; text-align:right; font-weight:700; color:#df003b;">{v}</td>
+                            <td style="padding:4px 5px; color:#666; font-size:12px; text-align:center;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:4px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{r['NAVN']}</td>
+                            <td style="padding:4px 5px; text-align:center; font-weight:700; color:#df003b;">{v}</td>
                         </tr>"""
                 
                 html += "</table></div>"
