@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(df_team_matches, df_teams_csv):
-    st.title("⚔️ Modstanderanalyse")
+    st.title("Modstanderanalyse")
 
     if df_teams_csv is None or df_teams_csv.empty:
         st.error("Kunne ikke finde teams.csv fra GitHub.")
@@ -16,8 +16,13 @@ def vis_side(df_team_matches, df_teams_csv):
         options=hold_valgmuligheder['TEAMNAME'].unique()
     )
 
-    # Find ID
-    valgt_id = hold_valgmuligheder[hold_valgmuligheder['TEAMNAME'] == valgt_navn]['TEAM_WYID'].values[0]
+    id_kolonne = 'TEAM_WYID' if 'TEAM_WYID' in df_team_matches.columns else None
+
+    if id_kolonne:
+    df_filtreret = df_team_matches[df_team_matches[id_kolonne].astype(str) == str(valgt_id)].copy()
+    else:
+    st.error(f"Fejl: Kolonnen 'TEAM_WYID' blev ikke fundet i Snowflake-data. Tilgængelige kolonner: {list(df_team_matches.columns)}")
+        return
 
     # 2. DATA FILTRERING
     df_filtreret = df_team_matches[df_team_matches['TEAM_WYID'].astype(str) == str(valgt_id)].copy()
