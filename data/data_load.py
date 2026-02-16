@@ -17,7 +17,6 @@ def _get_snowflake_conn():
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
-        # Vi bruger kwargs udpakning for at matche st.secrets strukturen
         return snowflake.connector.connect(
             user=st.secrets["connections"]["snowflake"]["user"],
             account=st.secrets["connections"]["snowflake"]["account"],
@@ -33,9 +32,9 @@ def _get_snowflake_conn():
 
 # --- CENTRAL LOAD FUNKTION ---
 @st.cache_data(ttl=3600)
-def load_all_data(season_ids=[191807]): # Tilføjet standard-værdi så den ikke fejler
+def load_all_data(season_id=191807): 
     # 1. Hent CSV-filer fra GitHub
-    url_base = f"https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
             u = f"{url_base}{file}?nocache={uuid.uuid4()}"
@@ -48,75 +47,66 @@ def load_all_data(season_ids=[191807]): # Tilføjet standard-værdi så den ikke
     df_players = read_gh("players.csv")
     df_teams = read_gh("teams.csv")
     df_scout = read_gh("scouting_db.csv")
+    df_matches = read_gh("matches.csv") # Tilføjet denne
     
+    # Lav hold_map med det samme
+    hold_map = {}
+    if not df_teams.empty:
+        hold_map = dict(zip(df_teams['TEAM_WYID'].astype(str), df_teams['TEAMNAME']))
+
     # 2. SNOWFLAKE DATA
     conn = _get_snowflake_conn()
-    df_shots = pd.DataFrame()
-    df_passes = pd.DataFrame()
+    df_combined = pd.DataFrame()
     df_season_stats = pd.DataFrame()
 
     if conn:
-        # Dynamisk sæson-filter logik
-        season_filter = ""
-        if season_ids:
-            if isinstance(season_ids, list):
-                ids_str = ",".join(map(str, season_ids))
-                season_filter = f"WHERE m.SEASON_WYID IN ({ids_str})"
-            else:
-                season_filter = f"WHERE m.SEASON_WYID = {season_ids}"
-
         try:
-            # A: SHOT-QUERY
-            # Denne query henter det hele i ét hug
+            # A: KOMBINERET EVENT QUERY (Pass + Shot + Shot Against)
+            # Vi bruger sn som alias for seasons for at undgå 'S' konflikten
             q_combined = f"""
             SELECT 
-            c.LOCATIONX, 
-            c.LOCATIONY, 
-            c.PRIMARYTYPE, 
-            e.TEAM_WYID, 
-            m.MATCHLABEL, 
-            s.SHOTXG
+                c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, e.TEAM_WYID, 
+                m.MATCHLABEL, s.SHOTXG, sn.SEASONNAME
             FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
             LEFT JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
             JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
             JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+            JOIN AXIS.WYSCOUT_SEASONS sn ON m.SEASON_WYID = sn.SEASON_WYID
             WHERE m.SEASON_WYID = {season_id}
-            AND (
-            c.PRIMARYTYPE IN ('shot', 'pass') -- Dine egne aktioner
-            OR c.PRIMARYTYPE = 'shot_against'  -- Modstanderens skud mod dig
-            )
+            AND (c.PRIMARYTYPE IN ('shot', 'pass', 'shot_against'))
             """
 
-            # C: STATS
+            # B: STATS (Rettet xG kolonnenavn til adv.XG_TOTAL eller lign.)
+            # Tjek din Snowflake tabel hvis adv.XG stadig fejler (måske hedder den XG_TOTAL)
             q_stats = """
-            SELECT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL, adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XG
+            SELECT p.PLAYER_WYID, sn.SEASONNAME, t.TEAMNAME, p.GOAL, 
+                   adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XG_TOTAL AS XG
             FROM AXIS.WYSCOUT_PLAYERCAREER p
             JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID AND p.SEASON_WYID = adv.SEASON_WYID
-            JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
+            JOIN AXIS.WYSCOUT_SEASONS sn ON p.SEASON_WYID = sn.SEASON_WYID
             JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
             WHERE p.MINUTESPLAYED > 0
             """
 
-            df_shots = pd.read_sql(q_shots, conn)
-            df_passes = pd.read_sql(q_passes, conn)
+            df_combined = pd.read_sql(q_combined, conn)
             df_season_stats = pd.read_sql(q_stats, conn)
+            
         except Exception as e:
             st.error(f"SQL Error: {e}")
         finally:
             conn.close()
 
-    # Sørg for at kolonnenavne er konsistente
-    for df in [df_shots, df_passes, df_season_stats]:
+    # Standardiser kolonnenavne
+    for df in [df_combined, df_season_stats]:
         if not df.empty:
             df.columns = [c.upper() for c in df.columns]
 
-    # 3. RETURNER PAKKEN (RETTEDE NAVNE)
-    # I bunden af load_all_data funktionen:
-return {
-    "shotevents": df_combined_eller_passes, # Her skal din q_passes data ligge!
-    "hold_map": hold_map,
-    "players": df_players,
-    "season_stats": df_stats,
-    "matches": df_matches,
-    "scouting": df_scout
-}
+    # 3. RETURNER PAKKEN
+    return {
+        "shotevents": df_combined, 
+        "hold_map": hold_map,
+        "players": df_players,
+        "season_stats": df_season_stats,
+        "matches": df_matches,
+        "scouting": df_scout
+    }
