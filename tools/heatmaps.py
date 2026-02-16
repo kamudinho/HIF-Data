@@ -5,24 +5,33 @@ from mplsoccer import VerticalPitch
 import numpy as np
 
 # --- CACHING AF SELVE FIGUREN ---
-@st.cache_data(show_spinner="Heatmaps præsenteres...")
+# Vi bruger tuple for hold_ids, da lister ikke kan caches direkte
+@st.cache_data(show_spinner="Heatmaps genereres...")
 def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
     BG_WHITE = '#ffffff'
-    rows = int(np.ceil(len(hold_ids_tuple) / cols_slider))
+    # Beregn rækker baseret på antal hold og valgte kolonner
+    num_hold = len(hold_ids_tuple)
+    rows = int(np.ceil(num_hold / cols_slider))
     
-    # Optimeret figsize
+    # Opret figuren
     fig, axes = plt.subplots(
         rows, cols_slider,
-        figsize=(15, rows * 4), 
+        figsize=(15, rows * 5), 
         facecolor=BG_WHITE
     )
 
-    fig.subplots_adjust(left=0.05, right=0.95, bottom=0.02, top=0.92, wspace=0.05, hspace=0.25)
+    # Juster afstand mellem banerne
+    fig.subplots_adjust(left=0.05, right=0.95, bottom=0.02, top=0.95, wspace=0.1, hspace=0.3)
+    
+    # Gør axes flad (array), så vi kan iterere over dem, selv hvis der kun er 1 række
     axes_flat = np.atleast_1d(axes).flatten()
 
+    # Opsæt banen (Wyscout bruger ofte 100x100)
     pitch = VerticalPitch(
-        pitch_type='custom', pitch_length=100, pitch_width=100,
-        line_color='#1a1a1a', line_zorder=2, linewidth=0.5
+        pitch_type='wyscout', 
+        line_color='#1a1a1a', 
+        line_zorder=2, 
+        linewidth=0.8
     )
 
     for i, tid in enumerate(hold_ids_tuple):
@@ -32,55 +41,79 @@ def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
         hold_df_full = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         total_passes = len(hold_df_full)
         
-        # SPEED BOOST: Sample data (max 2000 rækker pr. heatmap)
-        hold_df_draw = hold_df_full.sample(n=min(total_passes, 2000), random_state=42)
+        # SPEED BOOST: Sample data hvis der er ekstremt mange rækker
+        if total_passes > 3000:
+            hold_df_draw = hold_df_full.sample(n=3000, random_state=42)
+        else:
+            hold_df_draw = hold_df_full
 
         pitch.draw(ax=ax)
 
-        # Navn og Titel
-        navn = str(hold_map.get(tid, f"HOLD ID: {tid}")).upper()
+        # Hent navn fra map eller brug ID
+        navn = str(hold_map.get(str(tid), f"HOLD: {tid}")).upper()
         ax.set_title(f"{navn}\n({total_passes:,} AFLEVERINGER)".replace(',', '.'), 
-                     fontsize=10, fontweight='bold', pad=8)
+                     fontsize=11, fontweight='bold', pad=10)
 
-        if total_passes > 10:
+        # Tegn Heatmap hvis der er data nok
+        if total_passes > 5:
             sns.kdeplot(
-                x=hold_df_draw['LOCATIONY'], y=hold_df_draw['LOCATIONX'], ax=ax,
-                fill=True, thresh=0.05, levels=20, 
-                cmap='YlOrRd', alpha=0.8, zorder=1,
-                clip=((0, 100), (0, 100)), # HOLDER DET INDEN FOR LINJERNE
-                linewidths=0
+                x=hold_df_draw['LOCATIONY'], 
+                y=hold_df_draw['LOCATIONX'], 
+                ax=ax,
+                fill=True, 
+                thresh=0.05, 
+                levels=15, 
+                cmap='YlOrRd', 
+                alpha=0.7, 
+                zorder=1,
+                clip=((0, 100), (0, 100)) # Holder det inden for banen
             )
 
-    # Skjul tomme felter hvis antallet af hold ikke går op i kolonnerne
+    # Skjul resterende tomme plots
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
 
     return fig
 
-# VIGTIGT: Denne definition skal matche dit kald i HIF-dash.py
-def vis_side(df_events, cols_slider, hold_map=None):
-    HIF_ID = 38331 # Juster til dit holds ID
-
+# --- HOVEDFUNKTION ---
+def vis_side(df_events, hold_map=None):
+    st.subheader("HEATMAPS: AFLEVERINGSMØNSTRE")
+    
     if df_events is None or df_events.empty:
-        st.error("Ingen data fundet.")
+        st.error("Ingen data fundet i Snowflake.")
         return
 
-    # Standardiser kolonnenavne til store bogstaver
+    # 1. SIDEBAR KONTROL
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Indstillinger for Heatmaps")
+    cols_slider = st.sidebar.slider("Antal kolonner", 1, 4, 2)
+    
+    # 2. DATAPRÆPARERING
+    # Sørg for kolonnenavne er rigtige
     df_events.columns = [c.upper() for c in df_events.columns]
-
-    # Filtrer kun pasninger (PRIMARYTYPE indeholder 'pass')
-    mask = df_events['PRIMARYTYPE'].astype(str).str.contains('pass', case=False, na=False)
-    df_p = df_events[mask].copy()
+    
+    # Filtrer kun pasninger (PRIMARYTYPE skal indeholde 'pass')
+    df_p = df_events[df_events['PRIMARYTYPE'].str.lower().str.contains('pass', na=False)].copy()
 
     if df_p.empty:
-        st.warning("Ingen afleveringsdata at vise.")
+        st.warning("Der blev ikke fundet nogen 'pass' events i de indlæste data.")
         return
 
-    # Sorter holdliste (Sørg for dit eget hold er først)
-    hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
+    # Sorter hold efter navn
+    # Vi mapper ID til navn først for at kunne sortere alfabetisk
+    temp_hold_list = []
+    unique_ids = df_p['TEAM_WYID'].unique()
+    for tid in unique_ids:
+        t_name = hold_map.get(str(tid), f"ID: {tid}")
+        temp_hold_list.append({'ID': tid, 'NAME': t_name})
+    
+    sorted_hold = sorted(temp_hold_list, key=lambda x: x['NAME'])
+    hold_ids = [h['ID'] for h in sorted_hold]
 
-    # Kald cache-funktionen
+    # 3. GENERER OG VIS
+    # Vi sender hold_ids som en tuple til cachen
     fig = generate_cached_heatmaps(df_p, cols_slider, tuple(hold_ids), hold_map)
     
-    # Vis resultatet
     st.pyplot(fig, use_container_width=True)
+    
+    st.info("💡 Heatmappet viser koncentrationen af afleveringer. Røde områder indikerer høj aktivitet.")
