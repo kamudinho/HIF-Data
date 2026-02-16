@@ -21,8 +21,8 @@ def vis_side(spillere_df, stats_df):
     s_stats.columns = [c.upper().strip() for c in s_stats.columns]
 
     # 2. Find ID-kolonner
-    id_s = next((c for c in ['PLAYER_WYID', 'PLAYER_WYID'] if c in s_info.columns), None)
-    id_t = next((c for c in ['PLAYER_WYID', 'PLAYER_WYID'] if c in s_stats.columns), None)
+    id_s = next((c for c in ['PLAYER_WYID', 'ID'] if c in s_info.columns), None)
+    id_t = next((c for c in ['PLAYER_WYID', 'ID'] if c in s_stats.columns), None)
 
     if not id_s or not id_t:
         st.error(f"ID-kolonne mangler!")
