@@ -1,44 +1,59 @@
 import streamlit as st
 import pandas as pd
 import uuid
+import snowflake.connector
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
 def _get_snowflake_conn():
-    """Opretter forbindelse til Snowflake med manuel rensning af Private Key."""
+    """Bruger samme robuste RSA-metode som din test-fil."""
     try:
-        # Vi henter parametrene direkte fra secrets for at have fuld kontrol
         s = st.secrets["connections"]["snowflake"]
+        p_key_pem = s["private_key"]
         
-        # Rens private_key for at undgå "Incorrect padding" fejl
-        pk = s["private_key"].strip()
+        if isinstance(p_key_pem, str):
+            p_key_pem = p_key_pem.strip()
+
+        # Manuel dekodning af RSA nøglen (Præcis som din test-fil)
+        p_key_obj = serialization.load_pem_private_key(
+            p_key_pem.encode(),
+            password=None, 
+            backend=default_backend()
+        )
         
+        p_key_der = p_key_obj.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        
+        # Vi bruger st.connection med den færdigbehandlede nøgle
         return st.connection(
             "snowflake",
+            type="snowflake",
             account=s["account"],
             user=s["user"],
             role=s["role"],
             warehouse=s["warehouse"],
             database=s["database"],
             schema=s["schema"],
-            private_key=pk
+            private_key=p_key_der # Den magiske DER-nøgle
         )
     except Exception as e:
-        st.error(f"Snowflake Connection Error: {e}")
+        st.error(f"❌ Snowflake Connection Error: {e}")
         return None
 
 @st.cache_data(ttl=3600)
 def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
-    # --- 1. GITHUB FILER (Stamdata) ---
+    # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
-    
     def read_gh(file):
         try:
-            # Vi bruger uuid for at undgå at browseren cacher en gammel fil fra GitHub
             u = f"{url_base}{file}?nocache={uuid.uuid4()}"
             d = pd.read_csv(u, sep=None, engine='python')
             d.columns = [str(c).strip().upper() for c in d.columns]
             return d
-        except: 
-            return pd.DataFrame()
+        except: return pd.DataFrame()
 
     df_players_gh = read_gh("players.csv")
     df_scout_gh = read_gh("scouting_db.csv")
@@ -60,11 +75,10 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             if not df_teams_sn.empty:
                 hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
             
-            # Tilføj navne fra GitHub CSV hvis de ikke findes i Snowflake
             if not df_teams_csv.empty:
                 hold_map.update(dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME'])))
 
-            # B: SHOT EVENTS (Alt data uden filter for test)
+            # B: SHOT EVENTS
             q_shots = """
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
@@ -91,7 +105,7 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             """
             df_season_stats = conn.query(q_stats)
 
-            # D: TEAM MATCHES (Modstanderanalyse) - Filter fjernet for at fange 2020-data
+            # D: TEAM MATCHES
             q_teammatches = """
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
                        g.SHOTS, g.GOALS, g.XG, d.PPDA, p.POSSESSIONPERCENT, ps.PASSES, du.CHALLENGEINTENSITY
@@ -109,8 +123,7 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             q_playerstats = """
                 SELECT DISTINCT
                     p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.ROLECODE3, p.BIRTHDATE, t.TEAMNAME,
-                    SUM(DISTINCT s.MATCHES) AS KAMPE, SUM(DISTINCT s.MATCHESINSTART) AS MATCHESINSTART,
-                    SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD,
+                    SUM(DISTINCT s.MATCHES) AS KAMPE, SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD,
                     SUM(DISTINCT s.GOALS) AS GOALS, SUM(DISTINCT s.ASSISTS) AS ASSISTS, 
                     SUM(DISTINCT s.SHOTS) AS SHOTS, SUM(DISTINCT s.XGSHOT) AS XGSHOT
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
@@ -121,23 +134,14 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             df_playerstats = conn.query(q_playerstats)
 
         except Exception as e:
-            st.error(f"SQL fejl i load_all_data: {e}")
+            st.error(f"SQL fejl: {e}")
 
-    # --- 3. ROBUST STANDARDISERING TIL UPPERCASE ---
-    # Vi mapper alle dataframes i en ordbog for at køre loopet sikkert
-    all_dfs = {
-        "shotevents": df_shotevents,
-        "season_stats": df_season_stats,
-        "team_matches": df_team_matches,
-        "playerstats": df_playerstats
-    }
-
-    for name, df in all_dfs.items():
+    # Standardisering
+    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper() for c in df.columns]
 
-    # Debug besked i sidebar
-    st.sidebar.success(f"Snowflake Data: {len(df_team_matches)} kampe indlæst.")
+    st.sidebar.success(f"Snowflake Data indlæst!")
 
     return {
         "shotevents": df_shotevents,
