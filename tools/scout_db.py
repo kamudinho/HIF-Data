@@ -45,14 +45,18 @@ def vis_metrikker(row):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, fs_df):
-    # Sikr os at s_df har de rigtige kolonnenavne (UPPERCASE)
+    # 1. Sikr os at s_df og full_df har store bogstaver
     if s_df is not None and not s_df.empty:
         s_df.columns = [c.upper() for c in s_df.columns]
+    
+    # Vi tvinger også kolonnerne i den lokale historik-df til store bogstaver
+    full_df.columns = [c.upper() for c in full_df.columns]
         
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     
-    # Hent alle historiske rapporter fra CSV
+    # Hent alle historiske rapporter for denne spiller
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
+    
     if historik.empty:
         st.error("Ingen historiske data fundet.")
         return
@@ -63,6 +67,7 @@ def vis_profil(p_data, full_df, s_df, fs_df):
     with head_col1: vis_spiller_billede(clean_p_id, w=115)
     with head_col2:
         st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
+        # Bemærk: Vi bruger UPPERCASE her (POSITION_VISNING, RATING_AVG)
         st.markdown(f"**{nyeste.get('KLUB', '')}** | {nyeste.get('POSITION_VISNING', '')} | Snit: {nyeste.get('RATING_AVG', 0)}")
 
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
@@ -77,37 +82,42 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with t2:
         for _, row in historik.iloc[::-1].iterrows():
+            # Vi bruger DATO, SCOUT, RATING_AVG i store bogstaver
             with st.expander(f"Dato: {row.get('DATO')} | Scout: {row.get('SCOUT')} | Rating: {row.get('RATING_AVG')}"):
                 vis_metrikker(row)
 
     with t3:
+        # FEJL-RETTELSE HER: Brug store bogstaver for DATO_DT og RATING_AVG
         fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='markers+lines', line=dict(color='#df003b')))
-        fig_line.update_layout(height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
+        fig_line.add_trace(go.Scatter(
+            x=historik['DATO_DT'], 
+            y=historik['RATING_AVG'], 
+            mode='markers+lines', 
+            line=dict(color='#df003b')
+        ))
+        fig_line.update_layout(
+            height=300, 
+            yaxis=dict(range=[0.8, 6.2], title="Rating"), 
+            xaxis=dict(title="Dato"),
+            plot_bgcolor='white'
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
         st.markdown("### 📊 Statistisk Historik (Snowflake)")
-        # Robust filtrering: Vi tjekker PLAYER_WYID findes og sammenligner som strings
         if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
             df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-            
             if not df_stats.empty:
-                # Vi viser de vigtigste kolonner hvis de findes
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
                 existing_cols = [c for c in cols_to_show if c in df_stats.columns]
-                
-                # Formatér xG pænt hvis kolonnen findes
-                if 'XG' in df_stats.columns:
-                    df_stats['XG'] = df_stats['XG'].fillna(0).round(2)
-                
                 st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
             else:
                 st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
         else:
-            st.warning("Kolonnen PLAYER_WYID blev ikke fundet i Snowflake-dataen.")
+            st.warning("Snowflake-statistik er ikke tilgængelig.")
 
     with t5:
+        # Radar (Alt i store bogstaver)
         categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
