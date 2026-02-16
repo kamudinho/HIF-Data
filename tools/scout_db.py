@@ -11,7 +11,6 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def map_position(row):
-    # Prøver først kolonnen fra players.csv, dernæst fra scouting_db.csv
     csv_pos = str(row.get('POS', row.get('POSITION', 'Ukendt'))).strip().split('.')[0]
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -19,7 +18,6 @@ def map_position(row):
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
         "10": "Offensiv Midt", "11": "Venstre Kant"
     }
-    # Hvis det er en kode (1-11), map den. Ellers brug teksten direkte (f.eks. "Stopper")
     return pos_dict.get(csv_pos, csv_pos)
 
 def vis_spiller_billede(pid, w=110):
@@ -47,9 +45,18 @@ def vis_metrikker(row):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, fs_df):
-    clean_p_id = str(p_data['PLAYER_WYID'])
-    # Hent alle historiske rapporter for denne spiller
+    # Sikr os at s_df har de rigtige kolonnenavne (UPPERCASE)
+    if s_df is not None and not s_df.empty:
+        s_df.columns = [c.upper() for c in s_df.columns]
+        
+    clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+    
+    # Hent alle historiske rapporter fra CSV
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
+    if historik.empty:
+        st.error("Ingen historiske data fundet.")
+        return
+        
     nyeste = historik.iloc[-1]
     
     head_col1, head_col2 = st.columns([1, 4])
@@ -74,21 +81,33 @@ def vis_profil(p_data, full_df, s_df, fs_df):
                 vis_metrikker(row)
 
     with t3:
-        # Udviklingskurve baseret på historik-rækkerne i scouting_db.csv
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='markers+lines', line=dict(color='#df003b')))
         fig_line.update_layout(height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        # Snowflake stats
-        df_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id].copy()
-        if not df_stats.empty:
-            st.dataframe(df_stats[['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']], use_container_width=True, hide_index=True)
-        else: st.info("Ingen Snowflake data fundet for denne spiller.")
+        st.markdown("### 📊 Statistisk Historik (Snowflake)")
+        # Robust filtrering: Vi tjekker PLAYER_WYID findes og sammenligner som strings
+        if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
+            df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+            
+            if not df_stats.empty:
+                # Vi viser de vigtigste kolonner hvis de findes
+                cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                existing_cols = [c for c in cols_to_show if c in df_stats.columns]
+                
+                # Formatér xG pænt hvis kolonnen findes
+                if 'XG' in df_stats.columns:
+                    df_stats['XG'] = df_stats['XG'].fillna(0).round(2)
+                
+                st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
+            else:
+                st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
+        else:
+            st.warning("Kolonnen PLAYER_WYID blev ikke fundet i Snowflake-dataen.")
 
     with t5:
-        # Radar baseret på de subjektive scout-tal
         categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
@@ -98,14 +117,14 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df):
-    # Standardisering
+    # Standardisering af kolonnenavne til UPPERCASE
     for d in [scout_df, spillere_df, stats_df]:
         if d is not None and not d.empty:
             d.columns = [c.upper() for c in d.columns]
     
-    # ID Rensning
+    # ID Rensning (Sikrer at vi kan merge på tværs af kilder)
     def clean(df):
-        if df is not None and 'PLAYER_WYID' in df.columns:
+        if df is not None and not df.empty and 'PLAYER_WYID' in df.columns:
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
         return df
 
@@ -113,26 +132,34 @@ def vis_side(scout_df, spillere_df, stats_df):
     spillere_df = clean(spillere_df)
     stats_df = clean(stats_df)
 
-    # Merge og Position
+    # Merge scouting rapporter med metadata fra players.csv
     df = scout_df.copy()
-    if 'PLAYER_WYID' in spillere_df.columns:
-        df = df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
+    if spillere_df is not None and not spillere_df.empty:
+        df = df.merge(
+            spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), 
+            on='PLAYER_WYID', 
+            how='left'
+        )
     
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     
     st.subheader("Scouting Database")
     
-    # Find den nyeste rapport pr. spiller til oversigten
+    # Oversigtstabellen: Vis kun den nyeste rapport pr. spiller
     f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
     
     search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
     if search:
-        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | 
+                    f_df['KLUB'].str.contains(search, case=False, na=False)]
     
     disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
+    disp.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'VURDERING', 'DATO', 'SCOUT']
+    
     event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     if len(event.selection.rows) > 0:
         p_row = f_df.iloc[event.selection.rows[0]]
+        # Vi sender stats_df med ind i profil-dialogen
         vis_profil(p_row, df, stats_df, pd.DataFrame())
