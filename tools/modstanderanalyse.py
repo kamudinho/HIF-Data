@@ -34,11 +34,15 @@ def vis_side():
         # Vælg visualiseringstype
         vis_type = st.radio("Vælg visning:", ["Heatmap (Tendenser)", "Scatter (Enkelte aktioner)"], horizontal=True)
 
-        pitch = Pitch(pitch_type='wyscout', pitch_color='#22312b', line_color='#c7d5cc')
+        # Ændret til hvid baggrund og grå/sorte linjer
+        pitch = Pitch(pitch_type='wyscout', pitch_color='white', line_color='#555555')
         fig, ax = pitch.draw(figsize=(10, 7))
+        
+        # Sørg for at selve figurens baggrund også er hvid
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
 
         if vis_type == "Heatmap (Tendenser)":
-            # Lav heatmap over offensive pasninger (LOCATIONX > 60)
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
             if not passes.empty:
                 kde = sns.kdeplot(
@@ -46,22 +50,25 @@ def vis_side():
                     y=passes['LOCATIONY'],
                     fill=True,
                     shade_lowest=False,
-                    alpha=.5,
+                    alpha=.6,
                     n_levels=10,
-                    cmap='magma',
+                    cmap='Reds', # 'Reds' ser godt ud på en hvid baggrund
                     ax=ax
                 )
-            st.info("Heatmap viser, hvor modstanderen oftest har bolden på jeres banehalvdel.")
+            st.info("Heatmap viser intensiteten af aktioner. Jo rødere, jo flere aktioner.")
 
         else:
             # Scatter plot af skud og pasninger
-            # Pasninger
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
-            pitch.scatter(passes['LOCATIONX'], passes['LOCATIONY'], ax=ax, color='cyan', alpha=0.3, s=20, label='Pasning')
-            # Skud
+            pitch.scatter(passes['LOCATIONX'], passes['LOCATIONY'], ax=ax, 
+                          color='blue', alpha=0.3, s=20, label='Offensiv pasning')
+            
             shots = kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']
-            pitch.scatter(shots['LOCATIONX'], shots['LOCATIONY'], ax=ax, color='red', s=100, edgecolors='white', label='Skud')
-            ax.legend(facecolor='#22312b', edgecolor='None', labelcolor='white', loc='upper left')
+            pitch.scatter(shots['LOCATIONX'], shots['LOCATIONY'], ax=ax, 
+                          color='red', s=120, edgecolors='black', marker='o', label='Skud')
+            
+            # Tilpas legend til hvid baggrund
+            ax.legend(facecolor='white', edgecolor='black', loc='upper left')
 
         st.pyplot(fig)
 
