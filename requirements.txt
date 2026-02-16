@@ -3,6 +3,8 @@ pandas
 openpyxl
 bcrypt
 sqlalchemy
+snowflake-sqlalchemy
+snowflake-connector-python
 streamlit-option-menu
 matplotlib
 seaborn
@@ -16,7 +18,4 @@ streamlit-antd-components
 pyarrow
 fastparquet
 requests
-snowflake-connector-python
-snowflake-sqlalchemy
-streamlit-snowflake
 cryptography
