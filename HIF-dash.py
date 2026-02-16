@@ -70,52 +70,56 @@ with st.sidebar:
     elif hoved_omraade == "ADMIN":
         selected = "Brugerstyring"
 
-# --- 5. ROUTING (GENOPRETTELSE AF ALLE SIDER) ---
-if selected == "Oversigt":
-    import tools.players as players
-    players.vis_side(dp["players"])
+# --- ROUTING LOGIK ---
 
-elif selected == "Forecast":
-    import tools.squad as squad
-    squad.vis_side(dp["players"])
+# --- GRUPPE: TRUPPEN ---
+if sel == "Oversigt":
+    import tools.players as pl
+    pl.vis_side(dp["players"])
 
-elif selected == "Spillerstats":
-    import tools.stats as stats
-    stats.vis_side(dp["players"], dp["season_stats"])
+elif sel == "Forecast":
+    import tools.squad as sq
+    sq.vis_side(dp["players"])
 
-elif selected == "Top 5":
-    import tools.top5 as top5
-    top5.vis_side(dp["players"], dp["season_stats"])
+elif sel == "Spillerstats":
+    import tools.stats as st_tool
+    st_tool.vis_side(dp["players"], dp["season_stats"])
 
-elif selected == "Zoneinddeling":
+elif sel == "Top 5":
+    import tools.top5 as t5
+    t5.vis_side(dp["players"], dp["season_stats"])
+
+# --- GRUPPE: ANALYSE ---
+elif sel == "Zoneinddeling":
     import tools.player_goalzone as pgz
-    # Her sender vi de nødvendige data fra pakken
-    pgz.vis_side(dp.get("matches", pd.DataFrame()), dp["players"], dp["hold_map"])
+    pgz.vis_side(dp["matches"], dp["players"], dp["hold_map"])
 
-elif selected == "Afslutninger":
+elif sel == "Afslutninger":
     import tools.player_shots as ps
     ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
 
-elif selected == "Heatmaps":
+elif sel == "Heatmaps":
     import tools.heatmaps as hm
-    hm.vis_side(dp["pass_events"], dp["hold_map"])
+    hm.vis_side(dp["shotevents"], dp["hold_map"])
 
-elif selected == "Modstanderanalyse":
+elif sel == "Modstanderanalyse":
     import tools.modstanderanalyse as ma
     ma.vis_side(dp["shotevents"], dp["hold_map"])
 
-elif selected == "Database":
+# --- GRUPPE: SCOUTING ---
+elif sel == "Database":
     import tools.scout_db as sdb
     sdb.vis_side(dp["scouting"])
 
-elif selected == "Sammenligning":
-    import tools.comparison as comp
-    comp.vis_side(dp["players"], dp["season_stats"], dp["scouting"])
-
-elif selected == "Scoutrapport":
+elif sel == "Scoutrapport":
     import tools.scout_input as si
     si.vis_side(dp["players"])
 
-elif selected == "Brugerstyring":
-    import tools.admin as admin
-    admin.vis_side()
+elif sel == "Sammenligning":
+    import tools.comparison as comp
+    comp.vis_side(dp["players"], dp["season_stats"], dp["scouting"])
+
+# --- GRUPPE: ADMIN ---
+elif sel == "Brugerstyring":
+    import tools.admin as adm
+    adm.vis_side()
