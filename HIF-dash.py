@@ -110,7 +110,8 @@ elif sel == "Heatmaps":
 
 elif sel == "Modstanderanalyse":
     import tools.modstanderanalyse as ma
-    ma.vis_side(dp["shotevents"], dp["hold_map"])
+    # Vi sender Snowflake-data (team_matches) og din CSV-liste (teams_csv)
+    ma.vis_side(dp["team_matches"], dp["teams_csv"])
 
 # --- GRUPPE: SCOUTING ---
 elif sel == "Database":
