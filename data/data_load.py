@@ -80,7 +80,7 @@ def load_all_data(season_id=191807):
             # Tjek din Snowflake tabel hvis adv.XG stadig fejler (måske hedder den XG_TOTAL)
             q_stats = """
             SELECT p.PLAYER_WYID, sn.SEASONNAME, t.TEAMNAME, p.GOAL, 
-                   adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XG_TOTAL AS XG
+                   adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XGSHOT AS XG
             FROM AXIS.WYSCOUT_PLAYERCAREER p
             JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID AND p.SEASON_WYID = adv.SEASON_WYID
             JOIN AXIS.WYSCOUT_SEASONS sn ON p.SEASON_WYID = sn.SEASON_WYID
