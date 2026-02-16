@@ -43,6 +43,13 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
+    # --- 0. INDLÆS KONFIGURATION (TILFØJET) ---
+    try:
+        from data.season_show import SEASONNAM, TEAM_WYID, COMPETITION_WYID
+    except ImportError:
+        # Fallback hvis filen ikke findes
+        SEASONNAM, TEAM_WYID, COMPETITION_WYID = "2024/2025", 38331, 3134
+
     # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     
@@ -135,7 +142,7 @@ def load_all_data():
                     p.FIRSTNAME, 
                     p.LASTNAME, 
                     t.TEAMNAME,
-                    se.SEASONNAME,  -- Her henter vi det læsbare navn
+                    se.SEASONNAME,  
                     s.MATCHES, 
                     s.MINUTESONFIELD, 
                     s.GOALS, 
@@ -145,11 +152,12 @@ def load_all_data():
                     s.PASSES,
                     s.SUCCESSFULPASSES,
                     s.DUELS,
-                    s.DUELSWON
+                    s.DUELSWON,
+                    s.TEAM_WYID
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID  -- Forbindelsen til navnet
+                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
             """
             df_playerstats = conn.query(q_playerstats)
 
@@ -160,6 +168,13 @@ def load_all_data():
     for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper() for c in df.columns]
+
+    # --- 3. FILTRERING BASERET PÅ CONFIG (TILFØJET) ---
+    if df_playerstats is not None and not df_playerstats.empty:
+        df_playerstats = df_playerstats[
+            (df_playerstats['SEASONNAME'] == SEASONNAM) & 
+            (df_playerstats['TEAM_WYID'] == TEAM_WYID)
+        ].copy()
 
     return {
         "shotevents": df_shotevents,
