@@ -40,48 +40,65 @@ def vis_side():
     if conn:
         st.success("✅ Forbundet til Snowflake")
         
-        # FIND TILGÆNGELIGE TABELLER
         try:
-            # Vi henter en liste over alle tabeller du må se
+            # 1. Hent liste over tabeller kun fra AXIS schema
             query_tables = """
             SELECT TABLE_SCHEMA, TABLE_NAME 
             FROM INFORMATION_SCHEMA.TABLES 
-            WHERE TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA', 'PUBLIC')
-            ORDER BY TABLE_SCHEMA, TABLE_NAME
+            WHERE TABLE_SCHEMA = 'AXIS'
+            ORDER BY TABLE_NAME
             """
             all_tables = pd.read_sql(query_tables, conn)
             
             if not all_tables.empty:
-                # Opret en liste med "SCHEMA.TABEL" til selectbox
+                # Lav en pæn liste til dropdown
                 all_tables['FULL_NAME'] = all_tables['TABLE_SCHEMA'] + "." + all_tables['TABLE_NAME']
-                valgt_tabel = st.selectbox("Vælg en tabel at se data fra:", all_tables['FULL_NAME'])
+                valgt_tabel = st.selectbox("Vælg en AXIS tabel:", all_tables['FULL_NAME'])
                 
-                limit = st.slider("Antal rækker:", 5, 100, 20)
+                # Definer fuld sti til brug i queries
+                db = st.secrets["connections"]["snowflake"]["database"]
+                full_path = f"{db}.{valgt_tabel}"
+
+                col1, col2 = st.columns(2)
                 
-                if st.button("Hent Data"):
-                    # Vi bruger DATABASE.SCHEMA.TABEL for at være 100% sikre
-                    db = st.secrets["connections"]["snowflake"]["database"]
-                    full_path = f"{db}.{valgt_tabel}"
-                    
-                    with st.spinner(f"Henter fra {full_path}..."):
+                with col1:
+                    limit = st.slider("Antal rækker:", 5, 500, 50)
+                    hent_data = st.button("Hent Data")
+                
+                with col2:
+                    st.write("Værktøjer")
+                    vis_kolonner = st.button("Vis kolonne-navne")
+
+                # --- HANDLING: VIS KOLONNER ---
+                if vis_kolonner:
+                    with st.spinner("Henter kolonne-info..."):
+                        # Snowflake kræver ofte store bogstaver eller præcis match i SHOW COLUMNS
+                        columns_df = pd.read_sql(f"SHOW COLUMNS IN TABLE {full_path}", conn)
+                        st.subheader(f"Kolonner i {valgt_tabel}")
+                        st.dataframe(columns_df[['column_name', 'data_type', 'comment']])
+
+                # --- HANDLING: HENT DATA ---
+                if hent_data:
+                    with st.spinner(f"Henter data fra {full_path}..."):
                         df = pd.read_sql(f"SELECT * FROM {full_path} LIMIT {limit}", conn)
-                        st.write(f"Resultat fra {valgt_tabel}:")
+                        st.subheader(f"Data-udsnit: {valgt_tabel}")
                         st.dataframe(df, use_container_width=True)
+                        
+                        # Download knap til CSV
+                        csv = df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="Download denne visning som CSV",
+                            data=csv,
+                            file_name=f"{valgt_tabel}_extract.csv",
+                            mime='text/csv',
+                        )
             else:
-                st.warning("Ingen tabeller fundet. Bed Jacob tjekke dine 'SELECT' rettigheder.")
+                st.warning("Ingen tabeller fundet i AXIS schemaet.")
                 
         except Exception as e:
-            st.error(f"Fejl ved indlæsning af tabeloversigt: {e}")
+            st.error(f"Fejl under datahåndtering: {e}")
         finally:
             conn.close()
 
-# Tilføj dette midlertidigt i din kode for at se kolonnerne
-if st.button("Vis kolonne-navne"):
-    db = st.secrets["connections"]["snowflake"]["database"]
-    columns_df = pd.read_sql(f"SHOW COLUMNS IN TABLE {db}.AXIS.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL", conn)
-    st.write(columns_df[['column_name', 'data_type']])
-
 if __name__ == "__main__":
     vis_side()
-
-
