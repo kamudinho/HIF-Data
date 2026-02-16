@@ -4,7 +4,6 @@ import pandas as pd
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
-# --- 1. FORBINDELSESFUNKTION (RSA) ---
 def get_snowflake_connection():
     try:
         p_key_pem = st.secrets["connections"]["snowflake"]["private_key"]
@@ -31,72 +30,57 @@ def get_snowflake_connection():
         st.error(f"Forbindelsesfejl: {e}")
         return None
 
-# --- 2. HOVEDSIDE ---
 def vis_side():
-    st.title("❄️ Snowflake Database Browser")
+    st.title("📂 AXIS Schema Explorer")
     
     conn = get_snowflake_connection()
     
     if conn:
-        st.success("✅ Forbundet til Snowflake")
+        st.success("✅ Forbindelse til Snowflake aktiv")
         
         try:
-            # 1. Hent liste over tabeller kun fra AXIS schema
-            query_tables = """
-            SELECT TABLE_SCHEMA, TABLE_NAME 
-            FROM INFORMATION_SCHEMA.TABLES 
-            WHERE TABLE_SCHEMA = 'AXIS'
-            ORDER BY TABLE_NAME
-            """
-            all_tables = pd.read_sql(query_tables, conn)
-            
-            if not all_tables.empty:
-                # Lav en pæn liste til dropdown
-                all_tables['FULL_NAME'] = all_tables['TABLE_SCHEMA'] + "." + all_tables['TABLE_NAME']
-                valgt_tabel = st.selectbox("Vælg en AXIS tabel:", all_tables['FULL_NAME'])
-                
-                # Definer fuld sti til brug i queries
-                db = st.secrets["connections"]["snowflake"]["database"]
-                full_path = f"{db}.{valgt_tabel}"
+            # 1. Hent alle tabelnavne i AXIS
+            query_find_all = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'AXIS'"
+            tables_df = pd.read_sql(query_find_all, conn)
+            table_list = tables_df['TABLE_NAME'].tolist()
 
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    limit = st.slider("Antal rækker:", 5, 500, 50)
-                    hent_data = st.button("Hent Data")
-                
-                with col2:
-                    st.write("Værktøjer")
-                    vis_kolonner = st.button("Vis kolonne-navne")
+            st.write(f"Fundet **{len(table_list)}** tabeller i AXIS schemaet.")
 
-                # --- HANDLING: VIS KOLONNER ---
-                if vis_kolonner:
-                    with st.spinner("Henter kolonne-info..."):
-                        # Snowflake kræver ofte store bogstaver eller præcis match i SHOW COLUMNS
-                        columns_df = pd.read_sql(f"SHOW COLUMNS IN TABLE {full_path}", conn)
-                        st.subheader(f"Kolonner i {valgt_tabel}")
-                        st.dataframe(columns_df[['column_name', 'data_type', 'comment']])
+            # 2. Mulighed for at vælge én tabel eller trække ALLE
+            mode = st.radio("Vælg handling:", ["Se én tabel", "Træk overblik over ALLE AXIS tabeller"])
 
-                # --- HANDLING: HENT DATA ---
-                if hent_data:
-                    with st.spinner(f"Henter data fra {full_path}..."):
-                        df = pd.read_sql(f"SELECT * FROM {full_path} LIMIT {limit}", conn)
-                        st.subheader(f"Data-udsnit: {valgt_tabel}")
-                        st.dataframe(df, use_container_width=True)
-                        
-                        # Download knap til CSV
-                        csv = df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="Download denne visning som CSV",
-                            data=csv,
-                            file_name=f"{valgt_tabel}_extract.csv",
-                            mime='text/csv',
-                        )
+            if mode == "Se én tabel":
+                valgt = st.selectbox("Vælg tabel:", table_list)
+                if st.button("Hent data fra valgt"):
+                    df = pd.read_sql(f"SELECT * FROM AXIS.{valgt} LIMIT 100", conn)
+                    st.dataframe(df)
+
             else:
-                st.warning("Ingen tabeller fundet i AXIS schemaet.")
-                
+                if st.button("START TOTAL UDTRÆK (Limit 10 per tabel)"):
+                    progress_bar = st.progress(0)
+                    all_data = {}
+                    
+                    for i, table in enumerate(table_list):
+                        try:
+                            # Vi henter kun 10 rækker fra hver for ikke at sprænge hukommelsen
+                            df = pd.read_sql(f"SELECT * FROM AXIS.{table} LIMIT 10", conn)
+                            all_data[table] = df
+                        except Exception as e:
+                            st.warning(f"Kunne ikke hente {table}: {e}")
+                        
+                        # Opdater progress bar
+                        progress_bar.progress((i + 1) / len(table_list))
+                    
+                    st.success("Alle tilgængelige AXIS data er hentet!")
+                    
+                    # Vis resultaterne i en expander per tabel
+                    for table, data in all_data.items():
+                        with st.expander(f"Data fra {table}"):
+                            st.write(f"Antal kolonner: {len(data.columns)}")
+                            st.dataframe(data)
+
         except Exception as e:
-            st.error(f"Fejl under datahåndtering: {e}")
+            st.error(f"Fejl: {e}")
         finally:
             conn.close()
 
