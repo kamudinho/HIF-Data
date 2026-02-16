@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 
 def vis_side(spillere, player_stats_sn):
-    st.title("📊 Spillerstatistik (Sæsondata)")
 
     # 1. Rens kolonner
     spillere.columns = [str(c).strip().upper() for c in spillere.columns]
