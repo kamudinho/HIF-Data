@@ -6,7 +6,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 def _get_snowflake_conn():
-    """Bruger RSA-metode til sikker forbindelse."""
+    """Opretter forbindelse ved hjælp af RSA-nøgle dekodning."""
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_pem = s["private_key"]
@@ -43,23 +43,21 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
+    # --- 1. GITHUB FILER ---
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     
-   # --- 1. GITHUB FILER (Dine 3 overlevende filer) ---
-url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
+            d = pd.read_csv(u, sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except:
+            return pd.DataFrame()
 
-def read_gh(file):
-    try:
-        u = f"{url_base}{file}?nocache={uuid.uuid4()}"
-        d = pd.read_csv(u, sep=None, engine='python')
-        d.columns = [str(c).strip().upper() for c in d.columns]
-        return d
-    except Exception as e:
-        return pd.DataFrame()
-
-# Hent kun de 3 nødvendige
-df_players_gh = read_gh("players.csv")
-df_scout_gh = read_gh("scouting_db.csv")
-df_teams_csv = read_gh("teams.csv")
+    df_players_gh = read_gh("players.csv")
+    df_scout_gh = read_gh("scouting_db.csv")
+    df_teams_csv = read_gh("teams.csv")
 
     # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
@@ -71,21 +69,23 @@ df_teams_csv = read_gh("teams.csv")
 
     if conn:
         try:
-            # A: HOLD NAVNE (RETTET LOGIK)
+            # A: HOLD NAVNE (Robust loop)
             q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
             df_teams_sn = conn.query(q_teams)
             
             if df_teams_sn is not None and not df_teams_sn.empty:
-                # Vi bruger .tolist() for at sikre at vi zipper de rå værdier og ikke hele kolonner
-                sn_ids = df_teams_sn['TEAM_WYID'].astype(str).tolist()
-                sn_names = df_teams_sn['TEAMNAME'].astype(str).tolist()
-                hold_map = dict(zip(sn_ids, sn_names))
+                for _, row in df_teams_sn.iterrows():
+                    tid = str(int(row['TEAM_WYID']))
+                    hold_map[tid] = str(row['TEAMNAME']).strip()
             
-            # Tilføj/opdater med navne fra GitHub CSV
+            # Tilføj fra GitHub CSV
             if not df_teams_csv.empty:
-                csv_ids = df_teams_csv['TEAM_WYID'].astype(str).tolist()
-                csv_names = df_teams_csv['TEAMNAME'].astype(str).tolist()
-                hold_map.update(dict(zip(csv_ids, csv_names)))
+                for _, row in df_teams_csv.iterrows():
+                    try:
+                        tid = str(int(row['TEAM_WYID']))
+                        hold_map[tid] = str(row['TEAMNAME']).strip()
+                    except:
+                        continue
 
             # B: SHOT EVENTS
             q_shots = """
@@ -145,12 +145,10 @@ df_teams_csv = read_gh("teams.csv")
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
-    # Standardisering
+    # Standardisering til UPPERCASE
     for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper() for c in df.columns]
-
-    st.sidebar.success(f"Snowflake Data indlæst!")
 
     return {
         "shotevents": df_shotevents,
