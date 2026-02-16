@@ -19,3 +19,6 @@ pyarrow
 fastparquet
 requests
 cryptography
+asn1crypto
+pyOpenSSL
+PyJWT
