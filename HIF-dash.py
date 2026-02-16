@@ -115,8 +115,8 @@ elif sel == "Modstanderanalyse":
 # --- GRUPPE: SCOUTING ---
 elif sel == "Database":
     import tools.scout_db as sdb
-    sdb.vis_side(dp["scouting"])
-
+    sdb.vis_side(dp["scouting"], dp["players"], dp["season_stats"])
+    
 elif sel == "Scoutrapport":
     import tools.scout_input as si
     si.vis_side(dp["players"])
