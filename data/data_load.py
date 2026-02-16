@@ -10,7 +10,7 @@ def _get_snowflake_conn():
         return None
 
 @st.cache_data(ttl=3600)
-def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
+def load_all_data(season_wyid=191807, competition_wyid=3134, team_wyid=38331):
     # --- 1. GITHUB FILER (Stamdata) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
