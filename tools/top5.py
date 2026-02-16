@@ -86,9 +86,9 @@ def vis_side(spillere_df, stats_df):
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                         <tr style="border-bottom:1px solid #f9f9f9;">
-                            <td style="padding:10px 0; color:#666;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:10px 0; font-weight:500;">{r['NAVN']}</td>
-                            <td style="padding:10px 0; text-align:center; font-weight:bold; color:#df003b;">{v}</td>
+                            <td style="padding:8px 0; color:#666;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:8px 0; font-weight:500;">{r['NAVN']}</td>
+                            <td style="padding:8px 0; text-align:center; font-weight:bold; color:#df003b;">{v}</td>
                         </tr>"""
                 html += "</table></div>"
                 st.write(html, unsafe_allow_html=True)
