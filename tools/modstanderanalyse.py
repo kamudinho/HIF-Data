@@ -5,7 +5,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 def vis_side():
-    st.title("🛡️ Taktisk Modstanderanalyse")
     st.markdown("Analyse af offensive mønstre og afslutninger.")
 
     # 1. Indlæs data
@@ -28,8 +27,6 @@ def vis_side():
             st.metric("Egne Skud", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']))
         with col3:
             st.metric("Skud imod", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot_against']))
-
-        st.divider()
 
         # 4. Valg af visning via Radio knap
         vis_type = st.radio(
