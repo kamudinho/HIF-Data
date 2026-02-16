@@ -42,20 +42,24 @@ def _get_snowflake_conn():
         return None
 
 @st.cache_data(ttl=3600)
-def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
-    # --- 1. GITHUB FILER ---
-    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main"
-    def read_gh(file):
-        try:
-            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
-            d = pd.read_csv(u, sep=None, engine='python')
-            d.columns = [str(c).strip().upper() for c in d.columns]
-            return d
-        except: return pd.DataFrame()
+def load_all_data():
+    
+   # --- 1. GITHUB FILER (Dine 3 overlevende filer) ---
+url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
 
-    df_players_gh = read_gh("/data/players.csv")
-    df_scout_gh = read_gh("/data/scouting_db.csv")
-    df_teams_csv = read_gh("/data/teams.csv")
+def read_gh(file):
+    try:
+        u = f"{url_base}{file}?nocache={uuid.uuid4()}"
+        d = pd.read_csv(u, sep=None, engine='python')
+        d.columns = [str(c).strip().upper() for c in d.columns]
+        return d
+    except Exception as e:
+        return pd.DataFrame()
+
+# Hent kun de 3 nødvendige
+df_players_gh = read_gh("players.csv")
+df_scout_gh = read_gh("scouting_db.csv")
+df_teams_csv = read_gh("teams.csv")
 
     # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
