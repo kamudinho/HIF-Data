@@ -75,11 +75,13 @@ def vis_side():
         finally:
             conn.close()
 
-if __name__ == "__main__":
-    vis_side()
-
 # Tilføj dette midlertidigt i din kode for at se kolonnerne
 if st.button("Vis kolonne-navne"):
     db = st.secrets["connections"]["snowflake"]["database"]
     columns_df = pd.read_sql(f"SHOW COLUMNS IN TABLE {db}.AXIS.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL", conn)
     st.write(columns_df[['column_name', 'data_type']])
+
+if __name__ == "__main__":
+    vis_side()
+
+
