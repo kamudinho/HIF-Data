@@ -8,15 +8,36 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere_df, stats_df):
-    # --- 1. KOMPAKT TOP BRANDING ---
+    # --- 1. CSS INJECTION (Fjerner de sidste barrierer for højrestilling) ---
+    st.markdown("""
+        <style>
+            /* Fjern padding i kolonne-beholdere så vi kan ramme kanten */
+            [data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+            }
+            /* Tving segmented control til at flugte helt til højre i sin beholder */
+            div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
+                align-items: flex-end !important;
+            }
+            /* Gør knapperne kompakte */
+            div[data-testid="stSegmentedControl"] {
+                width: fit-content !important;
+                margin-left: auto !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 2. KOMPAKT TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">TOP 5 PRÆSTATIONER</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. DATA-KLARGØRING ---
+    # 3. Data-klargøring
     s_info = spillere_df.copy()
     s_stats = stats_df.copy()
     s_info.columns = [str(c).upper().strip() for c in s_info.columns]
@@ -25,48 +46,26 @@ def vis_side(spillere_df, stats_df):
     s_info['PLAYER_WYID'] = s_info['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     s_stats['PLAYER_WYID'] = s_stats['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
+    # 4. Merge & Rens
     df = pd.merge(s_stats, s_info[['PLAYER_WYID', 'NAVN', 'ROLECODE3']], on='PLAYER_WYID', how='inner')
     if 'MINUTESONFIELD' in df.columns:
         df = df.sort_values('MINUTESONFIELD', ascending=False).drop_duplicates(subset=['PLAYER_WYID'])
 
     if df.empty:
-        st.warning(f"⚠️ Ingen match fundet for {SEASONNAME}")
+        st.warning(f"⚠️ Ingen match fundet.")
         return
 
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     df['POS_DISPLAY'] = df['ROLECODE3'].map(pos_map).fillna(df['ROLECODE3'])
 
-    # --- 3. KNAP-STYRING (Tvinger dem helt ud til siderne) ---
-    # Vi bruger en CSS-hack til at placere komponenterne i hver sin ende
-    st.markdown("""
-        <style>
-            .knap-beholder {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-                width: 100%;
-            }
-            /* Fjerner Streamlits standard margin på widgets indeni flex */
-            .stPills, .stSegmentedControl {
-                width: auto !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # Vi laver to kolonner, men med stor luft imellem
-    c1, _, c3 = st.columns([1, 0.1, 1])
-    
+    # --- 5. KNAPPER (Med det nye kolonne-gap fix) ---
+    c1, c2 = st.columns([1, 1], gap="large") # 'gap' fjerner det tætte mellemrum
     with c1:
         valgt_kat = st.pills("Kategori", ["Offensivt", "Generelt"], default="Offensivt", label_visibility="collapsed")
-    
-    with c3:
-        # Denne rykker indholdet i kolonne 3 helt til højre
-        inner_c1, inner_c2 = st.columns([0.1, 1])
-        with inner_c2:
-            visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
+    with c2:
+        # Segmented control presses nu mod højre af CSS'en i toppen
+        visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
-    # --- 4. KPI CONFIG ---
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'SHOTS': 'Skud', 'XGSHOT': 'xG',
         'TOUCHINBOX': 'Touch i feltet', 'PROGRESSIVEPASSES': 'Prog. Pasninger'
@@ -77,9 +76,9 @@ def vis_side(spillere_df, stats_df):
     else:
         kpis = ['GOALS', 'ASSISTS', 'SHOTS', 'XGSHOT', 'TOUCHINBOX', 'PROGRESSIVEPASSES']
 
-    st.markdown("<div style='margin-bottom:5px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
-    # --- 5. RENDER KOMPAKTE TABELLER (3 kolonner) ---
+    # --- 6. RENDER KOMPAKTE TABELLER ---
     cols = st.columns(3)
     for i, kpi in enumerate(kpis):
         if kpi in df.columns:
