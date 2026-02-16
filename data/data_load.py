@@ -47,9 +47,9 @@ def load_all_data(season_id=191807):
     df_players = read_gh("players.csv")
     df_teams = read_gh("teams.csv")
     df_scout = read_gh("scouting_db.csv")
-    df_matches = read_gh("matches.csv") # Tilføjet denne
+    df_matches = read_gh("matches.csv")
     
-    # Lav hold_map med det samme
+    # Lav hold_map med det samme til brug i Modstanderanalyse
     hold_map = {}
     if not df_teams.empty:
         hold_map = dict(zip(df_teams['TEAM_WYID'].astype(str), df_teams['TEAMNAME']))
@@ -62,7 +62,6 @@ def load_all_data(season_id=191807):
     if conn:
         try:
             # A: KOMBINERET EVENT QUERY (Pass + Shot + Shot Against)
-            # Vi bruger sn som alias for seasons for at undgå 'S' konflikten
             q_combined = f"""
             SELECT 
                 c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, e.TEAM_WYID, 
@@ -76,18 +75,40 @@ def load_all_data(season_id=191807):
             AND (c.PRIMARYTYPE IN ('shot', 'pass', 'shot_against'))
             """
 
-            # B: STATS (Rettet xG kolonnenavn til adv.XG_TOTAL eller lign.)
-            # Tjek din Snowflake tabel hvis adv.XG stadig fejler (måske hedder den XG_TOTAL)
+            # B: DIN NYE STATS QUERY (Uden xG for at undgå fejl)
             q_stats = """
-            SELECT p.PLAYER_WYID, sn.SEASONNAME, t.TEAMNAME, p.GOAL, 
-                   adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XGSHOT AS XG
+            SELECT DISTINCT
+                p.PLAYER_WYID,
+                s.SEASONNAME,
+                t.TEAMNAME,
+                p.APPEARANCES as MATCHES,
+                p.MINUTESPLAYED as MINUTESTAGGED,
+                p.GOAL as GOALS,
+                p.YELLOWCARD,
+                p.REDCARDS,
+                adv.PASSES,
+                adv.SUCCESSFULPASSES,
+                adv.PASSESTOFINALTHIRD,
+                adv.SUCCESSFULPASSESTOFINALTHIRD,
+                adv.FORWARDPASSES,
+                adv.SUCCESSFULFORWARDPASSES,
+                adv.TOUCHINBOX,
+                adv.ASSISTS,
+                adv.DUELS,
+                adv.DUELSWON,
+                adv.PROGRESSIVEPASSES,
+                adv.SUCCESSFULPROGRESSIVEPASSES
             FROM AXIS.WYSCOUT_PLAYERCAREER p
-            JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID AND p.SEASON_WYID = adv.SEASON_WYID
-            JOIN AXIS.WYSCOUT_SEASONS sn ON p.SEASON_WYID = sn.SEASON_WYID
+            JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv 
+                ON p.PLAYER_WYID = adv.PLAYER_WYID 
+                AND p.SEASON_WYID = adv.SEASON_WYID
+            JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
             JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
             WHERE p.MINUTESPLAYED > 0
+            ORDER BY s.SEASONNAME DESC
             """
-
+            
+            # Eksekver queries
             df_combined = pd.read_sql(q_combined, conn)
             df_season_stats = pd.read_sql(q_stats, conn)
             
@@ -96,7 +117,7 @@ def load_all_data(season_id=191807):
         finally:
             conn.close()
 
-    # Standardiser kolonnenavne
+    # Standardiser kolonnenavne (Tving alt til UPPERCASE)
     for df in [df_combined, df_season_stats]:
         if not df.empty:
             df.columns = [c.upper() for c in df.columns]
