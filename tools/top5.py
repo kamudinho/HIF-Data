@@ -8,9 +8,9 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere_df, stats_df):
-    # --- 1. KOMPAKT TOP BRANDING ---
+    # --- 1. KOMPAKT TOP BRANDING (Med ekstra luft i bunden) ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:8px; border-radius:4px; margin-bottom:10px;">
+        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">TOP 5 PRÆSTATIONER</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
@@ -37,12 +37,16 @@ def vis_side(spillere_df, stats_df):
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     df['POS_DISPLAY'] = df['ROLECODE3'].map(pos_map).fillna(df['ROLECODE3'])
 
-    # --- 4. KNAPPER (Label_visibility="collapsed") ---
-    c1, c2, c3 = st.columns(3)
+    # --- 4. KNAPPER (Kategori til venstre, Visning helt til højre) ---
+    c1, c2, c3 = st.columns([1.5, 1, 1.5])
     with c1:
         valgt_kat = st.pills("Kategori", ["Offensivt", "Generelt"], default="Offensivt", label_visibility="collapsed")
+    
     with c3:
+        # Vi bruger en div-wrapper her for at sikre, at Streamlit-komponenten presses mod højre
+        st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'SHOTS': 'Skud', 'XGSHOT': 'xG',
@@ -54,7 +58,7 @@ def vis_side(spillere_df, stats_df):
     else:
         kpis = ['GOALS', 'ASSISTS', 'SHOTS', 'XGSHOT', 'TOUCHINBOX', 'PROGRESSIVEPASSES']
     
-    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
     # --- 5. RENDER KOMPAKTE TABELLER ---
     cols = st.columns(3)
@@ -88,7 +92,7 @@ def vis_side(spillere_df, stats_df):
                     html += f"""
                         <tr style="border-bottom:1px solid #f9f9f9;">
                             <td style="padding:4px 10px; color:#666; font-size:12px;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:4px 10px; font-weight:500; color:#222;">{r['NAVN']}</td>
+                            <td style="padding:4px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">{r['NAVN']}</td>
                             <td style="padding:4px 10px; text-align:right; font-weight:700; color:#df003b;">{v}</td>
                         </tr>"""
                 
