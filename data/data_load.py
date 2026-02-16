@@ -43,12 +43,13 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # --- 0. INDLÆS KONFIGURATION (TILFØJET) ---
-    try:
-        from data.season_show import SEASONNAME, TEAM_WYID, COMPETITION_WYID
-    except ImportError:
-        # Fallback hvis filen ikke findes
-        SEASONNAME, TEAM_WYID, COMPETITION_WYID = "2025/2026", 38331, 3134
+    # --- 0. INDLÆS KONFIGURATION ---
+try:
+    # Vi bruger nu det korrekte navn: SEASONNAME
+    from data.season_show import SEASONNAME, TEAM_WYID
+except ImportError:
+    st.error("❌ Kunne ikke finde data/season_show.py eller variablen SEASONNAME.")
+    st.stop()
 
     # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
