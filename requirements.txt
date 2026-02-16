@@ -15,5 +15,8 @@ google-auth
 streamlit-antd-components
 pyarrow
 fastparquet
-snowflake-connector-python
 requests
+snowflake-connector-python
+snowflake-sqlalchemy
+streamlit-snowflake
+cryptography
