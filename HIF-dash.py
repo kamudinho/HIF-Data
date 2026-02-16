@@ -42,11 +42,12 @@ if not st.session_state["logged_in"]:
 # --- 3. DATA LOADING ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
+        # Vi kalder load_all_data - husk at SQL fejlen med 'ADV.XG' skal rettes i data_load.py!
         st.session_state["data_package"] = load_all_data()
 
 dp = st.session_state["data_package"]
 
-# --- 4. SIDEBAR NAVIGATION (INGEN IKONER) ---
+# --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {st.session_state['user'].upper()}</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
@@ -60,17 +61,21 @@ with st.sidebar:
         styles={"container": {"background-color": "#fafafa"}, "nav-link-selected": {"background-color": "#003366"}}
     )    
     
-    selected = "" 
+    # Vi bruger 'sel' som gennemgående variabelnavn
+    sel = "" 
     if hoved_omraade == "TRUPPEN":
-        selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
-        selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
-        selected = "Brugerstyring"
+        sel = "Brugerstyring"
 
-# --- ROUTING LOGIK ---
+# --- 5. ROUTING LOGIK ---
+# Vi sikrer os at 'sel' ikke er tom
+if not sel:
+    sel = "Oversigt"
 
 # --- GRUPPE: TRUPPEN ---
 if sel == "Oversigt":
@@ -92,7 +97,8 @@ elif sel == "Top 5":
 # --- GRUPPE: ANALYSE ---
 elif sel == "Zoneinddeling":
     import tools.player_goalzone as pgz
-    pgz.vis_side(dp["matches"], dp["players"], dp["hold_map"])
+    # Vi bruger .get() for at undgå KeyError hvis matches mangler i data_load
+    pgz.vis_side(dp.get("matches", pd.DataFrame()), dp["players"], dp["hold_map"])
 
 elif sel == "Afslutninger":
     import tools.player_shots as ps
