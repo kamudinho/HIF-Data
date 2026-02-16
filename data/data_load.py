@@ -71,12 +71,12 @@ def load_all_data(season_ids=[191807]): # Tilføjet standard-værdi så den ikke
             SELECT 
                 c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, 
                 c.PRIMARYTYPE, s.SHOTBODYPART, s.SHOTISGOAL, s.SHOTXG, 
-                m.MATCHLABEL, e.TEAM_WYID, m.SEASON_WYID, s.SEASONNAME
+                m.MATCHLABEL, e.TEAM_WYID, m.SEASON_WYID, sn.SEASONNAME
             FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
             JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
             JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
             JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            JOIN AXIS.WYSCOUT_SEASONS sn ON m.SEASON_WYID = sn.SEASON_WYID
             {season_filter}
             """
             
