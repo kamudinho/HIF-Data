@@ -10,9 +10,9 @@ except ImportError:
 def vis_side(spillere_df, stats_df):
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:12px; border-radius:8px; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="background-color:#df003b; padding:12px; border-radius:4px; margin-bottom:15px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">TOP 5 PRÆSTATIONER</h3>
-            <p style="color:white; margin:0; text-align:center; font-size:11px; opacity:0.9;">Hvidovre IF | {SEASONNAME}</p>
+            <p style="color:white; margin:0; text-align:center; font-size:11px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -37,13 +37,15 @@ def vis_side(spillere_df, stats_df):
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     df['POS_DISPLAY'] = df['ROLECODE3'].map(pos_map).fillna(df['ROLECODE3'])
 
-    # --- 4. KNAPPER UDEN TEKST (Collapsed labels) ---
-    c1, c2 = st.columns([2, 1])
+    # --- 4. KNAPPER (Justeret til 50/50 for at matche boksene) ---
+    c1, c2 = st.columns(2)
     with c1:
-        # label_visibility="collapsed" fjerner teksten over knappen
         valgt_kat = st.pills("Kategori", ["Offensivt", "Generelt"], default="Offensivt", label_visibility="collapsed")
     with c2:
-        visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
+        # Vi placerer den i en under-kolonne for at få den helt ud til højre kant
+        sub_c1, sub_c2 = st.columns([1, 1])
+        with sub_c2:
+            visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
     # KPI Opsætning
     KPI_MAP = {
@@ -52,9 +54,9 @@ def vis_side(spillere_df, stats_df):
     }
     kpis = ['TOUCHINBOX', 'PROGRESSIVEPASSES', 'ASSISTS', 'XGSHOT'] if valgt_kat == "Offensivt" else ['GOALS', 'ASSISTS', 'SHOTS', 'XGSHOT']
     
-    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
-    # --- 5. RENDER TABELLER ---
+    # --- 5. RENDER TABELLER (Forbedret justering) ---
     cols = st.columns(2)
     for i, kpi in enumerate(kpis):
         if kpi in df.columns:
@@ -70,22 +72,24 @@ def vis_side(spillere_df, stats_df):
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=False).head(5)
 
                 html = f"""
-                <div style="background:white; border:1px solid #eee; border-radius:8px; padding:12px; margin-bottom:15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.02);">
-                    <h4 style="color:#333; margin:0 0 10px 0; border-bottom: 2px solid #df003b; padding-bottom:5px; font-family:sans-serif; font-size:13px;">{KPI_MAP.get(kpi, kpi)}</h4>
+                <div style="background:white; border:1px solid #eee; border-radius:4px; padding:0px; margin-bottom:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="padding:10px; border-bottom: 2px solid #df003b;">
+                        <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">{KPI_MAP.get(kpi, kpi)}</h4>
+                    </div>
                     <table style="width:100%; font-size:12px; border-collapse:collapse; font-family:sans-serif;">
-                        <tr style="color:#888; text-align:left; font-size:9px; text-transform:uppercase; border-bottom: 1px solid #f0f0f0;">
-                            <th style="padding:4px 0;">Pos</th>
-                            <th style="padding:4px 0;">Spiller</th>
-                            <th style="padding:4px 0; text-align:right;">{visning}</th>
+                        <tr style="color:#999; text-align:left; font-size:10px; text-transform:uppercase; background:#fafafa;">
+                            <th style="padding:8px 12px; width:45px;">Pos</th>
+                            <th style="padding:8px 12px;">Spiller</th>
+                            <th style="padding:8px 12px; text-align:right;">{visning}</th>
                         </tr>"""
                 
                 for _, r in top5.iterrows():
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
-                        <tr>
-                            <td style="padding:7px 0; color:#666; width:35px;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:7px 0; font-weight:500; color:#222;">{r['NAVN']}</td>
-                            <td style="padding:7px 0; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
+                        <tr style="border-bottom:1px solid #f2f2f2;">
+                            <td style="padding:10px 12px; color:#666;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:10px 12px; font-weight:500; color:#222;">{r['NAVN']}</td>
+                            <td style="padding:10px 12px; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
                         </tr>"""
                 
                 html += "</table></div>"
