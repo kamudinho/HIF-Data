@@ -10,7 +10,7 @@ def vis_side():
 
     # 1. Indlæs data
     try:
-        df = pd.read_csv("team_matches.csv")
+        df = pd.read_csv("data/team_matches.csv")
         
         # 2. Sidebar filtre
         st.sidebar.header("Analyse Indstillinger")
