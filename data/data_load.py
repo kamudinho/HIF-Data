@@ -130,15 +130,26 @@ def load_all_data():
 
             # E: PLAYERSTATS
             q_playerstats = """
-                SELECT DISTINCT
-                    p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.ROLECODE3, p.BIRTHDATE, t.TEAMNAME,
-                    SUM(DISTINCT s.MATCHES) AS KAMPE, SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD,
-                    SUM(DISTINCT s.GOALS) AS GOALS, SUM(DISTINCT s.ASSISTS) AS ASSISTS, 
-                    SUM(DISTINCT s.SHOTS) AS SHOTS, SUM(DISTINCT s.XGSHOT) AS XGSHOT
+                SELECT 
+                    s.PLAYER_WYID, 
+                    p.FIRSTNAME, 
+                    p.LASTNAME, 
+                    t.TEAMNAME,
+                    se.SEASONNAME,  -- Her henter vi det læsbare navn
+                    s.MATCHES, 
+                    s.MINUTESONFIELD, 
+                    s.GOALS, 
+                    s.ASSISTS, 
+                    s.SHOTS, 
+                    s.XGSHOT,
+                    s.PASSES,
+                    s.SUCCESSFULPASSES,
+                    s.DUELS,
+                    s.DUELSWON
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                GROUP BY 1, 2, 3, 4, 5, 6
+                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID  -- Forbindelsen til navnet
             """
             df_playerstats = conn.query(q_playerstats)
 
