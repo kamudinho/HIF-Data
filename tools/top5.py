@@ -2,7 +2,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+# Vi importerer konfigurationen for at gøre overskriften dynamisk
+try:
+    from data.season_show import SEASONNAM
+except ImportError:
+    SEASONNAM = "Aktuel Sæson"
+
 def vis_side(spillere_df, stats_df):
+    # Dynamisk overskrift baseret på din season_show.py
+    st.title(f"🏆 Top 5 Præstationer")
+    st.subheader(f"Hvidovre IF | Sæson: {SEASONNAM}")
+    
     # 1. Klargør kopier og rens kolonnenavne
     s_info = spillere_df.copy()
     s_stats = stats_df.copy()
@@ -37,25 +47,21 @@ def vis_side(spillere_df, stats_df):
     df = pd.merge(s_stats, s_info[[id_s, 'POS_DISPLAY', 'NAVN_FINAL']], left_on=id_t, right_on=id_s, how='inner')
 
     if df.empty:
-        st.warning("⚠️ Ingen match fundet mellem spillere og statistikker!")
-        st.write("Tjek om PLAYER_WYID i season_stats matcher PLAYER_WYID i players.csv")
-        # Viser de første 5 ID'er for at hjælpe dig med at se fejlen
-        st.write("ID eksempler (Spillere):", s_info[id_s].head().tolist())
-        st.write("ID eksempler (Stats):", s_stats[id_t].head().tolist())
+        st.warning(f"⚠️ Ingen match fundet for {SEASONNAM}!")
         return
 
-    # 5. KPI Definitioner (Sikrer de matcher season_stats kolonnenavne)
+    # 5. KPI Definitioner (Inkluderer nu dine nye Snowflake-kolonner)
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'TOTAL_GOALS': 'Målinvolveringer',
         'SHOTS': 'Skud', 'XGSHOT': 'xG', 'PASSES': 'Pasninger',
-        'KEYPASSES': 'Nøglepasninger', 'DRIBBLES': 'Driblinger', 'CROSSES': 'Indlæg',
-        'INTERCEPTIONS': 'Interceptions', 'TACKLES': 'Tacklinger', 'LOSSES': 'Boldtab', 'FOULS': 'Frispark'
+        'SUCCESSFULPASSES': 'Vellykkede Pasninger', 'TOUCHINBOX': 'Touch i feltet',
+        'PROGRESSIVEPASSES': 'Progressive Pas.', 'DUELS': 'Dueller', 'DUELSWON': 'Dueller Vundet'
     }
     
     CATEGORIES = {
         'Generelt': ['GOALS', 'ASSISTS', 'TOTAL_GOALS', 'SHOTS', 'XGSHOT', 'PASSES'],
-        'Offensivt': ['GOALS', 'ASSISTS', 'TOTAL_GOALS', 'XGSHOT', 'KEYPASSES', 'DRIBBLES'],
-        'Defensivt': ['INTERCEPTIONS', 'TACKLES', 'LOSSES', 'FOULS']
+        'Offensivt': ['GOALS', 'ASSISTS', 'XGSHOT', 'TOUCHINBOX', 'PROGRESSIVEPASSES'],
+        'Dueller': ['DUELS', 'DUELSWON']
     }
 
     if 'TOTAL_GOALS' not in df.columns:
@@ -70,6 +76,7 @@ def vis_side(spillere_df, stats_df):
 
     kpis = [k for k in CATEGORIES[valgt_kat] if k in df.columns]
     
+    # Grid display
     for i in range(0, len(kpis), 3):
         cols = st.columns(3)
         for idx, kpi in enumerate(kpis[i:i+3]):
@@ -78,7 +85,7 @@ def vis_side(spillere_df, stats_df):
                 temp_df[kpi] = pd.to_numeric(temp_df[kpi], errors='coerce').fillna(0)
                 
                 # Find minutter kolonnen
-                m_col = next((c for c in ['MINUTESTAGGED', 'MINUTESONFIELD', 'MINUTES'] if c in temp_df.columns), None)
+                m_col = next((c for c in ['MINUTESONFIELD', 'MINUTESTAGGED', 'MINUTES'] if c in temp_df.columns), None)
                 mins = pd.to_numeric(temp_df[m_col], errors='coerce').fillna(0) if m_col else pd.Series(0, index=temp_df.index)
 
                 if visning == "Pr. 90":
@@ -89,7 +96,7 @@ def vis_side(spillere_df, stats_df):
                 # Top 5
                 top5 = temp_df[temp_df['VAL'] > 0].sort_values('VAL', ascending=False).head(5)
 
-                # HTML Tabel
+                # HTML Tabel (Din skabelon)
                 html = f"""
                 <div style="background:#fff; border:1px solid #e6e9ef; border-radius:4px; padding:10px; margin-bottom:15px; min-height:260px;">
                     <h5 style="text-align:center; margin:0 0 10px 0; color:#df003b;">{KPI_MAP.get(kpi, kpi)}</h5>
@@ -97,13 +104,14 @@ def vis_side(spillere_df, stats_df):
                         <thead>
                             <tr style="background:#f8f9fb;">
                                 <th style="text-align:center; padding:4px; border-bottom:1px solid #ddd; width:15%;">Pos</th>
-                                <th style="text-align:left; padding:4px; border-bottom:1px solid #ddd; width:65%;">Spiller</th>
-                                <th style="text-align:center; padding:4px; border-bottom:1px solid #ddd; width:20%;">{visning}</th>
+                                <th style="text-align:left; padding:4px; border-bottom:1px solid #ddd; width:60%;">Spiller</th>
+                                <th style="text-align:center; padding:4px; border-bottom:1px solid #ddd; width:25%;">{visning}</th>
                             </tr>
                         </thead>
                         <tbody>"""
                 
                 for _, r in top5.iterrows():
+                    # Formatering: xG og Pr. 90 får decimaler, ellers heltal
                     val_str = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                             <tr>
@@ -112,6 +120,7 @@ def vis_side(spillere_df, stats_df):
                                 <td style="text-align:center; padding:4px; border-bottom:1px solid #eee;"><b>{val_str}</b></td>
                             </tr>"""
                 
+                # Fyld tomme rækker hvis der er færre end 5 spillere
                 for _ in range(5 - len(top5)):
                     html += "<tr><td colspan='3' style='padding:4px; border-bottom:1px solid #eee;'>&nbsp;</td></tr>"
                 
