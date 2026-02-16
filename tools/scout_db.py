@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import requests
 
-# --- 1. HJÆLPEFUNKTIONER ---
+# --- 1. HJÆLPEFUNKTIONER (Uændret) ---
 def rens_metrik_vaerdi(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
@@ -39,7 +39,7 @@ def vis_spiller_billede(pid, w=110):
     except:
         st.image(std, width=w)
 
-# --- 2. LAYOUT FUNKTIONER ---
+# --- 2. LAYOUT FUNKTIONER (Uændret) ---
 def vis_metrikker(row):
     m_cols = st.columns(4)
     metrics = [
@@ -113,9 +113,13 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with tab4:
         st.markdown("### 📊 Statistisk Historik")
-        curr = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-        df_stats = pd.concat([curr, old], ignore_index=True)
+        # Filtrer Snowflake stats for spilleren
+        df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+        
+        # Hvis der findes historiske stats (fs_df), læg dem sammen
+        if not fs_df.empty:
+            old = fs_df[fs_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+            df_stats = pd.concat([df_stats, old], ignore_index=True)
 
         if not df_stats.empty:
             display_stats = pd.DataFrame()
@@ -124,9 +128,12 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             display_stats['Kampe'] = df_stats['MATCHES'].fillna(0).astype(int)
             display_stats['Minutter'] = df_stats['MINUTESTAGGED'].fillna(0).astype(int)
             display_stats['Mål'] = df_stats['GOALS'].fillna(0).astype(int)
-            display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
             
-            # Her er rettelsen til kort-fejlen
+            # --- NY: xG DATA ---
+            if 'XG' in df_stats.columns:
+                display_stats['xG'] = df_stats['XG'].fillna(0).round(2)
+            
+            display_stats['Assists'] = df_stats['ASSISTS'].fillna(0).astype(int)
             display_stats['Gule'] = df_stats['YELLOWCARD'].fillna(0).astype(int)
             display_stats['Røde'] = df_stats['REDCARDS'].fillna(0).astype(int)
 
@@ -146,66 +153,29 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.info("Ingen statistisk data fundet.")
 
     with tab5:
-        # 1. Præcis rækkefølge: Teknik kl. 12, derefter clockwise
-        categories = [
-            'Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 
-            'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude'
-        ]
-        cols = [
-            'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 
-            'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE'
-        ]
+        categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
+        cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         
-        # Hent og luk cirklen
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
         v_closed = v + [v[0]]
         cat_closed = categories + [categories[0]]
 
-        # 2. Layout
         col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
-
         with col_left:
             st.markdown("### Detaljer")
             st.caption(f"**Dato:** {nyeste.get('DATO', '-')}")
             st.caption(f"**Scout:** {nyeste.get('SCOUT', '-')}")
             st.divider()
-            
-            # Liste med værdier - nu med rød tekst for bedre læsbarhed
             for cat, val in zip(categories, v):
-                # Vi bruger HTML/CSS til at tvinge farven til HIF-rød (#df003b)
                 st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold; font-size:1.1em;'>{val}</span>", unsafe_allow_html=True)
 
         with col_mid:
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(
-                r=v_closed,
-                theta=cat_closed,
-                fill='toself',
-                line=dict(color='#df003b', width=2),
-                fillcolor='rgba(223, 0, 59, 0.3)',
-                marker=dict(size=8, color='#df003b')
-            ))
-
+            fig_radar.add_trace(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)', marker=dict(size=8, color='#df003b')))
             fig_radar.update_layout(
-                polar=dict(
-                    angularaxis=dict(
-                        tickfont=dict(size=10, color="black"),
-                        rotation=90,      # Teknik øverst
-                        direction="clockwise",
-                        gridcolor="lightgrey"
-                    ),
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 6],
-                        tickvals=[1, 2, 3, 4, 5, 6],
-                        gridcolor="lightgrey",
-                        tickfont=dict(color="grey")
-                    ),
-                    gridshape='linear'    # 8-kant
-                ),
-                showlegend=False,
-                height=450,
-                margin=dict(l=60, r=60, t=30, b=30)
+                polar=dict(angularaxis=dict(tickfont=dict(size=10, color="black"), rotation=90, direction="clockwise", gridcolor="lightgrey"),
+                radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6], gridcolor="lightgrey", tickfont=dict(color="grey")), gridshape='linear'),
+                showlegend=False, height=450, margin=dict(l=60, r=60, t=30, b=30)
             )
             st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
 
@@ -216,16 +186,13 @@ def vis_profil(p_data, full_df, s_df, fs_df):
             st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side():
-    if "main_data" not in st.session_state:
-        st.error("Data ikke fundet.")
-        return
-    
-    _, _, _, spillere_df, stats_df, scout_df, former_stats = st.session_state["main_data"]
-
+def vis_side(scout_df, spillere_df, stats_df):
+    # Sørg for at PLAYER_WYID er renset og streng-type
     scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     spillere_df['PLAYER_WYID'] = spillere_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+    stats_df['PLAYER_WYID'] = stats_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     
+    # Merge med spillere for at få positioner
     df = scout_df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
@@ -234,6 +201,7 @@ def vis_side():
     st.subheader("Scouting Database")
     search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
     
+    # Vis kun nyeste rapport i tabellen
     f_df = df.groupby('PLAYER_WYID').tail(1).copy()
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
@@ -245,4 +213,5 @@ def vis_side():
 
     if len(event.selection.rows) > 0:
         p_row = f_df.iloc[event.selection.rows[0]]
-        vis_profil(p_row, df, stats_df, former_stats)
+        # Vi sender en tom DataFrame som fs_df (historiske stats), da alt nu ligger i Snowflake stats_df
+        vis_profil(p_row, df, stats_df, pd.DataFrame())
