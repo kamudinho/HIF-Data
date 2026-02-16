@@ -80,7 +80,6 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_PASSES ps ON tm.MATCH_WYID = ps.MATCH_WYID AND tm.TEAM_WYID = ps.TEAM_WYID
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_DUELS du ON tm.MATCH_WYID = du.MATCH_WYID AND tm.TEAM_WYID = du.TEAM_WYID
-                WHERE tm.SEASON_WYID = {season_id}
             """
             df_team_matches = conn.query(q_teammatches)
 
@@ -108,7 +107,6 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID AND s.COMPETITION_WYID = p.COMPETITION_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                WHERE s.COMPETITION_WYID = {competition_id} AND p.CURRENTTEAM_WYID = {team_id}
                 GROUP BY 1, 2, 3, 4, 5, 6
             """
             df_playerstats = conn.query(q_playerstats)
