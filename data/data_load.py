@@ -2,18 +2,16 @@ import streamlit as st
 import pandas as pd
 import uuid
 
-# --- 1. FORBINDELSES-FUNKTION (Dette fjerner din NameError) ---
 def _get_snowflake_conn():
     try:
-        # Bruger Streamlits indbyggede connection-manager
         return st.connection("snowflake")
     except Exception as e:
         st.error(f"Snowflake Connection Error: {e}")
         return None
 
 @st.cache_data(ttl=3600)
-def load_all_data(season_id=191807):
-    # --- 2. GITHUB FILER ---
+def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
+    # --- 1. GITHUB FILER (Stamdata) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
@@ -23,63 +21,113 @@ def load_all_data(season_id=191807):
             return d
         except: return pd.DataFrame()
 
-    df_players = read_gh("players.csv")
-    df_scout = read_gh("scouting_db.csv")
+    df_players_gh = read_gh("players.csv")
+    df_scout_gh = read_gh("scouting_db.csv")
     df_teams_csv = read_gh("teams.csv")
 
-    # --- 3. SNOWFLAKE DATA ---
+    # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
-    df_events = pd.DataFrame()
+    df_shotevents = pd.DataFrame()
     df_season_stats = pd.DataFrame()
+    df_team_matches = pd.DataFrame()
+    df_playerstats = pd.DataFrame()
     hold_map = {}
 
     if conn:
         try:
-            # A: Hold-navne (Vigtigt for dine Heatmaps og Modstanderanalyse)
+            # A: HOLD NAVNE
             q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
             df_teams_sn = conn.query(q_teams)
             hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
-            
-            # Merge med lokale team-navne fra GitHub
             if not df_teams_csv.empty:
-                csv_map = dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME']))
-                hold_map.update(csv_map)
+                hold_map.update(dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME'])))
 
-            # B: Event Query (Til din Modstanderanalyse og Heatmaps)
-            q_combined = f"""
-                SELECT c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, e.TEAM_WYID, 
-                       m.MATCHLABEL, s.SHOTXG, sn.SEASONNAME
+            # B: SHOT EVENTS (Heatmaps/Analyse)
+            q_shots = f"""
+                SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
+                       c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
+                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
                 FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                LEFT JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
+                JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                JOIN AXIS.WYSCOUT_SEASONS sn ON m.SEASON_WYID = sn.SEASON_WYID
                 WHERE m.SEASON_WYID = {season_id}
             """
-            df_events = conn.query(q_combined)
+            df_shotevents = conn.query(q_shots)
 
-            # C: Stats Query (Til Scouting Profiler og Spillerstats)
+            # C: SEASON STATS (Scouting)
             q_stats = """
-                SELECT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
-                       p.APPEARANCES as MATCHES, adv.ASSISTS
+                SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
+                                p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
+                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS,
+                                adv.PASSES, adv.SUCCESSFULPASSES, adv.TOUCHINBOX, adv.PROGRESSIVEPASSES
                 FROM AXIS.WYSCOUT_PLAYERCAREER p
-                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID
+                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
+                     AND p.SEASON_WYID = adv.SEASON_WYID
                 JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
                 WHERE p.MINUTESPLAYED > 0
             """
             df_season_stats = conn.query(q_stats)
 
+            # D: TEAM MATCHES (Hold Analyse)
+            q_teammatches = f"""
+                SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
+                       g.SHOTS, g.GOALS, g.XG, d.PPDA, p.POSSESSIONPERCENT, ps.PASSES, du.CHALLENGEINTENSITY
+                FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE d ON tm.MATCH_WYID = d.MATCH_WYID AND tm.TEAM_WYID = d.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_PASSES ps ON tm.MATCH_WYID = ps.MATCH_WYID AND tm.TEAM_WYID = ps.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_DUELS du ON tm.MATCH_WYID = du.MATCH_WYID AND tm.TEAM_WYID = du.TEAM_WYID
+                WHERE tm.SEASON_WYID = {season_id}
+            """
+            df_team_matches = conn.query(q_teammatches)
+
+            # E: PLAYERSTATS (Trup Performance - Din store query)
+            q_playerstats = f"""
+                SELECT DISTINCT
+                    p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.ROLECODE3, p.BIRTHDATE, t.TEAMNAME,
+                    SUM(DISTINCT s.MATCHES) AS KAMPE, SUM(DISTINCT s.MATCHESINSTART) AS MATCHESINSTART,
+                    SUM(DISTINCT s.MATCHESSUBSTITUTED) AS MATCHESSUBSTITUTED, SUM(DISTINCT s.MATCHESCOMINGOFF) AS MATCHESCOMINGOFF,
+                    SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD, SUM(DISTINCT s.MINUTESTAGGED) AS MINUTESTAGGED,
+                    SUM(DISTINCT s.GOALS) AS GOALS, SUM(DISTINCT s.ASSISTS) AS ASSISTS, SUM(DISTINCT s.SHOTS) AS SHOTS,
+                    SUM(DISTINCT s.HEADSHOTS) AS HEADSHOTS, SUM(DISTINCT s.YELLOWCARDS) AS YELLOWCARDS,
+                    SUM(DISTINCT s.REDCARDS) AS REDCARDS, SUM(DISTINCT s.PENALTIES) AS PENALTIES,
+                    SUM(DISTINCT s.DUELS) AS DUELS, SUM(DISTINCT s.DUELSWON) AS DUELSWON,
+                    SUM(DISTINCT s.DEFENSIVEDUELS) AS DEFENSIVEDUELS, SUM(DISTINCT s.DEFENSIVEDUELSWON) AS DEFENSIVEDUELSWON,
+                    SUM(DISTINCT s.OFFENSIVEDUELS) AS OFFENSIVEDUELS, SUM(DISTINCT s.OFFENSIVEDUELSWON) AS OFFENSIVEDUELSWON,
+                    SUM(DISTINCT s.AERIALDUELS) AS AERIALDUELS, SUM(DISTINCT s.AERIALDUELSWON) AS AERIALDUELSWON,
+                    SUM(DISTINCT s.PASSES) AS PASSES, SUM(DISTINCT s.SUCCESSFULPASSES) AS SUCCESSFULPASSES,
+                    SUM(DISTINCT s.PASSESTOFINALTHIRD) AS PASSESTOFINALTHIRD, SUM(DISTINCT s.SUCCESSFULPASSESTOFINALTHIRD) AS SUCCESSFULPASSESTOFINALTHIRD,
+                    SUM(DISTINCT s.FORWARDPASSES) AS FORWARDPASSES, SUM(DISTINCT s.SUCCESSFULFORWARDPASSES) AS SUCCESSFULFORWARDPASSES,
+                    SUM(DISTINCT s.THROUGHPASSES) AS THROUGHPASSES, SUM(DISTINCT s.SUCCESSFULTHROUGHPASSES) AS SUCCESSFULTHROUGHPASSES,
+                    SUM(DISTINCT s.DRIBBLES) AS DRIBBLES, SUM(DISTINCT s.SUCCESSFULDRIBBLES) AS SUCCESSFULDRIBBLES,
+                    SUM(DISTINCT s.INTERCEPTIONS) AS INTERCEPTIONS, SUM(DISTINCT s.PROGRESSIVEPASSES) AS PROGRESSIVEPASSES,
+                    SUM(DISTINCT s.XGSHOT) AS XGSHOT, SUM(DISTINCT s.XGASSIST) AS XGASSIST, SUM(DISTINCT s.TOUCHINBOX) AS TOUCHINBOX
+                FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID AND s.COMPETITION_WYID = p.COMPETITION_WYID
+                JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                WHERE s.COMPETITION_WYID = {competition_id} AND p.CURRENTTEAM_WYID = {team_id}
+                GROUP BY 1, 2, 3, 4, 5, 6
+            """
+            df_playerstats = conn.query(q_playerstats)
+
         except Exception as e:
             st.error(f"SQL fejl i load_all_data: {e}")
 
-    # --- 4. RETURNERING ---
-    # Vi returnerer præcis de nøgler, din HIF-dash.py leder efter
+    # Standardisering til UPPERCASE
+    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
+        if not df.empty:
+            df.columns = [c.upper() for c in df.columns]
+
     return {
-        "shotevents": df_events, 
-        "hold_map": hold_map,
-        "players": df_players,
+        "shotevents": df_shotevents,
         "season_stats": df_season_stats,
-        "scouting": df_scout,
-        "matches": pd.DataFrame() # Tom placeholder til Zoneinddeling
+        "team_matches": df_team_matches,
+        "playerstats": df_playerstats,
+        "hold_map": hold_map,
+        "players": df_players_gh,
+        "scouting": df_scout_gh
     }
