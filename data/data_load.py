@@ -153,7 +153,7 @@ def load_all_data():
                     s.SUCCESSFULPASSES,
                     s.DUELS,
                     s.DUELSWON,
-                    s.TEAM_WYID
+                    p.CURRENTTEAM_WYID AS TEAM_WYID  -- Vi tager ID fra player-tabellen i stedet
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
