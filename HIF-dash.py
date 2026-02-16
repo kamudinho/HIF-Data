@@ -88,7 +88,7 @@ elif sel == "Forecast":
 
 elif sel == "Spillerstats":
     import tools.stats as st_tool
-    st_tool.vis_side(dp["players"], dp["season_stats"])
+    st_tool.vis_side(dp["players"], dp["playerstats"])
 
 elif sel == "Top 5":
     import tools.top5 as t5
