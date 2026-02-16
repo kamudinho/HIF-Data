@@ -92,7 +92,7 @@ elif sel == "Spillerstats":
 
 elif sel == "Top 5":
     import tools.top5 as t5
-    t5.vis_side(data["players"], data["playerstats"])
+    t5.vis_side(dp["players"], dp["playerstats"])
     
 # --- GRUPPE: ANALYSE ---
 elif sel == "Zoneinddeling":
