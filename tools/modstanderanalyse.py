@@ -15,11 +15,11 @@ def vis_side(df_team_matches, hold_map):
     if 'TEAM_WYID' in df_team_matches.columns:
         tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
         
-        # Lav en liste af navne baseret på hold_map
-        # Vi gemmer koblingen i en ordbog: { "Navn": ID }
         navne_dict = {}
         for tid in tilgaengelige_ids:
-            navn = hold_map.get(str(tid), f"Ukendt ({tid})")
+            # Vi tvinger både ID fra Snowflake og opslag i hold_map til at være string
+            str_tid = str(int(tid)) if pd.notnull(tid) else "0"
+            navn = hold_map.get(str_tid, f"Ukendt ({str_tid})")
             navne_dict[navn] = tid
         
         valgt_navn = st.selectbox(
@@ -27,7 +27,6 @@ def vis_side(df_team_matches, hold_map):
             options=sorted(navne_dict.keys())
         )
         
-        # Find det ID der hører til det valgte navn
         valgt_id = navne_dict[valgt_navn]
 
         # 3. Filtrer data
