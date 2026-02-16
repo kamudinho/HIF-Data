@@ -5,18 +5,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 import uuid
 
-# --- HJÆLPEFUNKTION TIL GITHUB (Flyttet herind) ---
-def read_github_csv(file_name, repo="Kamudinho/HIF-data"):
-    url = f"https://raw.githubusercontent.com/{repo}/main/data/{file_name}?nocache={uuid.uuid4()}"
-    df = pd.read_csv(url, sep=None, engine='python')
-    # Rens kolonnenavne (samme logik som du havde i hovedfilen)
-    df.columns = [str(c).strip().upper() for c in df.columns]
-    # Konverter ID-kolonner til string med det samme for at undgå merge-fejl
-    for col in ['PLAYER_WYID', 'TEAM_WYID', 'WYID', 'ID']:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.split('.').str[0].str.strip()
-    return df
-
 # --- INTERN SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
@@ -36,22 +24,29 @@ def _get_snowflake_conn():
     except:
         return None
 
-# --- DEN CENTRALE FUNKTION DER HENTER ALT ---
+# --- CENTRAL LOAD FUNKTION ---
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # 1. Hent CSV-filer fra GitHub
-    df_players = read_github_csv("players.csv")
-    df_teams = read_github_csv("teams.csv")
-    df_scout = read_github_csv("scouting_db.csv")
-    
-    # Lav hold_map med det samme (TEAM_WYID -> TEAMNAME)
-    hold_map = dict(zip(df_teams['TEAM_WYID'], df_teams['TEAMNAME']))
+    # 1. Hent CSV-filer fra GitHub (Oversættelses-filer)
+    url_base = f"https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        u = f"{url_base}{file}?nocache={uuid.uuid4()}"
+        d = pd.read_csv(u, sep=None, engine='python')
+        d.columns = [str(c).strip().upper() for c in d.columns]
+        return d
 
-    # 2. Hent Live-data fra Snowflake
+    df_players = read_gh("players.csv")
+    df_teams = read_gh("teams.csv")
+    df_scout = read_gh("scouting_db.csv")
+    
+    # 2. Snowflake Datahentning
     conn = _get_snowflake_conn()
-    df_snowflake = pd.DataFrame()
+    df_modstander = pd.DataFrame()
+    df_season_stats = pd.DataFrame()
+
     if conn:
-        query = """
+        # A: Query til Modstanderanalyse (Events)
+        q_modstander = """
         SELECT c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, m.MATCHLABEL, e.TEAM_WYID
         FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
         JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
@@ -59,15 +54,40 @@ def load_all_data():
         WHERE m.SEASON_WYID = 191807
         AND (c.PRIMARYTYPE IN ('shot', 'shot_against') OR (c.PRIMARYTYPE = 'pass' AND c.LOCATIONX > 60))
         """
-        df_snowflake = pd.read_sql(query, conn)
-        df_snowflake.columns = [c.upper() for c in df_snowflake.columns]
+        
+        # B: DIT NYE QUERY (Sæson-stats)
+        q_season = """
+        SELECT DISTINCT
+            p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME,
+            p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
+            p.GOAL as GOALS, p.YELLOWCARD, p.REDCARDS,
+            adv.PASSES, adv.SUCCESSFULPASSES, adv.PASSESTOFINALTHIRD,
+            adv.SUCCESSFULPASSESTOFINALTHIRD, adv.FORWARDPASSES,
+            adv.SUCCESSFULFORWARDPASSES, adv.TOUCHINBOX, adv.ASSISTS,
+            adv.DUELS, adv.DUELSWON, adv.PROGRESSIVEPASSES,
+            adv.SUCCESSFULPROGRESSIVEPASSES
+        FROM AXIS.WYSCOUT_PLAYERCAREER p
+        JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
+            AND p.SEASON_WYID = adv.SEASON_WYID
+        JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
+        JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
+        WHERE p.MINUTESPLAYED > 0
+        """
+        
+        df_modstander = pd.read_sql(q_modstander, conn)
+        df_season_stats = pd.read_sql(q_season, conn)
+        
+        # Rens kolonnenavne til UPPERCASE
+        df_modstander.columns = [c.upper() for c in df_modstander.columns]
+        df_season_stats.columns = [c.upper() for c in df_season_stats.columns]
+        
         conn.close()
-    
-    # Vi returnerer det hele som en pakke
+
     return {
-        "snowflake": df_snowflake,
+        "modstander_events": df_modstander,
+        "season_stats": df_season_stats,
         "players": df_players,
         "teams": df_teams,
-        "hold_map": hold_map,
-        "scouting": df_scout
+        "scouting": df_scout,
+        "hold_map": dict(zip(df_teams['TEAM_WYID'].astype(str), df_teams['TEAMNAME']))
     }
