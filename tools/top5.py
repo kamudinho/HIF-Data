@@ -56,7 +56,7 @@ def vis_side(spillere_df, stats_df):
     
     st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
-    # --- 5. RENDER TABELLER (3-kolonne layout med større skrift) ---
+    # --- 5. RENDER TABELLER (Forbedret plads til navne) ---
     cols = st.columns(3)
     for i, kpi in enumerate(kpis):
         if kpi in df.columns:
@@ -74,21 +74,21 @@ def vis_side(spillere_df, stats_df):
                 html = f"""
                 <div style="background:white; border:1px solid #eee; border-radius:4px; padding:0px; margin-bottom:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <div style="padding:10px; border-bottom: 2px solid #df003b;">
-                        <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">{KPI_MAP.get(kpi, kpi)}</h4>
+                        <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:15px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">{KPI_MAP.get(kpi, kpi)}</h4>
                     </div>
-                    <table style="width:100%; font-size:13px; border-collapse:collapse; font-family:sans-serif;">
+                    <table style="width:100%; font-size:14px; border-collapse:collapse; font-family:sans-serif; table-layout: auto;">
                         <tr style="color:#888; text-align:left; font-size:11px; text-transform:uppercase; background:#fafafa; border-bottom: 1px solid #eee;">
-                            <th style="padding:8px 10px; width:40px;">Pos</th>
-                            <th style="padding:8px 10px;">Spiller</th>
-                            <th style="padding:8px 10px; text-align:right;">{visning}</th>
+                            <th style="padding:8px 10px; width:15%;">Pos</th>
+                            <th style="padding:8px 10px; width:60%;">Spiller</th>
+                            <th style="padding:8px 10px; width:25%; text-align:right;">{visning}</th>
                         </tr>"""
                 
                 for _, r in top5.iterrows():
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                         <tr style="border-bottom:1px solid #f2f2f2;">
-                            <td style="padding:10px 10px; color:#666;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:10px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{r['NAVN']}</td>
+                            <td style="padding:10px 10px; color:#666; white-space: nowrap;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:10px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden;">{r['NAVN']}</td>
                             <td style="padding:10px 10px; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
                         </tr>"""
                 
