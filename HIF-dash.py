@@ -92,8 +92,8 @@ elif sel == "Spillerstats":
 
 elif sel == "Top 5":
     import tools.top5 as t5
-    t5.vis_side(dp["players"], dp["season_stats"])
-
+    t5.vis_side(data["players"], data["playerstats"])
+    
 # --- GRUPPE: ANALYSE ---
 elif sel == "Zoneinddeling":
     import tools.player_goalzone as pgz
