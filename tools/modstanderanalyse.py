@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(df_team_matches, df_teams_csv):
-    st.title("⚔️ Modstanderanalyse")
+    st.title("Modstanderanalyse")
 
     # 1. Tjek om data er indlæst
     if df_teams_csv is None or df_teams_csv.empty:
