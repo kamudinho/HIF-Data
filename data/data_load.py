@@ -39,48 +39,58 @@ def load_all_data():
     df_teams = read_gh("teams.csv")
     df_scout = read_gh("scouting_db.csv")
     
-    # 2. Snowflake Datahentning
+    # 2. SNOWFLAKE DATA
     conn = _get_snowflake_conn()
-    df_modstander = pd.DataFrame()
+    df_shots = pd.DataFrame()
+    df_passes = pd.DataFrame()
     df_season_stats = pd.DataFrame()
 
     if conn:
-        # A: Query til Modstanderanalyse (Events)
-        q_modstander = """
-        SELECT c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, m.MATCHLABEL, e.TEAM_WYID
+        # Dynamisk sæson-filter
+        # Hvis du vil have ALT, fjerner vi bare WHERE-klausulen eller sætter en bred betingelse
+        season_filter = ""
+        if season_ids:
+            if isinstance(season_ids, list):
+                season_filter = f"WHERE m.SEASON_WYID IN ({','.join(map(str, season_ids))})"
+            else:
+                season_filter = f"WHERE m.SEASON_WYID = {season_ids}"
+
+        # A: SHOT-QUERY (Uden hårdkodet sæson)
+        q_shots = f"""
+        SELECT 
+            c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, 
+            c.PRIMARYTYPE, s.SHOTBODYPART, s.SHOTISGOAL, s.SHOTXG, 
+            m.MATCHLABEL, e.TEAM_WYID, m.SEASON_WYID, s.SEASONNAME
         FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+        JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
         JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
         JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-        WHERE m.SEASON_WYID = 191807
-        AND (c.PRIMARYTYPE IN ('shot', 'shot_against') OR (c.PRIMARYTYPE = 'pass' AND c.LOCATIONX > 60))
+        JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+        {season_filter}
         """
         
-        # B: DIT NYE QUERY (Sæson-stats)
-        q_season = """
-        SELECT DISTINCT
-            p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME,
-            p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
-            p.GOAL as GOALS, p.YELLOWCARD, p.REDCARDS,
-            adv.PASSES, adv.SUCCESSFULPASSES, adv.PASSESTOFINALTHIRD,
-            adv.SUCCESSFULPASSESTOFINALTHIRD, adv.FORWARDPASSES,
-            adv.SUCCESSFULFORWARDPASSES, adv.TOUCHINBOX, adv.ASSISTS,
-            adv.DUELS, adv.DUELSWON, adv.PROGRESSIVEPASSES,
-            adv.SUCCESSFULPROGRESSIVEPASSES
+        # B: PASSES
+        q_passes = f"""
+        SELECT c.LOCATIONX, c.LOCATIONY, c.TEAM_WYID, m.MATCHLABEL, m.SEASON_WYID
+        FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+        JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+        WHERE c.PRIMARYTYPE = 'pass' AND c.LOCATIONX > 60
+        {season_filter.replace('WHERE', 'AND') if season_filter else ''}
+        """
+
+        # C: SEASON ADVANCED STATS (Her vil vi typisk altid have alt for at se historik)
+        q_stats = """
+        SELECT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL, adv.PROGRESSIVEPASSES, adv.TOUCHINBOX, adv.XG
         FROM AXIS.WYSCOUT_PLAYERCAREER p
-        JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
-            AND p.SEASON_WYID = adv.SEASON_WYID
+        JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID AND p.SEASON_WYID = adv.SEASON_WYID
         JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
         JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
         WHERE p.MINUTESPLAYED > 0
         """
-        
-        df_modstander = pd.read_sql(q_modstander, conn)
-        df_season_stats = pd.read_sql(q_season, conn)
-        
-        # Rens kolonnenavne til UPPERCASE
-        df_modstander.columns = [c.upper() for c in df_modstander.columns]
-        df_season_stats.columns = [c.upper() for c in df_season_stats.columns]
-        
+
+        df_shots = pd.read_sql(q_shots, conn)
+        df_passes = pd.read_sql(q_passes, conn)
+        df_season_stats = pd.read_sql(q_stats, conn)
         conn.close()
 
     return {
