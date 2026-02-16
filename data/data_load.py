@@ -5,35 +5,9 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 import uuid
 
-# --- INTERN SNOWFLAKE FORBINDELSE ---
-def _get_snowflake_conn():
-    try:
-        p_key_pem = st.secrets["connections"]["snowflake"]["private_key"]
-        p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(), password=None, backend=default_backend()
-        )
-        p_key_der = p_key_obj.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        return snowflake.connector.connect(
-            user=st.secrets["connections"]["snowflake"]["user"],
-            account=st.secrets["connections"]["snowflake"]["account"],
-            private_key=p_key_der,
-            warehouse=st.secrets["connections"]["snowflake"]["warehouse"],
-            database=st.secrets["connections"]["snowflake"]["database"],
-            schema=st.secrets["connections"]["snowflake"]["schema"],
-            role=st.secrets["connections"]["snowflake"]["role"]
-        )
-    except Exception as e:
-        st.error(f"Snowflake Connection Error: {e}")
-        return None
-
-# --- CENTRAL LOAD FUNKTION ---
 @st.cache_data(ttl=3600)
 def load_all_data(season_id=191807): 
-    # 1. Hent CSV-filer fra GitHub
+    # 1. GitHub filer
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
@@ -41,27 +15,29 @@ def load_all_data(season_id=191807):
             d = pd.read_csv(u, sep=None, engine='python')
             d.columns = [str(c).strip().upper() for c in d.columns]
             return d
-        except:
-            return pd.DataFrame()
+        except: return pd.DataFrame()
 
     df_players = read_gh("players.csv")
-    df_teams = read_gh("teams.csv")
     df_scout = read_gh("scouting_db.csv")
-    df_matches = read_gh("matches.csv")
-    
-    # Lav hold_map med det samme til brug i Modstanderanalyse
-    hold_map = {}
-    if not df_teams.empty:
-        hold_map = dict(zip(df_teams['TEAM_WYID'].astype(str), df_teams['TEAMNAME']))
+    df_teams_csv = read_gh("teams.csv")
 
-    # 2. SNOWFLAKE DATA
+    # 2. Snowflake
     conn = _get_snowflake_conn()
-    df_combined = pd.DataFrame()
+    df_events = pd.DataFrame()
     df_season_stats = pd.DataFrame()
+    hold_map = {}
 
     if conn:
         try:
-            # A: KOMBINERET EVENT QUERY (Pass + Shot + Shot Against)
+            # A: Hold-navne
+            q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
+            df_teams_sn = pd.read_sql(q_teams, conn)
+            hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
+            if not df_teams_csv.empty:
+                csv_map = dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME']))
+                hold_map.update(csv_map)
+
+            # B: Event Query (Til Modstanderanalyse) - SHOTXG er allerede med her
             q_combined = f"""
             SELECT 
                 c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE, e.TEAM_WYID, 
@@ -75,8 +51,19 @@ def load_all_data(season_id=191807):
             AND (c.PRIMARYTYPE IN ('shot', 'pass', 'shot_against'))
             """
 
-            # B: DIN NYE STATS QUERY (Uden xG for at undgå fejl)
+            # C: Avanceret Stats Query med xG (Til Scouting Profil)
+            # Vi joiner COMMON med SHOTS for at få fat i xG pr. spiller
             q_stats = """
+            WITH player_xg AS (
+                SELECT 
+                    c.PLAYER_WYID, 
+                    m.SEASON_WYID,
+                    SUM(s.SHOTXG) as XG_TOTAL
+                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
+                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                GROUP BY 1, 2
+            )
             SELECT DISTINCT
                 p.PLAYER_WYID,
                 s.SEASONNAME,
@@ -84,6 +71,7 @@ def load_all_data(season_id=191807):
                 p.APPEARANCES as MATCHES,
                 p.MINUTESPLAYED as MINUTESTAGGED,
                 p.GOAL as GOALS,
+                COALESCE(pxg.XG_TOTAL, 0) as XG,
                 p.YELLOWCARD,
                 p.REDCARDS,
                 adv.PASSES,
@@ -100,16 +88,15 @@ def load_all_data(season_id=191807):
                 adv.SUCCESSFULPROGRESSIVEPASSES
             FROM AXIS.WYSCOUT_PLAYERCAREER p
             JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv 
-                ON p.PLAYER_WYID = adv.PLAYER_WYID 
-                AND p.SEASON_WYID = adv.SEASON_WYID
+                ON p.PLAYER_WYID = adv.PLAYER_WYID AND p.SEASON_WYID = adv.SEASON_WYID
             JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
             JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
+            LEFT JOIN player_xg pxg ON p.PLAYER_WYID = pxg.PLAYER_WYID AND p.SEASON_WYID = pxg.SEASON_WYID
             WHERE p.MINUTESPLAYED > 0
             ORDER BY s.SEASONNAME DESC
             """
             
-            # Eksekver queries
-            df_combined = pd.read_sql(q_combined, conn)
+            df_events = pd.read_sql(q_combined, conn)
             df_season_stats = pd.read_sql(q_stats, conn)
             
         except Exception as e:
@@ -117,17 +104,15 @@ def load_all_data(season_id=191807):
         finally:
             conn.close()
 
-    # Standardiser kolonnenavne (Tving alt til UPPERCASE)
-    for df in [df_combined, df_season_stats]:
+    # Standardisering
+    for df in [df_events, df_season_stats]:
         if not df.empty:
             df.columns = [c.upper() for c in df.columns]
 
-    # 3. RETURNER PAKKEN
     return {
-        "shotevents": df_combined, 
+        "shotevents": df_events, 
         "hold_map": hold_map,
         "players": df_players,
         "season_stats": df_season_stats,
-        "matches": df_matches,
         "scouting": df_scout
     }
