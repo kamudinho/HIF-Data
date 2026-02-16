@@ -4,11 +4,13 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 import numpy as np
 
+# --- CACHING AF SELVE FIGUREN ---
 @st.cache_data(show_spinner="Heatmaps præsenteres...")
 def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
     BG_WHITE = '#ffffff'
     rows = int(np.ceil(len(hold_ids_tuple) / cols_slider))
     
+    # Optimeret figsize
     fig, axes = plt.subplots(
         rows, cols_slider,
         figsize=(15, rows * 4), 
@@ -18,7 +20,6 @@ def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
     fig.subplots_adjust(left=0.05, right=0.95, bottom=0.02, top=0.92, wspace=0.05, hspace=0.25)
     axes_flat = np.atleast_1d(axes).flatten()
 
-    # Bruger VerticalPitch for konsistens
     pitch = VerticalPitch(
         pitch_type='custom', pitch_length=100, pitch_width=100,
         line_color='#1a1a1a', line_zorder=2, linewidth=0.5
@@ -26,15 +27,19 @@ def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
 
     for i, tid in enumerate(hold_ids_tuple):
         ax = axes_flat[i]
+        
+        # Filtrer data for det specifikke hold
         hold_df_full = df_p[df_p['TEAM_WYID'] == tid].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
         total_passes = len(hold_df_full)
         
-        # Speed boost
+        # SPEED BOOST: Sample data (max 2000 rækker pr. heatmap)
         hold_df_draw = hold_df_full.sample(n=min(total_passes, 2000), random_state=42)
 
         pitch.draw(ax=ax)
+
+        # Navn og Titel
         navn = str(hold_map.get(tid, f"HOLD ID: {tid}")).upper()
-        ax.set_title(f"{navn}\n({total_passes:,} PASSES)".replace(',', '.'), 
+        ax.set_title(f"{navn}\n({total_passes:,} AFLEVERINGER)".replace(',', '.'), 
                      fontsize=10, fontweight='bold', pad=8)
 
         if total_passes > 10:
@@ -46,7 +51,36 @@ def generate_cached_heatmaps(df_p, cols_slider, hold_ids_tuple, hold_map):
                 linewidths=0
             )
 
+    # Skjul tomme felter hvis antallet af hold ikke går op i kolonnerne
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis('off')
 
     return fig
+
+# VIGTIGT: Denne definition skal matche dit kald i HIF-dash.py
+def vis_side(df_events, cols_slider, hold_map=None):
+    HIF_ID = 38331 # Juster til dit holds ID
+
+    if df_events is None or df_events.empty:
+        st.error("Ingen data fundet.")
+        return
+
+    # Standardiser kolonnenavne til store bogstaver
+    df_events.columns = [c.upper() for c in df_events.columns]
+
+    # Filtrer kun pasninger (PRIMARYTYPE indeholder 'pass')
+    mask = df_events['PRIMARYTYPE'].astype(str).str.contains('pass', case=False, na=False)
+    df_p = df_events[mask].copy()
+
+    if df_p.empty:
+        st.warning("Ingen afleveringsdata at vise.")
+        return
+
+    # Sorter holdliste (Sørg for dit eget hold er først)
+    hold_ids = sorted(df_p['TEAM_WYID'].unique(), key=lambda x: x != HIF_ID)
+
+    # Kald cache-funktionen
+    fig = generate_cached_heatmaps(df_p, cols_slider, tuple(hold_ids), hold_map)
+    
+    # Vis resultatet
+    st.pyplot(fig, use_container_width=True)
