@@ -129,3 +129,7 @@ elif sel == "Sammenligning":
 elif sel == "Brugerstyring":
     import tools.admin as adm
     adm.vis_side()
+
+elif sel == "Schema Explorer":  # Navnet i menuen
+    import tools.snowflake_test as stest  # Filnavnet du har valgt
+    stest.vis_side()
