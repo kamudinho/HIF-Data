@@ -10,7 +10,6 @@ except ImportError:
 
 def vis_side(spillere_df, stats_df):
     # Dynamisk overskrift baseret på din season_show.py
-    st.title(f"🏆 Top 5 Præstationer")
     st.subheader(f"Hvidovre IF | Sæson: {SEASONNAME}")
     
     # 1. Klargør kopier og rens kolonnenavne
