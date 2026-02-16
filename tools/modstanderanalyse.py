@@ -109,7 +109,7 @@ def vis_side():
         for i, (p_type, title, cmap) in enumerate(configs):
             with cols[i]:
                 st.caption(title)
-                fig, ax = pitch.draw(figsize=(4, 6))
+                fig, ax = pitch.draw(figsize=(3, 5))
                 d = hold_data[hold_data['PRIMARYTYPE'] == p_type]
                 if not d.empty:
                     sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, alpha=.5, cmap=cmap, ax=ax)
