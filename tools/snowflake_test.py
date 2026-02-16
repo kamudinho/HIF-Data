@@ -1,31 +1,35 @@
 import streamlit as st
-import pandas as pd
+import snowflake.connector
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
-def vis_side():
-    st.title("❄️ Snowflake Live Test")
+def get_snowflake_connection():
+    # 1. Hent rå-teksten fra secrets
+    p_key_pem = st.secrets["connections"]["snowflake"]["private_key"]
     
-    st.write("Forsøger at forbinde til Snowflake med RSA-nøgle...")
-    
-    try:
-        # Etabler forbindelse via st.connection
-        conn = st.connection("snowflake")
-        
-        # En helt simpel test-query for at se om vi har hul igennem
-        # Vi vælger bare 5 rækker fra din matches tabel
-        query = "SELECT * FROM MATCHES LIMIT 5"
-        
-        df_test = conn.query(query)
-        
-        if not df_test.empty:
-            st.success("Forbindelse etableret! Her er data fra Snowflake:")
-            st.dataframe(df_test)
-            
-            # Vis hvilke kolonner vi har adgang til
-            st.write("Tilgængelige kolonner:", list(df_test.columns))
-        else:
-            st.warning("Forbindelsen virker, men tabellen ser ud til at være tom.")
-            
-    except Exception as e:
-        st.error("Der opstod en fejl i forbindelsen:")
-        st.code(e)
-        st.info("Tjek om din Private Key i Secrets er indsat korrekt med BEGIN og END linjer.")
+    # 2. Dekod PEM-teksten til et nøgle-objekt
+    p_key_obj = serialization.load_pem_private_key(
+        p_key_pem.encode(),
+        password=None, # Sæt password hvis din nøgle er krypteret
+        backend=default_backend()
+    )
+
+    # 3. Konvertér til DER-format (bytes) som Snowflake kræver
+    p_key_der = p_key_obj.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    # 4. Opret forbindelsen manuelt (da st.connection kan drille med bytes)
+    return snowflake.connector.connect(
+        user=st.secrets["connections"]["snowflake"]["user"],
+        account=st.secrets["connections"]["snowflake"]["account"],
+        private_key=p_key_der,
+        warehouse=st.secrets["connections"]["snowflake"]["warehouse"],
+        database=st.secrets["connections"]["snowflake"]["database"],
+        schema=st.secrets["connections"]["snowflake"]["schema"]
+    )
+
+# Brug forbindelsen
+conn = get_snowflake_connection()
