@@ -6,76 +6,92 @@ import matplotlib.pyplot as plt
 
 def vis_side():
     st.title("🛡️ Taktisk Modstanderanalyse")
-    st.markdown("Her analyseres de 26.000 vigtigste offensive aktioner fra sæsonen.")
+    st.markdown("Analyse af offensive mønstre og afslutninger.")
 
     # 1. Indlæs data
     try:
+        # Sørg for at stien passer til din GitHub-struktur
         df = pd.read_csv("data/team_matches.csv")
         
         # 2. Sidebar filtre
         st.sidebar.header("Analyse Indstillinger")
         valgt_kamp = st.sidebar.selectbox("Vælg Kamp/Modstander", df['MATCHLABEL'].unique())
         
-        # Filtrer data
+        # Filtrer data for den valgte kamp
         kamp_data = df[df['MATCHLABEL'] == valgt_kamp]
         
-        # 3. Layout med kolonner til metrics
+        # 3. Layout med kolonner til hurtige tal
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Offensive Aktions", len(kamp_data))
+            st.metric("Offensive Aktioner", len(kamp_data))
         with col2:
             st.metric("Egne Skud", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']))
         with col3:
             st.metric("Skud imod", len(kamp_data[kamp_data['PRIMARYTYPE'] == 'shot_against']))
 
-        # 4. Visualisering af banen
-        st.subheader(f"Taktisk mønster: {valgt_kamp}")
-        
-        # Vælg visualiseringstype
-        vis_type = st.radio("Vælg visning:", ["Heatmap (Tendenser)", "Scatter (Enkelte aktioner)"], horizontal=True)
+        st.divider()
 
-        # Ændret til hvid baggrund og grå/sorte linjer
-        pitch = Pitch(pitch_type='wyscout', pitch_color='white', line_color='#555555')
+        # 4. Valg af visning via Radio knap
+        vis_type = st.radio(
+            "Vælg visuel analyse:", 
+            ["Heatmap (Tendenser)", "Scatter (Enkelte aktioner)"], 
+            horizontal=True
+        )
+
+        # 5. Opsætning af banen (Hvid baggrund)
+        pitch = Pitch(
+            pitch_type='wyscout', 
+            pitch_color='white', 
+            line_color='#555555',
+            linewidth=2
+        )
         fig, ax = pitch.draw(figsize=(10, 7))
-        
-        # Sørg for at selve figurens baggrund også er hvid
         fig.patch.set_facecolor('white')
-        ax.set_facecolor('white')
 
+        # 6. Tegning baseret på brugerens valg
         if vis_type == "Heatmap (Tendenser)":
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
             if not passes.empty:
-                kde = sns.kdeplot(
+                # clip=((x_min, x_max), (y_min, y_max)) holder det inden for kridtstregerne
+                sns.kdeplot(
                     x=passes['LOCATIONX'],
                     y=passes['LOCATIONY'],
                     fill=True,
-                    shade_lowest=False,
                     alpha=.6,
-                    n_levels=10,
-                    cmap='Reds', # 'Reds' ser godt ud på en hvid baggrund
-                    ax=ax
+                    n_levels=15,
+                    cmap='Reds',
+                    ax=ax,
+                    clip=((0, 100), (0, 100)) 
                 )
-            st.info("Heatmap viser intensiteten af aktioner. Jo rødere, jo flere aktioner.")
+                st.info("💡 Heatmap viser de zoner, hvor modstanderen oftest opererer på jeres banehalvdel.")
+            else:
+                st.warning("Ingen pasningsdata fundet for denne kamp.")
 
         else:
             # Scatter plot af skud og pasninger
             passes = kamp_data[kamp_data['PRIMARYTYPE'] == 'pass']
-            pitch.scatter(passes['LOCATIONX'], passes['LOCATIONY'], ax=ax, 
-                          color='blue', alpha=0.3, s=20, label='Offensiv pasning')
+            pitch.scatter(
+                passes['LOCATIONX'], passes['LOCATIONY'], 
+                ax=ax, color='#3498db', alpha=0.4, s=30, 
+                label='Offensiv pasning', edgecolors='none'
+            )
             
             shots = kamp_data[kamp_data['PRIMARYTYPE'] == 'shot']
-            pitch.scatter(shots['LOCATIONX'], shots['LOCATIONY'], ax=ax, 
-                          color='red', s=120, edgecolors='black', marker='o', label='Skud')
+            pitch.scatter(
+                shots['LOCATIONX'], shots['LOCATIONY'], 
+                ax=ax, color='#e74c3c', s=150, 
+                edgecolors='black', marker='o', label='Skud'
+            )
             
-            # Tilpas legend til hvid baggrund
-            ax.legend(facecolor='white', edgecolor='black', loc='upper left')
+            ax.legend(facecolor='white', edgecolor='black', loc='upper left', fontsize=10)
+            st.info("💡 Scatter viser de præcise positioner for hver offensiv aktion.")
 
+        # Vis figuren i Streamlit
         st.pyplot(fig)
 
     except Exception as e:
-        st.error(f"Kunne ikke indlæse data: {e}")
-        st.info("Sørg for at 'team_matches.csv' er uploadet til GitHub.")
+        st.error(f"Fejl ved indlæsning af data: {e}")
+        st.info("Tjek at data/team_matches.csv findes og er korrekt formateret.")
 
-# Kør funktionen hvis filen køres direkte
 if __name__ == "__main__":
     vis_side()
