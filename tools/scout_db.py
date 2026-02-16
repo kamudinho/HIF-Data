@@ -103,27 +103,71 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-    with t4:
+    with tab4:
         st.markdown("### 📊 Statistisk Historik (Snowflake)")
-        if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
-            df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+        
+        # Vi gør tjekket ekstremt bredt for at finde PLAYER_WYID
+        target_col = None
+        if s_df is not None and not s_df.empty:
+            # Find kolonnen uanset om den hedder player_wyid, PLAYER_WYID eller Player_Wyid
+            potential_cols = [c for c in s_df.columns if c.upper() == 'PLAYER_WYID']
+            if potential_cols:
+                target_col = potential_cols[0]
+
+        if target_col:
+            df_stats = s_df[s_df[target_col].astype(str) == clean_p_id].copy()
             if not df_stats.empty:
+                # Sørg for store bogstaver til visning
+                df_stats.columns = [c.upper() for c in df_stats.columns]
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
                 existing_cols = [c for c in cols_to_show if c in df_stats.columns]
                 st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
             else:
                 st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
         else:
-            st.warning("Snowflake-statistik er ikke tilgængelig.")
+            st.warning("Snowflake-data kunne ikke matches (PLAYER_WYID mangler).")
 
-    with t5:
-        # Radar (Alt i store bogstaver)
-        categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
-        cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
+    with tab5:
+        # DIT ORIGINALE RADAR DESIGN
+        categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 
+                      'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
+        cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 
+                'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
+        
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        fig_radar = go.Figure(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', line=dict(color='#df003b')))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
-        st.plotly_chart(fig_radar, use_container_width=True)
+        v_closed = v + [v[0]]
+        cat_closed = categories + [categories[0]]
+
+        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
+        
+        with col_left:
+            st.markdown("### Detaljer")
+            for cat, val in zip(categories, v):
+                st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold;'>{val}</span>", unsafe_allow_html=True)
+
+        with col_mid:
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(
+                r=v_closed, theta=cat_closed, fill='toself',
+                line=dict(color='#df003b', width=2),
+                fillcolor='rgba(223, 0, 59, 0.3)',
+                marker=dict(size=8, color='#df003b')
+            ))
+            fig_radar.update_layout(
+                polar=dict(
+                    angularaxis=dict(rotation=90, direction="clockwise", gridcolor="lightgrey"),
+                    radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6], gridcolor="lightgrey"),
+                    gridshape='linear' # Dette giver 8-kanten
+                ),
+                showlegend=False, height=450, margin=dict(l=60, r=60, t=30, b=30)
+            )
+            st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+
+        with col_right:
+            st.markdown("### Bemærkninger")
+            st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
+            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
+            st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df):
