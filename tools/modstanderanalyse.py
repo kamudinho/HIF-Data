@@ -6,7 +6,6 @@ from cryptography.hazmat.primitives import serialization
 from mplsoccer import VerticalPitch
 import seaborn as sns
 import matplotlib.pyplot as plt
-import os
 
 # --- 1. FORBINDELSESFUNKTION (RSA) ---
 def get_snowflake_connection():
@@ -42,6 +41,7 @@ def hent_taktisk_data(season_id=191807):
     if not conn:
         return pd.DataFrame()
     
+    # Dit query med store bogstaver for at matche Snowflake output
     query = f"""
     SELECT 
         c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE,
@@ -68,79 +68,94 @@ def hent_taktisk_data(season_id=191807):
 
 # --- 3. HOVEDSIDE ---
 def vis_side():
-    st.markdown("### 🛡️ Taktisk Modstanderanalyse")
+    st.markdown("### 🛡️ Taktisk Modstanderanalyse (HIF Data)")
     
-    # --- INDLÆS LOKALE FILER TIL OVERSÆTTELSE ---
+    # --- INDLÆS LOKALE FILER ---
     try:
-        df_teams = pd.read_csv("data/teams.csv") # Antager kolonner: wyId, officialName
-        df_players = pd.read_csv("data/players.csv") # Antager kolonner: wyId, shortName
+        # Vi indlæser dine CSV'er
+        df_players = pd.read_csv("data/players.csv")
+        # For teams.csv: Da dit eksempel ser lidt sammenflettet ud, 
+        # antager vi her, at du har kolonnerne TEAM_WYID og TEAMNAME
+        df_teams = pd.read_csv("data/teams.csv") 
     except Exception as e:
-        st.warning(f"Kunne ikke indlæse oversættelsesfiler: {e}")
-        df_teams = pd.DataFrame()
-        df_players = pd.DataFrame()
+        st.error(f"Fejl ved indlæsning af CSV-filer: {e}")
+        return
 
     # Hent data fra Snowflake
-    st.sidebar.header("Indstillinger")
+    st.sidebar.header("Analyse Filter")
     season_input = st.sidebar.number_input("Sæson ID", value=191807)
     
-    with st.spinner("Henter data fra Snowflake..."):
-        df = hent_taktisk_data(season_input)
+    with st.spinner("Henter live data fra Snowflake..."):
+        df_live = hent_taktisk_data(season_input)
 
-    if df.empty:
-        st.warning("Ingen data fundet for denne sæson.")
+    if df_live.empty:
+        st.warning("Ingen data fundet.")
         return
 
     # --- OVERSÆTTELSE (MERGE) ---
-    if not df_teams.empty:
-        # Merge holdnavne (oversæt TEAM_WYID til officialName)
-        df = df.merge(df_teams[['wyId', 'officialName']], left_on='TEAM_WYID', right_on='wyId', how='left')
+    # 1. Tilføj spillernavne (NAVN fra players.csv)
+    df_merged = df_live.merge(
+        df_players[['PLAYER_WYID', 'NAVN', 'TEAMNAME']], 
+        on='PLAYER_WYID', 
+        how='left'
+    )
     
-    if not df_players.empty:
-        # Merge spillernavne (oversæt PLAYER_WYID til shortName)
-        df = df.merge(df_players[['wyId', 'shortName']], left_on='PLAYER_WYID', right_on='wyId', how='left')
+    # 2. Tilføj holdnavne (Hvis TEAM_WYID findes i teams.csv)
+    # Hvis din teams.csv har TEAM_WYID og TEAMNAME:
+    if 'TEAM_WYID' in df_teams.columns:
+        df_merged = df_merged.merge(
+            df_teams[['TEAM_WYID', 'TEAMNAME']], 
+            on='TEAM_WYID', 
+            how='left',
+            suffixes=('', '_team_file')
+        )
 
-    try:
-        # Valg af hold i sidebar (nu med navne hvis de findes)
-        hold_liste = df['officialName'].dropna().unique() if 'officialName' in df.columns else df['TEAM_WYID'].unique()
-        valgt_hold = st.sidebar.selectbox("Vælg Hold", hold_liste)
-        
-        # Filtrer data på det valgte hold
-        if 'officialName' in df.columns:
-            hold_data = df[df['officialName'] == valgt_hold]
-        else:
-            hold_data = df[df['TEAM_WYID'] == valgt_hold]
+    # --- VISNING ---
+    # Brug TEAMNAME fra merge eller TEAMNAME fra players.csv som fallback
+    hold_navn_col = 'TEAMNAME' if 'TEAMNAME' in df_merged.columns else 'TEAM_WYID'
+    hold_liste = sorted(df_merged[hold_navn_col].dropna().unique())
+    
+    valgt_hold = st.sidebar.selectbox("Vælg Hold", hold_liste)
+    hold_data = df_merged[df_merged[hold_navn_col] == valgt_hold]
 
-        # Vis nøgletal
-        col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("Aktioner", len(hold_data))
-        col_m2.metric("Egne Skud", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot']))
-        col_m3.metric("Skud imod", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot_against']))
-        
-        st.divider()
+    # Nøgletal
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("Aktioner", len(hold_data))
+    col_m2.metric("Egne Skud", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot']))
+    col_m3.metric("Skud imod", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot_against']))
+    
+    st.divider()
 
-        # Baner og visualisering
-        col_pass, col_shot, col_against = st.columns(3)
-        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='white', line_color='#555555')
+    # Baner
+    col_pass, col_shot, col_against = st.columns(3)
+    pitch = VerticalPitch(pitch_type='wyscout', pitch_color='white', line_color='#555555', linewidth=1.5)
 
-        # Tegn baner (samme logik som før, men nu med hold-specifik data)
-        types = [('pass', '🔥 Pasninger (>60m)', 'Reds', col_pass),
-                 ('shot', '🎯 Egne Afslutninger', 'YlOrBr', col_shot),
-                 ('shot_against', '⚠️ Modstanderens Skud', 'Purples', col_against)]
+    plot_configs = [
+        ('pass', '🔥 Offensive Afleveringer', 'Reds', col_pass),
+        ('shot', '🎯 Egne Afslutninger', 'YlOrBr', col_shot),
+        ('shot_against', '⚠️ Skud Imod', 'Purples', col_against)
+    ]
 
-        for p_type, title, cmap, col in types:
-            with col:
-                st.caption(title)
-                fig, ax = pitch.draw(figsize=(4, 6))
-                data = hold_data[hold_data['PRIMARYTYPE'] == p_type]
-                if not data.empty:
-                    sns.kdeplot(x=data['LOCATIONY'], y=data['LOCATIONX'], fill=True, 
-                                alpha=.6, cmap=cmap, ax=ax, clip=((0, 100), (0, 100)))
-                    if p_type != 'pass':
-                        pitch.scatter(data.LOCATIONX, data.LOCATIONY, s=80, ax=ax, edgecolors='black')
-                st.pyplot(fig)
+    for p_type, title, cmap, col in plot_configs:
+        with col:
+            st.caption(title)
+            fig, ax = pitch.draw(figsize=(4, 6))
+            data = hold_data[hold_data['PRIMARYTYPE'] == p_type]
+            
+            if not data.empty:
+                sns.kdeplot(x=data['LOCATIONY'], y=data['LOCATIONX'], fill=True, 
+                            alpha=.6, cmap=cmap, ax=ax, clip=((0, 100), (0, 100)), linewidths=0)
+                
+                if p_type != 'pass':
+                    pitch.scatter(data.LOCATIONX, data.LOCATIONY, s=100, 
+                                  color='white', edgecolors='black', ax=ax, alpha=0.8)
+            st.pyplot(fig)
 
-    except Exception as e:
-        st.error(f"Fejl ved behandling af data: {e}")
+    # --- TOP SPILLERE LISTE ---
+    if st.checkbox("Vis spillere bag aktionerne"):
+        st.subheader(f"Profilerede aktioner for {valgt_hold}")
+        top_spillere = hold_data.groupby(['NAVN', 'PRIMARYTYPE']).size().reset_index(name='Antal')
+        st.dataframe(top_spillere.sort_values('Antal', ascending=False), use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
