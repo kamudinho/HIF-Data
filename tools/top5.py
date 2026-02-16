@@ -10,7 +10,7 @@ except ImportError:
 def vis_side(spillere_df, stats_df):
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:4px; border-radius:3px; margin-bottom:10px;">
+        <div style="background-color:#df003b; padding:1px; border-radius:1px; margin-bottom:5px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif;">TOP 5 PRÆSTATIONER</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
