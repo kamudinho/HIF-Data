@@ -10,22 +10,24 @@ def vis_side(df_live, hold_map):
         st.info("Ingen data fundet i Snowflake for denne sæson.")
         return
 
-    # Forbered data (rensning af typer og navne)
-    df_live['PRIMARYTYPE'] = df_live['PRIMARYTYPE'].str.lower()
+    # 1. Standardiser typer (vigtigt for matching)
+    # Vi tvinger alt til små bogstaver for at undgå 'Shot' vs 'shot' fejl
+    df_live['PRIMARYTYPE'] = df_live['PRIMARYTYPE'].astype(str).str.lower().str.strip()
     df_live['HOLD_NAVN'] = df_live['TEAM_WYID'].astype(str).map(hold_map).fillna(df_live['TEAM_WYID'].astype(str))
     
-    # Valg af modstander i sidebar
+    # 2. Valg af modstander
     alle_hold = sorted(df_live['HOLD_NAVN'].unique())
     valgt_hold = st.sidebar.selectbox("Vælg modstander", alle_hold)
-    hold_data = df_live[df_live['HOLD_NAVN'] == valgt_hold]
+    hold_data = df_live[df_live['HOLD_NAVN'] == valgt_hold].copy()
 
-    # --- 1. OVERORDNEDE METRICS (UDEN IKONER) ---
+    # --- 1. OVERORDNEDE METRICS ---
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("AKTIONER I ALT", len(hold_data))
     with c2:
         st.metric("EGNE SKUD", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot']))
     with c3:
+        # Nu matcher denne 'shot_against' uanset store/små bogstaver i databasen
         st.metric("SKUD IMOD", len(hold_data[hold_data['PRIMARYTYPE'] == 'shot_against']))
     with c4:
         avg_xg = hold_data[hold_data['PRIMARYTYPE'] == 'shot']['SHOTXG'].mean() if 'SHOTXG' in hold_data.columns else 0
@@ -58,7 +60,6 @@ def vis_side(df_live, hold_map):
             d = hold_data[hold_data['PRIMARYTYPE'] == p_type]
             
             if not d.empty:
-                # Heatmap / KDE Plot
                 try:
                     sns.kdeplot(
                         x=d['LOCATIONY'], y=d['LOCATIONX'], 
@@ -66,12 +67,15 @@ def vis_side(df_live, hold_map):
                         levels=8, thresh=.05, bw_adjust=0.8
                     )
                 except:
-                    # Fallback hvis der er for få datapunkter til et heatmap
+                    # Fallback hvis der er for få datapunkter (f.eks. kun 1-2 skud)
                     pitch.scatter(d['LOCATIONX'], d['LOCATIONY'], alpha=0.5, color='grey', ax=ax)
                 
-                # Hvis det er skud, så tegn de præcise punkter ovenpå
+                # Tegn prikker for både egne skud og skud imod
                 if 'shot' in p_type:
                     pitch.scatter(d['LOCATIONX'], d['LOCATIONY'], s=15, edgecolors='#333333', linewidth=0.5, c='white', alpha=0.8, ax=ax)
+            else:
+                # Vis en lille tekst hvis banen er tom
+                ax.text(50, 50, "INGEN DATA", color='grey', ha='center', va='center', alpha=0.3)
             
             st.pyplot(fig)
             
