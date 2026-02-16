@@ -131,7 +131,9 @@ with st.sidebar:
     if hoved_omraade == "Truppen":
         selected = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=["people", "magic", "bar-chart-line", "trophy"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Analyse":
-        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video"], icons=["grid-3x3", "target", "map", "play-btn"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        selected = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Video", "Snowflake Test"], 
+                              icons=["grid-3x3", "target", "map", "play-btn", "cloud"], 
+                              styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "Scouting":
         selected = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=["pencil-square", "database", "arrow-left-right"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
 
@@ -161,6 +163,9 @@ elif selected == "Heatmaps":
 elif selected == "Video":
     import tools.video_analysis as va
     va.vis_side(spillere)
+elif selected == "Snowflake Test":
+    import tools.snowflake_test as sn_test
+    sn_test.vis_side()
 elif selected == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(spillere, player_events, df_scout)
