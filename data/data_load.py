@@ -3,23 +3,42 @@ import pandas as pd
 import uuid
 
 def _get_snowflake_conn():
+    """Opretter forbindelse til Snowflake med manuel rensning af Private Key."""
     try:
-        return st.connection("snowflake")
+        # Vi henter parametrene direkte fra secrets for at have fuld kontrol
+        s = st.secrets["connections"]["snowflake"]
+        
+        # Rens private_key for at undgå "Incorrect padding" fejl
+        pk = s["private_key"].strip()
+        
+        return st.connection(
+            "snowflake",
+            account=s["account"],
+            user=s["user"],
+            role=s["role"],
+            warehouse=s["warehouse"],
+            database=s["database"],
+            schema=s["schema"],
+            private_key=pk
+        )
     except Exception as e:
         st.error(f"Snowflake Connection Error: {e}")
         return None
 
 @st.cache_data(ttl=3600)
-def load_all_data():
+def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
     # --- 1. GITHUB FILER (Stamdata) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    
     def read_gh(file):
         try:
+            # Vi bruger uuid for at undgå at browseren cacher en gammel fil fra GitHub
             u = f"{url_base}{file}?nocache={uuid.uuid4()}"
             d = pd.read_csv(u, sep=None, engine='python')
             d.columns = [str(c).strip().upper() for c in d.columns]
             return d
-        except: return pd.DataFrame()
+        except: 
+            return pd.DataFrame()
 
     df_players_gh = read_gh("players.csv")
     df_scout_gh = read_gh("scouting_db.csv")
@@ -38,12 +57,15 @@ def load_all_data():
             # A: HOLD NAVNE
             q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
             df_teams_sn = conn.query(q_teams)
-            hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
+            if not df_teams_sn.empty:
+                hold_map = dict(zip(df_teams_sn['TEAM_WYID'].astype(str), df_teams_sn['TEAMNAME']))
+            
+            # Tilføj navne fra GitHub CSV hvis de ikke findes i Snowflake
             if not df_teams_csv.empty:
                 hold_map.update(dict(zip(df_teams_csv['TEAM_WYID'].astype(str), df_teams_csv['TEAMNAME'])))
 
-            # B: SHOT EVENTS (Heatmaps/Analyse)
-            q_shots = f"""
+            # B: SHOT EVENTS (Alt data uden filter for test)
+            q_shots = """
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
                        s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
@@ -54,7 +76,7 @@ def load_all_data():
             """
             df_shotevents = conn.query(q_shots)
 
-            # C: SEASON STATS (Scouting)
+            # C: SEASON STATS
             q_stats = """
                 SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
                                 p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
@@ -69,8 +91,8 @@ def load_all_data():
             """
             df_season_stats = conn.query(q_stats)
 
-            # D: TEAM MATCHES (Hold Analyse)
-            q_teammatches = f"""
+            # D: TEAM MATCHES (Modstanderanalyse) - Filter fjernet for at fange 2020-data
+            q_teammatches = """
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
                        g.SHOTS, g.GOALS, g.XG, d.PPDA, p.POSSESSIONPERCENT, ps.PASSES, du.CHALLENGEINTENSITY
                 FROM AXIS.WYSCOUT_TEAMMATCHES tm
@@ -83,32 +105,16 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # SÆT DEN IND HER:
-            st.sidebar.write(f"DEBUG: Snowflake hentede {len(df_team_matches)} kampe")
-
-            # E: PLAYERSTATS (Trup Performance - Din store query)
-            q_playerstats = f"""
+            # E: PLAYERSTATS
+            q_playerstats = """
                 SELECT DISTINCT
                     p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.ROLECODE3, p.BIRTHDATE, t.TEAMNAME,
                     SUM(DISTINCT s.MATCHES) AS KAMPE, SUM(DISTINCT s.MATCHESINSTART) AS MATCHESINSTART,
-                    SUM(DISTINCT s.MATCHESSUBSTITUTED) AS MATCHESSUBSTITUTED, SUM(DISTINCT s.MATCHESCOMINGOFF) AS MATCHESCOMINGOFF,
-                    SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD, SUM(DISTINCT s.MINUTESTAGGED) AS MINUTESTAGGED,
-                    SUM(DISTINCT s.GOALS) AS GOALS, SUM(DISTINCT s.ASSISTS) AS ASSISTS, SUM(DISTINCT s.SHOTS) AS SHOTS,
-                    SUM(DISTINCT s.HEADSHOTS) AS HEADSHOTS, SUM(DISTINCT s.YELLOWCARDS) AS YELLOWCARDS,
-                    SUM(DISTINCT s.REDCARDS) AS REDCARDS, SUM(DISTINCT s.PENALTIES) AS PENALTIES,
-                    SUM(DISTINCT s.DUELS) AS DUELS, SUM(DISTINCT s.DUELSWON) AS DUELSWON,
-                    SUM(DISTINCT s.DEFENSIVEDUELS) AS DEFENSIVEDUELS, SUM(DISTINCT s.DEFENSIVEDUELSWON) AS DEFENSIVEDUELSWON,
-                    SUM(DISTINCT s.OFFENSIVEDUELS) AS OFFENSIVEDUELS, SUM(DISTINCT s.OFFENSIVEDUELSWON) AS OFFENSIVEDUELSWON,
-                    SUM(DISTINCT s.AERIALDUELS) AS AERIALDUELS, SUM(DISTINCT s.AERIALDUELSWON) AS AERIALDUELSWON,
-                    SUM(DISTINCT s.PASSES) AS PASSES, SUM(DISTINCT s.SUCCESSFULPASSES) AS SUCCESSFULPASSES,
-                    SUM(DISTINCT s.PASSESTOFINALTHIRD) AS PASSESTOFINALTHIRD, SUM(DISTINCT s.SUCCESSFULPASSESTOFINALTHIRD) AS SUCCESSFULPASSESTOFINALTHIRD,
-                    SUM(DISTINCT s.FORWARDPASSES) AS FORWARDPASSES, SUM(DISTINCT s.SUCCESSFULFORWARDPASSES) AS SUCCESSFULFORWARDPASSES,
-                    SUM(DISTINCT s.THROUGHPASSES) AS THROUGHPASSES, SUM(DISTINCT s.SUCCESSFULTHROUGHPASSES) AS SUCCESSFULTHROUGHPASSES,
-                    SUM(DISTINCT s.DRIBBLES) AS DRIBBLES, SUM(DISTINCT s.SUCCESSFULDRIBBLES) AS SUCCESSFULDRIBBLES,
-                    SUM(DISTINCT s.INTERCEPTIONS) AS INTERCEPTIONS, SUM(DISTINCT s.PROGRESSIVEPASSES) AS PROGRESSIVEPASSES,
-                    SUM(DISTINCT s.XGSHOT) AS XGSHOT, SUM(DISTINCT s.XGASSIST) AS XGASSIST, SUM(DISTINCT s.TOUCHINBOX) AS TOUCHINBOX
+                    SUM(DISTINCT s.MINUTESONFIELD) AS MINUTESONFIELD,
+                    SUM(DISTINCT s.GOALS) AS GOALS, SUM(DISTINCT s.ASSISTS) AS ASSISTS, 
+                    SUM(DISTINCT s.SHOTS) AS SHOTS, SUM(DISTINCT s.XGSHOT) AS XGSHOT
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID AND s.COMPETITION_WYID = p.COMPETITION_WYID
+                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 GROUP BY 1, 2, 3, 4, 5, 6
             """
@@ -117,10 +123,21 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl i load_all_data: {e}")
 
-    # Standardisering til UPPERCASE
-    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
-        if not df.empty:
-            df.columns = [c.upper() for c in df.columns]
+    # --- 3. ROBUST STANDARDISERING TIL UPPERCASE ---
+    # Vi mapper alle dataframes i en ordbog for at køre loopet sikkert
+    all_dfs = {
+        "shotevents": df_shotevents,
+        "season_stats": df_season_stats,
+        "team_matches": df_team_matches,
+        "playerstats": df_playerstats
+    }
+
+    for name, df in all_dfs.items():
+        if df is not None and not df.empty:
+            df.columns = [str(c).upper() for c in df.columns]
+
+    # Debug besked i sidebar
+    st.sidebar.success(f"Snowflake Data: {len(df_team_matches)} kampe indlæst.")
 
     return {
         "shotevents": df_shotevents,
@@ -131,6 +148,6 @@ def load_all_data():
         "players": df_players_gh,    
         "scouting": df_scout_gh,     
         "teams_csv": df_teams_csv,   
-        "scouting_db": df_scout_gh, 
+        "scouting_db": df_scout_gh,  
         "players_all": df_players_gh 
     }
