@@ -53,9 +53,9 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
             return d
         except: return pd.DataFrame()
 
-    df_players_gh = read_gh("players.csv")
-    df_scout_gh = read_gh("scouting_db.csv")
-    df_teams_csv = read_gh("teams.csv")
+    df_players_gh = read_gh("/data/players.csv")
+    df_scout_gh = read_gh("/data/scouting_db.csv")
+    df_teams_csv = read_gh("/data/teams.csv")
 
     # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
