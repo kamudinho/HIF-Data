@@ -1,53 +1,74 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# Vi ændrer input-navnet fra df_teams_csv til hold_map
 def vis_side(df_team_matches, hold_map):
-    st.caption("Modstanderanalyse (Snowflake Direkte)")
+    st.title("⚔️ Modstanderanalyse")
     
-    # DEBUG: Se hvad hold_map egentlig indeholder
-    with st.expander("Debug: Tjek Hold Map"):
-        st.write(f"Antal hold i map: {len(hold_map)}")
-        st.write("Er 38331 i map?", "38331" in hold_map)
-        st.write("Første 5 hold i map:", list(hold_map.items())[:5])
-
-    # 1. Tjek data
     if df_team_matches is None or df_team_matches.empty:
-        st.error("Ingen data modtaget fra Snowflake.")
+        st.error("Ingen kampdata fundet i Snowflake.")
         return
 
-    # 2. Lav navne-vælger i stedet for ID-vælger
-    if 'TEAM_WYID' in df_team_matches.columns:
-        tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
-        
-        navne_dict = {}
-        for tid in tilgaengelige_ids:
-            # Vi tvinger både ID fra Snowflake og opslag i hold_map til at være string
-            str_tid = str(int(tid)) if pd.notnull(tid) else "0"
-            navn = hold_map.get(str_tid, f"Ukendt ({str_tid})")
-            navne_dict[navn] = tid
-        
-        valgt_navn = st.selectbox(
-            "Vælg modstander:",
-            options=sorted(navne_dict.keys())
-        )
-        
-        valgt_id = navne_dict[valgt_navn]
-
-        # 3. Filtrer data
-        df_filtreret = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
-    else:
-        st.error("Kolonnen 'TEAM_WYID' mangler.")
-        return
-
-    # 4. Vis resultater med Navn
-    st.success(f"Viser data for: {valgt_navn}")
+    # 1. Valg af hold
+    tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
+    navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_ids}
     
-    col1, col2 = st.columns(2)
-    col1.metric("Antal kampe fundet", len(df_filtreret))
-    if 'XG' in df_filtreret.columns:
-        col2.metric("Gns. xG", round(df_filtreret['XG'].mean(), 2))
+    valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
+    valgt_id = navne_dict[valgt_navn]
 
-    st.subheader(f"Kampdata for {valgt_navn}")
-    st.dataframe(df_filtreret, use_container_width=True)
+    # 2. Filtrering og sortering
+    df_filtreret = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
+    df_filtreret['DATE'] = pd.to_datetime(df_filtreret['DATE'])
+    df_filtreret = df_filtreret.sort_values('DATE', ascending=True)
+
+    # 3. Metrics øverst
+    col1, col2, col3, col4 = st.columns(4)
+    seneste_xg = df_filtreret['XG'].iloc[-1] if not df_filtreret.empty else 0
+    col1.metric("Kampe analyseret", len(df_filtreret))
+    col2.metric("Gns. xG", round(df_filtreret['XG'].mean(), 2))
+    col3.metric("Seneste xG", round(seneste_xg, 2))
+    col4.metric("Gns. Possession", f"{round(df_filtreret['POSSESSIONPERCENT'].mean(), 1)}%")
+
+    st.markdown("---")
+
+    # --- BANE 1: xG TREND (FORM) ---
+    st.subheader("📊 Offensiv Form (xG pr. kamp)")
+    fig_xg = px.line(df_filtreret, x='DATE', y='XG', title=f"xG udvikling for {valgt_navn}",
+                     labels={'XG': 'Expected Goals', 'DATE': 'Dato'},
+                     line_shape='spline', render_mode='svg')
+    fig_xg.add_hline(y=df_filtreret['XG'].mean(), line_dash="dot", line_color="red", annotation_text="Gennemsnit")
+    fig_xg.update_traces(line_color='#003366')
+    st.plotly_chart(fig_xg, use_container_width=True)
+
+    # --- BANE 2: KAMPSTIL (POSSESSION VS INTENSITET) ---
+    st.subheader("🧠 Spilstils-analyse")
+    col_a, col_b = st.columns(2)
+    
+    with col_a:
+        # Scatter plot over hvordan de vinder/kontrollerer
+        fig_style = px.scatter(df_filtreret, x='POSSESSIONPERCENT', y='CHALLENGEINTENSITY',
+                               size='XG', color='GOALS',
+                               title="Besiddelse vs. Duel-intensitet",
+                               labels={'POSSESSIONPERCENT': 'Besiddelse %', 'CHALLENGEINTENSITY': 'Duel-intensitet'})
+        st.plotly_chart(fig_style, use_container_width=True)
+
+    with col_b:
+        # Fordeling af afslutninger
+        fig_shots = px.histogram(df_filtreret, x='SHOTS', nbins=15, 
+                                 title="Antal afslutninger pr. kamp",
+                                 labels={'SHOTS': 'Antal skud'}, color_discrete_sequence=['#cc0000'])
+        st.plotly_chart(fig_shots, use_container_width=True)
+
+    # --- BANE 3: DEFENSIVT PRES (PPDA) ---
+    st.subheader("🛡️ Defensiv Struktur (PPDA - Jo lavere, jo højere pres)")
+    # PPDA forklares: Lav PPDA = Aggressivt pres. Høj PPDA = Afventende.
+    fig_ppda = px.area(df_filtreret, x='DATE', y='PPDA', 
+                       title="PPDA Trend (Pres-intensitet)",
+                       labels={'PPDA': 'Passes Per Defensive Action'},
+                       color_discrete_sequence=['#2ecc71'])
+    st.plotly_chart(fig_ppda, use_container_width=True)
+
+    # 4. Rå data tabel nederst
+    with st.expander("Se alle rå kampdata"):
+        st.dataframe(df_filtreret.sort_values('DATE', ascending=False), use_container_width=True)
