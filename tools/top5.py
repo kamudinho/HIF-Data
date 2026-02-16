@@ -11,8 +11,8 @@ def vis_side(spillere_df, stats_df):
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
         <div style="background-color:#df003b; padding:12px; border-radius:4px; margin-bottom:15px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">TOP 5 PRÆSTATIONER</h3>
-            <p style="color:white; margin:0; text-align:center; font-size:11px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.2rem;">TOP 5 PRÆSTATIONER</h3>
+            <p style="color:white; margin:0; text-align:center; font-size:13px; opacity:0.9;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -37,15 +37,13 @@ def vis_side(spillere_df, stats_df):
     pos_map = {'GKP': 'MM', 'DEF': 'FOR', 'MID': 'MID', 'FWD': 'ANG'}
     df['POS_DISPLAY'] = df['ROLECODE3'].map(pos_map).fillna(df['ROLECODE3'])
 
-    # --- 4. KNAPPER (Justeret til at flugte med 3 kolonner) ---
+    # --- 4. KNAPPER ---
     c1, c2, c3 = st.columns(3)
     with c1:
         valgt_kat = st.pills("Kategori", ["Offensivt", "Generelt"], default="Offensivt", label_visibility="collapsed")
     with c3:
-        # Segmented control placeret i højre side
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
-    # KPI Opsætning (6 KPI'er i alt = 2 fulde linjer med 3 i hver)
     KPI_MAP = {
         'GOALS': 'Mål', 'ASSISTS': 'Assists', 'SHOTS': 'Skud', 'XGSHOT': 'xG',
         'TOUCHINBOX': 'Touch i feltet', 'PROGRESSIVEPASSES': 'Prog. Pasninger'
@@ -58,11 +56,11 @@ def vis_side(spillere_df, stats_df):
     
     st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
-    # --- 5. RENDER TABELLER (3-kolonne layout) ---
+    # --- 5. RENDER TABELLER (3-kolonne layout med større skrift) ---
     cols = st.columns(3)
     for i, kpi in enumerate(kpis):
         if kpi in df.columns:
-            with cols[i % 3]: # Bruger Modulo 3 for at skifte kolonne korrekt
+            with cols[i % 3]:
                 temp_df = df.copy()
                 temp_df[kpi] = pd.to_numeric(temp_df[kpi], errors='coerce').fillna(0)
                 
@@ -75,23 +73,23 @@ def vis_side(spillere_df, stats_df):
 
                 html = f"""
                 <div style="background:white; border:1px solid #eee; border-radius:4px; padding:0px; margin-bottom:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <div style="padding:8px 10px; border-bottom: 2px solid #df003b;">
-                        <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">{KPI_MAP.get(kpi, kpi)}</h4>
+                    <div style="padding:10px; border-bottom: 2px solid #df003b;">
+                        <h4 style="color:#333; margin:0; font-family:sans-serif; font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">{KPI_MAP.get(kpi, kpi)}</h4>
                     </div>
-                    <table style="width:100%; font-size:11px; border-collapse:collapse; font-family:sans-serif;">
-                        <tr style="color:#999; text-align:left; font-size:9px; text-transform:uppercase; background:#fafafa;">
-                            <th style="padding:6px 8px; width:35px;">Pos</th>
-                            <th style="padding:6px 8px;">Spiller</th>
-                            <th style="padding:6px 8px; text-align:right;">{visning}</th>
+                    <table style="width:100%; font-size:13px; border-collapse:collapse; font-family:sans-serif;">
+                        <tr style="color:#888; text-align:left; font-size:11px; text-transform:uppercase; background:#fafafa; border-bottom: 1px solid #eee;">
+                            <th style="padding:8px 10px; width:40px;">Pos</th>
+                            <th style="padding:8px 10px;">Spiller</th>
+                            <th style="padding:8px 10px; text-align:right;">{visning}</th>
                         </tr>"""
                 
                 for _, r in top5.iterrows():
                     v = f"{r['VAL']:.2f}" if (visning == "Pr. 90" or kpi == 'XGSHOT') else f"{int(r['VAL'])}"
                     html += f"""
                         <tr style="border-bottom:1px solid #f2f2f2;">
-                            <td style="padding:8px 8px; color:#666;">{r['POS_DISPLAY']}</td>
-                            <td style="padding:8px 8px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{r['NAVN']}</td>
-                            <td style="padding:8px 8px; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
+                            <td style="padding:10px 10px; color:#666;">{r['POS_DISPLAY']}</td>
+                            <td style="padding:10px 10px; font-weight:500; color:#222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{r['NAVN']}</td>
+                            <td style="padding:10px 10px; text-align:right; font-weight:bold; color:#df003b;">{v}</td>
                         </tr>"""
                 
                 html += "</table></div>"
