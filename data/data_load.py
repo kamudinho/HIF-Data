@@ -45,7 +45,7 @@ def _get_snowflake_conn():
 def load_all_data():
     # --- 0. INDLÆS KONFIGURATION (TILFØJET) ---
     try:
-        from data.season_show import SEASONNAM, TEAM_WYID, COMPETITION_WYID
+        from data.season_show import SEASONNAME, TEAM_WYID, COMPETITION_WYID
     except ImportError:
         # Fallback hvis filen ikke findes
         SEASONNAME, TEAM_WYID, COMPETITION_WYID = "2025/2026", 38331, 3134
@@ -172,7 +172,7 @@ def load_all_data():
     # --- 3. FILTRERING BASERET PÅ CONFIG (TILFØJET) ---
     if df_playerstats is not None and not df_playerstats.empty:
         df_playerstats = df_playerstats[
-            (df_playerstats['SEASONNAME'] == SEASONNAM) & 
+            (df_playerstats['SEASONNAME'] == SEASONNAME) & 
             (df_playerstats['TEAM_WYID'] == TEAM_WYID)
         ].copy()
 
