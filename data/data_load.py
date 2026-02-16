@@ -67,27 +67,24 @@ def load_all_data(season_ids=[191807]): # Tilføjet standard-værdi så den ikke
 
         try:
             # A: SHOT-QUERY
-            q_shots = f"""
+            # Denne query henter det hele i ét hug
+            q_combined = f"""
             SELECT 
-                c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, 
-                c.PRIMARYTYPE, s.SHOTBODYPART, s.SHOTISGOAL, s.SHOTXG, 
-                m.MATCHLABEL, e.TEAM_WYID, m.SEASON_WYID, sn.SEASONNAME
+            c.LOCATIONX, 
+            c.LOCATIONY, 
+            c.PRIMARYTYPE, 
+            e.TEAM_WYID, 
+            m.MATCHLABEL, 
+            s.SHOTXG
             FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-            JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
+            LEFT JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
             JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
             JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            JOIN AXIS.WYSCOUT_SEASONS sn ON m.SEASON_WYID = sn.SEASON_WYID
-            {season_filter}
-            """
-            
-            # B: PASSES
-            p_filter = season_filter.replace('WHERE', 'AND') if season_filter else ''
-            q_passes = f"""
-            SELECT c.LOCATIONX, c.LOCATIONY, c.TEAM_WYID, m.MATCHLABEL, m.SEASON_WYID
-            FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-            JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            WHERE c.PRIMARYTYPE = 'pass' AND c.LOCATIONX > 60
-            {p_filter}
+            WHERE m.SEASON_WYID = {season_id}
+            AND (
+            c.PRIMARYTYPE IN ('shot', 'pass') -- Dine egne aktioner
+            OR c.PRIMARYTYPE = 'shot_against'  -- Modstanderens skud mod dig
+            )
             """
 
             # C: STATS
