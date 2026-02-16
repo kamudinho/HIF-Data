@@ -51,7 +51,6 @@ def load_all_data(season_id=191807, competition_id=3134, team_id=38331):
                 JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                WHERE m.SEASON_WYID = {season_id}
             """
             df_shotevents = conn.query(q_shots)
 
