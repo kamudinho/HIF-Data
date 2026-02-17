@@ -111,8 +111,8 @@ elif sel == "Heatmaps":
 elif sel == "Modstanderanalyse":
     import tools.modstanderanalyse as ma
     # Vi sender Snowflake-data (team_matches) og den færdige navne-oversigt (hold_map)
-    ma.vis_side(dp["team_matches"], dp["hold_map"])
-
+    ma.vis_side(dp["team_matches"], dp["hold_map"], dp["shotevents"])
+    
 # --- GRUPPE: SCOUTING ---
 elif sel == "Database":
     import tools.scout_db as sdb
