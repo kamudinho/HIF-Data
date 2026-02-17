@@ -141,6 +141,7 @@ def vis_side(df_spillere):
         pot = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         styrker = st.text_area("Styrker")
+        udvikling = st.text_area("Udvikling")
         vurdering = st.text_area("Samlet vurdering")
 
         if st.form_submit_button("Gem rapport", use_container_width=True):
@@ -150,7 +151,7 @@ def vis_side(df_spillere):
                     p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
                     avg, status, pot, styrker, vurdering,
                     beslut, fart, aggres, att, udhold, leder, teknik, intel
-                ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
+                ]], columns=["PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
                 
                 if save_to_github(ny_df) in [200, 201]:
                     st.success("Rapport gemt!")
