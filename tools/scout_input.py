@@ -12,6 +12,17 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 
+def get_all_scouted_players():
+    """Henter alle unikke navne fra scouting-databasen på GitHub"""
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        content = r.json()
+        df = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
+        return df
+    return pd.DataFrame()
+
 def save_to_github(new_row_df):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -25,6 +36,7 @@ def save_to_github(new_row_df):
     else:
         sha = None
         updated_csv = new_row_df.to_csv(index=False)
+    
     payload = {
         "message": f"Scouting: {new_row_df['Navn'].values[0]}",
         "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
@@ -35,17 +47,25 @@ def save_to_github(new_row_df):
 def vis_side(df_players, df_stats_all=None):
     st.write("#### Scoutrapport")
     
-    # Hent logget bruger
     logged_in_user = st.session_state.get("user", "Ukendt").upper()
-    names_system = sorted(df_players['NAVN'].dropna().unique().tolist()) if df_players is not None else []
+    
+    # --- SAML ALLE SPILLERE ---
+    # 1. Navne fra truppen/Wyscout
+    names_system = df_players['NAVN'].dropna().unique().tolist() if df_players is not None else []
+    
+    # 2. Navne fra tidligere scouting (Hentes her for at sikre ALLE er med)
+    df_scouting_all = get_all_scouted_players()
+    names_scouting = df_scouting_all['Navn'].dropna().unique().tolist() if not df_scouting_all.empty else []
+    
+    # Kombiner og sortér
+    all_names = sorted(list(set(names_system + names_scouting)))
 
     # 1. VALG AF METODE (RADIO)
     kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
 
-    # 2. KOMPAKT LINJE: NAVN/VALG, POSITION, KLUB, SCOUT
+    # 2. KOMPAKT LINJE
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     
-    # Initialiser værdier
     p_id = f"999{datetime.now().strftime('%H%M%S')}"
     navn_endelig = ""
     klub_val = ""
@@ -53,13 +73,21 @@ def vis_side(df_players, df_stats_all=None):
 
     with c1:
         if kilde == "Vælg eksisterende":
-            valgt_navn = st.selectbox("Vælg spiller", options=[""] + names_system)
+            valgt_navn = st.selectbox("Vælg spiller", options=[""] + all_names)
             if valgt_navn:
-                info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
-                p_id = str(info.get('PLAYER_WYID', '0'))
                 navn_endelig = valgt_navn
-                klub_val = str(info.get('HOLD', ''))
-                pos_val = str(info.get('POS', ''))
+                # Tjek først i trup-data
+                if df_players is not None and valgt_navn in names_system:
+                    info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
+                    p_id = str(info.get('PLAYER_WYID', '0'))
+                    klub_val = str(info.get('HOLD', ''))
+                    pos_val = str(info.get('POS', ''))
+                # Ellers tjek i scouting-data
+                elif not df_scouting_all.empty and valgt_navn in names_scouting:
+                    info = df_scouting_all[df_scouting_all['Navn'] == valgt_navn].iloc[-1] # Tag nyeste entry
+                    p_id = str(info.get('PLAYER_WYID', '0'))
+                    klub_val = str(info.get('Klub', ''))
+                    pos_val = str(info.get('Position', ''))
         else:
             navn_endelig = st.text_input("Navn på ny spiller")
 
@@ -86,7 +114,7 @@ def vis_side(df_players, df_stats_all=None):
         intel = col8.select_slider("Intel.", options=[1,2,3,4,5,6], value=3)
 
         st.divider()
-        m1, m2, _ = st.columns([1, 1, 2])
+        m1, m2, _ = st.columns([1, 2])
         status = m1.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         potentiale = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
