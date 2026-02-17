@@ -44,9 +44,9 @@ def _get_snowflake_conn():
 def load_all_data():
     # --- 0. INDLÆS KONFIGURATION ---
     try:
-        from data.season_show import SEASONNAME, TEAM_WYID, COMPETITION_WYID
+        from data.season_show import SEASONNAME, COMPETITION_WYID
     except ImportError:
-        SEASONNAME, TEAM_WYID = "2024/2025", 38331
+        SEASONNAME = "2024/2025"
         COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
