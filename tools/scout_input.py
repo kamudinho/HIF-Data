@@ -4,7 +4,6 @@ import pandas as pd
 import requests
 import base64
 from datetime import datetime
-import uuid
 from io import StringIO
 from data.data_load import write_log
 
@@ -40,35 +39,36 @@ def vis_side(df_players, df_stats_all=None):
     logged_in_user = st.session_state.get("user", "Ukendt").upper()
     names_system = sorted(df_players['NAVN'].dropna().unique().tolist()) if df_players is not None else []
 
-    # --- ÉN LINJE: VALG, POSITION, KLUB, SCOUT ---
+    # 1. VALG AF METODE (RADIO)
+    kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
+
+    # 2. KOMPAKT LINJE: NAVN/VALG, POSITION, KLUB, SCOUT
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     
-    with c1:
-        valgt_navn = st.selectbox("**Vælg spiller**", options=["-- Opret ny --"] + names_system)
-    
-    # Initialiser data baseret på valg
+    # Initialiser værdier
     p_id = f"999{datetime.now().strftime('%H%M%S')}"
+    navn_endelig = ""
     klub_val = ""
     pos_val = ""
-    navn_endelig = ""
 
-    if valgt_navn != "-- Opret ny --":
-        info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
-        p_id = str(info.get('PLAYER_WYID', '0'))
-        navn_endelig = valgt_navn
-        klub_val = str(info.get('HOLD', ''))
-        pos_val = str(info.get('POS', ''))
-    
+    with c1:
+        if kilde == "Vælg eksisterende":
+            valgt_navn = st.selectbox("Vælg spiller", options=[""] + names_system)
+            if valgt_navn:
+                info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
+                p_id = str(info.get('PLAYER_WYID', '0'))
+                navn_endelig = valgt_navn
+                klub_val = str(info.get('HOLD', ''))
+                pos_val = str(info.get('POS', ''))
+        else:
+            navn_endelig = st.text_input("Navn på ny spiller")
+
     with c2:
         pos_input = st.text_input("Position", value=pos_val)
     with c3:
         klub_input = st.text_input("Klub", value=klub_val)
     with c4:
-        st.text_input("Scout (Auto)", value=logged_in_user, disabled=True)
-
-    # Hvis det er en ny spiller, skal vi bruge et navn-felt (vises kun ved "Opret ny")
-    if valgt_navn == "-- Opret ny --":
-        navn_endelig = st.text_input("Indtast navn på ny spiller")
+        st.text_input("Scout", value=logged_in_user, disabled=True)
 
     # --- FORMULAR TIL RATINGS ---
     with st.form("scout_form", clear_on_submit=True):
