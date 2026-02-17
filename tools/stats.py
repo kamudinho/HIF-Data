@@ -10,12 +10,26 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 1. CSS INJECTION (Ensretning med Top 5) ---
+    # --- 1. CSS INJECTION (Layout & Flugtning med Top 5) ---
     st.markdown("""
         <style>
-            .block-container { padding-top: 1rem !important; max-width: 98% !important; }
-            .main { background-color: white; }
-            /* Centrering og knap-layout */
+            /* 1. Fjern luft i toppen af selve siden */
+            .block-container { 
+                padding-top: 1rem !important; 
+                max-width: 98% !important; 
+            }
+            
+            /* 2. Tving knapper og grafik højere op for at matche Top 5 */
+            div[data-testid="stVerticalBlock"] > div:has(div[data-testid="stHorizontalBlock"]) {
+                margin-top: -10px !important;
+            }
+
+            /* 3. Flyt Plotly-grafen opad for at fjerne "huller" */
+            .stPlotlyChart { 
+                margin-top: -25px !important; 
+            }
+
+            /* 4. Samme knap-layout som Top 5 */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
             }
@@ -23,8 +37,6 @@ def vis_side(spillere, player_stats_sn):
                 width: fit-content !important;
                 margin-left: auto !important;
             }
-            /* Fjern unødig padding i toppen af grafer */
-            .stPlotlyChart { margin-top: -15px !important; }
         </style>
     """, unsafe_allow_html=True)
 
