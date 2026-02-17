@@ -121,15 +121,25 @@ def load_all_data():
 
             # E: PLAYERSTATS (Hoveddata)
             q_playerstats = """
-                SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
-                       s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, s.TEAM_WYID
+                SELECT 
+                    s.PLAYER_WYID, 
+                    p.FIRSTNAME, 
+                    p.LASTNAME, 
+                    t.TEAMNAME, 
+                    se.SEASONNAME,  
+                    s.MATCHES, 
+                    s.MINUTESONFIELD, 
+                    s.GOALS, 
+                    s.ASSISTS, 
+                    s.SHOTS, 
+                    s.XGSHOT, 
+                    p.CURRENTTEAM_WYID AS TEAM_WYID -- Vi henter ID fra p i stedet for s
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
             """
             df_playerstats = conn.query(q_playerstats)
-
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
