@@ -4,11 +4,14 @@ import requests
 import base64
 from datetime import datetime
 import uuid
+from io import StringIO
 
 # --- KONFIGURATION OG ADGANG ---
+# REPO skal kun være "bruger/repo"
+# FILE_PATH skal indeholde hele stien fra roden
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO = "Kamudinho/HIF-data/data/"
-FILE_PATH = "scouting_db.csv"
+REPO = "Kamudinho/HIF-data"
+FILE_PATH = "data/scouting_db.csv"
 
 POS_MAP = {
     1: "MM", 2: "HB", 3: "CB", 4: "CB", 5: "VB", 
@@ -17,23 +20,38 @@ POS_MAP = {
 }
 
 def save_to_github(new_row_df):
+    """Henter eksisterende CSV, tilføjer række og uploader til GitHub."""
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # 1. Forsøg at hente eksisterende fil
     r = requests.get(url, headers=headers)
+    
     if r.status_code == 200:
         content = r.json()
         sha = content['sha']
-        old_csv = base64.b64decode(content['content']).decode('utf-8')
-        new_row_str = ",".join([f'"{str(x)}"' for x in new_row_df.values[0]])
-        updated_csv = old_csv.strip() + "\n" + new_row_str
+        # Dekod eksisterende indhold
+        old_csv_raw = base64.b64decode(content['content']).decode('utf-8')
+        old_df = pd.read_csv(StringIO(old_csv_raw))
+        # Kombiner med ny data
+        updated_df = pd.concat([old_df, new_row_df], ignore_index=True)
+        updated_csv = updated_df.to_csv(index=False)
     else:
+        # Hvis filen ikke findes, opret en ny med header
         sha = None
-        updated_csv = ",".join(new_row_df.columns) + "\n" + ",".join([f'"{str(x)}"' for x in new_row_df.values[0]])
+        updated_csv = new_row_df.to_csv(index=False)
+
+    # 2. Forbered payload til GitHub
     payload = {
         "message": f"Scouting: {new_row_df['Navn'].values[0]}",
         "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
         "sha": sha if sha else ""
     }
+    
+    # 3. Send opdatering (PUT)
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
@@ -50,12 +68,14 @@ def vis_side(df_spillere):
 
     st.write("#### Scoutrapport")
     
-    # --- DATA HENTNING ---
+    # --- DATA HENTNING (Læs fra den rigtige mappe) ---
     try:
-        raw_url = f"https://raw.githubusercontent.com/{REPO}/main/data/{FILE_PATH}?nocache={uuid.uuid4()}"
+        # Vi bruger rå URL til læsning (cache busting med uuid for at få de nyeste data)
+        raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         db_scout = pd.read_csv(raw_url)
         scouted_names = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
     except:
+        # Hvis filen er tom eller ikke findes endnu
         scouted_names = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
     kilde_type = st.radio("Metode", ["Find i systemet", "Opret ny spiller"], horizontal=True, label_visibility="collapsed")
@@ -66,7 +86,7 @@ def vis_side(df_spillere):
     c1, c2, c3 = st.columns([2, 1, 1])
     
     if kilde_type == "Find i systemet":
-        system_names = sorted(df_spillere['NAVN'].unique().tolist())
+        system_names = sorted(df_spillere['NAVN'].unique().tolist()) if not df_spillere.empty else []
         manual_names = sorted(scouted_names['Navn'].unique().tolist())
         alle_navne = sorted(list(set(system_names + manual_names)))
         
@@ -83,7 +103,6 @@ def vis_side(df_spillere):
                 info = scouted_names[scouted_names['Navn'] == valgt_navn].iloc[0]
                 p_id, pos_default, klub_default = info['ID'], info['Position'], info['Klub']
             
-            # VIS ID TYDELIGT
             st.markdown(f"<p class='id-label'>ID: {p_id}</p>", unsafe_allow_html=True)
             
         with c2: pos_val = st.text_input("Position", value=pos_default)
@@ -130,16 +149,21 @@ def vis_side(df_spillere):
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn and p_id:
                 avg_rating = round(sum([beslut, fart, aggres, attitude, udhold, leder, teknik, intel]) / 8, 1)
+                
+                # Opret DataFrame til den nye række
                 ny_data = pd.DataFrame([[
                     p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
                     avg_rating, status, potentiale, styrker, udvikling, vurdering,
                     beslut, fart, aggres, attitude, udhold, leder, teknik, intel
                 ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
                 
-                res = save_to_github(ny_data)
-                if res in [200, 201]:
-                    st.success("Rapport gemt!")
+                # Kør gemme-funktionen
+                status_code = save_to_github(ny_data)
+                
+                if status_code in [200, 201]:
+                    st.success(f"Rapport gemt i {FILE_PATH}!")
+                    st.balloons()
                 else: 
-                    st.error(f"Fejl ved gem: {res}")
+                    st.error(f"Fejl ved gem: {status_code}. Tjek dine GITHUB_TOKEN rettigheder.")
             else: 
                 st.error("Udfyld venligst navn.")
