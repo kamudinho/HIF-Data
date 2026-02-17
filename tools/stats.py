@@ -67,19 +67,30 @@ def vis_side(spillere, player_stats_sn):
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- 4. BEREGNING ---
+   # --- 4. BEREGNING (RETTET) ---
     min_col = "MINUTESONFIELD"
+    
+    # 1. FIX: Fjern dubletter før vi summerer. 
+    # Vi antager, at en unik kombination af spillernavn, minutter og mål pr. række er nok til at spotte en dublet.
+    # Hvis du har et MATCHID eller en unik DATE i dit Snowflake-træk, så tilføj den til subset herunder.
+    df_unique = df_hif.drop_duplicates(subset=['PLAYER_WYID', 'NAVN', 'MINUTESONFIELD', 'GOALS', 'ASSISTS'])
+
     if valg_label in kategorier_uden_pct:
         kolonne = kategorier_uden_pct[valg_label]
-        df_group = df_hif.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
+        # Vi summerer på det rensede datasæt
+        df_group = df_unique.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
+        
         if visning == "Pr. 90" and valg_label != "Minutter":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[kolonne] / df_group[min_col] * 90), 0)
         else:
             df_group['VAL'] = df_group[kolonne]
         df_group['LABEL'] = df_group['VAL'].apply(lambda x: f"{x:.2f}" if x % 1 != 0 else f"{int(x)}")
+    
     else:
         tot_col, suc_col = kategorier_med_pct[valg_label]
-        df_group = df_hif.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
+        # Vi summerer på det rensede datasæt
+        df_group = df_unique.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
+        
         df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
         if visning == "Pr. 90":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[tot_col] / df_group[min_col] * 90), 0)
