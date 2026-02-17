@@ -89,3 +89,11 @@ def vis_side(df_players, df_playerstats):
                 if save_to_github(ny_data) in [200, 201]:
                     st.success(f"Rapport gemt på {p_navn} (ID: {p_id})")
                     st.rerun()
+
+
+# DEBUG TJEK - Fjern når det virker
+with st.expander("Debug: Hvad ser systemet?"):
+    st.write(f"Antal spillere i master_df: {len(master_df)}")
+    if not master_df.empty:
+        st.write("Format på ID:", type(master_df['PLAYER_WYID'].iloc[0]))
+        st.write("Første 5 ID'er:", master_df['PLAYER_WYID'].head().tolist())
