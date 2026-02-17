@@ -19,10 +19,10 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Aggressiv Højrestilling) ---
+    # --- 3. CSS INJECTION (Aggressiv Højrestilling & Oprykning) ---
     st.markdown("""
         <style>
-            /* 1. Fjern begrænsninger på kolonne-mellemrum */
+            /* 1. Generel layout-justering */
             [data-testid="column"] {
                 display: flex !important;
                 flex-direction: column !important;
@@ -30,20 +30,27 @@ def vis_side(df):
                 width: 100% !important;
             }
 
-            /* 2. Tving den sidste kolonne helt ud til højre side af skærmen */
+            /* 2. Ryk banen og menuen OP mod headeren */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
+                margin-top: -25px !important; /* Trækker indholdet op */
             }
             
+            /* Fjern Streamlits standard top-luft i kolonnerne */
+            div[data-testid="stVerticalBlock"] > div {
+                padding-top: 0px !important;
+            }
+
+            /* 3. Tving menu-kolonnen helt ud til højre kant */
             div[data-testid="stHorizontalBlock"] > div:last-child {
                 flex: 0 1 auto !important;
-                min-width: 130px !important; /* Lige præcis bred nok til knapperne */
+                min-width: 130px !important;
                 padding-left: 0px !important;
                 padding-right: 0px !important;
                 align-items: flex-end !important;
             }
 
-            /* 3. Tving knapperne helt ud til højre kant af deres egen container */
+            /* 4. Pill Button Styling (Formationer) */
             div.stButton {
                 text-align: right !important;
                 width: 100% !important;
@@ -55,7 +62,7 @@ def vis_side(df):
                 background-color: white !important;
                 color: #333 !important;
                 width: 110px !important;
-                margin-left: auto !important; /* Skubber dem væk fra banen */
+                margin-left: auto !important;
                 margin-right: 0px !important;
                 display: block !important;
             }
@@ -66,7 +73,7 @@ def vis_side(df):
                 font-weight: bold !important;
             }
 
-            /* 4. Popover styling - skal også helt til højre */
+            /* 5. Popover styling (Trup-knap) */
             div[data-testid="stPopover"] {
                 width: 100% !important;
                 display: flex !important;
@@ -79,10 +86,12 @@ def vis_side(df):
         </style>
     """, unsafe_allow_html=True)
 
-    # BRANDING HEADER
-    st.markdown(f"""<div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase;">TAKTIK & KONTRAKTER</h3>
-    </div>""", unsafe_allow_html=True)
+    # --- 4. TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:5px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px;">TAKTIK & KONTRAKTER</h3>
+        </div>
+    """, unsafe_allow_html=True)
 
     # --- 4. DATA PROCESSERING ---
     df_squad = df.copy()
