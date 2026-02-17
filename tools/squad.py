@@ -17,18 +17,18 @@ def vis_side(df):
     hif_rod = "#df003b"
     gul_udlob = "#ffffcc"
     leje_gra = "#d3d3d3"
+    rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Højrestillet menu & knap-styling) ---
+    # --- 3. CSS INJECTION (Højrestillet menu & Tabel-styling fra players.py) ---
     st.markdown(f"""
         <style>
             .block-container {{ padding-top: 1rem !important; max-width: 98% !important; }}
             
-            /* Højrestil indhold i højre kolonne */
+            /* Højrestil menu-kolonnen */
             [data-testid="column"]:last-child {{
                 display: flex;
                 flex-direction: column;
                 align-items: flex-end !important;
-                text-align: right;
             }}
 
             /* Pill Button Styling */
@@ -38,10 +38,9 @@ def vis_side(df):
                 background-color: white !important;
                 color: #333 !important;
                 padding: 4px 15px !important;
-                width: 100px !important; /* Fast bredde for ensartet look i menuen */
+                width: 120px !important;
                 transition: all 0.2s;
             }}
-            
             div.stButton > button[kind="primary"] {{
                 background-color: white !important;
                 color: {hif_rod} !important;
@@ -49,16 +48,34 @@ def vis_side(df):
                 font-weight: bold !important;
             }}
 
-            /* Popover bredde */
-            [data-testid="stPopoverBody"] {{ width: 380px !important; }}
+            /* Popover-vindue styling */
+            [data-testid="stPopoverBody"] {{ width: 400px !important; padding: 0px !important; }}
+            
+            /* Tabel-stil magen til players.py */
+            .squad-tabel {{
+                width: 100%;
+                border-collapse: collapse;
+                font-family: sans-serif;
+                font-size: 13px;
+            }}
+            .squad-tabel tr {{ border-bottom: 1px solid #f2f2f2; }}
+            .squad-tabel th {{
+                background: #fafafa;
+                border-bottom: 2px solid {hif_rod};
+                color: #888;
+                font-size: 10px;
+                text-transform: uppercase;
+                padding: 8px 10px;
+                text-align: left;
+            }}
+            .squad-tabel td {{ padding: 8px 10px; color: #222; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP BRANDING ---
+    # --- 4. BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem; text-transform:uppercase;">TAKTIK & KONTRAKTER</h3>
-            <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | Taktisk Oversigt</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -69,36 +86,38 @@ def vis_side(df):
     
     idag = datetime.now()
     if 'CONTRACT' in df_squad.columns:
-        df_squad['CONTRACT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
-        df_squad['DAYS_LEFT'] = (df_squad['CONTRACT'] - idag).dt.days
+        df_squad['CONTRACT_DT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
+        df_squad['DAYS_LEFT'] = (df_squad['CONTRACT_DT'] - idag).dt.days
 
-    def get_status_color(row):
-        if str(row.get('PRIOR', '')).upper() == 'L': return leje_gra
-        days = row.get('DAYS_LEFT', 999)
-        if pd.isna(days): return 'white'
-        if days < 183: return "#ffcccc"
-        if days <= 365: return "#ffffcc"
-        return 'white'
-
-    # --- 6. HOVED-LAYOUT (Bane til venstre, Menu til højre) ---
+    # --- 6. HOVED-LAYOUT ---
     col_pitch, col_menu = st.columns([5, 1], gap="medium")
 
     with col_menu:
-        # Popover øverst i menuen
-        with st.popover("Kontrakter", use_container_width=True):
-            df_display = df_squad[['NAVN', 'CONTRACT']].copy()
-            st.dataframe(
-                df_display.style.apply(lambda r: [f'background-color: {get_status_color(df_squad.loc[r.name])}']*len(r), axis=1),
-                column_config={
-                    "NAVN": st.column_config.TextColumn("Navn"),
-                    "CONTRACT": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY"),
-                },
-                hide_index=True, use_container_width=True, height=450
-            )
+        # --- HTML TABEL TIL POPOVER ---
+        with st.popover("Vis Kontrakter", use_container_width=True):
+            html = '<table class="squad-tabel"><tr><th>Spiller</th><th style="text-align:right;">Udløb</th></tr>'
+            
+            # Sorter efter navn for overblik
+            for _, r in df_squad.sort_values('NAVN').iterrows():
+                # Farvelogik magen til players.py
+                bg = "transparent"
+                days = r.get('DAYS_LEFT', 999)
+                if str(r.get('PRIOR', '')).upper() == 'L': bg = leje_gra
+                elif pd.notna(days):
+                    if days < 183: bg = rod_udlob
+                    elif days <= 365: bg = gul_udlob
+                
+                kontrakt_str = r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"
+                html += f'''
+                    <tr style="background-color:{bg};">
+                        <td style="font-weight:600;">{r['NAVN']}</td>
+                        <td style="text-align:right;">{kontrakt_str}</td>
+                    </tr>
+                '''
+            html += '</table>'
+            st.markdown(html, unsafe_allow_html=True)
         
         st.write("---")
-        st.caption("Formation")
-        # Vertikale knapper til højre
         formations = ["3-4-3", "4-3-3", "3-5-2"]
         for f in formations:
             if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
@@ -106,18 +125,18 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # Pitch Render
+        # Pitch Render (Bane-logikken forbliver den samme stærke version)
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333333', linewidth=1)
         fig, ax = pitch.draw(figsize=(12, 9))
         
-        # Legend (Lille og diskret i hjørnet)
-        legend_items = [("#ffcccc", "< 6 mdr"), ("#ffffcc", "6-12 mdr"), (leje_gra, "Leje")]
+        # Legend
+        legend_items = [(rod_udlob, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
         for i, (color, text) in enumerate(legend_items):
             ax.text(1, 2 + (i * 3), text, size=8, color="black", va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
+        # Formation rendering...
         form_valg = st.session_state.formation_valg
-        # Formation defineres her...
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 7: (60, 70, 'HWB'), 
@@ -138,10 +157,16 @@ def vis_side(df):
                 ax.text(x_pos, y_pos - 4.5, f" {label} ", size=10, color="white", va='center', ha='center', fontweight='bold',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
                 for i, (_, p) in enumerate(spillere_pos.iterrows()):
-                    bg_color = get_status_color(p)
+                    # Match farve på banen med tabellen
+                    days_p = p.get('DAYS_LEFT', 999)
+                    bg_p = "white"
+                    if str(p.get('PRIOR', '')).upper() == 'L': bg_p = leje_gra
+                    elif pd.notna(days_p):
+                        if days_p < 183: bg_p = rod_udlob
+                        elif days_p <= 365: bg_p = gul_udlob
+                    
                     ax.text(x_pos, (y_pos - 1.5) + (i * 2.2), f" {p['NAVN']} ", size=9, 
                             color="black", va='top', ha='center', fontweight='bold',
-                            bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+                            bbox=dict(facecolor=bg_p, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
 
-        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
         st.pyplot(fig, use_container_width=True)
