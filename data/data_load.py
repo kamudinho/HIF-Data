@@ -84,7 +84,7 @@ def load_all_data():
                     AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
                 """,
                 "team_matches": f"""
-                    SELECT tm.*, m.MATCHLABEL, m.DATE, m.COMPETITION_WYID, g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
+                    SELECT tm.*, m.MATCHLABEL, m.DATE, tm.COMPETITION_WYID, g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
                     FROM AXIS.WYSCOUT_TEAMMATCHES tm
                     JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
                     LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
