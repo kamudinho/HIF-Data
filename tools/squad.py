@@ -29,7 +29,7 @@ def vis_side(df):
             /* Ryk banen og menuen moderat OP og fjern gap */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: -15px !important;
+                margin-top: 5px !important;
             }
             /* Tving menu-kolonnen helt ud til højre kant */
             div[data-testid="stHorizontalBlock"] > div:last-child {
