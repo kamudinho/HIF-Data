@@ -17,36 +17,33 @@ def vis_side(spillere, player_stats_sn):
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. RENS DATA FØR MERGE (Kritisk for at undgå 83.000 min) ---
-    spillere.columns = [str(c).strip().upper() for c in spillere.columns]
-    player_stats_sn.columns = [str(c).strip().upper() for c in player_stats_sn.columns]
+    # --- 2. RENS & FILTRÉR DATA (Sæson er nu fastlåst) ---
+    spillere.columns = [str(c).upper().strip() for c in spillere.columns]
+    player_stats_sn.columns = [str(c).upper().strip() for c in player_stats_sn.columns]
 
-    # Sørg for PLAYER_WYID er string og ensartet
+    # ID Match Fix
     spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     player_stats_sn['PLAYER_WYID'] = player_stats_sn['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # VIGTIGT: Fjern dubletter i spillertabellen så vi ikke mangedobler stats ved merge
-    spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
-
-    if 'NAVN' not in spillere_clean.columns:
-        spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
-
-    # Sæsonvælger
+    # Automatiske filtre (Ingen dropdown)
     if 'SEASONNAME' in player_stats_sn.columns:
-        saesoner = sorted(player_stats_sn['SEASONNAME'].unique(), reverse=True)
-        valgt_saeson = st.selectbox("Sæson", saesoner, label_visibility="collapsed")
-        df_stats = player_stats_sn[player_stats_sn['SEASONNAME'] == valgt_saeson].copy()
+        df_stats = player_stats_sn[player_stats_sn['SEASONNAME'] == SEASONNAME].copy()
     else:
         df_stats = player_stats_sn.copy()
 
-    # Merge stats med de rensede spiller-navne
+    # Rens dubletter i spillertabellen
+    spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
+    if 'NAVN' not in spillere_clean.columns:
+        spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
+
+    # Merge
     df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
-        st.info("Ingen data fundet.")
+        st.info(f"Ingen data fundet for {SEASONNAME}")
         return
 
-    # --- 3. UI KONTROLLER ---
+    # --- 3. UI KONTROLLER (Pills og Segmented Control) ---
     c1, c2 = st.columns([1, 1], gap="large")
     
     kategorier_med_pct = {
@@ -73,17 +70,13 @@ def vis_side(spillere, player_stats_sn):
 
     # --- 4. BEREGNING (Sikret mod dubletter) ---
     min_col = "MINUTESONFIELD"
-    
-    # Fjern rækker der er 100% identiske (hvis Snowflake sender dublet-rækker)
     df_final = df_hif.drop_duplicates()
 
     if valg_label in kategorier_uden_pct:
         kolonne = kategorier_uden_pct[valg_label]
-        # Gruppér og summér
         df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
         
-        # SIKKERHEDS-CHECK: Hvis en spiller har over 6000 minutter, er det fysisk umuligt.
-        # Så tager vi max i stedet for sum (fordi data må være præ-aggregeret i Snowflake)
+        # Sikkerheds-check (hvis data er præ-aggregeret)
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'max', min_col: 'max'})
 
@@ -97,7 +90,6 @@ def vis_side(spillere, player_stats_sn):
         tot_col, suc_col = kategorier_med_pct[valg_label]
         df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
         
-        # Samme check for procenter
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'max', suc_col: 'max', min_col: 'max'})
 
@@ -111,23 +103,18 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
-    # --- 5. GRAF ---
+    # --- 5. GRAF (Clean Design) ---
     st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
     bar_color = '#df003b' if visning == "Total" else '#333'
 
-    fig = px.bar(
-        df_plot, 
-        x='VAL', 
-        y='NAVN', 
-        orientation='h', 
-        text='LABEL'
-    )
+    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
 
     fig.update_traces(
         marker_color=bar_color,
         textposition='outside',
         cliponaxis=False,
-        textfont_size=12
+        textfont_size=12,
+        hovertemplate='%{y}: <b>%{text}</b><extra></extra>'
     )
 
     fig.update_layout(
