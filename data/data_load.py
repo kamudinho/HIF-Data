@@ -85,8 +85,8 @@ def load_all_data():
                     WHERE s.COMPETITION_WYID IN {comp_filter} AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME='{SEASONNAME}')
                 """,
                 "events": f"""
-                    SELECT * FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON 
-                    WHERE COMPETITION_WYID IN {comp_filter} AND PRIMARYTYPE IN ('pass', 'duel')
+                    SELECT TOP 100 * FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON 
+                    WHERE COMPETITION_WYID IN {comp_filter}
                 """
             }
             for key, q in queries.items():
