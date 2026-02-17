@@ -95,21 +95,30 @@ def vis_side(df):
     # --- 6. HOVEDLAYOUT ---
     col_pitch, col_menu = st.columns([7, 1])
 
-    with col_menu:
-        with st.popover("Trup", use_container_width=True):
-            tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
-                <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
-                    <th style="text-align:left; padding:8px;">Spiller</th>
-                    <th style="text-align:right; padding:8px;">Udløb</th>
-                </tr>'''
-            for _, r in df_squad.sort_values('NAVN').iterrows():
-                bg = get_status_color(r)
-                tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
-                    <td style="padding:8px; font-weight:600;">{r['NAVN']}</td>
-                    <td style="padding:8px; text-align:right;">{r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"}</td>
-                </tr>'''
-            tabel_html += "</table>"
-            st.components.v1.html(tabel_html, height=400, scrolling=True)
+   with col_pitch:
+        # 1. Pitch med pad=0 sikrer at banen fylder hele billedet
+        pitch = Pitch(
+            pitch_type='statsbomb', 
+            pitch_color='#ffffff', 
+            line_color='#333', 
+            linewidth=1,
+            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
+        )
+        fig, ax = pitch.draw(figsize=(13, 8))
+        
+        # 2. Fjern margener i selve figuren
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        
+        # 3. LEGENDS - Placeret øverst (y=79/80)
+        # Vi bruger va='top' for at de "hænger" fra toppen af banen
+        ax.text(1, 79.5, " < 6 mdr ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        
+        ax.text(10, 79.5, " 6-12 mdr ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        
+        ax.text(21, 79.5, " Leje ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         st.write("---")
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
