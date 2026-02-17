@@ -23,6 +23,7 @@ USER_DB = get_users()
 if "logged_in" not in st.session_state: 
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
+    st.session_state["role"] = None # Ny variabel til rolle
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -32,12 +33,21 @@ if not st.session_state["logged_in"]:
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
             if st.form_submit_button("LOG IND", use_container_width=True):
-                if u in USER_DB and USER_DB[u] == p:
+                # Tjek om bruger findes og kode matcher
+                if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
+                    st.session_state["role"] = USER_DB[u]["role"] # Gem rollen
                     st.rerun()
-                else: st.error("Ugyldig bruger eller kode")
+                else: 
+                    st.error("Ugyldig bruger eller kode")
     st.stop()
+
+# --- Rettigheds-tjek funktion ---
+def check_permission(min_role):
+    roles = {"viewer": 1, "scout": 2, "admin": 3}
+    user_role = st.session_state.get("role", "viewer")
+    return roles.get(user_role, 1) >= roles.get(min_role, 1)
 
 # --- 3. DATA LOADING ---
 if "data_package" not in st.session_state:
