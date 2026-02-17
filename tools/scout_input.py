@@ -52,7 +52,7 @@ def vis_side(df_spillere):
     
     # --- DATA HENTNING ---
     try:
-        raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
+        raw_url = f"https://raw.githubusercontent.com/{REPO}/main/data/{FILE_PATH}?nocache={uuid.uuid4()}"
         db_scout = pd.read_csv(raw_url)
         scouted_names = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
     except:
