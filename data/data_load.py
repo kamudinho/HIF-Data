@@ -71,6 +71,7 @@ def load_all_data():
     df_season_stats = pd.DataFrame()
     df_team_matches = pd.DataFrame()
     df_playerstats = pd.DataFrame()
+    df_events = pd.DataFrame()
     hold_map = {}
 
     if conn:
