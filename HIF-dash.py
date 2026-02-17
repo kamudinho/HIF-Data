@@ -43,15 +43,19 @@ if not st.session_state["logged_in"]:
     st.stop()
     
 # --- 3. DATA LOADING ---
-# Vi bruger en try-except blok her for at fange KeyError hvis data_load fejler
 if "data_package" not in st.session_state:
-    try:
-        with st.spinner("Henter systemdata fra Snowflake..."):
-            st.session_state["data_package"] = load_all_data()
-    except Exception as e:
-        st.error(f"🚨 Kunne ikke indlæse data: {e}")
-        st.info("Prøv at rydde cachen ved at trykke på 'C'")
-        st.stop()
+    with st.spinner("Henter systemdata..."):
+        try:
+            # Vi tvinger en frisk indlæsning
+            temp_data = load_all_data()
+            if temp_data and isinstance(temp_data, dict):
+                st.session_state["data_package"] = temp_data
+            else:
+                st.error("Data-pakken blev ikke genereret korrekt.")
+                st.stop()
+        except Exception as e:
+            st.error(f"🚨 Kritisk fejl ved indlæsning: {e}")
+            st.stop()
 
 dp = st.session_state["data_package"]
 
