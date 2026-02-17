@@ -26,10 +26,14 @@ def vis_side(df):
                 display: flex !important;
                 flex-direction: column !important;
             }
-            /* Ryk banen og menuen moderat OP og fjern gap */
+            /* Ryk banen og menuen helt OP mod headeren */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: 5px !important;
+                margin-top: -20px !important;
+            }
+            /* Fjern Streamlits standard top-luft i kolonnerne */
+            div[data-testid="stVerticalBlock"] > div {
+                padding-top: 0px !important;
             }
             /* Tving menu-kolonnen helt ud til højre kant */
             div[data-testid="stHorizontalBlock"] > div:last-child {
@@ -69,7 +73,7 @@ def vis_side(df):
 
     # --- 4. TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:5px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
         </div>
     """, unsafe_allow_html=True)
@@ -95,30 +99,21 @@ def vis_side(df):
     # --- 6. HOVEDLAYOUT ---
     col_pitch, col_menu = st.columns([7, 1])
 
-   with col_pitch:
-        # 1. Pitch med pad=0 sikrer at banen fylder hele billedet
-        pitch = Pitch(
-            pitch_type='statsbomb', 
-            pitch_color='#ffffff', 
-            line_color='#333', 
-            linewidth=1,
-            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
-        )
-        fig, ax = pitch.draw(figsize=(13, 8))
-        
-        # 2. Fjern margener i selve figuren
-        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-        
-        # 3. LEGENDS - Placeret øverst (y=79/80)
-        # Vi bruger va='top' for at de "hænger" fra toppen af banen
-        ax.text(1, 79.5, " < 6 mdr ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        
-        ax.text(10, 79.5, " 6-12 mdr ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        
-        ax.text(21, 79.5, " Leje ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+    with col_menu:
+        with st.popover("Trup", use_container_width=True):
+            tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
+                <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
+                    <th style="text-align:left; padding:8px;">Spiller</th>
+                    <th style="text-align:right; padding:8px;">Udløb</th>
+                </tr>'''
+            for _, r in df_squad.sort_values('NAVN').iterrows():
+                bg = get_status_color(r)
+                tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
+                    <td style="padding:8px; font-weight:600;">{r['NAVN']}</td>
+                    <td style="padding:8px; text-align:right;">{r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"}</td>
+                </tr>'''
+            tabel_html += "</table>"
+            st.components.v1.html(tabel_html, height=400, scrolling=True)
 
         st.write("---")
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
@@ -128,7 +123,6 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # Pitch med pad=0 fjerner den hvide "omkreds"
         pitch = Pitch(
             pitch_type='statsbomb', 
             pitch_color='#ffffff', 
@@ -137,13 +131,15 @@ def vis_side(df):
             pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
         )
         fig, ax = pitch.draw(figsize=(13, 8))
-        # Tvinger indholdet helt ud til kanten af billedet
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # Legend
-        ax.text(1, 78, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(12, 78, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(25, 78, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        # Legend - Placeret helt øverst ved y=80
+        ax.text(1, 80, " < 6 mdr ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(10, 80, " 6-12 mdr ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(21, 80, " Leje ", size=8, fontweight='bold', va='top', ha='left',
+                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         # Formationer
         form = st.session_state.formation_valg
