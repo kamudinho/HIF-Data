@@ -20,7 +20,7 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. DIN SPECIFIKKE CSS INJECTION (Layout & Centrering) ---
+    # --- 3. CSS INJECTION (Layout, Centrering & Knapper) ---
     st.markdown("""
         <style>
             [data-testid="column"] {
@@ -28,11 +28,11 @@ def vis_side(df):
                 flex-direction: column;
                 justify-content: flex-start;
             }
-            /* Højrestiller knapper og indhold i den sidste kolonne */
+            /* Højrestiller alt indhold i menu-kolonnen (sidste kolonne) */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
             }
-            /* Styling af knapper (Pill look) */
+            /* Pill Button Styling */
             div.stButton > button {
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
@@ -48,7 +48,7 @@ def vis_side(df):
                 border: 2px solid #df003b !important;
                 font-weight: bold !important;
             }
-            /* Popover bredde */
+            /* Popover styling */
             [data-testid="stPopoverBody"] { width: 400px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -78,12 +78,12 @@ def vis_side(df):
         if days <= 365: return gul_udlob
         return 'white'
 
-    # --- 6. HOVED-LAYOUT (80/20 split for at give plads til din CSS) ---
-    col_pitch, col_menu = st.columns([4, 1], gap="medium")
+    # --- 6. HOVED-LAYOUT (Banen får 85% og Menuen 15%) ---
+    col_pitch, col_menu = st.columns([6, 1], gap="small")
 
     with col_menu:
-        # --- POPOVER MED DIN HTML TABEL ---
-        with st.popover("Vis Kontrakter", use_container_width=True):
+        # --- POPOVER ("Trup") ---
+        with st.popover("Trup", use_container_width=True):
             tabel_rows = ""
             for _, r in df_squad.sort_values('NAVN').iterrows():
                 bg = get_status_color(r)
@@ -96,7 +96,6 @@ def vis_side(df):
                 </tr>
                 '''
 
-            # Dedent sikrer at HTML ikke tolkes som kodeblok
             fuld_tabel_html = textwrap.dedent(f'''
                 <table style="width:100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px;">
                     <thead>
@@ -113,7 +112,7 @@ def vis_side(df):
             st.markdown(fuld_tabel_html, unsafe_allow_html=True)
         
         st.write("---")
-        # Formationsknapper (Pill look)
+        # Formationsknapper rykket ud til højre via CSS
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
                 st.session_state.formation_valg = f
@@ -122,12 +121,13 @@ def vis_side(df):
     with col_pitch:
         # Pitch Render
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333333', linewidth=1)
-        fig, ax = pitch.draw(figsize=(11, 8))
+        # Vi øger figurens bredde lidt for at udnytte den ekstra plads
+        fig, ax = pitch.draw(figsize=(13, 8))
         
         # Legend
         legend_items = [(rod_udlob, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
         for i, (color, text) in enumerate(legend_items):
-            ax.text(1, 2 + (i * 3), text, size=8, color="black", va='center', ha='left', 
+            ax.text(1, 2 + (i * 3.2), text, size=8, color="black", va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         # Formation rendering
