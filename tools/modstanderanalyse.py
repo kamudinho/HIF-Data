@@ -6,44 +6,43 @@ from mplsoccer import VerticalPitch
 import numpy as np
 
 def vis_side(df_team_matches, hold_map, df_events):
-    # --- 1. CSS STYLING (HIF Look) ---
+    # --- 1. CSS STYLING ---
     st.markdown("""
         <style>
         .stMetric { 
-            background-color: #ffffff; 
-            padding: 10px; 
-            border-radius: 8px; 
-            border-bottom: 3px solid #df003b; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-            margin-bottom: 10px;
+            background-color: #ffffff; padding: 10px; border-radius: 8px; 
+            border-bottom: 3px solid #df003b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
         }
-        [data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
-        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #555; }
+        [data-testid="stMetricValue"] { font-size: 20px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    if df_team_matches is None or df_team_matches.empty:
-        st.error("Kunne ikke finde kampdata.")
-        return
-
-    # --- 2. VALG AF MODSTANDER ---
+    # --- 2. VALG AF MODSTANDER & HALVDEL ---
     tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
     navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_ids}
     
-    valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
+    col_sel1, col_sel2 = st.columns([2, 1])
+    with col_sel1:
+        valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
+    with col_sel2:
+        halvdel = st.radio("Fokusområde:", ["Modstanders halvdel", "Egen halvdel"], horizontal=True)
+
     valgt_id = navne_dict[valgt_navn]
-    
-    # Forbered data
     df_f = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
-    df_f['DATE'] = pd.to_datetime(df_f['DATE']).dt.date
-    
+
     # --- 3. HOVEDLAYOUT ---
-    # Venstre side: De 3 heatmaps | Højre side: Alle de statistiske bokse
-    main_left, main_right = st.columns([2, 1])
+    main_left, main_right = st.columns([2.2, 1])
 
     with main_left:
-        st.subheader(f"Positionsanalyse: {valgt_navn}")
-        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#1a1a1a', linewidth=1)
+        st.subheader(f"Halvdel-analyse: {halvdel}")
+        
+        # Sæt pitch til kun at vise halvdelen (half=True)
+        # VerticalPitch viser som standard den offensive halvdel (X > 50)
+        pitch = VerticalPitch(
+            pitch_type='wyscout', pitch_color='#f8f9fa', 
+            line_color='#1a1a1a', linewidth=1, 
+            half=True # Dette aktiverer 60% view/halvdelen
+        )
         
         c1, c2, c3 = st.columns(3)
 
@@ -51,24 +50,39 @@ def vis_side(df_team_matches, hold_map, df_events):
             df_events.columns = [c.upper() for c in df_events.columns]
             df_hold = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
 
-            # Heatmap farver: Rød (Pass), Blå (Duel), Grøn (Interception)
+            # Filtrer data baseret på valgt halvdel
+            # Wyscout koordinater går fra 0-100. 100 er modstanderens mål.
+            if halvdel == "Modstanders halvdel":
+                df_plot = df_hold[df_hold['LOCATIONX'] >= 50]
+            else:
+                # For at vise egen halvdel "zoomet", flipper vi koordinaterne 
+                # så bunden af banen er vores eget mål
+                df_plot = df_hold[df_hold['LOCATIONX'] < 50]
+                # Vi spejler X, så pitch.draw(half=True) kan tegne det korrekt
+                df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
+
             configs = [
                 (c1, "Afleveringer", "pass", "Reds"),
-                (c2, "Dueller", "duel", "Blues"),
+                (col2, "Dueller", "duel", "Blues"),
                 (c3, "Interceptions", "interception", "Greens")
             ]
 
-            for col, title, p_type, cmap in configs:
+            for col, title, p_type, cmap in [
+                (c1, "Afleveringer", "pass", "Reds"),
+                (c2, "Dueller", "duel", "Blues"),
+                (c3, "Interceptions", "interception", "Greens")
+            ]:
                 with col:
                     st.caption(title)
                     fig, ax = pitch.draw(figsize=(4, 6))
-                    mask = df_hold['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
-                    df_filtered = df_hold[mask]
+                    mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
+                    df_filtered = df_plot[mask]
                     if not df_filtered.empty:
                         sns.kdeplot(x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], 
                                     ax=ax, fill=True, cmap=cmap, alpha=0.6, 
-                                    clip=((0, 100), (0, 100)), levels=10)
+                                    clip=((0, 100), (50, 100)), levels=10)
                     st.pyplot(fig)
+
 
     # --- 4. HØJRE SIDE: STATISTISKE BOKSE (Metrics) ---
     with main_right:
@@ -115,5 +129,8 @@ def vis_side(df_team_matches, hold_map, df_events):
         """)
 
     # --- 5. RÅ DATA TABEL ---
-    with st.expander("Se alle kampdata"):
+    
+        st.info(f"Analysen viser kun hændelser foretaget på **{halvdel.lower()}**.")
+
+    with st.expander("Se kampdata"):
         st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
