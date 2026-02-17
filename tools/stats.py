@@ -10,26 +10,26 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 1. CSS INJECTION (Layout & Flugtning med Top 5) ---
+    # --- 1. CSS INJECTION (Synkronisering med Top 5) ---
     st.markdown("""
         <style>
-            /* 1. Fjern luft i toppen af selve siden */
+            /* Fjern standard Streamlit padding i toppen */
             .block-container { 
-                padding-top: 1rem !important; 
+                padding-top: 0.5rem !important; 
                 max-width: 98% !important; 
             }
             
-            /* 2. Tving knapper og grafik højere op for at matche Top 5 */
+            /* Fjern luft mellem header og knapper */
             div[data-testid="stVerticalBlock"] > div:has(div[data-testid="stHorizontalBlock"]) {
-                margin-top: -10px !important;
+                margin-top: -15px !important;
             }
 
-            /* 3. Flyt Plotly-grafen opad for at fjerne "huller" */
+            /* Træk selve grafen op for at modvirke Plotly's default margin */
             .stPlotlyChart { 
-                margin-top: -25px !important; 
+                margin-top: -30px !important; 
             }
 
-            /* 4. Samme knap-layout som Top 5 */
+            /* Justering af knapper (Pills til venstre, Segmented til højre) */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
             }
@@ -39,7 +39,7 @@ def vis_side(spillere, player_stats_sn):
             }
         </style>
     """, unsafe_allow_html=True)
-
+    
     # --- 2. KOMPAKT TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
