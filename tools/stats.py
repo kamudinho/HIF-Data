@@ -71,7 +71,8 @@ def vis_side(spillere, player_stats_sn):
     c1, c2 = st.columns([1, 1])
     
     # Mapper UI navne til kolonnenavne (XGSHOT er standard i din SQL)
-    kpi_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", "Skud": "SHOTS", "Minutter": "MINUTESONFIELD"}
+    # Vi bruger de navne, vi definerede i SQL 'AS' eller som Snowflake returnerer
+    kpi_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XG", "Minutter": "MINUTESONFIELD"}
     kpi_med_pct = {"Afleveringer": ("PASSES", "SUCCESSFULPASSES"), "Dueller": ("DUELS", "DUELSWON")}
     
     alle_kategorier = list(kpi_uden_pct.keys()) + list(kpi_med_pct.keys())
