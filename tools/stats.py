@@ -17,11 +17,21 @@ def vis_side(spillere, player_stats_sn):
         </div>
     """, unsafe_allow_html=True)
 
-    # 2. Rens & Klargør Data
+    # --- 2. RENS DATA FØR MERGE (Kritisk for at undgå 83.000 min) ---
     spillere.columns = [str(c).strip().upper() for c in spillere.columns]
     player_stats_sn.columns = [str(c).strip().upper() for c in player_stats_sn.columns]
 
-    # Sæsonvælger (Kompakt)
+    # Sørg for PLAYER_WYID er string og ensartet
+    spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    player_stats_sn['PLAYER_WYID'] = player_stats_sn['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
+    # VIGTIGT: Fjern dubletter i spillertabellen så vi ikke mangedobler stats ved merge
+    spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
+
+    if 'NAVN' not in spillere_clean.columns:
+        spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
+
+    # Sæsonvælger
     if 'SEASONNAME' in player_stats_sn.columns:
         saesoner = sorted(player_stats_sn['SEASONNAME'].unique(), reverse=True)
         valgt_saeson = st.selectbox("Sæson", saesoner, label_visibility="collapsed")
@@ -29,20 +39,14 @@ def vis_side(spillere, player_stats_sn):
     else:
         df_stats = player_stats_sn.copy()
 
-    # ID Match Fix
-    spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    df_stats['PLAYER_WYID'] = df_stats['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-
-    if 'NAVN' not in spillere.columns:
-        spillere['NAVN'] = (spillere['FIRSTNAME'].fillna('') + " " + spillere['LASTNAME'].fillna('')).str.strip()
-
-    df_hif = pd.merge(df_stats, spillere[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
+    # Merge stats med de rensede spiller-navne
+    df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
         st.info("Ingen data fundet.")
         return
 
-    # --- 3. UI KONTROLLER (Samme stil som Top 5) ---
+    # --- 3. UI KONTROLLER ---
     c1, c2 = st.columns([1, 1], gap="large")
     
     kategorier_med_pct = {
@@ -57,8 +61,8 @@ def vis_side(spillere, player_stats_sn):
         "Minutter": "MINUTESONFIELD"
     }
 
-    tilgaengelige = [k for k, v in kategorier_med_pct.items() if v[0] in df_hif.columns] + \
-                   [k for k, v in kategorier_uden_pct.items() if v in df_hif.columns]
+    tilgaengelige = [k for k in kategorier_med_pct.keys() if kategorier_med_pct[k][0] in df_hif.columns] + \
+                   [k for k in kategorier_uden_pct.keys() if kategorier_uden_pct[k] in df_hif.columns]
 
     with c1:
         valg_label = st.pills("Statistik", tilgaengelige, default="Mål", label_visibility="collapsed")
@@ -67,19 +71,22 @@ def vis_side(spillere, player_stats_sn):
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
 
-   # --- 4. BEREGNING (RETTET) ---
+    # --- 4. BEREGNING (Sikret mod dubletter) ---
     min_col = "MINUTESONFIELD"
     
-    # 1. FIX: Fjern dubletter før vi summerer. 
-    # Vi antager, at en unik kombination af spillernavn, minutter og mål pr. række er nok til at spotte en dublet.
-    # Hvis du har et MATCHID eller en unik DATE i dit Snowflake-træk, så tilføj den til subset herunder.
-    df_unique = df_hif.drop_duplicates(subset=['PLAYER_WYID', 'NAVN', 'MINUTESONFIELD', 'GOALS', 'ASSISTS'])
+    # Fjern rækker der er 100% identiske (hvis Snowflake sender dublet-rækker)
+    df_final = df_hif.drop_duplicates()
 
     if valg_label in kategorier_uden_pct:
         kolonne = kategorier_uden_pct[valg_label]
-        # Vi summerer på det rensede datasæt
-        df_group = df_unique.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
+        # Gruppér og summér
+        df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
         
+        # SIKKERHEDS-CHECK: Hvis en spiller har over 6000 minutter, er det fysisk umuligt.
+        # Så tager vi max i stedet for sum (fordi data må være præ-aggregeret i Snowflake)
+        if df_group[min_col].max() > 6000:
+            df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'max', min_col: 'max'})
+
         if visning == "Pr. 90" and valg_label != "Minutter":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[kolonne] / df_group[min_col] * 90), 0)
         else:
@@ -88,9 +95,12 @@ def vis_side(spillere, player_stats_sn):
     
     else:
         tot_col, suc_col = kategorier_med_pct[valg_label]
-        # Vi summerer på det rensede datasæt
-        df_group = df_unique.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
+        df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
         
+        # Samme check for procenter
+        if df_group[min_col].max() > 6000:
+            df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'max', suc_col: 'max', min_col: 'max'})
+
         df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
         if visning == "Pr. 90":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[tot_col] / df_group[min_col] * 90), 0)
@@ -101,10 +111,8 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
-    # --- 5. GRAF (Clean Design) ---
+    # --- 5. GRAF ---
     st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
-    
-    # Farvevalg baseret på visning (HIF Rød eller Neutral Grå/Blå)
     bar_color = '#df003b' if visning == "Total" else '#333'
 
     fig = px.bar(
@@ -112,25 +120,23 @@ def vis_side(spillere, player_stats_sn):
         x='VAL', 
         y='NAVN', 
         orientation='h', 
-        text='LABEL',
-        labels={'NAVN': '', 'VAL': ''}
+        text='LABEL'
     )
 
     fig.update_traces(
         marker_color=bar_color,
         textposition='outside',
         cliponaxis=False,
-        textfont_size=12,
-        hovertemplate='%{y}: <b>%{text}</b><extra></extra>'
+        textfont_size=12
     )
 
     fig.update_layout(
-        height=40 + (len(df_plot) * 30), # Dynamisk højde baseret på antal spillere
-        margin=dict(l=0, r=50, t=0, b=0),
+        height=50 + (len(df_plot) * 35),
+        margin=dict(l=0, r=60, t=0, b=0),
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
-        yaxis=dict(autorange="reversed", tickfont_size=13),
+        yaxis=dict(tickfont_size=13, title=""),
         plot_bgcolor='white',
-        paper_bgcolor='white',
+        paper_bgcolor='white'
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
