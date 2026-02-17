@@ -15,11 +15,8 @@ def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
-
         p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(),
-            password=None, 
-            backend=default_backend()
+            p_key_pem.encode(), password=None, backend=default_backend()
         )
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
@@ -37,10 +34,9 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # Dynamisk SQL-filter
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
 
-    # --- 1. GITHUB FILER ---
+    # --- 1. GITHUB DATA (CSV) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
@@ -54,87 +50,61 @@ def load_all_data():
     df_scout_gh = read_gh("scouting_db.csv")
     df_teams_csv = read_gh("teams.csv")
 
-    # --- 2. SNOWFLAKE SETUP ---
+    # --- 2. SNOWFLAKE DATA (SQL) ---
     conn = _get_snowflake_conn()
-    
     res = {
-        "shotevents": pd.DataFrame(), 
-        "season_stats": pd.DataFrame(),
-        "team_matches": pd.DataFrame(), 
-        "playerstats": pd.DataFrame(),
-        "events": pd.DataFrame(), 
-        "hold_map": {}
+        "shotevents": pd.DataFrame(), "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(), "events": pd.DataFrame(), "hold_map": {}
     }
 
     if conn:
         try:
-            # A: Hold-navne mapping (WYSCOUT_TEAMS)
-            df_teams_sn = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
-            if df_teams_sn is not None:
-                res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_teams_sn.values}
-            
-            # B: Queries tilpasset dine præcise kolonnenavne
+            # A: Hold Mapping
+            df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+            if df_t is not None:
+                res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
+
+            # B: Queries baseret på dine Schema-oplysninger
             queries = {
                 "shotevents": f"""
-                    SELECT 
-                        c.EVENT_WYID, c.MATCH_WYID, c.TEAM_WYID, c.PLAYER_WYID, 
-                        c.MINUTE, c.LOCATIONX, c.LOCATIONY, c.PRIMARYTYPE,
-                        m.MATCHLABEL, m.DATE, m.COMPETITION_WYID
+                    SELECT c.*, m.MATCHLABEL, m.DATE 
                     FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                     JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                    WHERE m.COMPETITION_WYID IN {comp_filter}
-                    AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
-                    AND c.PRIMARYTYPE = 'shot'
+                    WHERE c.PRIMARYTYPE = 'shot' AND c.COMPETITION_WYID IN {comp_filter}
                 """,
                 "team_matches": f"""
-                    SELECT 
-                        tm.MATCH_WYID, tm.TEAM_WYID, tm.SEASON_WYID, tm.COMPETITION_WYID, tm.DATE,
-                        m.MATCHLABEL
-                    FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                    SELECT tm.*, m.MATCHLABEL FROM AXIS.WYSCOUT_TEAMMATCHES tm
                     JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
                     WHERE tm.COMPETITION_WYID IN {comp_filter}
-                    AND tm.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
                 """,
                 "playerstats": f"""
-                    SELECT 
-                        s.PLAYER_WYID, s.SEASON_WYID, s.COMPETITION_WYID,
-                        s.MATCHES, s.GOALS, s.ASSISTS, s.XGSHOT, s.SHOTS,
-                        p.SHORTNAME, p.FIRSTNAME, p.LASTNAME, p.CURRENTTEAM_WYID, p.ROLECODE3
+                    SELECT s.PLAYER_WYID, s.GOALS, s.ASSISTS, s.XGSHOT, s.MATCHES, 
+                           p.SHORTNAME, p.ROLECODE3, p.CURRENTTEAM_WYID
                     FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                     JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID AND s.SEASON_WYID = p.SEASON_WYID
-                    WHERE s.COMPETITION_WYID IN {comp_filter}
-                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
+                    WHERE s.COMPETITION_WYID IN {comp_filter} AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME='{SEASONNAME}')
                 """,
                 "events": f"""
-                    SELECT 
-                        MATCH_WYID, TEAM_WYID, PLAYER_WYID, PRIMARYTYPE, 
-                        LOCATIONX, LOCATIONY, POSSESSIONSTARTLOCATIONX, POSSESSIONSTARTLOCATIONY,
-                        COMPETITION_WYID
-                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON
-                    WHERE COMPETITION_WYID IN {comp_filter}
-                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
-                    AND PRIMARYTYPE IN ('pass', 'touch', 'duel', 'interception')
+                    SELECT * FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON 
+                    WHERE COMPETITION_WYID IN {comp_filter} AND PRIMARYTYPE IN ('pass', 'duel')
                 """
             }
-
             for key, q in queries.items():
                 df = conn.query(q)
                 if df is not None:
                     df.columns = [c.upper() for c in df.columns]
                     res[key] = df
-            
         except Exception as e:
-            st.error(f"SQL fejl i data_load: {e}")
+            st.error(f"SQL Fejl: {e}")
 
-    # --- 3. FINAL MERGE & RETURN ---
+    # --- 3. SAMLET PAKKE ---
     return {
-        "shotevents": res["shotevents"],
-        "events": res["events"],
-        "team_matches": res["team_matches"], 
-        "hold_map": res["hold_map"],
-        "players": df_players_gh,        
-        "scouting": df_scout_gh,         
+        "players": df_players_gh,
+        "scouting": df_scout_gh,
         "teams_csv": df_teams_csv,
+        "shotevents": res["shotevents"],
+        "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
-        "season_stats": res["season_stats"]
+        "events": res["events"],
+        "hold_map": res["hold_map"]
     }
