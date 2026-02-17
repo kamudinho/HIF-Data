@@ -140,11 +140,33 @@ def load_all_data():
                 JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
             """
             df_playerstats = conn.query(q_playerstats)
+
+            q_events = """
+                SELECT 
+                    c.EVENT_WYID,
+                    c.PLAYER_WYID,
+                    c.possessionstartlocationx AS LOCATIONX,
+                    c.possessionstartlocationy AS LOCATIONY,
+                    c.possessionendlocationx AS ENDLOCATIONX,
+                    c.possessionendlocationy AS ENDLOCATIONY,
+                    c.primarytype AS PRIMARYTYPE,
+                    c.MATCH_WYID,
+                    m.MATCHLABEL,
+                    m.DATE,
+                    e.TEAM_WYID
+                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
+                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                -- Vi henter kun de typer, der er relevante for banen for at spare hukommelse
+                WHERE c.primarytype IN ('pass', 'shot', 'touch', 'throw_in', 'interception')
+            """
+            df_events = conn.query(q_events)
+            
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
     # Standardisering til UPPERCASE
-    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
+    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
 
@@ -163,10 +185,11 @@ def load_all_data():
 
     # --- 4. RETURNERING ---
     return {
-        "shotevents": df_shotevents,
-        "season_stats": df_season_stats, # Til historik-tabellen i profilen
-        "team_matches": df_team_matches, # Fixer Modstanderanalyse
-        "playerstats": df_playerstats,   # Det originale navn - nu med ALT data
+        "shotevents": df_shotevents, 
+        "events": df_events,         
+        "season_stats": df_season_stats,
+        "team_matches": df_team_matches, 
+        "playerstats": df_playerstats,   
         "hold_map": hold_map,
         "players": df_players_gh,    
         "scouting": df_scout_gh,     
