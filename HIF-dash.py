@@ -23,7 +23,7 @@ USER_DB = get_users()
 if "logged_in" not in st.session_state: 
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
-    st.session_state["role"] = None # Ny variabel til rolle
+    st.session_state["role"] = None 
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -33,37 +33,41 @@ if not st.session_state["logged_in"]:
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
             if st.form_submit_button("LOG IND", use_container_width=True):
-                # Tjek om bruger findes og kode matcher
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
-                    st.session_state["role"] = USER_DB[u]["role"] # Gem rollen
+                    st.session_state["role"] = USER_DB[u]["role"]
                     st.rerun()
                 else: 
                     st.error("Ugyldig bruger eller kode")
     st.stop()
 
-# --- Rettigheds-tjek funktion ---
-def check_permission(min_role):
-    roles = {"viewer": 1, "scout": 2, "admin": 3}
-    user_role = st.session_state.get("role", "viewer")
-    return roles.get(user_role, 1) >= roles.get(min_role, 1)
-
 # --- 3. DATA LOADING ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
-        # Vi kalder load_all_data - husk at SQL fejlen med 'ADV.XG' skal rettes i data_load.py!
         st.session_state["data_package"] = load_all_data()
 
 dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {st.session_state['user'].upper()}</p>", unsafe_allow_html=True)
+    # Hent rolle og tving til små bogstaver for sikker sammenligning
+    role = st.session_state.get("role", "scout").lower()
+    
+    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {st.session_state['user'].upper()} ({role.upper()})</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    hoved_options = ["TRUPPEN", "ANALYSE", "SCOUTING"]
-    if st.session_state["user"] == "kasper":
+    # Dynamisk hovedmenu baseret på rolle
+    hoved_options = ["TRUPPEN"]
+    
+    # Analytiker, Coach og Admin kan se Analyse
+    if role in ["admin", "analytiker", "coach"]:
+        hoved_options.append("ANALYSE")
+    
+    hoved_options.append("SCOUTING")
+    
+    # Kun Admin kan se Admin-menuen
+    if role == "admin":
         hoved_options.append("ADMIN")
 
     hoved_omraade = option_menu(
@@ -71,19 +75,24 @@ with st.sidebar:
         styles={"container": {"background-color": "#fafafa"}, "nav-link-selected": {"background-color": "#003366"}}
     )    
     
-    # Vi bruger 'sel' som gennemgående variabelnavn
     sel = "" 
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "ANALYSE":
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        scout_options = ["Scoutrapport"]
+        # Scout kan kun se rapport-indtastning. Andre kan se database/sammenligning.
+        if role in ["admin", "analytiker", "coach"]:
+            scout_options += ["Database", "Sammenligning"]
+        sel = option_menu(None, options=scout_options, icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "Schema Explorer"], icons=None, styles={"nav-link-selected": {"background-color": "#333333"}})
+        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], icons=None, styles={"nav-link-selected": {"background-color": "#333333"}})
 
 # --- 5. ROUTING LOGIK ---
-# Vi sikrer os at 'sel' ikke er tom
 if not sel:
     sel = "Oversigt"
 
@@ -91,58 +100,42 @@ if not sel:
 if sel == "Oversigt":
     import tools.players as pl
     pl.vis_side(dp["players"])
-
 elif sel == "Forecast":
     import tools.squad as sq
     sq.vis_side(dp["players"])
-
 elif sel == "Spillerstats":
     import tools.stats as st_tool
     st_tool.vis_side(dp["players"], dp["playerstats"])
-
 elif sel == "Top 5":
     import tools.top5 as t5
     t5.vis_side(dp["players"], dp["playerstats"])
     
 # --- GRUPPE: ANALYSE ---
-elif sel == "Zoneinddeling":
-    import tools.player_goalzone as pgz
-    # Vi bruger .get() for at undgå KeyError hvis matches mangler i data_load
-    pgz.vis_side(dp.get("matches", pd.DataFrame()), dp["players"], dp["hold_map"])
-
 elif sel == "Afslutninger":
     import tools.player_shots as ps
     ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
-
-elif sel == "Heatmaps":
-    import tools.heatmaps as hm
-    hm.vis_side(dp["shotevents"], dp["hold_map"])
-
 elif sel == "Modstanderanalyse":
     import tools.modstanderanalyse as ma
-    # Vi sender Snowflake-data (team_matches) og den færdige navne-oversigt (hold_map)
     ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
     
 # --- GRUPPE: SCOUTING ---
 elif sel == "Database":
     import tools.scout_db as sdb
-    # Vi bruger "playerstats" i stedet for "season_stats"
     sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
-    
 elif sel == "Scoutrapport":
     import tools.scout_input as si
     si.vis_side(dp["players"], dp["playerstats"])
-    
 elif sel == "Sammenligning":
     import tools.comparison as comp
-    # Vi bruger "playerstats" her også
     comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
 
 # --- GRUPPE: ADMIN ---
 elif sel == "Brugerstyring":
     import tools.admin as adm
     adm.vis_side()
-
-elif sel == "Schema Explorer":  # Navnet i menuen
-    import tools.snowflake_test as stest  # Filnavnet du har valgt
+elif sel == "System Log":
+    import tools.admin as adm
+    adm.vis_log() # Kalder log-visningen
+elif sel == "Schema Explorer":
+    import tools.snowflake_test as stest
     stest.vis_side()
