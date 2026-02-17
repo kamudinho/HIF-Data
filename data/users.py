@@ -1,14 +1,13 @@
 # data/users.py
 
-# Ordbog over godkendte brugere: { "brugernavn": "adgangskode" }
+# Format: { "brugernavn": {"pass": "kode", "role": "rolle"} }
 USER_DB = {
-    "kasper": "kasper",
-    "ceo": "ceo",
-    "mr": "mr",
-    "kd": "kd",
-    "cg": "cg"
+    "kasper": {"pass": "kasper", "role": "admin"},
+    "ceo":    {"pass": "ceo",    "role": "Analytiker"},
+    "mr":     {"pass": "mr",     "role": "coach"},
+    "kd":     {"pass": "kd",     "role": "coach"},
+    "cg":     {"pass": "cg",     "role": "scout"}
 }
 
 def get_users():
-    """Returnerer ordbogen med brugere"""
     return USER_DB
