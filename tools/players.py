@@ -25,10 +25,22 @@ def vis_side(df_spillere):
         return
 
     # 1. CSS
-    st.markdown("""<style>
-        .block-container { padding-top: 1rem !important; max-width: 98% !important; }
-        .stTextInput > div > div > input { background-color: #fafafa; border-radius: 4px; border: 1px solid #eee; }
-    </style>""", unsafe_allow_html=True)
+    st.markdown("""
+        <style>
+            [data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+            }
+            div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
+                align-items: flex-end !important;
+            }
+            div[data-testid="stSegmentedControl"] {
+                width: fit-content !important;
+                margin-left: auto !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
     # 2. BRANDING
     st.markdown(f"""<div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:20px;">
