@@ -30,7 +30,7 @@ def get_snowflake_connection():
 
 def vis_side():
     st.title("❄️ Snowflake Schema Explorer")
-    st.info("Her kan du se de præcise kolonnenavne i AXIS-schemaet. Brug tekstfelterne til at kopiere navnene til chatten.")
+    st.info("Her er overblikket over alle 43 tabeller i AXIS-schemaet. Brug tekstfelterne til at kopiere kolonnerne.")
     
     conn = get_snowflake_connection()
     if not conn:
@@ -39,56 +39,65 @@ def vis_side():
     try:
         cursor = conn.cursor()
         
-        # Liste over tabeller vi skal tjekke
+        # --- KOMPLET LISTE OVER DINE TABELLER ---
         vigtige_tabeller = [
-            "WYSCOUT_COMPETITIONS", 
-            "WYSCOUT_PLAYERS", 
-            "WYSCOUT_TEAMS", 
-            "WYSCOUT_MATCHES", 
-            "WYSCOUT_PLAYERADVANCEDSTATS_TOTAL",
-            "WYSCOUT_TEAMMATCHES",
-            "WYSCOUT_MATCHEVENTS_COMMON"
+            "WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL", "WYSCOUT_MATCHADVANCEDSTATS_ATTACKS",
+            "WYSCOUT_MATCHADVANCEDSTATS_DEFENCE", "WYSCOUT_MATCHADVANCEDSTATS_DUELS",
+            "WYSCOUT_MATCHADVANCEDSTATS_FLANKS", "WYSCOUT_MATCHADVANCEDSTATS_GENERAL",
+            "WYSCOUT_MATCHADVANCEDSTATS_OPENPLAY", "WYSCOUT_MATCHADVANCEDSTATS_PASSES",
+            "WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS", "WYSCOUT_MATCHADVANCEDSTATS_TRANSITIONS",
+            "WYSCOUT_MATCHDETAIL_BASE", "WYSCOUT_MATCHDETAIL_PLAYERS",
+            "WYSCOUT_MATCHDETAIL_SUBSTITUTIONS", "WYSCOUT_MATCHES",
+            "WYSCOUT_MATCHEVENTS_AERIALDUEL", "WYSCOUT_MATCHEVENTS_CARRY",
+            "WYSCOUT_MATCHEVENTS_COMMON", "WYSCOUT_MATCHEVENTS_GROUNDDUEL",
+            "WYSCOUT_MATCHEVENTS_INFRACTIONS", "WYSCOUT_MATCHEVENTS_PASSES",
+            "WYSCOUT_MATCHEVENTS_POSSESSIONTYPES", "WYSCOUT_MATCHEVENTS_SECONDARYTYPE",
+            "WYSCOUT_MATCHEVENTS_SHOTS", "WYSCOUT_MATCHFORMATIONS",
+            "WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE", "WYSCOUT_PLAYERADVANCEDSTATS_BASE",
+            "WYSCOUT_PLAYERADVANCEDSTATS_PERCENT", "WYSCOUT_PLAYERADVANCEDSTATS_TOTAL",
+            "WYSCOUT_PLAYERCAREER", "WYSCOUT_PLAYERCONTRACTINFO",
+            "WYSCOUT_PLAYERMATCHES", "WYSCOUT_PLAYERS",
+            "WYSCOUT_PLAYERTRANSFERS", "WYSCOUT_SEASONS",
+            "WYSCOUT_SEASONS_ASSISTMEN", "WYSCOUT_SEASONS_SCORERS",
+            "WYSCOUT_SEASONS_STANDINGS", "WYSCOUT_TEAMMATCHES",
+            "WYSCOUT_TEAMS", "WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE",
+            "WYSCOUT_TEAMSADVANCEDSTATS_PERCENT", "WYSCOUT_TEAMSADVANCEDSTATS_TOTAL",
+            "WYSCOUT_TEAMSQUADS"
         ]
         
-        for tabel in vigtige_tabeller:
+        # Sorteret alfabetisk så det er nemmere at navigere
+        for tabel in sorted(vigtige_tabeller):
             with st.expander(f"📊 TABEL: {tabel}", expanded=False):
                 col1, col2 = st.columns([1, 2])
                 
-                # VENSTRE SIDE: Kolonne information (DESCRIBE)
+                # VENSTRE SIDE: Kolonne information
                 with col1:
                     st.markdown("### 📋 Kolonner")
                     try:
                         cursor.execute(f"DESCRIBE TABLE AXIS.{tabel}")
                         schema_data = cursor.fetchall()
-                        
-                        # Snowflake DESCRIBE returnerer mange kolonner. 
-                        # Vi tager: [0]=Navn, [1]=Type, [2]=Kind
                         schema_df = pd.DataFrame(schema_data).iloc[:, [0, 1]]
                         schema_df.columns = ['Navn', 'Type']
-                        
                         st.dataframe(schema_df, hide_index=True, use_container_width=True)
                         
-                        # Generér kommasepareret liste til kopiering
+                        # Kommasepareret liste til chatten
                         all_cols = ", ".join(schema_df['Navn'].tolist())
-                        st.text_area(f"Kopiér kolonner for {tabel}:", value=all_cols, height=100)
-                        
+                        st.text_area(f"Kopiér kolonner for {tabel}:", value=all_cols, height=100, key=f"text_{tabel}")
                     except Exception as e:
-                        st.error(f"Kunne ikke hente kolonner for {tabel}: {e}")
+                        st.error(f"Fejl ved beskrivelse: {e}")
 
                 # HØJRE SIDE: Data eksempel
                 with col2:
-                    st.markdown("### 👁️ Data Eksempel (Top 5)")
+                    st.markdown("### 👁️ Eksempel (Top 5)")
                     try:
                         cursor.execute(f"SELECT * FROM AXIS.{tabel} LIMIT 5")
                         data = cursor.fetchall()
                         col_names = [desc[0] for desc in cursor.description]
-                        
                         df_sample = pd.DataFrame(data, columns=col_names)
                         st.dataframe(df_sample, use_container_width=True)
-                        
-                        st.success(f"Antal kolonner fundet: {len(col_names)}")
+                        st.success(f"Kolonner fundet: {len(col_names)}")
                     except Exception as e:
-                        st.warning(f"Kunne ikke hente data-eksempel: {e}")
+                        st.warning(f"Kunne ikke hente eksempel: {e}")
 
     except Exception as e:
         st.error(f"🚨 Overordnet fejl: {e}")
