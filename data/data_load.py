@@ -146,7 +146,7 @@ def load_all_data():
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
                 WHERE m.DATE >= '2024-07-01' 
-                AND c.primarytype IN ('pass', 'touch')
+                AND c.primarytype IN ('pass', 'touch', 'duel', 'interception')
             """
             df_events = conn.query(q_events)
             
