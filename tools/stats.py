@@ -9,21 +9,33 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 0. RESPONSIVE LAYOUT FIX ---
+    # --- 0. CSS FOR HØJRE-STILLING & RESPONSIVITET ---
     st.markdown("""
         <style>
-            /* Gør at indholdet bruger hele bredden og fjerner unødig luft i toppen */
+            /* Brug bredden optimalt */
             .block-container {
                 padding-top: 1rem !important;
                 padding-bottom: 0rem !important;
-                max-width: 95% !important;
+                max-width: 98% !important;
             }
-            /* Sikrer at knapperne ikke overlapper på små skærme */
-            @media (max-width: 768px) {
-                [data-testid="column"] {
-                    width: 100% !important;
-                    flex: 1 1 100% !important;
-                }
+            
+            /* Tving kolonne 2's indhold helt til højre */
+            [data-testid="column"]:last-child {
+                display: flex;
+                justify-content: flex-end;
+                align-items: flex-end;
+            }
+            
+            /* Sørg for at segmented control selv flugter højre */
+            div[data-testid="stSegmentedControl"] {
+                display: flex;
+                justify-content: flex-end;
+                width: 100%;
+            }
+
+            /* Fjern unødig padding i bunden af widgets */
+            [data-testid="stVerticalBlock"] > div {
+                padding-bottom: 0px;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -58,8 +70,8 @@ def vis_side(spillere, player_stats_sn):
         st.info(f"Ingen data fundet for {SEASONNAME}")
         return
 
-    # --- 3. UI KONTROLLER ---
-    c1, c2 = st.columns([1.5, 1], gap="small")
+    # --- 3. UI KONTROLLER (Med højrestillet visning) ---
+    c1, c2 = st.columns([1.5, 1])
     
     kategorier_med_pct = {
         "Afleveringer": ("PASSES", "SUCCESSFULPASSES"),
@@ -76,9 +88,8 @@ def vis_side(spillere, player_stats_sn):
     with c1:
         valg_label = st.pills("Statistik", tilgaengelige, default="Mål", label_visibility="collapsed")
     with c2:
-        st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+        # Segmented control presses nu helt mod højre via CSS
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # --- 4. BEREGNING ---
     min_col = "MINUTESONFIELD"
@@ -111,27 +122,23 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
-    # --- 5. GRAF (Skaleret til opløsning) ---
+    # --- 5. GRAF ---
     st.markdown("<div style='margin-bottom:5px;'></div>", unsafe_allow_html=True)
-    
-    # Beregn højde dynamisk: Mindst 400px, ellers 30px pr. spiller + bund
-    calc_height = max(400, (len(df_plot) * 30) + 50)
-    
+    calc_height = max(400, (len(df_plot) * 32) + 60)
     bar_color = '#df003b' if visning == "Total" else '#333'
+    
     fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
 
     fig.update_traces(
         marker_color=bar_color,
         textposition='outside',
         cliponaxis=False,
-        textfont_size=12,
-        hovertemplate='%{y}: <b>%{text}</b><extra></extra>'
+        textfont_size=12
     )
 
     fig.update_layout(
-        autosize=True, # Tvinger Plotly til at lytte til container-bredde
         height=calc_height,
-        margin=dict(l=0, r=50, t=10, b=10),
+        margin=dict(l=0, r=60, t=10, b=10),
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
         yaxis=dict(tickfont_size=12, title="", automargin=True),
         plot_bgcolor='white',
