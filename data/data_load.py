@@ -152,9 +152,9 @@ def load_all_data():
             df_events = conn.query(q_events)
             
         except Exception as e:
-            st.error(f"SQL fejl: {e}")
+            st.error(f"SQL fejl i data_load: {e}")
 
-    # Standardisering til UPPERCASE og rensning af PLAYER_WYID
+    # Rensning og standardisering
     dfs_to_clean = [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events, df_players_gh, df_scout_gh]
     for df in dfs_to_clean:
         if df is not None and not df.empty:
@@ -162,7 +162,6 @@ def load_all_data():
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # --- 4. RETURNERING ---
     return {
         "shotevents": df_shotevents,
         "events": df_events,
