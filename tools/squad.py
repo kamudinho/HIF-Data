@@ -20,20 +20,20 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Layout & Knapper) ---
-    st.markdown(f"""
+    # --- 3. DIN SPECIFIKKE CSS INJECTION (Layout & Centrering) ---
+    st.markdown("""
         <style>
-            .block-container {{ padding-top: 1rem !important; max-width: 98% !important; }}
-            
-            /* Højrestil menu-kolonnen */
-            [data-testid="column"]:last-child {{
+            [data-testid="column"] {
                 display: flex;
                 flex-direction: column;
+                justify-content: flex-start;
+            }
+            /* Højrestiller knapper og indhold i den sidste kolonne */
+            div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
-            }}
-
-            /* Pill Button Styling (Ligesom på de andre sider) */
-            div.stButton > button {{
+            }
+            /* Styling af knapper (Pill look) */
+            div.stButton > button {
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
                 background-color: white !important;
@@ -41,17 +41,15 @@ def vis_side(df):
                 padding: 4px 15px !important;
                 width: 120px !important;
                 transition: all 0.2s;
-            }}
-            
-            div.stButton > button[kind="primary"] {{
+            }
+            div.stButton > button[kind="primary"] {
                 background-color: white !important;
-                color: {hif_rod} !important;
-                border: 2px solid {hif_rod} !important;
+                color: #df003b !important;
+                border: 2px solid #df003b !important;
                 font-weight: bold !important;
-            }}
-
+            }
             /* Popover bredde */
-            [data-testid="stPopoverBody"] {{ width: 400px !important; }}
+            [data-testid="stPopoverBody"] { width: 400px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -80,11 +78,11 @@ def vis_side(df):
         if days <= 365: return gul_udlob
         return 'white'
 
-    # --- 6. HOVED-LAYOUT ---
-    col_pitch, col_menu = st.columns([5, 1], gap="medium")
+    # --- 6. HOVED-LAYOUT (80/20 split for at give plads til din CSS) ---
+    col_pitch, col_menu = st.columns([4, 1], gap="medium")
 
     with col_menu:
-        # --- POPOVER MED DEN FEJLSIKRE TABEL ---
+        # --- POPOVER MED DIN HTML TABEL ---
         with st.popover("Vis Kontrakter", use_container_width=True):
             tabel_rows = ""
             for _, r in df_squad.sort_values('NAVN').iterrows():
@@ -98,6 +96,7 @@ def vis_side(df):
                 </tr>
                 '''
 
+            # Dedent sikrer at HTML ikke tolkes som kodeblok
             fuld_tabel_html = textwrap.dedent(f'''
                 <table style="width:100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px;">
                     <thead>
@@ -114,7 +113,7 @@ def vis_side(df):
             st.markdown(fuld_tabel_html, unsafe_allow_html=True)
         
         st.write("---")
-        st.caption("Formation")
+        # Formationsknapper (Pill look)
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             if st.button(f, use_container_width=True, type="primary" if st.session_state.formation_valg == f else "secondary"):
                 st.session_state.formation_valg = f
@@ -123,7 +122,7 @@ def vis_side(df):
     with col_pitch:
         # Pitch Render
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333333', linewidth=1)
-        fig, ax = pitch.draw(figsize=(12, 9))
+        fig, ax = pitch.draw(figsize=(11, 8))
         
         # Legend
         legend_items = [(rod_udlob, "< 6 mdr"), (gul_udlob, "6-12 mdr"), (leje_gra, "Leje")]
@@ -131,7 +130,7 @@ def vis_side(df):
             ax.text(1, 2 + (i * 3), text, size=8, color="black", va='center', ha='left', 
                     fontweight='bold', bbox=dict(facecolor=color, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # Formation konfiguration
+        # Formation rendering
         form_valg = st.session_state.formation_valg
         if form_valg == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
@@ -159,5 +158,4 @@ def vis_side(df):
                             color="black", va='top', ha='center', fontweight='bold',
                             bbox=dict(facecolor=bg_p, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
 
-        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
         st.pyplot(fig, use_container_width=True)
