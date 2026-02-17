@@ -116,7 +116,8 @@ elif sel == "Modstanderanalyse":
 # --- GRUPPE: SCOUTING ---
 elif sel == "Database":
     import tools.scout_db as sdb
-    sdb.vis_side(dp["scouting"], dp["players"], dp["season_stats"])
+    # Vi bruger "playerstats" i stedet for "season_stats"
+    sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
     
 elif sel == "Scoutrapport":
     import tools.scout_input as si
@@ -124,7 +125,8 @@ elif sel == "Scoutrapport":
 
 elif sel == "Sammenligning":
     import tools.comparison as comp
-    comp.vis_side(dp["scouting"], dp["players"], dp["season_stats"])
+    # Vi bruger "playerstats" her også
+    comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
 
 # --- GRUPPE: ADMIN ---
 elif sel == "Brugerstyring":
