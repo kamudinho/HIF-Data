@@ -11,6 +11,21 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def map_position(row):
+    # 1. Prioritet: ROLECODE3 (De 4 overordnede koder fra Wyscout)
+    # Typisk: 'GKT' (GK), 'DEF', 'MID', 'FWD'
+    role = str(row.get('ROLECODE3', '')).strip().upper()
+    
+    role_dict = {
+        "GKP":  "Målmand",
+        "DEF": "Forsvarsspiller",
+        "MID": "Midtbanespiller",
+        "FWD": "Angriber"
+    }
+    
+    if role in role_dict:
+        return role_dict[role]
+
+    # 2. Prioritet: Din originale tal-logik (POS)
     csv_pos = str(row.get('POS', row.get('POSITION', 'Ukendt'))).strip().split('.')[0]
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -18,7 +33,9 @@ def map_position(row):
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
         "10": "Offensiv Midt", "11": "Venstre Kant"
     }
-    return pos_dict.get(csv_pos, csv_pos)
+    
+    # Returner fra pos_dict, eller de rå koder fra din CSV (FWD/DEF) hvis alt andet fejler
+    return pos_dict.get(csv_pos, role_dict.get(csv_pos.upper(), csv_pos))
 
 def vis_spiller_billede(pid, w=110):
     pid_clean = str(pid).split('.')[0].strip()
@@ -86,25 +103,23 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with t4:
         st.markdown("### Sæsonstatistik")
-        if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
+        if s_df is not None and not s_df.empty:
+            # Sørg for at vi sammenligner rene strenge uden .0
+            clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+            
+            # Filtrér Snowflake-stats på spilleren
             df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
+            
             if not df_stats.empty:
-                cols_to_check = ['SEASONNAME', 'TEAMNAME', 'MATCHES']
-                existing_check = [c for c in cols_to_check if c in df_stats.columns]
-                df_stats = df_stats.drop_duplicates(subset=existing_check)
-                if 'SEASONNAME' in df_stats.columns:
-                    df_stats = df_stats.sort_values('SEASONNAME', ascending=False)
-                
+                # Da der kan være dubletter fra forskellige turneringer (Pokal/Liga),
+                # grupperer vi dem her for et rent overblik
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
-                existing_cols = [c for c in cols_to_show if c in df_stats.columns]
-                if 'XG' in df_stats.columns:
-                    df_stats['XG'] = df_stats['XG'].fillna(0).round(2)
+                existing = [c for c in cols_to_show if c in df_stats.columns]
                 
-                st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
+                df_display = df_stats[existing].drop_duplicates()
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
-                st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
-        else:
-            st.warning("Dataforbindelse til Snowflake-statistik ikke fundet.")
+                st.info(f"Ingen kampdata fundet i Snowflake for ID: {clean_p_id}")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
