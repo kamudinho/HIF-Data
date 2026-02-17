@@ -9,6 +9,25 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
+    # --- 0. RESPONSIVE LAYOUT FIX ---
+    st.markdown("""
+        <style>
+            /* Gør at indholdet bruger hele bredden og fjerner unødig luft i toppen */
+            .block-container {
+                padding-top: 1rem !important;
+                padding-bottom: 0rem !important;
+                max-width: 95% !important;
+            }
+            /* Sikrer at knapperne ikke overlapper på små skærme */
+            @media (max-width: 768px) {
+                [data-testid="column"] {
+                    width: 100% !important;
+                    flex: 1 1 100% !important;
+                }
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
         <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -17,45 +36,38 @@ def vis_side(spillere, player_stats_sn):
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. RENS & FILTRÉR DATA (Sæson er nu fastlåst) ---
+    # --- 2. DATA KLARGØRING ---
     spillere.columns = [str(c).upper().strip() for c in spillere.columns]
     player_stats_sn.columns = [str(c).upper().strip() for c in player_stats_sn.columns]
 
-    # ID Match Fix
     spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     player_stats_sn['PLAYER_WYID'] = player_stats_sn['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # Automatiske filtre (Ingen dropdown)
     if 'SEASONNAME' in player_stats_sn.columns:
         df_stats = player_stats_sn[player_stats_sn['SEASONNAME'] == SEASONNAME].copy()
     else:
         df_stats = player_stats_sn.copy()
 
-    # Rens dubletter i spillertabellen
     spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
     if 'NAVN' not in spillere_clean.columns:
         spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
 
-    # Merge
     df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
         st.info(f"Ingen data fundet for {SEASONNAME}")
         return
 
-    # --- 3. UI KONTROLLER (Pills og Segmented Control) ---
-    c1, c2 = st.columns([1, 1], gap="large")
+    # --- 3. UI KONTROLLER ---
+    c1, c2 = st.columns([1.5, 1], gap="small")
     
     kategorier_med_pct = {
         "Afleveringer": ("PASSES", "SUCCESSFULPASSES"),
         "Dueller": ("DUELS", "DUELSWON"),
     }
     kategorier_uden_pct = {
-        "Mål": "GOALS",
-        "Assists": "ASSISTS",
-        "xG": "XGSHOT",
-        "Afslutninger": "SHOTS",
-        "Minutter": "MINUTESONFIELD"
+        "Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", 
+        "Afslutninger": "SHOTS", "Minutter": "MINUTESONFIELD"
     }
 
     tilgaengelige = [k for k in kategorier_med_pct.keys() if kategorier_med_pct[k][0] in df_hif.columns] + \
@@ -68,15 +80,13 @@ def vis_side(spillere, player_stats_sn):
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- 4. BEREGNING (Sikret mod dubletter) ---
+    # --- 4. BEREGNING ---
     min_col = "MINUTESONFIELD"
     df_final = df_hif.drop_duplicates()
 
     if valg_label in kategorier_uden_pct:
         kolonne = kategorier_uden_pct[valg_label]
         df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
-        
-        # Sikkerheds-check (hvis data er præ-aggregeret)
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'max', min_col: 'max'})
 
@@ -85,11 +95,9 @@ def vis_side(spillere, player_stats_sn):
         else:
             df_group['VAL'] = df_group[kolonne]
         df_group['LABEL'] = df_group['VAL'].apply(lambda x: f"{x:.2f}" if x % 1 != 0 else f"{int(x)}")
-    
     else:
         tot_col, suc_col = kategorier_med_pct[valg_label]
         df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
-        
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'max', suc_col: 'max', min_col: 'max'})
 
@@ -103,10 +111,13 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
-    # --- 5. GRAF (Clean Design) ---
-    st.markdown("<div style='margin-bottom:2px;'></div>", unsafe_allow_html=True)
+    # --- 5. GRAF (Skaleret til opløsning) ---
+    st.markdown("<div style='margin-bottom:5px;'></div>", unsafe_allow_html=True)
+    
+    # Beregn højde dynamisk: Mindst 400px, ellers 30px pr. spiller + bund
+    calc_height = max(400, (len(df_plot) * 30) + 50)
+    
     bar_color = '#df003b' if visning == "Total" else '#333'
-
     fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
 
     fig.update_traces(
@@ -118,12 +129,13 @@ def vis_side(spillere, player_stats_sn):
     )
 
     fig.update_layout(
-        height=20 + (len(df_plot) * 35),
-        margin=dict(l=0, r=40, t=0, b=0),
+        autosize=True, # Tvinger Plotly til at lytte til container-bredde
+        height=calc_height,
+        margin=dict(l=0, r=50, t=10, b=10),
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
-        yaxis=dict(tickfont_size=13, title=""),
+        yaxis=dict(tickfont_size=12, title="", automargin=True),
         plot_bgcolor='white',
         paper_bgcolor='white'
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
