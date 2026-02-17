@@ -1,6 +1,6 @@
 PLAYER_WYID,Dato,Navn,Klub,Position,Rating_Avg,Status,Potentiale,Styrker,Udvikling,Vurdering,Beslutsomhed,Fart,Aggresivitet,Attitude,Udholdenhed,Lederegenskaber,Teknik,Spilintelligens,Scout
-MAN-260217-409a,2026-02-17,Test,Økstykke,Angriber ,2.8,Interessant,Højt,,,,2,6,3,3,1,5,1,1,
-MAN-260217-9cef,2026-02-17,CEO,Odense,CB,1.5,Kig nærmere,Lavt,,,,1,5,1,1,1,1,1,1,
+MAN-260217-409a,2026-02-17,Test,Økstykke,Angriber ,2.8,Interessant,Højt,,,,2,6,3,3,1,5,1,1,,
+MAN-260217-9cef,2026-02-17,CEO,Odense,CB,1.5,Kig nærmere,Lavt,,,,1,5,1,1,1,1,1,1,,
 48809,2026-02-10,Konrad,SSBK,FWD,3.0,Hold øje,Lavt,God indstilling,Teknisk niveau,Skal ses an over tid,3,3,2,4,3,2,3,3,Christian,
 48809,2026-03-12,Konrad,SSBK,FWD,3.5,Kig nærmere,Lavt,Arbejder hårdt,Placeringsevne,Viser god fremgang,4,3,3,4,4,3,3,4,Christian,
 48809,2026-04-15,Konrad,SSBK,FWD,4.0,Prioritet,Lavt,Vigtig for holdet,Fysisk overskud,Stabil profil nu,4,4,4,5,4,4,4,4,Christian,
