@@ -1,17 +1,19 @@
 #HIF-dash.py
 import streamlit as st
 from streamlit_option_menu import option_menu
+import os
 import pandas as pd
 from data.data_load import load_all_data, write_log
 from data.users import get_users
 
-# --- 1. KONFIGURATION ---
+# --- 1. KONFIGURATION & STYLES ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
         header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
         .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
+        [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
     </style>
@@ -35,7 +37,7 @@ if not st.session_state["logged_in"]:
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
-                    st.session_state["role"] = USER_DB[u]["role"]
+                    st.session_state["role"] = str(USER_DB[u]["role"]).lower().strip()
                     write_log("Log ind", target="System")
                     st.rerun()
                 else: 
@@ -51,41 +53,85 @@ dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    role = str(st.session_state.get("role", "scout")).lower().strip()
-    st.markdown(f"<p style='text-align: center; font-size: 11px;'>BRUGER: {st.session_state['user'].upper()} ({role.upper()})</p>", unsafe_allow_html=True)
+    # Vi tvinger rollen til at være admin i testen her, hvis du oplever problemer
+    role = st.session_state.get("role", "scout")
+    
+    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {st.session_state['user'].upper()} ({role.upper()})</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    hoved_options = ["TRUPPEN"]
-    if role in ["admin", "analytiker", "coach"]:
-        hoved_options.append("ANALYSE")
-    hoved_options.append("SCOUTING")
-    if role == "admin":
-        hoved_options.append("ADMIN")
+    # Hovedmenu
+    hoved_options = ["TRUPPEN", "ANALYSE", "SCOUTING", "ADMIN"]
+    
+    # Vis kun bestemte menuer hvis man ikke er admin (valgfrit - her er de åbne for admin)
+    if role != "admin":
+        if role == "scout":
+            hoved_options = ["TRUPPEN", "SCOUTING"]
+        else:
+            hoved_options = ["TRUPPEN", "ANALYSE", "SCOUTING"]
 
-    hoved_omraade = option_menu(None, options=hoved_options, default_index=0, styles={"nav-link-selected": {"background-color": "#003366"}})    
+    hoved_omraade = option_menu(
+        menu_title=None, options=hoved_options, icons=None, menu_icon=None, default_index=0,
+        styles={"container": {"background-color": "#fafafa"}, "nav-link-selected": {"background-color": "#003366"}}
+    )    
     
     sel = "" 
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "ANALYSE":
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "SCOUTING":
-        scout_opts = ["Scoutrapport"]
-        if role in ["admin", "analytiker", "coach"]: scout_opts += ["Database", "Sammenligning"]
-        sel = option_menu(None, options=scout_opts, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        scout_options = ["Scoutrapport", "Database", "Sammenligning"]
+        sel = option_menu(None, options=scout_options, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], styles={"nav-link-selected": {"background-color": "#333333"}})
 
-# --- 5. ROUTING ---
-if not sel: sel = "Oversigt"
+# --- 5. ROUTING LOGIK ---
+if not sel:
+    sel = "Oversigt"
 
+# --- GRUPPE: TRUPPEN ---
 if sel == "Oversigt":
     import tools.players as pl
     pl.vis_side(dp["players"])
+elif sel == "Forecast":
+    import tools.squad as sq
+    sq.vis_side(dp["players"])
+elif sel == "Spillerstats":
+    import tools.stats as st_tool
+    st_tool.vis_side(dp["players"], dp["playerstats"])
+elif sel == "Top 5":
+    import tools.top5 as t5
+    t5.vis_side(dp["players"], dp["playerstats"])
+    
+# --- GRUPPE: ANALYSE ---
+elif sel == "Afslutninger":
+    import tools.player_shots as ps
+    ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
+elif sel == "Modstanderanalyse":
+    import tools.modstanderanalyse as ma
+    ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
+    
+# --- GRUPPE: SCOUTING ---
+elif sel == "Database":
+    import tools.scout_db as sdb
+    sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
 elif sel == "Scoutrapport":
     import tools.scout_input as si
     si.vis_side(dp["players"], dp["playerstats"])
+elif sel == "Sammenligning":
+    import tools.comparison as comp
+    comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
+
+# --- GRUPPE: ADMIN ---
+elif sel == "Brugerstyring":
+    import tools.admin as adm
+    adm.vis_side()
 elif sel == "System Log":
     import tools.admin as adm
     adm.vis_log()
-# ... (Tilføj de andre imports her efter samme mønster)
+elif sel == "Schema Explorer":
+    import tools.snowflake_test as stest
+    stest.vis_side()
