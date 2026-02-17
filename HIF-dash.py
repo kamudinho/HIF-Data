@@ -120,7 +120,9 @@ elif sel == "Database":
     sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
 elif sel == "Scoutrapport":
     import tools.scout_input as si
-    si.vis_side(dp["players"], dp["playerstats"])
+    players_data = dp.get("players")
+    stats_data = dp.get("playerstats") # Sørg for at denne nøgle matcher data_load.py
+    si.vis_side(players_data, stats_data)
 elif sel == "Sammenligning":
     import tools.comparison as comp
     comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
