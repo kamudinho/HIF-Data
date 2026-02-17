@@ -1,4 +1,4 @@
-#data/data_load.py
+# data/data_load.py
 import streamlit as st
 import pandas as pd
 import uuid
@@ -9,6 +9,9 @@ from datetime import datetime
 import snowflake.connector
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+
+# HER HENTER VI DINE KONFIGURATIONER
+from data.season_show import SEASONNAME, TEAM_WYID, COMPETITION_WYID
 
 def _get_snowflake_conn():
     """Opretter forbindelse ved hjælp af RSA-nøgle dekodning."""
@@ -48,152 +51,9 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    try:
-        from data.season_show import SEASONNAME, TEAM_WYID
-    except ImportError:
-        SEASONNAME, TEAM_WYID = "2024/2025", 38331
-
+    # SEASONNAME, TEAM_WYID og COMPETITION_WYID er nu tilgængelige herfra toppen af filen
+    
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     
     def read_gh(file):
-        try:
-            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
-            d = pd.read_csv(u, sep=None, engine='python')
-            d.columns = [str(c).strip().upper() for c in d.columns]
-            return d
-        except:
-            return pd.DataFrame()
-
-    df_players_gh = read_gh("players.csv")
-    df_scout_gh = read_gh("scouting_db.csv")
-    df_teams_csv = read_gh("teams.csv")
-
-    conn = _get_snowflake_conn()
-    df_shotevents = pd.DataFrame()
-    df_team_matches = pd.DataFrame()
-    df_playerstats = pd.DataFrame()
-    df_events = pd.DataFrame()
-    hold_map = {}
-
-    if conn:
-        try:
-            # A: HOLD NAVNE
-            q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
-            df_teams_sn = conn.query(q_teams)
-            if df_teams_sn is not None and not df_teams_sn.empty:
-                for _, row in df_teams_sn.iterrows():
-                    tid = str(int(row['TEAM_WYID']))
-                    hold_map[tid] = str(row['TEAMNAME']).strip()
-            
-            # B: SHOT EVENTS
-            q_shots = """
-                SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
-                       c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
-                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
-                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
-                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
-                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            """
-            df_shotevents = conn.query(q_shots)
-
-            # C: TEAM MATCHES
-            q_teammatches = """
-                SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
-                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
-                FROM AXIS.WYSCOUT_TEAMMATCHES tm
-                JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
-                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
-            """
-            df_team_matches = conn.query(q_teammatches)
-
-            # D: PLAYERSTATS - Henter ALLE spillere med læsbare positioner
-            q_playerstats = """
-                SELECT 
-                    p.PLAYER_WYID, 
-                    p.FIRSTNAME, 
-                    p.LASTNAME, 
-                    t.TEAMNAME, 
-                    CASE 
-                        WHEN p.ROLECODE3 = '1' THEN 'GKP'
-                        WHEN p.ROLECODE3 = '2' THEN 'DEF'
-                        WHEN p.ROLECODE3 = '3' THEN 'MID'
-                        WHEN p.ROLECODE3 = '4' THEN 'FWD'
-                        ELSE p.ROLECODE3 
-                    END AS ROLE_TEXT,
-                    p.CURRENTTEAM_WYID AS TEAM_WYID,
-                    s.MATCHES, 
-                    s.MINUTESONFIELD, 
-                    s.GOALS, 
-                    s.ASSISTS, 
-                    s.SHOTS, 
-                    s.XGSHOT
-                FROM AXIS.WYSCOUT_PLAYERS p
-                LEFT JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                LEFT JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s ON p.PLAYER_WYID = s.PLAYER_WYID
-            """
-            df_playerstats = conn.query(q_playerstats)
-
-            # E: EVENTS
-            q_events = """
-                SELECT c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX, c.possessionstartlocationy AS LOCATIONY,
-                       c.possessionendlocationx AS ENDLOCATIONX, c.possessionendlocationy AS ENDLOCATIONY, 
-                       c.primarytype AS PRIMARYTYPE, e.TEAM_WYID, m.DATE
-                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
-                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                WHERE m.DATE >= '2024-07-01' 
-                AND c.primarytype IN ('pass', 'touch', 'duel', 'interception')
-            """
-            df_events = conn.query(q_events)
-            
-        except Exception as e:
-            st.error(f"SQL fejl: {e}")
-
-    for df in [df_shotevents, df_team_matches, df_playerstats, df_events]:
-        if df is not None and not df.empty:
-            df.columns = [str(c).upper().strip() for c in df.columns]
-
-    return {
-        "shotevents": df_shotevents,
-        "events": df_events,
-        "team_matches": df_team_matches, 
-        "playerstats": df_playerstats,   
-        "hold_map": hold_map,
-        "players": df_players_gh,    
-        "scouting": df_scout_gh,     
-        "teams_csv": df_teams_csv
-    }
-
-def write_log(action, target="System"):
-    """Logger handlinger til GitHub data/action_log.csv"""
-    try:
-        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-        REPO = "Kamudinho/HIF-data"
-        FILE_PATH = "data/action_log.csv"
-        user = st.session_state.get("user", "ukendt")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        
-        r = requests.get(url, headers=headers)
-        new_entry = pd.DataFrame([[timestamp, user, action, target]], columns=["Dato", "Bruger", "Handling", "Mål"])
-        
-        if r.status_code == 200:
-            content = r.json()
-            old_log = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
-            updated_log = pd.concat([old_log, new_entry], ignore_index=True)
-            sha = content['sha']
-        else:
-            updated_log = new_entry
-            sha = None
-
-        payload = {
-            "message": f"Log: {user} - {action}",
-            "content": base64.b64encode(updated_log.to_csv(index=False).encode('utf-8')).decode('utf-8'),
-            "sha": sha if sha else ""
-        }
-        requests.put(url, json=payload, headers=headers)
-    except:
-        pass
+        # ... din eksisterende read_gh funktion ...
