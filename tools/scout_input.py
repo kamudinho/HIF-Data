@@ -145,21 +145,50 @@ def vis_side(df_players, df_stats_all=None):
         potentiale = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         styrker = st.text_area("Styrker")
+        udvikling = st.text_area("Udvikling")
         vurdering = st.text_area("Samlet vurdering")
 
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn:
                 avg = round(sum([beslut, fart, aggres, att, udhold, leder, teknik, intel]) / 8, 1)
                 
-                # Her bruger vi PLAYER_WYID som kolonnenavn
-                ny_df = pd.DataFrame([[
-                    p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
-                    avg, status, potentiale, styrker, vurdering,
-                    beslut, fart, aggres, att, udhold, leder, teknik, intel
-                ]], columns=["PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
+                # Hent den loggede bruger
+                logged_in_scout = st.session_state.get("user", "Ukendt")
                 
-                if save_to_github(ny_df) in [200, 201]:
-                    st.success(f"Rapport gemt med PLAYER_WYID: {p_id}")
+                # Opret række med "Scout" kolonne
+                ny_df = pd.DataFrame([[
+                    p_id, 
+                    datetime.now().strftime("%Y-%m-%d"), 
+                    navn, 
+                    klub, 
+                    pos_val, 
+                    avg, 
+                    status, 
+                    potentiale, 
+                    styrker, 
+                    vurdering,
+                    beslut, fart, aggres, att, udhold, leder, teknik, intel,
+                    logged_in_scout  # <--- Autofyld her
+                ]], columns=[
+                    "PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", 
+                    "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", 
+                    "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", 
+                    "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens",
+                    "Scout" # <--- Ny kolonne
+                ])
+                
+                status_code = save_to_github(ny_df)
+                if status_code in [200, 201]:
+                    # Trigger log-systemet
+                    try:
+                        from data.data_load import write_log
+                        write_log("Oprettede scoutrapport", target=navn)
+                    except:
+                        pass
+                        
+                    st.success(f"Rapport gemt af {logged_in_scout}!")
                     st.rerun()
+                else:
+                    st.error(f"Fejl ved gem: {status_code}")
             else:
                 st.error("Navn mangler")
