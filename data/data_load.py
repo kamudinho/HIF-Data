@@ -97,7 +97,7 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL Fejl: {e}")
 
-    # --- 3. SAMLET PAKKE ---
+    # --- 3. SAMLET PAKKE (i data_load.py) ---
     return {
         "players": df_players_gh,
         "scouting": df_scout_gh,
@@ -105,6 +105,7 @@ def load_all_data():
         "shotevents": res["shotevents"],
         "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
+        "season_stats": res["playerstats"],  # Tilføjet så den ikke fejler i tools
         "events": res["events"],
         "hold_map": res["hold_map"]
     }
