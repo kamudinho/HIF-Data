@@ -114,8 +114,14 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
-    return {
-        "shotevents": data["shotevents"], "events": data["events"],
-        "team_matches": data["team_matches"], "hold_map": data["hold_map"],
-        "players": df_players_gh, "scouting": df_scout_gh, "teams_csv": df_teams_csv
+   return {
+        "shotevents": df_shotevents,
+        "events": df_events,
+        "team_matches": df_team_matches, 
+        "hold_map": hold_map,
+        "players": df_players_gh,        
+        "scouting": df_scout_gh,         
+        "teams_csv": df_teams_csv,
+        "playerstats": df_playerstats,  # Sørg for at denne nøgle findes!
+        "season_stats": df_season_stats # Behold denne hvis andre sider bruger den
     }
