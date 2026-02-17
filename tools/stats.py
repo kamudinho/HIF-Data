@@ -7,7 +7,7 @@ import numpy as np
 try:
     from data.season_show import SEASONNAME
 except ImportError:
-    SEASONNAME = "Aktuel Sæson"
+    SEASONNAME = "2024/2025"
 
 def vis_side(spillere, player_stats_sn):
     # --- 1. LAYOUT INDSTILLINGER ---
@@ -34,52 +34,62 @@ def vis_side(spillere, player_stats_sn):
     s_info = spillere.copy()
     s_stats = player_stats_sn.copy()
 
-    # Tving kolonnenavne til UPPERCASE med det samme for at undgå KeyErrors
+    # Tving kolonnenavne til UPPERCASE for konsistens
     s_info.columns = [str(c).upper().strip() for c in s_info.columns]
     s_stats.columns = [str(c).upper().strip() for c in s_stats.columns]
 
-    # VIGTIGT: Robust rensning af PLAYER_WYID (det var her den fejlede)
+    # Rens PLAYER_WYID
     for df in [s_info, s_stats]:
         if 'PLAYER_WYID' in df.columns:
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         else:
-            st.error(f"Kolonnen PLAYER_WYID mangler i data. Fundne kolonner: {list(df.columns)}")
+            st.error(f"PLAYER_WYID mangler. Fundne kolonner: {list(df.columns)}")
             return
-
-    # Sæson-filter (Vi bruger SEASONNAME fra din config)
-    if 'SEASONNAME' in s_stats.columns:
-        df_stats = s_stats[s_stats['SEASONNAME'] == SEASONNAME].copy()
-    else:
-        df_stats = s_stats.copy()
 
     # Navne-merge
     spillere_clean = s_info.drop_duplicates(subset=['PLAYER_WYID'])
     if 'NAVN' not in spillere_clean.columns and 'FIRSTNAME' in spillere_clean.columns:
         spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
 
-    # Hvis NAVN stadig mangler, brug PLAYER_WYID som backup
     if 'NAVN' not in spillere_clean.columns:
         spillere_clean['NAVN'] = spillere_clean['PLAYER_WYID']
 
-    df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
+    df_hif = pd.merge(s_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
-        st.info(f"Ingen data fundet for {SEASONNAME}. Prøv at tjekke om sæsonnavnet matcher i Snowflake.")
+        st.info(f"Ingen spillere matchet i Snowflake for {SEASONNAME}.")
         return
 
     # --- 4. UI KONTROLLER ---
-    c1, c2 = st.columns([1, 1])
+    # HER ER TILPASNINGEN TIL DE RÅ KOLONNER:
+    # Vi bruger XGSHOT og MINUTESONFIELD præcis som de hedder i din liste
+    kpi_uden_pct = {
+        "Mål": "GOALS", 
+        "Assists": "ASSISTS", 
+        "xG": "XGSHOT",      # Rettet fra XG
+        "Skud": "SHOTS", 
+        "Minutter": "MINUTESONFIELD" # Rettet fra MINUTES
+    }
     
-    # Mapper UI navne til kolonnenavne (XGSHOT er standard i din SQL)
-    # Vi bruger de navne, vi definerede i SQL 'AS' eller som Snowflake returnerer
-    kpi_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XG", "Minutter": "MINUTESONFIELD"}
-    kpi_med_pct = {"Afleveringer": ("PASSES", "SUCCESSFULPASSES"), "Dueller": ("DUELS", "DUELSWON")}
+    kpi_med_pct = {
+        "Afleveringer": ("PASSES", "SUCCESSFULPASSES"), 
+        "Dueller": ("DUELS", "DUELSWON")
+    }
     
     alle_kategorier = list(kpi_uden_pct.keys()) + list(kpi_med_pct.keys())
-    tilgaengelige = [k for k in alle_kategorier if (k in kpi_uden_pct and kpi_uden_pct[k] in df_hif.columns) or (k in kpi_med_pct and kpi_med_pct[k][0] in df_hif.columns)]
+    
+    # Dynamisk tjek om kolonnerne findes i Snowflake-trækket
+    tilgaengelige = [k for k in alle_kategorier if 
+                    (k in kpi_uden_pct and kpi_uden_pct[k] in df_hif.columns) or 
+                    (k in kpi_med_pct and kpi_med_pct[k][0] in df_hif.columns)]
 
+    if not tilgaengelige:
+        st.error(f"Ingen af de valgte statistikker blev fundet i Snowflake. Tilgængelige kolonner: {list(df_hif.columns)}")
+        return
+
+    c1, c2 = st.columns([1, 1])
     with c1:
-        valgt_kat = st.pills("Statistik", tilgaengelige, default=tilgaengelige[0] if tilgaengelige else None, label_visibility="collapsed")
+        valgt_kat = st.pills("Statistik", tilgaengelige, default=tilgaengelige[0], label_visibility="collapsed")
     with c2:
         sub_c1, sub_c2 = st.columns([1, 1])
         with sub_c2:
@@ -87,7 +97,7 @@ def vis_side(spillere, player_stats_sn):
 
     # --- 5. BEREGNING AF GRAF-DATA ---
     df_final = df_hif.drop_duplicates()
-    min_col = "MINUTESONFIELD"
+    min_col = "MINUTESONFIELD" # Kilden til Pr. 90 beregning
 
     if valgt_kat in kpi_uden_pct:
         stat_col = kpi_uden_pct[valgt_kat]
@@ -113,17 +123,8 @@ def vis_side(spillere, player_stats_sn):
     df_plot = res[res['VAL'] > 0].sort_values('VAL', ascending=True)
 
     # --- 6. PLOTLY GRAF ---
-    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
     h = max(400, (len(df_plot) * 30) + 50)
-    
-    fig = px.bar(
-        df_plot, 
-        x='VAL', 
-        y='NAVN', 
-        orientation='h', 
-        text='LABEL',
-        labels={'VAL': valgt_kat, 'NAVN': ''}
-    )
+    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL', labels={'VAL': valgt_kat, 'NAVN': ''})
 
     fig.update_traces(
         marker_color='#df003b' if visning == "Total" else '#333',
@@ -132,16 +133,9 @@ def vis_side(spillere, player_stats_sn):
     )
 
     fig.update_layout(
-        height=h,
-        margin=dict(l=0, r=60, t=10, b=50),
-        xaxis=dict(
-            title=dict(text=f"<b>{valgt_kat.upper()}</b> ({visning})", font=dict(size=12, color='#333')),
-            showgrid=True,
-            gridcolor='#f0f0f0'
-        ),
-        yaxis=dict(tickfont=dict(size=12), autorange=True),
-        plot_bgcolor='white',
-        paper_bgcolor='white'
+        height=h, margin=dict(l=0, r=60, t=10, b=50),
+        xaxis=dict(title=dict(text=f"<b>{valgt_kat.upper()}</b> ({visning})", font=dict(size=12)), showgrid=True, gridcolor='#f0f0f0'),
+        yaxis=dict(tickfont=dict(size=12)), plot_bgcolor='white', paper_bgcolor='white'
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
