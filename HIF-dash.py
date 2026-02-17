@@ -47,7 +47,7 @@ if "data_package" not in st.session_state:
         # Vi kalder load_all_data - husk at SQL fejlen med 'ADV.XG' skal rettes i data_load.py!
         st.session_state["data_package"] = load_all_data()
 
-dp = st.session_state["data_package"]
+    dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
