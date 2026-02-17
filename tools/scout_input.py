@@ -9,7 +9,7 @@ from io import StringIO
 # --- KONFIGURATION OG ADGANG ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
-FILE_PATH = "data/scouting_db.csv"  # Gemmer i /data/ mappen
+FILE_PATH = "data/scouting_db.csv"  # Vi arbejder udelukkende i /data/ mappen
 
 POS_MAP = {
     1: "MM", 2: "HB", 3: "CB", 4: "CB", 5: "VB", 
@@ -25,7 +25,7 @@ def save_to_github(new_row_df):
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # 1. Hent eksisterende fil for at få SHA og indhold
+    # 1. Hent eksisterende fil
     r = requests.get(url, headers=headers)
     
     if r.status_code == 200:
@@ -33,11 +33,9 @@ def save_to_github(new_row_df):
         sha = content['sha']
         old_csv_raw = base64.b64decode(content['content']).decode('utf-8')
         old_df = pd.read_csv(StringIO(old_csv_raw))
-        # Kombiner og bevar formatering
         updated_df = pd.concat([old_df, new_row_df], ignore_index=True)
         updated_csv = updated_df.to_csv(index=False)
     else:
-        # Hvis filen ikke findes, opret ny
         sha = None
         updated_csv = new_row_df.to_csv(index=False)
 
@@ -52,9 +50,8 @@ def save_to_github(new_row_df):
     return res.status_code
 
 def vis_side(df_spillere):
-    """Hovedfunktion for scout-input siden."""
+    """Hovedfunktion for scout-input siden med dublet-rensning."""
     
-    # CSS Layout
     st.markdown("""
         <style>
             [data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
@@ -66,46 +63,52 @@ def vis_side(df_spillere):
 
     st.write("#### Scoutrapport")
     
-    # --- 1. HENT EKSISTERENDE SCOUTING DATA (Fra /data/ mappen) ---
+    # --- 1. HENT DATABASE FRA GITHUB ---
     try:
+        # Tving frisk hentning med UUID
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         db_scout = pd.read_csv(raw_url, sep=None, engine='python')
         db_scout.columns = [c.strip() for c in db_scout.columns]
+        
+        # Rens navne for usynlige mellemrum i databasen
+        db_scout['Navn'] = db_scout['Navn'].astype(str).str.strip()
         scouted_names_df = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
     except:
         scouted_names_df = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
-    # --- 2. FLET NAVNE UDEN DUBLETTER ---
+    # --- 2. FLET NAVNE OG FJERN DUBLETTER (KONRAD-SIKRING) ---
+    # Hent fra systemet (players.csv / Snowflake)
     system_names = []
     if df_spillere is not None and not df_spillere.empty:
-        system_names = sorted(df_spillere['NAVN'].unique().tolist())
+        system_names = [str(n).strip() for n in df_spillere['NAVN'].unique().tolist() if n]
     
-    manual_names = sorted(scouted_names_df['Navn'].unique().tolist())
+    # Hent fra scouting databasen
+    manual_names = [str(n).strip() for n in scouted_names_df['Navn'].unique().tolist() if n]
     
-    # Dette fjerner dubletter hvis en spiller findes begge steder
+    # Saml alt i et set (fjerner automatiske dubletter) og sorter
     alle_navne = sorted(list(set(system_names + manual_names)))
 
-    # Valg af kilde
     kilde_type = st.radio("Metode", ["Find i systemet", "Opret ny spiller"], horizontal=True, label_visibility="collapsed")
     
     p_id, navn, klub, pos_val = "", "", "", ""
+    pos_default, klub_default = "", ""
 
     # --- 3. BASIS INFORMATION ---
     c1, c2, c3 = st.columns([2, 1, 1])
     
     if kilde_type == "Find i systemet":
         with c1:
-            valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne)
+            valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne, index=0)
             navn = valgt_navn
             
-            # Prioritering: Tjek først Snowflake/System data
+            # Tjek system-data først
             if valgt_navn in system_names:
-                info = df_spillere[df_spillere['NAVN'] == valgt_navn].iloc[0]
+                info = df_spillere[df_spillere['NAVN'].str.strip() == valgt_navn].iloc[0]
                 p_id = str(info.get('PLAYER_WYID', '0')).split('.')[0]
                 pos_raw = info.get('POS', '')
                 pos_default = POS_MAP.get(int(pos_raw) if str(pos_raw).replace('.0','').isdigit() else 0, str(pos_raw))
                 klub_default = info.get('HOLD', 'Hvidovre IF')
-            # Ellers hent fra vores egen scouting_db.csv
+            # Ellers tjek manuel database
             elif valgt_navn in manual_names:
                 info = scouted_names_df[scouted_names_df['Navn'] == valgt_navn].iloc[0]
                 p_id, pos_default, klub_default = info['ID'], info['Position'], info['Klub']
@@ -120,24 +123,24 @@ def vis_side(df_spillere):
             navn = st.text_input("Spillernavn", placeholder="Indtast navn...")
             p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
             st.markdown(f"<p class='id-label'>ID: {p_id} (Auto-genereret)</p>", unsafe_allow_html=True)
-        with c2: pos_val = st.text_input("Position", placeholder="f.eks. CB")
-        with c3: klub = st.text_input("Klub", placeholder="Klub...")
+        with c2: pos_val = st.text_input("Position")
+        with c3: klub = st.text_input("Klub")
 
-    # --- 4. SCOUTING FORMULAR ---
+    # --- 4. FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         
-        col1, col2, col3, col4 = st.columns(4)
-        beslut = col1.select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=1)
-        fart = col2.select_slider("Fart", options=[1,2,3,4,5,6], value=1)
-        aggres = col3.select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=1)
-        attitude = col4.select_slider("Attitude", options=[1,2,3,4,5,6], value=1)
+        r1 = st.columns(4)
+        beslut = r1[0].select_slider("Beslutsomhed", options=[1,2,3,4,5,6], value=1)
+        fart = r1[1].select_slider("Fart", options=[1,2,3,4,5,6], value=1)
+        aggres = r1[2].select_slider("Aggresivitet", options=[1,2,3,4,5,6], value=1)
+        attitude = r1[3].select_slider("Attitude", options=[1,2,3,4,5,6], value=1)
 
-        col5, col6, col7, col8 = st.columns(4)
-        udhold = col5.select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=1)
-        leder = col6.select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=1)
-        teknik = col7.select_slider("Teknik", options=[1,2,3,4,5,6], value=1)
-        intel = col8.select_slider("Intelligens", options=[1,2,3,4,5,6], value=1)
+        r2 = st.columns(4)
+        udhold = r2[0].select_slider("Udholdenhed", options=[1,2,3,4,5,6], value=1)
+        leder = r2[1].select_slider("Lederegenskaber", options=[1,2,3,4,5,6], value=1)
+        teknik = r2[2].select_slider("Teknik", options=[1,2,3,4,5,6], value=1)
+        intel = r2[3].select_slider("Intelligens", options=[1,2,3,4,5,6], value=1)
 
         st.divider()
         m1, m2, _ = st.columns([1, 1, 2])
@@ -160,12 +163,10 @@ def vis_side(df_spillere):
                     beslut, fart, aggres, attitude, udhold, leder, teknik, intel
                 ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
                 
-                res_code = save_to_github(ny_data)
-                
-                if res_code in [200, 201]:
-                    st.success(f"Rapport gemt korrekt i {FILE_PATH}!")
+                if save_to_github(ny_data) in [200, 201]:
+                    st.success("Rapport gemt!")
                     st.rerun()
                 else: 
-                    st.error(f"Fejl ved gem (Status: {res_code}). Tjek GITHUB_TOKEN.")
+                    st.error("Kunne ikke gemme til GitHub. Tjek rettigheder.")
             else: 
-                st.error("Udfyld venligst spillernavn.")
+                st.error("Udfyld venligst navn.")
