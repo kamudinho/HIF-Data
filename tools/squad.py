@@ -19,44 +19,62 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Layout & Centrering) ---
-    # Jeg har beholdt din kode 1:1, men tilføjet specifik styling til knapperne
+    # --- 3. CSS INJECTION (Aggressiv Højrestilling) ---
     st.markdown("""
         <style>
+            /* 1. Fjern begrænsninger på kolonne-mellemrum */
             [data-testid="column"] {
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-start;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                width: 100% !important;
             }
-            /* Din kode til at højrestille indholdet i menu-kolonnen */
-            div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
-                align-items: flex-end !important;
+
+            /* 2. Tving den sidste kolonne helt ud til højre side af skærmen */
+            div[data-testid="stHorizontalBlock"] {
+                gap: 0rem !important;
             }
             
-            /* Gør knapperne til røde/hvide "Pills" */
+            div[data-testid="stHorizontalBlock"] > div:last-child {
+                flex: 0 1 auto !important;
+                min-width: 130px !important; /* Lige præcis bred nok til knapperne */
+                padding-left: 0px !important;
+                padding-right: 0px !important;
+                align-items: flex-end !important;
+            }
+
+            /* 3. Tving knapperne helt ud til højre kant af deres egen container */
+            div.stButton {
+                text-align: right !important;
+                width: 100% !important;
+            }
+
             div.stButton > button {
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
                 background-color: white !important;
                 color: #333 !important;
                 width: 110px !important;
-                transition: 0.2s;
+                margin-left: auto !important; /* Skubber dem væk fra banen */
+                margin-right: 0px !important;
+                display: block !important;
             }
+            
             div.stButton > button[kind="primary"] {
                 color: #df003b !important;
                 border: 2px solid #df003b !important;
                 font-weight: bold !important;
             }
-            
-            /* Sørger for at popover-knappen flugter med de andre pills */
+
+            /* 4. Popover styling - skal også helt til højre */
             div[data-testid="stPopover"] {
-                display: flex;
-                justify-content: flex-end;
-                width: 100%;
+                width: 100% !important;
+                display: flex !important;
+                justify-content: flex-end !important;
             }
             div[data-testid="stPopover"] > button {
-                border-radius: 20px !important;
                 width: 110px !important;
+                border-radius: 20px !important;
             }
         </style>
     """, unsafe_allow_html=True)
