@@ -111,7 +111,7 @@ def load_all_data():
             # D: TEAM MATCHES (Til Modstanderanalyse)
             q_teammatches = """
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
-                       g.SHOTS, g.GOALS, g.XG, d.PPDA, p.POSSESSIONPERCENT
+                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
                 FROM AXIS.WYSCOUT_TEAMMATCHES tm
                 JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
@@ -154,12 +154,12 @@ def load_all_data():
     # --- 4. RETURNERING ---
     return {
         "shotevents": df_shotevents,
-        "season_stats": df_season_stats, # Bruges til Tab 4 i profilen
-        "team_matches": df_team_matches, # Fixer Modstanderanalyse crash
-        "playerstats": df_playerstats,   # Bruges til Scouting (fuld historik)
-        "hif_stats": df_hif_stats,       # Bruges til Dashboard/Top 5
+        "season_stats": df_season_stats, # Til historik-tabellen i profilen
+        "team_matches": df_team_matches, # Fixer Modstanderanalyse
+        "playerstats": df_playerstats,   # Det originale navn - nu med ALT data
         "hold_map": hold_map,
         "players": df_players_gh,    
         "scouting": df_scout_gh,     
-        "teams_csv": df_teams_csv
+        "teams_csv": df_teams_csv,
+        "players_all": df_players_gh
     }
