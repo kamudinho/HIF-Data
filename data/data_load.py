@@ -1,16 +1,12 @@
-#data/data_load.py
 import streamlit as st
 import pandas as pd
 import uuid
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
-# --- 0. DYNAMISK IMPORT ---
-# Vi henter kun de rå data. Navne-logikken (COMP_MAP) gemmer vi til visnings-siderne.
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID
 except ImportError:
-    # Kun fallback hvis filen slet ikke findes
     SEASONNAME = "2024/2025"
     COMPETITION_WYID = (3134,)
 
@@ -42,10 +38,9 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # Dynamisk SQL-filter baseret på din tuple i season_show
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
 
-    # --- 1. GITHUB (Dynamisk cache-busting) ---
+    # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
@@ -59,12 +54,17 @@ def load_all_data():
     df_scout_gh = read_gh("scouting_db.csv")
     df_teams_csv = read_gh("teams.csv")
 
-    # --- 2. SNOWFLAKE (Dynamisk query-bygning) ---
+    # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
-    data = {
-        "shotevents": pd.DataFrame(), "season_stats": pd.DataFrame(),
-        "team_matches": pd.DataFrame(), "playerstats": pd.DataFrame(),
-        "events": pd.DataFrame(), "hold_map": {}
+    
+    # Her samler vi alt i et 'resultat' objekt
+    res = {
+        "shotevents": pd.DataFrame(), 
+        "season_stats": pd.DataFrame(),
+        "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(),
+        "events": pd.DataFrame(), 
+        "hold_map": {}
     }
 
     if conn:
@@ -72,9 +72,8 @@ def load_all_data():
             # Hold-navne mapping
             df_teams_sn = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
             if df_teams_sn is not None:
-                data["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_teams_sn.values}
+                res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_teams_sn.values}
             
-            # Alle queries bruger nu dine centraliserede filtre
             queries = {
                 "shotevents": f"""
                     SELECT c.*, s.SHOTBODYPART, s.SHOTISGOAL, s.SHOTXG, m.MATCHLABEL, m.DATE, m.COMPETITION_WYID
@@ -93,6 +92,15 @@ def load_all_data():
                     WHERE m.COMPETITION_WYID IN {comp_filter}
                     AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
                 """,
+                "playerstats": f"""
+                    SELECT s.*, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                    JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+                    JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
+                    WHERE se.SEASONNAME = '{SEASONNAME}'
+                    AND s.COMPETITION_WYID IN {comp_filter}
+                """,
                 "events": f"""
                     SELECT c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX, c.possessionstartlocationy AS LOCATIONY, 
                            c.primarytype AS PRIMARYTYPE, e.TEAM_WYID, m.DATE, m.COMPETITION_WYID
@@ -109,19 +117,21 @@ def load_all_data():
                 df = conn.query(q)
                 if df is not None:
                     df.columns = [c.upper() for c in df.columns]
-                    data[key] = df
+                    res[key] = df
             
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
-   return {
-        "shotevents": df_shotevents,
-        "events": df_events,
-        "team_matches": df_team_matches, 
-        "hold_map": hold_map,
+    # --- 3. RETURNERING ---
+    # Vi returnerer nu konsekvent fra vores 'res' ordbog + Github data
+    return {
+        "shotevents": res["shotevents"],
+        "events": res["events"],
+        "team_matches": res["team_matches"], 
+        "hold_map": res["hold_map"],
         "players": df_players_gh,        
         "scouting": df_scout_gh,         
         "teams_csv": df_teams_csv,
-        "playerstats": df_playerstats,  # Sørg for at denne nøgle findes!
-        "season_stats": df_season_stats # Behold denne hvis andre sider bruger den
+        "playerstats": res["playerstats"],
+        "season_stats": res["season_stats"]
     }
