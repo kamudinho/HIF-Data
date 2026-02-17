@@ -52,15 +52,23 @@ def vis_side(df_spillere):
 
     st.write("#### Scoutrapport")
     
-    # --- 1. HENT EKSTISTERENDE SCOUTING DATA ---
-    try:
-        # Vi tvinger den til at hente på ny med uuid for at se spillere vi lige har oprettet
-        raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
-        db_scout = pd.read_csv(raw_url)
-        # Vi tager de unikke spillere fra vores egen database
-        scouted_names_df = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
-    except:
-        scouted_names_df = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
+   # --- 1. HENT EKSISTERENDE SCOUTING DATA ---
+try:
+    # FILE_PATH er "data/scouting_db.csv"
+    raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
+    
+    # Vi læser filen - her er det vigtigt at definere separatoren, hvis din CSV bruger semikolon
+    db_scout = pd.read_csv(raw_url, sep=None, engine='python') 
+    
+    # Vi sikrer os at kolonnenavnene matcher (fjerner mellemrum og gør dem ens)
+    db_scout.columns = [c.strip() for c in db_scout.columns]
+    
+    # Hent unikke spillere til dropdown-menuen
+    scouted_names_df = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
+except Exception as e:
+    # Hvis filen ikke findes i /data/ endnu, opretter vi en tom dataframe
+    # st.error(f"Kunne ikke hente {FILE_PATH}: {e}") # Debug linje
+    scouted_names_df = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
 
     kilde_type = st.radio("Metode", ["Find i systemet", "Opret ny spiller"], horizontal=True, label_visibility="collapsed")
     
