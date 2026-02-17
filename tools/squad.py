@@ -33,7 +33,7 @@ def vis_side(df):
             /* 2. Ryk banen og menuen OP mod headeren */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: -5px !important; /* Trækker indholdet op */
+                margin-top: 0px !important; /* Trækker indholdet op */
             }
             
             /* Fjern Streamlits standard top-luft i kolonnerne */
