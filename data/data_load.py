@@ -1,184 +1,154 @@
 #data/data_load.py
 import streamlit as st
 import pandas as pd
-import uuid
 import requests
 import base64
-from io import StringIO
 from datetime import datetime
-import snowflake.connector
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from io import StringIO
+from data.data_load import write_log
 
-def _get_snowflake_conn():
-    """Opretter forbindelse ved hjælp af RSA-nøgle dekodning."""
-    try:
-        s = st.secrets["connections"]["snowflake"]
-        p_key_pem = s["private_key"]
-        
-        if isinstance(p_key_pem, str):
-            p_key_pem = p_key_pem.strip()
+# --- GITHUB KONFIGURATION ---
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+REPO = "Kamudinho/HIF-data"
+FILE_PATH = "data/scouting_db.csv"
 
-        p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(),
-            password=None, 
-            backend=default_backend()
-        )
-        
-        p_key_der = p_key_obj.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        
-        return st.connection(
-            "snowflake",
-            type="snowflake",
-            account=s["account"],
-            user=s["user"],
-            role=s["role"],
-            warehouse=s["warehouse"],
-            database=s["database"],
-            schema=s["schema"],
-            private_key=p_key_der
-        )
-    except Exception as e:
-        st.error(f"❌ Snowflake Connection Error: {e}")
-        return None
+def get_all_scouted_players():
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        content = r.json()
+        df = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
+        return df
+    return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
-def load_all_data():
-    try:
-        from data.season_show import SEASONNAME, TEAM_WYID
-    except ImportError:
-        SEASONNAME, TEAM_WYID = "2024/2025", 38331
-
-    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+def save_to_github(new_row_df):
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        content = r.json()
+        sha = content['sha']
+        old_df = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
+        updated_df = pd.concat([old_df, new_row_df], ignore_index=True, sort=False)
+        updated_csv = updated_df.to_csv(index=False)
+    else:
+        sha = None
+        updated_csv = new_row_df.to_csv(index=False)
     
-    def read_gh(file):
-        try:
-            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
-            d = pd.read_csv(u, sep=None, engine='python')
-            d.columns = [str(c).strip().upper() for c in d.columns]
-            return d
-        except:
-            return pd.DataFrame()
-
-    df_players_gh = read_gh("players.csv")
-    df_scout_gh = read_gh("scouting_db.csv")
-    df_teams_csv = read_gh("teams.csv")
-
-    conn = _get_snowflake_conn()
-    df_shotevents = pd.DataFrame()
-    df_team_matches = pd.DataFrame()
-    df_playerstats = pd.DataFrame()
-    df_events = pd.DataFrame()
-    hold_map = {}
-
-    if conn:
-        try:
-            # A: HOLD NAVNE
-            q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
-            df_teams_sn = conn.query(q_teams)
-            if df_teams_sn is not None and not df_teams_sn.empty:
-                for _, row in df_teams_sn.iterrows():
-                    tid = str(int(row['TEAM_WYID']))
-                    hold_map[tid] = str(row['TEAMNAME']).strip()
-            
-            # B: SHOT EVENTS
-            q_shots = """
-                SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
-                       c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
-                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
-                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
-                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
-                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            """
-            df_shotevents = conn.query(q_shots)
-
-            # C: TEAM MATCHES
-            q_teammatches = """
-                SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
-                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
-                FROM AXIS.WYSCOUT_TEAMMATCHES tm
-                JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
-                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
-            """
-            df_team_matches = conn.query(q_teammatches)
-
-            # D: PLAYERSTATS
-            q_playerstats = """
-                SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
-                       s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
-                       p.CURRENTTEAM_WYID AS TEAM_WYID
-                FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
-            """
-            df_playerstats = conn.query(q_playerstats)
-
-            # E: EVENTS
-            q_events = """
-                SELECT c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX, c.possessionstartlocationy AS LOCATIONY,
-                       c.possessionendlocationx AS ENDLOCATIONX, c.possessionendlocationy AS ENDLOCATIONY, 
-                       c.primarytype AS PRIMARYTYPE, e.TEAM_WYID, m.DATE
-                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
-                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                WHERE m.DATE >= '2024-07-01' 
-                AND c.primarytype IN ('pass', 'touch', 'duel', 'interception')
-            """
-            df_events = conn.query(q_events)
-            
-        except Exception as e:
-            st.error(f"SQL fejl: {e}")
-
-    for df in [df_shotevents, df_team_matches, df_playerstats, df_events]:
-        if df is not None and not df.empty:
-            df.columns = [str(c).upper().strip() for c in df.columns]
-
-    return {
-        "shotevents": df_shotevents,
-        "events": df_events,
-        "team_matches": df_team_matches, 
-        "playerstats": df_playerstats,   
-        "hold_map": hold_map,
-        "players": df_players_gh,    
-        "scouting": df_scout_gh,     
-        "teams_csv": df_teams_csv
+    payload = {
+        "message": f"Scouting: {new_row_df['Navn'].values[0]}",
+        "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
+        "sha": sha if sha else ""
     }
+    return requests.put(url, json=payload, headers=headers).status_code
 
-def write_log(action, target="System"):
-    """Logger handlinger til GitHub data/action_log.csv"""
-    try:
-        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-        REPO = "Kamudinho/HIF-data"
-        FILE_PATH = "data/action_log.csv"
-        user = st.session_state.get("user", "ukendt")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        
-        r = requests.get(url, headers=headers)
-        new_entry = pd.DataFrame([[timestamp, user, action, target]], columns=["Dato", "Bruger", "Handling", "Mål"])
-        
-        if r.status_code == 200:
-            content = r.json()
-            old_log = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
-            updated_log = pd.concat([old_log, new_entry], ignore_index=True)
-            sha = content['sha']
+def vis_side(df_players, df_playerstats):
+    st.write("#### Scoutrapport")
+    
+    logged_in_user = st.session_state.get("user", "Ukendt").upper()
+    
+    # --- 1. BYG OPSLAGSTABEL FRA ALLE KILDER ---
+    # A: Fra Snowflake Playerstats
+    if df_playerstats is not None:
+        df_playerstats['NAVN_FULL'] = df_playerstats['FIRSTNAME'] + " " + df_playerstats['LASTNAME']
+        # Vi mapper TEAMNAME til HOLD og ROLECODE3 til POS
+        source_stats = df_playerstats[['NAVN_FULL', 'PLAYER_WYID', 'TEAMNAME', 'ROLECODE3']].rename(
+            columns={'NAVN_FULL': 'NAVN', 'TEAMNAME': 'HOLD', 'ROLECODE3': 'POS'}
+        )
+    else:
+        source_stats = pd.DataFrame()
+
+    # B: Fra lokal players.csv (Truppen)
+    source_local = df_players[['NAVN', 'PLAYER_WYID', 'HOLD', 'POS']] if df_players is not None else pd.DataFrame()
+
+    # C: Fra eksisterende scouting database
+    df_scouting_all = get_all_scouted_players()
+    source_scout = df_scouting_all[['Navn', 'PLAYER_WYID', 'Klub', 'Position']].rename(
+        columns={'Navn': 'NAVN', 'Klub': 'HOLD', 'Position': 'POS'}
+    ) if not df_scouting_all.empty else pd.DataFrame()
+
+    # Kombiner alt til én stor tabel til dropdown
+    lookup_df = pd.concat([source_stats, source_local, source_scout], ignore_index=True).drop_duplicates(subset=['NAVN'])
+    all_names = sorted(lookup_df['NAVN'].dropna().unique().tolist())
+
+    # --- 2. LAYOUT: TOP-LINJEN ---
+    kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
+
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    
+    p_id = f"999{datetime.now().strftime('%H%M%S')}"
+    navn_endelig = ""
+    klub_val = ""
+    pos_val = ""
+
+    with c1:
+        if kilde == "Vælg eksisterende":
+            valgt_navn = st.selectbox("Vælg spiller", options=[""] + all_names)
+            if valgt_navn:
+                navn_endelig = valgt_navn
+                match = lookup_df[lookup_df['NAVN'] == valgt_navn].iloc[0]
+                p_id = str(match.get('PLAYER_WYID', '0'))
+                klub_val = str(match.get('HOLD', ''))
+                pos_val = str(match.get('POS', ''))
         else:
-            updated_log = new_entry
-            sha = None
+            navn_endelig = st.text_input("Navn på ny spiller")
 
-        payload = {
-            "message": f"Log: {user} - {action}",
-            "content": base64.b64encode(updated_log.to_csv(index=False).encode('utf-8')).decode('utf-8'),
-            "sha": sha if sha else ""
-        }
-        requests.put(url, json=payload, headers=headers)
-    except:
-        pass
+    with c2:
+        pos_input = st.text_input("Position", value=pos_val)
+    with c3:
+        klub_input = st.text_input("Klub", value=klub_val)
+    with c4:
+        # Scout feltet er låst og autogenereret fra login
+        st.text_input("Scout", value=logged_in_user, disabled=True)
+
+    if navn_endelig and kilde == "Vælg eksisterende":
+        st.caption(f"WyID: {p_id}")
+
+    # --- 3. RATINGS FORMULAR ---
+    with st.form("scout_form", clear_on_submit=True):
+        st.write("**Parametre (1-6)**")
+        col1, col2, col3, col4 = st.columns(4)
+        beslut = col1.select_slider("Beslut.", options=[1,2,3,4,5,6], value=3)
+        fart = col2.select_slider("Fart", options=[1,2,3,4,5,6], value=3)
+        aggres = col3.select_slider("Aggres.", options=[1,2,3,4,5,6], value=3)
+        att = col4.select_slider("Attitude", options=[1,2,3,4,5,6], value=3)
+        
+        col5, col6, col7, col8 = st.columns(4)
+        udhold = col5.select_slider("Udhold.", options=[1,2,3,4,5,6], value=3)
+        leder = col6.select_slider("Leder.", options=[1,2,3,4,5,6], value=3)
+        teknik = col7.select_slider("Teknik", options=[1,2,3,4,5,6], value=3)
+        intel = col8.select_slider("Intel.", options=[1,2,3,4,5,6], value=3)
+
+        st.divider()
+        
+        m1, m2 = st.columns([1, 1]) 
+        status = m1.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
+        potentiale = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+
+        styrker = st.text_area("Styrker")
+        udvikling = st.text_area("Udvikling")
+        vurdering = st.text_area("Samlet vurdering")
+
+        if st.form_submit_button("Gem rapport", use_container_width=True):
+            if navn_endelig:
+                avg = round(sum([beslut, fart, aggres, att, udhold, leder, teknik, intel]) / 8, 1)
+                ny_df = pd.DataFrame([[
+                    p_id, datetime.now().strftime("%Y-%m-%d"), navn_endelig, klub_input, pos_input, 
+                    avg, status, potentiale, styrker, udvikling, vurdering,
+                    beslut, fart, aggres, att, udhold, leder, teknik, intel,
+                    logged_in_user.lower()
+                ]], columns=[
+                    "PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", 
+                    "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", 
+                    "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", 
+                    "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens",
+                    "Scout"
+                ])
+                
+                if save_to_github(ny_df) in [200, 201]:
+                    write_log("Oprettede scoutrapport", target=navn_endelig)
+                    st.success(f"Rapport gemt!")
+                    st.rerun()
+            else:
+                st.error("Navn mangler!")
