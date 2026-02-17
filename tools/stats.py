@@ -11,8 +11,8 @@ except ImportError:
 def vis_side(spillere, player_stats_sn):
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">SPILLER STATISTIK</h3>
+        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">SPILLERSTATISTIK</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
@@ -104,7 +104,7 @@ def vis_side(spillere, player_stats_sn):
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
     # --- 5. GRAF (Clean Design) ---
-    st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
     bar_color = '#df003b' if visning == "Total" else '#333'
 
     fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
@@ -119,9 +119,9 @@ def vis_side(spillere, player_stats_sn):
 
     fig.update_layout(
         height=40 + (len(df_plot) * 35),
-        margin=dict(l=0, r=60, t=0, b=0),
+        margin=dict(l=0, r=40, t=0, b=0),
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
-        yaxis=dict(tickfont_size=11, title=""),
+        yaxis=dict(tickfont_size=13, title=""),
         plot_bgcolor='white',
         paper_bgcolor='white'
     )
