@@ -97,6 +97,9 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL Fejl: {e}")
 
+    st.write("Forbinder til Snowflake...")
+    conn = _get_snowflake_conn()
+    st.write("Henter hold-mapping...")
     # --- 3. SAMLET PAKKE (i data_load.py) ---
     return {
         "players": df_players_gh,
