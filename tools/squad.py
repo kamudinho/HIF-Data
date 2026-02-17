@@ -19,27 +19,19 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Justeret for perfekt balance) ---
+    # --- 3. CSS INJECTION ---
     st.markdown("""
         <style>
             [data-testid="column"] {
                 display: flex !important;
                 flex-direction: column !important;
-                justify-content: flex-start !important;
-                width: 100% !important;
             }
-
-            /* 2. Ryk banen og menuen moderat OP */
+            /* Ryk banen og menuen moderat OP og fjern gap */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: -15px !important; /* Den gyldne middelvej */
+                margin-top: -15px !important;
             }
-            
-            div[data-testid="stVerticalBlock"] > div {
-                padding-top: 0px !important;
-            }
-
-            /* 3. Tving menu-kolonnen helt ud til højre kant */
+            /* Tving menu-kolonnen helt ud til højre kant */
             div[data-testid="stHorizontalBlock"] > div:last-child {
                 flex: 0 1 auto !important;
                 min-width: 130px !important;
@@ -47,13 +39,7 @@ def vis_side(df):
                 padding-right: 0px !important;
                 align-items: flex-end !important;
             }
-
-            /* 4. Pill Button Styling */
-            div.stButton {
-                text-align: right !important;
-                width: 100% !important;
-            }
-
+            /* Pill Button Styling */
             div.stButton > button {
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
@@ -63,13 +49,12 @@ def vis_side(df):
                 margin-left: auto !important;
                 display: block !important;
             }
-            
             div.stButton > button[kind="primary"] {
                 color: #df003b !important;
                 border: 2px solid #df003b !important;
                 font-weight: bold !important;
             }
-
+            /* Popover knappen */
             div[data-testid="stPopover"] {
                 width: 100% !important;
                 display: flex !important;
@@ -82,14 +67,14 @@ def vis_side(df):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP BRANDING (Kompakt højde) ---
+    # --- 4. TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 4. DATA PROCESSERING ---
+    # --- 5. DATA PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
@@ -107,40 +92,26 @@ def vis_side(df):
         if days <= 365: return gul_udlob
         return 'white'
 
-    # --- 5. HOVEDLAYOUT (Bred bane, smal menu) ---
+    # --- 6. HOVEDLAYOUT ---
     col_pitch, col_menu = st.columns([7, 1])
 
-   with col_pitch:
-        # 1. Pitch - Vi fjerner 'pad' (standard er 4)
-        pitch = Pitch(
-            pitch_type='statsbomb', 
-            pitch_color='#ffffff', 
-            line_color='#333', 
-            linewidth=1,
-            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0 # Tvinger linjerne til kanten
-        )
-        
-        # 2. Figure - constrained_layout hjælper med at udfylde pladsen
-        fig, ax = pitch.draw(figsize=(13, 8), constrained_layout=True)
-        
-        # 3. Den vigtigste linje: Fjern alt resterende hvidt omkring banen
-        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    with col_menu:
+        with st.popover("Trup", use_container_width=True):
+            tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
+                <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
+                    <th style="text-align:left; padding:8px;">Spiller</th>
+                    <th style="text-align:right; padding:8px;">Udløb</th>
+                </tr>'''
+            for _, r in df_squad.sort_values('NAVN').iterrows():
+                bg = get_status_color(r)
+                tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
+                    <td style="padding:8px; font-weight:600;">{r['NAVN']}</td>
+                    <td style="padding:8px; text-align:right;">{r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"}</td>
+                </tr>'''
+            tabel_html += "</table>"
+            st.components.v1.html(tabel_html, height=400, scrolling=True)
 
-        # Legend - Flyttet helt op i hjørnet (nu hvor der ikke er margin)
-        # Vi bruger 'va=bottom' og y=pitch_height for at flugte med øverste linje
-        ax.text(1, 79, " < 6 mdr ", size=8, fontweight='bold', va='bottom', 
-                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(12, 79, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', 
-                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(25, 79, " Leje ", size=8, fontweight='bold', va='bottom', 
-                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-
-        # ... (Din spiller-rendering her) ...
-
-        # 4. Vis billedet - Streamlit vil nu strække det helt ud til kanterne
-        st.pyplot(fig, use_container_width=True)
-        
-        # Formation Pills
+        st.write("---")
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, use_container_width=True, type="primary" if is_active else "secondary"):
@@ -148,16 +119,24 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # Pitch Setup
-        pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
+        # Pitch med pad=0 fjerner den hvide "omkreds"
+        pitch = Pitch(
+            pitch_type='statsbomb', 
+            pitch_color='#ffffff', 
+            line_color='#333', 
+            linewidth=1,
+            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
+        )
         fig, ax = pitch.draw(figsize=(13, 8))
+        # Tvinger indholdet helt ud til kanten af billedet
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # Legend (Kompakt i toppen)
-        ax.text(2, 2, " < 6 mdr ", size=8, fontweight='bold', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(14, 2, " 6-12 mdr ", size=8, fontweight='bold', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(28, 2, " Leje ", size=8, fontweight='bold', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        # Legend
+        ax.text(1, 78, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(12, 78, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(25, 78, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # Positions-logik
+        # Formationer
         form = st.session_state.formation_valg
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
