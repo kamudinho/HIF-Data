@@ -19,10 +19,9 @@ def vis_side(df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION (Aggressiv Højrestilling & Oprykning) ---
+    # --- 3. CSS INJECTION (Justeret for perfekt balance) ---
     st.markdown("""
         <style>
-            /* 1. Generel layout-justering */
             [data-testid="column"] {
                 display: flex !important;
                 flex-direction: column !important;
@@ -30,13 +29,12 @@ def vis_side(df):
                 width: 100% !important;
             }
 
-            /* 2. Ryk banen og menuen OP mod headeren */
+            /* 2. Ryk banen og menuen moderat OP */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: 0px !important; /* Trækker indholdet op */
+                margin-top: -15px !important; /* Den gyldne middelvej */
             }
             
-            /* Fjern Streamlits standard top-luft i kolonnerne */
             div[data-testid="stVerticalBlock"] > div {
                 padding-top: 0px !important;
             }
@@ -50,7 +48,7 @@ def vis_side(df):
                 align-items: flex-end !important;
             }
 
-            /* 4. Pill Button Styling (Formationer) */
+            /* 4. Pill Button Styling */
             div.stButton {
                 text-align: right !important;
                 width: 100% !important;
@@ -63,7 +61,6 @@ def vis_side(df):
                 color: #333 !important;
                 width: 110px !important;
                 margin-left: auto !important;
-                margin-right: 0px !important;
                 display: block !important;
             }
             
@@ -73,7 +70,6 @@ def vis_side(df):
                 font-weight: bold !important;
             }
 
-            /* 5. Popover styling (Trup-knap) */
             div[data-testid="stPopover"] {
                 width: 100% !important;
                 display: flex !important;
@@ -86,10 +82,10 @@ def vis_side(df):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP BRANDING ---
+    # --- 4. TOP BRANDING (Kompakt højde) ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:20px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px;">TAKTIK & KONTRAKTER</h3>
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
         </div>
     """, unsafe_allow_html=True)
 
