@@ -100,8 +100,12 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = res[res['VAL'] > 0].sort_values('VAL', ascending=True)
 
-   # --- 6. PLOTLY GRAF (Dynamisk skala + kategori-label) ---
+   # --- 6. PLOTLY GRAF (Størst øverst + kategori-label) ---
     st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+    
+    # Sortering: Vi sorterer dataframe, så de mindste værdier er først 
+    # (Plotly tegner nemlig nedefra og op på y-aksen)
+    df_plot = df_plot.sort_values('VAL', ascending=True)
     
     h = max(400, (len(df_plot) * 30) + 50)
     
@@ -122,21 +126,19 @@ def vis_side(spillere, player_stats_sn):
 
     fig.update_layout(
         height=h,
-        margin=dict(l=0, r=60, t=10, b=50), # Plads til kategorien i bunden
+        margin=dict(l=0, r=60, t=10, b=50),
         xaxis=dict(
             title=dict(
                 text=f"<b>{valgt_kat.upper()}</b> ({visning})", 
                 font=dict(size=12, color='#333')
             ),
             showgrid=True,
-            gridcolor='#f0f0f0',
-            showticklabels=True,
-            zeroline=True,
-            zerolinecolor='#ccc'
+            gridcolor='#f0f0f0'
         ),
         yaxis=dict(
             tickfont=dict(size=12),
-            autorange="reversed" if len(df_plot) > 0 else True # Topscorer øverst
+            # Fjern 'reversed' herfra, da vi nu sorterer i selve dataframen
+            autorange=True 
         ),
         plot_bgcolor='white',
         paper_bgcolor='white'
