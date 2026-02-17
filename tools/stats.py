@@ -9,52 +9,55 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 0. CSS FOR HØJRE-STILLING & RESPONSIVITET ---
+    # --- 0. CSS FOR TOTAL HØJRE-STILLING ---
     st.markdown("""
         <style>
-            /* Brug bredden optimalt */
+            /* Fjern margener i siderne */
             .block-container {
                 padding-top: 1rem !important;
-                padding-bottom: 0rem !important;
                 max-width: 98% !important;
             }
             
-            /* Tving kolonne 2's indhold helt til højre */
-            [data-testid="column"]:last-child {
+            /* Containeren til knapperne */
+            .button-container {
                 display: flex;
-                justify-content: flex-end;
-                align-items: flex-end;
-            }
-            
-            /* Sørg for at segmented control selv flugter højre */
-            div[data-testid="stSegmentedControl"] {
-                display: flex;
-                justify-content: flex-end;
+                justify-content:间-between;
                 width: 100%;
+                align-items: center;
             }
 
-            /* Fjern unødig padding i bunden af widgets */
-            [data-testid="stVerticalBlock"] > div {
-                padding-bottom: 0px;
+            /* Tving segmented control til højre side af sin kolonne */
+            div[data-testid="column"]:nth-of-type(2) {
+                display: flex !important;
+                justify-content: flex-end !important;
+            }
+            
+            div[data-testid="stSegmentedControl"] {
+                width: fit-content !important;
+                margin-left: auto !important;
+            }
+
+            /* Fjern hvid plads mellem overskrift og graf */
+            [data-testid="stVerticalBlock"] {
+                gap: 0.5rem !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
     # --- 1. RENT DESIGN (HIF BRANDING) ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">SPILLERSTATISTIK</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. DATA KLARGØRING ---
+    # --- 2. DATA KLARGØRING (Samme som før) ---
     spillere.columns = [str(c).upper().strip() for c in spillere.columns]
     player_stats_sn.columns = [str(c).upper().strip() for c in player_stats_sn.columns]
-
     spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     player_stats_sn['PLAYER_WYID'] = player_stats_sn['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-
+    
     if 'SEASONNAME' in player_stats_sn.columns:
         df_stats = player_stats_sn[player_stats_sn['SEASONNAME'] == SEASONNAME].copy()
     else:
@@ -63,35 +66,30 @@ def vis_side(spillere, player_stats_sn):
     spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
     if 'NAVN' not in spillere_clean.columns:
         spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
-
+    
     df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
         st.info(f"Ingen data fundet for {SEASONNAME}")
         return
 
-    # --- 3. UI KONTROLLER (Med højrestillet visning) ---
-    c1, c2 = st.columns([1.5, 1])
+    # --- 3. UI KONTROLLER (NU MED FLEX-FIX) ---
+    # Vi bruger columns, men tvinger indholdet i c2 til at flugte højre
+    c1, c2 = st.columns([1, 1])
     
-    kategorier_med_pct = {
-        "Afleveringer": ("PASSES", "SUCCESSFULPASSES"),
-        "Dueller": ("DUELS", "DUELSWON"),
-    }
-    kategorier_uden_pct = {
-        "Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", 
-        "Afslutninger": "SHOTS", "Minutter": "MINUTESONFIELD"
-    }
-
+    kategorier_med_pct = {"Afleveringer": ("PASSES", "SUCCESSFULPASSES"), "Dueller": ("DUELS", "DUELSWON")}
+    kategorier_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", "Afslutninger": "SHOTS", "Minutter": "MINUTESONFIELD"}
     tilgaengelige = [k for k in kategorier_med_pct.keys() if kategorier_med_pct[k][0] in df_hif.columns] + \
                    [k for k in kategorier_uden_pct.keys() if kategorier_uden_pct[k] in df_hif.columns]
 
     with c1:
         valg_label = st.pills("Statistik", tilgaengelige, default="Mål", label_visibility="collapsed")
+    
     with c2:
-        # Segmented control presses nu helt mod højre via CSS
+        # Segmented control i sin egen div for at sikre højre-alignment
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
-    # --- 4. BEREGNING ---
+    # --- 4. BEREGNING (Samme som før) ---
     min_col = "MINUTESONFIELD"
     df_final = df_hif.drop_duplicates()
 
@@ -100,7 +98,6 @@ def vis_side(spillere, player_stats_sn):
         df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'max', min_col: 'max'})
-
         if visning == "Pr. 90" and valg_label != "Minutter":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[kolonne] / df_group[min_col] * 90), 0)
         else:
@@ -111,7 +108,6 @@ def vis_side(spillere, player_stats_sn):
         df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
         if df_group[min_col].max() > 6000:
             df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'max', suc_col: 'max', min_col: 'max'})
-
         df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
         if visning == "Pr. 90":
             df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[tot_col] / df_group[min_col] * 90), 0)
@@ -123,19 +119,11 @@ def vis_side(spillere, player_stats_sn):
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
     # --- 5. GRAF ---
-    st.markdown("<div style='margin-bottom:5px;'></div>", unsafe_allow_html=True)
     calc_height = max(400, (len(df_plot) * 32) + 60)
     bar_color = '#df003b' if visning == "Total" else '#333'
     
     fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
-
-    fig.update_traces(
-        marker_color=bar_color,
-        textposition='outside',
-        cliponaxis=False,
-        textfont_size=12
-    )
-
+    fig.update_traces(marker_color=bar_color, textposition='outside', cliponaxis=False, textfont_size=12)
     fig.update_layout(
         height=calc_height,
         margin=dict(l=0, r=60, t=10, b=10),
@@ -144,5 +132,4 @@ def vis_side(spillere, player_stats_sn):
         plot_bgcolor='white',
         paper_bgcolor='white'
     )
-
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
