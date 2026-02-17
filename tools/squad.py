@@ -29,7 +29,7 @@ def vis_side(df):
             /* Ryk hele sektionen op mod branding-headeren */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: -15px !important;
+                margin-top: 5px !important;
             }
             /* Fjern standard Streamlit padding i toppen af kolonner */
             div[data-testid="stVerticalBlock"] > div {
