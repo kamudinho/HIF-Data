@@ -1,35 +1,40 @@
-# tools/admin.py
 import streamlit as st
 import pandas as pd
-from data.users import get_users
+import uuid
 
 def vis_side():
-    st.subheader("ADMINISTRATION")
-    
-    # Hent brugerlisten
+    """Viser brugeroversigt og profilrettigheder."""
+    if st.session_state.get("role") != "admin":
+        st.error("Adgang nægtet.")
+        return
+
+    st.write("### Brugerstyring")
+    from data.users import get_users
     users = get_users()
     
-    # Konverter til DataFrame for at vise det pænt i en tabel
-    df_users = pd.DataFrame(list(users.items()), columns=['BRUGERNAVN', 'ADGANGSKODE'])
+    user_data = []
+    for u, info in users.items():
+        user_data.append({"Brugernavn": u, "Rolle": info["role"]})
     
-    # Layout med kolonner
-    col1, col2 = st.columns([2, 1])
+    st.table(pd.DataFrame(user_data))
+    st.info("Rettigheder styres pt. via data/users.py")
+
+def vis_log():
+    """Viser systemets aktivitetslog fra GitHub."""
+    if st.session_state.get("role") != "admin":
+        st.error("Adgang nægtet.")
+        return
+
+    st.write("### System Log")
     
-    with col1:
-        st.markdown("**AKTIVE BRUGERE**")
+    try:
+        # Cache-busting URL for at sikre vi ser de nyeste handlinger
+        url = f"https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/action_log.csv?nocache={uuid.uuid4()}"
+        df_log = pd.read_csv(url)
         st.dataframe(
-            df_users, 
+            df_log.sort_values("Dato", ascending=False), 
             use_container_width=True, 
             hide_index=True
         )
-        
-    with col2:
-        st.markdown("**SYSTEM STATUS**")
-        st.metric("ANTAL BRUGERE", len(df_users))
-        
-        if st.button("TJEK FORBINDELSER", use_container_width=True):
-            st.success("SNOWFLAKE: OK")
-            st.success("GITHUB: OK")
-
-    st.divider()
-    st.caption("Bemærk: Nye brugere tilføjes i øjeblikket manuelt i data/users.py")
+    except Exception as e:
+        st.warning("Kunne ikke hente log-filen. Den oprettes automatisk ved næste handling.")
