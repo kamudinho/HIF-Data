@@ -1,7 +1,5 @@
-# HIF-dash.py
 import streamlit as st
 from streamlit_option_menu import option_menu
-import os
 import pandas as pd
 from data.data_load import load_all_data
 from data.users import get_users
@@ -33,7 +31,7 @@ if not st.session_state["logged_in"]:
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
             if st.form_submit_button("LOG IND", width="stretch"):
-                # RETTET: Tjekker mod ["pass"] i stedet for hele objektet
+                # Rettelse: Tjekker specifikt ['pass'] nøglen
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
@@ -47,7 +45,7 @@ if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
         st.session_state["data_package"] = load_all_data()
 
-# RETTET: Denne linje skal stå UDEN FOR if-blokken, ellers findes 'dp' ikke ved rerun
+# VIGTIGT: dp skal defineres UDEN FOR if-blokken
 dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
@@ -55,11 +53,11 @@ with st.sidebar:
     curr_user = st.session_state["user"]
     user_info = USER_DB.get(curr_user, {})
     
-    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {curr_user.upper()} ({user_info.get('role', 'Bruger')})</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {curr_user.upper()} ({user_info.get('role', 'User')})</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    # RETTET: Bruger adgangslisten fra users.py
-    hoved_options = user_info.get("access", ["TRUPPEN"])
+    # Henter adgang fra users.py
+    hoved_options = user_info.get("access", ["TRUPPEN", "ANALYSE", "SCOUTING"])
 
     hoved_omraade = option_menu(
         menu_title=None, options=hoved_options, icons=None, menu_icon=None, default_index=0,
@@ -80,6 +78,7 @@ with st.sidebar:
 if not sel:
     sel = "Oversigt"
 
+# Fejlsikret routing
 try:
     if sel == "Oversigt":
         import tools.players as pl
@@ -115,4 +114,4 @@ try:
         import tools.snowflake_test as stest
         stest.vis_side()
 except Exception as e:
-    st.error(f"Fejl i visning af siden '{sel}': {e}")
+    st.error(f"Fejl ved indlæsning af siden '{sel}': {e}")
