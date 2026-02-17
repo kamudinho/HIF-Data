@@ -6,7 +6,7 @@ from mplsoccer import VerticalPitch
 import numpy as np
 
 def vis_side(df_team_matches, hold_map, df_events):
-    # --- 1. CSS STYLING ---
+    # --- 1. CSS STYLING (HIF Look) ---
     st.markdown("""
         <style>
         .stMetric { 
@@ -15,8 +15,10 @@ def vis_side(df_team_matches, hold_map, df_events):
             border-radius: 8px; 
             border-bottom: 3px solid #df003b; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+            margin-bottom: 10px;
         }
-        [data-testid="stMetricValue"] { font-size: 22px !important; }
+        [data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
+        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #555; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -31,81 +33,87 @@ def vis_side(df_team_matches, hold_map, df_events):
     valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
     valgt_id = navne_dict[valgt_navn]
     
-    # Forbered kamp-statistik (Begræns til de seneste 10 kampe for trendline)
+    # Forbered data
     df_f = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
     df_f['DATE'] = pd.to_datetime(df_f['DATE']).dt.date
-    df_f = df_f.sort_values('DATE', ascending=True)
-    df_trend = df_f.tail(10) # Kun de seneste 10 kampe
-
+    
     # --- 3. HOVEDLAYOUT ---
+    # Venstre side: De 3 heatmaps | Højre side: Alle de statistiske bokse
     main_left, main_right = st.columns([2, 1])
 
     with main_left:
-        st.subheader(f"Positionsanalyse (Heatmaps): {valgt_navn}")
+        st.subheader(f"Positionsanalyse: {valgt_navn}")
         pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#1a1a1a', linewidth=1)
         
-        # 3 heatmaps ved siden af hinanden
         c1, c2, c3 = st.columns(3)
 
         if df_events is not None and not df_events.empty:
-            # Tving kolonnenavne til upper
             df_events.columns = [c.upper() for c in df_events.columns]
             df_hold = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
 
-            # 1. PASS HEATMAP
-            with c1:
-                st.caption("Afleveringer")
-                fig, ax = pitch.draw(figsize=(4, 6))
-                df_p = df_hold[df_hold['PRIMARYTYPE'].str.contains('pass', case=False, na=False)]
-                if not df_p.empty:
-                    sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], ax=ax, fill=True, cmap='Reds', alpha=0.6, clip=((0, 100), (0, 100)), levels=10)
-                st.pyplot(fig)
+            # Heatmap farver: Rød (Pass), Blå (Duel), Grøn (Interception)
+            configs = [
+                (c1, "Afleveringer", "pass", "Reds"),
+                (c2, "Dueller", "duel", "Blues"),
+                (c3, "Interceptions", "interception", "Greens")
+            ]
 
-            # 2. DUEL HEATMAP
-            with c2:
-                st.caption("Dueller")
-                fig, ax = pitch.draw(figsize=(4, 6))
-                df_d = df_hold[df_hold['PRIMARYTYPE'].str.contains('duel', case=False, na=False)]
-                if not df_d.empty:
-                    sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], ax=ax, fill=True, cmap='Blues', alpha=0.6, clip=((0, 100), (0, 100)), levels=10)
-                st.pyplot(fig)
+            for col, title, p_type, cmap in configs:
+                with col:
+                    st.caption(title)
+                    fig, ax = pitch.draw(figsize=(4, 6))
+                    mask = df_hold['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
+                    df_filtered = df_hold[mask]
+                    if not df_filtered.empty:
+                        sns.kdeplot(x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], 
+                                    ax=ax, fill=True, cmap=cmap, alpha=0.6, 
+                                    clip=((0, 100), (0, 100)), levels=10)
+                    st.pyplot(fig)
 
-            # 3. INTERCEPTION HEATMAP
-            with c3:
-                st.caption("Interceptions")
-                fig, ax = pitch.draw(figsize=(4, 6))
-                df_i = df_hold[df_hold['PRIMARYTYPE'].str.contains('interception', case=False, na=False)]
-                if not df_i.empty:
-                    sns.kdeplot(x=df_i['LOCATIONY'], y=df_i['LOCATIONX'], ax=ax, fill=True, cmap='Greens', alpha=0.6, clip=((0, 100), (0, 100)), levels=10)
-                st.pyplot(fig)
-
-    # --- HØJRE SIDE: METRICS & TREND (KUN 10 KAMPE) ---
+    # --- 4. HØJRE SIDE: STATISTISKE BOKSE (Metrics) ---
     with main_right:
-        st.subheader("Form & Statistik")
+        st.subheader("Holdets Profil")
         
-        m_col1, m_col2 = st.columns(2)
-        avg_xg = df_f['XG'].mean()
+        # Vi deler metrics op i kategorier (3 rækker af 2 kolonner)
         
-        with m_col1:
-            st.metric("Gns. xG", round(avg_xg, 2))
-        with m_col2:
-            seneste_xg_mean = df_trend['XG'].mean()
-            st.metric("Trend (10 kampe)", round(seneste_xg_mean, 2), delta=round(seneste_xg_mean - avg_xg, 2))
+        # Række 1: Offensivt
+        st.write("**Offensiv**")
+        col_off1, col_off2 = st.columns(2)
+        col_off1.metric("Gns. xG", round(df_f['XG'].mean(), 2))
+        col_off2.metric("Skud/Kamp", round(df_f['SHOTS'].mean(), 1))
+
+        # Række 2: Spilstyring
+        st.write("**Spilstyring**")
+        col_ctrl1, col_ctrl2 = st.columns(2)
+        col_ctrl1.metric("Possession", f"{round(df_f['POSSESSIONPERCENT'].mean(), 0)}%")
+        col_ctrl2.metric("Gns. Mål", round(df_f['GOALS'].mean(), 1))
+
+        # Række 3: Disciplin / Defensivt
+        st.write("**Defensiv & Disciplin**")
+        col_def1, col_def2 = st.columns(2)
+        # Tjekker om kolonnerne findes før beregning
+        y_cards = df_f['YELLOWCARDS'].mean() if 'YELLOWCARDS' in df_f else 0
+        r_cards = df_f['REDCARDS'].sum() if 'REDCARDS' in df_f else 0
+        
+        col_def1.metric("Gule kort/K", round(y_cards, 1))
+        col_def2.metric("Røde kort (Total)", int(r_cards))
 
         st.markdown("---")
-        st.write("**xG Udvikling (Seneste 10 kampe)**")
-        # Grafen viser kun de seneste 10 rækker
-        st.line_chart(df_trend.set_index('DATE')['XG'], color="#df003b")
         
-        # Konvertering
+        # Konverteringsrate Progress Bar
         total_shots = df_f['SHOTS'].sum()
         total_goals = df_f['GOALS'].sum()
         if total_shots > 0:
             rate = (total_goals / total_shots) * 100
-            st.write(f"**Mål/Skud Rate:** {round(rate, 1)}%")
+            st.write(f"**Effektivitet (Mål/Skud):** {round(rate, 1)}%")
             st.progress(min(rate/30, 1.0))
 
-        st.info(f"**Scout Note:** De blå områder viser hvor {valgt_navn} søger duellerne, mens de røde viser deres opbygningszoner.")
+        st.info(f"""
+        **Kort analyse:**
+        Holdet har en gennemsnitlig xG på {round(df_f['XG'].mean(), 2)}. 
+        De tre heatmaps viser deres taktiske tyngdepunkter i opbygning (Rød), defensive dueller (Blå) og opspils-brydninger (Grøn).
+        """)
 
-    with st.expander("Se rå kampdata"):
+    # --- 5. RÅ DATA TABEL ---
+    with st.expander("Se alle kampdata"):
         st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
