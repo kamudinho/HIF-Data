@@ -44,16 +44,14 @@ def _get_snowflake_conn():
 def load_all_data():
     # --- 0. INDLÆS KONFIGURATION ---
     try:
-        # Tilføjet COMPETITION_WYID til importen
         from data.season_show import SEASONNAME, TEAM_WYID, COMPETITION_WYID
     except ImportError:
         SEASONNAME, TEAM_WYID = "2024/2025", 38331
         COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
-    # Opretter en streng-version af tuplen til SQL, f.eks. "(3134, 329...)"
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
 
-    # ... (GITHUB FILER SEKTION ER UÆNDRET) ...
+    # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
@@ -69,11 +67,23 @@ def load_all_data():
 
     # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
-    # ... (INITIALISERING AF DATAFRAMES) ...
+    df_shotevents = pd.DataFrame()
+    df_season_stats = pd.DataFrame() # Denne skal være defineret!
+    df_team_matches = pd.DataFrame()
+    df_playerstats = pd.DataFrame()
+    df_events = pd.DataFrame() 
+    hold_map = {}
 
     if conn:
         try:
-            # B: SHOT EVENTS (Tilføjet filtrering på Competition og Sæson)
+            # A: HOLD NAVNE
+            df_teams_sn = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+            if df_teams_sn is not None and not df_teams_sn.empty:
+                for _, row in df_teams_sn.iterrows():
+                    tid = str(int(row['TEAM_WYID']))
+                    hold_map[tid] = str(row['TEAMNAME']).strip()
+            
+            # B: SHOT EVENTS
             q_shots = f"""
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
@@ -87,7 +97,22 @@ def load_all_data():
             """
             df_shotevents = conn.query(q_shots)
 
-            # D: TEAM MATCHES (Tilføjet filtrering på Competition)
+            # C: SEASON STATS (GENINDSAT)
+            q_season_stats = f"""
+                SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
+                                p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
+                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS
+                FROM AXIS.WYSCOUT_PLAYERCAREER p
+                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
+                     AND p.SEASON_WYID = adv.SEASON_WYID
+                JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
+                JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
+                WHERE s.SEASONNAME = '{SEASONNAME}'
+                AND adv.COMPETITION_WYID IN {comp_filter}
+            """
+            df_season_stats = conn.query(q_season_stats)
+
+            # D: TEAM MATCHES
             q_teammatches = f"""
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
                        g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
@@ -100,7 +125,7 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # E: PLAYERSTATS (Tilføjet filtrering på Competition og Sæson)
+            # E: PLAYERSTATS
             q_playerstats = f"""
                 SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
                        s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
@@ -114,7 +139,7 @@ def load_all_data():
             """
             df_playerstats = conn.query(q_playerstats)
 
-            # F: EVENTS (Tilføjet filtrering på Competition)
+            # F: EVENTS
             q_events = f"""
                 SELECT 
                     c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX,
@@ -133,7 +158,7 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl i data_load: {e}")
 
-    # Rensning og standardisering
+    # Rensning (Nu findes alle variabler i listen herunder)
     dfs_to_clean = [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events, df_players_gh, df_scout_gh]
     for df in dfs_to_clean:
         if df is not None and not df.empty:
