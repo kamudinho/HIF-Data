@@ -8,6 +8,7 @@ from data.users import get_users
 # --- 1. KONFIGURATION & STYLES ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
+# Opdateret CSS for bedre visning i 2026-versionen
 st.markdown("""
 <style>
     header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
@@ -31,8 +32,8 @@ if not st.session_state["logged_in"]:
         with st.form("login"):
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
-            if st.form_submit_button("LOG IND", use_container_width=True):
-                # RETTELSEN ER HER: Vi tjekker specifikt USER_DB[u]["pass"]
+            # Opdateret use_container_width -> width="stretch"
+            if st.form_submit_button("LOG IND", width="stretch"):
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
@@ -42,9 +43,15 @@ if not st.session_state["logged_in"]:
     st.stop()
     
 # --- 3. DATA LOADING ---
+# Vi bruger en try-except blok her for at fange KeyError hvis data_load fejler
 if "data_package" not in st.session_state:
-    with st.spinner("Henter systemdata..."):
-        st.session_state["data_package"] = load_all_data()
+    try:
+        with st.spinner("Henter systemdata fra Snowflake..."):
+            st.session_state["data_package"] = load_all_data()
+    except Exception as e:
+        st.error(f"🚨 Kunne ikke indlæse data: {e}")
+        st.info("Prøv at rydde cachen ved at trykke på 'C'")
+        st.stop()
 
 dp = st.session_state["data_package"]
 
@@ -54,7 +61,7 @@ with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
     hoved_options = ["TRUPPEN", "ANALYSE", "SCOUTING"]
-    if st.session_state["user"] == "kasper":
+    if st.session_state["user"] in ["kasper", "admin"]: # Tilføjet admin tjek
         hoved_options.append("ADMIN")
 
     hoved_omraade = option_menu(
@@ -76,36 +83,41 @@ with st.sidebar:
 if not sel:
     sel = "Oversigt"
 
-if sel == "Oversigt":
-    import tools.players as pl
-    pl.vis_side(dp["players"])
-elif sel == "Forecast":
-    import tools.squad as sq
-    sq.vis_side(dp["players"])
-elif sel == "Spillerstats":
-    import tools.stats as st_tool
-    st_tool.vis_side(dp["players"], dp["playerstats"])
-elif sel == "Top 5":
-    import tools.top5 as t5
-    t5.vis_side(dp["players"], dp["playerstats"])
-elif sel == "Afslutninger":
-    import tools.player_shots as ps
-    ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
-elif sel == "Modstanderanalyse":
-    import tools.modstanderanalyse as ma
-    ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
-elif sel == "Database":
-    import tools.scout_db as sdb
-    sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
-elif sel == "Scoutrapport":
-    import tools.scout_input as si
-    si.vis_side(dp["players"])
-elif sel == "Sammenligning":
-    import tools.comparison as comp
-    comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
-elif sel == "Brugerstyring":
-    import tools.admin as adm
-    adm.vis_side()
-elif sel == "Schema Explorer":
-    import tools.snowflake_test as stest
-    stest.vis_side()
+# Centraliseret routing
+try:
+    if sel == "Oversigt":
+        import tools.players as pl
+        pl.vis_side(dp["players"])
+    elif sel == "Forecast":
+        import tools.squad as sq
+        sq.vis_side(dp["players"])
+    elif sel == "Spillerstats":
+        import tools.stats as st_tool
+        st_tool.vis_side(dp["players"], dp["playerstats"])
+    elif sel == "Top 5":
+        import tools.top5 as t5
+        t5.vis_side(dp["players"], dp["playerstats"])
+    elif sel == "Afslutninger":
+        import tools.player_shots as ps
+        ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
+    elif sel == "Modstanderanalyse":
+        import tools.modstanderanalyse as ma
+        ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
+    elif sel == "Database":
+        import tools.scout_db as sdb
+        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
+    elif sel == "Scoutrapport":
+        import tools.scout_input as si
+        si.vis_side(dp["players"])
+    elif sel == "Sammenligning":
+        import tools.comparison as comp
+        comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
+    elif sel == "Brugerstyring":
+        import tools.admin as adm
+        adm.vis_side()
+    elif sel == "Schema Explorer":
+        import tools.snowflake_test as stest
+        stest.vis_side()
+except KeyError as e:
+    st.error(f"Mangler datafelt: {e}")
+    st.button("Genindlæs system", on_click=lambda: st.session_state.pop("data_package", None))
