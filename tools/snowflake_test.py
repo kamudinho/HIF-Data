@@ -6,7 +6,8 @@ from cryptography.hazmat.primitives import serialization
 
 def get_snowflake_connection():
     try:
-        p_key_pem = st.secrets["connections"]["snowflake"]["private_key"]
+        s = st.secrets["connections"]["snowflake"]
+        p_key_pem = s["private_key"]
         if isinstance(p_key_pem, str):
             p_key_pem = p_key_pem.strip()
 
@@ -23,44 +24,77 @@ def get_snowflake_connection():
         )
         
         return snowflake.connector.connect(
-            user=st.secrets["connections"]["snowflake"]["user"],
-            account=st.secrets["connections"]["snowflake"]["account"],
+            user=s["user"],
+            account=s["account"],
             private_key=p_key_der,
-            warehouse=st.secrets["connections"]["snowflake"]["warehouse"],
-            database=st.secrets["connections"]["snowflake"]["database"],
-            schema=st.secrets["connections"]["snowflake"]["schema"],
-            role=st.secrets["connections"]["snowflake"]["role"]
+            warehouse=s["warehouse"],
+            database=s["database"],
+            schema=s["schema"],
+            role=s["role"]
         )
     except Exception as e:
         st.error(f"❌ Forbindelsesfejl: {e}")
         return None
 
 def vis_side():
-    st.title("❄️ Snowflake Connection Test")
-    st.info("Her kan du teste adgangen til AXIS schemaet og se tabel-strukturer.")
+    st.title("❄️ Snowflake Explorer Pro")
     
     conn = get_snowflake_connection()
     
     if conn:
-        st.success("✅ Forbindelse til Snowflake aktiv!")
+        st.success("✅ Forbindelse aktiv!")
         try:
-            # Hent tabel-oversigt
             cursor = conn.cursor()
             cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'AXIS' ORDER BY TABLE_NAME")
             table_list = [row[0] for row in cursor.fetchall()]
 
-            st.write(f"Fundet **{len(table_list)}** tabeller i AXIS.")
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                valgt = st.selectbox("Vælg tabel:", table_list, index=table_list.index("WYSCOUT_PLAYERS") if "WYSCOUT_PLAYERS" in table_list else 0)
+            with col2:
+                # HER STYRER DU MÆNGDEN
+                limit = st.number_input("Antal rækker", min_value=10, max_value=50000, value=1000, step=500)
 
-            valgt = st.selectbox("Vælg tabel for at se struktur:", table_list)
-            if st.button(f"Inspicér {valgt}"):
-                df = pd.read_sql(f"SELECT * FROM AXIS.{valgt} LIMIT 100", conn)
-                st.subheader(f"Top 100 rækker fra {valgt}")
-                st.dataframe(df)
-                
-                st.subheader("Kolonne-liste (Til SQL Queries)")
-                st.code(", ".join(df.columns))
+            st.divider()
+            
+            # Hurtig-søgning direkte i SQL
+            search_query = st.text_input("Søg i tabellen (f.eks. efter PLAYER_WYID eller Navn)", "")
+
+            if st.button(f"Hent {limit} rækker fra {valgt}"):
+                with st.spinner(f"Henter data fra {valgt}..."):
+                    sql = f"SELECT * FROM AXIS.{valgt}"
+                    
+                    # Hvis der er skrevet noget i søgefeltet, prøver vi at filtrere (simpel version)
+                    if search_query:
+                        # Dette kræver man ved hvilken kolonne man søger i, 
+                        # men for testen henter vi bare alt og filtrerer i pandas nedenfor
+                        pass
+                    
+                    sql += f" LIMIT {limit}"
+                    
+                    df = pd.read_sql(sql, conn)
+                    
+                    # Standardiser kolonner for nemmere læsning
+                    df.columns = [c.upper() for c in df.columns]
+
+                    # Hvis brugeren har søgt, filtrerer vi i det hentede dataframe
+                    if search_query:
+                        mask = df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)
+                        df = df[mask]
+                        st.write(f"Fundet {len(df)} rækker der matcher din søgning.")
+
+                    st.subheader(f"Data-view: {valgt}")
+                    st.dataframe(df, use_container_width=True)
+                    
+                    # Statistik om ID'er
+                    if 'PLAYER_WYID' in df.columns:
+                        st.info(f"Første 5 PLAYER_WYID: {df['PLAYER_WYID'].head().tolist()}")
+                    
+                    # Download mulighed
+                    csv = df.to_csv(index=False).encode('utf-8')
+                    st.download_button("Download denne visning (CSV)", csv, f"snowflake_{valgt}.csv", "text/csv")
 
         except Exception as e:
-            st.error(f"Fejl: {e}")
+            st.error(f"SQL Fejl: {e}")
         finally:
             conn.close()
