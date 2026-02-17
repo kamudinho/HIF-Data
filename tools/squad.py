@@ -95,41 +95,52 @@ def vis_side(df):
     with col_menu:
         # --- HTML TABEL TIL POPOVER (RETTET) ---
         with st.popover("Vis Kontrakter", use_container_width=True):
-            # Vi bygger rækkerne først som en samlet streng
+            # 1. Byg alle rækkerne først
             tabel_rows = ""
-            for _, r in df_squad.sort_values('NAVN').iterrows():
-                bg = "transparent"
+            # Vi sorterer efter navn for at matche players.py stilen
+            df_sorted = df_squad.sort_values('NAVN')
+            
+            for _, r in df_sorted.iterrows():
+                # Find farven baseret på dage tilbage
+                bg_farve = "transparent"
                 days = r.get('DAYS_LEFT', 999)
-                if str(r.get('PRIOR', '')).upper() == 'L': 
-                    bg = leje_gra
+                
+                if str(r.get('PRIOR', '')).upper() == 'L':
+                    bg_farve = leje_gra # Grå for leje
                 elif pd.notna(days):
-                    if days < 183: bg = rod_udlob
-                    elif days <= 365: bg = gul_udlob
+                    if days < 183: 
+                        bg_farve = rod_udlob # Lys rød < 6 mdr
+                    elif days <= 365: 
+                        bg_farve = gul_udlob # Lys gul < 12 mdr
                 
-                kontrakt_str = r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"
+                kontrakt_visning = r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"
                 
-                tabel_rows += f'''
-                    <tr style="background-color:{bg}; border-bottom: 1px solid #f2f2f2;">
-                        <td style="padding: 8px 10px; font-weight:600; color: #222;">{r['NAVN']}</td>
-                        <td style="padding: 8px 10px; text-align:right; color: #222;">{kontrakt_str}</td>
-                    </tr>
-                '''
+                # Tilføj rækken til tabellen
+                tabel_rows += f"""
+                <tr style="background-color:{bg_farve}; border-bottom:1px solid #f2f2f2;">
+                    <td style="padding:8px 10px; font-weight:600; color:#222;">{r['NAVN']}</td>
+                    <td style="padding:8px 10px; text-align:right; color:#222;">{kontrakt_visning}</td>
+                </tr>
+                """
 
-            # Saml det hele og send til markdown
-            fuld_tabel_html = f'''
-                <table style="width:100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px;">
+            # 2. Saml den fulde HTML-struktur
+            fuld_tabel_html = f"""
+            <div style="width:100%;">
+                <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:13px;">
                     <thead>
-                        <tr style="background: #fafafa; border-bottom: 2px solid {hif_rod};">
-                            <th style="padding: 8px 10px; text-align: left; color: #888; font-size: 10px; text-transform: uppercase;">Spiller</th>
-                            <th style="padding: 8px 10px; text-align: right; color: #888; font-size: 10px; text-transform: uppercase;">Udløb</th>
+                        <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
+                            <th style="padding:8px 10px; text-align:left; color:#888; font-size:10px; text-transform:uppercase;">Spiller</th>
+                            <th style="padding:8px 10px; text-align:right; color:#888; font-size:10px; text-transform:uppercase;">Udløb</th>
                         </tr>
                     </thead>
                     <tbody>
                         {tabel_rows}
                     </tbody>
                 </table>
-            '''
+            </div>
+            """
             
+            # 3. Render som HTML
             st.markdown(fuld_tabel_html, unsafe_allow_html=True)
         
         st.write("---")
