@@ -16,7 +16,7 @@ def vis_side(df_team_matches, hold_map, df_events):
             border-bottom: 4px solid #df003b; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
         }
-        [data-testid="stMetricValue"] { font-size: 28px; font-weight: bold; }
+        [data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -34,24 +34,22 @@ def vis_side(df_team_matches, hold_map, df_events):
     
     valgt_id = navne_dict[valgt_navn]
     
-    # Forbered data
+    # Forbered kamp-statistik
     df_f = df_team_matches[df_team_matches['TEAM_WYID'] == valgt_id].copy()
     df_f['DATE'] = pd.to_datetime(df_f['DATE'])
     df_f = df_f.sort_values('DATE', ascending=False)
 
-    # --- 3. BEREGNING AF METRICS (DEM DER MANGLEDE) ---
+    # --- 3. DASHBOARD METRICS ---
     avg_xg = df_f['XG'].mean() if 'XG' in df_f else 0
     avg_poss = df_f['POSSESSIONPERCENT'].mean() if 'POSSESSIONPERCENT' in df_f else 0
     avg_shots = df_f['SHOTS'].mean() if 'SHOTS' in df_f else 0
     avg_goals = df_f['GOALS'].mean() if 'GOALS' in df_f else 0
     
-    # Trend (Sidste 3 kampe)
     seneste_3_xg = df_f['XG'].head(3).mean() if len(df_f) >= 3 else avg_xg
     xg_delta = round(seneste_3_xg - avg_xg, 2)
 
     st.markdown(f"### Statistisk overblik: {valgt_navn.upper()}")
     m1, m2, m3, m4, m5 = st.columns(5)
-    
     m1.metric("Gns. xG", round(avg_xg, 2))
     m2.metric("Skud pr. kamp", round(avg_shots, 1))
     m3.metric("Possession", f"{round(avg_poss, 1)}%")
@@ -60,96 +58,99 @@ def vis_side(df_team_matches, hold_map, df_events):
 
     st.markdown("---")
 
-    # --- 4. HOVEDLAYOUT (BANE & TABEL) ---
-    left_col, right_col = st.columns([1.4, 1])
+    # --- 4. DE 4 SMÅ BANER (QUAD-VIEW) ---
+    st.subheader("Taktisk Positionering & Mønstre")
+    c1, c2, c3, c4 = st.columns(4)
+    
+    pitch = VerticalPitch(
+        pitch_type='wyscout', pitch_color='#f8f9fa', 
+        line_color='#1a1a1a', linewidth=1, goal_type='box'
+    )
 
-    with left_col:
-        visningstype = st.selectbox(
-            "Vælg visning på banen:", 
-            ["Heatmap (Aktivitet)", "Afleveringer (Pile)", "Skud (Prikker)", "Alt (Kombineret)"]
-        )
+    if df_events is not None and not df_events.empty:
+        # Alt data for det valgte hold
+        df_hold = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
         
-        pitch = VerticalPitch(
-            pitch_type='wyscout', 
-            pitch_color='#f8f9fa', 
-            line_color='#1a1a1a', 
-            linewidth=2,
-            goal_type='box'
-        )
-        fig, ax = pitch.draw(figsize=(8, 11))
+        # Find modstanderens modstandere i de samme kampe (til Skud Mod)
+        if 'MATCH_WYID' in df_events.columns:
+            match_ids = df_hold['MATCH_WYID'].unique()
+            df_opponents = df_events[
+                (df_events['MATCH_WYID'].isin(match_ids)) & 
+                (df_events['TEAM_WYID'].astype(str) != str(int(valgt_id)))
+            ].copy()
+        else:
+            df_opponents = pd.DataFrame()
 
-        if df_events is not None and not df_events.empty:
-            df_hold = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
+        # BANE 1: AFLEVERINGER (PILE)
+        with c1:
+            st.caption("Afleveringer (Seneste 50)")
+            fig, ax = pitch.draw(figsize=(4, 6))
+            df_p = df_hold[df_hold['PRIMARYTYPE'].fillna('').str.contains('pass', case=False)]
+            # Sikker tjek for EndLocation
+            cols = df_p.columns.tolist()
+            ex = next((c for c in cols if 'ENDLOCATIONX' in c.upper()), None)
+            ey = next((c for c in cols if 'ENDLOCATIONY' in c.upper()), None)
             
+            if ex and ey:
+                df_p = df_p.dropna(subset=[ex, ey]).tail(50)
+                pitch.arrows(df_p['LOCATIONX'], df_p['LOCATIONY'], 
+                             df_p[ex], df_p[ey], width=1, color='#df003b', alpha=0.6, ax=ax)
+            st.pyplot(fig)
+
+        # BANE 2: SKUD (FOR)
+        with c2:
+            st.caption("Egen Afslutninger")
+            fig, ax = pitch.draw(figsize=(4, 6))
+            df_s = df_hold[df_hold['PRIMARYTYPE'].fillna('').str.contains('shot', case=False)]
+            if not df_s.empty:
+                pitch.scatter(df_s['LOCATIONX'], df_s['LOCATIONY'], s=50, c='#df003b', edgecolors='black', ax=ax)
+            st.pyplot(fig)
+
+        # BANE 3: SKUD (IMOD)
+        with c3:
+            st.caption("Skud mod holdet")
+            fig, ax = pitch.draw(figsize=(4, 6))
+            if not df_opponents.empty:
+                df_si = df_opponents[df_opponents['PRIMARYTYPE'].fillna('').str.contains('shot', case=False)]
+                if not df_si.empty:
+                    pitch.scatter(df_si['LOCATIONX'], df_si['LOCATIONY'], s=50, c='blue', edgecolors='black', ax=ax)
+            st.pyplot(fig)
+
+        # BANE 4: DUELLER / AKTIVITET
+        with c4:
+            st.caption("Duel & Pressionszoner")
+            fig, ax = pitch.draw(figsize=(4, 6))
             if not df_hold.empty:
-                # A: HEATMAP
-                if visningstype in ["Heatmap (Aktivitet)", "Alt (Kombineret)"]:
-                    sns.kdeplot(
-                        x=df_hold['LOCATIONY'], y=df_hold['LOCATIONX'],
-                        ax=ax, fill=True, thresh=0.05, levels=15,
-                        cmap='Reds', alpha=0.5, zorder=1, clip=((0, 100), (0, 100))
-                    )
+                sns.kdeplot(x=df_hold['LOCATIONY'], y=df_hold['LOCATIONX'], ax=ax, 
+                            fill=True, thresh=0.1, levels=10, cmap='Reds', alpha=0.5, zorder=0, clip=((0, 100), (0, 100)))
+            st.pyplot(fig)
 
-                # B: PILE (Afleveringer) - SIKKER VERSION
-                if visningstype in ["Afleveringer (Pile)", "Alt (Kombineret)"]:
-                    mask_pass = df_hold['PRIMARYTYPE'].fillna('').str.contains('pass', case=False)
-                    
-                    # Vi finder ud af, hvad slut-kolonnerne faktisk hedder i din data
-                    cols = df_hold.columns.tolist()
-                    end_x = next((c for c in cols if 'ENDLOCATIONX' in c.upper()), None)
-                    end_y = next((c for c in cols if 'ENDLOCATIONY' in c.upper()), None)
+    st.markdown("---")
 
-                    if end_x and end_y:
-                        df_passes = df_hold[mask_pass].dropna(subset=[end_x, end_y])
-                        if not df_passes.empty:
-                            pitch.arrows(
-                                df_passes['LOCATIONX'].tail(50), df_passes['LOCATIONY'].tail(50),
-                                df_passes[end_x].tail(50), df_passes[end_y].tail(50),
-                                width=2, headwidth=3, headlength=3, color='#1a1a1a', alpha=0.3, ax=ax, zorder=2
-                            )
-                    else:
-                        st.warning(f"Slut-koordinater ikke fundet. Tilgængelige kolonner: {cols}")
-
-                # C: SKUD (Prikker)
-                if visningstype in ["Skud (Prikker)", "Alt (Kombineret)"]:
-                    mask_shot = df_hold['PRIMARYTYPE'].fillna('').str.contains('shot', case=False)
-                    df_shots = df_hold[mask_shot]
-                    if not df_shots.empty:
-                        pitch.scatter(
-                            df_shots['LOCATIONX'], df_shots['LOCATIONY'],
-                            s=100, edgecolors='#1a1a1a', c='#df003b', marker='o', ax=ax, zorder=3
-                        )
-
-                pitch.annotate(f"Analyse: {valgt_navn}", xy=(5, 50), va='center', ha='center',
-                               ax=ax, fontsize=12, fontweight='bold', color='#df003b',
-                               bbox=dict(facecolor='white', alpha=0.8, edgecolor='#df003b', boxstyle='round,pad=0.5'))
-            else:
-                ax.text(50, 50, "INGEN POSITIONS-DATA FUNDET", size=15, ha="center", va="center", color="grey")
-        
-        st.pyplot(fig)
-
-    with right_col:
+    # --- 5. RESULTATTABEL & NOTER ---
+    low_left, low_right = st.columns([1, 1])
+    
+    with low_left:
         st.subheader("Seneste 5 Kampe")
         res_df = df_f[['DATE', 'MATCHLABEL', 'XG', 'GOALS']].head(5).copy()
         res_df['DATE'] = res_df['DATE'].dt.strftime('%d/%m-%y')
         st.table(res_df.set_index('DATE'))
-        
-        st.write("**Konverteringsrate (Mål/Skud)**")
+
+    with low_right:
+        st.subheader("Form & Effektivitet")
         total_shots = df_f['SHOTS'].sum()
         total_goals = df_f['GOALS'].sum()
-        
         if total_shots > 0:
             acc = (total_goals / total_shots) * 100
-            st.progress(min(acc/30, 1.0), text=f"{round(acc, 1)}%")
-        else:
-            st.write("Ingen skud registreret")
-
+            st.write(f"**Konverteringsrate:** {round(acc, 1)}%")
+            st.progress(min(acc/30, 1.0))
+        
         st.info(f"""
         **Scout Note:**
-        Holdet har en gennemsnitlig xG på {round(avg_xg, 2)}. 
-        Heatmappet til venstre viser hvor deres opspil er mest koncentreret. 
-        Vær opmærksom på deres trend-score, som viser om de er i form.
+        {valgt_navn} opererer med en xG på {round(avg_xg, 2)}. 
+        Tjek 'Skud mod holdet' for at se om de tillader mange afslutninger i boksen. 
+        Heatmappet til højre afslører deres foretrukne opbygningsside.
         """)
 
-    with st.expander("Se alle rå kampdata for modstanderen"):
-        st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
+    with st.expander("Se rå data for alle kampe"):
+        st.dataframe(df_f, use_container_width=True)
