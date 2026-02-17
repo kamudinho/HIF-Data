@@ -10,37 +10,24 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
+    # --- 1. CSS INJECTION (Layout & Centrering) ---
     st.markdown("""
         <style>
-            /* 1. Fjern absolut alt luft i toppen af appen */
-            .stAppViewMain > div:nth-child(1) {
-                padding-top: 0rem !important;
+            [data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
             }
-            
-            /* 2. Nulstil containeren hvor indholdet ligger */
-            .block-container { 
-                padding-top: 1rem !important; 
-                padding-bottom: 0rem !important;
-                max-width: 98% !important; 
-            }
-
-            /* 3. Fjern Streamlits indbyggede header-plads */
-            header {
-                visibility: hidden;
-                height: 0px;
-            }
-
-            /* 4. Tving din røde bar helt op */
-            div[data-testid="stVerticalBlock"] > div:first-child {
-                margin-top: -20px !important;
-            }
-            
-            /* 5. Justering af knapper (SegmentedControl til højre) */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
             }
+            div[data-testid="stSegmentedControl"] {
+                width: fit-content !important;
+                margin-left: auto !important;
+            }
         </style>
     """, unsafe_allow_html=True)
+
     
     # --- 2. KOMPAKT TOP BRANDING ---
     st.markdown(f"""
