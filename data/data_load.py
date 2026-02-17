@@ -1,112 +1,181 @@
 #data/data_load.py
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from mplsoccer import VerticalPitch
-import numpy as np
+import uuid
+import snowflake.connector
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
-# Vi importerer din centrale konfiguration
-try:
-    from data.season_show import COMP_MAP
-except ImportError:
-    COMP_MAP = {}
+def _get_snowflake_conn():
+    try:
+        s = st.secrets["connections"]["snowflake"]
+        p_key_pem = s["private_key"]
+        
+        if isinstance(p_key_pem, str):
+            p_key_pem = p_key_pem.strip()
 
-def vis_side(df_team_matches, hold_map, df_events):
-    # --- 1. CSS STYLING ---
-    st.markdown("""
-        <style>
-        .stMetric { 
-            background-color: #ffffff; padding: 10px; border-radius: 8px; 
-            border-bottom: 3px solid #df003b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-        }
-        [data-testid="stMetricValue"] { font-size: 20px !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    if df_team_matches is None or df_team_matches.empty:
-        st.error("Kunne ikke finde kampdata.")
-        return
-
-    # --- 2. CENTRALISERET DOBBELT-DROPDOWN ---
-    # Vi henter de unikke turneringer direkte fra de data, Snowflake har leveret
-    if 'COMPETITION_WYID' in df_team_matches.columns:
-        aktive_comp_ids = sorted(df_team_matches['COMPETITION_WYID'].unique())
-    else:
-        aktive_comp_ids = []
-
-    col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
-
-    with col_sel1:
-        # Her bruger vi COMP_MAP til at vise navne i stedet for tal
-        valgt_comp_id = st.selectbox(
-            "Vælg Turnering:", 
-            options=aktive_comp_ids,
-            format_func=lambda x: COMP_MAP.get(int(x), f"Turnering {x}")
+        p_key_obj = serialization.load_pem_private_key(
+            p_key_pem.encode(),
+            password=None, 
+            backend=default_backend()
         )
+        
+        p_key_der = p_key_obj.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        
+        return st.connection(
+            "snowflake",
+            type="snowflake",
+            account=s["account"],
+            user=s["user"],
+            role=s["role"],
+            warehouse=s["warehouse"],
+            database=s["database"],
+            schema=s["schema"],
+            private_key=p_key_der
+        )
+    except Exception as e:
+        st.error(f"❌ Snowflake Connection Error: {e}")
+        return None
 
-    # Filtrer data til den valgte turnering
-    df_comp = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp_id]
+@st.cache_data(ttl=3600)
+def load_all_data():
+    # --- 0. INDLÆS KONFIGURATION ---
+    try:
+        from data.season_show import SEASONNAME, COMPETITION_WYID
+    except ImportError:
+        SEASONNAME = "2024/2025"
+        COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
-    # Find holdene i den specifikke turnering
-    tilgaengelige_hold_ids = df_comp['TEAM_WYID'].unique()
-    navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_hold_ids}
-    
-    with col_sel2:
-        valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
-    
-    with col_sel3:
-        halvdel = st.radio("Fokusområde:", ["Modstanders halvdel", "Egen halvdel"], horizontal=True)
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
 
-    valgt_id = navne_dict[valgt_navn]
-    df_f = df_comp[df_comp['TEAM_WYID'] == valgt_id].copy()
+    # --- 1. GITHUB FILER ---
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
+            d = pd.read_csv(u, sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except: return pd.DataFrame()
 
-    # --- 3. HOVEDLAYOUT & HEATMAPS ---
-    main_left, main_right = st.columns([2.2, 1])
+    df_players_gh = read_gh("players.csv")
+    df_scout_gh = read_gh("scouting_db.csv")
+    df_teams_csv = read_gh("teams.csv")
 
-    with main_left:
-        st.subheader(f"Analyse af {valgt_navn}")
-        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#1a1a1a', half=True)
-        c1, c2, c3 = st.columns(3)
+    # --- 2. SNOWFLAKE SETUP ---
+    conn = _get_snowflake_conn()
+    df_shotevents = pd.DataFrame()
+    df_season_stats = pd.DataFrame() # Denne skal være defineret!
+    df_team_matches = pd.DataFrame()
+    df_playerstats = pd.DataFrame()
+    df_events = pd.DataFrame() 
+    hold_map = {}
 
-        if df_events is not None and not df_events.empty:
-            # Filtrer hændelser på hold og turnering
-            df_hold_ev = df_events[
-                (df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))) & 
-                (df_events['COMPETITION_WYID'] == valgt_comp_id)
-            ].copy()
+    if conn:
+        try:
+            # A: HOLD NAVNE
+            df_teams_sn = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+            if df_teams_sn is not None and not df_teams_sn.empty:
+                for _, row in df_teams_sn.iterrows():
+                    tid = str(int(row['TEAM_WYID']))
+                    hold_map[tid] = str(row['TEAMNAME']).strip()
+            
+            # B: SHOT EVENTS
+            q_shots = f"""
+                SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
+                       c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
+                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
+                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
+                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
+                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                WHERE m.COMPETITION_WYID IN {comp_filter}
+                AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
+            """
+            df_shotevents = conn.query(q_shots)
 
-            if halvdel == "Modstanders halvdel":
-                df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50].copy()
-            else:
-                df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
-                df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
-                df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
+            # C: SEASON STATS (GENINDSAT)
+            q_season_stats = f"""
+                SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
+                                p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
+                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS
+                FROM AXIS.WYSCOUT_PLAYERCAREER p
+                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
+                     AND p.SEASON_WYID = adv.SEASON_WYID
+                JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
+                JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
+                WHERE s.SEASONNAME = '{SEASONNAME}'
+                AND adv.COMPETITION_WYID IN {comp_filter}
+            """
+            df_season_stats = conn.query(q_season_stats)
 
-            for col, title, p_type, cmap in [(c1, "Passes", "pass", "Reds"), (c2, "Duels", "duel", "Blues"), (c3, "Intercepts", "interception", "Greens")]:
-                with col:
-                    st.caption(title)
-                    fig, ax = pitch.draw(figsize=(4, 6))
-                    mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
-                    df_filtered = df_plot[mask]
-                    if not df_filtered.empty:
-                        sns.kdeplot(x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], ax=ax, fill=True, cmap=cmap, alpha=0.6, clip=((0, 100), (50, 100)), levels=10)
-                    else:
-                        ax.text(50, 75, "Ingen data", ha='center', va='center', alpha=0.5)
-                    st.pyplot(fig)
+            # D: TEAM MATCHES
+            q_teammatches = f"""
+                SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
+                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
+                FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
+                WHERE m.COMPETITION_WYID IN {comp_filter}
+                AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
+            """
+            df_team_matches = conn.query(q_teammatches)
 
-    # --- 4. HØJRE SIDE: STATISTIK ---
-    with main_right:
-        st.subheader("Holdets Profil")
-        col_off1, col_off2 = st.columns(2)
-        col_off1.metric("Gns. xG", round(df_f['XG'].mean(), 2) if 'XG' in df_f else 0)
-        col_off2.metric("Skud/Kamp", round(df_f['SHOTS'].mean(), 1) if 'SHOTS' in df_f else 0)
+            # E: PLAYERSTATS
+            q_playerstats = f"""
+                SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
+                       s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
+                       p.CURRENTTEAM_WYID AS TEAM_WYID
+                FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+                JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
+                WHERE se.SEASONNAME = '{SEASONNAME}'
+                AND s.COMPETITION_WYID IN {comp_filter}
+            """
+            df_playerstats = conn.query(q_playerstats)
 
-        col_ctrl1, col_ctrl2 = st.columns(2)
-        pos = df_f['POSSESSIONPERCENT'].mean() if 'POSSESSIONPERCENT' in df_f else 0
-        col_ctrl1.metric("Possession", f"{round(pos, 0)}%")
-        col_ctrl2.metric("Gns. Mål", round(df_f['GOALS'].mean(), 1) if 'GOALS' in df_f else 0)
+            # F: EVENTS
+            q_events = f"""
+                SELECT 
+                    c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX,
+                    c.possessionstartlocationy AS LOCATIONY, c.possessionendlocationx AS ENDLOCATIONX, 
+                    c.possessionendlocationy AS ENDLOCATIONY, c.primarytype AS PRIMARYTYPE,
+                    e.TEAM_WYID, m.DATE
+                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
+                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                WHERE m.COMPETITION_WYID IN {comp_filter}
+                AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
+                AND c.primarytype IN ('pass', 'touch', 'duel', 'interception')
+            """
+            df_events = conn.query(q_events)
+            
+        except Exception as e:
+            st.error(f"SQL fejl i data_load: {e}")
 
-    # --- 5. RÅ DATA ---
-    with st.expander("Se kamp-log"):
-        st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
+    # Rensning (Nu findes alle variabler i listen herunder)
+    dfs_to_clean = [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events, df_players_gh, df_scout_gh]
+    for df in dfs_to_clean:
+        if df is not None and not df.empty:
+            df.columns = [str(c).upper().strip() for c in df.columns]
+            if 'PLAYER_WYID' in df.columns:
+                df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
+    return {
+        "shotevents": df_shotevents,
+        "events": df_events,
+        "season_stats": df_season_stats,
+        "team_matches": df_team_matches, 
+        "playerstats": df_playerstats,   
+        "hold_map": hold_map,
+        "players": df_players_gh,    
+        "scouting": df_scout_gh,     
+        "teams_csv": df_teams_csv,
+        "players_all": df_players_gh
+    }
