@@ -157,9 +157,19 @@ def load_all_data():
                 FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                WHERE m.DATE >= DATEADD(month, -12, CURRENT_DATE()) -- Henter kun sidste 12 måneder
-                WHERE c.primarytype IN ('pass', 'shot', 'touch', 'throw_in', 'interceptions')
-            """
+                q_events = """
+                SELECT 
+                    c.possessionstartlocationx AS LOCATIONX,
+                    c.possessionstartlocationy AS LOCATIONY,
+                    c.primarytype AS PRIMARYTYPE,
+                    e.TEAM_WYID,
+                    m.DATE
+                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
+                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                WHERE m.DATE >= '2024-07-01' 
+                AND c.primarytype IN ('pass', 'shot', 'touch', 'throw_in')
+            
             df_events = conn.query(q_events)
             
         except Exception as e:
