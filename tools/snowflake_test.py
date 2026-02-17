@@ -45,56 +45,38 @@ def vis_side():
         st.success("✅ Forbindelse aktiv!")
         try:
             cursor = conn.cursor()
+            
+            # Hent tabel-liste
             cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'AXIS' ORDER BY TABLE_NAME")
             table_list = [row[0] for row in cursor.fetchall()]
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                valgt = st.selectbox("Vælg tabel:", table_list, index=table_list.index("WYSCOUT_PLAYERS") if "WYSCOUT_PLAYERS" in table_list else 0)
+                valgt = st.selectbox("Vælg tabel:", table_list)
             with col2:
-                # HER STYRER DU MÆNGDEN
-                limit = st.number_input("Antal rækker", min_value=10, max_value=50000, value=1000, step=500)
+                # Sørg for at 'limit' variablen faktisk bliver brugt nedenfor
+                limit_val = st.number_input("Hent antal rækker:", min_value=1, max_value=10000, value=100)
 
-            st.divider()
-            
-            # Hurtig-søgning direkte i SQL
-            search_query = st.text_input("Søg i tabellen (f.eks. efter PLAYER_WYID eller Navn)", "")
-
-            if st.button(f"Hent {limit} rækker fra {valgt}"):
-                with st.spinner(f"Henter data fra {valgt}..."):
-                    sql = f"SELECT * FROM AXIS.{valgt}"
+            if st.button(f"Kør Query: SELECT * FROM AXIS.{valgt} LIMIT {limit_val}"):
+                # VI BYGGER QUERY'EN HELT FORFRA HER
+                query = f"SELECT * FROM AXIS.{valgt} LIMIT {limit_val}"
+                
+                with st.spinner("Henter data..."):
+                    cursor.execute(query)
+                    # Fetchall henter ALT hvad queryen returnerer
+                    data = cursor.fetchall()
+                    cols = [desc[0] for desc in cursor.description]
                     
-                    # Hvis der er skrevet noget i søgefeltet, prøver vi at filtrere (simpel version)
-                    if search_query:
-                        # Dette kræver man ved hvilken kolonne man søger i, 
-                        # men for testen henter vi bare alt og filtrerer i pandas nedenfor
-                        pass
+                    df = pd.DataFrame(data, columns=cols)
                     
-                    sql += f" LIMIT {limit}"
+                    st.write(f"📊 **Resultat:** Modtog {len(df)} rækker fra databasen.")
                     
-                    df = pd.read_sql(sql, conn)
-                    
-                    # Standardiser kolonner for nemmere læsning
-                    df.columns = [c.upper() for c in df.columns]
-
-                    # Hvis brugeren har søgt, filtrerer vi i det hentede dataframe
-                    if search_query:
-                        mask = df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)
-                        df = df[mask]
-                        st.write(f"Fundet {len(df)} rækker der matcher din søgning.")
-
-                    st.subheader(f"Data-view: {valgt}")
-                    st.dataframe(df, use_container_width=True)
-                    
-                    # Statistik om ID'er
-                    if 'PLAYER_WYID' in df.columns:
-                        st.info(f"Første 5 PLAYER_WYID: {df['PLAYER_WYID'].head().tolist()}")
-                    
-                    # Download mulighed
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("Download denne visning (CSV)", csv, f"snowflake_{valgt}.csv", "text/csv")
+                    if not df.empty:
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.warning("Queryen returnerede 0 rækker.")
 
         except Exception as e:
-            st.error(f"SQL Fejl: {e}")
+            st.error(f"🚨 Fejl: {e}")
         finally:
             conn.close()
