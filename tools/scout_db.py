@@ -87,25 +87,41 @@ def vis_profil(p_data, full_df, s_df, fs_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        st.markdown("### 📊 Statistisk Historik (Snowflake)")
-        # Robust filtrering: Vi tjekker PLAYER_WYID findes og sammenligner som strings
+        st.markdown("### Sæsonstatistik")
+        
         if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
+            # 1. Filtrér på spilleren
             df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
             
             if not df_stats.empty:
-                # Vi viser de vigtigste kolonner hvis de findes
+                # 2. Fjern dubletter (Vis kun én række per Sæson + Hold kombination)
+                # Vi bruger de kolonner der definerer en unik historisk post
+                cols_to_check = ['SEASONNAME', 'TEAMNAME', 'MATCHES']
+                existing_check = [c for c in cols_to_check if c in df_stats.columns]
+                df_stats = df_stats.drop_duplicates(subset=existing_check)
+                
+                # 3. Sortér så nyeste sæson er øverst
+                # Vi antager SEASONNAME formatet "2025/2026" virker med almindelig sortering
+                if 'SEASONNAME' in df_stats.columns:
+                    df_stats = df_stats.sort_values('SEASONNAME', ascending=False)
+                
+                # 4. Vælg kolonner og formatér
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
                 existing_cols = [c for c in cols_to_show if c in df_stats.columns]
                 
-                # Formatér xG pænt hvis kolonnen findes
                 if 'XG' in df_stats.columns:
                     df_stats['XG'] = df_stats['XG'].fillna(0).round(2)
                 
-                st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
+                # 5. Vis tabellen
+                st.dataframe(
+                    df_stats[existing_cols], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
                 st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
         else:
-            st.warning("Kolonnen PLAYER_WYID blev ikke fundet i Snowflake-dataen.")
+            st.warning("Dataforbindelse til Snowflake-statistik ikke fundet.")
 
     with t5:
         # DIT ORIGINALE RADAR DESIGN
