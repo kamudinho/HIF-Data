@@ -66,7 +66,7 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
-        sel = option_menu(None, options=["Zoneinddeling", "Afslutninger", "Heatmaps", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
