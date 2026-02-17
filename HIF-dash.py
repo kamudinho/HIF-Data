@@ -121,8 +121,8 @@ elif sel == "Database":
     
 elif sel == "Scoutrapport":
     import tools.scout_input as si
-    si.vis_side(dp["players"])
-
+    si.vis_side(dp["players"], dp["playerstats"])
+    
 elif sel == "Sammenligning":
     import tools.comparison as comp
     # Vi bruger "playerstats" her også
