@@ -108,14 +108,20 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # D: PLAYERSTATS - Henter ALLE spillere + deres stats hvis de findes
+            # D: PLAYERSTATS - Henter ALLE spillere med læsbare positioner
             q_playerstats = """
                 SELECT 
                     p.PLAYER_WYID, 
                     p.FIRSTNAME, 
                     p.LASTNAME, 
                     t.TEAMNAME, 
-                    p.ROLECODE3,
+                    CASE 
+                        WHEN p.ROLECODE3 = '1' THEN 'GKP'
+                        WHEN p.ROLECODE3 = '2' THEN 'DEF'
+                        WHEN p.ROLECODE3 = '3' THEN 'MID'
+                        WHEN p.ROLECODE3 = '4' THEN 'FWD'
+                        ELSE p.ROLECODE3 
+                    END AS ROLE_TEXT,
                     p.CURRENTTEAM_WYID AS TEAM_WYID,
                     s.MATCHES, 
                     s.MINUTESONFIELD, 
@@ -126,7 +132,6 @@ def load_all_data():
                 FROM AXIS.WYSCOUT_PLAYERS p
                 LEFT JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 LEFT JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s ON p.PLAYER_WYID = s.PLAYER_WYID
-                -- Her kan du evt. tilføje en WHERE se.SEASONNAME = '2024/2025' hvis du kun vil se stats for nuværende sæson
             """
             df_playerstats = conn.query(q_playerstats)
 
