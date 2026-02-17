@@ -55,7 +55,7 @@ def vis_side():
                 valgt = st.selectbox("Vælg tabel:", table_list)
             with col2:
                 # Sørg for at 'limit' variablen faktisk bliver brugt nedenfor
-                limit_val = st.number_input("Hent antal rækker:", min_value=1, max_value=10000, value=100)
+                limit_val = st.number_input("Hent antal rækker:", min_value=100, max_value=10000, value=100)
 
             if st.button(f"Kør Query: SELECT * FROM AXIS.{valgt} LIMIT {limit_val}"):
                 # VI BYGGER QUERY'EN HELT FORFRA HER
