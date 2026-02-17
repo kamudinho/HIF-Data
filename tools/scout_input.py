@@ -42,24 +42,28 @@ def vis_side(df_players, df_playerstats):
     # --- 1. BYG MASTER-LOOKUP FRA KILDERNE ---
     sources = []
     
-    # Kilde A: WyScout Stats (Snowflake) - Bruger dine specifikke kolonnenavne
+    # Kilde A: WyScout Stats (Snowflake)
     if df_playerstats is not None and not df_playerstats.empty:
         temp_stats = df_playerstats.copy()
-        # Samler navn fra FIRSTNAME/LASTNAME
         temp_stats['Navn_Lookup'] = temp_stats['FIRSTNAME'].fillna('') + " " + temp_stats['LASTNAME'].fillna('')
-        sources.append(temp_stats[['Navn_Lookup', 'PLAYER_WYID', 'TEAMNAME', 'ROLECODE3']].rename(
-            columns={'Navn_Lookup': 'NAVN_JOIN', 'TEAMNAME': 'KLUB_JOIN', 'ROLECODE3': 'POS_JOIN'}
+        # Vi bruger ROLE_TEXT (fra den nye SQL) og TEAMNAME
+        sources.append(temp_stats[['Navn_Lookup', 'PLAYER_WYID', 'TEAMNAME', 'ROLE_TEXT']].rename(
+            columns={'Navn_Lookup': 'NAVN_JOIN', 'TEAMNAME': 'KLUB_JOIN', 'ROLE_TEXT': 'POS_JOIN'}
         ))
 
     # Kilde B: Lokal players.csv
     if df_players is not None and not df_players.empty:
-        sources.append(df_players[['NAVN', 'PLAYER_WYID', 'HOLD', 'POS']].rename(
-            columns={'NAVN': 'NAVN_JOIN', 'HOLD': 'KLUB_JOIN', 'POS': 'POS_JOIN'}
+        sources.append(df_players[['NAVN', 'PLAYER_WYID', 'TEAMNAME', 'POS']].rename(
+            columns={'NAVN': 'NAVN_JOIN', 'TEAMNAME': 'KLUB_JOIN', 'POS': 'POS_JOIN'}
         ))
 
     # Samlet tabel til dropdown
-    lookup_df = pd.concat(sources, ignore_index=True).drop_duplicates(subset=['NAVN_JOIN'])
-    all_names = sorted(lookup_df['NAVN_JOIN'].dropna().unique().tolist())
+    if sources:
+        lookup_df = pd.concat(sources, ignore_index=True).drop_duplicates(subset=['NAVN_JOIN'])
+        all_names = sorted(lookup_df['NAVN_JOIN'].dropna().unique().tolist())
+    else:
+        lookup_df = pd.DataFrame()
+        all_names = []
 
     # --- 2. LAYOUT: TOP-LINJEN ---
     kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
@@ -73,7 +77,7 @@ def vis_side(df_players, df_playerstats):
             if valgt_navn:
                 match = lookup_df[lookup_df['NAVN_JOIN'] == valgt_navn].iloc[0]
                 navn_endelig = valgt_navn
-                p_id_val = str(int(match.get('PLAYER_WYID', 0)))
+                p_id_val = str(int(float(match.get('PLAYER_WYID', 0))))
                 klub_val = str(match.get('KLUB_JOIN', ''))
                 pos_val = str(match.get('POS_JOIN', ''))
         else:
@@ -86,7 +90,8 @@ def vis_side(df_players, df_playerstats):
         klub_input = st.text_input("Klub", value=klub_val)
     with c4:
         st.text_input("Scout", value=logged_in_user, disabled=True)
-
+        
+    # ... resten af din form kode fortsætter herfra
     # --- 3. RATINGS FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
