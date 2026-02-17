@@ -27,6 +27,10 @@ def save_to_github(new_row_df):
         sha = content['sha']
         old_csv_raw = base64.b64decode(content['content']).decode('utf-8')
         old_df = pd.read_csv(StringIO(old_csv_raw))
+        # Sikrer at eksisterende PLAYER_WYID også behandles som tekst/string
+        if 'PLAYER_WYID' in old_df.columns:
+            old_df['PLAYER_WYID'] = old_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+        
         updated_df = pd.concat([old_df, new_row_df], ignore_index=True)
         updated_csv = updated_df.to_csv(index=False)
     else:
@@ -50,37 +54,38 @@ def vis_side(df_players, df_stats_all=None):
 
     st.write("#### Scoutrapport")
     
-    # 1. HENT MANUEL DATABASE
+    # 1. HENT SCOUTING DB
     try:
         raw_url = f"https://raw.githubusercontent.com/{REPO}/main/{FILE_PATH}?nocache={uuid.uuid4()}"
         db_scout = pd.read_csv(raw_url)
+        db_scout.columns = [c.strip() for c in db_scout.columns]
+        # Rens navne og PLAYER_WYID
         db_scout['Navn'] = db_scout['Navn'].astype(str).str.strip()
-        scouted_names_df = db_scout[['Navn', 'Klub', 'Position', 'ID']].drop_duplicates('Navn')
+        if 'PLAYER_WYID' in db_scout.columns:
+            db_scout['PLAYER_WYID'] = db_scout['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+        
+        scouted_names_df = db_scout[['Navn', 'Klub', 'Position', 'PLAYER_WYID']].drop_duplicates('Navn')
     except:
-        scouted_names_df = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'ID'])
+        scouted_names_df = pd.DataFrame(columns=['Navn', 'Klub', 'Position', 'PLAYER_WYID'])
 
     # 2. SAML NAVNE FRA ALLE KILDER
-    names_system = []
-    if df_players is not None and not df_players.empty:
-        names_system = [str(n).strip() for n in df_players['NAVN'].unique().tolist() if n]
+    names_system = [str(n).strip() for n in df_players['NAVN'].unique().tolist() if n] if df_players is not None else []
     
     names_stats = []
     if df_stats_all is not None and not df_stats_all.empty:
-        # Hvis det er Snowflake data, samler vi for- og efternavn
         if 'FIRSTNAME' in df_stats_all.columns:
             df_stats_all['FULL_NAME'] = df_stats_all['FIRSTNAME'].str.cat(df_stats_all['LASTNAME'], sep=' ').str.strip()
             names_stats = [str(n).strip() for n in df_stats_all['FULL_NAME'].unique().tolist() if n]
     
     names_manual = [str(n).strip() for n in scouted_names_df['Navn'].unique().tolist() if n]
-    
-    # Flet alt til én liste uden dubletter
     alle_navne = sorted(list(set(names_system + names_stats + names_manual)))
 
     kilde_type = st.radio("Metode", ["Find i systemet", "Opret ny spiller"], horizontal=True, label_visibility="collapsed")
     
-    p_id, navn, klub, pos_val = "", "", "", ""
+    p_id, navn, klub, pos_val = "0", "", "", ""
+    pos_default, klub_default = "", ""
 
-    # 3. BASIS INFORMATION
+    # 3. BASIS INFO
     c1, c2, c3 = st.columns([2, 1, 1])
     
     if kilde_type == "Find i systemet":
@@ -88,23 +93,25 @@ def vis_side(df_players, df_stats_all=None):
             valgt_navn = st.selectbox("Vælg Spiller", options=alle_navne)
             navn = valgt_navn
             
-            # Find data i kilderne (prioriteret rækkefølge)
-            if valgt_navn in names_manual:
-                info = scouted_names_df[scouted_names_df['Navn'] == valgt_navn].iloc[0]
-                p_id, pos_default, klub_default = info['ID'], info['Position'], info['Klub']
+            # Find data & ID (PLAYER_WYID)
+            if df_stats_all is not None and valgt_navn in names_stats:
+                info = df_stats_all[df_stats_all['FULL_NAME'] == valgt_navn].iloc[0]
+                raw_id = info.get('PLAYER_WYID', '0')
+                p_id = str(int(float(raw_id))) if pd.notnull(raw_id) else "0"
+                klub_default = info.get('TEAMNAME', '')
             elif valgt_navn in names_system:
                 info = df_players[df_players['NAVN'].str.strip() == valgt_navn].iloc[0]
-                p_id = str(info.get('PLAYER_WYID', '0')).split('.')[0]
+                raw_id = info.get('PLAYER_WYID', '0')
+                p_id = str(int(float(raw_id))) if pd.notnull(raw_id) else "0"
                 pos_raw = info.get('POS', '')
                 pos_default = POS_MAP.get(int(pos_raw) if str(pos_raw).replace('.0','').isdigit() else 0, str(pos_raw))
                 klub_default = info.get('HOLD', 'Hvidovre IF')
-            elif valgt_navn in names_stats:
-                info = df_stats_all[df_stats_all['FULL_NAME'] == valgt_navn].iloc[0]
-                p_id = str(info.get('PLAYER_WYID', '0'))
-                pos_default = "" 
-                klub_default = info.get('TEAMNAME', '')
+            elif valgt_navn in names_manual:
+                info = scouted_names_df[scouted_names_df['Navn'] == valgt_navn].iloc[0]
+                p_id = str(info['PLAYER_WYID'])
+                pos_default, klub_default = info['Position'], info['Klub']
             
-            st.markdown(f"<p class='id-label'>ID: {p_id}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p class='id-label'>PLAYER_WYID: {p_id}</p>", unsafe_allow_html=True)
             
         with c2: pos_val = st.text_input("Position", value=pos_default)
         with c3: klub = st.text_input("Klub", value=klub_default)
@@ -112,12 +119,12 @@ def vis_side(df_players, df_stats_all=None):
     else:
         with c1: 
             navn = st.text_input("Spillernavn")
-            p_id = f"MAN-{datetime.now().strftime('%y%m%d')}-{str(uuid.uuid4())[:4]}"
-            st.markdown(f"<p class='id-label'>ID: {p_id}</p>", unsafe_allow_html=True)
+            p_id = f"999{datetime.now().strftime('%H%M%S')}" # Manuelt ID for spillere uden for systemet
+            st.markdown(f"<p class='id-label'>Midlertidigt ID: {p_id}</p>", unsafe_allow_html=True)
         with c2: pos_val = st.text_input("Position")
         with c3: klub = st.text_input("Klub")
 
-    # 4. SCOUTING FORMULAR
+    # 4. FORMULAR
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         col1, col2, col3, col4 = st.columns(4)
@@ -143,14 +150,16 @@ def vis_side(df_players, df_stats_all=None):
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn:
                 avg = round(sum([beslut, fart, aggres, att, udhold, leder, teknik, intel]) / 8, 1)
+                
+                # Her bruger vi PLAYER_WYID som kolonnenavn
                 ny_df = pd.DataFrame([[
                     p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
                     avg, status, potentiale, styrker, vurdering,
                     beslut, fart, aggres, att, udhold, leder, teknik, intel
-                ]], columns=["ID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
+                ]], columns=["PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Status", "Potentiale", "Styrker", "Vurdering", "Beslutsomhed", "Fart", "Aggresivitet", "Attitude", "Udholdenhed", "Lederegenskaber", "Teknik", "Spilintelligens"])
                 
                 if save_to_github(ny_df) in [200, 201]:
-                    st.success("Rapport gemt!")
+                    st.success(f"Rapport gemt med PLAYER_WYID: {p_id}")
                     st.rerun()
             else:
                 st.error("Navn mangler")
