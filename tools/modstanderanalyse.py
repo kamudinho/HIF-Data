@@ -17,6 +17,10 @@ def vis_side(df_team_matches, hold_map, df_events):
         </style>
     """, unsafe_allow_html=True)
 
+    if df_team_matches is None or df_team_matches.empty:
+        st.error("Kunne ikke finde kampdata.")
+        return
+
     # --- 2. VALG AF MODSTANDER & HALVDEL ---
     tilgaengelige_ids = df_team_matches['TEAM_WYID'].unique()
     navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_ids}
@@ -36,85 +40,81 @@ def vis_side(df_team_matches, hold_map, df_events):
     with main_left:
         st.subheader(f"Halvdel-analyse: {halvdel}")
         
-        # Sæt pitch til kun at vise halvdelen (half=True)
-        # VerticalPitch viser som standard den offensive halvdel (X > 50)
+        # Pitch sat til half=True for at vise ca. 60% af banen (offensivt fokus)
         pitch = VerticalPitch(
             pitch_type='wyscout', pitch_color='#f8f9fa', 
             line_color='#1a1a1a', linewidth=1, 
-            half=True # Dette aktiverer 60% view/halvdelen
+            half=True 
         )
         
         c1, c2, c3 = st.columns(3)
 
         if df_events is not None and not df_events.empty:
+            # Sikrer ensartede kolonnenavne
             df_events.columns = [c.upper() for c in df_events.columns]
             df_hold = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
 
-            # Filtrer data baseret på valgt halvdel
-            # Wyscout koordinater går fra 0-100. 100 er modstanderens mål.
+            # Filtrer data baseret på valgt halvdel (Wyscout: 0-100, 100 er modstanders mål)
             if halvdel == "Modstanders halvdel":
-                df_plot = df_hold[df_hold['LOCATIONX'] >= 50]
+                df_plot = df_hold[df_hold['LOCATIONX'] >= 50].copy()
             else:
-                # For at vise egen halvdel "zoomet", flipper vi koordinaterne 
-                # så bunden af banen er vores eget mål
-                df_plot = df_hold[df_hold['LOCATIONX'] < 50]
-                # Vi spejler X, så pitch.draw(half=True) kan tegne det korrekt
+                # Ved egen halvdel tager vi data under 50, men flipper koordinaterne
+                # så jeres eget mål er i bunden af "halv-banen"
+                df_plot = df_hold[df_hold['LOCATIONX'] < 50].copy()
                 df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
+                df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
 
-            configs = [
-                (c1, "Afleveringer", "pass", "Reds"),
-                (col2, "Dueller", "duel", "Blues"),
-                (c3, "Interceptions", "interception", "Greens")
-            ]
-
-            for col, title, p_type, cmap in [
+            # Loop gennem de tre kategorier
+            plot_configs = [
                 (c1, "Afleveringer", "pass", "Reds"),
                 (c2, "Dueller", "duel", "Blues"),
                 (c3, "Interceptions", "interception", "Greens")
-            ]:
+            ]
+
+            for col, title, p_type, cmap in plot_configs:
                 with col:
                     st.caption(title)
                     fig, ax = pitch.draw(figsize=(4, 6))
                     mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
                     df_filtered = df_plot[mask]
+                    
                     if not df_filtered.empty:
-                        sns.kdeplot(x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], 
-                                    ax=ax, fill=True, cmap=cmap, alpha=0.6, 
-                                    clip=((0, 100), (50, 100)), levels=10)
+                        sns.kdeplot(
+                            x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], 
+                            ax=ax, fill=True, cmap=cmap, alpha=0.6, 
+                            clip=((0, 100), (50, 100)), levels=10
+                        )
+                    else:
+                        ax.text(50, 75, "Ingen data i denne zone", ha='center', va='center', alpha=0.5)
                     st.pyplot(fig)
-
 
     # --- 4. HØJRE SIDE: STATISTISKE BOKSE (Metrics) ---
     with main_right:
         st.subheader("Holdets Profil")
         
-        # Vi deler metrics op i kategorier (3 rækker af 2 kolonner)
-        
-        # Række 1: Offensivt
+        # Offensiv
         st.write("**Offensiv**")
         col_off1, col_off2 = st.columns(2)
         col_off1.metric("Gns. xG", round(df_f['XG'].mean(), 2))
         col_off2.metric("Skud/Kamp", round(df_f['SHOTS'].mean(), 1))
 
-        # Række 2: Spilstyring
+        # Spilstyring
         st.write("**Spilstyring**")
         col_ctrl1, col_ctrl2 = st.columns(2)
         col_ctrl1.metric("Possession", f"{round(df_f['POSSESSIONPERCENT'].mean(), 0)}%")
         col_ctrl2.metric("Gns. Mål", round(df_f['GOALS'].mean(), 1))
 
-        # Række 3: Disciplin / Defensivt
+        # Disciplin
         st.write("**Defensiv & Disciplin**")
         col_def1, col_def2 = st.columns(2)
-        # Tjekker om kolonnerne findes før beregning
         y_cards = df_f['YELLOWCARDS'].mean() if 'YELLOWCARDS' in df_f else 0
         r_cards = df_f['REDCARDS'].sum() if 'REDCARDS' in df_f else 0
-        
         col_def1.metric("Gule kort/K", round(y_cards, 1))
-        col_def2.metric("Røde kort (Total)", int(r_cards))
+        col_def2.metric("Røde kort (Tot)", int(r_cards))
 
         st.markdown("---")
         
-        # Konverteringsrate Progress Bar
+        # Effektivitet
         total_shots = df_f['SHOTS'].sum()
         total_goals = df_f['GOALS'].sum()
         if total_shots > 0:
@@ -122,15 +122,8 @@ def vis_side(df_team_matches, hold_map, df_events):
             st.write(f"**Effektivitet (Mål/Skud):** {round(rate, 1)}%")
             st.progress(min(rate/30, 1.0))
 
-        st.info(f"""
-        **Kort analyse:**
-        Holdet har en gennemsnitlig xG på {round(df_f['XG'].mean(), 2)}. 
-        De tre heatmaps viser deres taktiske tyngdepunkter i opbygning (Rød), defensive dueller (Blå) og opspils-brydninger (Grøn).
-        """)
-
-    # --- 5. RÅ DATA TABEL ---
-    
         st.info(f"Analysen viser kun hændelser foretaget på **{halvdel.lower()}**.")
 
-    with st.expander("Se kampdata"):
+    # --- 5. RÅ DATA ---
+    with st.expander("Se alle rå kampdata for modstanderen"):
         st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
