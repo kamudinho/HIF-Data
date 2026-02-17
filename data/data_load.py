@@ -49,6 +49,7 @@ def load_all_data():
         SEASONNAME = "2024/2025"
         COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
+    # Sikrer korrekt SQL-format til IN-klausul
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
 
     # --- 1. GITHUB FILER ---
@@ -68,7 +69,7 @@ def load_all_data():
     # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
     df_shotevents = pd.DataFrame()
-    df_season_stats = pd.DataFrame() # Denne skal være defineret!
+    df_season_stats = pd.DataFrame()
     df_team_matches = pd.DataFrame()
     df_playerstats = pd.DataFrame()
     df_events = pd.DataFrame() 
@@ -83,11 +84,11 @@ def load_all_data():
                     tid = str(int(row['TEAM_WYID']))
                     hold_map[tid] = str(row['TEAMNAME']).strip()
             
-            # B: SHOT EVENTS
+            # B: SHOT EVENTS (Tilføjet m.COMPETITION_WYID)
             q_shots = f"""
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
-                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID
+                       s.SHOTXG, m.MATCHLABEL, m.DATE, e.SCORE, e.TEAM_WYID, m.COMPETITION_WYID
                 FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                 JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
@@ -97,11 +98,11 @@ def load_all_data():
             """
             df_shotevents = conn.query(q_shots)
 
-            # C: SEASON STATS (GENINDSAT)
+            # C: SEASON STATS
             q_season_stats = f"""
                 SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
                                 p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
-                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS
+                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS, adv.COMPETITION_WYID
                 FROM AXIS.WYSCOUT_PLAYERCAREER p
                 JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
                      AND p.SEASON_WYID = adv.SEASON_WYID
@@ -112,10 +113,10 @@ def load_all_data():
             """
             df_season_stats = conn.query(q_season_stats)
 
-            # D: TEAM MATCHES
+            # D: TEAM MATCHES (Vigtigst for din dropdown!)
             q_teammatches = f"""
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
-                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
+                       g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT, m.COMPETITION_WYID
                 FROM AXIS.WYSCOUT_TEAMMATCHES tm
                 JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
@@ -129,7 +130,7 @@ def load_all_data():
             q_playerstats = f"""
                 SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
                        s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
-                       p.CURRENTTEAM_WYID AS TEAM_WYID
+                       p.CURRENTTEAM_WYID AS TEAM_WYID, s.COMPETITION_WYID
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
@@ -145,7 +146,7 @@ def load_all_data():
                     c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX,
                     c.possessionstartlocationy AS LOCATIONY, c.possessionendlocationx AS ENDLOCATIONX, 
                     c.possessionendlocationy AS ENDLOCATIONY, c.primarytype AS PRIMARYTYPE,
-                    e.TEAM_WYID, m.DATE
+                    e.TEAM_WYID, m.DATE, m.COMPETITION_WYID
                 FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
@@ -158,7 +159,7 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl i data_load: {e}")
 
-    # Rensning (Nu findes alle variabler i listen herunder)
+    # Rensning
     dfs_to_clean = [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events, df_players_gh, df_scout_gh]
     for df in dfs_to_clean:
         if df is not None and not df.empty:
