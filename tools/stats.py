@@ -118,7 +118,7 @@ def vis_side(spillere, player_stats_sn):
     )
 
     fig.update_layout(
-        height=50 + (len(df_plot) * 35),
+        height=40 + (len(df_plot) * 35),
         margin=dict(l=0, r=60, t=0, b=0),
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
         yaxis=dict(tickfont_size=13, title=""),
