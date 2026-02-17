@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 def vis_side(df_team_matches, hold_map):
-    st.title("⚔️ Modstanderanalyse")
+    st.title("Modstanderanalyse")
     
     if df_team_matches is None or df_team_matches.empty:
         st.error("Ingen kampdata fundet i Snowflake.")
@@ -33,32 +33,13 @@ def vis_side(df_team_matches, hold_map):
     st.markdown("---")
 
     # --- BANE 1: xG TREND (FORM) ---
-    st.subheader("📊 Offensiv Form (xG pr. kamp)")
+    st.subheader("xG pr. kamp")
     fig_xg = px.line(df_filtreret, x='DATE', y='XG', title=f"xG udvikling for {valgt_navn}",
                      labels={'XG': 'Expected Goals', 'DATE': 'Dato'},
                      line_shape='spline', render_mode='svg')
     fig_xg.add_hline(y=df_filtreret['XG'].mean(), line_dash="dot", line_color="red", annotation_text="Gennemsnit")
     fig_xg.update_traces(line_color='#003366')
     st.plotly_chart(fig_xg, use_container_width=True)
-
-    # --- BANE 2: KAMPSTIL (POSSESSION VS INTENSITET) ---
-    st.subheader("🧠 Spilstils-analyse")
-    col_a, col_b = st.columns(2)
-    
-    with col_a:
-        # Scatter plot over hvordan de vinder/kontrollerer
-        fig_style = px.scatter(df_filtreret, x='POSSESSIONPERCENT', y='CHALLENGEINTENSITY',
-                               size='XG', color='GOALS',
-                               title="Besiddelse vs. Duel-intensitet",
-                               labels={'POSSESSIONPERCENT': 'Besiddelse %', 'CHALLENGEINTENSITY': 'Duel-intensitet'})
-        st.plotly_chart(fig_style, use_container_width=True)
-
-    with col_b:
-        # Fordeling af afslutninger
-        fig_shots = px.histogram(df_filtreret, x='SHOTS', nbins=15, 
-                                 title="Antal afslutninger pr. kamp",
-                                 labels={'SHOTS': 'Antal skud'}, color_discrete_sequence=['#cc0000'])
-        st.plotly_chart(fig_shots, use_container_width=True)
 
     # --- BANE 3: DEFENSIVT PRES (PPDA) ---
     st.subheader("🛡️ Defensiv Struktur (PPDA - Jo lavere, jo højere pres)")
