@@ -71,7 +71,7 @@ def load_all_data():
     df_season_stats = pd.DataFrame()
     df_team_matches = pd.DataFrame()
     df_playerstats = pd.DataFrame()
-    df_events = pd.DataFrame()
+    df_events = pd.DataFrame() # Sørg for at denne står her!
     hold_map = {}
 
     if conn:
@@ -84,7 +84,7 @@ def load_all_data():
                     tid = str(int(row['TEAM_WYID']))
                     hold_map[tid] = str(row['TEAMNAME']).strip()
             
-            # B: SHOT EVENTS
+            # B: SHOT EVENTS (Specifikke skud detaljer)
             q_shots = """
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
@@ -96,7 +96,7 @@ def load_all_data():
             """
             df_shotevents = conn.query(q_shots)
 
-            # C: SEASON STATS (Historik til profil)
+            # C: SEASON STATS
             q_season_stats = """
                 SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
                                 p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
@@ -109,7 +109,7 @@ def load_all_data():
             """
             df_season_stats = conn.query(q_season_stats)
 
-            # D: TEAM MATCHES (Til Modstanderanalyse)
+            # D: TEAM MATCHES
             q_teammatches = """
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
                        g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
@@ -120,21 +120,11 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # E: PLAYERSTATS (Hoveddata)
+            # E: PLAYERSTATS
             q_playerstats = """
-                SELECT 
-                    s.PLAYER_WYID, 
-                    p.FIRSTNAME, 
-                    p.LASTNAME, 
-                    t.TEAMNAME, 
-                    se.SEASONNAME,  
-                    s.MATCHES, 
-                    s.MINUTESONFIELD, 
-                    s.GOALS, 
-                    s.ASSISTS, 
-                    s.SHOTS, 
-                    s.XGSHOT, 
-                    p.CURRENTTEAM_WYID AS TEAM_WYID -- Vi henter ID fra p i stedet for s
+                SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
+                       s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
+                       p.CURRENTTEAM_WYID AS TEAM_WYID
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
@@ -142,23 +132,8 @@ def load_all_data():
             """
             df_playerstats = conn.query(q_playerstats)
 
+            # F: EVENTS (Filtreret til Heatmap)
             q_events = """
-                SELECT 
-                    c.EVENT_WYID,
-                    c.PLAYER_WYID,
-                    c.possessionstartlocationx AS LOCATIONX,
-                    c.possessionstartlocationy AS LOCATIONY,
-                    c.possessionendlocationx AS ENDLOCATIONX,
-                    c.possessionendlocationy AS ENDLOCATIONY,
-                    c.primarytype AS PRIMARYTYPE,
-                    c.MATCH_WYID,
-                    m.MATCHLABEL,
-                    m.DATE,
-                    e.TEAM_WYID
-                FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
-                JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                q_events = """
                 SELECT 
                     c.possessionstartlocationx AS LOCATIONX,
                     c.possessionstartlocationy AS LOCATIONY,
@@ -170,7 +145,7 @@ def load_all_data():
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
                 WHERE m.DATE >= '2024-07-01' 
                 AND c.primarytype IN ('pass', 'shot', 'touch', 'throw_in')
-            
+            """
             df_events = conn.query(q_events)
             
         except Exception as e:
@@ -181,14 +156,12 @@ def load_all_data():
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # --- 3. FILTRERING TIL DASHBOARD (HIF SPECIFIK) ---
+    # --- 3. FILTRERING ---
     df_hif_stats = pd.DataFrame()
     if df_playerstats is not None and not df_playerstats.empty:
-        # Tving typer for sikker sammenligning
         df_playerstats['TEAM_WYID'] = pd.to_numeric(df_playerstats['TEAM_WYID'], errors='coerce')
         df_playerstats['SEASONNAME'] = df_playerstats['SEASONNAME'].astype(str).str.strip()
         
-        # Vi laver en kopi kun med HIF's nuværende trup til Top 5 / Dashboard
         df_hif_stats = df_playerstats[
             (df_playerstats['SEASONNAME'] == str(SEASONNAME).strip()) & 
             (df_playerstats['TEAM_WYID'] == int(TEAM_WYID))
@@ -196,8 +169,8 @@ def load_all_data():
 
     # --- 4. RETURNERING ---
     return {
-        "shotevents": df_shotevents, 
-        "events": df_events,         
+        "shotevents": df_shotevents,
+        "events": df_events,         # Sikrer at modstanderanalyse får data
         "season_stats": df_season_stats,
         "team_matches": df_team_matches, 
         "playerstats": df_playerstats,   
