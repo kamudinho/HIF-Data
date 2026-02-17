@@ -131,6 +131,11 @@ def vis_side(df_spillere):
 
     html += "</table></div>"
 
+    # Brug en container til at tvinge rendering
+    tabel_placeholder = st.container()
+    with tabel_placeholder:
+        st.markdown(html, unsafe_allow_html=True)
+
     # --- 6. STATISTIK I BUNDEN ---
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
