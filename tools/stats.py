@@ -133,14 +133,16 @@ def vis_side(spillere, player_stats_sn):
     )
 
     fig.update_layout(
-        height=h, margin=dict(l=0, r=80, t=10, b=40),
+        height=h, 
+        margin=dict(l=0, r=80, t=10, b=40),
         xaxis=dict(
             title=dict(text=f"<b>{valgt_kat.upper()}</b> ({visning})", font=dict(size=12, color='#666')),
             showgrid=True, gridcolor='#f2f2f2', zeroline=False
         ),
         yaxis=dict(tickfont=dict(size=12, color='#222'), fixedrange=True),
-        plot_bgcolor='white', paper_bgcolor='white',
-        bar_gap=0.2
+        plot_bgcolor='white', 
+        paper_bgcolor='white',
+        bargap=0.2  # <--- HER! Fjern understregningen (det hedder bargap, ikke bar_gap)
     )
-
+    
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
