@@ -1,5 +1,4 @@
 #data/data_load.py
-#data/data_load.py
 import streamlit as st
 import pandas as pd
 import uuid
@@ -109,15 +108,25 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # D: PLAYERSTATS
+            # D: PLAYERSTATS - Henter ALLE spillere + deres stats hvis de findes
             q_playerstats = """
-                SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
-                       s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
-                       p.CURRENTTEAM_WYID AS TEAM_WYID
-                FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-                JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
+                SELECT 
+                    p.PLAYER_WYID, 
+                    p.FIRSTNAME, 
+                    p.LASTNAME, 
+                    t.TEAMNAME, 
+                    p.ROLECODE3,
+                    p.CURRENTTEAM_WYID AS TEAM_WYID,
+                    s.MATCHES, 
+                    s.MINUTESONFIELD, 
+                    s.GOALS, 
+                    s.ASSISTS, 
+                    s.SHOTS, 
+                    s.XGSHOT
+                FROM AXIS.WYSCOUT_PLAYERS p
+                LEFT JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s ON p.PLAYER_WYID = s.PLAYER_WYID
+                -- Her kan du evt. tilføje en WHERE se.SEASONNAME = '2024/2025' hvis du kun vil se stats for nuværende sæson
             """
             df_playerstats = conn.query(q_playerstats)
 
