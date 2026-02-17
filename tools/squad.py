@@ -26,25 +26,25 @@ def vis_side(df):
                 display: flex !important;
                 flex-direction: column !important;
             }
-            /* Ryk hele sektionen op mod branding-headeren */
+            /* Ryk banen og menuen moderat OP og fjern gap */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
-                margin-top: 5px !important;
+                margin-top: -15px !important;
             }
-            /* Fjern standard Streamlit padding i toppen af kolonner */
-            div[data-testid="stVerticalBlock"] > div {
-                padding-top: 0px !important;
-            }
-            /* Højrestil menu-kolonnen */
+            /* Tving menu-kolonnen helt ud til højre kant */
             div[data-testid="stHorizontalBlock"] > div:last-child {
                 flex: 0 1 auto !important;
                 min-width: 130px !important;
-                padding: 0px !important;
+                padding-left: 0px !important;
+                padding-right: 0px !important;
                 align-items: flex-end !important;
             }
-            /* Knapper og Popover styling */
-            div.stButton > button, div[data-testid="stPopover"] > button {
+            /* Pill Button Styling */
+            div.stButton > button {
                 border-radius: 20px !important;
+                border: 1px solid #ddd !important;
+                background-color: white !important;
+                color: #333 !important;
                 width: 110px !important;
                 margin-left: auto !important;
                 display: block !important;
@@ -54,12 +54,22 @@ def vis_side(df):
                 border: 2px solid #df003b !important;
                 font-weight: bold !important;
             }
+            /* Popover knappen */
+            div[data-testid="stPopover"] {
+                width: 100% !important;
+                display: flex !important;
+                justify-content: flex-end !important;
+            }
+            div[data-testid="stPopover"] > button {
+                width: 110px !important;
+                border-radius: 20px !important;
+            }
         </style>
     """, unsafe_allow_html=True)
 
     # --- 4. TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:5px;">
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
         </div>
     """, unsafe_allow_html=True)
@@ -86,7 +96,6 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([7, 1])
 
     with col_menu:
-        # Trup Popover
         with st.popover("Trup", use_container_width=True):
             tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
                 <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
@@ -103,7 +112,6 @@ def vis_side(df):
             st.components.v1.html(tabel_html, height=400, scrolling=True)
 
         st.write("---")
-        # Formation knapper
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, use_container_width=True, type="primary" if is_active else "secondary"):
@@ -111,7 +119,7 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        # Pitch Setup uden padding (fjerner hvid omkreds)
+        # Pitch med pad=0 fjerner den hvide "omkreds"
         pitch = Pitch(
             pitch_type='statsbomb', 
             pitch_color='#ffffff', 
@@ -120,17 +128,15 @@ def vis_side(df):
             pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
         )
         fig, ax = pitch.draw(figsize=(13, 8))
+        # Tvinger indholdet helt ud til kanten af billedet
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # --- LEGENDS (Helt i top ved y=80) ---
-        ax.text(1, 80, " < 6 mdr ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(11, 80, " 6-12 mdr ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(22, 80, " Leje ", size=8, fontweight='bold', va='top', ha='left',
-                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        # Legend
+        ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(25, 2, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # Positions-logik
+        # Formationer
         form = st.session_state.formation_valg
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
