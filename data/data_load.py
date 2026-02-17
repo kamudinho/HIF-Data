@@ -80,19 +80,20 @@ def load_all_data():
                 # I data/data_load.py - playerstats query
                 "playerstats": f"""
                     SELECT 
-                    s.PLAYER_WYID, 
-                    s.GOALS, 
-                    s.ASSISTS, 
-                    s.XGSHOT,        -- Vi holder det originale navn
-                    s.MATCHES, 
-                    s.MINUTESP_P,    -- Vi holder det originale navn fra Snowflake
-                    p.SHORTNAME, 
-                    p.ROLECODE3, 
-                    p.CURRENTTEAM_WYID
-                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-                    JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID AND s.SEASON_WYID = p.SEASON_WYID
-                    WHERE s.COMPETITION_WYID IN {comp_filter} 
-                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME='{SEASONNAME}')
+                        PLAYER_WYID, 
+                        GOALS, 
+                        ASSISTS, 
+                        XGSHOT, 
+                        MATCHES, 
+                        MINUTESONFIELD,  -- Den hedder MinutesOnField i din liste!
+                        SHOTS,
+                        PASSES,
+                        SUCCESSFULPASSES,
+                        DUELS,
+                        DUELSWON
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                    WHERE COMPETITION_WYID IN {comp_filter} 
+                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME='{SEASONNAME}')
                 """,
                 "events": f"""
                     SELECT TOP 100 * FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON 
