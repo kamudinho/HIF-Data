@@ -6,6 +6,12 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 import numpy as np
 
+# Vi importerer din centrale konfiguration
+try:
+    from data.season_show import COMP_MAP
+except ImportError:
+    COMP_MAP = {}
+
 def vis_side(df_team_matches, hold_map, df_events):
     # --- 1. CSS STYLING ---
     st.markdown("""
@@ -19,36 +25,32 @@ def vis_side(df_team_matches, hold_map, df_events):
     """, unsafe_allow_html=True)
 
     if df_team_matches is None or df_team_matches.empty:
-        st.error("Kunne ikke finde kampdata. Tjek om COMPETITION_WYID er med i din SQL.")
+        st.error("Kunne ikke finde kampdata.")
         return
 
-    # --- 2. DYNAMISK FILTRERING (TURNERING -> HOLD) ---
-    # Vi henter de unikke turneringer direkte fra dataframe (ingen hardkodning)
+    # --- 2. CENTRALISERET DOBBELT-DROPDOWN ---
+    # Vi henter de unikke turneringer direkte fra de data, Snowflake har leveret
     if 'COMPETITION_WYID' in df_team_matches.columns:
-        aktive_turneringer = sorted(df_team_matches['COMPETITION_WYID'].unique())
+        aktive_comp_ids = sorted(df_team_matches['COMPETITION_WYID'].unique())
     else:
-        st.warning("⚠️ COMPETITION_WYID mangler i data. Viser alle hold samlet.")
-        aktive_turneringer = [None]
+        aktive_comp_ids = []
 
     col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
 
     with col_sel1:
-        # Viser turneringens ID (Navne kræver et join i SQL eller mapping i season_show)
-        valgt_comp = st.selectbox(
-            "Vælg Turnering (ID):", 
-            options=aktive_turneringer,
-            format_func=lambda x: f"Turnering ID: {int(x)}" if x is not None else "Alle"
+        # Her bruger vi COMP_MAP til at vise navne i stedet for tal
+        valgt_comp_id = st.selectbox(
+            "Vælg Turnering:", 
+            options=aktive_comp_ids,
+            format_func=lambda x: COMP_MAP.get(int(x), f"Turnering {x}")
         )
 
-    # Filtrer dataframe baseret på valgt turnering
-    if valgt_comp is not None:
-        df_comp_filtered = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp]
-    else:
-        df_comp_filtered = df_team_matches
+    # Filtrer data til den valgte turnering
+    df_comp = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp_id]
 
-    # Find holdene der findes i den valgte turnering
-    tilgaengelige_ids = df_comp_filtered['TEAM_WYID'].unique()
-    navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_ids}
+    # Find holdene i den specifikke turnering
+    tilgaengelige_hold_ids = df_comp['TEAM_WYID'].unique()
+    navne_dict = {hold_map.get(str(int(tid)), f"Ukendt ({tid})"): tid for tid in tilgaengelige_hold_ids}
     
     with col_sel2:
         valgt_navn = st.selectbox("Vælg modstander:", options=sorted(navne_dict.keys()))
@@ -57,55 +59,38 @@ def vis_side(df_team_matches, hold_map, df_events):
         halvdel = st.radio("Fokusområde:", ["Modstanders halvdel", "Egen halvdel"], horizontal=True)
 
     valgt_id = navne_dict[valgt_navn]
-    df_f = df_comp_filtered[df_comp_filtered['TEAM_WYID'] == valgt_id].copy()
+    df_f = df_comp[df_comp['TEAM_WYID'] == valgt_id].copy()
 
-    # --- 3. HOVEDLAYOUT ---
+    # --- 3. HOVEDLAYOUT & HEATMAPS ---
     main_left, main_right = st.columns([2.2, 1])
 
     with main_left:
-        st.subheader(f"Halvdel-analyse: {halvdel}")
-        
-        pitch = VerticalPitch(
-            pitch_type='wyscout', pitch_color='#f8f9fa', 
-            line_color='#1a1a1a', linewidth=1, half=True 
-        )
-        
+        st.subheader(f"Analyse af {valgt_navn}")
+        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#1a1a1a', half=True)
         c1, c2, c3 = st.columns(3)
 
         if df_events is not None and not df_events.empty:
-            df_events.columns = [c.upper() for c in df_events.columns]
-            df_hold_events = df_events[df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))].copy()
-
-            # Vi sikrer os at hændelserne også er fra den rigtige turnering hvis muligt
-            if 'COMPETITION_WYID' in df_hold_events.columns and valgt_comp is not None:
-                df_hold_events = df_hold_events[df_hold_events['COMPETITION_WYID'] == valgt_comp]
+            # Filtrer hændelser på hold og turnering
+            df_hold_ev = df_events[
+                (df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))) & 
+                (df_events['COMPETITION_WYID'] == valgt_comp_id)
+            ].copy()
 
             if halvdel == "Modstanders halvdel":
-                df_plot = df_hold_events[df_hold_events['LOCATIONX'] >= 50].copy()
+                df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50].copy()
             else:
-                df_plot = df_hold_events[df_hold_events['LOCATIONX'] < 50].copy()
+                df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
                 df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
                 df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
 
-            plot_configs = [
-                (c1, "Afleveringer", "pass", "Reds"),
-                (c2, "Dueller", "duel", "Blues"),
-                (c3, "Interceptions", "interception", "Greens")
-            ]
-
-            for col, title, p_type, cmap in plot_configs:
+            for col, title, p_type, cmap in [(c1, "Passes", "pass", "Reds"), (c2, "Duels", "duel", "Blues"), (c3, "Intercepts", "interception", "Greens")]:
                 with col:
                     st.caption(title)
                     fig, ax = pitch.draw(figsize=(4, 6))
                     mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
                     df_filtered = df_plot[mask]
-                    
                     if not df_filtered.empty:
-                        sns.kdeplot(
-                            x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], 
-                            ax=ax, fill=True, cmap=cmap, alpha=0.6, 
-                            clip=((0, 100), (50, 100)), levels=10
-                        )
+                        sns.kdeplot(x=df_filtered['LOCATIONY'], y=df_filtered['LOCATIONX'], ax=ax, fill=True, cmap=cmap, alpha=0.6, clip=((0, 100), (50, 100)), levels=10)
                     else:
                         ax.text(50, 75, "Ingen data", ha='center', va='center', alpha=0.5)
                     st.pyplot(fig)
@@ -113,34 +98,15 @@ def vis_side(df_team_matches, hold_map, df_events):
     # --- 4. HØJRE SIDE: STATISTIK ---
     with main_right:
         st.subheader("Holdets Profil")
-        
-        st.write("**Offensiv**")
         col_off1, col_off2 = st.columns(2)
         col_off1.metric("Gns. xG", round(df_f['XG'].mean(), 2) if 'XG' in df_f else 0)
         col_off2.metric("Skud/Kamp", round(df_f['SHOTS'].mean(), 1) if 'SHOTS' in df_f else 0)
 
-        st.write("**Spilstyring**")
         col_ctrl1, col_ctrl2 = st.columns(2)
-        pos_val = df_f['POSSESSIONPERCENT'].mean() if 'POSSESSIONPERCENT' in df_f else 0
-        col_ctrl1.metric("Possession", f"{round(pos_val, 0)}%")
+        pos = df_f['POSSESSIONPERCENT'].mean() if 'POSSESSIONPERCENT' in df_f else 0
+        col_ctrl1.metric("Possession", f"{round(pos, 0)}%")
         col_ctrl2.metric("Gns. Mål", round(df_f['GOALS'].mean(), 1) if 'GOALS' in df_f else 0)
 
-        st.write("**Disciplin**")
-        col_def1, col_def2 = st.columns(2)
-        y_cards = df_f['YELLOWCARDS'].mean() if 'YELLOWCARDS' in df_f else 0
-        r_cards = df_f['REDCARDS'].sum() if 'REDCARDS' in df_f else 0
-        col_def1.metric("Gule kort/K", round(y_cards, 1))
-        col_def2.metric("Røde kort (Tot)", int(r_cards))
-
-        st.markdown("---")
-        
-        total_shots = df_f['SHOTS'].sum() if 'SHOTS' in df_f else 0
-        total_goals = df_f['GOALS'].sum() if 'GOALS' in df_f else 0
-        if total_shots > 0:
-            rate = (total_goals / total_shots) * 100
-            st.write(f"**Effektivitet (Mål/Skud):** {round(rate, 1)}%")
-            st.progress(min(rate/30, 1.0))
-
     # --- 5. RÅ DATA ---
-    with st.expander("Se alle rå kampdata for modstanderen"):
+    with st.expander("Se kamp-log"):
         st.dataframe(df_f.sort_values('DATE', ascending=False), use_container_width=True)
