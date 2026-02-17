@@ -135,11 +135,6 @@ def load_all_data():
     if df_playerstats is not None and not df_playerstats.empty:
         df_playerstats['SEASONNAME'] = df_playerstats['SEASONNAME'].astype(str).str.strip()
         df_playerstats['TEAM_WYID'] = pd.to_numeric(df_playerstats['TEAM_WYID'], errors='coerce')
-        
-        df_playerstats = df_playerstats[
-            (df_playerstats['SEASONNAME'] == str(SEASONNAME).strip()) & 
-            (df_playerstats['TEAM_WYID'] == int(TEAM_WYID))
-        ].copy()
 
     return {
         "shotevents": df_shotevents,
