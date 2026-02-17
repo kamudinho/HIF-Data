@@ -104,7 +104,7 @@ def vis_side(spillere, player_stats_sn):
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
     # --- 5. GRAF (Clean Design) ---
-    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom:2px;'></div>", unsafe_allow_html=True)
     bar_color = '#df003b' if visning == "Total" else '#333'
 
     fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
