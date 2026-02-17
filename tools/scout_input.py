@@ -1,4 +1,4 @@
-#tools/scout_input.py
+# tools/scout_input.py
 import streamlit as st
 import pandas as pd
 import requests
@@ -17,13 +17,18 @@ def save_to_github(new_row_df):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     r = requests.get(url, headers=headers)
+    
     if r.status_code == 200:
         content = r.json()
         sha = content['sha']
-        old_df = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
+        # Læs eksisterende data
+        decoded_content = base64.b64decode(content['content']).decode('utf-8')
+        old_df = pd.read_csv(StringIO(decoded_content))
+        # Tilføj den nye række
         updated_df = pd.concat([old_df, new_row_df], ignore_index=True, sort=False)
         updated_csv = updated_df.to_csv(index=False)
     else:
+        # Hvis filen ikke findes, opret en ny
         sha = None
         updated_csv = new_row_df.to_csv(index=False)
     
@@ -39,23 +44,33 @@ def vis_side(df_players, df_playerstats):
     
     logged_in_user = st.session_state.get("user", "Ukendt").upper()
     
-    # --- 1. BYG MASTER-LOOKUP FRA KILDERNE ---
+    # --- 1. BYG MASTER-LOOKUP (Arkitekturen der sikrer data på tværs) ---
     sources = []
     
     # Kilde A: WyScout Stats (Snowflake)
     if df_playerstats is not None and not df_playerstats.empty:
         temp_stats = df_playerstats.copy()
-        temp_stats['Navn_Lookup'] = temp_stats['FIRSTNAME'].fillna('') + " " + temp_stats['LASTNAME'].fillna('')
-        # Vi bruger ROLE_TEXT (fra den nye SQL) og TEAMNAME
-        sources.append(temp_stats[['Navn_Lookup', 'PLAYER_WYID', 'TEAMNAME', 'ROLE_TEXT']].rename(
-            columns={'Navn_Lookup': 'NAVN_JOIN', 'TEAMNAME': 'KLUB_JOIN', 'ROLE_TEXT': 'POS_JOIN'}
-        ))
+        # Samler navnet præcis som i SQL-trækket
+        temp_stats['NAVN_JOIN'] = (temp_stats['FIRSTNAME'].fillna('') + " " + temp_stats['LASTNAME'].fillna('')).str.strip()
+        
+        # Vi mapper de rå kolonner til vores interne format
+        # Bemærk: Vi bruger 'TEAMNAME' og 'ROLECODE3' (eller ROLE_TEXT hvis du har det i SQL)
+        cols_to_use = ['NAVN_JOIN', 'PLAYER_WYID', 'TEAMNAME']
+        if 'ROLE_TEXT' in temp_stats.columns:
+            cols_to_use.append('ROLE_TEXT')
+            temp_stats = temp_stats[cols_to_use].rename(columns={'TEAMNAME': 'KLUB_JOIN', 'ROLE_TEXT': 'POS_JOIN'})
+        else:
+            cols_to_use.append('ROLECODE3')
+            temp_stats = temp_stats[cols_to_use].rename(columns={'TEAMNAME': 'KLUB_JOIN', 'ROLECODE3': 'POS_JOIN'})
+        
+        sources.append(temp_stats)
 
     # Kilde B: Lokal players.csv
     if df_players is not None and not df_players.empty:
-        sources.append(df_players[['NAVN', 'PLAYER_WYID', 'TEAMNAME', 'POS']].rename(
+        temp_gh = df_players[['NAVN', 'PLAYER_WYID', 'TEAMNAME', 'POS']].rename(
             columns={'NAVN': 'NAVN_JOIN', 'TEAMNAME': 'KLUB_JOIN', 'POS': 'POS_JOIN'}
-        ))
+        )
+        sources.append(temp_gh)
 
     # Samlet tabel til dropdown
     if sources:
@@ -65,21 +80,25 @@ def vis_side(df_players, df_playerstats):
         lookup_df = pd.DataFrame()
         all_names = []
 
-    # --- 2. LAYOUT: TOP-LINJEN ---
-    kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
+    # --- 2. LAYOUT: INPUT ---
+    metode = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     
     p_id_val, navn_endelig, klub_val, pos_val = "", "", "", ""
 
     with c1:
-        if kilde == "Vælg eksisterende":
+        if metode == "Vælg eksisterende":
             valgt_navn = st.selectbox("Vælg spiller", options=[""] + all_names)
             if valgt_navn:
                 match = lookup_df[lookup_df['NAVN_JOIN'] == valgt_navn].iloc[0]
                 navn_endelig = valgt_navn
-                p_id_val = str(int(float(match.get('PLAYER_WYID', 0))))
-                klub_val = str(match.get('KLUB_JOIN', ''))
-                pos_val = str(match.get('POS_JOIN', ''))
+                # Sikrer at ID altid er en ren streng uden .0
+                try:
+                    p_id_val = str(int(float(match['PLAYER_WYID'])))
+                except:
+                    p_id_val = str(match['PLAYER_WYID'])
+                klub_val = str(match['KLUB_JOIN'])
+                pos_val = str(match['POS_JOIN'])
         else:
             navn_endelig = st.text_input("Navn på ny spiller")
             p_id_val = st.text_input("PLAYER_WYID")
@@ -91,7 +110,6 @@ def vis_side(df_players, df_playerstats):
     with c4:
         st.text_input("Scout", value=logged_in_user, disabled=True)
         
-    # ... resten af din form kode fortsætter herfra
     # --- 3. RATINGS FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
@@ -109,7 +127,6 @@ def vis_side(df_players, df_playerstats):
 
         st.divider()
         
-        # 50/50 layout for Status og Potentiale
         m1, m2 = st.columns([1, 1]) 
         status = m1.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         potentiale = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
@@ -121,10 +138,8 @@ def vis_side(df_players, df_playerstats):
         if st.form_submit_button("Gem rapport", use_container_width=True):
             if navn_endelig and p_id_val:
                 avg = round(sum([beslut, fart, aggres, att, udhold, leder, teknik, intel]) / 8, 1)
-                rapport_id = str(uuid.uuid4())[:8] # Unikt ID til den specifikke rapport
+                rapport_id = str(uuid.uuid4())[:8]
                 
-                # Gemmer i den præcise rækkefølge du sendte:
-                # PLAYER_WYID, Dato, Navn, Klub, Position, Rating_Avg, Status, Potentiale, Styrker, Udvikling, Vurdering, Beslutsomhed, Fart, Aggresivitet, Attitude, Udholdenhed, Lederegenskaber, Teknik, Spilintelligens, Scout, ID
                 ny_df = pd.DataFrame([[
                     p_id_val, 
                     datetime.now().strftime("%Y-%m-%d"), 
@@ -155,7 +170,14 @@ def vis_side(df_players, df_playerstats):
                     "Scout", "ID"
                 ])
                 
-                if save_to_github(ny_df) in [200, 201]:
+                status_code = save_to_github(ny_df)
+                if status_code in [200, 201]:
                     write_log("Oprettede scoutrapport", target=f"{navn_endelig} ({p_id_val})")
-                    st.success(f"Rapport gemt med WyID: {p_id_val}")
+                    st.success(f"Rapport gemt korrekt for {navn_endelig}!")
+                    st.balloons()
+                    # Vi venter lidt med rerun så brugeren ser success-beskeden
                     st.rerun()
+                else:
+                    st.error(f"Fejl ved gem til GitHub (Status: {status_code})")
+            else:
+                st.warning("Udfyld venligst både navn og spiller ID.")
