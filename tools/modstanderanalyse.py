@@ -41,14 +41,6 @@ def vis_side(df_team_matches, hold_map):
     fig_xg.update_traces(line_color='#003366')
     st.plotly_chart(fig_xg, use_container_width=True)
 
-    # --- BANE 3: DEFENSIVT PRES (PPDA) ---
-    st.subheader("🛡️ Defensiv Struktur (PPDA - Jo lavere, jo højere pres)")
-    # PPDA forklares: Lav PPDA = Aggressivt pres. Høj PPDA = Afventende.
-    fig_ppda = px.area(df_filtreret, x='DATE', y='PPDA', 
-                       title="PPDA Trend (Pres-intensitet)",
-                       labels={'PPDA': 'Passes Per Defensive Action'},
-                       color_discrete_sequence=['#2ecc71'])
-    st.plotly_chart(fig_ppda, use_container_width=True)
 
     # 4. Rå data tabel nederst
     with st.expander("Se alle rå kampdata"):
