@@ -114,7 +114,7 @@ def vis_side(df_players, df_stats_all=None):
         intel = col8.select_slider("Intel.", options=[1,2,3,4,5,6], value=3)
 
         st.divider()
-        m1, m2, _ = st.columns([1, 2])
+        m1, m2, _ = st.columns([1, 1, 2])
         status = m1.selectbox("Status", ["Kig nærmere", "Interessant", "Prioritet", "Køb"])
         potentiale = m2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
