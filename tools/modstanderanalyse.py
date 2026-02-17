@@ -65,9 +65,8 @@ def vis_side(df_team_matches, hold_map, df_events):
     left_col, right_col = st.columns([1.4, 1])
 
     with left_col:
-        st.subheader("Positionelt Heatmap (Afleveringer)")
+        st.subheader("Positionelt Heatmap")
         
-        # Opret banen med mplsoccer (VerticalPitch)
         pitch = VerticalPitch(
             pitch_type='wyscout', 
             pitch_color='#f8f9fa', 
@@ -77,32 +76,33 @@ def vis_side(df_team_matches, hold_map, df_events):
         )
         fig, ax = pitch.draw(figsize=(8, 11))
 
-        # --- DATA INTEGRATION PÅ BANEN ---
         if df_events is not None and not df_events.empty:
-            # Sikker filtrering af events (Passes)
-            # Vi tvinger alt til strings og lower for at undgå fejl i sammenligning
+            # RETTELSE HER: Vi inkluderer alle de typer vi har hentet i SQL
+            relevante_typer = ['pass', 'touch', 'throw_in', 'shot', 'interception']
+            
             mask = (
                 (df_events['TEAM_WYID'].astype(str) == str(int(valgt_id))) & 
-                (df_events['PRIMARYTYPE'].fillna('').str.lower().str.contains('pass'))
+                (df_events['PRIMARYTYPE'].fillna('').str.lower().isin(relevante_typer))
             )
             df_p = df_events[mask].copy().dropna(subset=['LOCATIONX', 'LOCATIONY'])
             
+            # DEBUG (Fjern denne når det virker):
+            # st.write(f"Antal datapunkter til heatmap: {len(df_p)}")
+
             if not df_p.empty:
-                # Tegn heatmap
+                # Vi bruger de nye kolonnenavne fra din SQL: LOCATIONX og LOCATIONY
                 sns.kdeplot(
                     x=df_p['LOCATIONY'], y=df_p['LOCATIONX'],
                     ax=ax, fill=True, thresh=0.05, levels=15,
                     cmap='Reds', alpha=0.6, zorder=1, clip=((0, 100), (0, 100))
                 )
                 
-                # Overlay statistik direkte på banen
-                pitch.annotate(f"Hovedzone: {valgt_navn}", 
+                pitch.annotate(f"Aktivitetszoner: {valgt_navn}", 
                                xy=(5, 50), va='center', ha='center',
                                ax=ax, fontsize=12, fontweight='bold', color='#df003b',
                                bbox=dict(facecolor='white', alpha=0.8, edgecolor='#df003b', boxstyle='round,pad=0.5'))
             else:
-                # Hvis der ikke er pass-data, viser vi en besked i stedet for en tom bane
-                ax.text(50, 50, "INGEN AFLEVERINGSDATA\nFUNDET FOR DETTE HOLD", 
+                ax.text(50, 50, "INGEN POSITIONS-DATA\nFOR DETTE HOLD", 
                         size=15, ha="center", va="center", color="grey", alpha=0.5)
         
         st.pyplot(fig)
