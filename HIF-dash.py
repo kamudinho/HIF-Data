@@ -18,11 +18,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Inde i HIF-dash.py under LOGIN SYSTEM
+# --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
+    st.session_state["role"] = None
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -32,10 +33,11 @@ if not st.session_state["logged_in"]:
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
             if st.form_submit_button("LOG IND", use_container_width=True):
-                # Tjek om bruger findes og om koden matcher
-                if u in USER_DB and str(USER_DB[u]) == p:
+                # Her er rettelsen: Vi tjekker ind i ["pass"] for at finde koden
+                if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
+                    st.session_state["role"] = USER_DB[u]["role"]
                     st.rerun()
                 else:
                     st.error("Ugyldig bruger eller kode")
