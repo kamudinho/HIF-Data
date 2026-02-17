@@ -1,5 +1,4 @@
 import streamlit as st
-import plotly.express as px
 import pandas as pd
 import numpy as np
 
@@ -9,127 +8,163 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 0. CSS FOR TOTAL HØJRE-STILLING ---
+    # --- 1. CSS INJECTION (Matcher Top 5 Layout) ---
     st.markdown("""
         <style>
-            /* Fjern margener i siderne */
             .block-container {
                 padding-top: 1rem !important;
                 max-width: 98% !important;
             }
-            
-            /* Containeren til knapperne */
-            .button-container {
+            [data-testid="column"] {
                 display: flex;
-                justify-content:间-between;
-                width: 100%;
-                align-items: center;
+                flex-direction: column;
+                justify-content: flex-start;
             }
-
-            /* Tving segmented control til højre side af sin kolonne */
-            div[data-testid="column"]:nth-of-type(2) {
-                display: flex !important;
-                justify-content: flex-end !important;
+            /* Tvinger visnings-knapperne helt til højre */
+            div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
+                align-items: flex-end !important;
             }
-            
             div[data-testid="stSegmentedControl"] {
                 width: fit-content !important;
                 margin-left: auto !important;
             }
-
-            /* Fjern hvid plads mellem overskrift og graf */
-            [data-testid="stVerticalBlock"] {
-                gap: 0.5rem !important;
+            /* Styling af de custom barer */
+            .stat-row {
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+                font-family: sans-serif;
+            }
+            .stat-name {
+                width: 150px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #222;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .stat-bar-container {
+                flex-grow: 1;
+                background: #f0f0f0;
+                height: 18px;
+                border-radius: 2px;
+                margin: 0 10px;
+                position: relative;
+            }
+            .stat-bar-fill {
+                background: #df003b;
+                height: 100%;
+                border-radius: 2px;
+            }
+            .stat-value {
+                width: 70px;
+                font-size: 13px;
+                font-weight: 700;
+                color: #df003b;
+                text-align: right;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. RENT DESIGN (HIF BRANDING) ---
+    # --- 2. BRANDING ---
     st.markdown(f"""
-        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">SPILLERSTATISTIK</h3>
+        <div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; letter-spacing:1px; font-size:1.1rem;">SPILLER STATISTIK</h3>
             <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. DATA KLARGØRING (Samme som før) ---
-    spillere.columns = [str(c).upper().strip() for c in spillere.columns]
-    player_stats_sn.columns = [str(c).upper().strip() for c in player_stats_sn.columns]
-    spillere['PLAYER_WYID'] = spillere['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    player_stats_sn['PLAYER_WYID'] = player_stats_sn['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    
-    if 'SEASONNAME' in player_stats_sn.columns:
-        df_stats = player_stats_sn[player_stats_sn['SEASONNAME'] == SEASONNAME].copy()
-    else:
-        df_stats = player_stats_sn.copy()
+    # --- 3. DATA-KLARGØRING ---
+    s_info = spillere.copy()
+    s_stats = player_stats_sn.copy()
+    s_info.columns = [str(c).upper().strip() for c in s_info.columns]
+    s_stats.columns = [str(c).upper().strip() for c in s_stats.columns]
 
-    spillere_clean = spillere.drop_duplicates(subset=['PLAYER_WYID'])
+    s_info['PLAYER_WYID'] = s_info['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    s_stats['PLAYER_WYID'] = s_stats['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
+    if 'SEASONNAME' in s_stats.columns:
+        df_stats = s_stats[s_stats['SEASONNAME'] == SEASONNAME].copy()
+    else:
+        df_stats = s_stats.copy()
+
+    spillere_clean = s_info.drop_duplicates(subset=['PLAYER_WYID'])
     if 'NAVN' not in spillere_clean.columns:
         spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
-    
+
     df_hif = pd.merge(df_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
 
     if df_hif.empty:
-        st.info(f"Ingen data fundet for {SEASONNAME}")
+        st.warning("Ingen data fundet.")
         return
 
-    # --- 3. UI KONTROLLER (NU MED FLEX-FIX) ---
-    # Vi bruger columns, men tvinger indholdet i c2 til at flugte højre
-    c1, c2 = st.columns([1, 1])
+    # --- 4. KNAPPER (Matcher Top 5 layout) ---
+    c1, c2 = st.columns([1, 1], gap="large")
     
     kategorier_med_pct = {"Afleveringer": ("PASSES", "SUCCESSFULPASSES"), "Dueller": ("DUELS", "DUELSWON")}
-    kategorier_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", "Afslutninger": "SHOTS", "Minutter": "MINUTESONFIELD"}
+    kategorier_uden_pct = {"Mål": "GOALS", "Assists": "ASSISTS", "xG": "XGSHOT", "Skud": "SHOTS", "Minutter": "MINUTESONFIELD"}
+    
     tilgaengelige = [k for k in kategorier_med_pct.keys() if kategorier_med_pct[k][0] in df_hif.columns] + \
                    [k for k in kategorier_uden_pct.keys() if kategorier_uden_pct[k] in df_hif.columns]
 
     with c1:
-        valg_label = st.pills("Statistik", tilgaengelige, default="Mål", label_visibility="collapsed")
-    
+        valgt_kat = st.pills("Statistik", tilgaengelige, default="Mål", label_visibility="collapsed")
     with c2:
-        # Segmented control i sin egen div for at sikre højre-alignment
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
-    # --- 4. BEREGNING (Samme som før) ---
-    min_col = "MINUTESONFIELD"
+    # --- 5. BEREGNING ---
     df_final = df_hif.drop_duplicates()
+    min_col = "MINUTESONFIELD"
 
-    if valg_label in kategorier_uden_pct:
-        kolonne = kategorier_uden_pct[valg_label]
-        df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'sum', min_col: 'sum'})
-        if df_group[min_col].max() > 6000:
-            df_group = df_final.groupby('NAVN', as_index=False).agg({kolonne: 'max', min_col: 'max'})
-        if visning == "Pr. 90" and valg_label != "Minutter":
-            df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[kolonne] / df_group[min_col] * 90), 0)
+    if valgt_kat in kategorier_uden_pct:
+        col = kategorier_uden_pct[valgt_kat]
+        res = df_final.groupby('NAVN', as_index=False).agg({col: 'sum', min_col: 'sum'})
+        if res[min_col].max() > 6000: # Sikkerhedscheck for præ-aggregeret data
+            res = df_final.groupby('NAVN', as_index=False).agg({col: 'max', min_col: 'max'})
+        
+        if visning == "Pr. 90" and valgt_kat != "Minutter":
+            res['VAL'] = (res[col] / res[min_col] * 90).replace([np.inf, -np.inf], 0).fillna(0)
         else:
-            df_group['VAL'] = df_group[kolonne]
-        df_group['LABEL'] = df_group['VAL'].apply(lambda x: f"{x:.2f}" if x % 1 != 0 else f"{int(x)}")
+            res['VAL'] = res[col]
+        res['LABEL'] = res['VAL'].apply(lambda x: f"{x:.2f}" if x % 1 != 0 else f"{int(x)}")
     else:
-        tot_col, suc_col = kategorier_med_pct[valg_label]
-        df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
-        if df_group[min_col].max() > 6000:
-            df_group = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'max', suc_col: 'max', min_col: 'max'})
-        df_group['PCT'] = (df_group[suc_col] / df_group[tot_col] * 100).fillna(0)
+        tot, suc = kategorier_med_pct[valgt_kat]
+        res = df_final.groupby('NAVN', as_index=False).agg({tot: 'sum', suc: 'sum', min_col: 'sum'})
+        if res[min_col].max() > 6000:
+            res = df_final.groupby('NAVN', as_index=False).agg({tot: 'max', suc: 'max', min_col: 'max'})
+        
+        pct = (res[suc] / res[tot] * 100).fillna(0)
         if visning == "Pr. 90":
-            df_group['VAL'] = np.where(df_group[min_col] > 0, (df_group[tot_col] / df_group[min_col] * 90), 0)
-            df_group['LABEL'] = df_group.apply(lambda r: f"{r['VAL']:.2f} ({int(r['PCT'])}%)", axis=1)
+            res['VAL'] = (res[tot] / res[min_col] * 90).replace([np.inf, -np.inf], 0).fillna(0)
+            res['LABEL'] = [f"{v:.2f} ({int(p)}%)" for v, p in zip(res['VAL'], pct)]
         else:
-            df_group['VAL'] = df_group[tot_col]
-            df_group['LABEL'] = df_group.apply(lambda r: f"{int(r['VAL'])} ({int(r['PCT'])}%)", axis=1)
+            res['VAL'] = res[tot]
+            res['LABEL'] = [f"{int(v)} ({int(p)}%)" for v, p in zip(res['VAL'], pct)]
 
-    df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
+    df_plot = res[res['VAL'] > 0].sort_values('VAL', ascending=False)
 
-    # --- 5. GRAF ---
-    calc_height = max(400, (len(df_plot) * 32) + 60)
-    bar_color = '#df003b' if visning == "Total" else '#333'
+    # --- 6. RENDER CUSTOM BARER (HTML) ---
+    st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
     
-    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
-    fig.update_traces(marker_color=bar_color, textposition='outside', cliponaxis=False, textfont_size=12)
-    fig.update_layout(
-        height=calc_height,
-        margin=dict(l=0, r=60, t=10, b=10),
-        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
-        yaxis=dict(tickfont_size=12, title="", automargin=True),
-        plot_bgcolor='white',
-        paper_bgcolor='white'
-    )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    max_val = max(df_plot['VAL'].max(), 1) # Undgå division med 0
+    # Skalaen går til 100 eller max_val
+    skala = max(100, max_val)
+
+    html_stats = '<div style="background:white; padding:15px; border:1px solid #eee; border-radius:4px;">'
+    html_stats += f'<div style="margin-bottom:15px; font-weight:700; font-size:14px; text-transform:uppercase; color:#333; border-bottom:2px solid #df003b; padding-bottom:5px;">{valgt_kat} ({visning})</div>'
+    
+    for _, r in df_plot.iterrows():
+        width = (r['VAL'] / skala) * 100
+        html_stats += f"""
+            <div class="stat-row">
+                <div class="stat-name">{r['NAVN']}</div>
+                <div class="stat-bar-container">
+                    <div class="stat-bar-fill" style="width: {width}%;"></div>
+                </div>
+                <div class="stat-value">{r['LABEL']}</div>
+            </div>
+        """
+    html_stats += "</div>"
+    
+    st.write(html_stats, unsafe_allow_html=True)
