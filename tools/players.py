@@ -45,7 +45,6 @@ def vis_side(df_spillere):
     # 2. BRANDING
     st.markdown(f"""<div style="background-color:#df003b; padding:10px; border-radius:4px; margin-bottom:20px;">
         <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TRUPOVERSIGT</h3>
-        <p style="color:white; margin:0; text-align:center; font-size:12px; opacity:0.8;">Hvidovre IF | {SEASONNAME}</p>
     </div>""", unsafe_allow_html=True)
 
     # 3. DATA
