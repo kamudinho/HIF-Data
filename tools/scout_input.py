@@ -7,7 +7,7 @@ import uuid
 
 # --- KONFIGURATION OG ADGANG ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO = "Kamudinho/HIF-data"
+REPO = "Kamudinho/HIF-data/data/"
 FILE_PATH = "scouting_db.csv"
 
 POS_MAP = {
