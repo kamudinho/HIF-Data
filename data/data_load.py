@@ -134,6 +134,7 @@ def load_all_data():
 
             q_events = """
                 SELECT 
+                    c. MATCH_WYID,
                     c.possessionstartlocationx AS LOCATIONX,
                     c.possessionstartlocationy AS LOCATIONY,
                     c.possessionendlocationx AS ENDLOCATIONX, 
