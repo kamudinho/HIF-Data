@@ -93,29 +93,44 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([5, 1], gap="medium")
 
     with col_menu:
-        # --- HTML TABEL TIL POPOVER ---
+        # --- HTML TABEL TIL POPOVER (RETTET) ---
         with st.popover("Vis Kontrakter", use_container_width=True):
-            html = '<table class="squad-tabel"><tr><th>Spiller</th><th style="text-align:right;">Udløb</th></tr>'
-            
-            # Sorter efter navn for overblik
+            # Vi bygger rækkerne først som en samlet streng
+            tabel_rows = ""
             for _, r in df_squad.sort_values('NAVN').iterrows():
-                # Farvelogik magen til players.py
                 bg = "transparent"
                 days = r.get('DAYS_LEFT', 999)
-                if str(r.get('PRIOR', '')).upper() == 'L': bg = leje_gra
+                if str(r.get('PRIOR', '')).upper() == 'L': 
+                    bg = leje_gra
                 elif pd.notna(days):
                     if days < 183: bg = rod_udlob
                     elif days <= 365: bg = gul_udlob
                 
                 kontrakt_str = r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"
-                html += f'''
-                    <tr style="background-color:{bg};">
-                        <td style="font-weight:600;">{r['NAVN']}</td>
-                        <td style="text-align:right;">{kontrakt_str}</td>
+                
+                tabel_rows += f'''
+                    <tr style="background-color:{bg}; border-bottom: 1px solid #f2f2f2;">
+                        <td style="padding: 8px 10px; font-weight:600; color: #222;">{r['NAVN']}</td>
+                        <td style="padding: 8px 10px; text-align:right; color: #222;">{kontrakt_str}</td>
                     </tr>
                 '''
-            html += '</table>'
-            st.markdown(html, unsafe_allow_html=True)
+
+            # Saml det hele og send til markdown
+            fuld_tabel_html = f'''
+                <table style="width:100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #fafafa; border-bottom: 2px solid {hif_rod};">
+                            <th style="padding: 8px 10px; text-align: left; color: #888; font-size: 10px; text-transform: uppercase;">Spiller</th>
+                            <th style="padding: 8px 10px; text-align: right; color: #888; font-size: 10px; text-transform: uppercase;">Udløb</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tabel_rows}
+                    </tbody>
+                </table>
+            '''
+            
+            st.markdown(fuld_tabel_html, unsafe_allow_html=True)
         
         st.write("---")
         formations = ["3-4-3", "4-3-3", "3-5-2"]
