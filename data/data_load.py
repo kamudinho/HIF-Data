@@ -132,11 +132,12 @@ def load_all_data():
             """
             df_playerstats = conn.query(q_playerstats)
 
-            # F: EVENTS (Filtreret til Heatmap)
             q_events = """
                 SELECT 
                     c.possessionstartlocationx AS LOCATIONX,
                     c.possessionstartlocationy AS LOCATIONY,
+                    c.possessionendlocationx AS ENDLOCATIONX, 
+                    c.possessionendlocationy AS ENDLOCATIONY, 
                     c.primarytype AS PRIMARYTYPE,
                     e.TEAM_WYID,
                     m.DATE
