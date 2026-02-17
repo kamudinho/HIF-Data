@@ -7,7 +7,7 @@ from datetime import datetime
 from io import StringIO
 from data.data_load import write_log
 
-# --- KONFIGURATION ---
+# --- GITHUB KONFIGURATION ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
@@ -48,26 +48,31 @@ def vis_side(df_players, df_playerstats):
     
     logged_in_user = st.session_state.get("user", "Ukendt").upper()
     
-    # --- 1. BYG DEN STORE SPILLERLISTE (Kombinerer 3 kilder) ---
-    # Kilde A: WyScout Stats (Snowflake)
+    # --- 1. BYG OPSLAGSTABEL FRA ALLE KILDER ---
+    # A: Fra Snowflake Playerstats
     if df_playerstats is not None:
-        df_playerstats['FULL_NAME'] = df_playerstats['FIRSTNAME'] + " " + df_playerstats['LASTNAME']
-        stats_names = df_playerstats[['FULL_NAME', 'PLAYER_WYID', 'TEAMNAME']].rename(columns={'FULL_NAME': 'NAVN', 'TEAMNAME': 'HOLD'})
+        df_playerstats['NAVN_FULL'] = df_playerstats['FIRSTNAME'] + " " + df_playerstats['LASTNAME']
+        # Vi mapper TEAMNAME til HOLD og ROLECODE3 til POS
+        source_stats = df_playerstats[['NAVN_FULL', 'PLAYER_WYID', 'TEAMNAME', 'ROLECODE3']].rename(
+            columns={'NAVN_FULL': 'NAVN', 'TEAMNAME': 'HOLD', 'ROLECODE3': 'POS'}
+        )
     else:
-        stats_names = pd.DataFrame(columns=['NAVN', 'PLAYER_WYID', 'HOLD'])
+        source_stats = pd.DataFrame()
 
-    # Kilde B: Lokal players.csv
-    local_names = df_players[['NAVN', 'PLAYER_WYID', 'HOLD']] if df_players is not None else pd.DataFrame()
+    # B: Fra lokal players.csv (Truppen)
+    source_local = df_players[['NAVN', 'PLAYER_WYID', 'HOLD', 'POS']] if df_players is not None else pd.DataFrame()
 
-    # Kilde C: Scouting DB
+    # C: Fra eksisterende scouting database
     df_scouting_all = get_all_scouted_players()
-    scout_names = df_scouting_all[['Navn', 'PLAYER_WYID', 'Klub']].rename(columns={'Navn': 'NAVN', 'Klub': 'HOLD'}) if not df_scouting_all.empty else pd.DataFrame()
+    source_scout = df_scouting_all[['Navn', 'PLAYER_WYID', 'Klub', 'Position']].rename(
+        columns={'Navn': 'NAVN', 'Klub': 'HOLD', 'Position': 'POS'}
+    ) if not df_scouting_all.empty else pd.DataFrame()
 
-    # Samling af alle unikke navne
-    combined_df = pd.concat([stats_names, local_names, scout_names], ignore_index=True).drop_duplicates(subset=['NAVN'])
-    all_names = sorted(combined_df['NAVN'].dropna().unique().tolist())
+    # Kombiner alt til én stor tabel til dropdown
+    lookup_df = pd.concat([source_stats, source_local, source_scout], ignore_index=True).drop_duplicates(subset=['NAVN'])
+    all_names = sorted(lookup_df['NAVN'].dropna().unique().tolist())
 
-    # --- 2. LAYOUT: RADIO & TOP-LINJE ---
+    # --- 2. LAYOUT: TOP-LINJEN ---
     kilde = st.radio("Metode", ["Vælg eksisterende", "Opret ny"], horizontal=True, label_visibility="collapsed")
 
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
@@ -82,15 +87,10 @@ def vis_side(df_players, df_playerstats):
             valgt_navn = st.selectbox("Vælg spiller", options=[""] + all_names)
             if valgt_navn:
                 navn_endelig = valgt_navn
-                # Find ID og Klub fra kombineret liste
-                match = combined_df[combined_df['NAVN'] == valgt_navn].iloc[0]
+                match = lookup_df[lookup_df['NAVN'] == valgt_navn].iloc[0]
                 p_id = str(match.get('PLAYER_WYID', '0'))
                 klub_val = str(match.get('HOLD', ''))
-                
-                # Find Position (Tjekker ROLECODE3 i df_players først, ellers POS)
-                if df_players is not None and valgt_navn in df_players['NAVN'].values:
-                    p_info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
-                    pos_val = p_info.get('ROLECODE3', p_info.get('POS', ''))
+                pos_val = str(match.get('POS', ''))
         else:
             navn_endelig = st.text_input("Navn på ny spiller")
 
@@ -99,13 +99,13 @@ def vis_side(df_players, df_playerstats):
     with c3:
         klub_input = st.text_input("Klub", value=klub_val)
     with c4:
+        # Scout feltet er låst og autogenereret fra login
         st.text_input("Scout", value=logged_in_user, disabled=True)
 
-    # Vis WyID under dropdown
     if navn_endelig and kilde == "Vælg eksisterende":
         st.caption(f"WyID: {p_id}")
 
-    # --- 3. FORMULAR ---
+    # --- 3. RATINGS FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         col1, col2, col3, col4 = st.columns(4)
@@ -150,3 +150,5 @@ def vis_side(df_players, df_playerstats):
                     write_log("Oprettede scoutrapport", target=navn_endelig)
                     st.success(f"Rapport gemt!")
                     st.rerun()
+            else:
+                st.error("Navn mangler!")
