@@ -90,16 +90,25 @@ def vis_side(df_team_matches, hold_map, df_events):
                         cmap='Reds', alpha=0.5, zorder=1, clip=((0, 100), (0, 100))
                     )
 
-                # B: PILE (Afleveringer)
+                # B: PILE (Afleveringer) - SIKKER VERSION
                 if visningstype in ["Afleveringer (Pile)", "Alt (Kombineret)"]:
                     mask_pass = df_hold['PRIMARYTYPE'].fillna('').str.contains('pass', case=False)
-                    df_passes = df_hold[mask_pass].dropna(subset=['ENDLOCATIONX', 'ENDLOCATIONY'])
-                    if not df_passes.empty:
-                        pitch.arrows(
-                            df_passes['LOCATIONX'].tail(50), df_passes['LOCATIONY'].tail(50),
-                            df_passes['ENDLOCATIONX'].tail(50), df_passes['ENDLOCATIONY'].tail(50),
-                            width=2, headwidth=3, headlength=3, color='#1a1a1a', alpha=0.3, ax=ax, zorder=2
-                        )
+                    
+                    # Vi finder ud af, hvad slut-kolonnerne faktisk hedder i din data
+                    cols = df_hold.columns.tolist()
+                    end_x = next((c for c in cols if 'ENDLOCATIONX' in c.upper()), None)
+                    end_y = next((c for c in cols if 'ENDLOCATIONY' in c.upper()), None)
+
+                    if end_x and end_y:
+                        df_passes = df_hold[mask_pass].dropna(subset=[end_x, end_y])
+                        if not df_passes.empty:
+                            pitch.arrows(
+                                df_passes['LOCATIONX'].tail(50), df_passes['LOCATIONY'].tail(50),
+                                df_passes[end_x].tail(50), df_passes[end_y].tail(50),
+                                width=2, headwidth=3, headlength=3, color='#1a1a1a', alpha=0.3, ax=ax, zorder=2
+                            )
+                    else:
+                        st.warning(f"Slut-koordinater ikke fundet. Tilgængelige kolonner: {cols}")
 
                 # C: SKUD (Prikker)
                 if visningstype in ["Skud (Prikker)", "Alt (Kombineret)"]:
