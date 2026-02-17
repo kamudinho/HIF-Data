@@ -93,10 +93,15 @@ def load_all_data():
                     AND m.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME = '{SEASONNAME}')
                 """,
                 "playerstats": f"""
-                    SELECT s.*, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME
+                    SELECT DISTINCT 
+                        s.*, 
+                        p.FIRSTNAME, 
+                        p.LASTNAME, 
+                        t.TEAMNAME, 
+                        se.SEASONNAME
                     FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                     JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                    JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
+                    JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAMID = t.TEAM_WYID  -- Retter S.TEAM_WYID til S.TEAMID
                     JOIN AXIS.WYSCOUT_SEASONS se ON s.SEASON_WYID = se.SEASON_WYID
                     WHERE se.SEASONNAME = '{SEASONNAME}'
                     AND s.COMPETITION_WYID IN {comp_filter}
