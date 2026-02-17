@@ -130,9 +130,6 @@ def vis_side(df_spillere):
         """
 
     html += "</table></div>"
-    
-    # RENDER TABELLEN SOM HTML
-    st.markdown(html, unsafe_allow_html=True)
 
     # --- 6. STATISTIK I BUNDEN ---
     st.markdown("<br>", unsafe_allow_html=True)
