@@ -54,7 +54,7 @@ def vis_side():
             valgt = st.selectbox("Vælg tabel for at se struktur:", table_list)
             if st.button(f"Inspicér {valgt}"):
                 df = pd.read_sql(f"SELECT * FROM AXIS.{valgt} LIMIT 100", conn)
-                st.subheader(f"Top 10 rækker fra {valgt}")
+                st.subheader(f"Top 100 rækker fra {valgt}")
                 st.dataframe(df)
                 
                 st.subheader("Kolonne-liste (Til SQL Queries)")
