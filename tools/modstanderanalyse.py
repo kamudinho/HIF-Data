@@ -17,7 +17,7 @@ def vis_side(df_team_matches, hold_map, df_events):
             /* Fjern padding i toppen af Streamlit columns */
             div[data-testid="stHorizontalBlock"] {
                 gap: 0.3rem !important;
-                margin-top: -30px !important;
+                margin-top: 50px !important;
             }
             .stMetric { 
                 background-color: #ffffff; padding: 8px; border-radius: 8px; 
@@ -25,7 +25,7 @@ def vis_side(df_team_matches, hold_map, df_events):
             }
             [data-testid="stMetricValue"] { font-size: 16px !important; }
             /* Gør radio buttons og selectboxes mere kompakte */
-            div[role="radiogroup"] { margin-top: -10px; }
+            div[role="radiogroup"] { margin-top: 50px; }
         </style>
     """, unsafe_allow_html=True)
 
