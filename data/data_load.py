@@ -158,7 +158,7 @@ def load_all_data():
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
                 -- Vi henter kun de typer, der er relevante for banen for at spare hukommelse
-                WHERE c.primarytype IN ('pass', 'shot', 'touch', 'throw_in', 'interception')
+                WHERE c.primarytype IN ('pass', 'shot', 'touch', 'throw_in')
             """
             df_events = conn.query(q_events)
             
