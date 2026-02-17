@@ -45,13 +45,11 @@ def vis_metrikker(row):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, fs_df):
-    # Sikr os at s_df har de rigtige kolonnenavne (UPPERCASE)
     if s_df is not None and not s_df.empty:
         s_df.columns = [c.upper() for c in s_df.columns]
         
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     
-    # Hent alle historiske rapporter fra CSV
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     if historik.empty:
         st.error("Ingen historiske data fundet.")
@@ -88,43 +86,27 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
     with t4:
         st.markdown("### Sæsonstatistik")
-        
         if s_df is not None and not s_df.empty and 'PLAYER_WYID' in s_df.columns:
-            # 1. Filtrér på spilleren
             df_stats = s_df[s_df['PLAYER_WYID'].astype(str) == clean_p_id].copy()
-            
             if not df_stats.empty:
-                # 2. Fjern dubletter (Vis kun én række per Sæson + Hold kombination)
-                # Vi bruger de kolonner der definerer en unik historisk post
                 cols_to_check = ['SEASONNAME', 'TEAMNAME', 'MATCHES']
                 existing_check = [c for c in cols_to_check if c in df_stats.columns]
                 df_stats = df_stats.drop_duplicates(subset=existing_check)
-                
-                # 3. Sortér så nyeste sæson er øverst
-                # Vi antager SEASONNAME formatet "2025/2026" virker med almindelig sortering
                 if 'SEASONNAME' in df_stats.columns:
                     df_stats = df_stats.sort_values('SEASONNAME', ascending=False)
                 
-                # 4. Vælg kolonner og formatér
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
                 existing_cols = [c for c in cols_to_show if c in df_stats.columns]
-                
                 if 'XG' in df_stats.columns:
                     df_stats['XG'] = df_stats['XG'].fillna(0).round(2)
                 
-                # 5. Vis tabellen
-                st.dataframe(
-                    df_stats[existing_cols], 
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                st.dataframe(df_stats[existing_cols], use_container_width=True, hide_index=True)
             else:
                 st.info(f"Ingen Snowflake-stats fundet for ID: {clean_p_id}")
         else:
             st.warning("Dataforbindelse til Snowflake-statistik ikke fundet.")
 
     with t5:
-        # DIT ORIGINALE RADAR DESIGN
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
@@ -147,12 +129,10 @@ def vis_profil(p_data, full_df, s_df, fs_df):
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df):
-    # Standardisering af kolonnenavne til UPPERCASE
     for d in [scout_df, spillere_df, stats_df]:
         if d is not None and not d.empty:
             d.columns = [c.upper() for c in d.columns]
     
-    # ID Rensning (Sikrer at vi kan merge på tværs af kilder)
     def clean(df):
         if df is not None and not df.empty and 'PLAYER_WYID' in df.columns:
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -162,7 +142,6 @@ def vis_side(scout_df, spillere_df, stats_df):
     spillere_df = clean(spillere_df)
     stats_df = clean(stats_df)
 
-    # Merge scouting rapporter med metadata fra players.csv
     df = scout_df.copy()
     if spillere_df is not None and not spillere_df.empty:
         df = df.merge(
@@ -176,7 +155,6 @@ def vis_side(scout_df, spillere_df, stats_df):
     
     st.subheader("Scouting Database")
     
-    # Oversigtstabellen: Vis kun den nyeste rapport pr. spiller
     f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
     
     search = st.text_input("Søg...", placeholder="Navn eller klub...", label_visibility="collapsed")
@@ -187,9 +165,19 @@ def vis_side(scout_df, spillere_df, stats_df):
     disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
     disp.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'VURDERING', 'DATO', 'SCOUT']
     
-    event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    # --- BEREGN HØJDE FOR AT UNDGÅ INDRE SCROLL ---
+    # 35px pr række + 40px til header
+    dynamic_height = (len(disp) + 1) * 35 + 40
+    
+    event = st.dataframe(
+        disp, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row",
+        height=dynamic_height # Tvinger boksen til at vise alle spillere
+    )
 
     if len(event.selection.rows) > 0:
         p_row = f_df.iloc[event.selection.rows[0]]
-        # Vi sender stats_df med ind i profil-dialogen
         vis_profil(p_row, df, stats_df, pd.DataFrame())
