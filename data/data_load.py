@@ -182,3 +182,42 @@ def load_all_data():
         "teams_csv": df_teams_csv,
         "players_all": df_players_gh
     }
+
+def write_log(action, target="System"):
+    """Logger handlinger til GitHub data/action_log.csv"""
+    try:
+        import requests
+        import base64
+        from datetime import datetime
+        from io import StringIO
+        
+        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+        REPO = "Kamudinho/HIF-data"
+        FILE_PATH = "data/action_log.csv"
+        
+        user = st.session_state.get("user", "ukendt")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        url = f"https://api.github.com/repos/Kamudinho/HIF-data/contents/{FILE_PATH}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        
+        r = requests.get(url, headers=headers)
+        new_entry = pd.DataFrame([[timestamp, user, action, target]], columns=["Dato", "Bruger", "Handling", "Mål"])
+        
+        if r.status_code == 200:
+            content = r.json()
+            old_log = pd.read_csv(StringIO(base64.b64decode(content['content']).decode('utf-8')))
+            updated_log = pd.concat([old_log, new_entry], ignore_index=True)
+            sha = content['sha']
+        else:
+            updated_log = new_entry
+            sha = None
+
+        payload = {
+            "message": f"Log: {user} - {action}",
+            "content": base64.b64encode(updated_log.to_csv(index=False).encode('utf-8')).decode('utf-8'),
+            "sha": sha if sha else ""
+        }
+        requests.put(url, json=payload, headers=headers)
+    except:
+        pass # Sikrer at appen ikke crasher hvis loggen fejler
