@@ -2,6 +2,10 @@
 import streamlit as st
 import pandas as pd
 import uuid
+import requests
+import base64
+from io import StringIO
+from datetime import datetime
 import snowflake.connector
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -44,13 +48,11 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # --- 0. INDLÆS KONFIGURATION ---
     try:
         from data.season_show import SEASONNAME, TEAM_WYID
     except ImportError:
         SEASONNAME, TEAM_WYID = "2024/2025", 38331
 
-    # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     
     def read_gh(file):
@@ -66,13 +68,11 @@ def load_all_data():
     df_scout_gh = read_gh("scouting_db.csv")
     df_teams_csv = read_gh("teams.csv")
 
-    # --- 2. SNOWFLAKE SETUP ---
     conn = _get_snowflake_conn()
     df_shotevents = pd.DataFrame()
-    df_season_stats = pd.DataFrame()
     df_team_matches = pd.DataFrame()
     df_playerstats = pd.DataFrame()
-    df_events = pd.DataFrame() # Sørg for at denne står her!
+    df_events = pd.DataFrame()
     hold_map = {}
 
     if conn:
@@ -85,7 +85,7 @@ def load_all_data():
                     tid = str(int(row['TEAM_WYID']))
                     hold_map[tid] = str(row['TEAMNAME']).strip()
             
-            # B: SHOT EVENTS (Specifikke skud detaljer)
+            # B: SHOT EVENTS
             q_shots = """
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
                        c.PRIMARYTYPE, c.MATCHPERIOD, c.MATCH_WYID, s.SHOTBODYPART, s.SHOTISGOAL, 
@@ -97,20 +97,7 @@ def load_all_data():
             """
             df_shotevents = conn.query(q_shots)
 
-            # C: SEASON STATS
-            q_season_stats = """
-                SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
-                                p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
-                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS
-                FROM AXIS.WYSCOUT_PLAYERCAREER p
-                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
-                     AND p.SEASON_WYID = adv.SEASON_WYID
-                JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
-                JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
-            """
-            df_season_stats = conn.query(q_season_stats)
-
-            # D: TEAM MATCHES
+            # C: TEAM MATCHES
             q_teammatches = """
                 SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
                        g.SHOTS, g.GOALS, g.XG, p.POSSESSIONPERCENT
@@ -121,7 +108,7 @@ def load_all_data():
             """
             df_team_matches = conn.query(q_teammatches)
 
-            # E: PLAYERSTATS
+            # D: PLAYERSTATS
             q_playerstats = """
                 SELECT s.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, t.TEAMNAME, se.SEASONNAME,  
                        s.MATCHES, s.MINUTESONFIELD, s.GOALS, s.ASSISTS, s.SHOTS, s.XGSHOT, 
@@ -133,16 +120,11 @@ def load_all_data():
             """
             df_playerstats = conn.query(q_playerstats)
 
+            # E: EVENTS
             q_events = """
-                SELECT 
-                    c. MATCH_WYID,
-                    c.possessionstartlocationx AS LOCATIONX,
-                    c.possessionstartlocationy AS LOCATIONY,
-                    c.possessionendlocationx AS ENDLOCATIONX, 
-                    c.possessionendlocationy AS ENDLOCATIONY, 
-                    c.primarytype AS PRIMARYTYPE,
-                    e.TEAM_WYID,
-                    m.DATE
+                SELECT c.MATCH_WYID, c.possessionstartlocationx AS LOCATIONX, c.possessionstartlocationy AS LOCATIONY,
+                       c.possessionendlocationx AS ENDLOCATIONX, c.possessionendlocationy AS ENDLOCATIONY, 
+                       c.primarytype AS PRIMARYTYPE, e.TEAM_WYID, m.DATE
                 FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                 JOIN AXIS.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
@@ -154,52 +136,30 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
-    # Standardisering til UPPERCASE
-    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats, df_events]:
+    for df in [df_shotevents, df_team_matches, df_playerstats, df_events]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # --- 3. FILTRERING ---
-    df_hif_stats = pd.DataFrame()
-    if df_playerstats is not None and not df_playerstats.empty:
-        df_playerstats['TEAM_WYID'] = pd.to_numeric(df_playerstats['TEAM_WYID'], errors='coerce')
-        df_playerstats['SEASONNAME'] = df_playerstats['SEASONNAME'].astype(str).str.strip()
-        
-        df_hif_stats = df_playerstats[
-            (df_playerstats['SEASONNAME'] == str(SEASONNAME).strip()) & 
-            (df_playerstats['TEAM_WYID'] == int(TEAM_WYID))
-        ].copy()
-
-    # --- 4. RETURNERING ---
     return {
         "shotevents": df_shotevents,
-        "events": df_events,         # Sikrer at modstanderanalyse får data
-        "season_stats": df_season_stats,
+        "events": df_events,
         "team_matches": df_team_matches, 
         "playerstats": df_playerstats,   
         "hold_map": hold_map,
         "players": df_players_gh,    
         "scouting": df_scout_gh,     
-        "teams_csv": df_teams_csv,
-        "players_all": df_players_gh
+        "teams_csv": df_teams_csv
     }
 
 def write_log(action, target="System"):
     """Logger handlinger til GitHub data/action_log.csv"""
     try:
-        import requests
-        import base64
-        from datetime import datetime
-        from io import StringIO
-        
         GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
         REPO = "Kamudinho/HIF-data"
         FILE_PATH = "data/action_log.csv"
-        
         user = st.session_state.get("user", "ukendt")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        url = f"https://api.github.com/repos/Kamudinho/HIF-data/contents/{FILE_PATH}"
+        url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
         r = requests.get(url, headers=headers)
@@ -221,4 +181,4 @@ def write_log(action, target="System"):
         }
         requests.put(url, json=payload, headers=headers)
     except:
-        pass # Sikrer at appen ikke crasher hvis loggen fejler
+        pass
