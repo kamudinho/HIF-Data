@@ -22,9 +22,9 @@ st.markdown("""
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
-if "logged_in" not in st.session_state: 
-    st.session_state["logged_in"] = False
-    st.session_state["user"] = None
+    if "logged_in" not in st.session_state: 
+        st.session_state["logged_in"] = False
+        st.session_state["user"] = None
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
