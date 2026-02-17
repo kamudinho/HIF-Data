@@ -116,7 +116,7 @@ def vis_side(df_team_matches, hold_map, df_events):
             st.write(f"**Konverteringsrate:** {round(rate, 1)}%")
             st.progress(min(rate/30, 1.0))
 
-        st.info(f"**Scout Note:** {valgt_navn} har en trend-score på {round(seneste_xg - avg_xg, 2)} over de sidste 3 kampe.")
+        st.info(f"**Analytiker:** {valgt_navn} har en trend-score på {round(seneste_xg - avg_xg, 2)} over de sidste 3 kampe.")
 
     # --- 6. RÅ DATA ---
     with st.expander("Se kampdata"):
