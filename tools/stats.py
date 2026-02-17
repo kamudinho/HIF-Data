@@ -131,19 +131,42 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = df_group[df_group['VAL'] > 0].sort_values(by='VAL', ascending=True)
 
-    # --- 5. GRAF ---
+    # --- 5. GRAF (Med dynamisk akse og linje) ---
     st.markdown("<div style='margin-bottom:5px;'></div>", unsafe_allow_html=True)
+    
     calc_height = max(400, (len(df_plot) * 32) + 60)
     bar_color = '#df003b' if visning == "Total" else '#333'
     
-    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
-    fig.update_traces(marker_color=bar_color, textposition='outside', cliponaxis=False, textfont_size=12)
+    fig = px.bar(
+        df_plot, 
+        x='VAL', 
+        y='NAVN', 
+        orientation='h', 
+        text='LABEL',
+        labels={'VAL': valg_label} # Viser kategorien (f.eks. 'Mål') på aksen
+    )
+
+    fig.update_traces(
+        marker_color=bar_color, 
+        textposition='outside', 
+        cliponaxis=False, 
+        textfont_size=12
+    )
+
     fig.update_layout(
         height=calc_height,
-        margin=dict(l=0, r=60, t=10, b=10),
-        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False),
+        margin=dict(l=0, r=60, t=10, b=30), # Lidt mere bund-margin til akse-titlen
+        xaxis=dict(
+            title=dict(text=valg_label, font=dict(size=12, color='#666')),
+            showgrid=True, 
+            gridcolor='#f0f0f0', 
+            showticklabels=True, # Vi slår tal til igen for at se 0-100 skalaen
+            range=[0, max(100, df_plot['VAL'].max() * 1.1)], # Går altid til mindst 100
+            dtick=25 # Laver en linje for hver 25. enhed
+        ),
         yaxis=dict(tickfont_size=12, title="", automargin=True),
         plot_bgcolor='white',
         paper_bgcolor='white'
     )
+
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
