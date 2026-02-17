@@ -43,12 +43,12 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_all_data():
-    # --- 0. INDLÆS KONFIGURATION ---
+    # --- 0. INDLÆS KONFIGURATION (TILFØJET) ---
     try:
-        from data.season_show import SEASONNAME, TEAM_WYID
+        from data.season_show import SEASONNAM, TEAM_WYID, COMPETITION_WYID
     except ImportError:
-        st.error("❌ Kunne ikke finde data/season_show.py")
-        st.stop()
+        # Fallback hvis filen ikke findes
+        SEASONNAM, TEAM_WYID, COMPETITION_WYID = "2024/2025", 38331, 3134
 
     # --- 1. GITHUB FILER ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
@@ -76,7 +76,7 @@ def load_all_data():
 
     if conn:
         try:
-            # A: HOLD NAVNE
+            # A: HOLD NAVNE (Robust loop)
             q_teams = "SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS"
             df_teams_sn = conn.query(q_teams)
             
@@ -85,6 +85,15 @@ def load_all_data():
                     tid = str(int(row['TEAM_WYID']))
                     hold_map[tid] = str(row['TEAMNAME']).strip()
             
+            # Tilføj fra GitHub CSV
+            if not df_teams_csv.empty:
+                for _, row in df_teams_csv.iterrows():
+                    try:
+                        tid = str(int(row['TEAM_WYID']))
+                        hold_map[tid] = str(row['TEAMNAME']).strip()
+                    except:
+                        continue
+
             # B: SHOT EVENTS
             q_shots = """
                 SELECT c.EVENT_WYID, c.PLAYER_WYID, c.LOCATIONX, c.LOCATIONY, c.MINUTE, c.SECOND,
@@ -96,6 +105,35 @@ def load_all_data():
                 JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
             """
             df_shotevents = conn.query(q_shots)
+
+            # C: SEASON STATS
+            q_stats = """
+                SELECT DISTINCT p.PLAYER_WYID, s.SEASONNAME, t.TEAMNAME, p.GOAL as GOALS, 
+                                p.APPEARANCES as MATCHES, p.MINUTESPLAYED as MINUTESTAGGED,
+                                adv.ASSISTS, adv.XGSHOT as XG, p.YELLOWCARD, p.REDCARDS,
+                                adv.PASSES, adv.SUCCESSFULPASSES, adv.TOUCHINBOX, adv.PROGRESSIVEPASSES
+                FROM AXIS.WYSCOUT_PLAYERCAREER p
+                JOIN AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL adv ON p.PLAYER_WYID = adv.PLAYER_WYID 
+                     AND p.SEASON_WYID = adv.SEASON_WYID
+                JOIN AXIS.WYSCOUT_SEASONS s ON p.SEASON_WYID = s.SEASON_WYID
+                JOIN AXIS.WYSCOUT_TEAMS t ON p.TEAM_WYID = t.TEAM_WYID
+                WHERE p.MINUTESPLAYED > 0
+            """
+            df_season_stats = conn.query(q_stats)
+
+            # D: TEAM MATCHES
+            q_teammatches = """
+                SELECT DISTINCT tm.MATCH_WYID, m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.DATE, 
+                       g.SHOTS, g.GOALS, g.XG, d.PPDA, p.POSSESSIONPERCENT, ps.PASSES, du.CHALLENGEINTENSITY
+                FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL g ON tm.MATCH_WYID = g.MATCH_WYID AND tm.TEAM_WYID = g.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE d ON tm.MATCH_WYID = d.MATCH_WYID AND tm.TEAM_WYID = d.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_POSESSIONS p ON tm.MATCH_WYID = p.MATCH_WYID AND tm.TEAM_WYID = p.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_PASSES ps ON tm.MATCH_WYID = ps.MATCH_WYID AND tm.TEAM_WYID = ps.TEAM_WYID
+                LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_DUELS du ON tm.MATCH_WYID = du.MATCH_WYID AND tm.TEAM_WYID = du.TEAM_WYID
+            """
+            df_team_matches = conn.query(q_teammatches)
 
             # E: PLAYERSTATS
             q_playerstats = """
@@ -115,7 +153,7 @@ def load_all_data():
                     s.SUCCESSFULPASSES,
                     s.DUELS,
                     s.DUELSWON,
-                    p.CURRENTTEAM_WYID AS TEAM_WYID
+                    s.TEAM_WYID
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                 JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
@@ -126,20 +164,27 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL fejl: {e}")
 
-    # Standardisering
-    for df in [df_shotevents, df_playerstats]:
+    # Standardisering til UPPERCASE
+    for df in [df_shotevents, df_season_stats, df_team_matches, df_playerstats]:
         if df is not None and not df.empty:
             df.columns = [str(c).upper() for c in df.columns]
 
-    # --- 3. FILTRERING ---
+    # --- 3. FILTRERING BASERET PÅ CONFIG (TILFØJET) ---
     if df_playerstats is not None and not df_playerstats.empty:
-        df_playerstats['SEASONNAME'] = df_playerstats['SEASONNAME'].astype(str).str.strip()
-        df_playerstats['TEAM_WYID'] = pd.to_numeric(df_playerstats['TEAM_WYID'], errors='coerce')
+        df_playerstats = df_playerstats[
+            (df_playerstats['SEASONNAME'] == SEASONNAM) & 
+            (df_playerstats['TEAM_WYID'] == TEAM_WYID)
+        ].copy()
 
     return {
         "shotevents": df_shotevents,
+        "season_stats": df_season_stats,
+        "team_matches": df_team_matches,
         "playerstats": df_playerstats,
         "hold_map": hold_map,
-        "players": df_players_gh,
-        "scouting": df_scout_gh
+        "players": df_players_gh,    
+        "scouting": df_scout_gh,     
+        "teams_csv": df_teams_csv,   
+        "scouting_db": df_scout_gh,  
+        "players_all": df_players_gh 
     }
