@@ -6,7 +6,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 def _get_snowflake_conn():
-    """Opretter forbindelse ved hjælp af RSA-nøgle dekodning."""
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_pem = s["private_key"]
