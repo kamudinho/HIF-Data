@@ -10,32 +10,34 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
-    # --- 1. CSS INJECTION (Synkronisering med Top 5) ---
     st.markdown("""
         <style>
-            /* Fjern standard Streamlit padding i toppen */
-            .block-container { 
-                padding-top: 0.5rem !important; 
-                max-width: 98% !important; 
+            /* 1. Fjern absolut alt luft i toppen af appen */
+            .stAppViewMain > div:nth-child(1) {
+                padding-top: 0rem !important;
             }
             
-            /* Fjern luft mellem header og knapper */
-            div[data-testid="stVerticalBlock"] > div:has(div[data-testid="stHorizontalBlock"]) {
-                margin-top: -15px !important;
+            /* 2. Nulstil containeren hvor indholdet ligger */
+            .block-container { 
+                padding-top: 1rem !important; 
+                padding-bottom: 0rem !important;
+                max-width: 98% !important; 
             }
 
-            /* Træk selve grafen op for at modvirke Plotly's default margin */
-            .stPlotlyChart { 
-                margin-top: -30px !important; 
+            /* 3. Fjern Streamlits indbyggede header-plads */
+            header {
+                visibility: hidden;
+                height: 0px;
             }
 
-            /* Justering af knapper (Pills til venstre, Segmented til højre) */
+            /* 4. Tving din røde bar helt op */
+            div[data-testid="stVerticalBlock"] > div:first-child {
+                margin-top: -20px !important;
+            }
+            
+            /* 5. Justering af knapper (SegmentedControl til højre) */
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] {
                 align-items: flex-end !important;
-            }
-            div[data-testid="stSegmentedControl"] {
-                width: fit-content !important;
-                margin-left: auto !important;
             }
         </style>
     """, unsafe_allow_html=True)
