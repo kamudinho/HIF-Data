@@ -47,7 +47,7 @@ def vis_side():
         st.divider()
 
         # 2. VIS DE 3 VIGTIGSTE TABELLER AUTOMATISK
-        vigtige_tabeller = ["WYSCOUT_COMPETITION", "WYSCOUT_PLAYERS", "WYSCOUT_TEAMS", "WYSCOUT_MATCHES"]
+        vigtige_tabeller = ["WYSCOUT_COMPETITIONS", "WYSCOUT_PLAYERS", "WYSCOUT_TEAMS", "WYSCOUT_MATCHES"]
         
         for tabel in vigtige_tabeller:
             st.write(f"### Indhold: {tabel}")
