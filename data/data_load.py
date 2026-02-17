@@ -97,7 +97,6 @@ def load_all_data():
                         s.*, 
                         p.FIRSTNAME, 
                         p.LASTNAME, 
-                        t.TEAMNAME, 
                         se.SEASONNAME
                     FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                     JOIN AXIS.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
