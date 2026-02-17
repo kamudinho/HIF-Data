@@ -100,14 +100,19 @@ def vis_side(spillere, player_stats_sn):
 
     df_plot = res[res['VAL'] > 0].sort_values('VAL', ascending=True)
 
-    # --- 6. PLOTLY GRAF (Nu med faste skalaer) ---
+   # --- 6. PLOTLY GRAF (Dynamisk skala + kategori-label) ---
     st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
     
-    # Dynamisk højde baseret på antal spillere
     h = max(400, (len(df_plot) * 30) + 50)
     
-    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL',
-                 labels={'VAL': valgt_kat, 'NAVN': ''})
+    fig = px.bar(
+        df_plot, 
+        x='VAL', 
+        y='NAVN', 
+        orientation='h', 
+        text='LABEL',
+        labels={'VAL': valgt_kat, 'NAVN': ''}
+    )
 
     fig.update_traces(
         marker_color='#df003b' if visning == "Total" else '#333',
@@ -117,15 +122,24 @@ def vis_side(spillere, player_stats_sn):
 
     fig.update_layout(
         height=h,
-        margin=dict(l=0, r=50, t=10, b=40),
+        margin=dict(l=0, r=60, t=10, b=50), # Plads til kategorien i bunden
         xaxis=dict(
-            title=f"{valgt_kat} ({visning})",
+            title=dict(
+                text=f"<b>{valgt_kat.upper()}</b> ({visning})", 
+                font=dict(size=12, color='#333')
+            ),
             showgrid=True,
             gridcolor='#f0f0f0',
-            range=[0, max(100, df_plot['VAL'].max() * 1.1)] # Linje 0-100 sikret her
+            showticklabels=True,
+            zeroline=True,
+            zerolinecolor='#ccc'
         ),
-        yaxis=dict(tickfont_size=12),
-        plot_bgcolor='white'
+        yaxis=dict(
+            tickfont=dict(size=12),
+            autorange="reversed" if len(df_plot) > 0 else True # Topscorer øverst
+        ),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
