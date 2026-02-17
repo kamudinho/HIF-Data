@@ -16,7 +16,6 @@ FILE_PATH = "data/scouting_db.csv"
 def save_to_github(new_row_df):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
         content = r.json()
@@ -27,7 +26,6 @@ def save_to_github(new_row_df):
     else:
         sha = None
         updated_csv = new_row_df.to_csv(index=False)
-
     payload = {
         "message": f"Scouting: {new_row_df['Navn'].values[0]}",
         "content": base64.b64encode(updated_csv.encode('utf-8')).decode('utf-8'),
@@ -38,40 +36,41 @@ def save_to_github(new_row_df):
 def vis_side(df_players, df_stats_all=None):
     st.write("#### Scoutrapport")
     
-    # Hent logget bruger med det samme
+    # Hent logget bruger
     logged_in_user = st.session_state.get("user", "Ukendt").upper()
-    
-    # 1. VALG AF SPILLER OG BASIS INFO
     names_system = sorted(df_players['NAVN'].dropna().unique().tolist()) if df_players is not None else []
-    
-    st.info(f"Rapport oprettes af: **{logged_in_user}**") # Viser hvem der er logget ind
 
-    c1, c2 = st.columns([2, 1])
+    # --- ÉN LINJE: VALG, POSITION, KLUB, SCOUT ---
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    
     with c1:
-        st.write("**Vælg spiller**")
-        valgt_navn = st.selectbox("Dropdown", options=["-- Opret ny --"] + names_system, label_visibility="collapsed")
+        valgt_navn = st.selectbox("**Vælg spiller**", options=["-- Opret ny --"] + names_system)
     
-    # Initialiser værdier
+    # Initialiser data baseret på valg
     p_id = f"999{datetime.now().strftime('%H%M%S')}"
-    navn_input = ""
-    klub_input = ""
-    pos_input = ""
+    klub_val = ""
+    pos_val = ""
+    navn_endelig = ""
 
-    # Hvis en spiller er valgt, hent data
     if valgt_navn != "-- Opret ny --":
         info = df_players[df_players['NAVN'] == valgt_navn].iloc[0]
         p_id = str(info.get('PLAYER_WYID', '0'))
-        navn_input = valgt_navn
-        klub_input = str(info.get('HOLD', ''))
-        pos_input = str(info.get('POS', ''))
+        navn_endelig = valgt_navn
+        klub_val = str(info.get('HOLD', ''))
+        pos_val = str(info.get('POS', ''))
     
-    # Input felter til rettelser eller ny spiller
-    col_n, col_k, col_p = st.columns([2, 1, 1])
-    navn = col_n.text_input("Navn", value=navn_input)
-    klub = col_k.text_input("Klub", value=klub_input)
-    pos_val = col_p.text_input("Position", value=pos_input)
+    with c2:
+        pos_input = st.text_input("Position", value=pos_val)
+    with c3:
+        klub_input = st.text_input("Klub", value=klub_val)
+    with c4:
+        st.text_input("Scout (Auto)", value=logged_in_user, disabled=True)
 
-    # 2. FORMULAR
+    # Hvis det er en ny spiller, skal vi bruge et navn-felt (vises kun ved "Opret ny")
+    if valgt_navn == "-- Opret ny --":
+        navn_endelig = st.text_input("Indtast navn på ny spiller")
+
+    # --- FORMULAR TIL RATINGS ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Parametre (1-6)**")
         col1, col2, col3, col4 = st.columns(4)
@@ -96,14 +95,13 @@ def vis_side(df_players, df_stats_all=None):
         vurdering = st.text_area("Samlet vurdering")
 
         if st.form_submit_button("Gem rapport", use_container_width=True):
-            if navn and navn != "":
+            if navn_endelig:
                 avg = round(sum([beslut, fart, aggres, att, udhold, leder, teknik, intel]) / 8, 1)
-                
                 ny_df = pd.DataFrame([[
-                    p_id, datetime.now().strftime("%Y-%m-%d"), navn, klub, pos_val, 
+                    p_id, datetime.now().strftime("%Y-%m-%d"), navn_endelig, klub_input, pos_input, 
                     avg, status, potentiale, styrker, udvikling, vurdering,
                     beslut, fart, aggres, att, udhold, leder, teknik, intel,
-                    logged_in_user.lower() # Gemmer som små bogstaver i CSV
+                    logged_in_user.lower()
                 ]], columns=[
                     "PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", 
                     "Status", "Potentiale", "Styrker", "Udvikling", "Vurdering", 
@@ -113,8 +111,8 @@ def vis_side(df_players, df_stats_all=None):
                 ])
                 
                 if save_to_github(ny_df) in [200, 201]:
-                    write_log("Oprettede scoutrapport", target=navn)
-                    st.success(f"Rapport gemt af {logged_in_user}!")
+                    write_log("Oprettede scoutrapport", target=navn_endelig)
+                    st.success(f"Rapport gemt!")
                     st.rerun()
             else:
-                st.error("Indtast venligst et navn")
+                st.error("Navn mangler!")
