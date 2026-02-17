@@ -110,25 +110,35 @@ def vis_side(df):
     # --- 5. HOVEDLAYOUT (Bred bane, smal menu) ---
     col_pitch, col_menu = st.columns([7, 1])
 
-    with col_menu:
-        # Popover "Trup"
-        with st.popover("Trup", use_container_width=True):
-            # Tabel-generering
-            tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
-                <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
-                    <th style="text-align:left; padding:8px;">Spiller</th>
-                    <th style="text-align:right; padding:8px;">Udløb</th>
-                </tr>'''
-            for _, r in df_squad.sort_values('NAVN').iterrows():
-                bg = get_status_color(r)
-                tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
-                    <td style="padding:8px; font-weight:600;">{r['NAVN']}</td>
-                    <td style="padding:8px; text-align:right;">{r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"}</td>
-                </tr>'''
-            tabel_html += "</table>"
-            st.components.v1.html(tabel_html, height=400, scrolling=True)
+   with col_pitch:
+        # 1. Pitch - Vi fjerner 'pad' (standard er 4)
+        pitch = Pitch(
+            pitch_type='statsbomb', 
+            pitch_color='#ffffff', 
+            line_color='#333', 
+            linewidth=1,
+            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0 # Tvinger linjerne til kanten
+        )
+        
+        # 2. Figure - constrained_layout hjælper med at udfylde pladsen
+        fig, ax = pitch.draw(figsize=(13, 8), constrained_layout=True)
+        
+        # 3. Den vigtigste linje: Fjern alt resterende hvidt omkring banen
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
-        st.write("---")
+        # Legend - Flyttet helt op i hjørnet (nu hvor der ikke er margin)
+        # Vi bruger 'va=bottom' og y=pitch_height for at flugte med øverste linje
+        ax.text(1, 79, " < 6 mdr ", size=8, fontweight='bold', va='bottom', 
+                bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(12, 79, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', 
+                bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(25, 79, " Leje ", size=8, fontweight='bold', va='bottom', 
+                bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+
+        # ... (Din spiller-rendering her) ...
+
+        # 4. Vis billedet - Streamlit vil nu strække det helt ud til kanterne
+        st.pyplot(fig, use_container_width=True)
         
         # Formation Pills
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
