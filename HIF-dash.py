@@ -101,7 +101,7 @@ try:
         ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
     elif sel == "Database":
         import tools.scout_db as sdb
-        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
+        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], dp["player_career"])
     elif sel == "Scoutrapport":
         import tools.scout_input as si
         si.vis_side(dp)
