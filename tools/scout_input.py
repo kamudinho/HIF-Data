@@ -18,14 +18,12 @@ def vis_side(dp):
     hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
-    # 2. Forbered spillerlisten med striks filtrering
+    # 2. Forbered spillerlisten
     if not df_ps.empty:
-        # A: Filtrér spillere baseret på COMPETITION_WYID fra season_show.py
-        # Vi sikrer os at vi kun viser spillere fra de relevante turneringer
+        # Filtrér på turneringer (hvis kolonnen findes)
         if 'COMPETITION_WYID' in df_ps.columns:
             df_ps = df_ps[df_ps['COMPETITION_WYID'].isin(COMPETITION_WYID)]
 
-        # B: Rens navne-data
         for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
             df_ps[col] = df_ps[col].astype(str).replace(['None', 'nan', '<NA>'], '')
 
@@ -53,37 +51,43 @@ def vis_side(dp):
         m_df = pd.DataFrame(columns=["Navn", "ID", "Klub", "Pos"])
 
     # 3. Logik for valg
-    metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
-    
     if 'scout_temp_data' not in st.session_state:
         st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
 
+    metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
+    
     if metode == "Søg i systemet":
-        def on_player_change():
-            sel = st.session_state.player_choice
-            if sel:
-                row = m_df[m_df['Navn'] == sel].iloc[0]
-                st.session_state.scout_temp_data = {
-                    "n": row['Navn'], "id": row['ID'], "pos": row['Pos'], "klub": row['Klub']
-                }
-            else:
-                st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
-
-        st.selectbox("Find spiller", options=[""] + m_df['Navn'].tolist(), key="player_choice", on_change=on_player_change)
+        # Vi finder indexet for den nuværende valgte spiller for at undgå fejl
+        options = [""] + m_df['Navn'].tolist()
         
-        # Diskret tekst med ID under dropdown (med lidt ekstra luft/padding)
+        selected = st.selectbox(
+            "Find spiller", 
+            options=options,
+            key="player_choice"
+        )
+        
+        # Opdater data med det samme uden at bruge en separat callback-funktion (undgår AttributeError)
+        if selected:
+            row = m_df[m_df['Navn'] == selected].iloc[0]
+            st.session_state.scout_temp_data = {
+                "n": row['Navn'], "id": row['ID'], "pos": row['Pos'], "klub": row['Klub']
+            }
+        
+        # Diskret tekst med ID under dropdown (med margin-bottom for luft)
         if st.session_state.scout_temp_data["id"]:
             st.markdown(f"""
-                <p style='color: gray; font-size: 11px; margin-top: -10px; padding-left: 2px;'>
-                    System ID: {st.session_state.scout_temp_data['id']}
-                </p>
+                <div style='margin-top: 5px; margin-bottom: 15px;'>
+                    <span style='color: gray; font-size: 11px; padding-left: 2px;'>
+                        System ID: {st.session_state.scout_temp_data['id']}
+                    </span>
+                </div>
                 """, unsafe_allow_html=True)
             
     else:
         c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
         
-        # Generér automatisk ID hvis det mangler for manuel oprettelse
+        # Auto-generér ID til manuel oprettelse
         if not st.session_state.scout_temp_data["id"] or len(st.session_state.scout_temp_data["id"]) > 10:
             st.session_state.scout_temp_data["id"] = str(uuid.uuid4().int)[:6]
             
