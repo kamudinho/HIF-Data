@@ -133,7 +133,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 # Valgfri: Fjern også rækker hvor alle tre værdier er 0
                 df_p = df_p[~((df_p['KAMPE'] == 0) & (df_p['MIN'] == 0) & (df_p['MÅL'] == 0))]
 
-                vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'GULE', 'RØDE']
+                vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
                 existing_cols = [c for c in vis_cols if c in df_p.columns]
                 
                 if not df_p.empty:
