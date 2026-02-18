@@ -109,10 +109,15 @@ try:
         si.vis_side(dp)
     elif sel == "Sammenligning":
         import tools.comparison as comp
+        import importlib
+        importlib.reload(comp) # Sikrer at den nye kode med de 5 parametre indlæses
         comp.vis_side(
-        spillere=dp["players"], 
-        player_events=dp["playerstats"], 
-        df_scout=dp["scouting"])
+            spillere=dp["players"], 
+            playerstats=dp["playerstats"], # Ændret fra player_events
+            df_scout=dp["scouting"],
+            player_seasons=dp["player_seasons"], # Ny tilføjelse
+            season_filter=dp["season_filter"]    # Ny tilføjelse fra din data_package
+        )
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
