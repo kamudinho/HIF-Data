@@ -94,6 +94,11 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
+    st.write("DEBUG: Antal rækker fundet:", len(df_career))
+    if not df_career.empty:
+        st.write("DEBUG: Kolonner i tabellen:", df_career.columns.tolist())
+        st.dataframe(df_career.head()) # Vis de rå data
+        
         st.markdown("### Karrierestatistik")
         
         all_data = st.session_state.get('all_data', {})
