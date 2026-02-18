@@ -93,38 +93,40 @@ def vis_profil(p_data, full_df, s_df):
         fig_line.update_layout(title="Rating udvikling", height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
         st.plotly_chart(fig_line, use_container_width=True)
 
-    with t4:
+   with t4:
         st.markdown("### Sæsonstatistik")
         
-        # DEBUG: Fjern disse to linjer når det virker, men brug dem til at se hvad der sker
-        # st.write(f"Søger efter ID: {clean_p_id}")
-        # st.write(f"Rækker i s_df: {len(s_df) if s_df is not None else 'None'}")
-
-        if s_df is not None and not s_df.empty:
-            # 1. Rens ID så det matcher Snowflake (fjern .0 og mellemrum)
-            tid = str(clean_p_id).split('.')[0].strip()
+        # Tjek om stats_df findes
+        if stats_df is not None and not stats_df.empty:
+            # Vi sikrer os at vi har et rent ID uden .0
+            target_id = str(clean_p_id).split('.')[0].strip()
             
-            # 2. Tving alle kolonnenavne til UPPERCASE
-            s_df.columns = [c.upper() for c in s_df.columns]
+            # Lav en kopi og tving kolonner til UPPER
+            df_p_stats = stats_df.copy()
+            df_p_stats.columns = [c.upper() for c in df_p_stats.columns]
             
-            # 3. Filtrer data specifikt på PLAYER_WYID
-            df_p = s_df[s_df['PLAYER_WYID'].astype(str) == tid].copy()
+            # Filtrer - vi tjekker både PLAYER_WYID og WYID hvis navnet er forskelligt
+            id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in df_p_stats.columns else 'WYID'
             
-            if not df_p.empty:
-                # 4. Definer de ønskede kolonner
-                cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
-                existing = [c for c in cols_to_show if c in df_p.columns]
+            if id_col in df_p_stats.columns:
+                final_df = df_p_stats[df_p_stats[id_col].astype(str) == target_id].copy()
                 
-                # 5. Vis tabellen
-                st.dataframe(
-                    df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                if not final_df.empty:
+                    # Vis de kolonner der findes
+                    show_cols = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                    existing = [c for c in show_cols if c in final_df.columns]
+                    
+                    st.dataframe(
+                        final_df[existing].drop_duplicates().sort_values(by='SEASONNAME', ascending=False) if 'SEASONNAME' in final_df.columns else final_df[existing],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info(f"Ingen kampdata fundet for ID: {target_id}")
             else:
-                st.info(f"Ingen kampdata fundet i Snowflake for ID: {tid}")
+                st.error("Kolonnen PLAYER_WYID blev ikke fundet i statistikken.")
         else:
-            st.warning("Kunne ikke hente statistik-pakken fra Snowflake.")
+            st.warning("Ingen statistik-data tilgængelig i systemet.")
 
     with t5:
 
