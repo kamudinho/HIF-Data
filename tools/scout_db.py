@@ -103,9 +103,10 @@ def vis_profil(p_data, full_df, s_df, career_df):
             df_p = df_c[df_c['PLAYER_WYID'] == clean_p_id].copy()
 
             if not df_p.empty:
+                # 1. Fjern dubletter
                 df_p = df_p.drop_duplicates()
 
-                # Omdøb til danske navne
+                # 2. Omdøb til danske navne
                 df_p = df_p.rename(columns={
                     'SEASONNAME': 'SÆSON',
                     'COMPETITIONNAME': 'TURNERING',
@@ -113,43 +114,31 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     'APPEARANCES': 'KAMPE',
                     'MINUTESPLAYED': 'MIN',
                     'GOAL': 'MÅL',
-                    'ASSIST': 'ASS', # Juster eventuelt navnet her hvis din SQL bruger noget andet
+                    'ASSIST': 'ASS',
                     'YELLOWCARD': 'GULE',
                     'REDCARD': 'RØDE'
                 })
 
-                # Filtrer ungdom og tomme rækker
-                ungdom_filter = ['U14', 'U13']
+                # 3. Filtrer ungdom (U15 og nedefter)
+                ungdom_filter = ['U15', 'U14', 'U13']
                 pattern = '|'.join(ungdom_filter)
                 df_p = df_p[~df_p['TURNERING'].str.contains(pattern, case=False, na=False)]
                 
-                stats_cols = ['SÆSON', 'TURNERING', 'HOLD']
+                # 4. Slet tomme rækker (hvor stats er 0 eller None)
+                stats_cols = ['KAMPE', 'MIN', 'MÅL']
                 df_p = df_p.dropna(subset=stats_cols, how='all')
                 df_p = df_p[~((df_p['KAMPE'] == 0) & (df_p['MIN'] == 0) & (df_p['MÅL'] == 0))]
 
-                # Definer kolonner og justering
+                # 5. Konfiguration af tabelvisning (Uden alignment pga. TypeError)
                 vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
                 existing_cols = [c for c in vis_cols if c in df_p.columns]
                 
-                # --- CENTRERING AF STATS-KOLONNER ---
-                # Vi opretter en konfiguration for hver kolonne der skal centreres
-                # --- CENTRERING AF STATS-KOLONNER ---
-                # Vi definerer de kolonner, der skal centreres
-                center_cols = ['KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
-                
-                # Vi bruger TextColumn eller NumberColumn, som har alignment-parameteren
                 col_config = {}
                 for c in existing_cols:
-                    if c in center_cols:
-                        col_config[c] = st.column_config.TextColumn(
-                            c,
-                            alignment="center"
-                        )
-                    elif c in ['SÆSON', 'TURNERING', 'HOLD']:
-                        col_config[c] = st.column_config.TextColumn(
-                            c,
-                            alignment="left"
-                        )
+                    if c in ['KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']:
+                        col_config[c] = st.column_config.NumberColumn(c, format="%d")
+                    else:
+                        col_config[c] = st.column_config.Column(c)
 
                 if not df_p.empty:
                     st.dataframe(
@@ -158,6 +147,12 @@ def vis_profil(p_data, full_df, s_df, career_df):
                         hide_index=True,
                         column_config=col_config
                     )
+                else:
+                    st.info("Ingen relevante karrierestatistikker fundet (U16+).")
+            else:
+                st.info("Ingen historiske karrierestatistikker fundet for denne spiller.")
+        else:
+            st.warning("Karriere-data er ikke tilgængelige.")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
@@ -186,7 +181,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_df):
-    # Standardiser kolonner til UPPERCASE
     for d in [scout_df, spillere_df, stats_df, career_df]:
         if d is not None and not d.empty:
             d.columns = [c.upper() for c in d.columns]
