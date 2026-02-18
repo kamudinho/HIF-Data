@@ -51,5 +51,20 @@ def get_queries(comp_filter, season_filter):
                 FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
                 WHERE COMPETITION_WYID IN {comp_filter}
             )
-        """
+        """,
+        "player_seasons": f"""
+            SELECT 
+                s.PLAYER_WYID,
+                ws.SEASONNAME,
+                wc.COMPETITIONNAME,
+                s.POSITION1NAME AS PRIMARY_POSITION,
+                s.POSITIONS1PERCENT AS POSITION_PERCENT,
+                s.SEASON_WYID,
+                s.COMPETITION_WYID
+            FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_BASE s
+            JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+            JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
+            WHERE s.COMPETITION_WYID IN {comp_filter}
+            AND ws.SEASONNAME {season_filter}
+        """,
     }
