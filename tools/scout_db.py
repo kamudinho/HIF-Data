@@ -96,34 +96,32 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Karrierestatistik")
         
-        # Hent karriere-data fra session_state
         all_data = st.session_state.get('all_data', {})
         df_career = all_data.get('player_career', pd.DataFrame()).copy()
 
         if not df_career.empty:
-            # Rens ID og kolonner
             df_career.columns = [c.upper() for c in df_career.columns]
             tid = str(clean_p_id).split('.')[0].strip()
             
-            if 'PLAYER_WYID' in df_career.columns:
-                df_career['PLAYER_WYID'] = df_career['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
-                
-                # Filtrer på spilleren
-                df_p = df_career[df_career['PLAYER_WYID'] == tid].copy()
+            # Filtrer på spiller
+            df_p = df_career[df_career['PLAYER_WYID'].astype(str) == tid].copy()
 
-                if not df_p.empty:
-                    vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
-                    existing = [c for c in vis_cols if c in df_p.columns]
-                    
-                    st.dataframe(
-                        df_p[existing].sort_values('SÆSON', ascending=False),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                else:
-                    st.info("Ingen historiske karrierestats fundet i Snowflake.")
-        else:
-            st.warning("Karriere-tabellen kunne ikke findes.")
+            if not df_p.empty:
+                # Her omdøber vi til dansk - her må vi gerne bruge Æ, Ø og Å
+                df_p = df_p.rename(columns={
+                    'SEASONNAME': 'SÆSON',
+                    'COMPETITIONNAME': 'TURNERING',
+                    'TEAMNAME': 'HOLD',
+                    'MATCHES': 'KAMPE',
+                    'MINUTESPLAYED': 'MIN',
+                    'GOALS': 'MÅL',
+                    'ASSISTS': 'ASS',
+                    'YELLOWCARDS': 'GULE',
+                    'REDCARDS': 'RØDE'
+                })
+
+                vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
+                st.dataframe(df_p[vis_cols], use_container_width=True, hide_index=True)
             
     with t5:
 
