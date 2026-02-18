@@ -7,14 +7,13 @@ from datetime import datetime
 def vis_side(dp):
     st.write("### Ny Scoutrapport")
 
-    # 1. Hent data sikkert
+    # 1. Hent data
     df_ps = dp.get("players_snowflake", pd.DataFrame())
     hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
     # 2. Forbered spillerlisten med striks filtrering
     if not df_ps.empty:
-        # Konvertér alle navne-kolonner til strenge og håndtér None
         for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
             df_ps[col] = df_ps[col].astype(str).replace(['None', 'nan', '<NA>'], '')
 
@@ -26,10 +25,8 @@ def vis_side(dp):
         
         lookup_data = []
         for _, r in df_ps.iterrows():
-            # Spring over hvis både navn og ID mangler
             if not r['FULL_NAME'] or pd.isna(r['PLAYER_WYID']):
                 continue
-                
             t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
             lookup_data.append({
                 "Navn": r['FULL_NAME'],
@@ -38,9 +35,7 @@ def vis_side(dp):
                 "Pos": r.get('ROLECODE3', '-')
             })
         
-        m_df = pd.DataFrame(lookup_data)
-        # Fjern dubletter og rækker hvor Navn er tomt
-        m_df = m_df.drop_duplicates(subset=['ID'])
+        m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID'])
         m_df = m_df[m_df['Navn'].str.len() > 0].sort_values('Navn')
     else:
         m_df = pd.DataFrame(columns=["Navn", "ID", "Klub", "Pos"])
@@ -62,23 +57,29 @@ def vis_side(dp):
             else:
                 st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
 
-        st.selectbox("Find spiller", 
-                     options=[""] + m_df['Navn'].tolist(), 
-                     key="player_choice", 
-                     on_change=on_player_change)
+        st.selectbox("Find spiller", options=[""] + m_df['Navn'].tolist(), key="player_choice", on_change=on_player_change)
+        
+        # Diskret tekst med ID under dropdown
+        if st.session_state.scout_temp_data["id"]:
+            st.markdown(f"<p style='color: gray; font-size: 12px; margin-top: -15px;'>System ID: {st.session_state.scout_temp_data['id']}</p>", unsafe_allow_html=True)
+            
     else:
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
-        st.session_state.scout_temp_data["id"] = c2.text_input("ID (Manuel)", value=st.session_state.scout_temp_data["id"])
+        
+        # Generér automatisk ID hvis det mangler for manuel oprettelse
+        if not st.session_state.scout_temp_data["id"] or len(st.session_state.scout_temp_data["id"]) > 10:
+            st.session_state.scout_temp_data["id"] = str(uuid.uuid4().int)[:6]
+            
+        st.session_state.scout_temp_data["id"] = c2.text_input("ID", value=st.session_state.scout_temp_data["id"])
 
     # 4. Formular Layout
     with st.form("scout_form", clear_on_submit=True):
-        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+        col1, col2, col3 = st.columns([2, 2, 1])
         
         f_pos = col1.text_input("Position", value=st.session_state.scout_temp_data["pos"])
         f_klub = col2.text_input("Klub", value=st.session_state.scout_temp_data["klub"])
-        f_id_val = col3.text_input("Player ID", value=st.session_state.scout_temp_data["id"], disabled=True)
-        f_scout = col4.text_input("Scout", value=curr_user, disabled=True)
+        f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
 
         st.divider()
         
@@ -106,6 +107,6 @@ def vis_side(dp):
 
         if st.form_submit_button("Gem Scoutrapport", use_container_width=True):
             if not st.session_state.scout_temp_data["n"]:
-                st.error("Du skal vælge en spiller.")
+                st.error("Indtast eller vælg venligst en spiller.")
             else:
-                st.success(f"Klar til at gemme rapport for {st.session_state.scout_temp_data['n']}!")
+                st.success(f"Rapport gemt for {st.session_state.scout_temp_data['n']} (ID: {st.session_state.scout_temp_data['id']})")
