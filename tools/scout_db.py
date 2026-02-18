@@ -93,32 +93,28 @@ def vis_profil(p_data, full_df, s_df):
         fig_line.update_layout(title="Rating udvikling", height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
         st.plotly_chart(fig_line, use_container_width=True)
 
-    with t4:
+   with t4:
         st.markdown("### Sæsonstatistik")
         if s_df is not None and not s_df.empty:
-            # 1. Hent ID fra den valgte spiller og rens det
-            # Vi sikrer os det er en ren streng uden .0
+            # 1. Rens ID'et fra den valgte spiller (f.eks. '528143')
             tid = str(clean_p_id).split('.')[0].strip()
             
-            # 2. Filtrer s_df så vi KUN har rækker for denne spiller
-            # Vi tjekker mod PLAYER_WYID kolonnen i Snowflake
+            # 2. FILTRER: Vis kun rækker hvor PLAYER_WYID matcher den valgte spiller
             df_p = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(tid)].copy()
             
             if not df_p.empty:
-                # 3. Vælg de kolonner vi vil se (nu hvor navnene er joinet i SQL)
-                cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                cols = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                # Tjek hvilke kolonner der findes (Snowflake returnerer ofte UPPERCASE)
+                df_p.columns = [c.upper() for c in df_p.columns]
+                existing = [c.upper() for c in cols if c.upper() in df_p.columns]
                 
-                # Vi tjekker lige hvilke af dem der rent faktisk er der (case-insensitive)
-                existing = [c for c in cols_to_show if c in df_p.columns]
-                
-                # 4. Vis tabellen sorteret efter nyeste sæson
                 st.dataframe(
                     df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False), 
                     use_container_width=True, 
                     hide_index=True
                 )
             else:
-                st.info(f"Ingen kampdata fundet i Snowflake for spiller ID: {tid}")
+                st.info(f"Ingen kampdata fundet for spiller ID: {tid}")
 
     with t5:
 
