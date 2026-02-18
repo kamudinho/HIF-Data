@@ -94,62 +94,36 @@ def vis_profil(p_data, full_df, s_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        st.markdown("### Sæsonstatistik")
+        st.markdown("### Karrierestatistik")
         
-        # 1. Hent rå stats og navne-opslag
-        df_stats_raw = stats_df.copy() if stats_df is not None else pd.DataFrame()
-        # Vi henter 'player_seasons' som vi gemte i data_load.py
+        # Hent karriere-data fra session_state
         all_data = st.session_state.get('all_data', {})
-        df_names = all_data.get('player_seasons', pd.DataFrame()).copy()
+        df_career = all_data.get('player_career', pd.DataFrame()).copy()
 
-        if not df_stats_raw.empty and not df_names.empty:
-            # Sikr uppercase på alle kolonner for en sikkerheds skyld
-            df_stats_raw.columns = [c.upper() for c in df_stats_raw.columns]
-            df_names.columns = [c.upper() for c in df_names.columns]
-
-            # Rens ID'er så de matcher 100%
-            for d in [df_stats_raw, df_names]:
-                for col in ['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID']:
-                    if col in d.columns:
-                        d[col] = d[col].astype(str).str.split('.').str[0].str.strip()
-
-            # 2. Forbered navne-tabellen (vigtigt: undgå dubletter før merge!)
-            # Vi tager kun de unikke kombinationer af ID'er og deres Navne
-            df_lookup = df_names[['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID', 'SEASONNAME', 'COMPETITIONNAME']].drop_duplicates()
-
-            # 3. Merge tallene med navnene
-            df_combined = df_stats_raw.merge(
-                df_lookup, 
-                on=['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID'], 
-                how='left'
-            )
-
-            # 4. Filtrer på den valgte spiller
+        if not df_career.empty:
+            # Rens ID og kolonner
+            df_career.columns = [c.upper() for c in df_career.columns]
             tid = str(clean_p_id).split('.')[0].strip()
-            df_p = df_combined[df_combined['PLAYER_WYID'] == tid].copy()
-
-            if not df_p.empty:
-                # Tilføj TEAMNAME fra hold_map via OWNTEAMID
-                hold_map = all_data.get('hold_map', {})
-                if 'OWNTEAMID' in df_p.columns:
-                    df_p['TEAMNAME'] = df_p['OWNTEAMID'].astype(str).map(hold_map)
-
-                # 5. Formatering og visning
-                df_p = df_p.rename(columns={'COMPETITIONNAME': 'TURNERING', 'SEASONNAME': 'SÆSON'})
+            
+            if 'PLAYER_WYID' in df_career.columns:
+                df_career['PLAYER_WYID'] = df_career['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
                 
-                # Vælg de kolonner vi vil vise (tjekker om de findes)
-                cols_to_show = ['SÆSON', 'TURNERING', 'TEAMNAME', 'MATCHES', 'GOALS', 'ASSISTS', 'XG']
-                existing = [c for c in cols_to_show if c in df_p.columns]
-                
-                st.dataframe(
-                    df_p[existing].sort_values(['SÆSON', 'MATCHES'], ascending=False),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Ingen detaljeret statistik fundet for denne spiller i de valgte turneringer.")
+                # Filtrer på spilleren
+                df_p = df_career[df_career['PLAYER_WYID'] == tid].copy()
+
+                if not df_p.empty:
+                    vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
+                    existing = [c for c in vis_cols if c in df_p.columns]
+                    
+                    st.dataframe(
+                        df_p[existing].sort_values('SÆSON', ascending=False),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("Ingen historiske karrierestats fundet i Snowflake.")
         else:
-            st.warning("Data for sæsonnavne eller statistikker er ikke tilgængelige.")
+            st.warning("Karriere-tabellen kunne ikke findes.")
             
     with t5:
 
