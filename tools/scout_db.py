@@ -93,7 +93,7 @@ def vis_profil(p_data, full_df, s_df):
         fig_line.update_layout(title="Rating udvikling", height=300, yaxis=dict(range=[0.8, 6.2]), plot_bgcolor='white')
         st.plotly_chart(fig_line, use_container_width=True)
 
-   with t4:
+    with t4:
         st.markdown("### Sæsonstatistik")
         if s_df is not None and not s_df.empty:
             # 1. Rens ID'et fra den valgte spiller (f.eks. '528143')
