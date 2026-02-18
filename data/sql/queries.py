@@ -57,8 +57,6 @@ def get_queries(comp_filter, season_filter):
                 s.PLAYER_WYID,
                 ws.SEASONNAME,
                 wc.COMPETITIONNAME,
-                s.POSITION1NAME AS PRIMARY_POSITION,
-                s.POSITIONS1PERCENT AS POSITION_PERCENT,
                 s.SEASON_WYID,
                 s.COMPETITION_WYID
             FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_BASE s
