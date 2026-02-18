@@ -115,8 +115,9 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     'APPEARANCES': 'KAMPE',
                     'MINUTESPLAYED': 'MIN',
                     'GOAL': 'MÅL',
+                    'ASSISTS': 'ASS',
                     'YELLOWCARD': 'GULE',
-                    'REDCARD': 'RØDE'
+                    'REDCARDS': 'RØDE'
                 })
 
                 # 4. FILTRER UNGDOM VÆK (U15 og nedefter)
