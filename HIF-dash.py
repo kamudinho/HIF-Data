@@ -1,3 +1,4 @@
+#HIF-dash.py
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
@@ -103,7 +104,7 @@ try:
         sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
     elif sel == "Scoutrapport":
         import tools.scout_input as si
-        si.vis_side(dp["players_snowflake"])
+        si.vis_side(dp)
     elif sel == "Sammenligning":
         import tools.comparison as comp
         comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
