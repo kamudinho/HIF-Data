@@ -103,7 +103,7 @@ try:
         sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
     elif sel == "Scoutrapport":
         import tools.scout_input as si
-        scout_input.vis_side(data["players"], data["playerstats"])
+        si.vis_side(data["players"], data["playerstats"])
     elif sel == "Sammenligning":
         import tools.comparison as comp
         comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
