@@ -1,58 +1,62 @@
 import streamlit as st
 import pandas as pd
-import uuid
 
 def vis_side(df_players, df_playerstats):
-    st.write("### 🔍 Test af Spillerdata")
+    st.write("#### 🔍 Scout Spiller")
 
-    # 1. DEBUG: Tjek om vi overhovedet modtager data
-    if df_playerstats is None or df_playerstats.empty:
-        st.error("Ingen data modtaget i df_playerstats!")
-        return
+    # 1. Sikker forberedelse af data
+    lookup_list = []
+    if df_playerstats is not None and not df_playerstats.empty:
+        # Tjek de faktiske kolonnenavne i din dataframe
+        # Vi bruger .get() for at undgå crash hvis en kolonne mangler
+        for _, r in df_playerstats.iterrows():
+            f_name = str(r.get('FIRSTNAME', ''))
+            l_name = str(r.get('LASTNAME', ''))
+            navn = f"{f_name} {l_name}".strip()
+            wyid = str(r.get('PLAYER_WYID', ''))
+            
+            if navn and wyid != 'nan':
+                lookup_list.append({
+                    "NAVN": navn,
+                    "ID": wyid,
+                    "KLUB": r.get('TEAMNAME', '-'),
+                    "POS": r.get('ROLECODE3', '-')
+                })
 
-    # 2. FORBERED LOOKUP (Kogt helt ned)
-    lookup_data = []
-    for _, r in df_playerstats.iterrows():
-        # Vi bygger navnet og gemmer de vigtige felter
-        navn = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
-        wyid = str(r.get('PLAYER_WYID', ''))
-        
-        if navn and wyid:
-            lookup_data.append({
-                "NAVN": navn,
-                "ID": wyid,
-                "KLUB": r.get('TEAMNAME', 'Ukendt'),
-                "POS": r.get('ROLECODE3', '-')
-            })
+    m_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['ID']) if lookup_list else pd.DataFrame()
 
-    # Lav DataFrame og fjern dubletter
-    m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID'])
-    
-    # 3. DEBUG: Se om listen er tom efter bearbejdning
-    st.write(f"Antal spillere fundet: {len(m_df)}")
-    if len(m_df) > 0:
-        st.write("Eksempel på første spiller:", m_df.iloc[0].to_dict())
-
-    # 4. INITIALISER SESSION STATE
+    # 2. Initialiser session state (Sikrer de eksisterer)
+    if 's_navn' not in st.session_state: st.session_state.s_navn = ""
     if 's_pos' not in st.session_state: st.session_state.s_pos = ""
     if 's_klub' not in st.session_state: st.session_state.s_klub = ""
 
-    # 5. DROPDOWN LOGIK (Minimalistisk)
-    options = [""] + sorted(m_df['NAVN'].tolist())
-    valgt_navn = st.selectbox("Vælg spiller fra systemet", options=options)
+    # 3. Dropdown uden kompliceret callback i første omgang
+    options = [""] + sorted(m_df['NAVN'].tolist()) if not m_df.empty else [""]
+    
+    # Vi gemmer valget i en variabel direkte i stedet for callback
+    valgt = st.selectbox("Find spiller i systemet", options=options, key="player_selector")
 
-    if valgt_navn:
-        # Find spillerens info
-        spiller_info = m_df[m_df['NAVN'] == valgt_navn].iloc[0]
-        st.session_state.s_pos = spiller_info['POS']
-        st.session_state.s_klub = spiller_info['KLUB']
-        st.success(f"Valgt: {valgt_navn} (ID: {spiller_info['ID']})")
+    # Opdater session state baseret på valget
+    if valgt != "":
+        row = m_df[m_df['NAVN'] == valgt].iloc[0]
+        st.session_state.s_navn = valgt
+        st.session_state.s_pos = row['POS']
+        st.session_state.s_klub = row['KLUB']
+    elif valgt == "" and st.session_state.s_navn != "":
+        # Nulstil hvis man vælger tom
+        st.session_state.s_navn = ""
+        st.session_state.s_pos = ""
+        st.session_state.s_klub = ""
 
-    # 6. VIS FELTERNE
-    col1, col2 = st.columns(2)
-    with col1:
-        p_pos = st.text_input("Position", value=st.session_state.s_pos)
-    with col2:
-        p_klub = st.text_input("Klub", value=st.session_state.s_klub)
+    # 4. Vis de auto-udfyldte felter
+    st.divider()
+    c1, c2 = st.columns(2)
+    
+    # Her bruger vi 'value' for at vise hvad der er fundet
+    aktuel_pos = c1.text_input("Position", value=st.session_state.s_pos)
+    aktuel_klub = c2.text_input("Klub", value=st.session_state.s_klub)
 
-    st.info("Hvis du kan se spillere i listen herover nu, kan vi bygge 'Gem'-funktionen på igen.")
+    if st.session_state.s_navn:
+        st.success(f"Klar til at scoute: {st.session_state.s_navn}")
+    else:
+        st.info("Vælg en spiller for at starte.")
