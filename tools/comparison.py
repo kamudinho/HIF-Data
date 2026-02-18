@@ -3,8 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 
+# --- HJÆLPEFUNKTIONER ---
 def map_position(pos_code):
-    """Oversætter numeriske positionskoder til dansk tekst."""
     pos_map = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
         "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
@@ -14,167 +14,129 @@ def map_position(pos_code):
     s_code = str(pos_code).split('.')[0]
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
-def vis_side(spillere, player_events, df_scout):
-    # --- 0. DATA STANDARDISERING ---
-    # Sørg for at alle kolonner er UPPERCASE for at undgå KeyError
-    if spillere is not None: spillere.columns = [c.upper() for c in spillere.columns]
-    if player_events is not None: player_events.columns = [c.upper() for c in player_events.columns]
-    if df_scout is not None: df_scout.columns = [c.upper() for c in df_scout.columns]
+def vis_spiller_billede(pid, w=100):
+    pid_clean = str(pid).split('.')[0].strip()
+    url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
+    std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
+    try:
+        resp = requests.head(url, timeout=0.8)
+        st.image(url if resp.status_code == 200 else std, width=w)
+    except:
+        st.image(std, width=w)
 
-    # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
+def vis_side(spillere, player_events, df_scout):
+    # 0. Sørg for at alle kolonnenavne er UPPERCASE
+    for d in [spillere, player_events, df_scout]:
+        if d is not None: d.columns = [c.upper() for c in d.columns]
+
+    # 1. Forbered navnelister
     df_p = spillere.copy() if spillere is not None else pd.DataFrame()
     if not df_p.empty and 'NAVN' not in df_p.columns:
-        # Håndterer hvis trup-data bruger FIRST/LASTNAME
-        fname = df_p.get('FIRSTNAME', '')
-        lname = df_p.get('LASTNAME', '')
-        df_p['NAVN'] = (fname.fillna('') + " " + lname.fillna('')).str.strip()
+        df_p['NAVN'] = (df_p.get('FIRSTNAME', '').fillna('') + " " + df_p.get('LASTNAME', '').fillna('')).str.strip()
     
     df_s = df_scout.copy() if df_scout is not None else pd.DataFrame()
-    
-    # SIKKERHED: Sørg for at df_s har de rigtige kolonnenavne (ID i stedet for PLAYER_WYID)
-    if not df_s.empty:
-        if 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
-            df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
-        if 'NAVN' not in df_s.columns:
-            df_s['NAVN'] = "Ukendt navn"
+    if not df_s.empty and 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
+        df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
 
-    # Lav lister til kombination
-    p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame(columns=['NAVN', 'ID'])
-    s_list = df_s[['NAVN', 'ID']] if not df_s.empty and 'ID' in df_s.columns else pd.DataFrame(columns=['NAVN', 'ID'])
-    
-    combined_names = pd.concat([p_list, s_list]).drop_duplicates(subset=['NAVN'])
-    navne_liste = sorted(combined_names['NAVN'].unique())
+    # Kombiner navne fra Truppen og Scouting-databasen
+    p_ids = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame()
+    s_ids = df_s[['NAVN', 'ID']] if not df_s.empty else pd.DataFrame()
+    combined = pd.concat([p_ids, s_ids]).drop_duplicates(subset=['NAVN'])
+    navne_liste = sorted(combined['NAVN'].unique())
 
     if not navne_liste:
-        st.warning("Ingen spillere fundet i databaserne.")
+        st.warning("Ingen data fundet.")
         return
 
-    # --- 2. SELECTBOX SEKTION ---
-    st.markdown("<div style='padding-top: 10px; padding-bottom: 30px;'>", unsafe_allow_html=True)
-    col_sel1, col_sel2 = st.columns(2)
-    with col_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
-    with col_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # 2. UI: Vælg spillere
+    st.markdown("### ⚖️ Spillersammenligning")
+    c_sel1, c_sel2 = st.columns(2)
+    with c_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
+    with c_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
-        p_match = df_p[df_p['NAVN'] == navn] if not df_p.empty else pd.DataFrame()
-        s_match = df_s[df_s['NAVN'] == navn] if not df_s.empty else pd.DataFrame()
+        # Find ID i enten trup eller scout-liste
+        match = combined[combined['NAVN'] == navn]
+        pid = str(match.iloc[0]['ID']).split('.')[0].strip() if not match.empty else "0"
         
-        pid, klub, pos = "0", "Ukendt", "Ukendt"
-        stats_data = {}
-        tech = {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
-        scout_texts = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen data'}
+        # Hent basis info (Klub/Pos)
+        p_data = df_p[df_p['NAVN'] == navn]
+        klub = p_data.iloc[0].get('TEAMNAME', 'Ukendt') if not p_data.empty else "Eksternt emne"
+        pos = map_position(p_data.iloc[0].get('POS', '')) if not p_data.empty else "Ukendt"
 
-        # Prioriter data fra trup-listen (spillere)
-        if not p_match.empty:
-            row = p_match.iloc[0]
-            pid = str(row.get('PLAYER_WYID', '0')).split('.')[0].strip()
-            klub = row.get('TEAMNAME', 'Hvidovre IF')
-            pos = map_position(row.get('POS', 'Ukendt'))
-            
-            if player_events is not None and not player_events.empty:
-                # Matcher stats på PLAYER_WYID
-                st_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
-                if not st_match.empty:
-                    stats_data = st_match.iloc[0].to_dict()
+        # --- PLAYERSTATS AGGREGERING ---
+        stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0, 'ASS': 0}
+        if player_events is not None and not player_events.empty:
+            # Matcher på ID (vi renser ID kolonnen for at være sikre)
+            p_stats = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
+            if not p_stats.empty:
+                stats['KAMPE'] = p_stats['MATCHES'].sum()
+                stats['MIN'] = p_stats['MINUTESPLAYED'].sum()
+                stats['MÅL'] = p_stats['GOALS'].sum()
+                stats['ASS'] = p_stats.get('ASSISTS', pd.Series([0])).sum()
 
-        # Suppler med data fra scouting-databasen
-        if not s_match.empty:
-            # Tag den nyeste rapport hvis der er flere (sorter efter første kolonne, ofte DATO)
-            n = s_match.sort_values(s_match.columns[0], ascending=False).iloc[0] 
-            if pid == "0":
-                pid = str(n.get('ID', '0')).split('.')[0].strip()
-                klub = n.get('KLUB', 'Eget emne')
-                pos = n.get('POSITION', 'Ukendt')
-            
-            for k in tech.keys():
-                val = n.get(k, 0)
-                try:
-                    # Håndterer både tal og strenge med komma (f.eks. "4,5")
-                    tech[k] = float(str(val).replace(',', '.'))
-                except:
-                    tech[k] = 0
-            
-            scout_texts = {
-                's': n.get('STYRKER', 'Ingen data'),
-                'u': n.get('UDVIKLING', 'Ingen data'),
-                'v': n.get('VURDERING', 'Ingen data')
-            }
+        # --- SCOUTING DATA (Radar & Tekst) ---
+        tech = {k: 0 for k in ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']}
+        scout_txt = {'s': '-', 'u': '-', 'v': '-'}
+        
+        if not df_s.empty:
+            s_match = df_s[df_s['NAVN'] == navn]
+            if not s_match.empty:
+                # Tag nyeste rapport
+                n = s_match.iloc[-1]
+                if klub == "Eksternt emne": klub = n.get('KLUB', 'Ukendt')
+                for k in tech.keys():
+                    try: tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
+                    except: tech[k] = 0
+                scout_txt = {'s': n.get('STYRKER', '-'), 'u': n.get('UDVIKLING', '-'), 'v': n.get('VURDERING', '-')}
 
-        return pid, klub, pos, stats_data, tech, scout_texts
+        return pid, klub, pos, stats, tech, scout_txt
 
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
 
-    # --- HJÆLPEFUNKTIONER TIL VISNING ---
-    def vis_spiller_billede(pid, w=100):
-        url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
-        std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-        try:
-            resp = requests.head(url, timeout=0.8)
-            st.image(url if resp.status_code == 200 else std, width=w)
-        except:
-            st.image(std, width=w)
+    # 3. VISNING
+    col1, col2, col3 = st.columns([3, 4, 3])
 
-    def vis_profil_kolonne(navn, pid, klub, pos, stats, side, color):
-        name_style = f"margin:0; padding:0; color:{color}; line-height:1.0; font-size:24px; font-weight:bold;"
-        info_style = "margin:0; padding:0; color:gray; font-size:14px; line-height:1.0;"
+    def vis_profil(navn, res, side, color):
+        pid, klub, pos, stats, _, _ = res
+        align = "left" if side == "venstre" else "right"
+        
+        # Header med billede
+        c1, c2 = (st.columns([1, 2]) if side == "venstre" else st.columns([2, 1]))
+        with (c1 if side == "venstre" else c2): vis_spiller_billede(pid)
+        with (c2 if side == "venstre" else c1):
+            st.markdown(f"<div style='text-align:{align};'><h3 style='color:{color}; margin:0;'>{navn}</h3><p style='color:gray;'>{pos}<br>{klub}</p></div>", unsafe_allow_html=True)
+        
+        # Stats blok
+        st.markdown("<br>", unsafe_allow_html=True)
+        m_cols = st.columns(3)
+        m_cols[0].metric("KAMPE", int(stats['KAMPE']))
+        m_cols[1].metric("MIN.", int(stats['MIN']))
+        m_cols[2].metric("MÅL", int(stats['MÅL']))
 
-        if side == "venstre":
-            c_img, c_txt = st.columns([1, 2])
-            with c_img: vis_spiller_billede(pid)
-            with c_txt: 
-                st.markdown(f"<div style='text-align:left;'><p style='{name_style}'>{navn}</p><p style='{info_style}'>{pos} | {klub}</p></div>", unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            m1, m2, m3 = st.columns([1,1,1])
-            m1.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
-            m2.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
-            m3.metric("MÅL", int(float(stats.get('GOALS', 0))))
-        else:
-            c_txt, c_img = st.columns([2, 1])
-            with c_txt: 
-                st.markdown(f"<div style='text-align:right;'><p style='{name_style}'>{navn}</p><p style='{info_style}'>{pos} | {klub}</p></div>", unsafe_allow_html=True)
-            with c_img: vis_spiller_billede(pid)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            _, m1, m2, m3 = st.columns([0.5, 1, 1, 1])
-            with m1: st.metric("KAMPE", int(float(stats.get('MATCHES', 0))))
-            with m2: st.metric("MIN.", int(float(stats.get('MINUTESPLAYED', 0))))
-            with m3: st.metric("MÅL", int(float(stats.get('GOALS', 0))))
+    with col1: vis_profil(s1_navn, res1, "venstre", "#df003b")
+    with col3: vis_profil(s2_navn, res2, "højre", "#0056a3")
 
-    # --- 3. HOVED LAYOUT ---
-    col1, col2, col3 = st.columns([3, 3, 3])
-    with col1: vis_profil_kolonne(s1_navn, res1[0], res1[1], res1[2], res1[3], "venstre", "#df003b")
-    
     with col2:
-        st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-        categories = ['Beslutsomhed', 'Fart', 'Aggressivitet', 'Attitude', 'Udholdenhed', 'Lederevner', 'Teknik', 'Spil-int.']
+        # Radar diagram
+        labels = ['Teknik', 'Fart', 'Aggres.', 'Attitude', 'Udhold.', 'Leder', 'Beslut.', 'Spil-int.']
+        def get_radar_v(t):
+            v = [t[k] for k in ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']]
+            return v + [v[0]]
         
-        def get_vals(t):
-            keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-            v = [t.get(k, 0) for k in keys]
-            v.append(v[0]) # Luk cirklen
-            return v
-
         fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories + [categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
-        fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
-        
-        fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
-            showlegend=False, height=420, margin=dict(l=40, r=40, t=20, b=20)
-        )
+        fig.add_trace(go.Scatterpolar(r=get_radar_v(res1[4]), theta=labels + [labels[0]], fill='toself', name=s1_navn, line_color='#df003b'))
+        fig.add_trace(go.Scatterpolar(r=get_radar_v(res2[4]), theta=labels + [labels[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=450, margin=dict(l=50, r=50, t=20, b=20))
         st.plotly_chart(fig, use_container_width=True)
 
-    with col3: vis_profil_kolonne(s2_navn, res2[0], res2[1], res2[2], res2[3], "højre", "#0056a3")
-
-    # --- 4. SCOUTING TABS ---
-    st.write("---")
-    sc1, sc2 = st.columns(2)
-    with sc1:
-        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
-        t1.info(res1[5]['s']); t2.warning(res1[5]['u']); t3.success(res1[5]['v'])
-    with sc2:
-        t1, t2, t3 = st.tabs(["Styrker", "Udvikling", "Vurdering"])
-        t1.info(res2[5]['s']); t2.warning(res2[5]['u']); t3.success(res2[5]['v'])
+    # 4. SCOUTING NOTER
+    st.divider()
+    sc_col1, sc_col2 = st.columns(2)
+    with sc_col1:
+        t = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        t[0].info(res1[5]['s']); t[1].warning(res1[5]['u']); t[2].success(res1[5]['v'])
+    with sc_col2:
+        t = st.tabs(["Styrker", "Udvikling", "Vurdering"])
+        t[0].info(res2[5]['s']); t[1].warning(res2[5]['u']); t[2].success(res2[5]['v'])
