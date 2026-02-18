@@ -97,11 +97,6 @@ def load_all_data():
                     WHERE tm.COMPETITION_WYID IN {comp_filter} 
                     AND s.SEASONNAME {season_filter}
                 """,
-                "playerstats": f"""
-                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                    WHERE COMPETITION_WYID IN {comp_filter} 
-                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                """,
                 "events": f"""
                     SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
                     FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
@@ -110,6 +105,21 @@ def load_all_data():
                     WHERE e.COMPETITION_WYID IN {comp_filter}
                     AND s.SEASONNAME {season_filter}
                     AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
+                """,
+                "playerstats": f"""
+                    SELECT DISTINCT 
+                        s.PLAYER_WYID,
+                        ws.SEASONNAME,
+                        wc.COMPETITIONNAME,
+                        t.TEAMNAME,
+                        s.MATCHES, s.GOALS, s.ASSISTS, s.XGSHOT AS XG,
+                        s.YELLOWCARDS, s.REDCARDS
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                    JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+                    JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
+                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
+                    WHERE s.COMPETITION_WYID IN {comp_filter}
+                    AND ws.SEASONNAME {season_filter}
                 """,
                 "players_snowflake": f"""
                     SELECT 
