@@ -29,13 +29,24 @@ def save_to_github(new_row_df):
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
+    # CSS Fix for hvid tekst i dropdown og styling
+    st.markdown("""
+        <style>
+            div[data-baseweb="select"] > div { color: black !important; background-color: white !important; }
+            div[role="listbox"] div { color: black !important; }
+            .stTextInput input { color: black !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.write("#### 📝 Ny Scoutrapport")
     
     # 1. DATA FORBEREDELSE
     lookup_list = []
     if df_playerstats is not None and not df_playerstats.empty:
         for _, r in df_playerstats.iterrows():
-            navn = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
+            f_name = r.get('FIRSTNAME', '') or ''
+            l_name = r.get('LASTNAME', '') or ''
+            navn = f"{f_name} {l_name}".strip()
             lookup_list.append({
                 "NAVN": navn, "PLAYER_WYID": str(int(r['PLAYER_WYID'])), 
                 "KLUB": r.get('TEAMNAME', 'Ukendt'), "POS": r.get('ROLECODE3', '-')
@@ -43,30 +54,39 @@ def vis_side(df_players, df_playerstats):
     
     master_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['PLAYER_WYID']) if lookup_list else pd.DataFrame()
 
-    # 2. INPUT SEKTION
+    # 2. INPUT SEKTION (Scout, Søg, Pos, Klub på én linje)
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
-    c1, c2, c3 = st.columns([2, 1, 1])
+    
+    # Fire kolonner til top-linjen
+    c_scout, c_find, c_pos, c_klub = st.columns([1, 2, 1, 1])
     
     p_navn, p_id, p_klub, p_pos = "", "", "", ""
+    curr_scout = st.session_state.get("user", "System").upper()
+
+    with c_scout:
+        st.text_input("Scout", value=curr_scout, disabled=True)
 
     if metode == "Søg i systemet" and not master_df.empty:
-        with c1:
+        with c_find:
             valgt = st.selectbox("Find spiller", options=[""] + sorted(master_df['NAVN'].tolist()))
             if valgt:
                 m = master_df[master_df['NAVN'] == valgt].iloc[0]
                 p_navn, p_id, p_klub, p_pos = valgt, m['PLAYER_WYID'], m['KLUB'], m['POS']
     else:
-        with c1: p_navn = st.text_input("Spillerens Navn")
-        # Generer automatisk ID hvis manuel oprettelse
-        p_id = str(uuid.uuid4().int)[:6] if not p_navn == "" else ""
+        with c_find: 
+            p_navn = st.text_input("Spillerens Navn")
+            if p_navn:
+                p_id = str(uuid.uuid4().int)[:6] # Auto-ID ved manuel oprettelse
 
-    with c2: pos_final = st.text_input("Position", value=p_pos)
-    with c3: klub_final = st.text_input("Klub", value=p_klub)
-    st.caption(f"System ID: {p_id}")
+    with c_pos: pos_final = st.text_input("Position", value=p_pos)
+    with c_klub: klub_final = st.text_input("Klub", value=p_klub)
+    
+    if p_id:
+        st.caption(f"System ID: {p_id}")
 
-    # 3. SCOUT FORM (Matcher dine 20 kolonner)
+    # 3. SCOUT FORM
     with st.form("scout_form"):
-        col_a, col_b, col_c = st.columns(3)
+        col_a, col_b = st.columns(2)
         status = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
         potentiale = col_b.selectbox("Potentiale", ["Lavt", "Middel", "Top"])
         
@@ -84,21 +104,20 @@ def vis_side(df_players, df_playerstats):
         leder = r3.select_slider("Lederegenskaber", options=range(1,7), value=3)
         
         st.divider()
-        c_not, c_styrke, c_udv = st.columns(3)
+        c_styrke, c_udv = st.columns(2)
         styrker = c_styrke.text_input("Styrker")
         udvikling = c_udv.text_input("Udviklingspunkter")
         vurdering = st.text_area("Samlet Vurdering")
 
         if st.form_submit_button("Gem til Database", use_container_width=True):
             if p_navn and p_id:
-                avg = round((fart+teknik+beslut+sp_int+attitude+aggresiv+udhold+leder)/8, 1)
+                avg = round((fart+teknik+beslut+spil_int+attitude+aggresiv+udhold+leder)/8, 1)
                 
-                # Opret række med alle 20 kolonner i præcis rækkefølge
                 ny_data = pd.DataFrame([[
                     p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, klub_final, pos_final,
                     avg, status, potentiale, styrker, udvikling, vurdering,
                     beslut, fart, aggresiv, attitude, udhold, leder, teknik, spil_int,
-                    st.session_state.get("user", "System")
+                    curr_scout
                 ]], columns=[
                     "PLAYER_WYID","Dato","Navn","Klub","Position","Rating_Avg","Status","Potentiale",
                     "Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet",
@@ -106,5 +125,7 @@ def vis_side(df_players, df_playerstats):
                 ])
                 
                 if save_to_github(ny_data) in [200, 201]:
-                    st.success(f"Gemt! ID: {p_id}")
+                    st.success(f"Gemt! {p_navn} tilføjet til databasen.")
                     st.rerun()
+            else:
+                st.warning("Udfyld venligst navn før du gemmer.")
