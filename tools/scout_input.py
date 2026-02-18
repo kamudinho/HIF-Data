@@ -37,7 +37,7 @@ def save_to_github(new_row_df):
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
-def vis_side(df_players, df_playerstats):
+def vis_side(df_players=None, df_playerstats=None):
     st.write("#### 📝 Ny Scoutrapport")
     
     # 1. Sammensmelt kilder med fejlsikring
