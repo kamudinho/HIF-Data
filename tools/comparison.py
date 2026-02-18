@@ -38,7 +38,6 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     
     df_s = df_scout.copy() if df_scout is not None else pd.DataFrame()
     
-    # Skab en samlet oversigt over tilgængelige spillere og deres ID'er
     p_lookup = df_p[['NAVN', 'PLAYER_WYID']].dropna() if not df_p.empty else pd.DataFrame()
     s_lookup = df_s[['NAVN', 'PLAYER_WYID']].dropna() if not df_s.empty else pd.DataFrame()
     
@@ -50,16 +49,23 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         return
 
     st.markdown("### ⚖️ Spillersammenligning")
+    
+    # DEBUG SEKTION (Kan fjernes senere)
+    with st.expander("🛠️ Debug Data Info"):
+        st.write(f"Valgt Sæson Filter: `{season_filter}`")
+        if player_seasons is not None:
+            st.write(f"Antal rækker i Sæson-bro: {len(player_seasons)}")
+        if playerstats is not None:
+            st.write(f"Antal rækker i Playerstats: {len(playerstats)}")
+
     c_sel1, c_sel2 = st.columns(2)
     with c_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
     with c_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
-        # 1. Find ID i den samlede liste
         match = combined_lookup[combined_lookup['NAVN'] == navn]
         if match.empty: return None
         
-        # Tving PID til at være en ren integer
         try:
             pid = int(float(str(match.iloc[0]['PLAYER_WYID'])))
         except:
@@ -73,14 +79,12 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         
         # --- PLAYERSTATS AGGREGERING ---
         if player_seasons is not None and not player_seasons.empty:
-            # Rens filter og data for mellemrum
             clean_season = season_filter.replace("= '", "").replace("'", "").strip()
             
-            # Sørg for at alt er sammenligneligt (Tving typer)
+            # Tving typer for match i bro-tabellen
             temp_seasons = player_seasons.copy()
             temp_seasons['PLAYER_WYID'] = pd.to_numeric(temp_seasons['PLAYER_WYID'], errors='coerce')
             
-            # Find SEASON_WYID
             s_match = temp_seasons[
                 (temp_seasons['PLAYER_WYID'] == pid) & 
                 (temp_seasons['SEASONNAME'].astype(str).str.strip() == clean_season)
@@ -94,12 +98,14 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
                 temp_stats['PLAYER_WYID'] = pd.to_numeric(temp_stats['PLAYER_WYID'], errors='coerce')
                 temp_stats['SEASON_WYID'] = pd.to_numeric(temp_stats['SEASON_WYID'], errors='coerce')
                 
-                # Filtrér på både spiller og den specifikke sæson
                 aktuel_df = temp_stats[
                     (temp_stats['PLAYER_WYID'] == pid) & 
                     (temp_stats['SEASON_WYID'] == target_season_id)
                 ]
                 
+                # Debug output for hver spiller
+                st.toast(f"{navn}: Match fundet!", icon="✅") if not aktuel_df.empty else None
+
                 if not aktuel_df.empty:
                     min_col = 'MINUTESTAGGED' if 'MINUTESTAGGED' in aktuel_df.columns else 'MINUTESPLAYED'
                     t_min = aktuel_df[min_col].sum()
@@ -110,8 +116,8 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
                     stats['MÅL'] = int(t_mål)
                     if t_min > 0:
                         stats['M90'] = round((t_mål / t_min) * 90, 2)
-
-        # Scouting data til Radarchart
+        
+        # Scouting data
         tech = {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
         scout_txt = {'s': '-', 'u': '-', 'v': '-'}
         if df_s is not None and not df_s.empty:
