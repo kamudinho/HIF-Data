@@ -64,7 +64,5 @@ def get_queries(comp_filter, season_filter):
             FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_BASE s
             JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
             JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
-            WHERE s.COMPETITION_WYID IN {comp_filter}
-            AND ws.SEASONNAME {season_filter}
         """,
     }
