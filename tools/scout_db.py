@@ -96,29 +96,29 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Sæsonstatistik")
         if s_df is not None and not s_df.empty:
-            # 1. Filtrer stats på spilleren (vi renser ID'et her)
-            target_id = str(clean_p_id).split('.')[0]
-            df_stats = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(target_id)].copy()
+            # 1. Hent ID fra den valgte spiller og rens det
+            # Vi sikrer os det er en ren streng uden .0
+            tid = str(clean_p_id).split('.')[0].strip()
             
-            if not df_stats.empty:
-                # 2. OVERSÆTTELSE: Hent navne fra stamdata (full_df), da de mangler i stats
-                # Vi ved at 'full_df' (dp["players"]) har SEASONNAME og TEAMNAME
-                if 'SEASONNAME' not in df_stats.columns:
-                    # Vi prøver at mappe navne ind via de ID'er der findes
-                    navne_map = full_df[['PLAYER_WYID', 'SEASONNAME', 'TEAMNAME']].drop_duplicates()
-                    df_stats = df_stats.merge(navne_map, on='PLAYER_WYID', how='left')
-
-                # 3. Vis tabellen
+            # 2. Filtrer s_df så vi KUN har rækker for denne spiller
+            # Vi tjekker mod PLAYER_WYID kolonnen i Snowflake
+            df_p = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(tid)].copy()
+            
+            if not df_p.empty:
+                # 3. Vælg de kolonner vi vil se (nu hvor navnene er joinet i SQL)
                 cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
-                existing = [c for c in cols_to_show if c in df_stats.columns]
                 
+                # Vi tjekker lige hvilke af dem der rent faktisk er der (case-insensitive)
+                existing = [c for c in cols_to_show if c in df_p.columns]
+                
+                # 4. Vis tabellen sorteret efter nyeste sæson
                 st.dataframe(
-                    df_stats[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False), 
+                    df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False), 
                     use_container_width=True, 
                     hide_index=True
                 )
             else:
-                st.warning(f"Ingen kampdata fundet for spiller ID {target_id}")
+                st.info(f"Ingen kampdata fundet i Snowflake for spiller ID: {tid}")
 
     with t5:
 
