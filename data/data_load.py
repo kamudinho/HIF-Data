@@ -97,11 +97,6 @@ def load_all_data():
                     WHERE tm.COMPETITION_WYID IN {comp_filter} 
                     AND s.SEASONNAME {season_filter}
                 """,
-                "playerstats": f"""
-                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                    WHERE COMPETITION_WYID IN {comp_filter} 
-                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                """,
                 "events": f"""
                     SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
                     FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
