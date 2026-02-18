@@ -124,51 +124,7 @@ def load_all_data():
                         wc.competitionname,
                         
                         -- ALLE KOLONNER UDEN SUM()
-                        s.matches AS kampe,
-                        s.MATCHESINSTART,
-                        s.MATCHESSUBSTITUTED,
-                        s.MATCHESCOMINGOFF,
-                        s.MINUTESONFIELD,
-                        s.GOALS,
-                        s.ASSISTS,
-                        s.SHOTS,
-                        s.YELLOWCARDS,
-                        s.REDCARDS,
-                        s.DUELS,
-                        s.DUELSWON,
-                        s.DEFENSIVEDUELS,
-                        s.DEFENSIVEDUELSWON,
-                        s.OFFENSIVEDUELS,
-                        s.OFFENSIVEDUELSWON,
-                        s.PASSES,
-                        s.SUCCESSFULPASSES,
-                        s.PASSESTOFINALTHIRD,
-                        s.SUCCESSFULPASSESTOFINALTHIRD,
-                        s.CROSSES,
-                        s.SUCCESSFULCROSSES,
-                        s.FORWARDPASSES,
-                        s.SUCCESSFULFORWARDPASSES,
-                        s.KEYPASSES,
-                        s.SUCCESSFULKEYPASSES,
-                        s.DRIBBLES,
-                        s.SUCCESSFULDRIBBLES,
-                        s.INTERCEPTIONS,
-                        s.DEFENSIVEACTIONS,
-                        s.SUCCESSFULDEFENSIVEACTION,
-                        s.ATTACKINGACTIONS,
-                        s.SUCCESSFULATTACKINGACTIONS,
-                        s.PRESSINGDUELS,
-                        s.PRESSINGDUELSWON,
-                        s.SHOTASSISTS,
-                        s.SHOTONTARGETASSISTS,
-                        s.RECOVERIES,
-                        s.OPPONENTHALFRECOVERIES,
-                        s.DANGEROUSOPPONENTHALFRECOVERIES,
-                        s.LOSSES,
-                        s.OWNHALFLOSSES,
-                        s.DANGEROUSOWNHALFLOSSES,
-                        s.XGSHOT,
-                        s.TOUCHINBOX,
+                        s.*
                     
                     
                     FROM wyscout_playeradvancedstats_total s
@@ -182,13 +138,15 @@ def load_all_data():
                     -- Joiner konkurrencenavnet for hver statistiklinje
                     JOIN wyscout_competitions wc
                         ON s.competition_wyid = wc.competition_wyid
+
+                    WHERE s.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
                     
                     ORDER BY 
                         ws.seasonname,
                         wc.competitionname;
-                                        WHERE s.COMPETITION_WYID IN {comp_filter}
-                                        AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                                    """
+                    
+                """
             }
             
             for key, q in queries.items():
