@@ -102,15 +102,30 @@ def vis_side(df_team_matches, hold_map, df_events):
                 with col:
                     st.write(f"**{title}**")
                     fig, ax = pitch.draw(figsize=(4, 5))
+                    
                     mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
                     df_f = df_plot[mask]
+                    
                     if not df_f.empty:
-                        sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], ax=ax, fill=True, cmap=cmap, alpha=0.7, levels=10)
+                        # KDEPLOT med begrænsning (clip) så det ikke går over kanten
+                        sns.kdeplot(
+                            x=df_f['LOCATIONY'], 
+                            y=df_f['LOCATIONX'], 
+                            ax=ax, 
+                            fill=True, 
+                            cmap=cmap, 
+                            alpha=0.7, 
+                            levels=10,
+                            thresh=0.05, # Fjerner de svageste skygger i kanten
+                            clip=((0, 100), (0, 100)) # Låser KDE til banens koordinater
+                        )
+                        # Ekstra sikkerhed: Lås aksen visuelt til banens grænser
+                        ax.set_xlim(0, 100)
+                        ax.set_ylim(0, 100)
                     else:
                         ax.text(50, 75, "Ingen data", ha='center', va='center', color='gray')
+                    
                     st.pyplot(fig, use_container_width=True)
-        else:
-            st.warning(f"Ingen hændelsesdata fundet for {valgt_hold_navn}")
 
     with side_col:
         st.write("**Seneste kampe**")
