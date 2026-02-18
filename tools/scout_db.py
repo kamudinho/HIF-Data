@@ -98,42 +98,6 @@ def vis_profil(p_data, full_df, s_df):
     if not df_career.empty:
         st.write("DEBUG: Kolonner i tabellen:", df_career.columns.tolist())
         st.dataframe(df_career.head()) # Vis de rå data
-        
-        st.markdown("### Karrierestatistik")
-        
-        all_data = st.session_state.get('all_data', {})
-        df_career = all_data.get('player_career', pd.DataFrame()).copy()
-
-        if not df_career.empty:
-            df_career.columns = [c.upper() for c in df_career.columns]
-            tid = str(clean_p_id).split('.')[0].strip()
-            
-            # Filtrer på spiller
-            df_p = df_career[df_career['PLAYER_WYID'].astype(str) == tid].copy()
-
-            if not df_p.empty:
-                # --- OVERSÆTTELSE AF WY-NAVNE TIL DANSK ---
-                oversat_df = df_p.rename(columns={
-                    'SEASONNAME': 'SÆSON',
-                    'COMPETITIONNAME': 'TURNERING',
-                    'TEAMNAME': 'HOLD',
-                    'APPEARANCES': 'KAMPE',
-                    'MINUTESPLAYED': 'MIN',
-                    'GOAL': 'MÅL',
-                    'YELLOWCARD': 'GULE',
-                    'REDCARD': 'RØDE'
-                })
-
-                # Vælg de nye danske navne til visning
-                vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'GULE', 'RØDE']
-                
-                st.dataframe(
-                    oversat_df[vis_cols].sort_values('SÆSON', ascending=False), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
-            else:
-                st.info("Ingen karrierestatistik fundet for denne spiller.")
             
     with t5:
 
