@@ -96,52 +96,53 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Sæsonstatistik")
         
-        if s_df is not None and not s_df.empty:
+        # 1. Hent data fra din stats_df (playerstats) og player_seasons query
+        # Antager at player_seasons er tilgængelig i din data-pakke
+        df_stats_raw = stats_df.copy() if stats_df is not None else pd.DataFrame()
+        
+        # Vi skal have fat i player_seasons queryen (den skal med ind i funktionen)
+        # Hvis du gemmer den i din load_all_data ordbog, kan vi tilgå den her:
+        df_names = st.session_state.get('all_data', {}).get('player_seasons', pd.DataFrame())
+
+        if not df_stats_raw.empty and not df_names.empty:
+            # Sørg for at ID'er er strings og rensede for at merge virker
+            for d in [df_stats_raw, df_names]:
+                for col in ['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID']:
+                    if col in d.columns:
+                        d[col] = d[col].astype(str).str.split('.').str[0].str.strip()
+
+            # 2. Merge tallene med navnene
+            # Vi kobler på 3 unikke ID'er for at ramme den helt rigtige række
+            df_combined = df_stats_raw.merge(
+                df_names[['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID', 'SEASONNAME', 'COMPETITIONNAME']], 
+                on=['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID'], 
+                how='left'
+            )
+
+            # 3. Filtrer på den valgte spiller
             tid = str(clean_p_id).split('.')[0].strip()
-            
-            # 1. Gør stats klar
-            df_stats = s_df.copy()
-            df_stats.columns = [c.upper() for c in df_stats.columns]
-            
-            # 2. Hent player_seasons hvis den er sendt med (via data-pakken)
-            # Antager at du har tilføjet den til din load_all_data retur-ordbog
-            df_seasons = full_df.get('player_seasons', pd.DataFrame()) 
-            
-            if 'PLAYER_WYID' in df_stats.columns:
-                # Filtrer stats for spilleren
-                df_p = df_stats[df_stats['PLAYER_WYID'].astype(str) == tid].copy()
+            df_p = df_combined[df_combined['PLAYER_WYID'] == tid].copy()
+
+            if not df_p.empty:
+                # Tilføj TEAMNAME fra din hold_map hvis det mangler
+                hold_map = st.session_state.get('all_data', {}).get('hold_map', {})
+                if 'OWNTEAMID' in df_p.columns:
+                    df_p['TEAMNAME'] = df_p['OWNTEAMID'].map(hold_map)
+
+                # 4. Vælg og vis kolonner
+                # Vi omdøber 'COMPETITIONNAME' til 'TURNERING' for læsbarhed
+                df_p = df_p.rename(columns={'COMPETITIONNAME': 'TURNERING', 'SEASONNAME': 'SÆSON'})
                 
-                if not df_p.empty:
-                    # --- NY KOBLING ---
-                    # Hvis vi har player_seasons, merger vi den på for at få TEAMNAME og SEASONNAME
-                    # (Dette løser dit problem med at navne mangler i rå playerstats)
-                    if 'SEASONNAME' not in df_p.columns and 'SEASON_WYID' in df_p.columns:
-                        # Her kan vi bruge den hold_map eller merge med seasons hvis nødvendigt
-                        # Men lettest er det, hvis du bruger de joins vi lavede i queries.py
-                        pass 
-
-                    # Beregn xG per kamp hvis det ønskes
-                    if 'XG' in df_p.columns and 'MATCHES' in df_p.columns:
-                        df_p['XG_PER_MATCH'] = (df_p['XG'] / df_p['MATCHES']).round(2)
-
-                    # Definer kolonner der skal vises
-                    cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'ASSISTS', 'XG']
-                    existing = [c for c in cols_to_show if c in df_p.columns]
-                    
-                    st.dataframe(
-                        df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False) if 'SEASONNAME' in df_p.columns else df_p[existing], 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-                else:
-                    st.info(f"Ingen statistiske kampdata fundet for ID: {tid}")
-
-        # --- NY SEKTION: Positions-historik (Fra din nye player_seasons query) ---
-        st.divider()
-        st.markdown("### Primære Positioner (Sæson)")
-        # Her trækker vi data fra den nye query vi lavede før
-        # Du skal sikre dig at 'player_seasons' er en del af de data der sendes til funktionen
-            
+                cols_to_show = ['SÆSON', 'TURNERING', 'TEAMNAME', 'MATCHES', 'GOALS', 'ASSISTS', 'XG']
+                existing = [c for c in cols_to_show if c in df_p.columns]
+                
+                st.dataframe(
+                    df_p[existing].drop_duplicates().sort_values('SÆSON', ascending=False),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Ingen detaljeret statistik fundet for denne spiller.")            
     with t5:
 
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
