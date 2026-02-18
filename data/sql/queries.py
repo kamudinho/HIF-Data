@@ -66,8 +66,8 @@ def get_queries(comp_filter, season_filter):
         "player_career": f"""
             SELECT 
                 PLAYER_WYID, 
-                SEASONNAME AS SÆSON, 
-                COMPETITIONNAME AS TURNERING, 
+                SEASONNAME,
+                COMPETITIONNAME, 
                 TEAMNAME AS HOLD, 
                 MATCHES AS KAMPE, 
                 MINUTESPLAYED AS MIN, 
