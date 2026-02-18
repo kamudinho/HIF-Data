@@ -29,27 +29,6 @@ def save_to_github(new_row_df):
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # DEN ULTIMATIVE CSS FIX TIL DROPDOWNS
-    st.markdown("""
-        <style>
-            /* Tvinger dropdown-tekst til at følge systemets tekstfarve */
-            div[data-baseweb="select"] span, 
-            div[data-baseweb="select"] div,
-            div[role="listbox"] div {
-                color: var(--text-color, #31333F) !important;
-            }
-            /* Gør dropdown-listen hvid/lys-grå for læsbarhed */
-            div[role="listbox"] {
-                background-color: #f0f2f6 !important;
-            }
-            /* Styling af overskrifter i inputfelter */
-            label {
-                color: var(--text-color, #31333F) !important;
-                font-weight: 600 !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.write("#### 📝 Ny Scoutrapport")
     
     # 1. DATA FORBEREDELSE
@@ -66,34 +45,33 @@ def vis_side(df_players, df_playerstats):
     
     master_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['PLAYER_WYID']) if lookup_list else pd.DataFrame()
 
-    # 2. TOP-LINJE (Søg, Pos, Klub, Scout)
+    # 2. TOP-LINJE LAYOUT (Find, Pos, Klub, Scout)
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
     c_find, c_pos, c_klub, c_scout = st.columns([2.5, 1, 1, 1])
     
-    p_navn, p_id, p_klub, p_pos = "", "", "", ""
+    p_navn, p_id, p_klub_val, p_pos_val = "", "", "", ""
     curr_scout = st.session_state.get("user", "System").upper()
 
-    if metode == "Søg i systemet" and not master_df.empty:
+    if metode == "Søg i systemet":
         with c_find:
-            valgt = st.selectbox("Find spiller", options=[""] + sorted(master_df['NAVN'].tolist()))
+            # Vi bruger en selectbox, men tvinger nu farven med en mere specifik CSS ID
+            alle_spillere = sorted(master_df['NAVN'].tolist()) if not master_df.empty else []
+            valgt = st.selectbox("Find spiller", options=[""] + alle_spillere, key="player_search_box")
+            
             if valgt:
                 m = master_df[master_df['NAVN'] == valgt].iloc[0]
-                p_navn, p_id, p_klub, p_pos = valgt, m['PLAYER_WYID'], m['KLUB'], m['POS']
+                p_navn, p_id, p_klub_val, p_pos_val = valgt, m['PLAYER_WYID'], m['KLUB'], m['POS']
     else:
         with c_find: 
             p_navn = st.text_input("Spillerens Navn")
-            if p_navn:
-                p_id = str(uuid.uuid4().int)[:6]
+            p_id = str(uuid.uuid4().int)[:6] if p_navn else ""
 
-    with c_pos: p_pos = st.text_input("Position", value=p_pos)
-    with c_klub: p_klub = st.text_input("Klub", value=p_klub)
+    with c_pos: pos_final = st.text_input("Position", value=p_pos_val)
+    with c_klub: klub_final = st.text_input("Klub", value=p_klub_val)
     with c_scout: st.text_input("Scout", value=curr_scout, disabled=True)
     
-    if p_id:
-        st.caption(f"System ID: {p_id}")
-
-    # 3. SCOUT FORM
+    # 3. SCOUT FORM (Matcher præcis dine 20 kolonner)
     with st.form("scout_form"):
         col_a, col_b = st.columns(2)
         status = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
@@ -103,7 +81,7 @@ def vis_side(df_players, df_playerstats):
         r1, r2, r3 = st.columns(3)
         fart = r1.select_slider("Fart", options=range(1,7), value=3)
         teknik = r1.select_slider("Teknik", options=range(1,7), value=3)
-        beslut = r1.select_slider("Beslutsomhed", options=range(1,7), value=3)
+        beslut = r1.select_slider("Beslutningsevne", options=range(1,7), value=3)
         
         spil_int = r2.select_slider("Spilintelligens", options=range(1,7), value=3)
         attitude = r2.select_slider("Attitude", options=range(1,7), value=3)
@@ -119,10 +97,12 @@ def vis_side(df_players, df_playerstats):
         vurdering = st.text_area("Samlet Vurdering")
 
         if st.form_submit_button("Gem til Database", use_container_width=True):
-            if p_navn and p_id:
+            if p_navn:
                 avg = round((fart+teknik+beslut+spil_int+attitude+aggresiv+udhold+leder)/8, 1)
+                
+                # Datastruktur der matcher dit ark 100%
                 ny_data = pd.DataFrame([[
-                    p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, p_klub, p_pos,
+                    p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, klub_final, pos_final,
                     avg, status, potentiale, styrker, udvikling, vurdering,
                     beslut, fart, aggresiv, attitude, udhold, leder, teknik, spil_int, curr_scout
                 ]], columns=[
@@ -130,6 +110,20 @@ def vis_side(df_players, df_playerstats):
                     "Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet",
                     "Attitude","Udholdenhed","Lederegenskaber","Teknik","Spilintelligens","Scout"
                 ])
+                
                 if save_to_github(ny_data) in [200, 201]:
-                    st.success(f"Gemt!")
+                    st.success("Rapport gemt!")
                     st.rerun()
+
+    # CSS FIX DER TVINGER FARVEN PÅ PLADS I DENNE SPECIFIKKE BOX
+    st.markdown("""
+        <style>
+            .stSelectbox div[data-baseweb="select"] {
+                background-color: white !important;
+                color: black !important;
+            }
+            .stSelectbox span {
+                color: black !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
