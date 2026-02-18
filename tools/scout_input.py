@@ -29,24 +29,23 @@ def save_to_github(new_row_df):
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # KRAFTIG CSS FIX: Tvinger tekstfarve i alle dropdowns og inputfelter
+    # DEN ULTIMATIVE CSS FIX TIL DROPDOWNS
     st.markdown("""
         <style>
-            /* Tvinger tekstfarve i dropdown-menuer (Selectbox) */
-            div[data-baseweb="select"] * {
-                color: #31333F !important;
+            /* Tvinger dropdown-tekst til at følge systemets tekstfarve */
+            div[data-baseweb="select"] span, 
+            div[data-baseweb="select"] div,
+            div[role="listbox"] div {
+                color: var(--text-color, #31333F) !important;
             }
-            /* Sikrer hvid baggrund i selve dropdown-listen når den åbner */
+            /* Gør dropdown-listen hvid/lys-grå for læsbarhed */
             div[role="listbox"] {
-                background-color: white !important;
+                background-color: #f0f2f6 !important;
             }
-            /* Tekstfarve i tekst-input felter */
-            .stTextInput input {
-                color: #31333F !important;
-            }
-            /* Gør titler på kolonner lidt tydeligere */
+            /* Styling af overskrifter i inputfelter */
             label {
-                font-weight: bold !important;
+                color: var(--text-color, #31333F) !important;
+                font-weight: 600 !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -67,10 +66,10 @@ def vis_side(df_players, df_playerstats):
     
     master_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['PLAYER_WYID']) if lookup_list else pd.DataFrame()
 
-    # 2. INPUT SEKTION (Scout flyttet bagerst)
+    # 2. TOP-LINJE (Søg, Pos, Klub, Scout)
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
-    c_find, c_pos, c_klub, c_scout = st.columns([2, 1, 1, 1])
+    c_find, c_pos, c_klub, c_scout = st.columns([2.5, 1, 1, 1])
     
     p_navn, p_id, p_klub, p_pos = "", "", "", ""
     curr_scout = st.session_state.get("user", "System").upper()
@@ -87,8 +86,8 @@ def vis_side(df_players, df_playerstats):
             if p_navn:
                 p_id = str(uuid.uuid4().int)[:6]
 
-    with c_pos: pos_final = st.text_input("Position", value=p_pos)
-    with c_klub: klub_final = st.text_input("Klub", value=p_klub)
+    with c_pos: p_pos = st.text_input("Position", value=p_pos)
+    with c_klub: p_klub = st.text_input("Klub", value=p_klub)
     with c_scout: st.text_input("Scout", value=curr_scout, disabled=True)
     
     if p_id:
@@ -122,18 +121,15 @@ def vis_side(df_players, df_playerstats):
         if st.form_submit_button("Gem til Database", use_container_width=True):
             if p_navn and p_id:
                 avg = round((fart+teknik+beslut+spil_int+attitude+aggresiv+udhold+leder)/8, 1)
-                
                 ny_data = pd.DataFrame([[
-                    p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, klub_final, pos_final,
+                    p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, p_klub, p_pos,
                     avg, status, potentiale, styrker, udvikling, vurdering,
-                    beslut, fart, aggresiv, attitude, udhold, leder, teknik, spil_int,
-                    curr_scout
+                    beslut, fart, aggresiv, attitude, udhold, leder, teknik, spil_int, curr_scout
                 ]], columns=[
                     "PLAYER_WYID","Dato","Navn","Klub","Position","Rating_Avg","Status","Potentiale",
                     "Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet",
                     "Attitude","Udholdenhed","Lederegenskaber","Teknik","Spilintelligens","Scout"
                 ])
-                
                 if save_to_github(ny_data) in [200, 201]:
-                    st.success(f"Gemt! {p_navn} tilføjet.")
+                    st.success(f"Gemt!")
                     st.rerun()
