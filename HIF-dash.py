@@ -101,6 +101,8 @@ try:
         ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
     elif sel == "Database":
         import tools.scout_db as sdb
+        import importlib
+        importlib.reload(sdb)  # Dette tvinger Python til at se den nye 'vis_side'
         sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], dp["player_career"])
     elif sel == "Scoutrapport":
         import tools.scout_input as si
