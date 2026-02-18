@@ -72,9 +72,17 @@ def load_all_data():
                     JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
                     WHERE c.PRIMARYTYPE = 'shot' AND c.COMPETITION_WYID IN {comp_filter}
                 """,
-                "team_matches": f"""
-                    SELECT tm.*, m.MATCHLABEL FROM AXIS.WYSCOUT_TEAMMATCHES tm
-                    JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+               "team_matches": f"""
+                    SELECT 
+                        tm.SEASON_WYID, 
+                        tm.TEAM_WYID, 
+                        tm.MATCH_WYID, 
+                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK, adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
+                    FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                    LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                        ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+                    JOIN AXIS.WYSCOUT_MATCHES m 
+                        ON tm.MATCH_WYID = m.MATCH_WYID
                     WHERE tm.COMPETITION_WYID IN {comp_filter}
                 """,
                 # I data/data_load.py - playerstats query
