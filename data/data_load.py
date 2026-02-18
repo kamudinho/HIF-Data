@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import serialization
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID
 except ImportError:
-    SEASONNAME = "2024/2025"
+    SEASONNAME = "2025/2026"
     COMPETITION_WYID = (3134,)
 
 def _get_snowflake_conn():
@@ -35,6 +35,7 @@ def _get_snowflake_conn():
 @st.cache_data(ttl=3600)
 def load_all_data():
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
 
     # --- 1. GITHUB DATA (CSV) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
@@ -64,56 +65,55 @@ def load_all_data():
             if df_t is not None:
                 res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
 
-            # B: Queries baseret på dine Schema-oplysninger
+            # B: Optimerede Queries med Sæson-filtrering
             queries = {
                 "shotevents": f"""
                     SELECT c.*, m.MATCHLABEL, m.DATE 
                     FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
                     JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                    WHERE c.PRIMARYTYPE = 'shot' AND c.COMPETITION_WYID IN {comp_filter}
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE c.PRIMARYTYPE = 'shot' 
+                    AND c.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
                 """,
-               "team_matches": f"""
+                "team_matches": f"""
                     SELECT 
-                        tm.SEASON_WYID, 
-                        tm.TEAM_WYID, 
-                        tm.MATCH_WYID, 
-                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK, adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
+                        tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
+                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK, 
+                        adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
                     FROM AXIS.WYSCOUT_TEAMMATCHES tm
                     LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                         ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-                    JOIN AXIS.WYSCOUT_MATCHES m 
-                        ON tm.MATCH_WYID = m.MATCH_WYID
-                    WHERE tm.COMPETITION_WYID IN {comp_filter}
+                    JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE tm.COMPETITION_WYID IN {comp_filter} 
+                    AND s.SEASONNAME {season_filter}
                 """,
-                # I data/data_load.py - playerstats query
                 "playerstats": f"""
-                    SELECT 
-                        PLAYER_WYID, 
-                        GOALS, 
-                        ASSISTS, 
-                        XGSHOT, 
-                        MATCHES, 
-                        MINUTESONFIELD,  -- Den hedder MinutesOnField i din liste!
-                        SHOTS,
-                        PASSES,
-                        SUCCESSFULPASSES,
-                        DUELS,
-                        DUELSWON
-                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
                     WHERE COMPETITION_WYID IN {comp_filter} 
-                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME='{SEASONNAME}')
+                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
                 """,
+                # VIGTIGSTE OPTIMERING: Join med MATCHES/SEASONS for at begrænse rækker
                 "events": f"""
-                    SELECT TEAM_WYID, PRIMARYTYPE, LOCATIONX, LOCATIONY, COMPETITION_WYID 
-                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON 
-                    WHERE COMPETITION_WYID IN {comp_filter}
-                    AND PRIMARYTYPE IN ('pass', 'duel', 'interception')
+                    SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
+                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
+                    JOIN AXIS.WYSCOUT_MATCHES m ON e.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE e.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
+                    AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
                 """
             }
+            
             for key, q in queries.items():
                 df = conn.query(q)
                 if df is not None:
                     df.columns = [c.upper() for c in df.columns]
+                    # Konverter koordinater til mindre datatyper for at spare RAM
+                    if 'LOCATIONX' in df.columns:
+                        df['LOCATIONX'] = df['LOCATIONX'].astype('float32')
+                        df['LOCATIONY'] = df['LOCATIONY'].astype('float32')
                     res[key] = df
         except Exception as e:
             st.error(f"SQL Fejl: {e}")
