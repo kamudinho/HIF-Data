@@ -79,7 +79,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         
         # --- PLAYERSTATS AGGREGERING ---
         if player_seasons is not None and not player_seasons.empty:
-            clean_season = season_filter.replace("= '", "").replace("'", "").strip()
+            clean_season = season_filter.replace("=", "").replace("'", "").strip()
             
             # Tving typer for match i bro-tabellen
             temp_seasons = player_seasons.copy()
