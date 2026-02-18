@@ -92,6 +92,7 @@ def load_all_data():
         "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
         "player_seasons": res["player_seasons"],
+        "player_career": res["player_career"],
         "season_stats": res["playerstats"], 
         "players_snowflake": res["players_snowflake"],
         "events": res["events"],
