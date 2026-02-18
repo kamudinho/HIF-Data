@@ -96,53 +96,61 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Sæsonstatistik")
         
-        # 1. Hent data fra din stats_df (playerstats) og player_seasons query
-        # Antager at player_seasons er tilgængelig i din data-pakke
+        # 1. Hent rå stats og navne-opslag
         df_stats_raw = stats_df.copy() if stats_df is not None else pd.DataFrame()
-        
-        # Vi skal have fat i player_seasons queryen (den skal med ind i funktionen)
-        # Hvis du gemmer den i din load_all_data ordbog, kan vi tilgå den her:
-        df_names = st.session_state.get('all_data', {}).get('player_seasons', pd.DataFrame())
+        # Vi henter 'player_seasons' som vi gemte i data_load.py
+        all_data = st.session_state.get('all_data', {})
+        df_names = all_data.get('player_seasons', pd.DataFrame()).copy()
 
         if not df_stats_raw.empty and not df_names.empty:
-            # Sørg for at ID'er er strings og rensede for at merge virker
+            # Sikr uppercase på alle kolonner for en sikkerheds skyld
+            df_stats_raw.columns = [c.upper() for c in df_stats_raw.columns]
+            df_names.columns = [c.upper() for c in df_names.columns]
+
+            # Rens ID'er så de matcher 100%
             for d in [df_stats_raw, df_names]:
                 for col in ['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID']:
                     if col in d.columns:
                         d[col] = d[col].astype(str).str.split('.').str[0].str.strip()
 
-            # 2. Merge tallene med navnene
-            # Vi kobler på 3 unikke ID'er for at ramme den helt rigtige række
+            # 2. Forbered navne-tabellen (vigtigt: undgå dubletter før merge!)
+            # Vi tager kun de unikke kombinationer af ID'er og deres Navne
+            df_lookup = df_names[['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID', 'SEASONNAME', 'COMPETITIONNAME']].drop_duplicates()
+
+            # 3. Merge tallene med navnene
             df_combined = df_stats_raw.merge(
-                df_names[['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID', 'SEASONNAME', 'COMPETITIONNAME']], 
+                df_lookup, 
                 on=['PLAYER_WYID', 'SEASON_WYID', 'COMPETITION_WYID'], 
                 how='left'
             )
 
-            # 3. Filtrer på den valgte spiller
+            # 4. Filtrer på den valgte spiller
             tid = str(clean_p_id).split('.')[0].strip()
             df_p = df_combined[df_combined['PLAYER_WYID'] == tid].copy()
 
             if not df_p.empty:
-                # Tilføj TEAMNAME fra din hold_map hvis det mangler
-                hold_map = st.session_state.get('all_data', {}).get('hold_map', {})
+                # Tilføj TEAMNAME fra hold_map via OWNTEAMID
+                hold_map = all_data.get('hold_map', {})
                 if 'OWNTEAMID' in df_p.columns:
-                    df_p['TEAMNAME'] = df_p['OWNTEAMID'].map(hold_map)
+                    df_p['TEAMNAME'] = df_p['OWNTEAMID'].astype(str).map(hold_map)
 
-                # 4. Vælg og vis kolonner
-                # Vi omdøber 'COMPETITIONNAME' til 'TURNERING' for læsbarhed
+                # 5. Formatering og visning
                 df_p = df_p.rename(columns={'COMPETITIONNAME': 'TURNERING', 'SEASONNAME': 'SÆSON'})
                 
+                # Vælg de kolonner vi vil vise (tjekker om de findes)
                 cols_to_show = ['SÆSON', 'TURNERING', 'TEAMNAME', 'MATCHES', 'GOALS', 'ASSISTS', 'XG']
                 existing = [c for c in cols_to_show if c in df_p.columns]
                 
                 st.dataframe(
-                    df_p[existing].drop_duplicates().sort_values('SÆSON', ascending=False),
+                    df_p[existing].sort_values(['SÆSON', 'MATCHES'], ascending=False),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                st.info("Ingen detaljeret statistik fundet for denne spiller.")            
+                st.info("Ingen detaljeret statistik fundet for denne spiller i de valgte turneringer.")
+        else:
+            st.warning("Data for sæsonnavne eller statistikker er ikke tilgængelige.")
+            
     with t5:
 
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
