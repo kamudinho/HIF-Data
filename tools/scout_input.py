@@ -4,8 +4,7 @@ import uuid
 from datetime import datetime
 
 def vis_side(data):
-    # --- 1. HENT DATA FRA SNOWFLAKE-NØGLERNE ---
-    # Vi bruger .get() for at undgå fejl hvis data ikke er loadet endnu
+    # Nu kan den hente begge dele fra 'dp' (som her kaldes 'data')
     df_snowflake = data.get("players_snowflake", pd.DataFrame())
     hold_map = data.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
