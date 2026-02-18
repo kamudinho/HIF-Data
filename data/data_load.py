@@ -80,7 +80,7 @@ def load_all_data():
                     SELECT 
                         tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
                         tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
-                        c.NAME AS COMPETITION_NAME, -- Her henter vi selve navnet
+                        c.COMPETITIONNAME AS COMPETITION_NAME, -- Her henter vi selve navnet
                         adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
                     FROM AXIS.WYSCOUT_TEAMMATCHES tm
                     LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
