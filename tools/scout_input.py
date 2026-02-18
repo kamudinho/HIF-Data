@@ -20,68 +20,63 @@ def save_to_github(new_row_df):
         content = r.json()
         sha = content['sha']
         old_csv = base64.b64decode(content['content']).decode('utf-8')
-        # Læser gammel data og sikrer at kolonner matcher
         updated_df = pd.concat([pd.read_csv(StringIO(old_csv)), new_row_df], ignore_index=True)
         csv_data = updated_df.to_csv(index=False)
     else:
-        # Hvis filen ikke findes, opretter vi den med den nye række
         csv_data = new_row_df.to_csv(index=False)
 
     payload = {
-        "message": f"Scout rapport: {new_row_df['Navn'].values[0]}", 
+        "message": f"Scout: {new_row_df['Navn'].values[0]}", 
         "content": base64.b64encode(csv_data.encode('utf-8')).decode('utf-8')
     }
     if sha:
         payload["sha"] = sha
 
-    res = requests.put(url, json=payload, headers=headers)
-    return res.status_code
+    return requests.put(url, json=payload, headers=headers).status_code
 
-def vis_side(df_players=None, df_playerstats=None):
+def vis_side(df_players, df_playerstats):
     st.write("#### 📝 Ny Scoutrapport")
     
-    # 1. Sammensmelt kilder med fejlsikring
+    # --- 1. DATABEHANDLING ---
     lookup_list = []
     
-    # Fra Snowflake (Liga-spillere)
+    # Fra Snowflake (playerstats)
     if df_playerstats is not None and not df_playerstats.empty:
+        # Vi tjekker kolonnenavne dynamisk for at undgå KeyError
+        cols = df_playerstats.columns
         for _, r in df_playerstats.iterrows():
-            # Håndter None-værdier i navne
-            f_name = r.get('FIRSTNAME', '') or ''
-            l_name = r.get('LASTNAME', '') or ''
+            f_name = r.get('FIRSTNAME', '') if 'FIRSTNAME' in cols else ''
+            l_name = r.get('LASTNAME', '') if 'LASTNAME' in cols else ''
             navn = f"{f_name} {l_name}".strip()
             
-            # Tving ID til ren streng-hovedpine-fri format
-            try:
-                p_id = str(int(r['PLAYER_WYID']))
-                lookup_list.append({
-                    "NAVN": navn, 
-                    "PLAYER_WYID": p_id, 
-                    "KLUB": r.get('TEAMNAME', 'Ukendt'), 
-                    "POS": r.get('ROLECODE3', '-')
-                })
-            except: continue
+            p_id = str(int(r['PLAYER_WYID'])) if 'PLAYER_WYID' in cols else None
+            klub = r.get('TEAMNAME', 'Ukendt') if 'TEAMNAME' in cols else 'Ukendt'
+            pos = r.get('ROLECODE3', '-') if 'ROLECODE3' in cols else '-'
+            
+            if p_id:
+                lookup_list.append({"NAVN": navn, "PLAYER_WYID": p_id, "KLUB": klub, "POS": pos})
     
-    # Fra GitHub (Lokale spillere)
+    # Fra GitHub (players)
     if df_players is not None and not df_players.empty:
+        cols_gh = df_players.columns
         for _, r in df_players.iterrows():
-            try:
-                p_id = str(int(r['PLAYER_WYID']))
+            p_id = str(int(r['PLAYER_WYID'])) if 'PLAYER_WYID' in cols_gh else None
+            if p_id:
                 lookup_list.append({
-                    "NAVN": str(r['NAVN']), 
+                    "NAVN": str(r.get('NAVN', 'Ukendt')), 
                     "PLAYER_WYID": p_id, 
                     "KLUB": str(r.get('TEAMNAME', 'Klubløs')), 
                     "POS": str(r.get('POS', '-'))
                 })
-            except: continue
 
     master_df = pd.DataFrame(lookup_list)
     if not master_df.empty:
         master_df = master_df.drop_duplicates(subset=['PLAYER_WYID'])
-    
-    alle_navne = sorted(master_df['NAVN'].tolist()) if not master_df.empty else []
+        alle_navne = sorted(master_df['NAVN'].tolist())
+    else:
+        alle_navne = []
 
-    # 2. Input Sektion
+    # --- 2. INPUT SEKTION ---
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     c1, c2, c3 = st.columns([2, 1, 1])
     
@@ -102,7 +97,7 @@ def vis_side(df_players=None, df_playerstats=None):
     
     st.caption(f"Unikt System ID: {p_id}")
 
-    # 3. Formular
+    # --- 3. FORMULAR ---
     with st.form("scout_form", clear_on_submit=True):
         st.write("**Vurdering (1-6)**")
         r1, r2 = st.columns(2)
@@ -113,12 +108,8 @@ def vis_side(df_players=None, df_playerstats=None):
         
         kommentar = st.text_area("Samlet scouting-notat")
         
-        submit = st.form_submit_button("Gem til Database", use_container_width=True)
-        
-        if submit:
-            if not p_navn or not p_id:
-                st.error("Navn og ID skal udfyldes!")
-            else:
+        if st.form_submit_button("Gem til Database", use_container_width=True):
+            if p_navn and p_id:
                 avg = round((fart+teknik+beslut+attitude)/4, 1)
                 ny_data = pd.DataFrame([[p_id, datetime.now().strftime("%Y-%m-%d"), p_navn, klub_final, pos_final, avg, kommentar]], 
                                       columns=["PLAYER_WYID", "Dato", "Navn", "Klub", "Position", "Rating_Avg", "Vurdering"])
@@ -129,7 +120,11 @@ def vis_side(df_players=None, df_playerstats=None):
                     st.balloons()
                 else:
                     st.error(f"Fejl ved gemning (Status: {status})")
+            else:
+                st.warning("Udfyld venligst både Navn og ID.")
 
-    # Debug
-    with st.expander("Debug"):
-        st.write(master_df.head())
+    # Debug expander til at verificere dataflow
+    with st.expander("System Debug"):
+        st.write("Data modtaget:", "Ja" if df_playerstats is not None else "Nej")
+        if not master_df.empty:
+            st.write(f"Antal unikke spillere fundet: {len(master_df)}")
