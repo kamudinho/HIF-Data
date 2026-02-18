@@ -1,178 +1,58 @@
 import streamlit as st
 import pandas as pd
-import requests
-import base64
-from datetime import datetime
 import uuid
-from io import StringIO
-
-# --- KONFIGURATION ---
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO = "Kamudinho/HIF-data"
-FILE_PATH = "data/scouting_db.csv"
-
-def save_to_github(new_row_df):
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    r = requests.get(url, headers=headers)
-    sha = None
-    if r.status_code == 200:
-        content = r.json()
-        sha = content['sha']
-        old_csv = base64.b64decode(content['content']).decode('utf-8')
-        # Læs eksisterende data
-        old_df = pd.read_csv(StringIO(old_csv))
-        # Tilføj den nye række
-        updated_df = pd.concat([old_df, new_row_df], ignore_index=True)
-        csv_data = updated_df.to_csv(index=False)
-    else:
-        # Hvis filen ikke findes, opret en ny
-        csv_data = new_row_df.to_csv(index=False)
-    
-    payload = {
-        "message": f"Scout: {new_row_df['Navn'].values[0]}", 
-        "content": base64.b64encode(csv_data.encode('utf-8')).decode('utf-8')
-    }
-    if sha: payload["sha"] = sha
-    
-    return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # --- CSS FIX FOR DROPDOWN ---
-    st.markdown("""
-        <style>
-            input[data-baseweb="base-input"] { 
-                color: black !important; 
-                -webkit-text-fill-color: black !important; 
-            }
-            div[role="listbox"] div, div[role="option"], div[data-baseweb="popover"] {
-                color: black !important; 
-                background-color: white !important;
-            }
-            .stSelectbox div[data-baseweb="select"] { 
-                color: black !important; 
-            }
-        </style>
-    """, unsafe_allow_html=True)
+    st.write("### 🔍 Test af Spillerdata")
 
-    st.write("#### 📝 Ny Scoutrapport")
+    # 1. DEBUG: Tjek om vi overhovedet modtager data
+    if df_playerstats is None or df_playerstats.empty:
+        st.error("Ingen data modtaget i df_playerstats!")
+        return
+
+    # 2. FORBERED LOOKUP (Kogt helt ned)
+    lookup_data = []
+    for _, r in df_playerstats.iterrows():
+        # Vi bygger navnet og gemmer de vigtige felter
+        navn = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
+        wyid = str(r.get('PLAYER_WYID', ''))
+        
+        if navn and wyid:
+            lookup_data.append({
+                "NAVN": navn,
+                "ID": wyid,
+                "KLUB": r.get('TEAMNAME', 'Ukendt'),
+                "POS": r.get('ROLECODE3', '-')
+            })
+
+    # Lav DataFrame og fjern dubletter
+    m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID'])
     
-    # Session State initialisering
+    # 3. DEBUG: Se om listen er tom efter bearbejdning
+    st.write(f"Antal spillere fundet: {len(m_df)}")
+    if len(m_df) > 0:
+        st.write("Eksempel på første spiller:", m_df.iloc[0].to_dict())
+
+    # 4. INITIALISER SESSION STATE
     if 's_pos' not in st.session_state: st.session_state.s_pos = ""
     if 's_klub' not in st.session_state: st.session_state.s_klub = ""
-    if 's_id' not in st.session_state: st.session_state.s_id = ""
-    if 's_navn' not in st.session_state: st.session_state.s_navn = ""
 
-    # Data forberedelse
-    lookup_list = []
-    if df_playerstats is not None and not df_playerstats.empty:
-        for _, r in df_playerstats.iterrows():
-            n = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
-            lookup_list.append({
-                "NAVN": n, 
-                "ID": str(int(r['PLAYER_WYID'])), 
-                "KLUB": r.get('TEAMNAME','?'), 
-                "POS": r.get('ROLECODE3','-')
-            })
-    m_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['ID']) if lookup_list else pd.DataFrame()
+    # 5. DROPDOWN LOGIK (Minimalistisk)
+    options = [""] + sorted(m_df['NAVN'].tolist())
+    valgt_navn = st.selectbox("Vælg spiller fra systemet", options=options)
 
-    def update_player_info():
-        valgt = st.session_state.main_search
-        if valgt:
-            row = m_df[m_df['NAVN'] == valgt].iloc[0]
-            st.session_state.s_navn = valgt
-            st.session_state.s_id = row['ID']
-            st.session_state.s_pos = row['POS']
-            st.session_state.s_klub = row['KLUB']
-        else:
-            st.session_state.s_navn = ""
-            st.session_state.s_id = ""
-            st.session_state.s_pos = ""
-            st.session_state.s_klub = ""
+    if valgt_navn:
+        # Find spillerens info
+        spiller_info = m_df[m_df['NAVN'] == valgt_navn].iloc[0]
+        st.session_state.s_pos = spiller_info['POS']
+        st.session_state.s_klub = spiller_info['KLUB']
+        st.success(f"Valgt: {valgt_navn} (ID: {spiller_info['ID']})")
 
-    # Layout
-    metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
-    c_find, c_pos, c_klub, c_scout = st.columns([2.5, 1, 1, 1])
-    curr_user = st.session_state.get("user", "System").upper()
+    # 6. VIS FELTERNE
+    col1, col2 = st.columns(2)
+    with col1:
+        p_pos = st.text_input("Position", value=st.session_state.s_pos)
+    with col2:
+        p_klub = st.text_input("Klub", value=st.session_state.s_klub)
 
-    if metode == "Søg i systemet":
-        with c_find:
-            opt = [""] + sorted(m_df['NAVN'].tolist())
-            st.selectbox("Find spiller", options=opt, key="main_search", on_change=update_player_info)
-    else:
-        with c_find:
-            st.session_state.s_navn = st.text_input("Navn", key="manual_name")
-            # Generer kun nyt ID hvis det er tomt
-            if st.session_state.s_navn and not st.session_state.s_id:
-                st.session_state.s_id = str(uuid.uuid4().int)[:6]
-
-    with c_pos: p_pos = st.text_input("Position", value=st.session_state.s_pos)
-    with c_klub: p_klub = st.text_input("Klub", value=st.session_state.s_klub)
-    with c_scout: st.text_input("Scout", value=curr_user, disabled=True)
-
-    with st.form("scout_form"):
-        col_a, col_b = st.columns(2)
-        stat = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
-        pot = col_b.selectbox("Potentiale", ["Lavt", "Middel", "Top"])
-        
-        st.divider()
-        r1, r2, r3 = st.columns(3)
-        fart = r1.select_slider("Fart", options=range(1,7), value=3)
-        teknik = r1.select_slider("Teknik", options=range(1,7), value=3)
-        beslut = r1.select_slider("Beslutsomhed", options=range(1,7), value=3)
-        sp_int = r2.select_slider("Spilintelligens", options=range(1,7), value=3)
-        att = r2.select_slider("Attitude", options=range(1,7), value=3)
-        agg = r2.select_slider("Aggresivitet", options=range(1,7), value=3)
-        udh = r3.select_slider("Udholdenhed", options=range(1,7), value=3)
-        led = r3.select_slider("Lederegenskaber", options=range(1,7), value=3)
-        
-        st.divider()
-        styrke = st.text_input("Styrker")
-        udv = st.text_input("Udvikling") # Rettet til "Udvikling" for at matche din CSV
-        vurder = st.text_area("Vurdering") # Rettet til "Vurdering" for at matche din CSV
-
-        if st.form_submit_button("Gem til Database"):
-            if st.session_state.s_navn:
-                avg = round((fart+teknik+beslut+sp_int+att+agg+udh+led)/8, 1)
-                
-                # DATA_ROW MATCHER DIN CSV OVERLYST 1:1
-                data_row = [
-                    st.session_state.s_id,               # PLAYER_WYID
-                    datetime.now().strftime("%Y-%m-%d"), # Dato
-                    st.session_state.s_navn,             # Navn
-                    p_klub,                              # Klub
-                    p_pos,                               # Position
-                    avg,                                 # Rating_Avg
-                    stat,                                # Status
-                    pot,                                 # Potentiale
-                    styrke,                              # Styrker
-                    udv,                                 # Udvikling
-                    vurder,                              # Vurdering
-                    beslut,                              # Beslutsomhed
-                    fart,                                # Fart
-                    agg,                                 # Aggresivitet
-                    att,                                 # Attitude
-                    udh,                                 # Udholdenhed
-                    led,                                 # Lederegenskaber
-                    teknik,                              # Teknik
-                    sp_int,                              # Spilintelligens
-                    curr_user                            # Scout
-                ]
-                
-                col_names = [
-                    "PLAYER_WYID", "Dato", "Navn", "Klub", "Position", 
-                    "Rating_Avg", "Status", "Potentiale", "Styrker", 
-                    "Udvikling", "Vurdering", "Beslutsomhed", "Fart", 
-                    "Aggresivitet", "Attitude", "Udholdenhed", 
-                    "Lederegenskaber", "Teknik", "Spilintelligens", "Scout"
-                ]
-
-                df_new = pd.DataFrame([data_row], columns=col_names)
-                
-                # Gem til GitHub
-                res = save_to_github(df_new)
-                if res in [200, 201]:
-                    st.success("Rapport gemt!")
-                    st.rerun()
-                else:
-                    st.error(f"Fejl ved gem (Status: {res})")
+    st.info("Hvis du kan se spillere i listen herover nu, kan vi bygge 'Gem'-funktionen på igen.")
