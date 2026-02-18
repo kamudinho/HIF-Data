@@ -62,7 +62,7 @@ def vis_side():
             "WYSCOUT_SEASONS_STANDINGS", "WYSCOUT_TEAMMATCHES",
             "WYSCOUT_TEAMS", "WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE",
             "WYSCOUT_TEAMSADVANCEDSTATS_PERCENT", "WYSCOUT_TEAMSADVANCEDSTATS_TOTAL",
-            "WYSCOUT_TEAMSQUADS"
+            "WYSCOUT_TEAMSQUADS", "WYSCOUT_COMPETITIONS"
         ]
         
         # Sorteret alfabetisk så det er nemmere at navigere
