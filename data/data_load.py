@@ -104,6 +104,17 @@ def load_all_data():
                     WHERE e.COMPETITION_WYID IN {comp_filter}
                     AND s.SEASONNAME {season_filter}
                     AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
+                """,
+                "players_snowflake": f"""
+                    SELECT 
+                        PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
+                        ROLECODE3, CURRENTTEAM_WYID 
+                    FROM AXIS.WYSCOUT_PLAYERS
+                    WHERE PLAYER_WYID IN (
+                        SELECT DISTINCT PLAYER_WYID 
+                        FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                        WHERE COMPETITION_WYID IN {comp_filter}
+                    )
                 """
             }
             
