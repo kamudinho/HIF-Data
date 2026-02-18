@@ -113,22 +113,82 @@ def load_all_data():
                 """,
                 "playerstats": f"""
                     SELECT DISTINCT 
-                        s.PLAYER_WYID,
-                        ws.SEASONNAME,
-                        wc.COMPETITIONNAME,
-                        -- Her tilføjer du alle de kolonner fra din SQL, du skal bruge
-                        s.MATCHES,
+                        p.player_wyid,
+                        p.firstname,
+                        p.lastname,
+                        p.rolecode3,
+                        p.birthdate,
+                        -- Viser Sæsonnavn
+                        ws.seasonname,
+                        -- Viser navnet på den konkurrence, linjen dækker
+                        wc.competitionname,
+                        
+                        -- ALLE KOLONNER UDEN SUM()
+                        s.matches AS kampe,
+                        s.MATCHESINSTART,
+                        s.MATCHESSUBSTITUTED,
+                        s.MATCHESCOMINGOFF,
+                        s.MINUTESONFIELD,
                         s.GOALS,
                         s.ASSISTS,
-                        s.XGSHOT AS XG,
-                        t.TEAMNAME  -- Husk at joine TEAMNAME på TEAM_WYID som vi talte om
-                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-                    JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
-                    JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
-                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
-                    WHERE s.COMPETITION_WYID IN {comp_filter}
-                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                """
+                        s.SHOTS,
+                        s.YELLOWCARDS,
+                        s.REDCARDS,
+                        s.DUELS,
+                        s.DUELSWON,
+                        s.DEFENSIVEDUELS,
+                        s.DEFENSIVEDUELSWON,
+                        s.OFFENSIVEDUELS,
+                        s.OFFENSIVEDUELSWON,
+                        s.PASSES,
+                        s.SUCCESSFULPASSES,
+                        s.PASSESTOFINALTHIRD,
+                        s.SUCCESSFULPASSESTOFINALTHIRD,
+                        s.CROSSES,
+                        s.SUCCESSFULCROSSES,
+                        s.FORWARDPASSES,
+                        s.SUCCESSFULFORWARDPASSES,
+                        s.KEYPASSES,
+                        s.SUCCESSFULKEYPASSES,
+                        s.DRIBBLES,
+                        s.SUCCESSFULDRIBBLES,
+                        s.INTERCEPTIONS,
+                        s.DEFENSIVEACTIONS,
+                        s.SUCCESSFULDEFENSIVEACTION,
+                        s.ATTACKINGACTIONS,
+                        s.SUCCESSFULATTACKINGACTIONS,
+                        s.PRESSINGDUELS,
+                        s.PRESSINGDUELSWON,
+                        s.SHOTASSISTS,
+                        s.SHOTONTARGETASSISTS,
+                        s.RECOVERIES,
+                        s.OPPONENTHALFRECOVERIES,
+                        s.DANGEROUSOPPONENTHALFRECOVERIES,
+                        s.LOSSES,
+                        s.OWNHALFLOSSES,
+                        s.DANGEROUSOWNHALFLOSSES,
+                        s.XGSHOT,
+                        s.TOUCHINBOX,
+                    
+                    
+                    FROM wyscout_playeradvancedstats_total s
+                    JOIN wyscout_players p
+                        ON s.player_wyid = p.player_wyid
+                        AND s.competition_wyid = p.competition_wyid
+                    -- Joiner sæsontabel for navnet
+                    JOIN WYSCOUT_SEASONS ws
+                        ON s.season_wyid = ws.season_wyid
+                    -- DEN MANGLENDE/FEJLENDE JOIN ER FJERNET HER
+                    -- Joiner konkurrencenavnet for hver statistiklinje
+                    JOIN wyscout_competitions wc
+                        ON s.competition_wyid = wc.competition_wyid
+                    
+                    ORDER BY 
+                        ws.seasonname,
+                        wc.competitionname;
+                                        WHERE s.COMPETITION_WYID IN {comp_filter}
+                                        AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                                    """
             }
             
             for key, q in queries.items():
