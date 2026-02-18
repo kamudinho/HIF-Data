@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID
 except ImportError:
-    SEASONNAME = "2024/2025"
+    SEASONNAME = "2025/2026"
     COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
 def _get_snowflake_conn():
@@ -30,6 +30,7 @@ def _get_snowflake_conn():
             schema=s["schema"], private_key=p_key_der
         )
     except Exception as e:
+        st.error(f"❌ Snowflake Connection Error: {e}")
         return None
 
 @st.cache_data(ttl=3600)
@@ -37,36 +38,80 @@ def load_all_data():
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
     season_filter = f"='{SEASONNAME}'"
 
-    # --- 1. GITHUB DATA ---
+    # --- 1. GITHUB DATA (CSV) ---
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
             u = f"{url_base}{file}?nocache={uuid.uuid4()}"
             d = pd.read_csv(u, sep=None, engine='python')
-            d.columns = [str(c).upper() for c in d.columns]
+            d.columns = [str(c).strip().upper() for c in d.columns]
             return d
         except: return pd.DataFrame()
 
     df_players_gh = read_gh("players.csv")
     df_scout_gh = read_gh("scouting_db.csv")
+    df_teams_csv = read_gh("teams.csv")
 
-    # --- 2. SNOWFLAKE DATA ---
+    # --- 2. SNOWFLAKE DATA (SQL) ---
     conn = _get_snowflake_conn()
-    res = {"shotevents": pd.DataFrame(), "team_matches": pd.DataFrame(), "playerstats": pd.DataFrame(), "events": pd.DataFrame(), "hold_map": {}}
+    res = {
+        "shotevents": pd.DataFrame(), 
+        "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(), 
+        "events": pd.DataFrame(), 
+        "players_snowflake": pd.DataFrame(),
+        "hold_map": {}
+    }
 
     if conn:
         try:
-            # Simpel hold-mapping
+            # A: Hold Mapping
             df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
             if df_t is not None:
-                res["hold_map"] = {str(int(r[0])): str(r[1]) for r in df_t.values}
+                res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
 
-            # Originale, brede queries uden joins
+            # B: Queries uden komplekse joins for at undgå "Invalid Identifier"
             queries = {
-                "shotevents": f"SELECT * FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON WHERE PRIMARYTYPE = 'shot' AND COMPETITION_WYID IN {comp_filter}",
-                "team_matches": f"SELECT * FROM AXIS.WYSCOUT_TEAMMATCHES WHERE COMPETITION_WYID IN {comp_filter}",
-                "playerstats": f"SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL WHERE COMPETITION_WYID IN {comp_filter}",
-                "events": f"SELECT TEAM_WYID, PRIMARYTYPE, LOCATIONX, LOCATIONY FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON WHERE COMPETITION_WYID IN {comp_filter} AND PRIMARYTYPE IN ('pass', 'duel', 'interception')"
+                "shotevents": f"""
+                    SELECT c.*, m.MATCHLABEL, m.DATE 
+                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                    JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE c.PRIMARYTYPE = 'shot' 
+                    AND c.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
+                """,
+                "team_matches": f"""
+                    SELECT tm.*, m.MATCHLABEL
+                    FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                    JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE tm.COMPETITION_WYID IN {comp_filter} 
+                    AND s.SEASONNAME {season_filter}
+                """,
+                "playerstats": f"""
+                    SELECT 
+                        PLAYER_WYID, COMPETITION_WYID, SEASON_WYID,
+                        MATCHES, GOALS, ASSISTS, XGSHOT AS XG,
+                        YELLOWCARDS, REDCARDS, TOUCHINBOX
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                    WHERE COMPETITION_WYID IN {comp_filter} 
+                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                """,
+                "events": f"""
+                    SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
+                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
+                    JOIN AXIS.WYSCOUT_MATCHES m ON e.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE e.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
+                    AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
+                """,
+                "players_snowflake": f"""
+                    SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, ROLECODE3 
+                    FROM AXIS.WYSCOUT_PLAYERS
+                    WHERE PLAYER_WYID IN (SELECT DISTINCT PLAYER_WYID FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL WHERE COMPETITION_WYID IN {comp_filter})
+                """
             }
             
             for key, q in queries.items():
@@ -74,15 +119,19 @@ def load_all_data():
                 if df is not None:
                     df.columns = [c.upper() for c in df.columns]
                     res[key] = df
-        except:
-            pass
+        except Exception as e:
+            st.error(f"SQL Fejl: {e}")
 
+    # --- 3. SAMLET RETUR ---
     return {
         "players": df_players_gh,
         "scouting": df_scout_gh,
+        "teams_csv": df_teams_csv,
         "shotevents": res["shotevents"],
         "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
+        "season_stats": res["playerstats"], 
+        "players_snowflake": res["players_snowflake"],
         "events": res["events"],
         "hold_map": res["hold_map"]
     }
