@@ -27,7 +27,7 @@ def get_queries(comp_filter, season_filter):
             WHERE tm.COMPETITION_WYID IN {comp_filter} 
             AND s.SEASONNAME {season_filter}
         """,
-        "player_stats": f"""
+        "playerstats": f"""
             SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
             WHERE COMPETITION_WYID IN {comp_filter} 
             AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
