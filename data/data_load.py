@@ -118,7 +118,7 @@ def load_all_data():
                         t.TEAMNAME 
                     FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL ps
                     LEFT JOIN AXIS.WYSCOUT_SEASONS s ON ps.SEASON_WYID = s.SEASON_WYID
-                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON ps.TEAMID = t.TEAM_WYID
+                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON ps.TEAM_WYID = t.TEAM_WYID
                     WHERE ps.COMPETITION_WYID IN {comp_filter} 
                     AND ps.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
                 """,
