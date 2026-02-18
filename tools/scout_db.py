@@ -96,13 +96,19 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Sæsonstatistik")
         if s_df is not None and not s_df.empty:
-            df_stats = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id)].copy()
-            if not df_stats.empty:
-                cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
-                existing = [c for c in cols_to_show if c in df_stats.columns]
-                st.dataframe(df_stats[existing].drop_duplicates(), use_container_width=True, hide_index=True)
-            else:
-                st.info("Ingen kampdata fundet.")
+            # s_df er din 'playerstats' dataframe fra Snowflake
+            df_p = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id)].copy()
+            
+            if not df_p.empty:
+                # Kolonnerne findes nu pga. de nye JOINS i SQL'en
+                cols = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                existing = [c for c in cols if c in df_p.columns]
+                
+                st.dataframe(
+                    df_p[existing].sort_values('SEASONNAME', ascending=False), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
 
     with t5:
 
