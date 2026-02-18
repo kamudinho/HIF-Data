@@ -101,13 +101,17 @@ def load_all_data():
                         s.PLAYER_WYID,
                         ws.SEASONNAME,
                         wc.COMPETITIONNAME,
-                        t.TEAMNAME,
-                        s.MATCHES, s.GOALS, s.ASSISTS, s.XGSHOT AS XG,
-                        s.YELLOWCARDS, s.REDCARDS
+                        m.MATCHLABEL as TEAMNAME, -- Vi bruger Matchlabel som midlertidig hold-identifikation
+                        s.MATCHES, 
+                        s.GOALS, 
+                        s.ASSISTS, 
+                        s.XGSHOT AS XG,
+                        s.YELLOWCARDS, 
+                        s.REDCARDS
                     FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
                     JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
                     JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
-                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
+                    LEFT JOIN AXIS.WYSCOUT_MATCHES m ON s.MATCH_WYID = m.MATCH_WYID
                     WHERE s.COMPETITION_WYID IN {comp_filter}
                     AND ws.SEASONNAME {season_filter}
                 """,
