@@ -119,16 +119,53 @@ def vis_side(spillere, player_events, df_scout):
     with col3: vis_profil(s2_navn, res2, "højre", "#0056a3")
 
     with col2:
-        # Radar diagram
-        labels = ['Teknik', 'Fart', 'Aggres.', 'Attitude', 'Udhold.', 'Leder', 'Beslut.', 'Spil-int.']
-        def get_radar_v(t):
-            v = [t[k] for k in ['TEKNIK', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'BESLUTSOMHED', 'SPILINTELLIGENS']]
-            return v + [v[0]]
+        st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
         
+        # Dine 8 originale kategorier
+        categories = [
+            'Beslutsomhed', 'Fart', 'Aggressivitet', 'Attitude', 
+            'Udholdenhed', 'Lederevner', 'Teknik', 'Spil-int.'
+        ]
+        
+        def get_vals(t):
+            # Mapper direkte til dine kolonnenavne i databasen
+            keys = [
+                'BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 
+                'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS'
+            ]
+            v = [t.get(k, 0) for k in keys]
+            v.append(v[0]) # Lukker 8-kanten
+            return v
+
         fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=get_radar_v(res1[4]), theta=labels + [labels[0]], fill='toself', name=s1_navn, line_color='#df003b'))
-        fig.add_trace(go.Scatterpolar(r=get_radar_v(res2[4]), theta=labels + [labels[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
-        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=450, margin=dict(l=50, r=50, t=20, b=20))
+        
+        # Spiller 1 (Rød)
+        fig.add_trace(go.Scatterpolar(
+            r=get_vals(res1[4]), 
+            theta=categories + [categories[0]], 
+            fill='toself', 
+            name=s1_navn, 
+            line_color='#df003b'
+        ))
+        
+        # Spiller 2 (Blå)
+        fig.add_trace(go.Scatterpolar(
+            r=get_vals(res2[4]), 
+            theta=categories + [categories[0]], 
+            fill='toself', 
+            name=s2_navn, 
+            line_color='#0056a3'
+        ))
+        
+        fig.update_layout(
+            polar=dict(
+                gridshape='linear', 
+                radialaxis=dict(visible=True, range=[0, 5]) # Din oprindelige skala
+            ),
+            showlegend=False, 
+            height=420, 
+            margin=dict(l=40, r=40, t=20, b=20)
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     # 4. SCOUTING NOTER
