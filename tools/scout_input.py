@@ -6,6 +6,7 @@ from datetime import datetime
 import uuid
 from io import StringIO
 
+# --- KONFIGURATION ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
@@ -23,60 +24,78 @@ def save_to_github(new_row_df):
         csv_data = updated_df.to_csv(index=False)
     else:
         csv_data = new_row_df.to_csv(index=False)
-    payload = {"message": f"Scout: {new_row_df['Navn'].values[0]}", "content": base64.b64encode(csv_data.encode('utf-8')).decode('utf-8')}
+    
+    payload = {
+        "message": f"Scout: {new_row_df['Navn'].values[0]}", 
+        "content": base64.b64encode(csv_data.encode('utf-8')).decode('utf-8')
+    }
     if sha: payload["sha"] = sha
+    
+    # Returnerer statuskoden direkte
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # CSS der specifikt rammer søge-feltet i dropdown (det der driller nu)
-    # CSS der tvinger farverne igennem i dropdown-menuer
+    # --- CSS FIX FOR DROPDOWN SYNLIGHED ---
     st.markdown("""
         <style>
-            /* 1. Teksten du skriver i søgefeltet mens du søger */
+            /* Teksten du skriver i søgefeltet mens du søger */
             input[data-baseweb="base-input"] {
                 color: black !important;
                 -webkit-text-fill-color: black !important;
             }
 
-            /* 2. Selve containeren med valgmulighederne (dropdown-listen) */
+            /* Selve listen med valgmuligheder (vigtigt for hvid-på-hvid problemet) */
+            div[role="listbox"] div, 
+            div[role="option"],
             div[data-baseweb="popover"] {
-                background-color: white !important;
-            }
-
-            /* 3. Teksten på de enkelte valgmuligheder i listen */
-            div[data-baseweb="select"] li {
                 color: black !important;
                 background-color: white !important;
             }
 
-            /* 4. Sikring af at den valgte tekst også er synlig */
-            div[data-baseweb="select"] [data-testid="stMarkdownContainer"] p {
+            /* Sikrer at teksten i den lukkede boks også er læselig */
+            .stSelectbox div[data-baseweb="select"] {
                 color: black !important;
-            }
-
-            /* 5. Placeholder tekst ("Find spiller") */
-            div[data-baseweb="select"] div[aria-hidden="true"] {
-                color: #666 !important;
             }
         </style>
     """, unsafe_allow_html=True)
+
+    st.write("#### 📝 Ny Scoutrapport")
     
-    st.write("#### Scoutrapport")
-    
-    # Initialiser session state
+    # --- SESSION STATE INITIALISERING ---
     if 's_pos' not in st.session_state: st.session_state.s_pos = ""
     if 's_klub' not in st.session_state: st.session_state.s_klub = ""
     if 's_id' not in st.session_state: st.session_state.s_id = ""
     if 's_navn' not in st.session_state: st.session_state.s_navn = ""
 
-    # Data forberedelse
+    # --- DATA FORBEREDELSE ---
     lookup_list = []
     if df_playerstats is not None and not df_playerstats.empty:
         for _, r in df_playerstats.iterrows():
             n = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
-            lookup_list.append({"NAVN": n, "ID": str(int(r['PLAYER_WYID'])), "KLUB": r.get('TEAMNAME','?'), "POS": r.get('ROLECODE3','-')})
+            lookup_list.append({
+                "NAVN": n, 
+                "ID": str(int(r['PLAYER_WYID'])), 
+                "KLUB": r.get('TEAMNAME','?'), 
+                "POS": r.get('ROLECODE3','-')
+            })
     m_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['ID']) if lookup_list else pd.DataFrame()
 
+    # --- CALLBACK FOR AUTO-UDFYLDNING ---
+    def update_player_info():
+        valgt = st.session_state.main_search
+        if valgt:
+            row = m_df[m_df['NAVN'] == valgt].iloc[0]
+            st.session_state.s_navn = valgt
+            st.session_state.s_id = row['ID']
+            st.session_state.s_pos = row['POS']
+            st.session_state.s_klub = row['KLUB']
+        else:
+            st.session_state.s_navn = ""
+            st.session_state.s_id = ""
+            st.session_state.s_pos = ""
+            st.session_state.s_klub = ""
+
+    # --- UI LAYOUT ---
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     c_find, c_pos, c_klub, c_scout = st.columns([2.5, 1, 1, 1])
     
@@ -85,26 +104,22 @@ def vis_side(df_players, df_playerstats):
     if metode == "Søg i systemet":
         with c_find:
             opt = [""] + sorted(m_df['NAVN'].tolist())
-            valgt = st.selectbox("Find spiller", options=opt, key="main_search")
-            if valgt:
-                row = m_df[m_df['NAVN'] == valgt].iloc[0]
-                st.session_state.s_navn = valgt
-                st.session_state.s_id = row['ID']
-                st.session_state.s_pos = row['POS']
-                st.session_state.s_klub = row['KLUB']
+            st.selectbox("Find spiller", options=opt, key="main_search", on_change=update_player_info)
     else:
         with c_find:
-            st.session_state.s_navn = st.text_input("Navn")
+            st.session_state.s_navn = st.text_input("Navn", key="manual_name")
             st.session_state.s_id = str(uuid.uuid4().int)[:6] if st.session_state.s_navn else ""
 
-    # De 3 felter der skal auto-udfyldes
-    with c_pos: p_pos = st.text_input("Position", value=st.session_state.s_pos)
-    with c_klub: p_klub = st.text_input("Klub", value=st.session_state.s_klub)
-    with c_scout: st.text_input("Scout", value=curr_user, disabled=True)
+    # Auto-udfyldte felter (bruger session_state direkte)
+    with c_pos: 
+        p_pos = st.text_input("Position", value=st.session_state.s_pos)
+    with c_klub: 
+        p_klub = st.text_input("Klub", value=st.session_state.s_klub)
+    with c_scout: 
+        st.text_input("Scout", value=curr_user, disabled=True)
 
-    # Formular
+    # --- SELVE FORMULAREN ---
     with st.form("scout_form"):
-        # ... (resten af dine sliders som før)
         col_a, col_b = st.columns(2)
         stat = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
         pot = col_b.selectbox("Potentiale", ["Lavt", "Middel", "Top"])
@@ -128,8 +143,35 @@ def vis_side(df_players, df_playerstats):
         if st.form_submit_button("Gem til Database"):
             if st.session_state.s_navn:
                 avg = round((fart+teknik+beslut+sp_int+att+agg+udh+led)/8, 1)
-                df_new = pd.DataFrame([[st.session_state.s_id, datetime.now().strftime("%Y-%m-%d"), st.session_state.s_navn, p_klub, p_pos, avg, stat, pot, styrke, udv, vurder, beslut, fart, agg, att, udh, led, teknik, sp_int, curr_user]], 
-                                     columns=["PLAYER_WYID","Dato","Navn","Klub","Position","Rating_Avg","Status","Potentiale","Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet","Attitude","Udholdenhed","Lederegenskaber","Teknik","Spilintelligens","Scout"])
-                if save_to_github(df_new) == 200 or save_to_github(df_new) == 201:
-                    st.success("Gemt!")
+                df_new = pd.DataFrame([[
+                    st.session_state.s_id, 
+                    datetime.now().strftime("%Y-%m-%d"), 
+                    st.session_state.s_navn, 
+                    p_klub, 
+                    p_pos, 
+                    avg, 
+                    stat, 
+                    pot, 
+                    styrke, 
+                    udv, 
+                    vurder, 
+                    beslut, 
+                    fart, 
+                    agg, 
+                    att, 
+                    udh, 
+                    led, 
+                    teknik, 
+                    sp_int, 
+                    curr_user
+                ]], columns=["PLAYER_WYID","Dato","Navn","Klub","Position","Rating_Avg","Status","Potentiale","Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet","Attitude","Udholdenhed","Lederegenskaber","Teknik","Spilintelligens","Scout"])
+                
+                # Gem til GitHub og tjek svar
+                status = save_to_github(df_new)
+                if status in [200, 201]:
+                    st.success("Rapport gemt korrekt i databasen!")
                     st.rerun()
+                else:
+                    st.error(f"Fejl ved lagring (Status: {status})")
+            else:
+                st.warning("Venligst vælg eller indtast en spiller før du gemmer.")
