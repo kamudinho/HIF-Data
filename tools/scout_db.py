@@ -128,7 +128,7 @@ def vis_profil(p_data, full_df, s_df):
             st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side(scout_df, spillere_df, stats_df):
+def vis_side(scout_df, spillere_df, stats_df, career_df):
     for d in [scout_df, spillere_df, stats_df]:
         if d is not None and not d.empty: d.columns = [c.upper() for c in d.columns]
     
@@ -166,4 +166,4 @@ def vis_side(scout_df, spillere_df, stats_df):
     event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", height=h)
 
     if len(event.selection.rows) > 0:
-        vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df)
+        vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
