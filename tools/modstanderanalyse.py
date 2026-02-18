@@ -98,16 +98,16 @@ def vis_side(df_team_matches, hold_map, df_events):
                 (c3, "Erobringer", "interception", "Greens")
             ]
             
-            for col, title, p_type, cmap in plots:
+           for col, title, p_type, cmap in plots:
                 with col:
                     st.write(f"**{title}**")
+                    # Vi beholder half=True her
                     fig, ax = pitch.draw(figsize=(4, 5))
                     
                     mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
                     df_f = df_plot[mask]
                     
                     if not df_f.empty:
-                        # KDEPLOT med begrænsning (clip) så det ikke går over kanten
                         sns.kdeplot(
                             x=df_f['LOCATIONY'], 
                             y=df_f['LOCATIONX'], 
@@ -116,17 +116,18 @@ def vis_side(df_team_matches, hold_map, df_events):
                             cmap=cmap, 
                             alpha=0.7, 
                             levels=10,
-                            thresh=0.05, # Fjerner de svageste skygger i kanten
-                            clip=((0, 100), (0, 100)) # Låser KDE til banens koordinater
+                            thresh=0.05,
+                            # Vi klipper X (bredden) 0-100 og Y (længden) 50-100 for halv bane
+                            clip=((0, 100), (50, 100)) 
                         )
-                        # Ekstra sikkerhed: Lås aksen visuelt til banens grænser
-                        ax.set_xlim(0, 100)
-                        ax.set_ylim(0, 100)
+                        # Her låser vi visningen til den øverste halvdel af Wyscout-banen
+                        ax.set_xlim(0, 100)   # Bredden (Y i Wyscout er X på aksen her)
+                        ax.set_ylim(50, 100)  # Længden (X i Wyscout er Y på aksen her)
                     else:
                         ax.text(50, 75, "Ingen data", ha='center', va='center', color='gray')
                     
                     st.pyplot(fig, use_container_width=True)
-
+                    
     with side_col:
         st.write("**Seneste kampe**")
         # Viser dato og kampnavn (MATCHLABEL)
