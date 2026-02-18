@@ -97,14 +97,18 @@ def vis_profil(p_data, full_df, s_df, career_df):
             df_c = career_df.copy()
             df_c.columns = [c.upper() for c in df_c.columns]
             
-            # Rens ID i career data
             if 'PLAYER_WYID' in df_c.columns:
                 df_c['PLAYER_WYID'] = df_c['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
+            # 1. Filtrer på spilleren
             df_p = df_c[df_c['PLAYER_WYID'] == clean_p_id].copy()
 
             if not df_p.empty:
-                # Omdøb de rå Snowflake-navne til danske overskrifter
+                # 2. FJERN DUBLETTER (Dette løser dit problem i skærmbilledet)
+                # Vi fjerner rækker der er 100% identiske
+                df_p = df_p.drop_duplicates()
+
+                # 3. Omdøb og vis
                 df_p = df_p.rename(columns={
                     'SEASONNAME': 'SÆSON',
                     'COMPETITIONNAME': 'TURNERING',
@@ -120,14 +124,10 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 existing_cols = [c for c in vis_cols if c in df_p.columns]
                 
                 st.dataframe(
-                    df_p[existing_cols].sort_values('SÆSON', ascending=False),
+                    df_p[existing_cols].sort_values(['SÆSON', 'KAMPE'], ascending=False),
                     use_container_width=True,
                     hide_index=True
                 )
-            else:
-                st.info("Ingen historiske karrierestatistikker fundet.")
-        else:
-            st.warning("Karriere-data er ikke tilgængelige.")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
