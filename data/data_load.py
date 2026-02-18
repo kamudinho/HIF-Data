@@ -2,100 +2,149 @@
 import streamlit as st
 import pandas as pd
 import uuid
-from datetime import datetime
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
-def vis_side(dp):
-    st.write("### 📝 Ny Scoutrapport")
+# --- 0. KONFIGURATION ---
+try:
+    from data.season_show import SEASONNAME, COMPETITION_WYID
+except ImportError:
+    SEASONNAME = "2025/2026"
+    COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
-    # 1. Hent data sikkert
-    df_ps = dp.get("players_snowflake", pd.DataFrame())
-    hold_map = dp.get("hold_map", {})
-    curr_user = st.session_state.get("user", "System").upper()
+def _get_snowflake_conn():
+    try:
+        s = st.secrets["connections"]["snowflake"]
+        p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
+        p_key_obj = serialization.load_pem_private_key(
+            p_key_pem.encode(), password=None, backend=default_backend()
+        )
+        p_key_der = p_key_obj.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        return st.connection(
+            "snowflake", type="snowflake", account=s["account"], user=s["user"],
+            role=s["role"], warehouse=s["warehouse"], database=s["database"],
+            schema=s["schema"], private_key=p_key_der
+        )
+    except Exception as e:
+        st.error(f"❌ Snowflake Connection Error: {e}")
+        return None
 
-    # 2. Forbered spillerlisten til dropdown
-    if not df_ps.empty:
-        # Byg navne og map klubber
-        df_ps['FULL_NAME'] = df_ps.apply(lambda r: f"{r['FIRSTNAME']} {r['LASTNAME']}".strip() if pd.notnull(r['FIRSTNAME']) else r['SHORTNAME'], axis=1)
-        
-        # Opret en liste af dicts til nemmere opslag
-        lookup_data = []
-        for _, r in df_ps.iterrows():
-            t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
-            lookup_data.append({
-                "Navn": r['FULL_NAME'],
-                "ID": str(int(r['PLAYER_WYID'])),
-                "Klub": hold_map.get(t_id, "Ukendt klub"),
-                "Pos": r.get('ROLECODE3', '-')
-            })
-        m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID']).sort_values('Navn')
-    else:
-        m_df = pd.DataFrame(columns=["Navn", "ID", "Klub", "Pos"])
+@st.cache_data(ttl=3600)
+def load_all_data():
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
 
-    # 3. Valg af spiller
-    metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
-    
-    sel_n, sel_id, sel_pos, sel_klub = "", "", "", ""
+    # --- 1. GITHUB DATA (CSV) ---
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
+            d = pd.read_csv(u, sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except: return pd.DataFrame()
 
-    if metode == "Søg i systemet":
-        selected = st.selectbox("Find spiller", options=[""] + m_df['Navn'].tolist(), index=0)
-        if selected:
-            row = m_df[m_df['Navn'] == selected].iloc[0]
-            sel_n, sel_id, sel_pos, sel_klub = row['Navn'], row['ID'], row['Pos'], row['Klub']
-    else:
-        c1, c2 = st.columns(2)
-        sel_n = c1.text_input("Navn")
-        sel_id = c2.text_input("ID (Valgfri)")
+    df_players_gh = read_gh("players.csv")
+    df_scout_gh = read_gh("scouting_db.csv")
+    df_teams_csv = read_gh("teams.csv")
 
-    # 4. Formular Layout (Som dit skærmbillede)
-    with st.form("scout_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns([2, 2, 1])
-        f_pos = col1.text_input("Position", value=sel_pos)
-        f_klub = col2.text_input("Klub", value=sel_klub)
-        f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
+    # --- 2. SNOWFLAKE DATA (SQL) ---
+    conn = _get_snowflake_conn()
+    # Initialiser res med alle nødvendige nøgler for at undgå KeyError senere
+    res = {
+        "shotevents": pd.DataFrame(), 
+        "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(), 
+        "events": pd.DataFrame(), 
+        "players_snowflake": pd.DataFrame(), # Ny nøgle til scouting
+        "hold_map": {}
+    }
 
-        st.divider()
-        
-        a1, a2 = st.columns(2)
-        f_status = a1.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
-        f_pot = a2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+    if conn:
+        try:
+            # A: Hold Mapping (Henter alle team-navne)
+            df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+            if df_t is not None:
+                res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
 
-        st.divider()
-        
-        # Rating sektion
-        r1, r2, r3 = st.columns(3)
-        with r1:
-            fart = st.select_slider("Fart", options=range(1,7), value=3)
-            teknik = st.select_slider("Teknik", options=range(1,7), value=3)
-        with r2:
-            spil_i = st.select_slider("Spilintelligens", options=range(1,7), value=3)
-            attit = st.select_slider("Attitude", options=range(1,7), value=3)
-        with r3:
-            fysik = st.select_slider("Fysik/Udholdenhed", options=range(1,7), value=3)
-            ledere = st.select_slider("Lederegenskaber", options=range(1,7), value=3)
+            # B: Optimerede Queries
+            queries = {
+                "shotevents": f"""
+                    SELECT c.*, m.MATCHLABEL, m.DATE 
+                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
+                    JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE c.PRIMARYTYPE = 'shot' 
+                    AND c.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
+                """,
+                "team_matches": f"""
+                    SELECT 
+                        tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
+                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+                        c.COMPETITIONNAME AS COMPETITION_NAME, 
+                        adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
+                    FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                    LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                        ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+                    JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    JOIN AXIS.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
+                    WHERE tm.COMPETITION_WYID IN {comp_filter} 
+                    AND s.SEASONNAME {season_filter}
+                """,
+                "playerstats": f"""
+                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                    WHERE COMPETITION_WYID IN {comp_filter} 
+                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                """,
+                "events": f"""
+                    SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
+                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
+                    JOIN AXIS.WYSCOUT_MATCHES m ON e.MATCH_WYID = m.MATCH_WYID
+                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    WHERE e.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASONNAME {season_filter}
+                    AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
+                """,
+                "players_snowflake": f"""
+                    SELECT 
+                        PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
+                        ROLECODE3, CURRENTTEAM_WYID 
+                    FROM AXIS.WYSCOUT_PLAYERS
+                    WHERE PLAYER_WYID IN (
+                        SELECT DISTINCT PLAYER_WYID 
+                        FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                        WHERE COMPETITION_WYID IN {comp_filter}
+                """,
+            }
+            
+            for key, q in queries.items():
+                df = conn.query(q)
+                if df is not None:
+                    df.columns = [c.upper() for c in df.columns]
+                    if 'LOCATIONX' in df.columns:
+                        df['LOCATIONX'] = df['LOCATIONX'].astype('float32')
+                        df['LOCATIONY'] = df['LOCATIONY'].astype('float32')
+                    res[key] = df
+        except Exception as e:
+            st.error(f"SQL Fejl: {e}")
 
-        st.divider()
-        f_styrke = st.text_input("Styrker")
-        f_udv = st.text_input("Udviklingspunkter")
-        f_vurder = st.text_area("Samlet Vurdering")
+    # --- 3. SAMLET RETUR (ALLE NØGLER BEVARET + NYE TILFØJET) ---
+    return {
+        "players": df_players_gh,           # Original GitHub CSV
+        "scouting": df_scout_gh,            # Original GitHub CSV
+        "teams_csv": df_teams_csv,          # Original GitHub CSV
+        "shotevents": res["shotevents"],
+        "team_matches": res["team_matches"],
+        "playerstats": res["playerstats"],
+        "season_stats": res["playerstats"], # Alias bevaret til andre sider
+        "players_snowflake": res["players_snowflake"], # Ny kilde til scout-input
+        "events": res["events"],
+        "hold_map": res["hold_map"]
+    }
 
-        if st.form_submit_button("Gem Scoutrapport", use_container_width=True):
-            if not sel_n:
-                st.error("Du skal vælge eller indtaste en spiller.")
-            else:
-                # Her samler vi data til din GitHub CSV
-                rapport_data = {
-                    "PLAYER_WYID": sel_id if sel_id else str(uuid.uuid4().int)[:6],
-                    "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": sel_n,
-                    "Klub": f_klub,
-                    "Position": f_pos,
-                    "Status": f_status,
-                    "Potentiale": f_pot,
-                    "Rating_Avg": round((fart+teknik+spil_i+attit+fysik+ledere)/6, 1),
-                    "Styrker": f_styrke,
-                    "Udvikling": f_udv,
-                    "Vurdering": f_vurder,
-                    "Scout": curr_user
-                }
-                st.success(f"Rapport for {sel_n} er genereret!")
-                st.info("Næste skridt: Forbind til din save_to_github funktion.")
