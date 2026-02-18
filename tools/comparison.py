@@ -71,7 +71,7 @@ def vis_side(spillere, player_events, df_scout):
             p_stats = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
             if not p_stats.empty:
                 stats['KAMPE'] = p_stats['MATCHES'].sum()
-                stats['MIN'] = p_stats['MINUTESPLAYED'].sum()
+                stats['MIN'] = p_stats['MINUTESTAGGED'].sum()
                 stats['MÅL'] = p_stats['GOALS'].sum()
                 stats['ASS'] = p_stats.get('ASSISTS', pd.Series([0])).sum()
 
