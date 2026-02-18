@@ -29,24 +29,39 @@ def save_to_github(new_row_df):
 
 def vis_side(df_players, df_playerstats):
     # CSS der specifikt rammer søge-feltet i dropdown (det der driller nu)
+    # CSS der tvinger farverne igennem i dropdown-menuer
     st.markdown("""
         <style>
-            /* Rammer teksten du skriver når du søger i dropdown */
-            input[aria-autocomplete="list"] {
+            /* 1. Teksten du skriver i søgefeltet mens du søger */
+            input[data-baseweb="base-input"] {
+                color: black !important;
+                -webkit-text-fill-color: black !important;
+            }
+
+            /* 2. Selve containeren med valgmulighederne (dropdown-listen) */
+            div[data-baseweb="popover"] {
+                background-color: white !important;
+            }
+
+            /* 3. Teksten på de enkelte valgmuligheder i listen */
+            div[data-baseweb="select"] li {
+                color: black !important;
+                background-color: white !important;
+            }
+
+            /* 4. Sikring af at den valgte tekst også er synlig */
+            div[data-baseweb="select"] [data-testid="stMarkdownContainer"] p {
                 color: black !important;
             }
-            /* Rammer selve valgmulighederne i den lange liste */
-            div[role="option"] {
-                color: black !important;
-            }
-            /* Generel sikring */
-            .stSelectbox div[data-baseweb="select"] {
-                color: black !important;
+
+            /* 5. Placeholder tekst ("Find spiller") */
+            div[data-baseweb="select"] div[aria-hidden="true"] {
+                color: #666 !important;
             }
         </style>
     """, unsafe_allow_html=True)
-
-    st.write("#### 📝 Ny Scoutrapport")
+    
+    st.write("#### Scoutrapport")
     
     # Initialiser session state
     if 's_pos' not in st.session_state: st.session_state.s_pos = ""
