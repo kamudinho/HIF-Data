@@ -68,13 +68,13 @@ def get_queries(comp_filter, season_filter):
                 PLAYER_WYID, 
                 SEASONNAME,
                 COMPETITIONNAME, 
-                TEAMNAME AS HOLD, 
-                MATCHES AS KAMPE, 
-                MINUTESPLAYED AS MIN, 
-                GOALS AS MÅL, 
-                ASSISTS AS ASS, 
-                YELLOWCARDS AS GULE, 
-                REDCARDS AS RØDE
+                TEAMNAME, 
+                MATCHES, 
+                MINUTESPLAYED,
+                GOALS, 
+                ASSISTS, 
+                YELLOWCARDS, 
+                REDCARDS
             FROM AXIS.WYSCOUT_PLAYERCAREER
             WHERE PLAYER_WYID IN (
                 SELECT DISTINCT PLAYER_WYID 
