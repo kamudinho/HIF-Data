@@ -97,8 +97,8 @@ def vis_profil(p_data, full_df, s_df):
         st.write("DEBUG: Antal rækker fundet:", len(df_career))
         
         if not df_career.empty:
-        st.write("DEBUG: Kolonner i tabellen:", df_career.columns.tolist())
-        st.dataframe(df_career.head()) # Vis de rå data
+            st.write("DEBUG: Kolonner i tabellen:", df_career.columns.tolist())
+            st.dataframe(df_career.head()) # Vis de rå data
             
     with t5:
 
