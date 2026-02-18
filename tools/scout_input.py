@@ -3,127 +3,98 @@ import pandas as pd
 import uuid
 from datetime import datetime
 
-def vis_side(data):
-    # Nu kan den hente begge dele fra 'dp' (som her kaldes 'data')
-    df_snowflake = data.get("players_snowflake", pd.DataFrame())
-    hold_map = data.get("hold_map", {})
+def vis_side(dp):
+    st.write("### 📝 Ny Scoutrapport")
+
+    # 1. Hent data sikkert
+    df_ps = dp.get("players_snowflake", pd.DataFrame())
+    hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
-    st.write("#### 📝 Ny Scoutrapport")
-
-    # --- 2. FORBERED DROPDOWN-LISTE ---
-    lookup_list = []
-    if not df_snowflake.empty:
-        for _, r in df_snowflake.iterrows():
-            # Saml navn fra de korrekte Snowflake-kolonner
-            f = str(r.get('FIRSTNAME', '')).strip()
-            l = str(r.get('LASTNAME', '')).strip()
-            navn = f"{f} {l}".strip()
-            if not navn or navn == "None": 
-                navn = r.get('SHORTNAME', 'Ukendt')
-
-            p_id = str(int(r['PLAYER_WYID']))
-            t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r.get('CURRENTTEAM_WYID')) else ""
-            
-            lookup_list.append({
-                "NAVN": navn,
-                "ID": p_id,
-                "KLUB": hold_map.get(t_id, "Ukendt klub"),
-                "POS": r.get('ROLECODE3', '-')
+    # 2. Forbered spillerlisten til dropdown
+    if not df_ps.empty:
+        # Byg navne og map klubber
+        df_ps['FULL_NAME'] = df_ps.apply(lambda r: f"{r['FIRSTNAME']} {r['LASTNAME']}".strip() if pd.notnull(r['FIRSTNAME']) else r['SHORTNAME'], axis=1)
+        
+        # Opret en liste af dicts til nemmere opslag
+        lookup_data = []
+        for _, r in df_ps.iterrows():
+            t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
+            lookup_data.append({
+                "Navn": r['FULL_NAME'],
+                "ID": str(int(r['PLAYER_WYID'])),
+                "Klub": hold_map.get(t_id, "Ukendt klub"),
+                "Pos": r.get('ROLECODE3', '-')
             })
+        m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID']).sort_values('Navn')
+    else:
+        m_df = pd.DataFrame(columns=["Navn", "ID", "Klub", "Pos"])
 
-    m_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['ID']) if lookup_list else pd.DataFrame()
-
-    # --- 3. SESSION STATE INITIALISERING ---
-    if 's_navn' not in st.session_state: st.session_state.s_navn = ""
-    if 's_id' not in st.session_state: st.session_state.s_id = ""
-    if 's_pos' not in st.session_state: st.session_state.s_pos = ""
-    if 's_klub' not in st.session_state: st.session_state.s_klub = ""
-
-    # --- 4. SØGEFUNKTION ---
+    # 3. Valg af spiller
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
+    sel_n, sel_id, sel_pos, sel_klub = "", "", "", ""
+
     if metode == "Søg i systemet":
-        options = [""] + sorted(m_df['NAVN'].tolist()) if not m_df.empty else [""]
-        valgt = st.selectbox("Find spiller", options=options)
-        
-        if valgt:
-            spiller = m_df[m_df['NAVN'] == valgt].iloc[0]
-            st.session_state.s_navn = valgt
-            st.session_state.s_id = spiller['ID']
-            st.session_state.s_pos = spiller['POS']
-            st.session_state.s_klub = spiller['KLUB']
+        selected = st.selectbox("Find spiller", options=[""] + m_df['Navn'].tolist(), index=0)
+        if selected:
+            row = m_df[m_df['Navn'] == selected].iloc[0]
+            sel_n, sel_id, sel_pos, sel_klub = row['Navn'], row['ID'], row['Pos'], row['Klub']
     else:
-        c_name, c_id = st.columns(2)
-        st.session_state.s_navn = c_name.text_input("Navn")
-        if st.session_state.s_navn and not st.session_state.s_id:
-            st.session_state.s_id = str(uuid.uuid4().int)[:6]
-        st.session_state.s_id = c_id.text_input("ID (Auto-genereret)", value=st.session_state.s_id)
+        c1, c2 = st.columns(2)
+        sel_n = c1.text_input("Navn")
+        sel_id = c2.text_input("ID (Valgfri)")
 
-    # --- 5. FORMULAR TIL SCOUTING ---
-    with st.form("scout_form"):
-        # Header info
-        c1, c2, c3 = st.columns([2, 1, 1])
-        p_pos = c1.text_input("Position", value=st.session_state.s_pos)
-        p_klub = c2.text_input("Klub", value=st.session_state.s_klub)
-        p_scout = c3.text_input("Scout", value=curr_user, disabled=True)
+    # 4. Formular Layout (Som dit skærmbillede)
+    with st.form("scout_form", clear_on_submit=True):
+        col1, col2, col3 = st.columns([2, 2, 1])
+        f_pos = col1.text_input("Position", value=sel_pos)
+        f_klub = col2.text_input("Klub", value=sel_klub)
+        f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
 
         st.divider()
         
-        col_a, col_b = st.columns(2)
-        stat = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
-        pot = col_b.selectbox("Potentiale", ["Lavt", "Middel", "Top"])
-        
+        a1, a2 = st.columns(2)
+        f_status = a1.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
+        f_pot = a2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+
         st.divider()
-        # Rating Sliders
+        
+        # Rating sektion
         r1, r2, r3 = st.columns(3)
-        fart = r1.select_slider("Fart", options=range(1,7), value=3)
-        teknik = r1.select_slider("Teknik", options=range(1,7), value=3)
-        beslut = r1.select_slider("Beslutsomhed", options=range(1,7), value=3)
-        sp_int = r2.select_slider("Spilintelligens", options=range(1,7), value=3)
-        att = r2.select_slider("Attitude", options=range(1,7), value=3)
-        agg = r2.select_slider("Aggresivitet", options=range(1,7), value=3)
-        udh = r3.select_slider("Udholdenhed", options=range(1,7), value=3)
-        led = r3.select_slider("Lederegenskaber", options=range(1,7), value=3)
-        
-        st.divider()
-        styrke = st.text_input("Styrker")
-        udv = st.text_input("Udvikling")
-        vurder = st.text_area("Vurdering")
+        with r1:
+            fart = st.select_slider("Fart", options=range(1,7), value=3)
+            teknik = st.select_slider("Teknik", options=range(1,7), value=3)
+        with r2:
+            spil_i = st.select_slider("Spilintelligens", options=range(1,7), value=3)
+            attit = st.select_slider("Attitude", options=range(1,7), value=3)
+        with r3:
+            fysik = st.select_slider("Fysik/Udholdenhed", options=range(1,7), value=3)
+            ledere = st.select_slider("Lederegenskaber", options=range(1,7), value=3)
 
-        if st.form_submit_button("Gem rapport til database"):
-            if st.session_state.s_navn:
-                # Beregn gennemsnit
-                avg = round((fart+teknik+beslut+sp_int+att+agg+udh+led)/8, 1)
-                
-                # Opret række (Dictionary sikrer korrekt kolonne-placering)
-                new_data = {
-                    "PLAYER_WYID": st.session_state.s_id,
+        st.divider()
+        f_styrke = st.text_input("Styrker")
+        f_udv = st.text_input("Udviklingspunkter")
+        f_vurder = st.text_area("Samlet Vurdering")
+
+        if st.form_submit_button("Gem Scoutrapport", use_container_width=True):
+            if not sel_n:
+                st.error("Du skal vælge eller indtaste en spiller.")
+            else:
+                # Her samler vi data til din GitHub CSV
+                rapport_data = {
+                    "PLAYER_WYID": sel_id if sel_id else str(uuid.uuid4().int)[:6],
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": st.session_state.s_navn,
-                    "Klub": p_klub,
-                    "Position": p_pos,
-                    "Rating_Avg": avg,
-                    "Status": stat,
-                    "Potentiale": pot,
-                    "Styrker": styrke,
-                    "Udvikling": udv,
-                    "Vurdering": vurder,
-                    "Beslutsomhed": beslut,
-                    "Fart": fart,
-                    "Aggresivitet": agg,
-                    "Attitude": att,
-                    "Udholdenhed": udh,
-                    "Lederegenskaber": led,
-                    "Teknik": teknik,
-                    "Spilintelligens": sp_int,
+                    "Navn": sel_n,
+                    "Klub": f_klub,
+                    "Position": f_pos,
+                    "Status": f_status,
+                    "Potentiale": f_pot,
+                    "Rating_Avg": round((fart+teknik+spil_i+attit+fysik+ledere)/6, 1),
+                    "Styrker": f_styrke,
+                    "Udvikling": f_udv,
+                    "Vurdering": f_vurder,
                     "Scout": curr_user
                 }
-                
-                # Her kalder du din gem-funktion (save_to_github)
-                # Den skal importeres eller ligge i samme fil
-                st.write("Sender data til GitHub...") 
-                # res = save_to_github(pd.DataFrame([new_data]))
-                st.success(f"Rapport for {st.session_state.s_navn} er klar til at blive gemt!")
-            else:
-                st.error("Vælg venligst en spiller først.")
+                st.success(f"Rapport for {sel_n} er genereret!")
+                st.info("Næste skridt: Forbind til din save_to_github funktion.")
