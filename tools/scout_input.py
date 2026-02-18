@@ -29,12 +29,25 @@ def save_to_github(new_row_df):
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # CSS Fix for hvid tekst i dropdown og styling
+    # KRAFTIG CSS FIX: Tvinger tekstfarve i alle dropdowns og inputfelter
     st.markdown("""
         <style>
-            div[data-baseweb="select"] > div { color: black !important; background-color: white !important; }
-            div[role="listbox"] div { color: black !important; }
-            .stTextInput input { color: black !important; }
+            /* Tvinger tekstfarve i dropdown-menuer (Selectbox) */
+            div[data-baseweb="select"] * {
+                color: #31333F !important;
+            }
+            /* Sikrer hvid baggrund i selve dropdown-listen når den åbner */
+            div[role="listbox"] {
+                background-color: white !important;
+            }
+            /* Tekstfarve i tekst-input felter */
+            .stTextInput input {
+                color: #31333F !important;
+            }
+            /* Gør titler på kolonner lidt tydeligere */
+            label {
+                font-weight: bold !important;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -54,17 +67,13 @@ def vis_side(df_players, df_playerstats):
     
     master_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['PLAYER_WYID']) if lookup_list else pd.DataFrame()
 
-    # 2. INPUT SEKTION (Scout, Søg, Pos, Klub på én linje)
+    # 2. INPUT SEKTION (Scout flyttet bagerst)
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
-    # Fire kolonner til top-linjen
-    c_scout, c_find, c_pos, c_klub = st.columns([1, 2, 1, 1])
+    c_find, c_pos, c_klub, c_scout = st.columns([2, 1, 1, 1])
     
     p_navn, p_id, p_klub, p_pos = "", "", "", ""
     curr_scout = st.session_state.get("user", "System").upper()
-
-    with c_scout:
-        st.text_input("Scout", value=curr_scout, disabled=True)
 
     if metode == "Søg i systemet" and not master_df.empty:
         with c_find:
@@ -76,10 +85,11 @@ def vis_side(df_players, df_playerstats):
         with c_find: 
             p_navn = st.text_input("Spillerens Navn")
             if p_navn:
-                p_id = str(uuid.uuid4().int)[:6] # Auto-ID ved manuel oprettelse
+                p_id = str(uuid.uuid4().int)[:6]
 
     with c_pos: pos_final = st.text_input("Position", value=p_pos)
     with c_klub: klub_final = st.text_input("Klub", value=p_klub)
+    with c_scout: st.text_input("Scout", value=curr_scout, disabled=True)
     
     if p_id:
         st.caption(f"System ID: {p_id}")
@@ -125,7 +135,5 @@ def vis_side(df_players, df_playerstats):
                 ])
                 
                 if save_to_github(ny_data) in [200, 201]:
-                    st.success(f"Gemt! {p_navn} tilføjet til databasen.")
+                    st.success(f"Gemt! {p_navn} tilføjet.")
                     st.rerun()
-            else:
-                st.warning("Udfyld venligst navn før du gemmer.")
