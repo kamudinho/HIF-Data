@@ -121,7 +121,7 @@ def load_all_data():
                         FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
                         WHERE COMPETITION_WYID IN {comp_filter}
                     )
-                """
+                """,
             }
             
             for key, q in queries.items():
