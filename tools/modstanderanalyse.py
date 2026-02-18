@@ -67,7 +67,9 @@ def vis_side(df_team_matches, hold_map, df_events):
     with m1:
         st.metric("Gns. Mål", get_avg('GOALS'))
     with m2:
-        st.metric("Gns. xG", get_avg('XG', 2))
+        col_navn = 'XG' if 'XG' in df_hold_matches.columns else 'XGSHOT'
+        val = round(df_hold_matches[col_navn].mean(), 2) if col_navn in df_hold_matches.columns else 0.0
+        st.metric("GNS. XG", val)
     with m3:
         st.metric("Skud pr. kamp", get_avg('SHOTS'))
     with m4:
