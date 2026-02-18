@@ -120,13 +120,13 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 })
 
                 # 4. FILTRER UNGDOM VÆK (U15 og nedefter)
-                ungdom_filter = ['U15', 'U14', 'U13']
+                ungdom_filter = ['U14', 'U13']
                 pattern = '|'.join(ungdom_filter)
                 df_p = df_p[~df_p['TURNERING'].str.contains(pattern, case=False, na=False)]
 
                 # 5. SLET RÆKKER HVIS DE ER TOMME (None/NaN) I DE TRE VIGTIGSTE KOLONNER
                 # Vi tjekker KAMPE, MIN og MÅL. Hvis alle tre er tomme, slettes rækken.
-                stats_cols = ['KAMPE', 'MIN', 'MÅL']
+                stats_cols = ['SÆSON', 'TURNERING', 'HOLD']
                 df_p = df_p.dropna(subset=stats_cols, how='all')
 
                 # Valgfri: Fjern også rækker hvor alle tre værdier er 0
