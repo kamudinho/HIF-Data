@@ -96,5 +96,6 @@ def load_all_data():
         "season_stats": res["playerstats"], 
         "players_snowflake": res["players_snowflake"],
         "events": res["events"],
+        "season_filter": season_query_filter,
         "hold_map": res["hold_map"]
     }
