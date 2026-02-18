@@ -63,4 +63,23 @@ def get_queries(comp_filter, season_filter):
             JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
             JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
         """,
+        "player_career": f"""
+            SELECT 
+                PLAYER_WYID, 
+                SEASONNAME AS SÆSON, 
+                COMPETITIONNAME AS TURNERING, 
+                TEAMNAME AS HOLD, 
+                MATCHES AS KAMPE, 
+                MINUTESPLAYED AS MIN, 
+                GOALS AS MÅL, 
+                ASSISTS AS ASS, 
+                YELLOWCARDS AS GULE, 
+                REDCARDS AS RØDE
+            FROM AXIS.WYSCOUT_PLAYERCAREER
+            WHERE PLAYER_WYID IN (
+                SELECT DISTINCT PLAYER_WYID 
+                FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                WHERE COMPETITION_WYID IN {comp_filter}
+            )
+        """,
     }
