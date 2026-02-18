@@ -108,8 +108,8 @@ try:
         import tools.scout_input as si
         si.vis_side(dp)
     elif sel == "Sammenligning":
-    import tools.comparison as comp
-    comp.vis_side(
+        import tools.comparison as comp
+        comp.vis_side(
         spillere=dp["players"], 
         player_events=dp["playerstats"], 
         df_scout=dp["scouting"])
