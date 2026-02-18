@@ -55,45 +55,49 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     with c_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
-        # Find ID i den samlede liste
+        # 1. Find ID i den samlede liste
         match = combined_lookup[combined_lookup['NAVN'] == navn]
         if match.empty: return None
         
-        # Sikker konvertering af ID til int
+        # Tving PID til at være en ren integer
         try:
             pid = int(float(str(match.iloc[0]['PLAYER_WYID'])))
         except:
             return None
 
-        # Hent info fra truppen hvis den findes, ellers sæt standard
         p_info = df_p[df_p['NAVN'] == navn]
         klub = p_info.iloc[0].get('TEAMNAME', 'Scouting / Ekstern') if not p_info.empty else "Scouting / Ekstern"
         pos = map_position(p_info.iloc[0].get('POS', '')) if not p_info.empty else "Ukendt"
 
         stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0, 'M90': 0.0}
         
-        # --- PLAYERSTATS AGGREGERING (VIA PLAYER_SEASONS BRO) ---
+        # --- PLAYERSTATS AGGREGERING ---
         if player_seasons is not None and not player_seasons.empty:
-            # Rens season_filter tekst
+            # Rens filter og data for mellemrum
             clean_season = season_filter.replace("= '", "").replace("'", "").strip()
             
-            # Find SEASON_WYID for denne spiller
-            player_seasons['PLAYER_WYID'] = pd.to_numeric(player_seasons['PLAYER_WYID'], errors='coerce')
-            s_match = player_seasons[
-                (player_seasons['PLAYER_WYID'] == pid) & 
-                (player_seasons['SEASONNAME'] == clean_season)
+            # Sørg for at alt er sammenligneligt (Tving typer)
+            temp_seasons = player_seasons.copy()
+            temp_seasons['PLAYER_WYID'] = pd.to_numeric(temp_seasons['PLAYER_WYID'], errors='coerce')
+            
+            # Find SEASON_WYID
+            s_match = temp_seasons[
+                (temp_seasons['PLAYER_WYID'] == pid) & 
+                (temp_seasons['SEASONNAME'].astype(str).str.strip() == clean_season)
             ]
             
             if not s_match.empty and playerstats is not None:
-                target_season_id = s_match.iloc[0]['SEASON_WYID']
+                target_season_id = int(float(str(s_match.iloc[0]['SEASON_WYID'])))
                 
-                # Tving ID'er til numerisk i playerstats for korrekt match
-                playerstats['PLAYER_WYID'] = pd.to_numeric(playerstats['PLAYER_WYID'], errors='coerce')
-                playerstats['SEASON_WYID'] = pd.to_numeric(playerstats['SEASON_WYID'], errors='coerce')
+                # Tving typer i playerstats for match
+                temp_stats = playerstats.copy()
+                temp_stats['PLAYER_WYID'] = pd.to_numeric(temp_stats['PLAYER_WYID'], errors='coerce')
+                temp_stats['SEASON_WYID'] = pd.to_numeric(temp_stats['SEASON_WYID'], errors='coerce')
                 
-                aktuel_df = playerstats[
-                    (playerstats['PLAYER_WYID'] == pid) & 
-                    (playerstats['SEASON_WYID'] == int(target_season_id))
+                # Filtrér på både spiller og den specifikke sæson
+                aktuel_df = temp_stats[
+                    (temp_stats['PLAYER_WYID'] == pid) & 
+                    (temp_stats['SEASON_WYID'] == target_season_id)
                 ]
                 
                 if not aktuel_df.empty:
@@ -102,8 +106,8 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
                     t_mål = aktuel_df['GOALS'].sum()
                     
                     stats['KAMPE'] = aktuel_df['MATCHES'].sum()
-                    stats['MIN'] = t_min
-                    stats['MÅL'] = t_mål
+                    stats['MIN'] = int(t_min)
+                    stats['MÅL'] = int(t_mål)
                     if t_min > 0:
                         stats['M90'] = round((t_mål / t_min) * 90, 2)
 
