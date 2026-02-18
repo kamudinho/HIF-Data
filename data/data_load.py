@@ -79,13 +79,15 @@ def load_all_data():
                 "team_matches": f"""
                     SELECT 
                         tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
-                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK, 
+                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+                        c.NAME AS COMPETITION_NAME, -- Her henter vi selve navnet
                         adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
                     FROM AXIS.WYSCOUT_TEAMMATCHES tm
                     LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                         ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
                     JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
                     JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                    JOIN AXIS.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID -- Join på turneringer
                     WHERE tm.COMPETITION_WYID IN {comp_filter} 
                     AND s.SEASONNAME {season_filter}
                 """,
