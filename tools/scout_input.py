@@ -143,35 +143,44 @@ def vis_side(df_players, df_playerstats):
         if st.form_submit_button("Gem til Database"):
             if st.session_state.s_navn:
                 avg = round((fart+teknik+beslut+sp_int+att+agg+udh+led)/8, 1)
-                df_new = pd.DataFrame([[
-                    st.session_state.s_id, 
-                    datetime.now().strftime("%Y-%m-%d"), 
-                    st.session_state.s_navn, 
-                    p_klub, 
-                    p_pos, 
-                    avg, 
-                    stat, 
-                    pot, 
-                    styrke, 
-                    udv, 
-                    vurder, 
-                    beslut, 
-                    fart, 
-                    agg, 
-                    att, 
-                    udh, 
-                    led, 
-                    teknik, 
-                    sp_int, 
-                    curr_user
-                ]], columns=["PLAYER_WYID","Dato","Navn","Klub","Position","Rating_Avg","Status","Potentiale","Styrker","Udvikling","Vurdering","Beslutsomhed","Fart","Aggresivitet","Attitude","Udholdenhed","Lederegenskaber","Teknik","Spilintelligens","Scout"])
                 
-                # Gem til GitHub og tjek svar
+                # Opret data i den PRÆCISE rækkefølge som din CSV kræver:
+                # PLAYER_WYID, Dato, Navn, Klub, Position, Rating_Avg, Status, Potentiale...
+                data_row = [
+                    st.session_state.s_id,               # PLAYER_WYID
+                    datetime.now().strftime("%Y-%m-%d"), # Dato
+                    st.session_state.s_navn,             # Navn
+                    p_klub,                              # Klub
+                    p_pos,                               # Position
+                    avg,                                 # Rating_Avg
+                    stat,                                # Status
+                    pot,                                 # Potentiale
+                    styrke,                              # Styrker
+                    udv,                                 # Udvikling
+                    vurder,                              # Vurdering
+                    beslut,                              # Beslutsomhed
+                    fart,                                # Fart
+                    agg,                                 # Aggresivitet
+                    att,                                 # Attitude
+                    udh,                                 # Udholdenhed
+                    led,                                 # Lederegenskaber
+                    teknik,                              # Teknik
+                    sp_int,                              # Spilintelligens
+                    curr_user                            # Scout
+                ]
+                
+                col_names = [
+                    "PLAYER_WYID", "Dato", "Navn", "Klub", "Position", 
+                    "Rating_Avg", "Status", "Potentiale", "Styrker", 
+                    "Udvikling", "Vurdering", "Beslutsomhed", "Fart", 
+                    "Aggresivitet", "Attitude", "Udholdenhed", 
+                    "Lederegenskaber", "Teknik", "Spilintelligens", "Scout"
+                ]
+
+                df_new = pd.DataFrame([data_row], columns=col_names)
+                
+                # Gem til GitHub
                 status = save_to_github(df_new)
                 if status in [200, 201]:
-                    st.success("Rapport gemt korrekt i databasen!")
+                    st.success("Gemt!")
                     st.rerun()
-                else:
-                    st.error(f"Fejl ved lagring (Status: {status})")
-            else:
-                st.warning("Venligst vælg eller indtast en spiller før du gemmer.")
