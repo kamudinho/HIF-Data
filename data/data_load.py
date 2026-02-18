@@ -53,9 +53,14 @@ def load_all_data():
 
     # --- 2. SNOWFLAKE DATA (SQL) ---
     conn = _get_snowflake_conn()
+    # Initialiser res med alle nødvendige nøgler for at undgå KeyError senere
     res = {
-        "shotevents": pd.DataFrame(), "team_matches": pd.DataFrame(), 
-        "playerstats": pd.DataFrame(), "events": pd.DataFrame(), "hold_map": {}
+        "shotevents": pd.DataFrame(), 
+        "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(), 
+        "events": pd.DataFrame(), 
+        "players_snowflake": pd.DataFrame(), # Ny nøgle til scouting
+        "hold_map": {}
     }
 
     if conn:
@@ -129,15 +134,16 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL Fejl: {e}")
 
-    # --- 3. SAMLET RETUR ---
+    # --- 3. SAMLET RETUR (ALLE NØGLER BEVARET + NYE TILFØJET) ---
     return {
-        "players": df_players_gh,
-        "scouting": df_scout_gh,
-        "teams_csv": df_teams_csv,
+        "players": df_players_gh,           # Original GitHub CSV
+        "scouting": df_scout_gh,            # Original GitHub CSV
+        "teams_csv": df_teams_csv,          # Original GitHub CSV
         "shotevents": res["shotevents"],
         "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
-        "season_stats": res["playerstats"],
+        "season_stats": res["playerstats"], # Alias bevaret til andre sider
+        "players_snowflake": res["players_snowflake"], # Ny kilde til scout-input
         "events": res["events"],
         "hold_map": res["hold_map"]
     }
