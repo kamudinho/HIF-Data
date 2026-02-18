@@ -15,34 +15,32 @@ def map_position(pos_code):
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
 def vis_side(spillere, player_events, df_scout):
-    # Standardiser alle dataframes til uppercase kolonner med det samme
+    # --- 0. DATA STANDARDISERING ---
+    # Sørg for at alle kolonner er UPPERCASE for at undgå KeyError
     if spillere is not None: spillere.columns = [c.upper() for c in spillere.columns]
     if player_events is not None: player_events.columns = [c.upper() for c in player_events.columns]
     if df_scout is not None: df_scout.columns = [c.upper() for c in df_scout.columns]
-    
-    # Resten af din kode...
-    # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
-    df_p = spillere.copy()
-    if 'NAVN' not in df_p.columns and not df_p.empty:
-        df_p['NAVN'] = df_p['FIRSTNAME'].fillna('') + " " + df_p['LASTNAME'].fillna('')
-    
-    df_s = df_scout.copy()
-    
-    # SIKKERHED: Sørg for at df_s har de rigtige kolonnenavne
-    if 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
-        df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
-    
-    if 'NAVN' not in df_s.columns:
-        df_s['NAVN'] = "Ukendt navn"
 
-    # Lav lister til kombination (kun hvis kolonnerne findes)
-    p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame(columns=['NAVN', 'ID'])
+    # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
+    df_p = spillere.copy() if spillere is not None else pd.DataFrame()
+    if not df_p.empty and 'NAVN' not in df_p.columns:
+        # Håndterer hvis trup-data bruger FIRST/LASTNAME
+        fname = df_p.get('FIRSTNAME', '')
+        lname = df_p.get('LASTNAME', '')
+        df_p['NAVN'] = (fname.fillna('') + " " + lname.fillna('')).str.strip()
     
-    # Her fejlede den før - nu tjekker vi om 'ID' findes i df_s
-    if 'ID' in df_s.columns:
-        s_list = df_s[['NAVN', 'ID']]
-    else:
-        s_list = pd.DataFrame(columns=['NAVN', 'ID'])
+    df_s = df_scout.copy() if df_scout is not None else pd.DataFrame()
+    
+    # SIKKERHED: Sørg for at df_s har de rigtige kolonnenavne (ID i stedet for PLAYER_WYID)
+    if not df_s.empty:
+        if 'ID' not in df_s.columns and 'PLAYER_WYID' in df_s.columns:
+            df_s = df_s.rename(columns={'PLAYER_WYID': 'ID'})
+        if 'NAVN' not in df_s.columns:
+            df_s['NAVN'] = "Ukendt navn"
+
+    # Lav lister til kombination
+    p_list = df_p[['NAVN', 'PLAYER_WYID']].rename(columns={'PLAYER_WYID': 'ID'}) if not df_p.empty else pd.DataFrame(columns=['NAVN', 'ID'])
+    s_list = df_s[['NAVN', 'ID']] if not df_s.empty and 'ID' in df_s.columns else pd.DataFrame(columns=['NAVN', 'ID'])
     
     combined_names = pd.concat([p_list, s_list]).drop_duplicates(subset=['NAVN'])
     navne_liste = sorted(combined_names['NAVN'].unique())
@@ -59,36 +57,43 @@ def vis_side(spillere, player_events, df_scout):
     st.markdown("</div>", unsafe_allow_html=True)
 
     def hent_info(navn):
-        p_match = df_p[df_p['NAVN'] == navn]
-        s_match = df_s[df_s['NAVN'] == navn]
+        p_match = df_p[df_p['NAVN'] == navn] if not df_p.empty else pd.DataFrame()
+        s_match = df_s[df_s['NAVN'] == navn] if not df_s.empty else pd.DataFrame()
         
         pid, klub, pos = "0", "Ukendt", "Ukendt"
         stats_data = {}
         tech = {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
         scout_texts = {'s': 'Ingen data', 'u': 'Ingen data', 'v': 'Ingen data'}
 
+        # Prioriter data fra trup-listen (spillere)
         if not p_match.empty:
             row = p_match.iloc[0]
-            pid = str(row['PLAYER_WYID']).split('.')[0].strip()
+            pid = str(row.get('PLAYER_WYID', '0')).split('.')[0].strip()
             klub = row.get('TEAMNAME', 'Hvidovre IF')
             pos = map_position(row.get('POS', 'Ukendt'))
             
-            if not player_events.empty:
-                # SIKKERHED: Håndter match på ID strengt
+            if player_events is not None and not player_events.empty:
+                # Matcher stats på PLAYER_WYID
                 st_match = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
                 if not st_match.empty:
                     stats_data = st_match.iloc[0].to_dict()
 
+        # Suppler med data fra scouting-databasen
         if not s_match.empty:
-            # Tag den nyeste rapport hvis der er flere
-            n = s_match.sort_values(df_s.columns[0], ascending=False).iloc[0] 
+            # Tag den nyeste rapport hvis der er flere (sorter efter første kolonne, ofte DATO)
+            n = s_match.sort_values(s_match.columns[0], ascending=False).iloc[0] 
             if pid == "0":
                 pid = str(n.get('ID', '0')).split('.')[0].strip()
                 klub = n.get('KLUB', 'Eget emne')
                 pos = n.get('POSITION', 'Ukendt')
             
             for k in tech.keys():
-                tech[k] = n.get(k, 0)
+                val = n.get(k, 0)
+                try:
+                    # Håndterer både tal og strenge med komma (f.eks. "4,5")
+                    tech[k] = float(str(val).replace(',', '.'))
+                except:
+                    tech[k] = 0
             
             scout_texts = {
                 's': n.get('STYRKER', 'Ingen data'),
@@ -149,7 +154,7 @@ def vis_side(spillere, player_events, df_scout):
         def get_vals(t):
             keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
             v = [t.get(k, 0) for k in keys]
-            v.append(v[0])
+            v.append(v[0]) # Luk cirklen
             return v
 
         fig = go.Figure()
@@ -157,7 +162,7 @@ def vis_side(spillere, player_events, df_scout):
         fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
         
         fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 5])),
+            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
             showlegend=False, height=420, margin=dict(l=40, r=40, t=20, b=20)
         )
         st.plotly_chart(fig, use_container_width=True)
