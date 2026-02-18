@@ -102,14 +102,17 @@ try:
     elif sel == "Database":
         import tools.scout_db as sdb
         import importlib
-        importlib.reload(sdb)  # Dette tvinger Python til at se den nye 'vis_side'
+        importlib.reload(sdb) 
         sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], dp["player_career"])
     elif sel == "Scoutrapport":
         import tools.scout_input as si
         si.vis_side(dp)
     elif sel == "Sammenligning":
-        import tools.comparison as comp
-        comp.vis_side(dp["scouting"], dp["players"], dp["playerstats"])
+    import tools.comparison as comp
+    comp.vis_side(
+        spillere=dp["players"], 
+        player_events=dp["playerstats"], 
+        df_scout=dp["scouting"])
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
