@@ -160,7 +160,7 @@ def vis_side(spillere, player_events, df_scout):
         fig.update_layout(
             polar=dict(
                 gridshape='linear', 
-                radialaxis=dict(visible=True, range=[0, 5]) # Din oprindelige skala
+                radialaxis=dict(visible=True, range=[0, 6]) # Din oprindelige skala
             ),
             showlegend=False, 
             height=420, 
