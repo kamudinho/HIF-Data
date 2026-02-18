@@ -126,7 +126,7 @@ def vis_profil(p_data, full_df, s_df):
                 st.info("Ingen kampdata fundet i systemet for denne spiller.")
 
     with t5:
-        # Radar diagram
+        # 1. Definer kategorier og find værdier
         categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         
@@ -134,24 +134,39 @@ def vis_profil(p_data, full_df, s_df):
         v_closed = v + [v[0]]
         cat_closed = categories + [categories[0]]
 
-        col_mid, col_right = st.columns([3, 2])
-        with col_mid:
+        # 2. Vis Radar i fuld bredde (eller centreret)
+        radar_col_left, radar_col_mid, radar_col_right = st.columns([1, 4, 1])
+        with radar_col_mid:
             fig_radar = go.Figure(go.Scatterpolar(
-                r=v_closed, theta=cat_closed, fill='toself', 
+                r=v_closed, 
+                theta=cat_closed, 
+                fill='toself', 
                 line=dict(color='#df003b', width=2),
-                fillcolor='rgba(223, 0, 59, 0.3)'
+                fillcolor='rgba(223, 0, 59, 0.3)',
+                marker=dict(size=8, color='#df003b')
             ))
             fig_radar.update_layout(
                 polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 6], tickvals=[1,2,3,4,5,6]),
+                    angularaxis=dict(rotation=90, direction="clockwise"),
+                    radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6]),
                     gridshape='linear'
                 ),
-                showlegend=False, height=400
+                showlegend=False, 
+                height=450,
+                margin=dict(l=80, r=80, t=20, b=20)
             )
-            st.plotly_chart(fig_radar, use_container_width=True)
-        with col_right:
-            st.markdown("### Opsummering")
-            st.write(f"**Seneste vurdering:**\n\n{nyeste.get('VURDERING', '-')}")
+            st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+
+        st.divider()
+
+        # 3. GENOPRETTET: De tre kolonner med tekstbokse under radaren
+        c1, c2, c3 = st.columns(3)
+        with c1: 
+            st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
+        with c2: 
+            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
+        with c3: 
+            st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df):
