@@ -104,11 +104,10 @@ def vis_profil(p_data, full_df, s_df, career_df):
             df_p = df_c[df_c['PLAYER_WYID'] == clean_p_id].copy()
 
             if not df_p.empty:
-                # 2. FJERN DUBLETTER (Dette løser dit problem i skærmbilledet)
-                # Vi fjerner rækker der er 100% identiske
+                # 2. FJERN DUBLETTER
                 df_p = df_p.drop_duplicates()
 
-                # 3. Omdøb og vis
+                # 3. Omdøb til danske navne
                 df_p = df_p.rename(columns={
                     'SEASONNAME': 'SÆSON',
                     'COMPETITIONNAME': 'TURNERING',
@@ -119,15 +118,33 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     'YELLOWCARD': 'GULE',
                     'REDCARD': 'RØDE'
                 })
-                
+
+                # 4. FILTRER UNGDOM VÆK (U15 og nedefter)
+                ungdom_filter = ['U15', 'U14', 'U13']
+                pattern = '|'.join(ungdom_filter)
+                df_p = df_p[~df_p['TURNERING'].str.contains(pattern, case=False, na=False)]
+
+                # 5. SLET RÆKKER HVIS DE ER TOMME (None/NaN) I DE TRE VIGTIGSTE KOLONNER
+                # Vi tjekker KAMPE, MIN og MÅL. Hvis alle tre er tomme, slettes rækken.
+                stats_cols = ['KAMPE', 'MIN', 'MÅL']
+                df_p = df_p.dropna(subset=stats_cols, how='all')
+
+                # Valgfri: Fjern også rækker hvor alle tre værdier er 0
+                df_p = df_p[~((df_p['KAMPE'] == 0) & (df_p['MIN'] == 0) & (df_p['MÅL'] == 0))]
+
                 vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'GULE', 'RØDE']
                 existing_cols = [c for c in vis_cols if c in df_p.columns]
                 
-                st.dataframe(
-                    df_p[existing_cols].sort_values(['SÆSON', 'KAMPE'], ascending=False),
-                    use_container_width=True,
-                    hide_index=True
-                )
+                if not df_p.empty:
+                    st.dataframe(
+                        df_p[existing_cols].sort_values(['SÆSON', 'KAMPE'], ascending=False),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("Ingen relevante karrierestatistikker fundet efter filtrering.")
+            else:
+                st.info("Ingen historiske data fundet.")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
