@@ -95,26 +95,36 @@ def vis_profil(p_data, full_df, s_df):
 
     with t4:
         st.markdown("### Sæsonstatistik")
+        
+        # DEBUG: Fjern disse to linjer når det virker, men brug dem til at se hvad der sker
+        # st.write(f"Søger efter ID: {clean_p_id}")
+        # st.write(f"Rækker i s_df: {len(s_df) if s_df is not None else 'None'}")
+
         if s_df is not None and not s_df.empty:
-            # 1. Rens ID'et fra den valgte spiller (f.eks. '528143')
+            # 1. Rens ID så det matcher Snowflake (fjern .0 og mellemrum)
             tid = str(clean_p_id).split('.')[0].strip()
             
-            # 2. FILTRER: Vis kun rækker hvor PLAYER_WYID matcher den valgte spiller
-            df_p = s_df[s_df['PLAYER_WYID'].astype(str).str.contains(tid)].copy()
+            # 2. Tving alle kolonnenavne til UPPERCASE
+            s_df.columns = [c.upper() for c in s_df.columns]
+            
+            # 3. Filtrer data specifikt på PLAYER_WYID
+            df_p = s_df[s_df['PLAYER_WYID'].astype(str) == tid].copy()
             
             if not df_p.empty:
-                cols = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
-                # Tjek hvilke kolonner der findes (Snowflake returnerer ofte UPPERCASE)
-                df_p.columns = [c.upper() for c in df_p.columns]
-                existing = [c.upper() for c in cols if c.upper() in df_p.columns]
+                # 4. Definer de ønskede kolonner
+                cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                existing = [c for c in cols_to_show if c in df_p.columns]
                 
+                # 5. Vis tabellen
                 st.dataframe(
                     df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False), 
                     use_container_width=True, 
                     hide_index=True
                 )
             else:
-                st.info(f"Ingen kampdata fundet for spiller ID: {tid}")
+                st.info(f"Ingen kampdata fundet i Snowflake for ID: {tid}")
+        else:
+            st.warning("Kunne ikke hente statistik-pakken fra Snowflake.")
 
     with t5:
 
