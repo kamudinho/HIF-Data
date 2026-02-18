@@ -69,11 +69,11 @@ def get_queries(comp_filter, season_filter):
                 s.SEASONNAME, 
                 c.COMPETITIONNAME, 
                 t.TEAMNAME, 
-                pc.APPEARANCES AS KAMPE, 
-                pc.MINUTESPLAYED AS MIN, 
-                pc.GOAL AS MÅL, 
-                pc.YELLOWCARD AS GULE, 
-                pc.REDCARD AS RØDE
+                pc.APPEARANCES, 
+                pc.MINUTESPLAYED, 
+                pc.GOAL, 
+                pc.YELLOWCARD, 
+                pc.REDCARD
             FROM AXIS.WYSCOUT_PLAYERCAREER pc
             LEFT JOIN AXIS.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN AXIS.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
