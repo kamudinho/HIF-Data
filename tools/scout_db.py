@@ -106,86 +106,29 @@ def vis_profil(p_data, full_df, s_df):
 
     with t5:
 
-        # 1. Definer kategorier og find værdier
-
-        categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
-
+        categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
 
-        
-
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-
         v_closed = v + [v[0]]
-
         cat_closed = categories + [categories[0]]
 
+        col_left, col_mid, col_right = st.columns([1.5, 4, 2.5])
 
+        with col_left:
+            st.markdown("### Detaljer")
 
-        # 2. Vis Radar i fuld bredde (eller centreret)
+            for cat, val in zip(categories, v):
+                st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold;'>{val}</span>", unsafe_allow_html=True)
 
-        radar_col_left, radar_col_mid, radar_col_right = st.columns([1, 4, 1])
-
-        with radar_col_mid:
-
-            fig_radar = go.Figure(go.Scatterpolar(
-
-                r=v_closed, 
-
-                theta=cat_closed, 
-
-                fill='toself', 
-
-                line=dict(color='#df003b', width=2),
-
-                fillcolor='rgba(223, 0, 59, 0.3)',
-
-                marker=dict(size=8, color='#df003b')
-
-            ))
-
-            fig_radar.update_layout(
-
-                polar=dict(
-
-                    angularaxis=dict(rotation=90, direction="clockwise"),
-
-                    radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6]),
-
-                    gridshape='linear'
-
-                ),
-
-                showlegend=False, 
-
-                height=450,
-
-                margin=dict(l=80, r=80, t=20, b=20)
-
-            )
-
+        with col_mid:
+            fig_radar = go.Figure(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)', marker=dict(size=8, color='#df003b')))
+            fig_radar.update_layout(polar=dict(angularaxis=dict(rotation=90, direction="clockwise", gridcolor="lightgrey"), radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6], gridcolor="lightgrey"), gridshape='linear'), showlegend=False, height=450, margin=dict(l=60, r=60, t=30, b=30))
             st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
 
-
-
-        st.divider()
-
-
-
-        # 3. GENOPRETTET: De tre kolonner med tekstbokse under radaren
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1: 
-
+        with col_right:
             st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
-
-        with c2: 
-
             st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
-
-        with c3: 
-
             st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
