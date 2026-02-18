@@ -4,6 +4,12 @@ import pandas as pd
 import uuid
 from datetime import datetime
 
+# Importér turnerings-filter fra din konfiguration
+try:
+    from data.season_show import COMPETITION_WYID
+except ImportError:
+    COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
+
 def vis_side(dp):
     st.write("### Ny Scoutrapport")
 
@@ -14,6 +20,12 @@ def vis_side(dp):
 
     # 2. Forbered spillerlisten med striks filtrering
     if not df_ps.empty:
+        # A: Filtrér spillere baseret på COMPETITION_WYID fra season_show.py
+        # Vi sikrer os at vi kun viser spillere fra de relevante turneringer
+        if 'COMPETITION_WYID' in df_ps.columns:
+            df_ps = df_ps[df_ps['COMPETITION_WYID'].isin(COMPETITION_WYID)]
+
+        # B: Rens navne-data
         for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
             df_ps[col] = df_ps[col].astype(str).replace(['None', 'nan', '<NA>'], '')
 
@@ -59,9 +71,13 @@ def vis_side(dp):
 
         st.selectbox("Find spiller", options=[""] + m_df['Navn'].tolist(), key="player_choice", on_change=on_player_change)
         
-        # Diskret tekst med ID under dropdown
+        # Diskret tekst med ID under dropdown (med lidt ekstra luft/padding)
         if st.session_state.scout_temp_data["id"]:
-            st.markdown(f"<p style='color: gray; font-size: 12px; margin-top: -15px;'>System ID: {st.session_state.scout_temp_data['id']}</p>", unsafe_allow_html=True)
+            st.markdown(f"""
+                <p style='color: gray; font-size: 11px; margin-top: -10px; padding-left: 2px;'>
+                    System ID: {st.session_state.scout_temp_data['id']}
+                </p>
+                """, unsafe_allow_html=True)
             
     else:
         c1, c2 = st.columns([3, 1])
