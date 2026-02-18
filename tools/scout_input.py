@@ -4,7 +4,12 @@ import pandas as pd
 import uuid
 from datetime import datetime
 from io import StringIO
-from tools.github_utils import get_github_file, push_to_github
+
+# RETTET IMPORT: Peger nu på din nye utils-mappe
+try:
+    from utils.github_handler import get_github_file, push_to_github
+except ImportError:
+    st.error("Kunne ikke finde github_handler.py i utils mappen.")
 
 try:
     from data.season_show import COMPETITION_WYID
@@ -21,6 +26,7 @@ def vis_side(dp):
 
     # 2. Forbered spillerlisten
     if not df_ps.empty:
+        # Filtrér på turneringer defineret i season_show.py
         if 'COMPETITION_WYID' in df_ps.columns:
             df_ps = df_ps[df_ps['COMPETITION_WYID'].isin(COMPETITION_WYID)]
 
@@ -65,6 +71,7 @@ def vis_side(dp):
     else:
         c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
+        # Auto-generér ID hvis manuel spiller
         if not st.session_state.scout_temp_data["id"] or len(st.session_state.scout_temp_data["id"]) > 10:
             st.session_state.scout_temp_data["id"] = str(uuid.uuid4().int)[:6]
         st.session_state.scout_temp_data["id"] = c2.text_input("ID", value=st.session_state.scout_temp_data["id"])
@@ -82,7 +89,7 @@ def vis_side(dp):
         f_pot = a2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
 
         st.divider()
-        # Rating sektion (Match med CSV kolonner)
+        # Rating sektion
         r1, r2, r3 = st.columns(3)
         with r1:
             fart = st.select_slider("Fart", options=range(1,7), value=3)
@@ -105,10 +112,12 @@ def vis_side(dp):
             if not st.session_state.scout_temp_data["n"]:
                 st.error("Indtast eller vælg venligst en spiller.")
             else:
+                import time # Bruges til forsinkelsen
+                
                 # Beregn gennemsnit
                 avg = round((fart+teknik+spil_i+f_beslut+f_aggro+attit+fysik+ledere)/8, 1)
                 
-                # Sammenhold data præcis med dine CSV-kolonner
+                # Dataobjekt til CSV
                 ny_rapport = {
                     "PLAYER_WYID": st.session_state.scout_temp_data["id"],
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
@@ -134,19 +143,36 @@ def vis_side(dp):
                 
                 file_path = "data/scouting_db.csv"
                 try:
+                    # Hent nuværende fil
                     content, sha = get_github_file(file_path)
+                    
                     if content is not None:
                         df_old = pd.read_csv(StringIO(content))
-                        # Sikre at vi bruger de rigtige kolonner
                         df_new = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
                     else:
                         df_new = pd.DataFrame([ny_rapport])
                     
                     csv_string = df_new.to_csv(index=False)
-                    push_to_github(file_path, f"Ny rapport: {ny_rapport['Navn']}", csv_string, sha)
                     
-                    st.success(f"Rapport for {ny_rapport['Navn']} gemt!")
-                    st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
-                    st.rerun()
+                    # Send til GitHub
+                    result = push_to_github(file_path, f"Ny rapport: {ny_rapport['Navn']}", csv_string, sha)
+                    
+                    # Tjek om GitHub svarede OK (status 200 eller 201)
+                    if result in [200, 201]:
+                        st.success(f"Rapport gemt! Siden nulstilles om 10 sekunder...")
+                        
+                        # Nulstil data
+                        st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
+                        
+                        # Vent 10 sekunder
+                        time.sleep(10)
+                        
+                        # Genindlæs for ny rapport
+                        st.rerun()
+                    else:
+                        st.error("Kunne ikke tilføje rapport (Fejl hos GitHub)")
+                        
                 except Exception as e:
-                    st.error(f"Fejl: {e}")
+                    # Hvis noget gik galt i koden eller forbindelsen
+                    st.error("Kunne ikke tilføje rapport")
+                    st.exception(e) # Valgfrit: viser teknisk detalje under fejlen
