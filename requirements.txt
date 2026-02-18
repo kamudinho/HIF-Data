@@ -1,24 +1,37 @@
-streamlit
-pandas
-openpyxl
-bcrypt
-sqlalchemy
-snowflake-sqlalchemy
-snowflake-connector-python
+# Core Web App & UI
+streamlit>=1.35.0
 streamlit-option-menu
-matplotlib
-seaborn
-scipy
-mplsoccer
-plotly
-jinja2
-gspread
-google-auth
 streamlit-antd-components
+
+# Data Handling
+pandas>=2.2.0
 pyarrow
 fastparquet
-requests
+openpyxl
+jinja2
+
+# Database & Snowflake
+snowflake-connector-python
+snowflake-sqlalchemy
+sqlalchemy>=2.0.0
+
+# Math & Science
+scipy
+scikit-learn
+
+# Visualization
+plotly
+matplotlib
+seaborn
+mplsoccer
+
+# Security & Auth
+bcrypt
 cryptography
-asn1crypto
 pyOpenSSL
 PyJWT
+
+# Integration & API
+requests
+gspread
+google-auth
