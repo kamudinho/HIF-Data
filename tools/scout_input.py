@@ -1,10 +1,11 @@
+# tools/scout_input.py
 import streamlit as st
 import pandas as pd
 import uuid
 from datetime import datetime
 
 def vis_side(dp):
-    st.write("### 📝 Ny Scoutrapport")
+    st.write("### Ny Scoutrapport")
 
     # 1. Hent data sikkert
     df_ps = dp.get("players_snowflake", pd.DataFrame())
@@ -16,7 +17,6 @@ def vis_side(dp):
         # Byg navne og map klubber
         df_ps['FULL_NAME'] = df_ps.apply(lambda r: f"{r['FIRSTNAME']} {r['LASTNAME']}".strip() if pd.notnull(r['FIRSTNAME']) else r['SHORTNAME'], axis=1)
         
-        # Opret en liste af dicts til nemmere opslag
         lookup_data = []
         for _, r in df_ps.iterrows():
             t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
@@ -45,15 +45,18 @@ def vis_side(dp):
         sel_n = c1.text_input("Navn")
         sel_id = c2.text_input("ID (Valgfri)")
 
-    # 4. Formular Layout (Som dit skærmbillede)
+    # 4. Formular Layout
     with st.form("scout_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns([2, 2, 1])
+        # Øverste række: Basis info + Synligt ID
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
         f_pos = col1.text_input("Position", value=sel_pos)
         f_klub = col2.text_input("Klub", value=sel_klub)
-        f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
+        f_id_display = col3.text_input("Player ID", value=sel_id, disabled=True)
+        f_scout = col4.text_input("Scout", value=curr_user, disabled=True)
 
         st.divider()
         
+        # Status og Potentiale
         a1, a2 = st.columns(2)
         f_status = a1.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
         f_pot = a2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
@@ -77,13 +80,15 @@ def vis_side(dp):
         f_udv = st.text_input("Udviklingspunkter")
         f_vurder = st.text_area("Samlet Vurdering")
 
+        # Submit knap
         if st.form_submit_button("Gem Scoutrapport", use_container_width=True):
             if not sel_n:
                 st.error("Du skal vælge eller indtaste en spiller.")
             else:
-                # Her samler vi data til din GitHub CSV
+                # Samling af data
+                final_id = sel_id if sel_id else str(uuid.uuid4().int)[:6]
                 rapport_data = {
-                    "PLAYER_WYID": sel_id if sel_id else str(uuid.uuid4().int)[:6],
+                    "PLAYER_WYID": final_id,
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
                     "Navn": sel_n,
                     "Klub": f_klub,
@@ -96,5 +101,6 @@ def vis_side(dp):
                     "Vurdering": f_vurder,
                     "Scout": curr_user
                 }
-                st.success(f"Rapport for {sel_n} er genereret!")
-                st.info("Næste skridt: Forbind til din save_to_github funktion.")
+                
+                st.success(f"Rapport for {sel_n} (ID: {final_id}) er genereret!")
+                st.info("Systemet er klar til at blive forbundet til din GitHub-lagerplads.")
