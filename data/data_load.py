@@ -97,6 +97,11 @@ def load_all_data():
                     WHERE tm.COMPETITION_WYID IN {comp_filter} 
                     AND s.SEASONNAME {season_filter}
                 """,
+                "playerstats": f"""
+                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                    WHERE COMPETITION_WYID IN {comp_filter} 
+                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                """,
                 "events": f"""
                     SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
                     FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
@@ -106,41 +111,16 @@ def load_all_data():
                     AND s.SEASONNAME {season_filter}
                     AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
                 """,
-                "playerstats": f"""
-                    SELECT DISTINCT 
-                        p.player_wyid,
-                        p.firstname,
-                        p.lastname,
-                        p.rolecode3,
-                        p.birthdate,
-                        -- Viser Sæsonnavn
-                        ws.seasonname,
-                        -- Viser navnet på den konkurrence, linjen dækker
-                        wc.competitionname,
-                        
-                        -- ALLE KOLONNER UDEN SUM()
-                        s.*
-                    
-                    
-                    FROM wyscout_playeradvancedstats_total s
-                    JOIN wyscout_players p
-                        ON s.player_wyid = p.player_wyid
-                        AND s.competition_wyid = p.competition_wyid
-                    -- Joiner sæsontabel for navnet
-                    JOIN WYSCOUT_SEASONS ws
-                        ON s.season_wyid = ws.season_wyid
-                    -- DEN MANGLENDE/FEJLENDE JOIN ER FJERNET HER
-                    -- Joiner konkurrencenavnet for hver statistiklinje
-                    JOIN wyscout_competitions wc
-                        ON s.competition_wyid = wc.competition_wyid
-
-                    WHERE s.COMPETITION_WYID IN {comp_filter}
-                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                    
-                    ORDER BY 
-                        ws.seasonname,
-                        wc.competitionname;
-                    
+                "players_snowflake": f"""
+                    SELECT 
+                        PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
+                        ROLECODE3, CURRENTTEAM_WYID 
+                    FROM AXIS.WYSCOUT_PLAYERS
+                    WHERE PLAYER_WYID IN (
+                        SELECT DISTINCT PLAYER_WYID 
+                        FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+                        WHERE COMPETITION_WYID IN {comp_filter}
+                    )
                 """
             }
             
