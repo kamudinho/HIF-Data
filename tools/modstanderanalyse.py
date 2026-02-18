@@ -5,7 +5,8 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 
 def vis_side(df_team_matches, hold_map, df_events):
-    # --- 1. CSS STYLING AF METRICS ---
+    # --- 1. CSS STYLING ---
+    # Gør metrics pæne og ensartede
     st.markdown("""
         <style>
             [data-testid="stMetric"] {
@@ -15,64 +16,78 @@ def vis_side(df_team_matches, hold_map, df_events):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. FILTRERING ---
-    # Vi finder de unikke turneringer i din team_matches DF
-    turneringer = sorted(df_team_matches['COMPETITION_WYID'].unique())
-    col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
+    # --- 2. DROPDOWNS OG FILTRERING ---
+    # Vi henter turneringsnavne direkte fra din SQL (COMPETITION_NAME)
+    if 'COMPETITION_NAME' in df_team_matches.columns:
+        comp_options = df_team_matches[['COMPETITION_NAME', 'COMPETITION_WYID']].drop_duplicates()
+        comp_dict = dict(zip(comp_options['COMPETITION_NAME'], comp_options['COMPETITION_WYID']))
+        
+        col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
+        with col_sel1:
+            valgt_comp_navn = st.selectbox("Vælg Turnering:", options=sorted(comp_dict.keys()))
+            valgt_comp_id = comp_dict[valgt_comp_navn]
+    else:
+        # Fallback hvis kolonnen mangler
+        turneringer = sorted(df_team_matches['COMPETITION_WYID'].unique())
+        col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
+        with col_sel1:
+            valgt_comp_id = st.selectbox("Vælg Turnering (ID):", options=turneringer)
+
+    # Filtrer kampe for den valgte turnering
+    df_filtered_comp = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp_id]
     
-    with col_sel1:
-        valgt_comp = st.selectbox("Turnering:", options=turneringer)
-    
-    df_filtered = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp]
-    
-    # Mapper holdnavne via dit hold_map
-    navne_dict = {hold_map.get(str(int(tid)), f"Hold {tid}"): tid for tid in df_filtered['TEAM_WYID'].unique()}
+    # Mapper hold-ID til navne ved hjælp af din hold_map fra data_load
+    navne_dict = {hold_map.get(str(int(tid)), f"Hold {tid}"): tid for tid in df_filtered_comp['TEAM_WYID'].unique()}
     
     with col_sel2:
-        valgt_navn = st.selectbox("Modstander:", options=sorted(navne_dict.keys()))
+        valgt_hold_navn = st.selectbox("Vælg Modstander:", options=sorted(navne_dict.keys()))
+        valgt_hold_id = navne_dict[valgt_hold_navn]
+        
     with col_sel3:
         halvdel = st.radio("Fokus:", ["Modstander", "Egen"], horizontal=True)
 
-    # Her defineres den variabel, der drillede før
-    valgt_id = navne_dict[valgt_navn]
-    df_hold_matches = df_filtered[df_filtered['TEAM_WYID'] == valgt_id].copy()
+    # Slut-data for det valgte hold
+    df_hold_data = df_filtered_comp[df_filtered_comp['TEAM_WYID'] == valgt_hold_id].copy()
 
     # --- 3. STATISTISK OVERBLIK (METRICS) ---
-    st.subheader(f"Statistisk overblik: {valgt_navn}")
+    st.subheader(f"Statistisk overblik: {valgt_hold_navn}")
     m1, m2, m3, m4 = st.columns(4)
     
     with m1:
-        val = round(df_hold_matches['GOALS'].mean(), 1) if 'GOALS' in df_hold_matches.columns else 0.0
+        val = round(df_hold_data['GOALS'].mean(), 1) if 'GOALS' in df_hold_data.columns else 0.0
         st.metric("GNS. MÅL", val)
     with m2:
-        # Vi tjekker efter både XG (fra din nye join) og XGSHOT (fra spiller-stats)
-        xg_col = 'XG' if 'XG' in df_hold_matches.columns else ('XGSHOT' if 'XGSHOT' in df_hold_matches.columns else None)
-        val = round(df_hold_matches[xg_col].mean(), 2) if xg_col else 0.0
+        # Bruger XG som defineret i din team_matches query
+        val = round(df_hold_data['XG'].mean(), 2) if 'XG' in df_hold_data.columns else 0.0
         st.metric("GNS. XG", val)
     with m3:
-        val = round(df_hold_matches['SHOTS'].mean(), 1) if 'SHOTS' in df_hold_matches.columns else 0.0
+        val = round(df_hold_data['SHOTS'].mean(), 1) if 'SHOTS' in df_hold_data.columns else 0.0
         st.metric("SKUD PR. KAMP", val)
     with m4:
-        poss = df_hold_matches['POSSESSIONPERCENT'].mean() if 'POSSESSIONPERCENT' in df_hold_matches.columns else None
-        st.metric("POSSESSION", f"{int(poss)}%" if poss else "N/A")
+        # Tjekker efter skud på mål
+        val = round(df_hold_data['SHOTSONTARGET'].mean(), 1) if 'SHOTSONTARGET' in df_hold_data.columns else 0.0
+        st.metric("SKUD PÅ MÅL", val)
 
     st.markdown("---")
 
-    # --- 4. HEATMAPS OG KAMP-LOG ---
+    # --- 4. HEATMAPS OG KAMP-LISTE ---
     main_col, side_col = st.columns([3, 1])
 
     with main_col:
         pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#333', half=True)
         c1, c2, c3 = st.columns(3)
         
-        # Filtrering af events baseret på det valgte hold
-        target_id_str = str(int(valgt_id))
+        # Filtrer events for det valgte hold
+        # Vi sikrer os at ID sammenlignes korrekt som strenge
+        target_id_str = str(int(valgt_hold_id))
         df_hold_ev = df_events[df_events['TEAM_WYID'].astype(str).str.contains(target_id_str)].copy()
 
         if not df_hold_ev.empty:
             if halvdel == "Modstander":
+                # Viser fjendens banehalvdel (X > 50)
                 df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50]
             else:
+                # Viser egen banehalvdel (X < 50) men spejlet så det ligner et angreb
                 df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
                 df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
                 df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
@@ -95,9 +110,13 @@ def vis_side(df_team_matches, hold_map, df_events):
                         ax.text(50, 75, "Ingen data", ha='center', va='center', color='gray')
                     st.pyplot(fig, use_container_width=True)
         else:
-            st.warning(f"Ingen hændelsesdata fundet for {valgt_navn} (ID: {valgt_id})")
+            st.warning(f"Ingen hændelsesdata fundet for {valgt_hold_navn}")
 
     with side_col:
         st.write("**Seneste kampe**")
-        cols_to_show = [c for c in ['DATE', 'STATUS', 'GAMEWEEK'] if c in df_hold_matches.columns]
-        st.dataframe(df_hold_matches[cols_to_show].sort_values('DATE', ascending=False), hide_index=True)
+        # Viser dato og kampnavn (MATCHLABEL)
+        cols_vis = [c for c in ['DATE', 'MATCHLABEL', 'GAMEWEEK'] if c in df_hold_data.columns]
+        if not df_hold_data.empty:
+            st.dataframe(df_hold_data[cols_vis].sort_values('DATE', ascending=False), hide_index=True)
+        else:
+            st.write("Ingen historik fundet.")
