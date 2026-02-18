@@ -15,7 +15,7 @@ def map_position(pos_code):
     res = pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
     return res if res != "nan" else "Ukendt"
 
-def vis_spiller_billede(pid, w=110):
+def vis_spiller_billede(pid, w=100):
     pid_clean = str(pid).split('.')[0].strip()
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
@@ -59,13 +59,26 @@ def vis_side(spillere, player_events, df_scout):
         klub = p_data.iloc[0].get('TEAMNAME', 'Ukendt') if not p_data.empty else "Eksternt emne"
         pos = map_position(p_data.iloc[0].get('POS', '')) if not p_data.empty else "Ukendt"
 
-        stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0}
+        # --- OPTIMERET BEREGNING (Kun nyeste sæson + Mål pr. 90) ---
+        stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0, 'M90': 0.0}
         if player_events is not None and not player_events.empty:
-            p_stats = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
-            if not p_stats.empty:
+            p_stats_all = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
+            
+            if not p_stats_all.empty:
+                # Find nyeste sæson for denne specifikke spiller
+                nyeste = p_stats_all.sort_values('SÆSON', ascending=False)['SÆSON'].iloc[0]
+                p_stats = p_stats_all[p_stats_all['SÆSON'] == nyeste]
+                
+                total_min = p_stats['MINUTESTAGGED'].sum()
+                total_mål = p_stats['GOALS'].sum()
+                
                 stats['KAMPE'] = p_stats['MATCHES'].sum()
-                stats['MIN'] = p_stats['MINUTESTAGGED'].sum()
-                stats['MÅL'] = p_stats['GOALS'].sum()
+                stats['MIN'] = total_min
+                stats['MÅL'] = total_mål
+                
+                # Beregn Mål pr. 90 (kun hvis han har spillet)
+                if total_min > 0:
+                    stats['M90'] = round((total_mål / total_min) * 90, 2)
 
         tech = {k: 0 for k in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']}
         scout_txt = {'s': '-', 'u': '-', 'v': '-'}
@@ -92,44 +105,36 @@ def vis_side(spillere, player_events, df_scout):
         pid, klub, pos, stats, _, _ = res
         align = "left" if side == "venstre" else "right"
         
-        # Øget skriftstørrelse i CSS
-        name_size = "32px"
-        meta_size = "16px"
+        # JUSTERET SKRIFTSTØRRELSE (Lidt mindre end før)
+        name_size = "26px" 
+        meta_size = "14px"
         
         c1, c2 = (st.columns([1, 2]) if side == "venstre" else st.columns([2, 1]))
         with (c1 if side == "venstre" else c2): vis_spiller_billede(pid)
         with (c2 if side == "venstre" else c1):
             st.markdown(f"""
                 <div style='text-align:{align};'>
-                    <h1 style='color:{color}; margin:0; font-size:{name_size}; line-height:1.1;'>{navn}</h1>
-                    <p style='color:gray; font-size:{meta_size}; margin-top:5px;'>{pos} | {klub}</p>
+                    <h2 style='color:{color}; margin:0; font-size:{name_size}; line-height:1.2;'>{navn}</h2>
+                    <p style='color:gray; font-size:{meta_size}; margin:0;'>{pos} | {klub}</p>
                 </div>
                 """, unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        m_cols = st.columns(3)
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+        m_cols = st.columns(4) # Tilføjet en kolonne til Mål/90
         m_cols[0].metric("KAMPE", int(stats['KAMPE']))
         m_cols[1].metric("MIN.", int(stats['MIN']))
         m_cols[2].metric("MÅL", int(stats['MÅL']))
+        m_cols[3].metric("M/90", stats['M90'])
 
     with col1: vis_profil(s1_navn, res1, "venstre", "#df003b")
     with col3: vis_profil(s2_navn, res2, "højre", "#0056a3")
 
     with col2:
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        
-        # NY LOGISK RÆKKEFØLGE: Fysisk/Teknisk -> Mentalt
-        categories = [
-            'Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 
-            'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet'
-        ]
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
         
         def get_vals(t):
-            # Skal matche 'categories' listen ovenfor
-            keys = [
-                'FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 
-                'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET'
-            ]
+            keys = ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']
             v = [t.get(k, 0) for k in keys]
             v.append(v[0])
             return v
@@ -139,8 +144,8 @@ def vis_side(spillere, player_events, df_scout):
         fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories + [categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
         
         fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=10))),
-            showlegend=False, height=450, margin=dict(l=50, r=50, t=30, b=30)
+            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
+            showlegend=False, height=400, margin=dict(l=40, r=40, t=20, b=20)
         )
         st.plotly_chart(fig, use_container_width=True)
 
