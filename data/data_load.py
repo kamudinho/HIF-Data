@@ -1,9 +1,10 @@
-#data/data_load.py
+# data/data_load.py
 import streamlit as st
 import pandas as pd
 import uuid
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from data.sql.queries import get_queries  # <--- DIN NYE IMPORT
 
 # --- 0. KONFIGURATION ---
 try:
@@ -13,6 +14,7 @@ except ImportError:
     COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
 
 def _get_snowflake_conn():
+    # ... (behold din nuværende _get_snowflake_conn kode her) ...
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
@@ -54,75 +56,21 @@ def load_all_data():
 
     # --- 2. SNOWFLAKE DATA (SQL) ---
     conn = _get_snowflake_conn()
-    # Initialiser res med alle nødvendige nøgler for at undgå KeyError senere
     res = {
-        "shotevents": pd.DataFrame(), 
-        "team_matches": pd.DataFrame(), 
-        "playerstats": pd.DataFrame(), 
-        "events": pd.DataFrame(), 
-        "players_snowflake": pd.DataFrame(), # Ny nøgle til scouting
-        "hold_map": {}
+        "shotevents": pd.DataFrame(), "team_matches": pd.DataFrame(), 
+        "playerstats": pd.DataFrame(), "events": pd.DataFrame(), 
+        "players_snowflake": pd.DataFrame(), "hold_map": {}
     }
 
     if conn:
         try:
-            # A: Hold Mapping (Henter alle team-navne)
+            # A: Hold Mapping
             df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
             if df_t is not None:
                 res["hold_map"] = {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
 
-            # B: Optimerede Queries
-            queries = {
-                "shotevents": f"""
-                    SELECT c.*, m.MATCHLABEL, m.DATE 
-                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-                    JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-                    WHERE c.PRIMARYTYPE = 'shot' 
-                    AND c.COMPETITION_WYID IN {comp_filter}
-                    AND s.SEASONNAME {season_filter}
-                """,
-                "team_matches": f"""
-                    SELECT 
-                        tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
-                        tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
-                        c.COMPETITIONNAME AS COMPETITION_NAME, 
-                        adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
-                    FROM AXIS.WYSCOUT_TEAMMATCHES tm
-                    LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                        ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-                    JOIN AXIS.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-                    JOIN AXIS.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-                    WHERE tm.COMPETITION_WYID IN {comp_filter} 
-                    AND s.SEASONNAME {season_filter}
-                """,
-                "playerstats": f"""
-                    SELECT * FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                    WHERE COMPETITION_WYID IN {comp_filter} 
-                    AND SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                """,
-                "events": f"""
-                    SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
-                    FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON e
-                    JOIN AXIS.WYSCOUT_MATCHES m ON e.MATCH_WYID = m.MATCH_WYID
-                    JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-                    WHERE e.COMPETITION_WYID IN {comp_filter}
-                    AND s.SEASONNAME {season_filter}
-                    AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
-                """,
-                "players_snowflake": f"""
-                    SELECT 
-                        PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
-                        ROLECODE3, CURRENTTEAM_WYID 
-                    FROM AXIS.WYSCOUT_PLAYERS
-                    WHERE PLAYER_WYID IN (
-                        SELECT DISTINCT PLAYER_WYID 
-                        FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                        WHERE COMPETITION_WYID IN {comp_filter}
-                    )
-                """
-            }
+            # B: Hent queries fra den eksterne fil
+            queries = get_queries(comp_filter, season_filter)
             
             for key, q in queries.items():
                 df = conn.query(q)
@@ -135,16 +83,16 @@ def load_all_data():
         except Exception as e:
             st.error(f"SQL Fejl: {e}")
 
-    # --- 3. SAMLET RETUR (ALLE NØGLER BEVARET + NYE TILFØJET) ---
+    # --- 3. SAMLET RETUR ---
     return {
-        "players": df_players_gh,           # Original GitHub CSV
-        "scouting": df_scout_gh,            # Original GitHub CSV
-        "teams_csv": df_teams_csv,          # Original GitHub CSV
+        "players": df_players_gh,
+        "scouting": df_scout_gh,
+        "teams_csv": df_teams_csv,
         "shotevents": res["shotevents"],
         "team_matches": res["team_matches"],
         "playerstats": res["playerstats"],
-        "season_stats": res["playerstats"], # Alias bevaret til andre sider
-        "players_snowflake": res["players_snowflake"], # Ny kilde til scout-input
+        "season_stats": res["playerstats"], 
+        "players_snowflake": res["players_snowflake"],
         "events": res["events"],
         "hold_map": res["hold_map"]
     }
