@@ -30,7 +30,7 @@ def get_snowflake_connection():
 
 def vis_side():
     st.title("❄️ Snowflake Schema Explorer")
-    st.info("Denne side henter automatisk alle tilgængelige tabeller fra AXIS-schemaet i Snowflake.")
+    st.info("Her hentes alle tilgængelige tabeller automatisk fra dit Snowflake-schema.")
     
     conn = get_snowflake_connection()
     if not conn:
@@ -38,20 +38,41 @@ def vis_side():
 
     try:
         cursor = conn.cursor()
+        s = st.secrets["connections"]["snowflake"]
         
-        # --- HENT ALLE TABELNAVNE FRA AXIS ---
-        # Dette sikrer at du ser alle 49+ tabeller uden at skrive dem manuelt
-        cursor.execute("SHOW TABLES IN SCHEMA AXIS")
-        tables_data = cursor.fetchall()
+        # --- 1. FORCE CONTEXT ---
+        # Vi tvinger sessionen til at kigge i den rigtige database og schema
+        cursor.execute(f"USE DATABASE {s['database']}")
+        cursor.execute(f"USE SCHEMA {s['schema']}")
         
-        # I Snowflake SHOW TABLES er tabelnavnet i kolonne index 1
-        alle_tabeller = sorted([row[1] for row in tables_data])
+        # --- 2. HENT TABELNAVNE (Med backup metode) ---
+        with st.spinner("Henter tabeloversigt..."):
+            try:
+                cursor.execute("SHOW TABLES")
+                tables_data = cursor.fetchall()
+                alle_tabeller = sorted([row[1] for row in tables_data])
+            except:
+                alle_tabeller = []
+
+            # Hvis SHOW TABLES returnerede 0, prøv Information Schema (mere robust)
+            if not alle_tabeller:
+                cursor.execute(f"""
+                    SELECT TABLE_NAME 
+                    FROM INFORMATION_SCHEMA.TABLES 
+                    WHERE TABLE_SCHEMA = '{s['schema'].upper()}'
+                """)
+                alle_tabeller = sorted([row[0] for row in cursor.fetchall()])
+
+        if not alle_tabeller:
+            st.warning(f"⚠️ Ingen tabeller fundet i schemaet '{s['schema']}'. Tjek dine rettigheder.")
+            return
+
+        st.write(f"🔍 Fundet **{len(alle_tabeller)}** tabeller i {s['schema']}.")
         
-        st.write(f"🔍 Fundet **{len(alle_tabeller)}** tabeller i AXIS schemaet.")
+        # Søgefelt
+        search_query = st.text_input("Søg efter tabelnavn:", "").upper()
         
-        # Søgefelt til hurtig filtrering
-        search_query = st.text_input("Søg i tabeller (f.eks. 'EVENTS' eller 'STATS'):", "").upper()
-        
+        # --- 3. VISNING AF TABELLER ---
         for tabel in alle_tabeller:
             if search_query and search_query not in tabel:
                 continue
@@ -63,23 +84,22 @@ def vis_side():
                 with col1:
                     st.markdown("### 📋 Kolonner")
                     try:
-                        cursor.execute(f"DESCRIBE TABLE AXIS.{tabel}")
+                        cursor.execute(f"DESCRIBE TABLE {tabel}")
                         schema_data = cursor.fetchall()
                         schema_df = pd.DataFrame(schema_data).iloc[:, [0, 1]]
                         schema_df.columns = ['Navn', 'Type']
                         st.dataframe(schema_df, hide_index=True, use_container_width=True)
                         
-                        # Liste til chatten/queries
                         all_cols = ", ".join(schema_df['Navn'].tolist())
-                        st.text_area(f"Kopiér kolonner for {tabel}:", value=all_cols, height=100, key=f"text_{tabel}")
+                        st.text_area("Kopiér kolonner:", value=all_cols, height=80, key=f"text_{tabel}")
                     except Exception as e:
-                        st.error(f"Fejl ved beskrivelse: {e}")
+                        st.error(f"Kunne ikke læse kolonner: {e}")
 
                 # HØJRE SIDE: Data eksempel
                 with col2:
                     st.markdown("### 👁️ Eksempel (Top 5)")
                     try:
-                        cursor.execute(f"SELECT * FROM AXIS.{tabel} LIMIT 5")
+                        cursor.execute(f"SELECT * FROM {tabel} LIMIT 5")
                         data = cursor.fetchall()
                         col_names = [desc[0] for desc in cursor.description]
                         df_sample = pd.DataFrame(data, columns=col_names)
@@ -89,7 +109,7 @@ def vis_side():
                         st.warning(f"Kunne ikke hente eksempel: {e}")
 
     except Exception as e:
-        st.error(f"🚨 Overordnet fejl: {e}")
+        st.error(f"🚨 Fejl i Explorer: {e}")
     finally:
         if conn:
             conn.close()
