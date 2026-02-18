@@ -15,6 +15,12 @@ def map_position(pos_code):
     return pos_map.get(s_code, s_code if s_code != "nan" else "Ukendt")
 
 def vis_side(spillere, player_events, df_scout):
+    # Standardiser alle dataframes til uppercase kolonner med det samme
+    if spillere is not None: spillere.columns = [c.upper() for c in spillere.columns]
+    if player_events is not None: player_events.columns = [c.upper() for c in player_events.columns]
+    if df_scout is not None: df_scout.columns = [c.upper() for c in df_scout.columns]
+    
+    # Resten af din kode...
     # --- 1. SAMLE NAVNELISTE FRA BEGGE KILDER ---
     df_p = spillere.copy()
     if 'NAVN' not in df_p.columns and not df_p.empty:
