@@ -133,18 +133,31 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 
                 # --- CENTRERING AF STATS-KOLONNER ---
                 # Vi opretter en konfiguration for hver kolonne der skal centreres
+                # --- CENTRERING AF STATS-KOLONNER ---
+                # Vi definerer de kolonner, der skal centreres
                 center_cols = ['KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
-                col_config = {c: st.column_config.Column(alignment="center") for c in center_cols if c in existing_cols}
+                
+                # Vi bruger TextColumn eller NumberColumn, som har alignment-parameteren
+                col_config = {}
+                for c in existing_cols:
+                    if c in center_cols:
+                        col_config[c] = st.column_config.TextColumn(
+                            c,
+                            alignment="center"
+                        )
+                    elif c in ['SÆSON', 'TURNERING', 'HOLD']:
+                        col_config[c] = st.column_config.TextColumn(
+                            c,
+                            alignment="left"
+                        )
 
                 if not df_p.empty:
                     st.dataframe(
                         df_p[existing_cols].sort_values(['SÆSON', 'KAMPE'], ascending=False),
                         use_container_width=True,
                         hide_index=True,
-                        column_config=col_config # Her påføres centreringen
+                        column_config=col_config
                     )
-                else:
-                    st.info("Ingen relevante karrierestatistikker fundet.")      
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
