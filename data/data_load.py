@@ -111,17 +111,17 @@ def load_all_data():
                     AND s.SEASONNAME {season_filter}
                     AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
                 """,
-                "players_snowflake": f"""
+                "playerstats": f"""
                     SELECT 
-                        PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
-                        ROLECODE3, CURRENTTEAM_WYID 
-                    FROM AXIS.WYSCOUT_PLAYERS
-                    WHERE PLAYER_WYID IN (
-                        SELECT DISTINCT PLAYER_WYID 
-                        FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                        WHERE COMPETITION_WYID IN {comp_filter}
-                    )
-                """
+                        ps.*, 
+                        s.SEASONNAME, 
+                        t.TEAMNAME 
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL ps
+                    LEFT JOIN AXIS.WYSCOUT_SEASONS s ON ps.SEASON_WYID = s.SEASON_WYID
+                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON ps.TEAM_WYID = t.TEAM_WYID
+                    WHERE ps.COMPETITION_WYID IN {comp_filter} 
+                    AND ps.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                """,
             }
             
             for key, q in queries.items():
