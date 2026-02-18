@@ -119,7 +119,7 @@ def load_all_data():
                     WHERE PLAYER_WYID IN (
                         SELECT DISTINCT PLAYER_WYID 
                         FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                        WHERE COMPETITION_WYID IN {comp_filter}
+                        WHERE COMPETITION_WYID IN {comp_filter})
                 """,
             }
             
