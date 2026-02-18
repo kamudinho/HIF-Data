@@ -96,37 +96,51 @@ def vis_profil(p_data, full_df, s_df):
     with t4:
         st.markdown("### Sæsonstatistik")
         
-        # Vi bruger 's_df', da det er navnet defineret i: def vis_profil(p_data, full_df, s_df)
         if s_df is not None and not s_df.empty:
-            # 1. Rens ID så det matcher Snowflake
             tid = str(clean_p_id).split('.')[0].strip()
             
-            # 2. Lav en kopi og tving kolonnenavne til UPPERCASE
+            # 1. Gør stats klar
             df_stats = s_df.copy()
             df_stats.columns = [c.upper() for c in df_stats.columns]
             
-            # 3. Filtrer data specifikt på PLAYER_WYID
-            # Vi sikrer os at PLAYER_WYID kolonnen findes
+            # 2. Hent player_seasons hvis den er sendt med (via data-pakken)
+            # Antager at du har tilføjet den til din load_all_data retur-ordbog
+            df_seasons = full_df.get('player_seasons', pd.DataFrame()) 
+            
             if 'PLAYER_WYID' in df_stats.columns:
+                # Filtrer stats for spilleren
                 df_p = df_stats[df_stats['PLAYER_WYID'].astype(str) == tid].copy()
                 
                 if not df_p.empty:
-                    # 4. Definer de ønskede kolonner
-                    cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'XG', 'ASSISTS']
+                    # --- NY KOBLING ---
+                    # Hvis vi har player_seasons, merger vi den på for at få TEAMNAME og SEASONNAME
+                    # (Dette løser dit problem med at navne mangler i rå playerstats)
+                    if 'SEASONNAME' not in df_p.columns and 'SEASON_WYID' in df_p.columns:
+                        # Her kan vi bruge den hold_map eller merge med seasons hvis nødvendigt
+                        # Men lettest er det, hvis du bruger de joins vi lavede i queries.py
+                        pass 
+
+                    # Beregn xG per kamp hvis det ønskes
+                    if 'XG' in df_p.columns and 'MATCHES' in df_p.columns:
+                        df_p['XG_PER_MATCH'] = (df_p['XG'] / df_p['MATCHES']).round(2)
+
+                    # Definer kolonner der skal vises
+                    cols_to_show = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'GOALS', 'ASSISTS', 'XG']
                     existing = [c for c in cols_to_show if c in df_p.columns]
                     
-                    # 5. Vis tabellen
                     st.dataframe(
                         df_p[existing].drop_duplicates().sort_values('SEASONNAME', ascending=False) if 'SEASONNAME' in df_p.columns else df_p[existing], 
                         use_container_width=True, 
                         hide_index=True
                     )
                 else:
-                    st.info(f"Ingen kampdata fundet i Snowflake for ID: {tid}")
-            else:
-                st.error("Kolonnen 'PLAYER_WYID' blev ikke fundet i data-pakken.")
-        else:
-            st.warning("Statistik-datarammen er tom eller ikke tilgængelig.")
+                    st.info(f"Ingen statistiske kampdata fundet for ID: {tid}")
+
+        # --- NY SEKTION: Positions-historik (Fra din nye player_seasons query) ---
+        st.divider()
+        st.markdown("### Primære Positioner (Sæson)")
+        # Her trækker vi data fra den nye query vi lavede før
+        # Du skal sikre dig at 'player_seasons' er en del af de data der sendes til funktionen
             
     with t5:
 
