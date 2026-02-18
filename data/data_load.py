@@ -112,16 +112,23 @@ def load_all_data():
                     AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
                 """,
                 "playerstats": f"""
-                    SELECT 
-                        ps.*, 
-                        s.SEASONNAME, 
-                        t.TEAMNAME 
-                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL ps
-                    LEFT JOIN AXIS.WYSCOUT_SEASONS s ON ps.SEASON_WYID = s.SEASON_WYID
-                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID 
-                    WHERE ps.COMPETITION_WYID IN {comp_filter} 
-                    AND ps.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
-                """,
+                    SELECT DISTINCT 
+                        s.PLAYER_WYID,
+                        ws.SEASONNAME,
+                        wc.COMPETITIONNAME,
+                        -- Her tilføjer du alle de kolonner fra din SQL, du skal bruge
+                        s.MATCHES,
+                        s.GOALS,
+                        s.ASSISTS,
+                        s.XGSHOT AS XG,
+                        t.TEAMNAME  -- Husk at joine TEAMNAME på TEAM_WYID som vi talte om
+                    FROM AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                    JOIN AXIS.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+                    JOIN AXIS.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
+                    LEFT JOIN AXIS.WYSCOUT_TEAMS t ON s.TEAM_WYID = t.TEAM_WYID
+                    WHERE s.COMPETITION_WYID IN {comp_filter}
+                    AND s.SEASON_WYID IN (SELECT SEASON_WYID FROM AXIS.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+                """
             }
             
             for key, q in queries.items():
