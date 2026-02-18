@@ -20,9 +20,13 @@ def save_to_github(new_row_df):
         content = r.json()
         sha = content['sha']
         old_csv = base64.b64decode(content['content']).decode('utf-8')
-        updated_df = pd.concat([pd.read_csv(StringIO(old_csv)), new_row_df], ignore_index=True)
+        # Læs eksisterende data
+        old_df = pd.read_csv(StringIO(old_csv))
+        # Tilføj den nye række
+        updated_df = pd.concat([old_df, new_row_df], ignore_index=True)
         csv_data = updated_df.to_csv(index=False)
     else:
+        # Hvis filen ikke findes, opret en ny
         csv_data = new_row_df.to_csv(index=False)
     
     payload = {
@@ -31,43 +35,35 @@ def save_to_github(new_row_df):
     }
     if sha: payload["sha"] = sha
     
-    # Returnerer statuskoden direkte
     return requests.put(url, json=payload, headers=headers).status_code
 
 def vis_side(df_players, df_playerstats):
-    # --- CSS FIX FOR DROPDOWN SYNLIGHED ---
+    # --- CSS FIX FOR DROPDOWN ---
     st.markdown("""
         <style>
-            /* Teksten du skriver i søgefeltet mens du søger */
-            input[data-baseweb="base-input"] {
-                color: black !important;
-                -webkit-text-fill-color: black !important;
+            input[data-baseweb="base-input"] { 
+                color: black !important; 
+                -webkit-text-fill-color: black !important; 
             }
-
-            /* Selve listen med valgmuligheder (vigtigt for hvid-på-hvid problemet) */
-            div[role="listbox"] div, 
-            div[role="option"],
-            div[data-baseweb="popover"] {
-                color: black !important;
+            div[role="listbox"] div, div[role="option"], div[data-baseweb="popover"] {
+                color: black !important; 
                 background-color: white !important;
             }
-
-            /* Sikrer at teksten i den lukkede boks også er læselig */
-            .stSelectbox div[data-baseweb="select"] {
-                color: black !important;
+            .stSelectbox div[data-baseweb="select"] { 
+                color: black !important; 
             }
         </style>
     """, unsafe_allow_html=True)
 
     st.write("#### 📝 Ny Scoutrapport")
     
-    # --- SESSION STATE INITIALISERING ---
+    # Session State initialisering
     if 's_pos' not in st.session_state: st.session_state.s_pos = ""
     if 's_klub' not in st.session_state: st.session_state.s_klub = ""
     if 's_id' not in st.session_state: st.session_state.s_id = ""
     if 's_navn' not in st.session_state: st.session_state.s_navn = ""
 
-    # --- DATA FORBEREDELSE ---
+    # Data forberedelse
     lookup_list = []
     if df_playerstats is not None and not df_playerstats.empty:
         for _, r in df_playerstats.iterrows():
@@ -80,7 +76,6 @@ def vis_side(df_players, df_playerstats):
             })
     m_df = pd.DataFrame(lookup_list).drop_duplicates(subset=['ID']) if lookup_list else pd.DataFrame()
 
-    # --- CALLBACK FOR AUTO-UDFYLDNING ---
     def update_player_info():
         valgt = st.session_state.main_search
         if valgt:
@@ -95,10 +90,9 @@ def vis_side(df_players, df_playerstats):
             st.session_state.s_pos = ""
             st.session_state.s_klub = ""
 
-    # --- UI LAYOUT ---
+    # Layout
     metode = st.radio("Metode", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     c_find, c_pos, c_klub, c_scout = st.columns([2.5, 1, 1, 1])
-    
     curr_user = st.session_state.get("user", "System").upper()
 
     if metode == "Søg i systemet":
@@ -108,17 +102,14 @@ def vis_side(df_players, df_playerstats):
     else:
         with c_find:
             st.session_state.s_navn = st.text_input("Navn", key="manual_name")
-            st.session_state.s_id = str(uuid.uuid4().int)[:6] if st.session_state.s_navn else ""
+            # Generer kun nyt ID hvis det er tomt
+            if st.session_state.s_navn and not st.session_state.s_id:
+                st.session_state.s_id = str(uuid.uuid4().int)[:6]
 
-    # Auto-udfyldte felter (bruger session_state direkte)
-    with c_pos: 
-        p_pos = st.text_input("Position", value=st.session_state.s_pos)
-    with c_klub: 
-        p_klub = st.text_input("Klub", value=st.session_state.s_klub)
-    with c_scout: 
-        st.text_input("Scout", value=curr_user, disabled=True)
+    with c_pos: p_pos = st.text_input("Position", value=st.session_state.s_pos)
+    with c_klub: p_klub = st.text_input("Klub", value=st.session_state.s_klub)
+    with c_scout: st.text_input("Scout", value=curr_user, disabled=True)
 
-    # --- SELVE FORMULAREN ---
     with st.form("scout_form"):
         col_a, col_b = st.columns(2)
         stat = col_a.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet", "Køb"])
@@ -137,15 +128,14 @@ def vis_side(df_players, df_playerstats):
         
         st.divider()
         styrke = st.text_input("Styrker")
-        udv = st.text_input("Udviklingspunkter")
-        vurder = st.text_area("Samlet Vurdering")
+        udv = st.text_input("Udvikling") # Rettet til "Udvikling" for at matche din CSV
+        vurder = st.text_area("Vurdering") # Rettet til "Vurdering" for at matche din CSV
 
         if st.form_submit_button("Gem til Database"):
             if st.session_state.s_navn:
                 avg = round((fart+teknik+beslut+sp_int+att+agg+udh+led)/8, 1)
                 
-                # Opret data i den PRÆCISE rækkefølge som din CSV kræver:
-                # PLAYER_WYID, Dato, Navn, Klub, Position, Rating_Avg, Status, Potentiale...
+                # DATA_ROW MATCHER DIN CSV OVERLYST 1:1
                 data_row = [
                     st.session_state.s_id,               # PLAYER_WYID
                     datetime.now().strftime("%Y-%m-%d"), # Dato
@@ -180,7 +170,9 @@ def vis_side(df_players, df_playerstats):
                 df_new = pd.DataFrame([data_row], columns=col_names)
                 
                 # Gem til GitHub
-                status = save_to_github(df_new)
-                if status in [200, 201]:
-                    st.success("Gemt!")
+                res = save_to_github(df_new)
+                if res in [200, 201]:
+                    st.success("Rapport gemt!")
                     st.rerun()
+                else:
+                    st.error(f"Fejl ved gem (Status: {res})")
