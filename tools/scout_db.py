@@ -144,7 +144,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
                         column_config=col_config # Her påføres centreringen
                     )
                 else:
-                    st.info("Ingen relevante karrierestatistikker fundet.")       
+                    st.info("Ingen relevante karrierestatistikker fundet.")      
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
