@@ -59,24 +59,35 @@ def vis_side(spillere, player_events, df_scout):
         klub = p_data.iloc[0].get('TEAMNAME', 'Ukendt') if not p_data.empty else "Eksternt emne"
         pos = map_position(p_data.iloc[0].get('POS', '')) if not p_data.empty else "Ukendt"
 
-        # --- OPTIMERET BEREGNING (Kun nyeste sæson + Mål pr. 90) ---
         stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0, 'M90': 0.0}
+        
         if player_events is not None and not player_events.empty:
-            p_stats_all = player_events[player_events['PLAYER_WYID'].astype(str).str.contains(pid, na=False)]
+            # Vi sikrer os at vi kigger i den rigtige kolonne for ID
+            id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in player_events.columns else player_events.columns[0]
+            p_stats_all = player_events[player_events[id_col].astype(str).str.contains(pid, na=False)]
             
             if not p_stats_all.empty:
-                # Find nyeste sæson for denne specifikke spiller
-                nyeste = p_stats_all.sort_values('SÆSON', ascending=False)['SÆSON'].iloc[0]
-                p_stats = p_stats_all[p_stats_all['SÆSON'] == nyeste]
+                # Tjek om 'SÆSON' kolonnen eksisterer før vi sorterer
+                if 'SÆSON' in p_stats_all.columns:
+                    nyeste = p_stats_all.sort_values('SÆSON', ascending=False)['SÆSON'].iloc[0]
+                    p_stats = p_stats_all[p_stats_all['SÆSON'] == nyeste]
+                elif 'SEASON' in p_stats_all.columns:
+                    nyeste = p_stats_all.sort_values('SEASON', ascending=False)['SEASON'].iloc[0]
+                    p_stats = p_stats_all[p_stats_all['SEASON'] == nyeste]
+                else:
+                    # Hvis ingen sæson-kolonne findes, brug al data
+                    p_stats = p_stats_all
                 
-                total_min = p_stats['MINUTESTAGGED'].sum()
-                total_mål = p_stats['GOALS'].sum()
+                # Brug MINUTESTAGGED eller MINUTESPLAYED alt efter hvad der findes
+                min_col = 'MINUTESTAGGED' if 'MINUTESTAGGED' in p_stats.columns else 'MINUTESPLAYED'
                 
-                stats['KAMPE'] = p_stats['MATCHES'].sum()
+                total_min = p_stats[min_col].sum() if min_col in p_stats.columns else 0
+                total_mål = p_stats['GOALS'].sum() if 'GOALS' in p_stats.columns else 0
+                
+                stats['KAMPE'] = p_stats['MATCHES'].sum() if 'MATCHES' in p_stats.columns else 0
                 stats['MIN'] = total_min
                 stats['MÅL'] = total_mål
                 
-                # Beregn Mål pr. 90 (kun hvis han har spillet)
                 if total_min > 0:
                     stats['M90'] = round((total_mål / total_min) * 90, 2)
 
