@@ -11,45 +11,34 @@ def vis_side(df_scatter):
         leagues = sorted(df_scatter['COMPETITIONNAME'].unique())
         valgt_league = st.selectbox("Vælg Turnering", leagues)
     with c2:
-        # Mulighed for at skifte mellem xG og faktiske mål
         metric_type = st.selectbox("Vælg Analyse", ["xG (Expected Goals)", "Mål & Afslutninger"])
 
-    # Filtrér data baseret på liga
     df_filtered = df_scatter[df_scatter['COMPETITIONNAME'] == valgt_league].copy()
     
-    # --- DYNAMISK MAPPING AF KOLONNER ---
-    # Vi bruger de navne, som din fejlbesked bekræftede findes i dit dataframe
+    # Mapping af kolonner (baseret på din Snowflake liste)
     if metric_type == "xG (Expected Goals)":
-        x_col = 'XGSHOT'         # xG For
-        y_col = 'XGSHOTAGAINST'  # xG Imod
+        x_col, y_col = 'XGSHOT', 'XGSHOTAGAINST'
     else:
-        x_col = 'GOALS'          # Mål For
-        y_col = 'CONCEDEDGOALS'  # Mål Imod (fundet i din liste)
+        x_col, y_col = 'GOALS', 'CONCEDEDGOALS'
 
-    # Beregn gennemsnit pr. kamp (da tallene er Total-stats fra din query)
+    # Beregn per kamp
     df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES']
     df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES']
 
-    # --- PLOT OPSÆTNING ---
+    # --- PLOT ---
     fig = px.scatter(
         df_filtered, 
         x='X_PER_GAME', 
         y='Y_PER_GAME',
         hover_name='TEAMNAME',
-        hover_data={'MATCHES': True, 'X_PER_GAME': ':.2f', 'Y_PER_GAME': ':.2f'},
         height=800,
         template="plotly_white",
-        labels={
-            "X_PER_GAME": f"{metric_type} For pr. kamp",
-            "Y_PER_GAME": f"{metric_type} Imod pr. kamp"
-        }
+        labels={"X_PER_GAME": f"{metric_type} For pr. kamp", "Y_PER_GAME": f"{metric_type} Imod pr. kamp"}
     )
 
-    # Invertér Y-aksen (Færre mål/xG imod er bedre = skal være øverst)
     fig.update_yaxes(autorange="reversed")
 
-    # --- TILFØJ LOGOER ---
-    # Vi bruger imagedataurl fra din query
+    # --- TILFØJ LOGOER (RETTET) ---
     for i, row in df_filtered.iterrows():
         if pd.notnull(row['IMAGEDATAURL']):
             fig.add_layout_image(
@@ -58,13 +47,13 @@ def vis_side(df_scatter):
                     xref="x", yref="y",
                     x=row['X_PER_GAME'],
                     y=row['Y_PER_GAME'],
-                    sizex=0.10, sizey=0.10, # Justeret størrelse til "per game" skala
-                    xhalign="center", yhalign="middle",
+                    sizex=0.10, sizey=0.10,
+                    xanchor="center", # RETTET FRA xhalign
+                    yanchor="middle", # RETTET FRA yhalign
                     layer="above"
                 )
             )
 
-    # Gør de originale prikker usynlige
     fig.update_traces(marker=dict(color='rgba(0,0,0,0)'))
 
     # Gennemsnitslinjer
