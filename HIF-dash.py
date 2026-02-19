@@ -75,7 +75,9 @@ with st.sidebar:
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "Schema Explorer"], icons=None, styles={"nav-link-selected": {"background-color": "#333333"}})
+        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
+                         icons=None, 
+                         styles={"nav-link-selected": {"background-color": "#333333"}})
 
 # --- 5. ROUTING LOGIK ---
 if not sel:
