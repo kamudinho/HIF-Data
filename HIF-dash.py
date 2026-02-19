@@ -123,8 +123,12 @@ try:
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
+    
+    # TILFØJ DENNE ELIF BLOK:
+    elif sel == "System Log":
+        import tools.admin as adm
+        adm.vis_log()  # Her kalder vi log-funktionen i stedet for side-funktionen
+        
     elif sel == "Schema Explorer":
         import tools.snowflake_test as stest
         stest.vis_side()
-except Exception as e:
-    st.error(f"Fejl ved indlæsning af siden '{sel}': {e}")
