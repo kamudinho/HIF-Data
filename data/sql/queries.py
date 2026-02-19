@@ -102,39 +102,16 @@ def get_queries(comp_filter, season_filter):
             )
         """,
         "team_scatter": f"""
-            WITH team_stats AS (
-                SELECT 
-                    tm.TEAM_WYID,
-                    tm.MATCH_WYID,
-                    tm.COMPETITION_WYID,
+                            SELECT 
+                    t.imagedataurl,
                     c.COMPETITIONNAME,
                     t.TEAMNAME,
-                    adv.SHOTS,
-                    adv.GOALS,
-                    adv.XG,
-                    adv.SHOTSONTARGET
-                FROM AXIS.WYSCOUT_TEAMMATCHES tm
+                    tm.*
+                FROM WYSCOUT_TEAMSADVANCEDSTATS_TOTAL tm
                 JOIN AXIS.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
                 JOIN AXIS.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
                 JOIN AXIS.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
                 LEFT JOIN AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                    ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-                WHERE tm.COMPETITION_WYID IN {comp_filter} 
-                AND s.SEASONNAME {season_filter}
-            )
-            SELECT 
-                a.TEAMNAME,
-                a.COMPETITIONNAME,
-                COUNT(a.MATCH_WYID) as KAMPE,
-                SUM(a.XG) as XG_FOR,
-                SUM(b.XG) as XG_AGAINST,
-                SUM(a.GOALS) as GOALS_FOR,
-                SUM(b.GOALS) as GOALS_AGAINST,
-                SUM(a.SHOTS) as SHOTS_FOR,
-                SUM(b.SHOTS) as SHOTS_AGAINST
-            FROM team_stats a
-            -- Joiner med sig selv på MATCH_WYID men forskellig TEAM_WYID for at få modstander-stats
-            JOIN team_stats b ON a.MATCH_WYID = b.MATCH_WYID AND a.TEAM_WYID <> b.TEAM_WYID
-            GROUP BY a.TEAMNAME, a.COMPETITIONNAME
+                    ON tm.TEAM_WYID = adv.TEAM_WYID;
         """
     }
