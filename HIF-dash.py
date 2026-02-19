@@ -23,6 +23,7 @@ USER_DB = get_users()
 if "logged_in" not in st.session_state: 
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
+    st.session_state["role"] = None  # Tilføj denne linje for en ren start
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -32,10 +33,11 @@ if not st.session_state["logged_in"]:
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
             if st.form_submit_button("LOG IND", width="stretch"):
-                # Rettelse: Tjekker specifikt ['pass'] nøglen
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
+                    # HER ER RETTELSEN: Gem rollen fra USER_DB i session_state
+                    st.session_state["role"] = USER_DB[u]["role"] 
                     st.rerun()
                 else: 
                     st.error("Ugyldig bruger eller kode")
