@@ -16,41 +16,46 @@ def vis_side(df_shots, df_spillere, hold_map):
     st.markdown("<style>.main .block-container { padding-top: 2rem; }</style>", unsafe_allow_html=True)
 
     if df_shots is None or df_shots.empty:
-        st.warning(f"Ingen skuddata fundet i Snowflake for {SEASONNAME}.")
+        st.warning(f"Ingen skuddata fundet for {SEASONNAME}.")
         return
 
-    # --- 1. DATA RENS & FORMATERING ---
+    # --- 1. SIKKER DATA-RENS ---
     df_s = df_shots.copy()
     df_s.columns = [str(c).upper() for c in df_s.columns]
     
-    # Mapping af kropsdele fra Wyscout koder/navne
-    body_map = {
-        'right_foot': 'Højre', 'left_foot': 'Venstre', 'head': 'Hoved',
-        'other': 'Andet', 'head/body': 'Hoved'
-    }
+    # Konverter alle vigtige kolonner til numeriske typer for at undgå fejl
+    for col in ['LOCATIONX', 'LOCATIONY', 'SHOTXG', 'MINUTE', 'TEAM_WYID']:
+        if col in df_s.columns:
+            df_s[col] = pd.to_numeric(df_s[col], errors='coerce').fillna(0)
 
-    # Rens Player IDs
-    df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-    
+    # Hjælpefunktion til booleans (Snowflake sender ofte 1/0 eller True/False)
+    def to_bool(val):
+        return str(val).lower() in ['true', '1', '1.0', 't', 'y']
+
+    df_s['IS_GOAL'] = df_s['SHOTISGOAL'].apply(to_bool) if 'SHOTISGOAL' in df_s.columns else False
+
     # Filtrer til eget hold
-    df_s = df_s[pd.to_numeric(df_s['TEAM_WYID'], errors='coerce') == TEAM_WYID].copy()
+    df_s = df_s[df_s['TEAM_WYID'] == TEAM_WYID].copy()
 
-    # Formater Matchlabel: "HIF - Modstander 2-1" -> "vs. Modstander 2-1"
-    # Vi fjerner "Hvidovre" eller hvad dit hold hedder i hold_map
-    eget_hold_navn = hold_map.get(str(TEAM_WYID), "Hvidovre")
+    # Formater Modstander-navn
+    eget_hold_navn = str(hold_map.get(str(int(TEAM_WYID)), "Hvidovre")).upper()
     
-    def format_match(label):
+    def clean_label(label):
         if pd.isna(label): return "Ukendt"
-        return label.replace(eget_hold_navn, "").replace(" - ", "").replace("  ", " ").strip()
+        # Fjerner eget holdnavn og overflødige bindestreger
+        txt = str(label).upper().replace(eget_hold_navn, "").replace("-", "").strip()
+        return f"vs. {txt}" if txt else "Kamp"
 
-    df_s['MODSTANDER'] = df_s['MATCHLABEL'].apply(lambda x: f"vs. {format_match(x)}")
+    df_s['MODSTANDER'] = df_s['MATCHLABEL'].apply(clean_label) if 'MATCHLABEL' in df_s.columns else "Kamp"
 
     # Spiller mapping
     s_df = df_spillere.copy()
     s_df.columns = [str(c).upper() for c in s_df.columns]
     s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     navne_dict = dict(zip(s_df['PLAYER_WYID'], s_df.get('NAVN', 'Ukendt')))
-    df_s['SPILLER_NAVN'] = df_s['PLAYER_WYID'].map(navne_dict).fillna("Ukendt Spiller")
+    
+    df_s['PLAYER_ID_STR'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+    df_s['SPILLER_NAVN'] = df_s['PLAYER_ID_STR'].map(navne_dict).fillna("Ukendt Spiller")
 
     # --- 2. UI LAYOUT ---
     col_map, col_stats = st.columns([2, 1])
@@ -65,46 +70,50 @@ def vis_side(df_shots, df_spillere, hold_map):
 
         # Beregninger
         SHOTS = len(df_p)
-        GOALS = int(df_p['SHOTISGOAL'].apply(lambda x: str(x).lower() in ['true', '1', '1.0', 't']).sum())
-        XG_TOTAL = df_p['SHOTXG'].sum()
+        GOALS = int(df_p['IS_GOAL'].sum())
+        XG_TOTAL = df_p['SHOTXG'].sum() if 'SHOTXG' in df_p.columns else 0
         CONV_RATE = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
 
-        # Metrics blok
+        # Metrics blok (HTML/CSS)
         st.markdown(f"""
-            <div style="margin-top:10px; border-left: 4px solid {TEAM_COLOR}; padding-left: 15px; background-color: #f9f9f9; padding: 15px; border-radius: 0 10px 10px 0;">
-                <small style="color:gray;">AFSLUTNINGER / MÅL</small>
-                <div style="font-size:24px; font-weight:bold;">{SHOTS} / {GOALS}</div>
-                <hr style="margin:10px 0;">
-                <small style="color:gray;">KONVERTERINGSRATE</small>
-                <div style="font-size:24px; font-weight:bold;">{CONV_RATE:.1f}%</div>
-                <hr style="margin:10px 0;">
-                <small style="color:gray;">TOTAL xG</small>
-                <div style="font-size:24px; font-weight:bold;">{XG_TOTAL:.2f}</div>
+            <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px; background: #f0f2f6; border-radius: 5px;">
+                <p style="margin:0; font-size:13px; color:#555;">AFSLUTNINGER / MÅL</p>
+                <p style="margin:0; font-size:26px; font-weight:bold;">{SHOTS} / {GOALS}</p>
+                <div style="margin:10px 0; border-top:1px solid #ccc;"></div>
+                <p style="margin:0; font-size:13px; color:#555;">KONVERTERINGSRATE</p>
+                <p style="margin:0; font-size:26px; font-weight:bold;">{CONV_RATE:.1f}%</p>
+                <div style="margin:10px 0; border-top:1px solid #ccc;"></div>
+                <p style="margin:0; font-size:13px; color:#555;">TOTAL xG</p>
+                <p style="margin:0; font-size:26px; font-weight:bold;">{XG_TOTAL:.2f}</p>
             </div>
         """, unsafe_allow_html=True)
 
         with st.popover("Se alle afslutninger", use_container_width=True):
             tabel_df = df_p.copy()
-            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(lambda x: "⚽ MÅL" if str(x).lower() in ['true', '1', '1.0', 't'] else "Skud")
-            tabel_df['DEL'] = tabel_df['SHOTBODYPART'].map(body_map).fillna(tabel_df['SHOTBODYPART'])
+            tabel_df['RES'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "Skud"})
             
-            vis_tabel = tabel_df[['NR', 'MODSTANDER', 'MINUTE', 'DEL', 'RESULTAT']]
-            vis_tabel.columns = ['#', 'Kamp', 'Min', 'Del', 'Res']
-            st.dataframe(vis_tabel, hide_index=True)
+            # Bodypart mapping
+            b_map = {'right_foot': 'Højre', 'left_foot': 'Venstre', 'head': 'Hoved', 'other': 'Andet'}
+            tabel_df['DEL'] = tabel_df['SHOTBODYPART'].str.lower().map(b_map).fillna(tabel_df['SHOTBODYPART'])
+            
+            vis_tabel = tabel_df[['NR', 'MODSTANDER', 'MINUTE', 'DEL', 'RES']]
+            st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
     with col_map:
+        # Pitch setup
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
         fig, ax = pitch.draw(figsize=(6, 5))
         
         for _, row in df_p.iterrows():
-            goal = str(row['SHOTISGOAL']).lower() in ['true', '1', '1.0', 't']
+            is_goal = row['IS_GOAL']
+            # Wyscout koordinater: x er op/ned, y er side til side
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=200 if goal else 130,
-                       color='gold' if goal else TEAM_COLOR, 
-                       edgecolors='white', linewidth=1, alpha=0.9, zorder=3)
+                       s=220 if is_goal else 140,
+                       color='gold' if is_goal else TEAM_COLOR, 
+                       edgecolors='white', linewidth=1.5, zorder=3)
             
             ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
-                    color='black' if goal else 'white', ha='center', va='center', 
-                    fontsize=7, fontweight='bold', zorder=4)
+                    color='black' if is_goal else 'white', ha='center', va='center', 
+                    fontsize=8, fontweight='bold', zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
