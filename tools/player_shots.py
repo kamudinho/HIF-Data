@@ -100,20 +100,33 @@ def vis_side(df_shots, df_spillere, hold_map):
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
     with col_map:
-        # Pitch setup
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444')
-        fig, ax = pitch.draw(figsize=(6, 5))
-        
+        # Pitch setup - Vi reducerer figsize lidt for at få bedre proportioner
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2)
+        fig, ax = pitch.draw(figsize=(5, 4)) # Lidt mindre figur giver bedre kontrol over punktstørrelsen
+        ax.set_ylim(45, 102) 
+
         for _, row in df_p.iterrows():
             is_goal = row['IS_GOAL']
-            # Wyscout koordinater: x er op/ned, y er side til side
-            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=220 if is_goal else 140,
-                       color='gold' if is_goal else TEAM_COLOR, 
-                       edgecolors='white', linewidth=1.5, zorder=3)
             
+            # Vi skalerer størrelsen markant ned:
+            # Mål: 120 (før 220)
+            # Skud: 70 (før 140)
+            point_size = 120 if is_goal else 70
+            
+            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
+                       s=point_size,
+                       color='gold' if is_goal else TEAM_COLOR, 
+                       edgecolors='white', 
+                       linewidth=0.8, # Finere kant
+                       alpha=0.9, 
+                       zorder=3)
+            
+            # Nummeret skal også være mindre for at passe i de mindre cirkler
             ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
-                    color='black' if is_goal else 'white', ha='center', va='center', 
-                    fontsize=8, fontweight='bold', zorder=4)
+                    color='black' if is_goal else 'white', 
+                    ha='center', va='center', 
+                    fontsize=5, # Mindre font
+                    fontweight='bold', 
+                    zorder=4)
         
         st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
