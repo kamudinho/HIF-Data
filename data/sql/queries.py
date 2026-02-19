@@ -4,10 +4,27 @@ def get_queries(comp_filter, season_filter):
     """Returnerer en ordbog med SQL-queries til Snowflake."""
     return {
         "shotevents": f"""
-            SELECT c.*, m.MATCHLABEL, m.DATE 
+            SELECT 
+                c.PLAYER_WYID, 
+                c.TEAM_WYID, 
+                c.MATCH_WYID,
+                c.LOCATIONX, 
+                c.LOCATIONY, 
+                c.MINUTE,
+                s_shot.SHOTISGOAL, 
+                s_shot.SHOTONTARGET, 
+                s_shot.SHOTXG,
+                s_shot.SHOTBODYPART,
+                m.MATCHLABEL
             FROM AXIS.WYSCOUT_MATCHEVENTS_COMMON c
-            JOIN AXIS.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
-            JOIN AXIS.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            -- Vi joiner SHOTS tabellen for at få de avancerede stats
+            INNER JOIN AXIS.WYSCOUT_MATCHEVENTS_SHOTS s_shot 
+                ON c.EVENT_WYID = s_shot.EVENT_WYID
+            -- Vi joiner MATCHES for at få holdnavne/labels
+            JOIN AXIS.WYSCOUT_MATCHES m 
+                ON c.MATCH_WYID = m.MATCH_WYID
+            JOIN AXIS.WYSCOUT_SEASONS s 
+                ON m.SEASON_WYID = s.SEASON_WYID
             WHERE c.PRIMARYTYPE = 'shot' 
             AND c.COMPETITION_WYID IN {comp_filter}
             AND s.SEASONNAME {season_filter}
