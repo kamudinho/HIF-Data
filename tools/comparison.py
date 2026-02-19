@@ -54,15 +54,28 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     with c_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
+        # Find spillerens ID i den kombinerede liste
         match = combined_lookup[combined_lookup['NAVN'] == navn]
-        if match.empty: return None
+        if match.empty: 
+            return None
+        
         try:
             pid = int(float(str(match.iloc[0]['PLAYER_WYID'])))
-        except: return None
+        except (ValueError, TypeError, IndexError): 
+            return None
 
+        # SIKKERHEDSTJEK: Find info i trup-data (df_p)
         p_info = df_p[df_p['NAVN'] == navn]
-        klub = p_info.iloc[0].get('TEAMNAME', 'Scouting / Ekstern') if not p_info.empty else "Scouting / Ekstern"
-        pos = map_position(p_info.iloc[0].get('POS', ''))
+        
+        # Hvis spilleren ikke findes i truppen, sætter vi standardværdier
+        if not p_info.empty:
+            klub = p_info.iloc[0].get('TEAMNAME', 'Ukendt Klub')
+            pos_val = p_info.iloc[0].get('POS', '')
+            pos = map_position(pos_val)
+        else:
+            # Her fanges fejlen: Hvis spilleren kun findes i scouting-data
+            klub = "Scouting / Ekstern"
+            pos = "Ukendt"
 
         s = {
             'GEN': {'KAMPE': 0, 'MIN': 0, 'START': 0},
@@ -70,6 +83,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             'DEF': {'DUEL_PCT': 0.0, 'AERIAL_PCT': 0.0, 'INTERCEPTIONS': 0.0, 'DEF_ACTIONS': 0.0, 'RECOVERIES': 0.0}
         }
         
+        # --- Statistik indlæsning (Samme som før, men med flere checks) ---
         if player_seasons is not None and not player_seasons.empty:
             clean_season = season_filter.replace("=", "").replace("'", "").strip()
             temp_seasons = player_seasons.copy()
@@ -78,42 +92,49 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             s_match = temp_seasons[(temp_seasons['PLAYER_WYID'] == pid) & (temp_seasons['SEASONNAME'].astype(str).str.strip() == clean_season)]
             
             if not s_match.empty and playerstats is not None:
-                target_season_id = int(float(str(s_match.iloc[0]['SEASON_WYID'])))
-                df = playerstats[(pd.to_numeric(playerstats['PLAYER_WYID'], errors='coerce') == pid) & 
-                                 (pd.to_numeric(playerstats['SEASON_WYID'], errors='coerce') == target_season_id)]
-                
-                if not df.empty:
-                    t_min = df['MINUTESTAGGED'].sum()
-                    p90 = t_min / 90 if t_min > 0 else 0
-                    s['GEN']['KAMPE'] = int(df['MATCHES'].sum())
-                    s['GEN']['MIN'] = int(t_min)
-                    s['GEN']['START'] = int(df['MATCHESINSTART'].sum())
-                    s['OFF']['MÅL'] = int(df['GOALS'].sum())
-                    s['OFF']['ASSISTS'] = int(df['ASSISTS'].sum())
-                    s['OFF']['xG'] = round(df['XGSHOT'].sum() + df['XGASSIST'].sum(), 2)
-                    if p90 > 0:
-                        s['OFF']['SKUD'] = round(df['SHOTS'].sum() / p90, 1)
-                        s['OFF']['KEYPASS'] = round(df['KEYPASSES'].sum() / p90, 1)
-                        s['OFF']['DRIBBLES'] = round(df['DRIBBLES'].sum() / p90, 1)
-                        s['OFF']['TOUCHBOX'] = round(df['TOUCHINBOX'].sum() / p90, 1)
-                    if df['DUELS'].sum() > 0:
-                        s['DEF']['DUEL_PCT'] = round((df['DUELSWON'].sum() / df['DUELS'].sum()) * 100, 1)
-                    if df['AERIALDUELS'].sum() > 0:
-                        s['DEF']['AERIAL_PCT'] = round((df['AERIALDUELSWON'].sum() / df['AERIALDUELS'].sum()) * 100, 1)
-                    if p90 > 0:
-                        s['DEF']['INTERCEPTIONS'] = round(df['INTERCEPTIONS'].sum() / p90, 1)
-                        s['DEF']['DEF_ACTIONS'] = round(df['DEFENSIVEACTIONS'].sum() / p90, 1)
-                        s['DEF']['RECOVERIES'] = round(df['RECOVERIES'].sum() / p90, 1)
+                try:
+                    target_season_id = int(float(str(s_match.iloc[0]['SEASON_WYID'])))
+                    df = playerstats[(pd.to_numeric(playerstats['PLAYER_WYID'], errors='coerce') == pid) & 
+                                     (pd.to_numeric(playerstats['SEASON_WYID'], errors='coerce') == target_season_id)]
+                    
+                    if not df.empty:
+                        t_min = df['MINUTESTAGGED'].sum()
+                        p90 = t_min / 90 if t_min > 0 else 0
+                        s['GEN']['KAMPE'] = int(df['MATCHES'].sum())
+                        s['GEN']['MIN'] = int(t_min)
+                        s['GEN']['START'] = int(df['MATCHESINSTART'].sum())
+                        s['OFF']['MÅL'] = int(df['GOALS'].sum())
+                        s['OFF']['ASSISTS'] = int(df['ASSISTS'].sum())
+                        s['OFF']['xG'] = round(float(df['XGSHOT'].sum() + df['XGASSIST'].sum()), 2)
+                        
+                        if p90 > 0:
+                            s['OFF']['SKUD'] = round(float(df['SHOTS'].sum() / p90), 1)
+                            s['OFF']['KEYPASS'] = round(float(df['KEYPASSES'].sum() / p90), 1)
+                            s['OFF']['DRIBBLES'] = round(float(df['DRIBBLES'].sum() / p90), 1)
+                            s['OFF']['TOUCHBOX'] = round(float(df['TOUCHINBOX'].sum() / p90), 1)
+                            s['DEF']['INTERCEPTIONS'] = round(float(df['INTERCEPTIONS'].sum() / p90), 1)
+                            s['DEF']['DEF_ACTIONS'] = round(float(df['DEFENSIVEACTIONS'].sum() / p90), 1)
+                            s['DEF']['RECOVERIES'] = round(float(df['RECOVERIES'].sum() / p90), 1)
+                        
+                        if df['DUELS'].sum() > 0:
+                            s['DEF']['DUEL_PCT'] = round((df['DUELSWON'].sum() / df['DUELS'].sum()) * 100, 1)
+                        if df['AERIALDUELS'].sum() > 0:
+                            s['DEF']['AERIAL_PCT'] = round((df['AERIALDUELSWON'].sum() / df['AERIALDUELS'].sum()) * 100, 1)
+                except:
+                    pass # Spring over hvis dataformater driller i de enkelte felter
 
-        # 2. RADARCHART DATA (FRA SCOUTING CSV)
+        # --- Radar/Scouting data ---
         tech = {k: 0 for k in ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']}
         scout_txt = {'s': '-', 'u': '-', 'v': '-'}
-        if not df_s.empty:
+        
+        if df_s is not None and not df_s.empty:
             sc_match = df_s[df_s['NAVN'] == navn]
             if not sc_match.empty:
                 n = sc_match.iloc[-1]
                 for k in tech.keys():
-                    try: tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
+                    try:
+                        val = str(n.get(k, 0)).replace(',', '.')
+                        tech[k] = float(val) if val != 'None' else 0
                     except: tech[k] = 0
                 scout_txt = {'s': n.get('STYRKER', '-'), 'u': n.get('UDVIKLING', '-'), 'v': n.get('VURDERING', '-')}
 
