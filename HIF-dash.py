@@ -114,23 +114,26 @@ try:
     elif sel == "Sammenligning":
         import tools.comparison as comp
         import importlib
-        importlib.reload(comp) # Sikrer at den nye kode med de 5 parametre indlæses
+        importlib.reload(comp)
         comp.vis_side(
             spillere=dp["players"], 
-            playerstats=dp["playerstats"], # Ændret fra player_events
+            playerstats=dp["playerstats"],
             df_scout=dp["scouting"],
-            player_seasons=dp["player_seasons"], # Ny tilføjelse
-            season_filter=dp["season_filter"]    # Ny tilføjelse fra din data_package
+            player_seasons=dp["player_seasons"],
+            season_filter=dp["season_filter"]
         )
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
     
-    # TILFØJ DENNE ELIF BLOK:
     elif sel == "System Log":
         import tools.admin as adm
-        adm.vis_log()  # Her kalder vi log-funktionen i stedet for side-funktionen
+        adm.vis_log() 
         
     elif sel == "Schema Explorer":
         import tools.snowflake_test as stest
         stest.vis_side()
+
+# HER LUKKES TRY-BLOKKEN KORREKT
+except Exception as e:
+    st.error(f"Fejl ved indlæsning af siden '{sel}': {e}")
