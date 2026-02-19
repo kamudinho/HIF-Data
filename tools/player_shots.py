@@ -81,16 +81,25 @@ def vis_side(df_shots, df_spillere, hold_map):
         df_plot['SHOT_NR'] = df_plot.index + 1
 
         # Tabel over skud (i en popover for at spare plads)
-        with st.popover(f"Kampdata: {valgt_spiller}", use_container_width=True):
-            tabel_df = df_plot.copy()
-            tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(
-                lambda x: "⚽ MÅL" if str(x).lower() in ['true', '1', '1.0', 't'] else "Afslutning"
-            )
-            # Vi bruger MATCHLABEL fra Snowflake query JOIN
-            vis_tabel = tabel_df[['SHOT_NR', 'MATCHLABEL', 'MINUTE', 'RESULTAT']]
-            vis_tabel.columns = ['Nr.', 'Kamp', 'Min.', 'Resultat']
-            st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
-
+    with st.popover(f"Kampdata: {valgt_spiller}", use_container_width=True):
+        tabel_df = df_plot.copy()
+        
+        # Definer mål-ikon
+        tabel_df['RESULTAT'] = tabel_df['SHOTISGOAL'].apply(
+            lambda x: "⚽ MÅL" if str(x).lower() in ['true', '1', '1.0', 't'] else "Afslutning"
+        )
+        
+        # Vi runder xG til 2 decimaler (hvis kolonnen findes)
+        if 'SHOTXG' in tabel_df.columns:
+            tabel_df['XG'] = tabel_df['SHOTXG'].astype(float).round(2)
+        else:
+            tabel_df['XG'] = 0.0
+        
+        # Vælg og navngiv kolonner til visning
+        vis_tabel = tabel_df[['SHOT_NR', 'MATCHLABEL', 'MINUTE', 'XG', 'RESULTAT']]
+        vis_tabel.columns = ['Nr.', 'Kamp', 'Min.', 'xG', 'Resultat']
+    
+    st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
         # Metrics kasser (Ligner dit Stats/Top5 design)
         SHOTS = len(df_plot)
         GOALS = int(df_plot['SHOTISGOAL'].apply(lambda x: str(x).lower() in ['true', '1', '1.0', 't']).sum())
