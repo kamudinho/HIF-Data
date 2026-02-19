@@ -47,6 +47,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         st.warning("Ingen spillere fundet.")
         return
 
+    # Overskrift uden ikon
     st.markdown("### Spillersammenligning")
 
     c_sel1, c_sel2 = st.columns(2)
@@ -144,7 +145,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         def get_vals(t):
             v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
                  t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
-            v.append(v[0]) # Luk cirklen for at skabe formen
+            v.append(v[0]) # Luk formen
             return v
         
         fig = go.Figure()
@@ -156,7 +157,8 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         fig.update_layout(
             polar=dict(
                 radialaxis=dict(visible=True, range=[0, 6]),
-                angularaxis=dict(direction="clockwise", period=8) # Sikrer 8 punkter
+                # Tvinger 8-kantet gitterlinjer
+                angularaxis=dict(direction="clockwise", period=8, ticks="")
             ), 
             height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
         )
