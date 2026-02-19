@@ -61,6 +61,9 @@ def vis_side(df_shots, df_spillere, hold_map):
     col_map, col_stats = st.columns([2, 1])
 
     with col_stats:
+        # En lille spacer for at flugte med toppen af banen
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+        
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", options=spiller_liste, label_visibility="collapsed")
         
@@ -68,65 +71,99 @@ def vis_side(df_shots, df_spillere, hold_map):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # Beregninger
+        # --- BEREGNINGER ---
         SHOTS = len(df_p)
         GOALS = int(df_p['IS_GOAL'].sum())
         XG_TOTAL = df_p['SHOTXG'].sum() if 'SHOTXG' in df_p.columns else 0
         CONV_RATE = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
 
-        # Metrics blok (HTML/CSS)
+        # --- METRICS BOKS (Opdateret til dit design) ---
         st.markdown(f"""
-            <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px; background: #f0f2f6; border-radius: 5px;">
-                <p style="margin:0; font-size:13px; color:#555;">AFSLUTNINGER / MÅL</p>
-                <p style="margin:0; font-size:26px; font-weight:bold;">{SHOTS} / {GOALS}</p>
-                <div style="margin:10px 0; border-top:1px solid #ccc;"></div>
-                <p style="margin:0; font-size:13px; color:#555;">KONVERTERINGSRATE</p>
-                <p style="margin:0; font-size:26px; font-weight:bold;">{CONV_RATE:.1f}%</p>
-                <div style="margin:10px 0; border-top:1px solid #ccc;"></div>
-                <p style="margin:0; font-size:13px; color:#555;">TOTAL xG</p>
-                <p style="margin:0; font-size:26px; font-weight:bold;">{XG_TOTAL:.2f}</p>
+            <div style="border-left: 4px solid {TEAM_COLOR}; padding: 20px; background-color: #f1f3f6; border-radius: 0 10px 10px 0; margin-bottom: 10px;">
+                <p style="margin:0; color:#666; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Afslutninger / Mål</p>
+                <p style="margin:0; font-size:26px; font-weight:800; color:#111;">{SHOTS} / {GOALS}</p>
+                
+                <div style="margin:15px 0; border-top:1px solid #ddd;"></div>
+                
+                <p style="margin:0; color:#666; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Konverteringsrate</p>
+                <p style="margin:0; font-size:26px; font-weight:800; color:#111;">{CONV_RATE:.1f}%</p>
+                
+                <div style="margin:15px 0; border-top:1px solid #ddd;"></div>
+                
+                <p style="margin:0; color:#666; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Total xG</p>
+                <p style="margin:0; font-size:26px; font-weight:800; color:#111;">{XG_TOTAL:.2f}</p>
             </div>
         """, unsafe_allow_html=True)
 
+        # --- POPOVER (Hvor tabellen ligger pænt gemt) ---
         with st.popover("Se alle afslutninger", use_container_width=True):
             tabel_df = df_p.copy()
-            tabel_df['RES'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "Skud"})
+            # Mål-ikon
+            tabel_df['RES'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "Afslutning"})
             
             # Bodypart mapping
             b_map = {'right_foot': 'Højre', 'left_foot': 'Venstre', 'head': 'Hoved', 'other': 'Andet'}
             tabel_df['DEL'] = tabel_df['SHOTBODYPART'].str.lower().map(b_map).fillna(tabel_df['SHOTBODYPART'])
             
-            vis_tabel = tabel_df[['NR', 'MODSTANDER', 'MINUTE', 'DEL', 'RES']]
+            # xG formatering i tabellen
+            if 'SHOTXG' in tabel_df.columns:
+                tabel_df['xG'] = tabel_df['SHOTXG'].astype(float).round(2)
+            
+            # Endelig tabelvisning
+            vis_tabel = tabel_df[['NR', 'MODSTANDER', 'MINUTE', 'DEL', 'xG', 'RES']]
+            vis_tabel.columns = ['#', 'Kamp', 'Min', 'Del', 'xG', 'Res']
             st.dataframe(vis_tabel, hide_index=True, use_container_width=True)
 
     with col_map:
-        # Pitch setup - Vi reducerer figsize lidt for at få bedre proportioner
-        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', line_zorder=2)
-        fig, ax = pitch.draw(figsize=(5, 4)) # Lidt mindre figur giver bedre kontrol over punktstørrelsen
-        ax.set_ylim(45, 102) 
-
-        for _, row in df_p.iterrows():
-            is_goal = row['IS_GOAL']
-            
-            # Vi skalerer størrelsen markant ned:
-            # Mål: 120 (før 220)
-            # Skud: 70 (før 140)
-            point_size = 120 if is_goal else 70
-            
-            ax.scatter(row['LOCATIONY'], row['LOCATIONX'], 
-                       s=point_size,
-                       color='gold' if is_goal else TEAM_COLOR, 
-                       edgecolors='white', 
-                       linewidth=0.8, # Finere kant
-                       alpha=0.9, 
-                       zorder=3)
-            
-            # Nummeret skal også være mindre for at passe i de mindre cirkler
-            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
-                    color='black' if is_goal else 'white', 
-                    ha='center', va='center', 
-                    fontsize=5, # Mindre font
-                    fontweight='bold', 
-                    zorder=4)
+        # 1. Setup pitch med fast aspect ratio
+        pitch = VerticalPitch(
+            half=True, 
+            pitch_type='wyscout', 
+            line_color='#444444', 
+            line_zorder=2,
+            goal_type='box' # Giver et pænere mål
+        )
         
-        st.pyplot(fig, bbox_inches='tight', pad_inches=0.05)
+        # Vi definerer en fast figurstørrelse der passer til Streamlit kolonnen
+        fig, ax = pitch.draw(figsize=(8, 10)) 
+        
+        # 2. Zoom - vi justerer lidt på tallene her for at centrere feltet bedre
+        # Wyscout feltet stopper ved 100, men vi giver den 2 ekstra for at undgå at klippe målstreget
+        ax.set_ylim(48, 102) 
+
+        # 3. Plot skud
+        for _, row in df_plot.iterrows():
+            is_goal = str(row.get('IS_GOAL', 'false')).lower() in ['true', '1', 't']
+            
+            # Vi sætter cirklerne lidt ned i størrelse ift. dit screenshot
+            # s=500 er ofte for meget i en vertical pitch, vi prøver 300/150
+            p_size = 350 if is_goal else 180
+            
+            # Tegn selve cirklen
+            ax.scatter(
+                row['LOCATIONY'], 
+                row['LOCATIONX'], 
+                s=p_size,
+                color='gold' if is_goal else TEAM_COLOR, 
+                edgecolors='white', 
+                linewidth=1.5,
+                alpha=1.0, 
+                zorder=3
+            )
+            
+            # 4. Tekst-justering
+            # Vi gør teksten lidt mindre (fontsize=9), så de ikke "stikker ud" af cirklerne
+            ax.text(
+                row['LOCATIONY'], 
+                row['LOCATIONX'], 
+                str(int(row['SHOT_NR'])), 
+                color='black' if is_goal else 'white', 
+                ha='center', 
+                va='center', 
+                fontsize=9, 
+                fontweight='bold', 
+                zorder=4
+            )
+        
+        # Fjern margin omkring plottet for at udnytte pladsen
+        st.pyplot(fig, bbox_inches='tight', pad_inches=0)
