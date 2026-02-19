@@ -146,36 +146,33 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         def get_vals(t):
             v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
                  t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
-            v.append(v[0]) # Lukker formen ved at forbinde sidste punkt med det første
+            v.append(v[0]) # Lukker formen
             return v
         
         fig = go.Figure()
         
-        # Spiller 1
         if res1: 
             fig.add_trace(go.Scatterpolar(
                 r=get_vals(res1[4]), 
                 theta=categories+[categories[0]], 
                 fill='toself', 
                 name=s1_navn, 
-                line_color='#df003b',
-                line=dict(shape='linear') # Tvinger skarpe kanter på selve grafen
+                line_color='#df003b'
             ))
             
-        # Spiller 2
         if res2: 
             fig.add_trace(go.Scatterpolar(
                 r=get_vals(res2[4]), 
                 theta=categories+[categories[0]], 
                 fill='toself', 
                 name=s2_navn, 
-                line_color='#0056a3',
-                line=dict(shape='linear') # Tvinger skarpe kanter på selve grafen
+                line_color='#0056a3'
             ))
         
         fig.update_layout(
             polar=dict(
-                gridshape='polygon', # DETTE gør selve gitteret bagved til en 8-kant i stedet for en cirkel
+                # RETTET: 'linear' skaber den kantede polygon-form i Plotly
+                gridshape='linear', 
                 radialaxis=dict(
                     visible=True, 
                     range=[0, 6],
@@ -192,7 +189,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             margin=dict(l=50, r=50, t=30, b=30), 
             showlegend=False
         )
-        st.pyplot_chart = st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
     # Tabs uden ikoner
