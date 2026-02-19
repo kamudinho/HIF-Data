@@ -142,27 +142,57 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     with col2:
         # 8-kantet Radarchart konfiguration
         categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
+        
         def get_vals(t):
             v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
                  t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
-            v.append(v[0]) # Luk formen
+            v.append(v[0]) # Lukker formen ved at forbinde sidste punkt med det første
             return v
         
         fig = go.Figure()
+        
+        # Spiller 1
         if res1: 
-            fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories+[categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
+            fig.add_trace(go.Scatterpolar(
+                r=get_vals(res1[4]), 
+                theta=categories+[categories[0]], 
+                fill='toself', 
+                name=s1_navn, 
+                line_color='#df003b',
+                line=dict(shape='linear') # Tvinger skarpe kanter på selve grafen
+            ))
+            
+        # Spiller 2
         if res2: 
-            fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
+            fig.add_trace(go.Scatterpolar(
+                r=get_vals(res2[4]), 
+                theta=categories+[categories[0]], 
+                fill='toself', 
+                name=s2_navn, 
+                line_color='#0056a3',
+                line=dict(shape='linear') # Tvinger skarpe kanter på selve grafen
+            ))
         
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=True, range=[0, 6]),
-                # Tvinger 8-kantet gitterlinjer
-                angularaxis=dict(direction="clockwise", period=8, ticks="")
+                gridshape='polygon', # DETTE gør selve gitteret bagved til en 8-kant i stedet for en cirkel
+                radialaxis=dict(
+                    visible=True, 
+                    range=[0, 6],
+                    gridcolor="#e5e5e5",
+                ),
+                angularaxis=dict(
+                    direction="clockwise",
+                    period=8,
+                    gridcolor="#e5e5e5",
+                    linecolor="black"
+                )
             ), 
-            height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
+            height=380, 
+            margin=dict(l=50, r=50, t=30, b=30), 
+            showlegend=False
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.pyplot_chart = st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
     # Tabs uden ikoner
