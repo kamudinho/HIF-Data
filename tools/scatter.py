@@ -11,58 +11,66 @@ def vis_side(df_scatter):
         leagues = sorted(df_scatter['COMPETITIONNAME'].unique())
         valgt_league = st.selectbox("Vælg Turnering", leagues)
     with c2:
-        # Her kan du tilføje de kolonner fra din tm.* som du vil sammenligne
-        metric_type = st.selectbox("Vælg Analyse", ["xG vs xG imod", "Mål vs Mål imod"])
+        # Mulighed for at skifte mellem xG og faktiske mål
+        metric_type = st.selectbox("Vælg Analyse", ["xG (Expected Goals)", "Mål & Afslutninger"])
 
-    # Filtrér data
+    # Filtrér data baseret på liga
     df_filtered = df_scatter[df_scatter['COMPETITIONNAME'] == valgt_league].copy()
     
-    # Mapping af akser (Ret disse navne så de matcher dine tm.* kolonnenavne præcist)
-    if metric_type == "xG vs xG imod":
-        x_col, y_col = 'XG', 'XG_AGAINST' # Tjek om de hedder præcis dette i din tabel
+    # --- DYNAMISK MAPPING AF KOLONNER ---
+    # Vi bruger de navne, som din fejlbesked bekræftede findes i dit dataframe
+    if metric_type == "xG (Expected Goals)":
+        x_col = 'XGSHOT'         # xG For
+        y_col = 'XGSHOTAGAINST'  # xG Imod
     else:
-        x_col, y_col = 'GOALS', 'GOALS_AGAINST'
+        x_col = 'GOALS'          # Mål For
+        y_col = 'CONCEDEDGOALS'  # Mål Imod (fundet i din liste)
+
+    # Beregn gennemsnit pr. kamp (da tallene er Total-stats fra din query)
+    df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES']
+    df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES']
 
     # --- PLOT OPSÆTNING ---
     fig = px.scatter(
         df_filtered, 
-        x=x_col, 
-        y=y_col,
+        x='X_PER_GAME', 
+        y='Y_PER_GAME',
         hover_name='TEAMNAME',
-        text='TEAMNAME', # Viser navnet som backup
+        hover_data={'MATCHES': True, 'X_PER_GAME': ':.2f', 'Y_PER_GAME': ':.2f'},
         height=800,
-        template="plotly_white"
+        template="plotly_white",
+        labels={
+            "X_PER_GAME": f"{metric_type} For pr. kamp",
+            "Y_PER_GAME": f"{metric_type} Imod pr. kamp"
+        }
     )
 
-    # Invertér Y-aksen (Færre mål imod = højere oppe)
+    # Invertér Y-aksen (Færre mål/xG imod er bedre = skal være øverst)
     fig.update_yaxes(autorange="reversed")
 
     # --- TILFØJ LOGOER ---
+    # Vi bruger imagedataurl fra din query
     for i, row in df_filtered.iterrows():
         if pd.notnull(row['IMAGEDATAURL']):
             fig.add_layout_image(
                 dict(
                     source=row['IMAGEDATAURL'],
                     xref="x", yref="y",
-                    x=row[x_col],
-                    y=row[y_col],
-                    sizex=0.8, sizey=0.8, # Justér størrelse afhængig af aksens skala
+                    x=row['X_PER_GAME'],
+                    y=row['Y_PER_GAME'],
+                    sizex=0.10, sizey=0.10, # Justeret størrelse til "per game" skala
                     xhalign="center", yhalign="middle",
                     layer="above"
                 )
             )
 
-    # Gør de blå prikker usynlige så kun logoet og teksten ses
-    fig.update_traces(marker=dict(color='rgba(0,0,0,0)'), textposition='top center')
+    # Gør de originale prikker usynlige
+    fig.update_traces(marker=dict(color='rgba(0,0,0,0)'))
 
-    # Gennemsnitslinjer for kvadrant-opdeling
-    avg_x = df_filtered[x_col].mean()
-    avg_y = df_filtered[y_col].mean()
-    
+    # Gennemsnitslinjer
+    avg_x = df_filtered['X_PER_GAME'].mean()
+    avg_y = df_filtered['Y_PER_GAME'].mean()
     fig.add_hline(y=avg_y, line_dash="dot", line_color="grey", opacity=0.5)
     fig.add_vline(x=avg_x, line_dash="dot", line_color="grey", opacity=0.5)
 
     st.plotly_chart(fig, use_container_width=True)
-
-    # Kvadrant guide
-    st.caption("Øverst til højre: God offensiv & God defensiv | Nederst til venstre: Svag offensiv & Svag defensiv")
