@@ -59,7 +59,6 @@ with st.sidebar:
     st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {curr_user.upper()} ({user_info.get('role', 'User')})</p>", unsafe_allow_html=True)
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
     
-    # Henter adgang fra users.py
     hoved_options = user_info.get("access", ["TRUPPEN", "ANALYSE", "SCOUTING"])
 
     hoved_omraade = option_menu(
@@ -71,14 +70,14 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        # TILFØJET: Scatterplots i menuen
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
                          icons=None, 
                          styles={"nav-link-selected": {"background-color": "#333333"}})
-
 # --- 5. ROUTING LOGIK ---
 if not sel:
     sel = "Oversigt"
@@ -97,12 +96,17 @@ try:
     elif sel == "Top 5":
         import tools.top5 as t5
         t5.vis_side(dp["players"], dp["playerstats"])
-    elif sel == "Afslutninger":
-        import tools.player_shots as ps
-        ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
     elif sel == "Modstanderanalyse":
         import tools.modstanderanalyse as ma
         ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
+    elif sel == "Scatterplots":
+        import tools.scatter as sc
+        import importlib
+        importlib.reload(sc)
+        sc.vis_side(dp["team_scatter"])
+    elif sel == "Afslutninger":
+        import tools.player_shots as ps
+        ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
     elif sel == "Database":
         import tools.scout_db as sdb
         import importlib
