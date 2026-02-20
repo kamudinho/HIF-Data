@@ -17,13 +17,13 @@ def build_scatter_plot(df_filtered, x_col, y_col, metric_type):
         y='Y_PER_GAME',
         hover_name='TEAMNAME',
         text='TEAMNAME', # Tilføjer holdnavn ved prikken
-        height=800,
+        height=700,
         template="plotly_white",
         labels={
             "X_PER_GAME": f"{metric_type} For pr. kamp", 
             "Y_PER_GAME": f"{metric_type} Imod pr. kamp"
         },
-        color_discrete_sequence=['#004d40'] # En solid fodbold-grøn eller klubfarve
+        color_discrete_sequence=['#df003b'] # HIF rød eller en solid kontrastfarve
     )
 
     # Vend Y-aksen så "få mål imod" er øverst (god præstation)
@@ -31,7 +31,7 @@ def build_scatter_plot(df_filtered, x_col, y_col, metric_type):
 
     # Tilpas prikkernes udseende og tekstens placering
     fig.update_traces(
-        marker=dict(size=12, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
+        marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         textposition='top center'
     )
 
@@ -44,19 +44,35 @@ def build_scatter_plot(df_filtered, x_col, y_col, metric_type):
     fig.add_vline(x=avg_x, line_dash="dot", line_color="grey", opacity=0.5,
                   annotation_text="Gns. For", annotation_position="top left")
     
+    # Tilføj kvadrant-forklaringer
+    fig.add_annotation(x=df_plot['X_PER_GAME'].max(), y=df_plot['Y_PER_GAME'].min(), text="Stærk Offensiv / Stærk Defensiv", showarrow=False, font=dict(color="green"))
+    
     return fig
 
 def vis_side(df_scatter):
-    st.write("### 📊 Hold Performance Scatterplot")
+    # Hent sæson-filteret fra session_state (sat i data_load.py)
+    current_season = st.session_state["data_package"]["season_filter"]
     
+    st.write(f"### 📊 Hold Performance | {current_season}")
+    
+    # 1. Filtrer straks på nuværende sæson
+    # Vi antager kolonnen hedder 'SEASONNAME' (juster hvis Snowflake bruger andet navn)
+    season_col = 'SEASONNAME' if 'SEASONNAME' in df_scatter.columns else 'SEASON'
+    df_current = df_scatter[df_scatter[season_col] == current_season].copy()
+    
+    if df_current.empty:
+        st.warning(f"Ingen data fundet for sæsonen {current_season}")
+        return
+
     c1, c2 = st.columns(2)
     with c1:
-        leagues = sorted(df_scatter['COMPETITIONNAME'].unique())
+        leagues = sorted(df_current['COMPETITIONNAME'].unique())
         valgt_league = st.selectbox("Vælg Turnering", leagues)
     with c2:
         metric_type = st.selectbox("Vælg Analyse", ["xG (Expected Goals)", "Mål & Afslutninger"])
 
-    df_filtered = df_scatter[df_scatter['COMPETITIONNAME'] == valgt_league].copy()
+    # 2. Filtrer på den valgte liga (indenfor den nuværende sæson)
+    df_filtered = df_current[df_current['COMPETITIONNAME'] == valgt_league].copy()
     
     if metric_type == "xG (Expected Goals)":
         x_col, y_col = 'XGSHOT', 'XGSHOTAGAINST'
