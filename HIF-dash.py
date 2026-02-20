@@ -2,7 +2,7 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-from data.data_load import load_all_data
+from data.data_load import get_data_package, load_snowflake_query 
 from data.users import get_users
 
 # --- 1. KONFIGURATION & STYLES ---
@@ -46,9 +46,9 @@ if not st.session_state["logged_in"]:
 # --- 3. DATA LOADING ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
-        st.session_state["data_package"] = load_all_data()
+        # RET HER: Brug det nye funktionsnavn
+        st.session_state["data_package"] = get_data_package()
 
-# VIGTIGT: dp skal defineres UDEN FOR if-blokken
 dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
@@ -96,9 +96,11 @@ try:
     elif sel == "Top 5":
         import tools.top5 as t5
         t5.vis_side(dp["players"], dp["playerstats"])
+
+    #ANALYSE
     elif sel == "Modstanderanalyse":
         import tools.modstanderanalyse as ma
-        ma.vis_side(dp["team_matches"], dp["hold_map"], dp["events"])
+        ma.vis_side(dp["team_matches"], dp["hold_map"], None)
     elif sel == "Scatterplots":
         import tools.scatter as sc
         import importlib
@@ -107,6 +109,8 @@ try:
     elif sel == "Afslutninger":
         import tools.player_shots as ps
         ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
+
+    #SCOUTING
     elif sel == "Database":
         import tools.scout_db as sdb
         import importlib
@@ -126,6 +130,8 @@ try:
             player_seasons=dp["player_seasons"],
             season_filter=dp["season_filter"]
         )
+
+    #ADMIN
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
