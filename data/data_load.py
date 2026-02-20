@@ -77,7 +77,8 @@ def get_data_package():
         "comp_filter": comp_filter,
         "season_filter": season_filter,
         "hold_map": get_hold_mapping(),
-        "playerstats": load_snowflake_query("playerstats", comp_filter, season_filter),
-        "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter),
-        "team_matches": load_snowflake_query("team_matches", comp_filter, season_filter)
+        "team_id": TEAM_WYID,
+        "playerstats": None,
+        "team_scatter": None,
+        "team_matches": None
     }
