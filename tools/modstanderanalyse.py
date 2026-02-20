@@ -7,7 +7,7 @@ from mplsoccer import VerticalPitch
 from data.data_load import load_snowflake_query
 
 def vis_side(df_team_matches, hold_map, df_events=None):
-st.markdown('<div class="custom-header"><h3>Modstanderanalyse</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-header"><h3>Modstanderanalyse</h3></div>', unsafe_allow_html=True)
 
     # --- AUTOMATISK DATA INDLÆSNING ---
     # Vi tjekker om vi allerede har data. Hvis ikke, henter vi det uden at spørge.
