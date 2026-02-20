@@ -1,33 +1,22 @@
-# Core Web App & UI
+# UI
 streamlit>=1.35.0
 streamlit-option-menu
 streamlit-antd-components
 
-# Data Handling & Optimering
-pandas>=2.2.0
-pyarrow  # VIGTIG: Hjælper Snowflake med at sende data hurtigere
-fastparquet
-openpyxl
-
-# Database & Snowflake (OPTIMERET)
+# Data & Database (Vigtigt: [pandas] sikrer Arrow-support)
+pandas
 snowflake-connector-python[pandas]
-snowflake-sqlalchemy
-sqlalchemy>=2.0.0
-streamlit-snowflake
+pyarrow
 
-# Visualization
+# Visualisering
 plotly
 matplotlib
 seaborn
 mplsoccer
 
-# Security & Auth
-bcrypt
+# Alt det andet
 cryptography
-pyOpenSSL
-PyJWT
-
-# Integration & API
+bcrypt
 requests
 gspread
 google-auth
