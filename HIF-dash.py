@@ -7,6 +7,28 @@ from data.users import get_users
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
+# CSS til at fjerne det tomme hul i toppen af Main Content
+st.markdown("""
+    <style>
+        /* 1. Fjern padding i toppen af hovedcontaineren */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0rem !important;
+        }
+
+        /* 2. Skjul Streamlits standard header (den usynlige bjælke øverst) */
+        header {
+            visibility: hidden;
+            height: 0px;
+        }
+
+        /* 3. Valgfrit: Fjern ekstra luft over overskrifter */
+        h1, h2, h3 {
+            margin-top: -20px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state: 
