@@ -38,36 +38,36 @@ def vis_side(df_scatter):
         st.warning("Ingen scatter-data tilgængelige.")
         return
 
-    dp = st.session_state.get("data_package", {})
-    
-    # --- SIKKER SÆSON-HENTNING ---
+    # Hent konfiguration fra season_show.py
     try:
         from data.season_show import SEASONNAME
         current_season = str(SEASONNAME).strip()
     except:
-        current_season = str(dp.get("season_filter", "")).replace("='", "").replace("'", "").strip()
+        current_season = "2025/2026"
 
-    st.write(f"### 📊 Hold Performance | {current_season}")
-    
     df_s = df_scatter.copy()
     df_s.columns = [c.upper() for c in df_s.columns]
     
-    # Find sæson-kolonnen
-    s_col = next((c for c in ['SEASONNAME', 'SEASON_NAME', 'SEASON'] if c in df_s.columns), None)
+    # --- NY DIAGNOSE: Hvis vi ikke kan finde kolonnen, vis brugeren hvad der findes ---
+    # Vi leder efter alt der minder om 'SEASON'
+    s_col = next((c for c in df_s.columns if 'SEASON' in c), None)
     
-    if s_col:
-        # Tving kolonnen til tekst og fjern whitespace for at sikre match
-        df_s[s_col] = df_s[s_col].astype(str).str.strip()
-        df_current = df_s[df_s[s_col] == current_season].copy()
-        
-        # Hvis den stadig er tom, kan det skyldes at sæsonen i DB hedder noget andet
-        if df_current.empty:
-            available = df_s[s_col].unique()
-            st.error(f"Kunne ikke finde data for '{current_season}'. Tilgængelige i DB: {available}")
-            return
-    else:
-        st.error("Kunne ikke finde en sæson-kolonne i dataene.")
+    if not s_col:
+        st.error(f"⚠️ Kolonnefejl! Kunne ikke finde en sæson-kolonne.")
+        st.write("Tilgængelige kolonner i dine data:", list(df_s.columns))
         return
+
+    # Rens data og filtrer
+    df_s[s_col] = df_s[s_col].astype(str).str.strip()
+    df_current = df_s[df_s[s_col] == current_season].copy()
+    
+    if df_current.empty:
+        st.warning(f"Ingen data fundet for sæsonen: {current_season}")
+        available = df_s[s_col].unique()
+        st.write(f"Sæsoner fundet i databasen: {available}")
+        return
+
+    st.write(f"### 📊 Hold Performance | {current_season}")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -79,14 +79,17 @@ def vis_side(df_scatter):
     df_filtered = df_current[df_current['COMPETITIONNAME'] == valgt_league].copy()
     
     if not df_filtered.empty:
-        # Beregn per kamp baseret på valgt metric
         if metric_type == "xG (Expected Goals)":
             x_col, y_col = 'XGSHOT', 'XGSHOTAGAINST'
         else:
             x_col, y_col = 'GOALS', 'CONCEDEDGOALS'
         
-        df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES']
-        df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES']
+        # Sikre numeriske typer før beregning
+        for col in [x_col, y_col, 'MATCHES']:
+            df_filtered[col] = pd.to_numeric(df_filtered[col], errors='coerce').fillna(0)
+
+        df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES'].replace(0, 1)
+        df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES'].replace(0, 1)
 
         fig = build_scatter_plot(df_filtered, x_col, y_col, metric_type)
         st.plotly_chart(fig, use_container_width=True)
