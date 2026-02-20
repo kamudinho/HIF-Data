@@ -1,4 +1,4 @@
-#HIF-dash.py
+# HIF-dash.py
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
@@ -23,7 +23,7 @@ USER_DB = get_users()
 if "logged_in" not in st.session_state: 
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
-    st.session_state["role"] = None  # Tilføj denne linje for en ren start
+    st.session_state["role"] = None 
 
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -36,17 +36,15 @@ if not st.session_state["logged_in"]:
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
-                    # HER ER RETTELSEN: Gem rollen fra USER_DB i session_state
                     st.session_state["role"] = USER_DB[u]["role"] 
                     st.rerun()
                 else: 
                     st.error("Ugyldig bruger eller kode")
     st.stop()
 
-# --- 3. DATA LOADING ---
+# --- 3. DATA LOADING (Lynhurtig opstart) ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
-        # RET HER: Brug det nye funktionsnavn
         st.session_state["data_package"] = get_data_package()
 
 dp = st.session_state["data_package"]
@@ -70,20 +68,18 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
-        # TILFØJET: Scatterplots i menuen
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
-                         icons=None, 
-                         styles={"nav-link-selected": {"background-color": "#333333"}})
+        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], icons=None, styles={"nav-link-selected": {"background-color": "#333333"}})
+
 # --- 5. ROUTING LOGIK ---
 if not sel:
     sel = "Oversigt"
 
-# Fejlsikret routing
 try:
+    # TRUPPEN
     if sel == "Oversigt":
         import tools.players as pl
         pl.vis_side(dp["players"])
@@ -97,10 +93,10 @@ try:
         import tools.top5 as t5
         t5.vis_side(dp["players"], dp["playerstats"])
 
-    #ANALYSE
+    # ANALYSE
     elif sel == "Modstanderanalyse":
         import tools.modstanderanalyse as ma
-        ma.vis_side(dp["team_matches"], dp["hold_map"], None)
+        ma.vis_side(dp["team_matches"], dp["hold_map"], None) # None fordi den selv henter data
     elif sel == "Scatterplots":
         import tools.scatter as sc
         import importlib
@@ -108,14 +104,14 @@ try:
         sc.vis_side(dp["team_scatter"])
     elif sel == "Afslutninger":
         import tools.player_shots as ps
-        ps.vis_side(dp["shotevents"], dp["players"], dp["hold_map"])
+        ps.vis_side(None, dp["players"], dp["hold_map"]) # None fordi den selv henter data
 
-    #SCOUTING
+    # SCOUTING
     elif sel == "Database":
         import tools.scout_db as sdb
         import importlib
         importlib.reload(sdb) 
-        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], dp["player_career"])
+        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None) # None pga. Lazy Loading
     elif sel == "Scoutrapport":
         import tools.scout_input as si
         si.vis_side(dp)
@@ -127,23 +123,20 @@ try:
             spillere=dp["players"], 
             playerstats=dp["playerstats"],
             df_scout=dp["scouting"],
-            player_seasons=dp["player_seasons"],
+            player_seasons=None, # Vi lader denne også være None til Lazy Loading
             season_filter=dp["season_filter"]
         )
 
-    #ADMIN
+    # ADMIN
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
-    
     elif sel == "System Log":
         import tools.admin as adm
         adm.vis_log() 
-        
     elif sel == "Schema Explorer":
         import tools.snowflake_test as stest
         stest.vis_side()
 
-# HER LUKKES TRY-BLOKKEN KORREKT
 except Exception as e:
     st.error(f"Fejl ved indlæsning af siden '{sel}': {e}")
