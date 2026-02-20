@@ -7,8 +7,6 @@ from data.users import get_users
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-# (Her kan du indsætte dine CSS styles hvis du ønsker det)
-
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state: 
@@ -25,14 +23,14 @@ if not st.session_state["logged_in"]:
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
-                    # FIX: Gem rollen så Admin-siden kan se hvem du er
+                    # VIGTIGT: Gemmer rollen så Admin-modulet virker
                     st.session_state["role"] = USER_DB[u]["role"] 
                     st.rerun()
                 else:
                     st.error("Ugyldig bruger eller kode")
     st.stop()
 
-# --- 3. DATA LOADING ---
+# --- 3. DATA LOADING (Lynhurtig opstart) ---
 if "data_package" not in st.session_state:
     with st.spinner("Henter systemdata..."):
         st.session_state["data_package"] = get_data_package()
@@ -48,15 +46,19 @@ with st.sidebar:
     
     sel = ""
     if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], styles={"nav-link-selected": {"background-color": "#333333"}})
+        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
+                         styles={"nav-link-selected": {"background-color": "#333333"}})
 
-# --- 5. ROUTING LOGIK ---
+# --- 5. ROUTING LOGIK (Med Lazy Loading) ---
 if not sel: sel = "Oversigt"
 
 try:
@@ -64,45 +66,70 @@ try:
     if sel == "Oversigt":
         import tools.players as pl
         pl.vis_side(dp["players"])
+        
     elif sel == "Forecast":
         import tools.squad as sq
         sq.vis_side(dp["players"])
+        
     elif sel == "Spillerstats":
         import tools.stats as st_tool
+        if dp["playerstats"] is None:
+            with st.spinner("Henter spillerstatistik..."):
+                dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
         st_tool.vis_side(dp["players"], dp["playerstats"])
+        
     elif sel == "Top 5":
         import tools.top5 as t5
+        if dp["playerstats"] is None:
+            with st.spinner("Henter data..."):
+                dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
         t5.vis_side(dp["players"], dp["playerstats"])
 
     # --- ANALYSE ---
     elif sel == "Afslutninger":
         import tools.player_shots as ps
-        ps.vis_side(None, dp["players"], dp["hold_map"]) # Lazy loading
+        ps.vis_side(None, dp["players"], dp["hold_map"])
+        
     elif sel == "Modstanderanalyse":
         import tools.modstanderanalyse as ma
-        ma.vis_side(dp["team_matches"], dp["hold_map"], None) # Lazy loading
+        if dp["team_matches"] is None:
+            with st.spinner("Henter kampdata..."):
+                dp["team_matches"] = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
+        ma.vis_side(dp["team_matches"], dp["hold_map"], None)
+        
     elif sel == "Scatterplots":
         import tools.scatter as sc
+        if dp["team_scatter"] is None:
+            with st.spinner("Henter scatter-data..."):
+                dp["team_scatter"] = load_snowflake_query("team_scatter", dp["comp_filter"], dp["season_filter"])
         sc.vis_side(dp["team_scatter"])
 
     # --- SCOUTING ---
     elif sel == "Scoutrapport":
         import tools.scout_input as si
         si.vis_side(dp)
+        
     elif sel == "Database":
         import tools.scout_db as sdb
-        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None) # Lazy loading
+        if dp["playerstats"] is None:
+            dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None)
+        
     elif sel == "Sammenligning":
         import tools.comparison as comp
-        comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp.get("season_filter"))
+        if dp["playerstats"] is None:
+            dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+        comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp["season_filter"])
 
     # --- ADMIN ---
     elif sel == "Brugerstyring":
         import tools.admin as adm
         adm.vis_side()
+        
     elif sel == "System Log":
         import tools.admin as adm
         adm.vis_log() 
+        
     elif sel == "Schema Explorer":
         import tools.snowflake_test as stest
         stest.vis_side()
