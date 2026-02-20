@@ -177,6 +177,9 @@ def vis_profil(p_data, full_df, s_df, career_df):
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
+
+    # Inde i f.eks. tools/stats.py
+    st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     # LAZY LOADING AF KARRIERE-DATA
     if "player_career_data" not in st.session_state:
         with st.spinner("Henter karrierehistorik fra Snowflake..."):
