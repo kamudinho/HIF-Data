@@ -3,21 +3,17 @@ streamlit>=1.35.0
 streamlit-option-menu
 streamlit-antd-components
 
-# Data Handling
+# Data Handling & Optimering
 pandas>=2.2.0
-pyarrow
+pyarrow  # VIGTIG: Hjælper Snowflake med at sende data hurtigere
 fastparquet
 openpyxl
-jinja2
 
-# Database & Snowflake
-snowflake-connector-python
+# Database & Snowflake (OPTIMERET)
+snowflake-connector-python[pandas]
 snowflake-sqlalchemy
 sqlalchemy>=2.0.0
-
-# Math & Science
-scipy
-scikit-learn
+streamlit-snowflake
 
 # Visualization
 plotly
