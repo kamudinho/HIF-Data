@@ -103,6 +103,7 @@ def get_queries(comp_filter, season_filter):
         """,
         "team_scatter": f"""
                             SELECT 
+                    s.SEASONNAME,
                     t.imagedataurl,
                     c.COMPETITIONNAME,
                     t.TEAMNAME,
