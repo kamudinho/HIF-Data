@@ -37,14 +37,13 @@ def _get_snowflake_conn():
 
 @st.cache_data(ttl=3600)
 def load_github_data():
-    """Henter de statiske CSV filer fra GitHub - uden UUID-støj."""
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
-            # Fjern uuid her for at tillade caching
-            return pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
         except: return pd.DataFrame()
-    
     return {
         "players": read_gh("players.csv"),
         "scouting": read_gh("scouting_db.csv"),
@@ -53,37 +52,42 @@ def load_github_data():
 
 @st.cache_data(ttl=3600)
 def load_snowflake_query(query_key, comp_filter, season_filter):
-    """Henter én specifik query ad gangen."""
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
-    
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
+    if not q: return pd.DataFrame()
     
     df = conn.query(q)
     if df is not None:
         df.columns = [c.upper() for c in df.columns]
-        # Optimer hukommelse for koordinater
         for col in ['LOCATIONX', 'LOCATIONY']:
             if col in df.columns:
                 df[col] = df[col].astype('float32')
     return df
 
-# Din hovedfunktion bliver nu en "dirigent"
+@st.cache_data(ttl=3600)
+def get_hold_mapping():
+    conn = _get_snowflake_conn()
+    if not conn: return {}
+    df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+    return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
+
 def get_data_package():
+    """Denne kører ved login. Vi henter KUN det lette her."""
     gh_data = load_github_data()
-    
-    # Lav filtrene her
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
     season_filter = f"='{SEASONNAME}'"
     
-    # Hent kun det lette data med det samme
+    # Vi samler kun de ting, der skal bruges på 'Oversigt' og de hurtige sider
     package = {
         **gh_data,
-        "season_filter": season_filter,
         "comp_filter": comp_filter,
+        "season_filter": season_filter,
+        "hold_map": get_hold_mapping(),
         "playerstats": load_snowflake_query("playerstats", comp_filter, season_filter),
-        "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter)
+        "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter),
+        "team_matches": load_snowflake_query("team_matches", comp_filter, season_filter)
     }
     return package
 
