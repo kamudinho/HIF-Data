@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import requests
+# Vigtig import for at kunne hente data on-demand
+from data.data_load import load_snowflake_query
 
 # --- 1. HJÆLPEFUNKTIONER ---
 def rens_metrik_vaerdi(val):
@@ -103,10 +105,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             df_p = df_c[df_c['PLAYER_WYID'] == clean_p_id].copy()
 
             if not df_p.empty:
-                # 1. Fjern dubletter
                 df_p = df_p.drop_duplicates()
-
-                # 2. Omdøb til danske navne
                 df_p = df_p.rename(columns={
                     'SEASONNAME': 'SÆSON',
                     'COMPETITIONNAME': 'TURNERING',
@@ -119,17 +118,14 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     'REDCARD': 'RØDE'
                 })
 
-                # 3. Filtrer ungdom (U15 og nedefter)
                 ungdom_filter = ['U15', 'U14', 'U13']
                 pattern = '|'.join(ungdom_filter)
                 df_p = df_p[~df_p['TURNERING'].str.contains(pattern, case=False, na=False)]
                 
-                # 4. Slet tomme rækker (hvor stats er 0 eller None)
                 stats_cols = ['KAMPE', 'MIN', 'MÅL']
                 df_p = df_p.dropna(subset=stats_cols, how='all')
                 df_p = df_p[~((df_p['KAMPE'] == 0) & (df_p['MIN'] == 0) & (df_p['MÅL'] == 0))]
 
-                # 5. Konfiguration af tabelvisning (Uden alignment pga. TypeError)
                 vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
                 existing_cols = [c for c in vis_cols if c in df_p.columns]
                 
@@ -180,7 +176,19 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side(scout_df, spillere_df, stats_df, career_df):
+def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
+    # LAZY LOADING AF KARRIERE-DATA
+    if "player_career_data" not in st.session_state:
+        with st.spinner("Henter karrierehistorik fra Snowflake..."):
+            dp = st.session_state["data_package"]
+            st.session_state["player_career_data"] = load_snowflake_query(
+                "player_career", dp["comp_filter"], dp["season_filter"]
+            )
+            st.rerun()
+    
+    # Brug de hentede data
+    career_df = st.session_state["player_career_data"]
+
     for d in [scout_df, spillere_df, stats_df, career_df]:
         if d is not None and not d.empty:
             d.columns = [c.upper() for c in d.columns]
