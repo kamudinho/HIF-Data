@@ -1,142 +1,84 @@
-# HIF-dash.py
 import streamlit as st
-from streamlit_option_menu import option_menu
 import pandas as pd
-from data.data_load import get_data_package, load_snowflake_query 
-from data.users import get_users
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from data.sql.queries import get_queries 
 
-# --- 1. KONFIGURATION & STYLES ---
-st.set_page_config(page_title="HIF Data Hub", layout="wide")
-
-st.markdown("""
-    <style>
-        header { visibility: visible !important; background: rgba(0,0,0,0) !important; height: 3rem !important; }
-        .block-container { padding-top: 0rem !important; margin-top: 2rem !important; padding-bottom: 1rem !important; }
-        [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-    </style>
-""", unsafe_allow_html=True)
-
-# --- 2. LOGIN SYSTEM ---
-USER_DB = get_users()
-if "logged_in" not in st.session_state: 
-    st.session_state["logged_in"] = False
-    st.session_state["user"] = None
-    st.session_state["role"] = None 
-
-if not st.session_state["logged_in"]:
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.markdown("<br><br><div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='120'></div>", unsafe_allow_html=True)
-        with st.form("login"):
-            u = st.text_input("BRUGER").lower().strip()
-            p = st.text_input("KODE", type="password")
-            if st.form_submit_button("LOG IND", width="stretch"):
-                if u in USER_DB and USER_DB[u]["pass"] == p:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user"] = u
-                    st.session_state["role"] = USER_DB[u]["role"] 
-                    st.rerun()
-                else: 
-                    st.error("Ugyldig bruger eller kode")
-    st.stop()
-
-# --- 3. DATA LOADING (Lynhurtig opstart) ---
-if "data_package" not in st.session_state:
-    with st.spinner("Henter systemdata..."):
-        st.session_state["data_package"] = get_data_package()
-
-dp = st.session_state["data_package"]
-
-# --- 4. SIDEBAR NAVIGATION ---
-with st.sidebar:
-    curr_user = st.session_state["user"]
-    user_info = USER_DB.get(curr_user, {})
-    
-    st.markdown(f"<p style='text-align: center; font-size: 11px; letter-spacing: 1px;'>BRUGER: {curr_user.upper()} ({user_info.get('role', 'User')})</p>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='80'></div>", unsafe_allow_html=True)
-    
-    hoved_options = user_info.get("access", ["TRUPPEN", "ANALYSE", "SCOUTING"])
-
-    hoved_omraade = option_menu(
-        menu_title=None, options=hoved_options, icons=None, menu_icon=None, default_index=0,
-        styles={"container": {"background-color": "#fafafa"}, "nav-link-selected": {"background-color": "#003366"}}
-    )    
-    
-    sel = "" 
-    if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
-    elif hoved_omraade == "ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
-    elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], icons=None, styles={"nav-link-selected": {"background-color": "#cc0000"}})
-    elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], icons=None, styles={"nav-link-selected": {"background-color": "#333333"}})
-
-# --- 5. ROUTING LOGIK ---
-if not sel:
-    sel = "Oversigt"
-
+# --- 0. IMPORT AF KONFIGURATION ---
 try:
-    # TRUPPEN
-    if sel == "Oversigt":
-        import tools.players as pl
-        pl.vis_side(dp["players"])
-    elif sel == "Forecast":
-        import tools.squad as sq
-        sq.vis_side(dp["players"])
-    elif sel == "Spillerstats":
-        import tools.stats as st_tool
-        st_tool.vis_side(dp["players"], dp["playerstats"])
-    elif sel == "Top 5":
-        import tools.top5 as t5
-        t5.vis_side(dp["players"], dp["playerstats"])
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+except ImportError:
+    SEASONNAME = "2025/2026"
+    COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
+    TEAM_WYID = 38331
 
-    # ANALYSE
-    elif sel == "Modstanderanalyse":
-        import tools.modstanderanalyse as ma
-        ma.vis_side(dp["team_matches"], dp["hold_map"], None) # None fordi den selv henter data
-    elif sel == "Scatterplots":
-        import tools.scatter as sc
-        import importlib
-        importlib.reload(sc)
-        sc.vis_side(dp["team_scatter"])
-    elif sel == "Afslutninger":
-        import tools.player_shots as ps
-        ps.vis_side(None, dp["players"], dp["hold_map"]) # None fordi den selv henter data
-
-    # SCOUTING
-    elif sel == "Database":
-        import tools.scout_db as sdb
-        import importlib
-        importlib.reload(sdb) 
-        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None) # None pga. Lazy Loading
-    elif sel == "Scoutrapport":
-        import tools.scout_input as si
-        si.vis_side(dp)
-    elif sel == "Sammenligning":
-        import tools.comparison as comp
-        import importlib
-        importlib.reload(comp)
-        comp.vis_side(
-            spillere=dp["players"], 
-            playerstats=dp["playerstats"],
-            df_scout=dp["scouting"],
-            player_seasons=None, # Vi lader denne også være None til Lazy Loading
-            season_filter=dp["season_filter"]
+def _get_snowflake_conn():
+    try:
+        s = st.secrets["connections"]["snowflake"]
+        p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
+        p_key_obj = serialization.load_pem_private_key(
+            p_key_pem.encode(), password=None, backend=default_backend()
         )
+        p_key_der = p_key_obj.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        return st.connection(
+            "snowflake", type="snowflake", account=s["account"], user=s["user"],
+            role=s["role"], warehouse=s["warehouse"], database=s["database"],
+            schema=s["schema"], private_key=p_key_der
+        )
+    except Exception as e:
+        st.error(f"❌ Snowflake Connection Error: {e}")
+        return None
 
-    # ADMIN
-    elif sel == "Brugerstyring":
-        import tools.admin as adm
-        adm.vis_side()
-    elif sel == "System Log":
-        import tools.admin as adm
-        adm.vis_log() 
-    elif sel == "Schema Explorer":
-        import tools.snowflake_test as stest
-        stest.vis_side()
+@st.cache_data(ttl=3600)
+def load_github_data():
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except: return pd.DataFrame()
+    return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
 
-except Exception as e:
-    st.error(f"Fejl ved indlæsning af siden '{sel}': {e}")
+@st.cache_data(ttl=3600)
+def load_snowflake_query(query_key, comp_filter, season_filter):
+    conn = _get_snowflake_conn()
+    if not conn: return pd.DataFrame()
+    queries = get_queries(comp_filter, season_filter)
+    q = queries.get(query_key)
+    if not q: return pd.DataFrame()
+    df = conn.query(q)
+    if df is not None:
+        df.columns = [c.upper() for c in df.columns]
+        for col in ['LOCATIONX', 'LOCATIONY']:
+            if col in df.columns: df[col] = df[col].astype('float32')
+    return df
+
+@st.cache_data(ttl=3600)
+def get_hold_mapping():
+    conn = _get_snowflake_conn()
+    if not conn: return {}
+    df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
+    return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
+
+def get_data_package():
+    gh_data = load_github_data()
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
+    
+    # Her henter vi kun det nødvendige for at dashboardet starter på 1 sekund
+    return {
+        "players": gh_data["players"],
+        "scouting": gh_data["scouting"],
+        "comp_filter": comp_filter,
+        "season_filter": season_filter,
+        "hold_map": get_hold_mapping(),
+        "team_id": TEAM_WYID,
+        "playerstats": load_snowflake_query("playerstats", comp_filter, season_filter),
+        "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter),
+        "team_matches": load_snowflake_query("team_matches", comp_filter, season_filter)
+    }
