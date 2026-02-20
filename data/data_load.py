@@ -36,23 +36,56 @@ def _get_snowflake_conn():
         return None
 
 @st.cache_data(ttl=3600)
-def load_all_data():
-    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
-    season_filter = f"='{SEASONNAME}'"
-
-    # --- 1. GITHUB DATA (CSV) ---
+def load_github_data():
+    """Henter de statiske CSV filer fra GitHub - uden UUID-støj."""
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
-            u = f"{url_base}{file}?nocache={uuid.uuid4()}"
-            d = pd.read_csv(u, sep=None, engine='python')
-            d.columns = [str(c).strip().upper() for c in d.columns]
-            return d
+            # Fjern uuid her for at tillade caching
+            return pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
         except: return pd.DataFrame()
+    
+    return {
+        "players": read_gh("players.csv"),
+        "scouting": read_gh("scouting_db.csv"),
+        "teams_csv": read_gh("teams.csv")
+    }
 
-    df_players_gh = read_gh("players.csv")
-    df_scout_gh = read_gh("scouting_db.csv")
-    df_teams_csv = read_gh("teams.csv")
+@st.cache_data(ttl=3600)
+def load_snowflake_query(query_key, comp_filter, season_filter):
+    """Henter én specifik query ad gangen."""
+    conn = _get_snowflake_conn()
+    if not conn: return pd.DataFrame()
+    
+    queries = get_queries(comp_filter, season_filter)
+    q = queries.get(query_key)
+    
+    df = conn.query(q)
+    if df is not None:
+        df.columns = [c.upper() for c in df.columns]
+        # Optimer hukommelse for koordinater
+        for col in ['LOCATIONX', 'LOCATIONY']:
+            if col in df.columns:
+                df[col] = df[col].astype('float32')
+    return df
+
+# Din hovedfunktion bliver nu en "dirigent"
+def get_data_package():
+    gh_data = load_github_data()
+    
+    # Lav filtrene her
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
+    
+    # Hent kun det lette data med det samme
+    package = {
+        **gh_data,
+        "season_filter": season_filter,
+        "comp_filter": comp_filter,
+        "playerstats": load_snowflake_query("playerstats", comp_filter, season_filter),
+        "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter)
+    }
+    return package
 
     # --- 2. SNOWFLAKE DATA (SQL) ---
     conn = _get_snowflake_conn()
