@@ -4,8 +4,26 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from mplsoccer import VerticalPitch
 
-def vis_side(team_matches, hold_map):
+def vis_side(df_team_matches, hold_map, df_events=None):
     st.write("### Modstanderanalyse")
+
+    if "events_data" not in st.session_state:
+        st.info("Denne analyse kræver detaljeret kamp-data (events).")
+        
+        # Hent filtre fra session_state (fra din data_package)
+        dp = st.session_state["data_package"]
+        
+        if st.button("🚀 Hent hændelses-data fra Snowflake"):
+            with st.spinner("Henter hændelser (afleveringer, dueller osv.)..."):
+                # Vi henter kun query'en "events"
+                st.session_state["events_data"] = load_snowflake_query(
+                    "events", dp["comp_filter"], dp["season_filter"]
+                )
+                st.rerun()
+        return # Stop her indtil data er hentet
+
+    # Definer df_events fra session_state, når de ER hentet
+    df_events = st.session_state["events_data"]
     
     # FØRST HER henter vi de tunge event-data
     if st.button("Hent detaljeret event-data (tager et øjeblik)"):
