@@ -67,8 +67,8 @@ def vis_side(df_scatter):
         st.write(f"Sæsoner fundet i databasen: {available}")
         return
 
-    st.write(f"### 📊 Hold Performance | {current_season}")
-
+    st.markdown('<div class="custom-header"><h3>SCATTERPLOTS</h3></div>', unsafe_allow_html=True)
+    
     c1, c2 = st.columns(2)
     with c1:
         leagues = sorted(df_current['COMPETITIONNAME'].unique()) if 'COMPETITIONNAME' in df_current.columns else []
