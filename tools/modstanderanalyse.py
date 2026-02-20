@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from mplsoccer import VerticalPitch
+from data.data_load import load_snowflake_query
 
 def vis_side(df_team_matches, hold_map, df_events=None):
     st.write("### Modstanderanalyse")
