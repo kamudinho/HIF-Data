@@ -38,36 +38,36 @@ def vis_side(df_scatter):
         st.warning("Ingen scatter-data tilgængelige.")
         return
 
-    # Hent den rå sæson-tekst (vi fjerner "=' " og " ' " fra filteret hvis nødvendigt)
     dp = st.session_state.get("data_package", {})
-    # Vi bruger SEASONNAME direkte fra season_show hvis muligt, ellers renses filteret
+    
+    # --- SIKKER SÆSON-HENTNING ---
     try:
         from data.season_show import SEASONNAME
-        current_season = SEASONNAME
+        current_season = str(SEASONNAME).strip()
     except:
-        current_season = dp.get("season_filter", "").replace("='", "").replace("'", "")
+        current_season = str(dp.get("season_filter", "")).replace("='", "").replace("'", "").strip()
 
     st.write(f"### 📊 Hold Performance | {current_season}")
     
     df_s = df_scatter.copy()
     df_s.columns = [c.upper() for c in df_s.columns]
     
-    # --- FEJLFIX: Dynamisk tjek af kolonnenavn ---
-    s_col = None
-    for possible_col in ['SEASONNAME', 'SEASON_NAME', 'SEASON']:
-        if possible_col in df_s.columns:
-            s_col = possible_col
-            break
+    # Find sæson-kolonnen
+    s_col = next((c for c in ['SEASONNAME', 'SEASON_NAME', 'SEASON'] if c in df_s.columns), None)
     
     if s_col:
+        # Tving kolonnen til tekst og fjern whitespace for at sikre match
+        df_s[s_col] = df_s[s_col].astype(str).str.strip()
         df_current = df_s[df_s[s_col] == current_season].copy()
+        
+        # Hvis den stadig er tom, kan det skyldes at sæsonen i DB hedder noget andet
+        if df_current.empty:
+            available = df_s[s_col].unique()
+            st.error(f"Kunne ikke finde data for '{current_season}'. Tilgængelige i DB: {available}")
+            return
     else:
-        # Hvis kolonnen slet ikke findes, viser vi data som de er for at undgå crash
-        df_current = df_s.copy()
-    
-    if df_current.empty:
-        st.info(f"Ingen specifikke data for {current_season} i tabellen. Viser alt tilgængeligt.")
-        df_current = df_s.copy()
+        st.error("Kunne ikke finde en sæson-kolonne i dataene.")
+        return
 
     c1, c2 = st.columns(2)
     with c1:
@@ -79,10 +79,12 @@ def vis_side(df_scatter):
     df_filtered = df_current[df_current['COMPETITIONNAME'] == valgt_league].copy()
     
     if not df_filtered.empty:
-        x_col = 'XGSHOT' if metric_type == "xG (Expected Goals)" else 'GOALS'
-        y_col = 'XGSHOTAGAINST' if metric_type == "xG (Expected Goals)" else 'CONCEDEDGOALS'
+        # Beregn per kamp baseret på valgt metric
+        if metric_type == "xG (Expected Goals)":
+            x_col, y_col = 'XGSHOT', 'XGSHOTAGAINST'
+        else:
+            x_col, y_col = 'GOALS', 'CONCEDEDGOALS'
         
-        # Beregn per kamp
         df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES']
         df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES']
 
