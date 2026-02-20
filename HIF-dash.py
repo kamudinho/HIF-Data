@@ -25,6 +25,8 @@ if not st.session_state["logged_in"]:
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
+                    # FIX: Gem rollen så Admin-siden kan se hvem du er
+                    st.session_state["role"] = USER_DB[u]["role"] 
                     st.rerun()
                 else:
                     st.error("Ugyldig bruger eller kode")
