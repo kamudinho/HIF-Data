@@ -9,24 +9,27 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 # CSS til at fjerne det tomme hul i toppen af Main Content
 st.markdown("""
-    <style>
-        /* 1. Fjern padding i toppen af hovedcontaineren */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 0rem !important;
-        }
-
-        /* 2. Skjul Streamlits standard header (den usynlige bjælke øverst) */
-        header {
-            visibility: hidden;
-            height: 0px;
-        }
-
-        /* 3. Valgfrit: Fjern ekstra luft over overskrifter */
-        h1, h2, h3 {
-            margin-top: -20px !important;
-        }
-    </style>
+    <div style="
+        background-color: #cc0000; 
+        color: white; 
+        height: 60px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        border-radius: 8px;
+        margin-top: 0px;
+        margin-bottom: 20px;
+    ">
+        <h2 style="
+            margin: 0; 
+            padding: 0; 
+            font-size: 24px; 
+            font-weight: bold;
+            text-align: center;
+        ">
+            TAKTIK & KONTRAKTER
+        </h2>
+    </div>
 """, unsafe_allow_html=True)
 
 # --- 2. LOGIN SYSTEM ---
