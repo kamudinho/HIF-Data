@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-from data.data_load import get_data_package, load_snowflake_query 
+from data.data_load import get_data_package, load_snowflake_query
 from data.users import get_users
 
 # --- 1. KONFIGURATION ---
