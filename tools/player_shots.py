@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
+# Vigtig import til lazy loading
+from data.data_load import load_snowflake_query
 
 # --- 0. DYNAMISK KONFIGURATION ---
 try:
@@ -14,6 +16,19 @@ except ImportError:
 
 def vis_side(df_shots, df_spillere, hold_map):
     st.markdown("<style>.main .block-container { padding-top: 1.5rem; }</style>", unsafe_allow_html=True)
+
+    # --- LAZY LOADING AF SKUDDATA ---
+    if "shotevents_data" not in st.session_state:
+        with st.spinner(f"Henter skuddata for {SEASONNAME}..."):
+            dp = st.session_state["data_package"]
+            # Vi henter specifikt 'shotevents'
+            st.session_state["shotevents_data"] = load_snowflake_query(
+                "shotevents", dp["comp_filter"], dp["season_filter"]
+            )
+            st.rerun()
+
+    # Brug de hentede data fra session_state
+    df_shots = st.session_state["shotevents_data"]
 
     if df_shots is None or df_shots.empty:
         st.warning(f"Ingen skuddata fundet for {SEASONNAME}.")
@@ -31,7 +46,13 @@ def vis_side(df_shots, df_spillere, hold_map):
         return str(val).lower() in ['true', '1', '1.0', 't', 'y']
 
     df_s['IS_GOAL'] = df_s['SHOTISGOAL'].apply(to_bool) if 'SHOTISGOAL' in df_s.columns else False
+    
+    # Filtrer på dit holds ID
     df_s = df_s[df_s['TEAM_WYID'] == TEAM_WYID].copy()
+
+    if df_s.empty:
+        st.warning(f"Ingen skud registreret for det valgte hold i {SEASONNAME}.")
+        return
 
     # Formater Modstander
     eget_hold_navn = str(hold_map.get(str(int(TEAM_WYID)), "Hvidovre")).upper()
@@ -66,7 +87,7 @@ def vis_side(df_shots, df_spillere, hold_map):
         XG_TOTAL = df_p['SHOTXG'].sum()
         CONV_RATE = (GOALS / SHOTS * 100) if SHOTS > 0 else 0
 
-        # --- METRICS BOKS (RETTET HTML) ---
+        # --- METRICS BOKS ---
         html_content = f"""
         <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px 20px; background-color: #f1f3f6; border-radius: 0 8px 8px 0; margin-top: 10px; font-family: sans-serif;">
             <p style="margin:0; color:#555; font-size:11px; font-weight:700; text-transform:uppercase;">Afslutninger / Mål</p>
@@ -97,7 +118,6 @@ def vis_side(df_shots, df_spillere, hold_map):
 
         for _, row in df_p.iterrows():
             is_goal = row['IS_GOAL']
-            # ENDNU mindre størrelse (s) for at fjerne overlappet fra dit billede
             p_size = 220 if is_goal else 110 
             
             ax.scatter(row['LOCATIONY'], row['LOCATIONX'], s=p_size,
