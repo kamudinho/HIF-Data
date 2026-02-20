@@ -4,7 +4,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from mplsoccer import VerticalPitch
 
-def vis_side(df_team_matches, hold_map, df_events):
+def vis_side(team_matches, hold_map):
+    st.write("### Modstanderanalyse")
+    
+    # FØRST HER henter vi de tunge event-data
+    if st.button("Hent detaljeret event-data (tager et øjeblik)"):
+        events = load_snowflake_query("events", st.session_state.comp_filter, st.session_state.season_filter)
+        
     # --- 1. CSS STYLING ---
     st.markdown("""
         <style>
