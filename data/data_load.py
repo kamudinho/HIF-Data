@@ -5,12 +5,14 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries 
 
-# --- 0. KONFIGURATION ---
+# --- 0. IMPORT AF KONFIGURATION (Fra din season_show.py) ---
 try:
-    from data.season_show import SEASONNAME, COMPETITION_WYID
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
 except ImportError:
+    # Fallback hvis filen mangler
     SEASONNAME = "2025/2026"
     COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
+    TEAM_WYID = 38331
 
 def _get_snowflake_conn():
     try:
@@ -43,29 +45,28 @@ def load_github_data():
             return d
         except: return pd.DataFrame()
     
-    data = load_github_data_internal(read_gh)
-    return data
-
-def load_github_data_internal(read_func):
     return {
-        "players": read_func("players.csv"),
-        "scouting": read_func("scouting_db.csv"),
-        "teams_csv": read_func("teams.csv")
+        "players": read_gh("players.csv"),
+        "scouting": read_gh("scouting_db.csv"),
+        "teams_csv": read_gh("teams.csv")
     }
 
 @st.cache_data(ttl=3600)
 def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
+    
+    # Henter SQL queries dynamisk baseret på filtre
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
+    
     if not q: 
-        st.error(f"Query nøgle '{query_key}' ikke fundet i queries.py")
         return pd.DataFrame()
     
     df = conn.query(q)
     if df is not None:
         df.columns = [c.upper() for c in df.columns]
+        # Optimer hukommelse for koordinater
         for col in ['LOCATIONX', 'LOCATIONY']:
             if col in df.columns:
                 df[col] = df[col].astype('float32')
@@ -82,23 +83,26 @@ def get_hold_mapping():
         return {}
 
 def get_data_package():
-    """Denne kører ved login. Vi henter kun de essentielle og lette data."""
+    """Henter kun de nødvendige metadata ved login."""
     gh_data = load_github_data()
     
-    # Formater filtre
+    # Skab SQL-klare filtre baseret på season_show.py
+    # Gør (ID1, ID2) format klar til SQL IN (...)
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
     season_filter = f"='{SEASONNAME}'"
     
-    # Saml pakken (Bemærk: Vi udelader de tunge som shotevents og career her)
-    package = {
+    # Returner pakken med alt hvad undersiderne skal bruge for at hente deres egne data
+    return {
         "players": gh_data["players"],
         "scouting": gh_data["scouting"],
         "teams_csv": gh_data["teams_csv"],
         "comp_filter": comp_filter,
         "season_filter": season_filter,
         "hold_map": get_hold_mapping(),
+        "team_id": TEAM_WYID, # Gemmer dit eget hold-ID centralt
+        # Hent kun playerstats ved start, da det bruges mange steder
         "playerstats": load_snowflake_query("playerstats", comp_filter, season_filter),
+        # Team scatter og matches er små tabeller - fine at have klar
         "team_scatter": load_snowflake_query("team_scatter", comp_filter, season_filter),
         "team_matches": load_snowflake_query("team_matches", comp_filter, season_filter)
     }
-    return package
