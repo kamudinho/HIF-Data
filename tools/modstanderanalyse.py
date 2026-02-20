@@ -3,32 +3,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from mplsoccer import VerticalPitch
+# Vigtigt: Sørg for at denne import er her
 from data.data_load import load_snowflake_query
 
 def vis_side(df_team_matches, hold_map, df_events=None):
     st.write("### Modstanderanalyse")
 
+    # --- AUTOMATISK DATA INDLÆSNING ---
+    # Vi tjekker om vi allerede har data. Hvis ikke, henter vi det uden at spørge.
     if "events_data" not in st.session_state:
-        st.info("Denne analyse kræver detaljeret kamp-data (events).")
-        
-        # Hent filtre fra session_state (fra din data_package)
-        dp = st.session_state["data_package"]
-        
-        if st.button("🚀 Hent hændelses-data fra Snowflake"):
-            with st.spinner("Henter hændelser (afleveringer, dueller osv.)..."):
-                # Vi henter kun query'en "events"
-                st.session_state["events_data"] = load_snowflake_query(
-                    "events", dp["comp_filter"], dp["season_filter"]
-                )
-                st.rerun()
-        return # Stop her indtil data er hentet
+        with st.spinner("Indlæser detaljeret kamp-data automatisk..."):
+            dp = st.session_state["data_package"]
+            st.session_state["events_data"] = load_snowflake_query(
+                "events", dp["comp_filter"], dp["season_filter"]
+            )
+            # Vi tvinger et rerun så 'df_events' variablen bliver fyldt med det samme
+            st.rerun()
 
-    # Definer df_events fra session_state, når de ER hentet
+    # Nu kan vi med sikkerhed bruge data fra session_state
     df_events = st.session_state["events_data"]
-    
-    # FØRST HER henter vi de tunge event-data
-    if st.button("Hent detaljeret event-data (tager et øjeblik)"):
-        events = load_snowflake_query("events", st.session_state.comp_filter, st.session_state.season_filter)
         
     # --- 1. CSS STYLING ---
     st.markdown("""
@@ -58,7 +51,7 @@ def vis_side(df_team_matches, hold_map, df_events=None):
     # Filtrer hold baseret på turnering
     df_filtered_comp = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp_id]
     
-    # Lav navne_dict (Sikrer at hold-navne vises korrekt)
+    # Lav navne_dict
     navne_dict = {}
     for tid in df_filtered_comp['TEAM_WYID'].unique():
         tid_str = str(int(tid))
@@ -97,6 +90,8 @@ def vis_side(df_team_matches, hold_map, df_events=None):
         c1, c2, c3 = st.columns(3)
         
         target_id_str = str(int(valgt_hold_id))
+        
+        # Filtrering af events
         df_hold_ev = df_events[df_events['TEAM_WYID'].astype(str).str.contains(target_id_str)].copy()
 
         if not df_hold_ev.empty:
