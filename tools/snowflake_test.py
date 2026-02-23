@@ -6,26 +6,56 @@ from cryptography.hazmat.primitives import serialization
 
 def get_snowflake_connection():
     try:
-        s = st.secrets["connections"]["snowflake"]
-        p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
+        if "connections" not in st.secrets or "snowflake" not in st.secrets["connections"]:
+            st.error("❌ Fejl: 'connections.snowflake' mangler i dine secrets!")
+            return None
 
-        p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(),
-            password=None, 
-            backend=default_backend()
-        )
+        s = st.secrets["connections"]["snowflake"]
+        
+        # --- DEBUG & RENS AF NØGLE ---
+        p_key_pem = s["private_key"]
+        
+        if isinstance(p_key_pem, str):
+            # Fjerner potentielle usynlige tegn og håndterer escaped linjeskift
+            p_key_pem = p_key_pem.replace("\\n", "\n").strip()
+            
+            # Hurtigt tjek af formatet
+            if not p_key_pem.startswith("-----BEGIN"):
+                st.error("❌ Fejl: Den private nøgle starter ikke med '-----BEGIN'. Tjek din secrets formatering.")
+                return None
+        
+        # Forsøg at indlæse nøglen
+        try:
+            p_key_obj = serialization.load_pem_private_key(
+                p_key_pem.encode(),
+                password=None, 
+                backend=default_backend()
+            )
+        except ValueError as ve:
+            st.error(f"❌ ASN.1/Nøgle Format Fejl: {ve}")
+            st.info("Dette betyder normalt at nøglen er PKCS#1 (RSA) i stedet for PKCS#8, eller indeholder ulovlige tegn.")
+            return None
+
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
+
+        # Selve forbindelsen
         return snowflake.connector.connect(
-            user=s["user"], account=s["account"], private_key=p_key_der,
-            warehouse=s["warehouse"], database=s["database"],
-            schema=s["schema"], role=s["role"]
+            user=s["user"], 
+            account=s["account"], 
+            private_key=p_key_der,
+            warehouse=s["warehouse"], 
+            database=s["database"],
+            schema=s["schema"], 
+            role=s["role"],
+            client_session_keep_alive=True # God at have til dashboards
         )
+        
     except Exception as e:
-        st.error(f"❌ Forbindelsesfejl: {e}")
+        st.error(f"❌ Uventet Forbindelsesfejl: {e}")
         return None
 
 def vis_side():
