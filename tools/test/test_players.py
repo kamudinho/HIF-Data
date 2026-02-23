@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 def vis_side():
-    # 1. CSS (Samme stil som players.py - Ingen ikoner)
+    # 1. CSS (Ikon-fri og professionel stil)
     st.markdown("""
         <style>
             .main-table-container { background: white; border: 1px solid #eee; border-radius: 4px; margin-top: 10px; }
@@ -18,8 +18,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # 2. BRANDING
-    st.markdown("<h3 style='color: #cc0000; text-transform: uppercase; font-size: 1.1rem; margin-bottom: 20px;'>Test: Spillerstatistik</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #cc0000; text-transform: uppercase; font-size: 1.1rem;'>Test: Spillerstatistik</h3>", unsafe_allow_html=True)
     
     csv_path = "data/testdata/players.csv"
     
@@ -27,8 +26,8 @@ def vis_side():
         df = pd.read_csv(csv_path)
         df['Navn'] = df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')
         
-        # --- 3. FILTRE ---
-        col1, col2, col3 = st.columns([2, 2, 2])
+        # --- 2. FILTRE ---
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
         with col1:
             hold = ["Alle"] + sorted(df['COMPETITIONNAME'].unique().tolist())
             valgt_hold = st.selectbox("Turnering", hold)
@@ -36,16 +35,11 @@ def vis_side():
             roller = ["Alle"] + sorted(df['ROLECODE3'].unique().tolist())
             valgt_rolle = st.selectbox("Position", roller)
         with col3:
-            visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
+            visningstype = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True)
+        with col4:
+            sortering_asc = st.checkbox("Stigende orden", value=False)
 
-        # Filtrering
-        df_filt = df.copy()
-        if valgt_hold != "Alle":
-            df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
-        if valgt_rolle != "Alle":
-            df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
-
-        # --- 4. DATA LOGIK (Stats grupper) ---
+        # Definition af stats grupper
         stats_groups = {
             "Generelt": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
             "Offensivt": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -53,12 +47,32 @@ def vis_side():
             "Pasninger": ['PASSES', 'SUCCESSFULPASSES', 'CROSSES', 'PROGRESSIVEPASSES']
         }
 
-        # Faner til kategorier
+        # --- 3. FANER ---
         tabs = st.tabs(list(stats_groups.keys()))
 
         for i, (group_name, cols) in enumerate(stats_groups.items()):
             with tabs[i]:
-                # Byg HTML Tabel
+                # Filtrering af data for denne fane
+                df_temp = df.copy()
+                if valgt_hold != "Alle":
+                    df_temp = df_temp[df_temp['COMPETITIONNAME'] == valgt_hold]
+                if valgt_rolle != "Alle":
+                    df_temp = df_temp[df_temp['ROLECODE3'] == valgt_rolle]
+
+                # Sorterings-vælger for den specifikke fane
+                sort_col = st.selectbox(f"Sorter efter ({group_name})", ["Navn", "MINUTESONFIELD"] + cols, key=f"sort_{i}")
+
+                # Beregn Pr. 90 hvis valgt (før sortering så vi kan sortere efter de nye tal)
+                if visningstype == "Pr. 90":
+                    for c in cols:
+                        df_temp[c] = df_temp.apply(
+                            lambda r: round((r[c] / r['MINUTESONFIELD'] * 90), 2) if r['MINUTESONFIELD'] > 0 else 0, axis=1
+                        )
+
+                # Udfør sortering
+                df_temp = df_temp.sort_values(by=sort_col, ascending=sortering_asc)
+
+                # --- 4. BYG HTML TABEL ---
                 html = f"""<div class="main-table-container"><table class="player-table">
                 <tr>
                     <th>Spiller</th>
@@ -67,16 +81,8 @@ def vis_side():
                     {" ".join([f'<th style="text-align:right;">{c}</th>' for c in cols])}
                 </tr>"""
                 
-                for _, r in df_filt.iterrows():
-                    # Beregn værdier
-                    row_stats = ""
-                    for c in cols:
-                        val = r[c] if c in r else 0
-                        if visningstype == "Pr. 90" and r['MINUTESONFIELD'] > 0:
-                            val = round((val / r['MINUTESONFIELD'] * 90), 2)
-                        
-                        row_stats += f'<td style="text-align:right;" class="stat-val">{val}</td>'
-
+                for _, r in df_temp.iterrows():
+                    row_stats = "".join([f'<td style="text-align:right;" class="stat-val">{r[c]}</td>' for c in cols])
                     html += f"""
                     <tr>
                         <td style="font-weight:600;">{r['Navn']}</td>
@@ -87,6 +93,5 @@ def vis_side():
                 
                 html += "</table></div>"
                 st.markdown(html, unsafe_allow_html=True)
-
     else:
-        st.error(f"Kunne ikke finde filen: {csv_path}")
+        st.error(f"Filen mangler: {csv_path}")
