@@ -96,7 +96,10 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
-    elif hoved_omraade == "ANALYSE":
+    elif hoved_omraade == "HIF ANALYSE":
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
