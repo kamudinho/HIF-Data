@@ -3,29 +3,31 @@ import pandas as pd
 import os
 
 def vis_side():
-    # 1. CSS der får st.dataframe til at ligne din trupoversigt
+    # 1. CSS (Matcher trupoversigtens layout)
     st.markdown("""
         <style>
-            /* Fjerner standard Streamlit padding */
+            [data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+            }
             .stDataFrame { border: 1px solid #eee; border-radius: 4px; }
-            
-            /* Branding af overskriften */
-            h3 { color: #cc0000; text-transform: uppercase; font-size: 1.1rem; }
-            
-            /* Gør tabellen ren og hvid som i players.py */
-            [data-testid="stMetric"] { background-color: #fafafa; border-radius: 4px; padding: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("<h3>Test: Spillerstatistik</h3>")
+    # 2. BRANDING BOKS (Præcis kopi fra players.py)
+    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
+        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: SPILLERSTATISTIK</h3>
+    </div>""", unsafe_allow_html=True)
     
     csv_path = "data/testdata/players.csv"
     
     if os.path.exists(csv_path):
         df = pd.read_csv(csv_path)
+        # Samler Navn med det samme
         df['Navn'] = df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')
         
-        # --- 2. FILTRE ---
+        # --- 3. FILTRE (Uden ikoner) ---
         col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
             hold = ["Alle"] + sorted(df['COMPETITIONNAME'].unique().tolist())
@@ -34,7 +36,14 @@ def vis_side():
             roller = ["Alle"] + sorted(df['ROLECODE3'].unique().tolist())
             valgt_rolle = st.selectbox("Position", roller)
         with col3:
-            visningstype = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True)
+            visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
+
+        # Filtrering
+        df_filt = df.copy()
+        if valgt_hold != "Alle":
+            df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
+        if valgt_rolle != "Alle":
+            df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
 
         # Definition af stats grupper
         stats_groups = {
@@ -44,39 +53,28 @@ def vis_side():
             "Pasninger": ['PASSES', 'SUCCESSFULPASSES', 'CROSSES', 'PROGRESSIVEPASSES']
         }
 
-        # --- 3. DATA PROCESSING ---
-        df_filt = df.copy()
-        if valgt_hold != "Alle":
-            df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
-        if valgt_rolle != "Alle":
-            df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
-
         # --- 4. FANER ---
         tabs = st.tabs(list(stats_groups.keys()))
 
         for i, (group_name, cols) in enumerate(stats_groups.items()):
             with tabs[i]:
-                # Basis kolonner
                 display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + cols
                 df_tab = df_filt[display_cols].copy()
 
-                # Beregn Pr. 90 hvis valgt
                 if visningstype == "Pr. 90":
                     for c in cols:
                         df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).round(2)
-                        # Håndter division med nul
                         df_tab.loc[df_tab['MINUTESONFIELD'] == 0, c] = 0
 
-                # --- 5. VISNING MED INDBYGGET SORTERING ---
-                # Vi bruger st.dataframe fordi den har indbygget sortering på alle kolonneoverskrifter
+                # --- 5. VISNING MED SORTERING ---
                 st.dataframe(
                     df_tab,
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "Navn": st.column_config.TextColumn("Spiller", width="medium"),
-                        "ROLECODE3": st.column_config.TextColumn("Pos", width="small"),
-                        "MINUTESONFIELD": st.column_config.NumberColumn("Min", format="%d"),
+                        "Navn": st.column_config.TextColumn("Spiller"),
+                        "ROLECODE3": st.column_config.TextColumn("Pos"),
+                        "MINUTESONFIELD": st.column_config.NumberColumn("Min"),
                         **{c: st.column_config.NumberColumn(c, format="%.2f" if visningstype == "Pr. 90" else "%d") for c in cols}
                     }
                 )
