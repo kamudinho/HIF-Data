@@ -12,17 +12,8 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # CSS til at style vores HTML-tabel så den ligner Streamlits
-    st.markdown("""
-        <style>
-            .custom-table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; }
-            .custom-table th { background-color: #f0f2f6; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
-            .custom-table td { padding: 8px; border-bottom: 1px solid #eee; }
-            .custom-table tr:hover { background-color: #f9f9f9; }
-            .pos { color: #28a745; font-weight: bold; }
-            .neg { color: #dc3545; font-weight: bold; }
-        </style>
-    """, unsafe_allow_html=True)
+    # 1. CSS & Branding
+    st.markdown("<style>.stDataFrame {border: none;} button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}</style>", unsafe_allow_html=True)
 
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
         <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: HOLDSTATISTIK</h3>
@@ -31,43 +22,69 @@ def vis_side():
     csv_path = "data/testdata/teams.csv"
     
     if os.path.exists(csv_path):
-        df = pd.read_csv(csv_path, encoding='utf-8-sig').fillna(0)
+        try:
+            df = pd.read_csv(csv_path, encoding='utf-8-sig')
+        except:
+            df = pd.read_csv(csv_path, encoding='latin-1')
+
+        # Rens data
         for col in df.select_dtypes(include=['object']).columns:
             df[col] = df[col].apply(super_clean)
 
-        # Filtre
-        ligaer = ["Alle"] + sorted([str(x) for x in df['SEASONNAME'].unique() if x != 0])
-        valgt_liga = st.selectbox("Sæson / Liga", ligaer)
-        if valgt_liga != "Alle": df = df[df['SEASONNAME'] == valgt_liga]
+        # Konvertering og beregning
+        df['GOALS'] = pd.to_numeric(df['GOALS'], errors='coerce').fillna(0)
+        df['XGSHOT'] = pd.to_numeric(df['XGSHOT'], errors='coerce').fillna(0)
+        df['CONCEDEDGOALS'] = pd.to_numeric(df['CONCEDEDGOALS'], errors='coerce').fillna(0)
+        df['XGSHOTAGAINST'] = pd.to_numeric(df['XGSHOTAGAINST'], errors='coerce').fillna(0)
+        
+        # Rene beregninger til sortering
+        df['xG (Diff)'] = (df['GOALS'] - df['XGSHOT']).round(2)
+        df['xG Imod (Diff)'] = (df['XGSHOTAGAINST'] - df['CONCEDEDGOALS']).round(2)
 
-        # Faner
+        # Filtre
+        ligaer = ["Alle"] + sorted([str(x) for x in df['SEASONNAME'].unique() if pd.notna(x)])
+        valgt_liga = st.selectbox("Sæson / Liga", ligaer)
+        df_filt = df.copy()
+        if valgt_liga != "Alle": df_filt = df_filt[df_filt['SEASONNAME'] == valgt_liga]
+
+        # Tab-layout
         tabs = st.tabs(["Angreb & xG", "Forsvar", "Overblik"])
 
-        with tabs[0]: # Angreb & xG
-            html = "<table class='custom-table'><thead><tr><th>Hold</th><th>Mål</th><th>xG (Diff)</th><th>Skud</th></tr></thead><tbody>"
-            for _, r in df.iterrows():
-                diff = r['GOALS'] - r['XGSHOT']
-                diff_class = "pos" if diff > 0 else "neg"
-                diff_str = f"<span class='{diff_class}'>({'+' if diff > 0 else ''}{diff:.2f})</span>"
-                
-                html += f"<tr><td>{r['TEAMNAME']}</td><td>{int(r['GOALS'])}</td><td>{r['XGSHOT']:.2f} {diff_str}</td><td>{int(r['SHOTS'])}</td></tr>"
-            html += "</tbody></table>"
-            st.markdown(html, unsafe_allow_html=True)
+        with tabs[0]:
+            calc_height = (len(df_filt) + 1) * 35 + 45
+            st.dataframe(
+                df_filt[['TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'SHOTS', 'TOUCHINBOX']],
+                use_container_width=True,
+                hide_index=True,
+                height=calc_height,
+                column_config={
+                    "TEAMNAME": "Hold",
+                    "GOALS": st.column_config.NumberColumn("Mål"),
+                    "XGSHOT": st.column_config.NumberColumn("xG", format="%.2f"),
+                    "xG (Diff)": st.column_config.NumberColumn("Diff", format="%+.2f", help="Mål minus xG")
+                }
+            )
 
-        with tabs[1]: # Forsvar
-            html = "<table class='custom-table'><thead><tr><th>Hold</th><th>Mål Imod</th><th>xG Imod (Diff)</th><th>PPDA</th></tr></thead><tbody>"
-            for _, r in df.iterrows():
-                # For forsvar: Positiv diff (xG imod > mål) er grøn
-                diff = r['XGSHOTAGAINST'] - r['CONCEDEDGOALS']
-                diff_class = "pos" if diff > 0 else "neg"
-                diff_str = f"<span class='{diff_class}'>({'+' if diff > 0 else ''}{diff:.2f})</span>"
-                
-                html += f"<tr><td>{r['TEAMNAME']}</td><td>{int(r['CONCEDEDGOALS'])}</td><td>{r['XGSHOTAGAINST']:.2f} {diff_str}</td><td>{r['PPDA']:.2f}</td></tr>"
-            html += "</tbody></table>"
-            st.markdown(html, unsafe_allow_html=True)
+        with tabs[1]:
+            st.dataframe(
+                df_filt[['TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'xG Imod (Diff)', 'PPDA']],
+                use_container_width=True,
+                hide_index=True,
+                height=calc_height,
+                column_config={
+                    "TEAMNAME": "Hold",
+                    "CONCEDEDGOALS": "Mål Imod",
+                    "XGSHOTAGAINST": st.column_config.NumberColumn("xG Imod", format="%.2f"),
+                    "xG Imod (Diff)": st.column_config.NumberColumn("Diff", format="%+.2f", help="xG Imod minus Mål Imod")
+                }
+            )
 
-        with tabs[2]: # Overblik
-            st.dataframe(df[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], use_container_width=True, hide_index=True)
-
+        with tabs[2]:
+            st.dataframe(
+                df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
+                use_container_width=True, 
+                hide_index=True,
+                height=calc_height
+            )
     else:
-        st.error("CSV filen kunne ikke findes.")
+        st.error("Filen mangler.")
