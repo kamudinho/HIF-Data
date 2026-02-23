@@ -16,32 +16,31 @@ def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
         
-        # Hent rå tekst
+        # 1. Hent rå tekst og passphrase
         p_key_raw = s["private_key"]
+        passphrase = s.get("private_key_passphrase") # Henter koden hvis den findes
         
-        # DEBUG: Tjek formatet inden behandling
-        # Vi viser kun de første 30 tegn for at tjekke BEGIN-tagget
+        # 2. Rens formatet
         if isinstance(p_key_raw, str):
-            # st.write(f"DEBUG: Nøgle starter med: {p_key_raw[:30]}") # Fjern kommentar for at se i app
-            
-            # Rens for 'escaped' linjeskift og whitespace
             p_key_pem = p_key_raw.replace("\\n", "\n").strip()
         else:
             p_key_pem = p_key_raw
 
-        # Forsøg at indlæse nøglen
+        # 3. Indlæs nøglen (Her bruger vi passphrasen til at låse op)
         p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(), 
-            password=None, 
+            p_key_pem.encode(),
+            password=passphrase.encode() if passphrase else None,
             backend=default_backend()
         )
         
+        # 4. Konverter til DER-format
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         
+        # 5. Opret forbindelsen
         return st.connection(
             "snowflake", 
             type="snowflake", 
@@ -54,12 +53,7 @@ def _get_snowflake_conn():
             private_key=p_key_der
         )
     except Exception as e:
-        # Her fanger vi den præcise fejl og viser den i Streamlit
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
-        
-        # Hvis det er en ASN.1 fejl, så tjekker vi indholdet
-        if "ASN.1" in str(e):
-            st.warning("Diagnose: Din Private Key har et format-problem (PKCS#1 vs PKCS#8 eller ødelagte linjeskift).")
         return None
 
 @st.cache_data(ttl=3600)
