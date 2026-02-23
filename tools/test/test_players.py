@@ -3,18 +3,23 @@ import pandas as pd
 import os
 
 def super_clean(text):
-    """Den ultimative vaskemaskine til danske og nordiske tegn (Björk, Jørgensen, osv.)"""
+    """Den ultimative vaskemaskine til nordiske og europæiske tegn (Björk, Ásgeir, Yatéké, Jørgensen)"""
     if not isinstance(text, str):
         return text
     
-    # Ordbog over præcise symbol-fejl fra Excel/CSV eksport
+    # Udvidet ordbog over præcise symbol-fejl fra Excel/CSV eksport
     rep = {
+        # Danske tegn
         "√¶": "æ", "√∏": "ø", "√•": "å",
         "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å",
-        "√º": "ü", "√∂": "ö", "√ñ": "Ö", # Tilføjet Björk fix her
         "Ã¦": "æ", "Ã¸": "ø", "Ã¥": "å",
         "Ã†": "Æ", "Ã˜": "Ø", "Ã…": "Å",
-        "Ã¼": "ü", "Ã¶": "ö"
+        
+        # Islandske / Specialtegn (Ásgeir, Yatéké, Björk)
+        "√Å": "Á", "√©": "é", "√∂": "ö", 
+        "√º": "ü", "√ñ": "Ö", "Yat√©k√©": "Yatéké",
+        "Ã©": "é", "Ã¡": "Á", "Ã¶": "ö",
+        "√≠": "í", "√≥": "ó", "√∫": "ú", "√Ω": "ý"
     }
     for wrong, right in rep.items():
         text = text.replace(wrong, right)
@@ -26,6 +31,8 @@ def vis_side():
         <style>
             [data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-start; }
             .stDataFrame { border: none; }
+            button[data-baseweb="tab"] { font-size: 14px; }
+            button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000; border-bottom-color: #cc0000; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -37,39 +44,37 @@ def vis_side():
     csv_path = "data/testdata/players.csv"
     
     if os.path.exists(csv_path):
-        # Indlæs - vi prøver flere formater
         try:
             df = pd.read_csv(csv_path, encoding='utf-8-sig')
         except:
             df = pd.read_csv(csv_path, encoding='latin-1')
         
-        # Rens alle tekst-kolonner (vasker navne som Björk og Jørgensen)
+        # Rens alle tekst-kolonner (vasker navne som Ásgeir, Yatéké og Björk)
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).apply(super_clean)
             
-        # Saml Navn
+        # Saml Navn (fjerner 'nan' strenge hvis de findes)
         df['Navn'] = df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')
+        df['Navn'] = df['Navn'].str.strip()
         
         # --- 3. FILTRE ---
         col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
-            hold = ["Alle"] + sorted([x for x in df['COMPETITIONNAME'].unique() if x != 'nan'])
+            hold = ["Alle"] + sorted([str(x) for x in df['COMPETITIONNAME'].unique() if x != 'nan'])
             valgt_hold = st.selectbox("Turnering", hold)
         with col2:
-            roller = ["Alle"] + sorted([x for x in df['ROLECODE3'].unique() if x != 'nan'])
+            roller = ["Alle"] + sorted([str(x) for x in df['ROLECODE3'].unique() if x != 'nan'])
             valgt_rolle = st.selectbox("Position", roller)
         with col3:
             visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
 
-        # Filtrering
         df_filt = df.copy()
         if valgt_hold != "Alle":
             df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
         if valgt_rolle != "Alle":
             df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
 
-        # Definition af stats grupper
         stats_groups = {
             "Generelt": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
             "Offensivt": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -85,7 +90,7 @@ def vis_side():
                 display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_filt.columns]
                 df_tab = df_filt[display_cols].copy()
 
-                # Sikr tal-formater
+                # Konverter tal-kolonner
                 df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
                 for c in cols:
                     if c in df_tab.columns:
@@ -97,7 +102,7 @@ def vis_side():
                         if c in df_tab.columns:
                             df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).replace([float('inf'), -float('inf')], 0).round(2).fillna(0)
 
-                # Fuldt udstrakt tabel
+                # Dynamisk højde til fuld længde
                 calc_height = (len(df_tab) + 1) * 35 + 45
                 
                 st.dataframe(
