@@ -60,7 +60,7 @@ dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='100'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     
     # 1. Alle hovedområder (Rækkefølgen i menuen)
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
