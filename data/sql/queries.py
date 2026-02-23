@@ -4,7 +4,7 @@ def get_queries(comp_filter, season_filter):
     """Returnerer en ordbog med SQL-queries til Snowflake (Rettet til KLUB_HVIDOVREIF)."""
     
     # Præfiks til alle tabeller
-    DB = "KLUB_HVIDOVREIF.PUBLIC"
+    DB = "KLUB_HVIDOVREIF.AXIS"
     
     return {
         "shotevents": f"""
