@@ -13,6 +13,8 @@ def vis_side():
         # --- OPRET NAVN-KOLONNE ---
         # Samler fornavn og efternavn og fjerner de gamle kolonner
         df['Navn'] = df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')
+        df['Pos'] = df['ROLECODE3'].fillna('')
+
         
         # --- FILTRE ---
         col1, col2, col3 = st.columns([2, 2, 2])
