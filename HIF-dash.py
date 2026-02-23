@@ -94,7 +94,8 @@ with st.sidebar:
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Oversigt", "Ligaoversigt", "Holdkampe"], 
+        # Opdateret med dine nye test-sider
+        sel = option_menu(None, options=["Test Kampe", "Test Spillerstats", "Test Holdoversigt"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
@@ -155,16 +156,18 @@ try:
 
     # --- BETINIA LIGAEN ---
     elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Oversigt":
-            import tools.league_table as lt
-            lt.vis_side()
-        elif sel == "Ligaoversigt":
-            safe_load_stats()
-            import tools.league_stats as ls
-            ls.vis_side(dp["playerstats"])
-        elif sel == "Holdkampe":
-            import tools.matches as mt
-            mt.vis_side()
+        if sel == "Test Kampe":
+            import tools.test.test_matches as tm
+            # Vi antager her at du har en funktion i filen der hedder vis_side()
+            tm.vis_side() 
+            
+        elif sel == "Test Spillerstats":
+            import tools.test.test_players as tp
+            tp.vis_side()
+            
+        elif sel == "Test Holdoversigt":
+            import tools.test.test_teams as tt
+            tt.vis_side()
 
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
