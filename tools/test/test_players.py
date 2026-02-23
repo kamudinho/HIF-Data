@@ -3,12 +3,15 @@ import pandas as pd
 import os
 
 def super_clean(text):
-    """Den ultimative vaskemaskine til nordiske og europæiske tegn (Björk, Ásgeir, Yatéké, Jørgensen)"""
+    """Den ultimative vaskemaskine til alle europæiske tegn (Delač, Ásgeir, Yatéké, Björk, Jørgensen)"""
     if not isinstance(text, str):
         return text
     
-    # Udvidet ordbog over præcise symbol-fejl fra Excel/CSV eksport
+    # Komplet ordbog over symbol-fejl fra CSV/Excel
     rep = {
+        # Østeuropæiske (č, ć, š osv.)
+        "ƒç": "č", "ƒá": "ć", "≈°": "š", "≈æ": "ž",
+        
         # Danske tegn
         "√¶": "æ", "√∏": "ø", "√•": "å",
         "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å",
@@ -17,7 +20,7 @@ def super_clean(text):
         
         # Islandske / Specialtegn (Ásgeir, Yatéké, Björk)
         "√Å": "Á", "√©": "é", "√∂": "ö", 
-        "√º": "ü", "√ñ": "Ö", "Yat√©k√©": "Yatéké",
+        "√º": "ü", "√ñ": "Ö",
         "Ã©": "é", "Ã¡": "Á", "Ã¶": "ö",
         "√≠": "í", "√≥": "ó", "√∫": "ú", "√Ω": "ý"
     }
@@ -26,7 +29,7 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 1. CSS (Matcher trupoversigtens layout)
+    # 1. CSS (Layout match)
     st.markdown("""
         <style>
             [data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-start; }
@@ -49,12 +52,12 @@ def vis_side():
         except:
             df = pd.read_csv(csv_path, encoding='latin-1')
         
-        # Rens alle tekst-kolonner (vasker navne som Ásgeir, Yatéké og Björk)
+        # Rens alle tekst-kolonner (vasker Delač, Ásgeir, Yatéké osv.)
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).apply(super_clean)
             
-        # Saml Navn (fjerner 'nan' strenge hvis de findes)
+        # Saml Navn
         df['Navn'] = df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')
         df['Navn'] = df['Navn'].str.strip()
         
@@ -75,6 +78,7 @@ def vis_side():
         if valgt_rolle != "Alle":
             df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
 
+        # Kolonner
         stats_groups = {
             "Generelt": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
             "Offensivt": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -90,21 +94,19 @@ def vis_side():
                 display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_filt.columns]
                 df_tab = df_filt[display_cols].copy()
 
-                # Konverter tal-kolonner
+                # Konvertering og beregning
                 df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
                 for c in cols:
                     if c in df_tab.columns:
                         df_tab[c] = pd.to_numeric(df_tab[c], errors='coerce').fillna(0)
 
-                # Pr. 90 beregning
                 if visningstype == "Pr. 90":
                     for c in cols:
                         if c in df_tab.columns:
                             df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).replace([float('inf'), -float('inf')], 0).round(2).fillna(0)
 
-                # Dynamisk højde til fuld længde
+                # Tabel visning
                 calc_height = (len(df_tab) + 1) * 35 + 45
-                
                 st.dataframe(
                     df_tab,
                     use_container_width=True,
