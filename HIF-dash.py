@@ -13,30 +13,14 @@ st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Fjern padding i toppen af hovedcontaineren */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 0rem !important;
-        }
-
-        /* 2. Skjul Streamlits standard header */
-        header {
-            visibility: hidden;
-            height: 0px;
-        }
-
-        /* 3. Fjern luft over overskrifter */
-        h1, h2, h3 {
-            margin: 0 !important; /* Fjerner al standard margin */
-            padding: 0 !important;
-        }
-
-        /* 4. NY: Gør din 'header-container' til en flexbox (Centrering) */
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
+        header { visibility: hidden; height: 0px; }
+        h1, h2, h3 { margin: 0 !important; padding: 0 !important; }
         .custom-header {
             display: flex !important;
-            align-items: center !important;    /* Lodret centring */
-            justify-content: center !important; /* Vandret centring */
-            height: 60px;                      /* Fast højde */
+            align-items: center !important;
+            justify-content: center !important;
+            height: 60px;
             background-color: #cc0000; 
             color: white; 
             border-radius: 8px;
@@ -76,18 +60,16 @@ dp = st.session_state["data_package"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Logo i sidebar
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='100'></div>", unsafe_allow_html=True)
     
     user_info = USER_DB.get(st.session_state["user"], {})
-    hoved_options = user_info.get("access", ["TRUPPEN", "ANALYSE", "SCOUTING", "ADMIN"])
+    hoved_options = user_info.get("access", ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"])
     
-    # Hovedmenu med BLÅ farve for valgt sektion
     hoved_omraade = option_menu(
         None, 
         options=hoved_options, 
         default_index=0,
-        styles={"nav-link-selected": {"background-color": "#0056a3"}} # Den blå farve
+        styles={"nav-link-selected": {"background-color": "#0056a3"}} 
     )
     
     st.markdown("---")
@@ -110,64 +92,83 @@ with st.sidebar:
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
 # --- 5. ROUTING LOGIK ---
-if not sel: sel = "Oversigt"
+if not sel: 
+    sel = "Oversigt"
 
 try:
-    if sel == "Oversigt":
-        import tools.players as pl
-        pl.vis_side(dp["players"])
-    elif sel == "Forecast":
-        import tools.squad as sq
-        sq.vis_side(dp["players"])
-    elif sel == "Spillerstats":
-        import tools.stats as st_tool
-        if dp["playerstats"] is None:
-            with st.spinner("Henter spillerstatistik..."):
+    # --- TRUPPEN ---
+    if hoved_omraade == "TRUPPEN":
+        if sel == "Oversigt":
+            import tools.players as pl
+            pl.vis_side(dp["players"])
+        elif sel == "Forecast":
+            import tools.squad as sq
+            sq.vis_side(dp["players"])
+        elif sel == "Spillerstats":
+            import tools.stats as st_tool
+            if dp["playerstats"] is None:
+                with st.spinner("Henter spillerstatistik..."):
+                    dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+            st_tool.vis_side(dp["players"], dp["playerstats"])
+        elif sel == "Top 5":
+            import tools.top5 as t5
+            if dp["playerstats"] is None:
+                with st.spinner("Henter data..."):
+                    dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+            t5.vis_side(dp["players"], dp["playerstats"])
+
+    # --- HIF ANALYSE ---
+    elif hoved_omraade == "HIF ANALYSE":
+        if sel == "Afslutninger":
+            st.header("🎯 Afslutningsanalyse")
+            st.info("Her kommer visualisering af skuddata for Hvidovre IF.")
+            # import tools.player_shots as ps (Aktiver når filen er klar)
+        elif sel == "Modstanderanalyse":
+            st.header("📋 Modstanderanalyse")
+            st.info("Her kan du analysere kommende modstandere.")
+        elif sel == "Scatterplots":
+            st.header("📊 Scatterplots")
+            st.info("Her kommer metrics-sammenligning via scatterplots.")
+
+    # --- BETINIA LIGAEN ---
+    elif hoved_omraade == "BETINIA LIGAEN":
+        if sel == "Oversigt":
+            st.header("🏆 Betinia Ligaen: Oversigt")
+            st.info("Ligatabel og aktuel form.")
+        elif sel == "Ligaoversigt":
+            st.header("📈 Ligaoversigt")
+            st.info("Avanceret statistik for alle hold i ligaen.")
+        elif sel == "Holdkampe":
+            st.header("⚽ Holdkampe")
+            st.info("Oversigt over spillerunder og resultater.")
+
+    # --- SCOUTING ---
+    elif hoved_omraade == "SCOUTING":
+        if sel == "Scoutrapport":
+            import tools.scout_input as si
+            si.vis_side(dp)
+        elif sel == "Database":
+            import tools.scout_db as sdb
+            if dp["playerstats"] is None:
                 dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
-        st_tool.vis_side(dp["players"], dp["playerstats"])
-    elif sel == "Top 5":
-        import tools.top5 as t5
-        if dp["playerstats"] is None:
-            with st.spinner("Henter data..."):
+            sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None)
+        elif sel == "Sammenligning":
+            import tools.comparison as comp
+            if dp["playerstats"] is None:
                 dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
-        t5.vis_side(dp["players"], dp["playerstats"])
-    elif sel == "Afslutninger":
-        import tools.player_shots as ps
-        ps.vis_side(None, dp["players"], dp["hold_map"])
-    elif sel == "Modstanderanalyse":
-        import tools.modstanderanalyse as ma
-        if dp["team_matches"] is None:
-            with st.spinner("Henter kampdata..."):
-                dp["team_matches"] = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
-        ma.vis_side(dp["team_matches"], dp["hold_map"], None)
-    elif sel == "Scatterplots":
-        import tools.scatter as sc
-        if dp["team_scatter"] is None:
-            with st.spinner("Henter scatter-data..."):
-                dp["team_scatter"] = load_snowflake_query("team_scatter", dp["comp_filter"], dp["season_filter"])
-        sc.vis_side(dp["team_scatter"])
-    elif sel == "Scoutrapport":
-        import tools.scout_input as si
-        si.vis_side(dp)
-    elif sel == "Database":
-        import tools.scout_db as sdb
-        if dp["playerstats"] is None:
-            dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
-        sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None)
-    elif sel == "Sammenligning":
-        import tools.comparison as comp
-        if dp["playerstats"] is None:
-            dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
-        comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp["season_filter"])
-    elif sel == "Brugerstyring":
-        import tools.admin as adm
-        adm.vis_side()
-    elif sel == "System Log":
-        import tools.admin as adm
-        adm.vis_log() 
-    elif sel == "Schema Explorer":
-        import tools.snowflake_test as stest
-        stest.vis_side()
+            comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp["season_filter"])
+
+    # --- ADMIN ---
+    elif hoved_omraade == "ADMIN":
+        if sel == "Brugerstyring":
+            import tools.admin as adm
+            adm.vis_side()
+        elif sel == "System Log":
+            import tools.admin as adm
+            adm.vis_log() 
+        elif sel == "Schema Explorer":
+            import tools.snowflake_test as stest
+            stest.vis_side()
 
 except Exception as e:
     st.error(f"⚠️ Kunne ikke indlæse siden '{sel}': {e}")
