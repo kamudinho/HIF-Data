@@ -12,7 +12,6 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 1. CSS & Branding
     st.markdown("<style>.stDataFrame {border: none;} button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}</style>", unsafe_allow_html=True)
 
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
@@ -31,15 +30,15 @@ def vis_side():
         for col in df.select_dtypes(include=['object']).columns:
             df[col] = df[col].apply(super_clean)
 
-        # Konvertering og beregning
+        # Konvertering
         df['GOALS'] = pd.to_numeric(df['GOALS'], errors='coerce').fillna(0)
         df['XGSHOT'] = pd.to_numeric(df['XGSHOT'], errors='coerce').fillna(0)
         df['CONCEDEDGOALS'] = pd.to_numeric(df['CONCEDEDGOALS'], errors='coerce').fillna(0)
         df['XGSHOTAGAINST'] = pd.to_numeric(df['XGSHOTAGAINST'], errors='coerce').fillna(0)
-        
-        # Rene beregninger til sortering
-        df['xG (Diff)'] = (df['GOALS'] - df['XGSHOT']).round(2)
-        df['xG Imod (Diff)'] = (df['XGSHOTAGAINST'] - df['CONCEDEDGOALS']).round(2)
+
+        # SAMLER xG og Diff i én kolonne (Tekst-format)
+        df['xG (Diff)'] = df.apply(lambda r: f"{r['XGSHOT']:.2f} ({'+' if (r['GOALS']-r['XGSHOT']) > 0 else ''}{(r['GOALS']-r['XGSHOT']):.2f})", axis=1)
+        df['xG Imod (Diff)'] = df.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({'+' if (r['XGSHOTAGAINST']-r['CONCEDEDGOALS']) > 0 else ''}{(r['XGSHOTAGAINST']-r['CONCEDEDGOALS']):.2f})", axis=1)
 
         # Filtre
         ligaer = ["Alle"] + sorted([str(x) for x in df['SEASONNAME'].unique() if pd.notna(x)])
@@ -47,44 +46,37 @@ def vis_side():
         df_filt = df.copy()
         if valgt_liga != "Alle": df_filt = df_filt[df_filt['SEASONNAME'] == valgt_liga]
 
-        # Tab-layout
         tabs = st.tabs(["Angreb & xG", "Forsvar", "Overblik"])
 
         with tabs[0]:
             calc_height = (len(df_filt) + 1) * 35 + 45
+            # Vi inkluderer den skjulte XGSHOT til sortering hvis man klikker på overskriften
             st.dataframe(
-                df_filt[['TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'SHOTS', 'TOUCHINBOX']],
+                df_filt[['TEAMNAME', 'GOALS', 'xG (Diff)', 'SHOTS']],
                 use_container_width=True,
                 hide_index=True,
                 height=calc_height,
                 column_config={
                     "TEAMNAME": "Hold",
                     "GOALS": st.column_config.NumberColumn("Mål"),
-                    "XGSHOT": st.column_config.NumberColumn("xG", format="%.2f"),
-                    "xG (Diff)": st.column_config.NumberColumn("Diff", format="%+.2f", help="Mål minus xG")
+                    "xG (Diff)": st.column_config.TextColumn("xG (Diff)", width="medium")
                 }
             )
 
         with tabs[1]:
             st.dataframe(
-                df_filt[['TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'xG Imod (Diff)', 'PPDA']],
+                df_filt[['TEAMNAME', 'CONCEDEDGOALS', 'xG Imod (Diff)', 'PPDA']],
                 use_container_width=True,
                 hide_index=True,
                 height=calc_height,
                 column_config={
                     "TEAMNAME": "Hold",
                     "CONCEDEDGOALS": "Mål Imod",
-                    "XGSHOTAGAINST": st.column_config.NumberColumn("xG Imod", format="%.2f"),
-                    "xG Imod (Diff)": st.column_config.NumberColumn("Diff", format="%+.2f", help="xG Imod minus Mål Imod")
+                    "xG Imod (Diff)": st.column_config.TextColumn("xG Imod (Diff)", width="medium")
                 }
             )
 
         with tabs[2]:
-            st.dataframe(
-                df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
-                use_container_width=True, 
-                hide_index=True,
-                height=calc_height
-            )
+            st.dataframe(df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], use_container_width=True, hide_index=True)
     else:
         st.error("Filen mangler.")
