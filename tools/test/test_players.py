@@ -2,33 +2,33 @@ import streamlit as st
 import pandas as pd
 import os
 
-def clean_text(text):
-    """Fikser fejlbehæftet encoding som J√∏rgensen -> Jørgensen"""
+def super_clean(text):
+    """En mere robust vaskemaskine til danske tegn"""
     if not isinstance(text, str):
         return text
-    try:
-        # Denne proces "vasker" teksten ved at tvinge den gennem de rigtige formater
-        return text.encode('latin-1').decode('utf-8')
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return text
+    
+    # Ordbog over de mest almindelige fejl fra CSV/Excel-eksport
+    rep = {
+        "√∏": "ø", "√¶": "æ", "√•": "å",
+        "√ò": "Ø", "√†": "Æ", "√Ö": "Å",
+        "√º": "ü", "√ñ": "Ö",
+        "Ã¸": "ø", "Ã¦": "æ", "Ã¥": "å",
+        "Ã˜": "Ø", "Ã†": "Æ", "Ã…": "Å"
+    }
+    for wrong, right in rep.items():
+        text = text.replace(wrong, right)
+    return text
 
 def vis_side():
-    # 1. CSS (Matcher trupoversigtens layout og fjerner ikoner)
+    # 1. CSS
     st.markdown("""
         <style>
-            [data-testid="column"] {
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-start;
-            }
+            [data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-start; }
             .stDataFrame { border: none; }
-            /* Styling af faner så de matcher det røde tema */
-            button[data-baseweb="tab"] { font-size: 14px; }
-            button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000; border-bottom-color: #cc0000; }
         </style>
     """, unsafe_allow_html=True)
 
-    # 2. BRANDING BOKS (Matcher players.py)
+    # 2. BRANDING BOKS
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
         <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: SPILLERSTATISTIK</h3>
     </div>""", unsafe_allow_html=True)
@@ -36,17 +36,17 @@ def vis_side():
     csv_path = "data/testdata/players.csv"
     
     if os.path.exists(csv_path):
-        # Indlæser data - vi prøver flere encodings for at være sikre
+        # Vi prøver at læse filen. Hvis den fejler, prøver vi latin-1
         try:
             df = pd.read_csv(csv_path, encoding='utf-8-sig')
         except:
-            df = pd.read_csv(csv_path, encoding='cp1252')
+            df = pd.read_csv(csv_path, encoding='latin-1')
         
-        # Rens alle tekst-kolonner for encoding-fejl (J√∏rgensen fix)
+        # Rens alle tekst-kolonner med super_clean
         for col in df.select_dtypes(include=['object']).columns:
-            df[col] = df[col].apply(clean_text)
+            df[col] = df[col].apply(super_clean)
             
-        # Samler Navn efter rensning
+        # Saml Navn (Efter rensning)
         df['Navn'] = df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')
         
         # --- 3. FILTRE ---
@@ -60,41 +60,34 @@ def vis_side():
         with col3:
             visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
 
-        # Filtrering af rådata
         df_filt = df.copy()
         if valgt_hold != "Alle":
             df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
         if valgt_rolle != "Alle":
             df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
 
-        # Statistik grupper
         stats_groups = {
             "Generelt": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
             "Offensivt": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
             "Defensivt": ['DEFENSIVEDUELS', 'INTERCEPTIONS', 'RECOVERIES', 'SLIDINGTACKLES'],
-            "Pasninger": ['PASSES', 'SUCCESSFULPASSES', 'PASSESTOFINALTHIRD', 'CROSSES', 'PROGRESSIVEPASSES']
+            "Pasninger": ['PASSES', 'SUCCESSFULPASSES', 'CROSSES', 'PROGRESSIVEPASSES']
         }
 
-        # --- 4. FANER ---
         tabs = st.tabs(list(stats_groups.keys()))
 
         for i, (group_name, cols) in enumerate(stats_groups.items()):
             with tabs[i]:
-                # Vi viser Navn, Position og Minutter som basis
                 display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_filt.columns]
                 df_tab = df_filt[display_cols].copy()
 
-                # Pr. 90 beregning
                 if visningstype == "Pr. 90":
                     for c in cols:
                         if c in df_tab.columns:
                             df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).round(2)
                             df_tab.loc[df_tab['MINUTESONFIELD'] == 0, c] = 0
 
-                # Dynamisk højde til fuld længde (ca. 35px pr række + 40px til header)
-                calc_height = (len(df_tab) + 1) * 35 + 40
+                calc_height = (len(df_tab) + 1) * 35 + 45
                 
-                # --- 5. TABEL VISNING ---
                 st.dataframe(
                     df_tab,
                     use_container_width=True,
