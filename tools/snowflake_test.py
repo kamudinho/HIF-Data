@@ -55,43 +55,51 @@ def get_snowflake_connection():
         return None
 
 def vis_side():
-    st.title("❄️ Snowflake Schema Explorer")
-    st.info("Forbinder til Snowflake og henter tabeller...")
+    st.title("❄️ Snowflake Login Check")
     
     conn = get_snowflake_connection()
     if not conn:
+        st.error("❌ Forbindelsen kunne slet ikke oprettes (Login fejlede).")
         return
 
     try:
         cursor = conn.cursor()
+        
+        # --- TRIN 1: TJEK LOGIN STATUS ---
+        st.subheader("1. Forbindelses-detaljer")
+        cursor.execute("SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_WAREHOUSE()")
+        status = cursor.fetchone()
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Bruger", status[0])
+        col2.metric("Rolle", status[1])
+        col3.metric("Warehouse", status[4])
+        
+        st.write(f"**Aktiv Database:** `{status[2]}`")
+        st.write(f"**Aktivt Schema:** `{status[3]}`")
+
+        # --- TRIN 2: TJEK ADGANG ---
+        st.subheader("2. Rettigheds-tjek")
+        
+        # Test om vi kan se databasen
+        try:
+            cursor.execute("SHOW DATABASES")
+            db_list = [row[1] for row in cursor.fetchall()]
+            st.write("✅ **Synlige databaser:**", db_list)
+        except Exception as e:
+            st.error(f"❌ Kan ikke liste databaser: {e}")
+
+        # Test om vi kan se skemaer i din specifikke database
         s = st.secrets["connections"]["snowflake"]
-        
-        # Vi sikrer os at vi er i den rigtige database
-        cursor.execute(f"USE DATABASE {s['database']}")
-        cursor.execute(f"USE SCHEMA {s['schema']}")
-        
-        with st.spinner("Henter tabeller..."):
-            cursor.execute("SHOW TABLES")
-            tables_data = cursor.fetchall()
-            alle_tabeller = sorted([row[1] for row in tables_data])
-
-        if not alle_tabeller:
-            st.warning(f"⚠️ Ingen tabeller fundet i {s['schema']}. Har din admin givet SELECT rettigheder?")
-            return
-
-        st.success(f"Fundet {len(alle_tabeller)} tabeller.")
-        valgt_tabel = st.selectbox("Vælg en tabel for at se data:", alle_tabeller)
-        
-        if valgt_tabel:
-            cursor.execute(f"SELECT * FROM {valgt_tabel} LIMIT 10")
-            df = pd.DataFrame(cursor.fetchall(), columns=[d[0] for d in cursor.description])
-            st.dataframe(df)
+        try:
+            cursor.execute(f"SHOW SCHEMAS IN DATABASE {s['database']}")
+            schema_list = [row[1] for row in cursor.fetchall()]
+            st.write(f"✅ **Synlige skemaer i {s['database']}:**", schema_list)
+        except Exception as e:
+            st.error(f"❌ Kan ikke se skemaer i `{s['database']}`. Fejl: {e}")
 
     except Exception as e:
-        st.error(f"🚨 Fejl under hentning af data: {e}")
+        st.error(f"🚨 Systemfejl under diagnose: {e}")
     finally:
         if conn:
             conn.close()
-
-if __name__ == "__main__":
-    vis_side()
