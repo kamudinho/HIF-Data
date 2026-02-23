@@ -11,11 +11,12 @@ def vis_side():
                 flex-direction: column;
                 justify-content: flex-start;
             }
-            .stDataFrame { border: 1px solid #eee; border-radius: 4px; }
+            /* Fjerner rammen omkring dataframe for et renere look */
+            .stDataFrame { border: none; }
         </style>
     """, unsafe_allow_html=True)
 
-    # 2. BRANDING BOKS (Præcis kopi fra players.py)
+    # 2. BRANDING BOKS
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
         <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: SPILLERSTATISTIK</h3>
     </div>""", unsafe_allow_html=True)
@@ -24,10 +25,9 @@ def vis_side():
     
     if os.path.exists(csv_path):
         df = pd.read_csv(csv_path)
-        # Samler Navn med det samme
         df['Navn'] = df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')
         
-        # --- 3. FILTRE (Uden ikoner) ---
+        # --- 3. FILTRE ---
         col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
             hold = ["Alle"] + sorted(df['COMPETITIONNAME'].unique().tolist())
@@ -66,11 +66,16 @@ def vis_side():
                         df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).round(2)
                         df_tab.loc[df_tab['MINUTESONFIELD'] == 0, c] = 0
 
-                # --- 5. VISNING MED SORTERING ---
+                # --- 5. VISNING MED FULD LÆNGDE OG SORTERING ---
+                # Vi beregner højden: (antal rækker + 1 til header) * rækkehøjde (ca. 35px)
+                # Vi sætter dog en minimumshøjde så den ikke forsvinder hvis tom
+                calc_height = (len(df_tab) + 1) * 35 + 2
+                
                 st.dataframe(
                     df_tab,
                     use_container_width=True,
                     hide_index=True,
+                    height=calc_height, # Her tvinges den fulde længde
                     column_config={
                         "Navn": st.column_config.TextColumn("Spiller"),
                         "ROLECODE3": st.column_config.TextColumn("Pos"),
