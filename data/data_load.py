@@ -63,7 +63,7 @@ def get_hold_mapping():
     try:
         # RETTET: Vi bruger jeres database 'KLUB_HVIDOVREIF' i stedet for 'AXIS'
         # Hvis tabellen ligger i PUBLIC schemaet:
-        df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.PUBLIC.WYSCOUT_TEAMS")
+        df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS")
         return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
     except Exception as e:
         st.warning(f"Kunne ikke hente hold-mapping: {e}")
