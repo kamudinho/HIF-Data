@@ -15,21 +15,51 @@ except ImportError:
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
-        p_key_pem = s["private_key"].strip() if isinstance(s["private_key"], str) else s["private_key"]
+        
+        # Hent rå tekst
+        p_key_raw = s["private_key"]
+        
+        # DEBUG: Tjek formatet inden behandling
+        # Vi viser kun de første 30 tegn for at tjekke BEGIN-tagget
+        if isinstance(p_key_raw, str):
+            # st.write(f"DEBUG: Nøgle starter med: {p_key_raw[:30]}") # Fjern kommentar for at se i app
+            
+            # Rens for 'escaped' linjeskift og whitespace
+            p_key_pem = p_key_raw.replace("\\n", "\n").strip()
+        else:
+            p_key_pem = p_key_raw
+
+        # Forsøg at indlæse nøglen
         p_key_obj = serialization.load_pem_private_key(
-            p_key_pem.encode(), password=None, backend=default_backend()
+            p_key_pem.encode(), 
+            password=None, 
+            backend=default_backend()
         )
+        
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
+        
         return st.connection(
-            "snowflake", type="snowflake", account=s["account"], user=s["user"],
-            role=s["role"], warehouse=s["warehouse"], database=s["database"],
-            schema=s["schema"], private_key=p_key_der
+            "snowflake", 
+            type="snowflake", 
+            account=s["account"], 
+            user=s["user"],
+            role=s["role"], 
+            warehouse=s["warehouse"], 
+            database=s["database"],
+            schema=s["schema"], 
+            private_key=p_key_der
         )
     except Exception as e:
+        # Her fanger vi den præcise fejl og viser den i Streamlit
+        st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
+        
+        # Hvis det er en ASN.1 fejl, så tjekker vi indholdet
+        if "ASN.1" in str(e):
+            st.warning("Diagnose: Din Private Key har et format-problem (PKCS#1 vs PKCS#8 eller ødelagte linjeskift).")
         return None
 
 @st.cache_data(ttl=3600)
