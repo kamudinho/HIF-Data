@@ -29,17 +29,19 @@ def vis_side():
         for col in df.select_dtypes(include=['object']).columns:
             df[col] = df[col].apply(super_clean)
 
-        # --- BEREGNINGER AF PERFORMANCE ---
-        # Angreb: Mål vs xG
+        # --- BEREGNINGER ---
         df['GOALS'] = pd.to_numeric(df['GOALS'], errors='coerce').fillna(0)
         df['XGSHOT'] = pd.to_numeric(df['XGSHOT'], errors='coerce').fillna(0)
-        df['XG_DIFF'] = (df['GOALS'] - df['XGSHOT']).round(2)
-
-        # Forsvar: Indkasserede mål vs xG Imod
         df['CONCEDEDGOALS'] = pd.to_numeric(df['CONCEDEDGOALS'], errors='coerce').fillna(0)
         df['XGSHOTAGAINST'] = pd.to_numeric(df['XGSHOTAGAINST'], errors='coerce').fillna(0)
-        df['XG_AGAINST_DIFF'] = (df['XGSHOTAGAINST'] - df['CONCEDEDGOALS']).round(2) 
-        # Ved forsvar betyder positiv diff at man har lukket FÆRRE mål ind end xG tilsiger
+
+        # Lav de sammensatte kolonner: "xG (Diff)"
+        def format_diff(val, diff):
+            prefix = "+" if diff > 0 else ""
+            return f"{val:.2f} ({prefix}{diff:.2f})"
+
+        df['xG (Diff)'] = df.apply(lambda r: format_diff(r['XGSHOT'], r['GOALS'] - r['XGSHOT']), axis=1)
+        df['xG Imod (Diff)'] = df.apply(lambda r: format_diff(r['XGSHOTAGAINST'], r['XGSHOTAGAINST'] - r['CONCEDEDGOALS']), axis=1)
 
         # Filtre
         ligaer = ["Alle"] + sorted([str(x) for x in df['SEASONNAME'].unique() if pd.notna(x)])
@@ -48,11 +50,11 @@ def vis_side():
         df_filt = df.copy()
         if valgt_liga != "Alle": df_filt = df_filt[df_filt['SEASONNAME'] == valgt_liga]
 
-        # Gruppering af kolonner med de nye Diff-placeringer
+        # Gruppering
         team_stats = {
             "Overblik": ['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALGOALSFOR', 'TOTALPOINTS'],
-            "Angreb & xG": ['TEAMNAME', 'GOALS', 'XGSHOT', 'XG_DIFF', 'SHOTS', 'TOUCHINBOX'],
-            "Forsvar": ['TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'XG_AGAINST_DIFF', 'DEFENSIVEDUELS', 'PPDA'],
+            "Angreb & xG": ['TEAMNAME', 'GOALS', 'xG (Diff)', 'SHOTS', 'TOUCHINBOX'],
+            "Forsvar": ['TEAMNAME', 'CONCEDEDGOALS', 'xG Imod (Diff)', 'DEFENSIVEDUELS', 'PPDA'],
             "Pasninger": ['TEAMNAME', 'PASSES', 'SUCCESSFULPASSES', 'PASSESTOFINALTHIRD']
         }
 
@@ -60,7 +62,7 @@ def vis_side():
 
         for i, (group_name, cols) in enumerate(team_stats.items()):
             with tabs[i]:
-                available_cols = [c for c in cols if c in df_filt.columns or c in ['XG_DIFF', 'XG_AGAINST_DIFF']]
+                available_cols = [c for c in cols if c in df_filt.columns]
                 df_display = df_filt[available_cols].copy()
 
                 calc_height = (len(df_display) + 1) * 35 + 45
@@ -73,12 +75,9 @@ def vis_side():
                     column_config={
                         "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
                         "GOALS": st.column_config.NumberColumn("Mål"),
-                        "XGSHOT": st.column_config.NumberColumn("xG"),
-                        "XG_DIFF": st.column_config.NumberColumn("(Diff)", format="%+.2f", help="Mål - xG"),
                         "CONCEDEDGOALS": st.column_config.NumberColumn("Mål Imod"),
-                        "XGSHOTAGAINST": st.column_config.NumberColumn("xG Imod"),
-                        "XG_AGAINST_DIFF": st.column_config.NumberColumn("(Diff)", format="%+.2f", help="xG Imod - Mål Imod"),
-                        "TOTALPOINTS": st.column_config.NumberColumn("Point"),
+                        "xG (Diff)": st.column_config.TextColumn("xG (Diff)", help="Forventede mål (forskel til faktiske mål)"),
+                        "xG Imod (Diff)": st.column_config.TextColumn("xG Imod (Diff)"),
                         "PPDA": st.column_config.NumberColumn("PPDA", format="%.2f")
                     }
                 )
