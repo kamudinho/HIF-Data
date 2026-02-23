@@ -17,22 +17,11 @@ def vis_side():
 
         
         # --- FILTRE ---
-        col1, col2, col3 = st.columns([2, 2, 2])
+        col1 = st.columns([2])
         with col1:
-            hold = ["Alle"] + sorted(df['COMPETITIONNAME'].unique().tolist())
-            valgt_hold = st.selectbox("Turnering", hold)
-        with col2:
-            roller = ["Alle"] + sorted(df['ROLECODE3'].unique().tolist())
-            valgt_rolle = st.selectbox("Position", roller)
-        with col3:
             visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
 
-        # Filtrering
-        df_filt = df.copy()
-        if valgt_hold != "Alle":
-            df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
-        if valgt_rolle != "Alle":
-            df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
+    
 
         # Definition af kolonne-grupper (Navn er nu med her)
         basis_cols = ['Navn', 'ROLECODE3', 'MATCHES', 'MINUTESONFIELD']
