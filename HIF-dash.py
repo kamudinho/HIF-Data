@@ -62,18 +62,30 @@ dp = st.session_state["data_package"]
 with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 20px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='100'></div>", unsafe_allow_html=True)
     
-    user_info = USER_DB.get(st.session_state["user"], {})
-    hoved_options = user_info.get("access", ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"])
+    # 1. Alle hovedområder (Rækkefølgen i menuen)
+    alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
     
+    # 2. Hent brugerens restriktioner (hvis ingen findes, er listen tom = alt synligt)
+    user_info = USER_DB.get(st.session_state["user"], {})
+    restriktioner = user_info.get("restricted", [])
+    
+    # 3. Byg menuen ved at fjerne de låste områder
+    synlige_options = [o for o in alle_omraader if o not in restriktioner]
+    
+    # 4. Hovedmenu (Uden ikoner, så de rene pile/linjer bevares)
     hoved_omraade = option_menu(
         None, 
-        options=hoved_options, 
+        options=synlige_options, 
         default_index=0,
-        styles={"nav-link-selected": {"background-color": "#0056a3"}} 
+        styles={
+            "nav-link-selected": {"background-color": "#0056a3"},
+            "nav-link": {"font-weight": "400"} # Holder teksten ren
+        }
     )
     
     st.markdown("---")
     
+    # 5. Undermenuer (Præcis som du har dem nu)
     sel = ""
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
