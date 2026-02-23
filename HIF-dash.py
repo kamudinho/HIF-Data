@@ -146,8 +146,8 @@ try:
             import tools.player_shots as ps
             ps.vis_side(dp) # Linker til din analyse-fil
         elif sel == "Modstanderanalyse":
-            import tools.opponent as opp
-            opp.vis_side(dp) # Linker til din modstander-fil
+            import tools.modstanderanalyse as ma
+            ma.vis_side(dp) # Linker til din modstander-fil
         elif sel == "Scatterplots":
             safe_load_stats()
             import tools.scatters as sc
