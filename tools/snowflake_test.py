@@ -14,10 +14,11 @@ def get_snowflake_connection():
         
         # --- DEBUG & RENS AF NØGLE ---
         p_key_pem = s["private_key"]
-        
         if isinstance(p_key_pem, str):
-            # Fjerner potentielle usynlige tegn og håndterer escaped linjeskift
-            p_key_pem = p_key_pem.replace("\\n", "\n").strip()
+    # Fjerner alt unødigt og sikrer rene linjeskift
+            p_key_pem = p_key_pem.strip()
+            if "\\n" in p_key_pem:
+                p_key_pem = p_key_pem.replace("\\n", "\n")
             
             # Hurtigt tjek af formatet
             if not p_key_pem.startswith("-----BEGIN"):
