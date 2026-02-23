@@ -69,4 +69,45 @@ def get_hold_mapping():
         st.warning(f"Kunne ikke hente hold-mapping: {e}")
         return {}
 
-# ... resten af dine funktioner (load_github_data, get_data_package osv.) forbliver de samme
+@st.cache_data(ttl=3600)
+def load_github_data():
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except: return pd.DataFrame()
+    return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
+
+@st.cache_data(ttl=3600)
+def load_snowflake_query(query_key, comp_filter, season_filter):
+    conn = _get_snowflake_conn()
+    if not conn: return pd.DataFrame()
+    queries = get_queries(comp_filter, season_filter)
+    q = queries.get(query_key)
+    if not q: return pd.DataFrame()
+    
+    df = conn.query(q)
+    if df is not None:
+        df.columns = [c.upper() for c in df.columns]
+        for col in ['LOCATIONX', 'LOCATIONY']:
+            if col in df.columns: df[col] = df[col].astype('float32')
+    return df
+
+def get_data_package():
+    gh_data = load_github_data()
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
+    
+    return {
+        "players": gh_data["players"],
+        "scouting": gh_data["scouting"],
+        "comp_filter": comp_filter,
+        "season_filter": season_filter,
+        "hold_map": get_hold_mapping(),
+        "team_id": TEAM_WYID,
+        "playerstats": None,
+        "team_scatter": None,
+        "team_matches": None
+    }
