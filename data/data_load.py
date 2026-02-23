@@ -16,31 +16,31 @@ def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
         
-        # 1. Hent rå tekst og passphrase
         p_key_raw = s["private_key"]
-        passphrase = s.get("private_key_passphrase") # Henter koden hvis den findes
+        # Hent passphrase og konverter den til bytes med det samme
+        passphrase = s.get("private_key_passphrase")
+        passphrase_bytes = passphrase.encode() if passphrase else None
         
-        # 2. Rens formatet
         if isinstance(p_key_raw, str):
             p_key_pem = p_key_raw.replace("\\n", "\n").strip()
         else:
             p_key_pem = p_key_raw
 
-        # 3. Indlæs nøglen (Her bruger vi passphrasen til at låse op)
+        # 1. Indlæs nøglen ved brug af bytes-passphrase
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode(),
-            password=passphrase.encode() if passphrase else None,
+            password=passphrase_bytes, # Her er rettelsen: det er nu bytes
             backend=default_backend()
         )
         
-        # 4. Konverter til DER-format
+        # 2. Eksporter til DER-format (bytes)
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         
-        # 5. Opret forbindelsen
+        # 3. Forbind (Bemærk: vi sender kun den dekrypterede p_key_der)
         return st.connection(
             "snowflake", 
             type="snowflake", 
