@@ -16,31 +16,30 @@ def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
         
+        # 1. Hent den private nøgle fra secrets
         p_key_raw = s["private_key"]
-        # Hent passphrase og konverter den til bytes med det samme
-        passphrase = s.get("private_key_passphrase")
-        passphrase_bytes = passphrase.encode() if passphrase else None
         
+        # 2. Rens formatet (håndterer linjeskift korrekt)
         if isinstance(p_key_raw, str):
             p_key_pem = p_key_raw.replace("\\n", "\n").strip()
         else:
             p_key_pem = p_key_raw
 
-        # 1. Indlæs nøglen ved brug af bytes-passphrase
+        # 3. Indlæs den ULÅSTE nøgle (password=None, da du fjernede det i terminalen)
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode(),
-            password=passphrase_bytes, # Her er rettelsen: det er nu bytes
+            password=None, 
             backend=default_backend()
         )
         
-        # 2. Eksporter til DER-format (bytes)
+        # 4. Eksporter til DER-format, som Snowflake-driveren kræver
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         
-        # 3. Forbind (Bemærk: vi sender kun den dekrypterede p_key_der)
+        # 5. Etabler forbindelsen via Streamlits indbyggede connection
         return st.connection(
             "snowflake", 
             type="snowflake", 
@@ -74,6 +73,8 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
     if not q: return pd.DataFrame()
+    
+    # Brug .query() fra Streamlit connection
     df = conn.query(q)
     if df is not None:
         df.columns = [c.upper() for c in df.columns]
@@ -86,6 +87,7 @@ def get_hold_mapping():
     conn = _get_snowflake_conn()
     if not conn: return {}
     try:
+        # Vi sikrer os at vi spørger på den fulde sti hvis muligt
         df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM AXIS.WYSCOUT_TEAMS")
         return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
     except: return {}
