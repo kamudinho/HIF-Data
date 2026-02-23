@@ -107,6 +107,20 @@ with st.sidebar:
 if not sel: 
     sel = "Oversigt"
 
+# Funktion til sikker hentning af Snowflake data uden at crashe siden
+def safe_load_stats():
+    if dp.get("playerstats") is None:
+        try:
+            # Vi tjekker om vi overhovedet har filtrene klar før vi kalder Snowflake
+            comp_f = dp.get("comp_filter", [])
+            seas_f = dp.get("season_filter", [])
+            
+            with st.spinner("Henter live stats fra Snowflake..."):
+                dp["playerstats"] = load_snowflake_query("playerstats", comp_f, seas_f)
+        except Exception as e:
+            st.warning("⚠️ Snowflake stats kunne ikke hentes. Viser kun lokale data (CSV).")
+            dp["playerstats"] = pd.DataFrame() # Fortsæt med tom dataframe
+
 try:
     # --- TRUPPEN ---
     if hoved_omraade == "TRUPPEN":
@@ -117,42 +131,40 @@ try:
             import tools.squad as sq
             sq.vis_side(dp["players"])
         elif sel == "Spillerstats":
+            safe_load_stats()
             import tools.stats as st_tool
-            if dp["playerstats"] is None:
-                with st.spinner("Henter spillerstatistik..."):
-                    dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             st_tool.vis_side(dp["players"], dp["playerstats"])
         elif sel == "Top 5":
+            safe_load_stats()
             import tools.top5 as t5
-            if dp["playerstats"] is None:
-                with st.spinner("Henter data..."):
-                    dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             t5.vis_side(dp["players"], dp["playerstats"])
 
     # --- HIF ANALYSE ---
     elif hoved_omraade == "HIF ANALYSE":
+        # Her kan du tilføje safe_load_stats() hvis de skal bruge Snowflake-data
         if sel == "Afslutninger":
-            st.header("🎯 Afslutningsanalyse")
-            st.info("Her kommer visualisering af skuddata for Hvidovre IF.")
-            # import tools.player_shots as ps (Aktiver når filen er klar)
+            import tools.player_shots as ps
+            ps.vis_side(dp) # Linker til din analyse-fil
         elif sel == "Modstanderanalyse":
-            st.header("📋 Modstanderanalyse")
-            st.info("Her kan du analysere kommende modstandere.")
+            import tools.opponent as opp
+            opp.vis_side(dp) # Linker til din modstander-fil
         elif sel == "Scatterplots":
-            st.header("📊 Scatterplots")
-            st.info("Her kommer metrics-sammenligning via scatterplots.")
+            safe_load_stats()
+            import tools.scatters as sc
+            sc.vis_side(dp["playerstats"])
 
     # --- BETINIA LIGAEN ---
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Oversigt":
-            st.header("🏆 Betinia Ligaen: Oversigt")
-            st.info("Ligatabel og aktuel form.")
+            import tools.league_table as lt
+            lt.vis_side()
         elif sel == "Ligaoversigt":
-            st.header("📈 Ligaoversigt")
-            st.info("Avanceret statistik for alle hold i ligaen.")
+            safe_load_stats()
+            import tools.league_stats as ls
+            ls.vis_side(dp["playerstats"])
         elif sel == "Holdkampe":
-            st.header("⚽ Holdkampe")
-            st.info("Oversigt over spillerunder og resultater.")
+            import tools.matches as mt
+            mt.vis_side()
 
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
@@ -160,14 +172,12 @@ try:
             import tools.scout_input as si
             si.vis_side(dp)
         elif sel == "Database":
+            safe_load_stats()
             import tools.scout_db as sdb
-            if dp["playerstats"] is None:
-                dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None)
         elif sel == "Sammenligning":
+            safe_load_stats()
             import tools.comparison as comp
-            if dp["playerstats"] is None:
-                dp["playerstats"] = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp["season_filter"])
 
     # --- ADMIN ---
@@ -183,4 +193,5 @@ try:
             stest.vis_side()
 
 except Exception as e:
-    st.error(f"⚠️ Kunne ikke indlæse siden '{sel}': {e}")
+    st.error(f"⚠️ Systemfejl på siden '{sel}': {e}")
+    st.info("Dette skyldes ofte manglende filer i 'tools' mappen eller Snowflake-rettigheder.")
