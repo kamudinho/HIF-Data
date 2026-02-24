@@ -56,7 +56,7 @@ def get_queries(comp_filter, season_filter):
                 t.SHOTS, 
                 t.PPDA,
                 t.PASSESTOFINALTHIRD,
-                t.TOUCHINBOX
+                t.TOUCHINBOX,
                 st.TOTALPOINTS,
                 st.TOTALPLAYED AS MATCHES,
                 st.TOTALWINS,
