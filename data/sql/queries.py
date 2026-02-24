@@ -55,7 +55,6 @@ def get_queries(comp_filter, season_filter):
                 t.XGSHOTAGAINST, 
                 t.SHOTS, 
                 t.PPDA,
-                t.PASSES, -- Ingen anførselstegn her!
                 t.SUCCESSFULPASSES,
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
