@@ -19,6 +19,15 @@ def super_clean(text):
     return text
 
 def vis_side():
+    # 1. Hent dp fra session_state med det samme
+    if "data_package" in st.session_state:
+        dp = st.session_state["data_package"]
+    else:
+        # Hvis den mangler (f.eks. ved direkte refresh), prøv at genindlæse den
+        from data.data_load import get_data_package
+        st.session_state["data_package"] = get_data_package()
+        dp = st.session_state["data_package"]
+        
     # 2. CSS FOR DESIGN & CENTRERING
     st.markdown("""
         <style>
