@@ -72,7 +72,7 @@ def vis_side():
                     "TEAMNAME": "HOLD", 
                     "MATCHES": "KAMPE", 
                     "TOTALPOINTS": "POINT",
-                    "TOTALWINS": "SEJRE",
+                    "TOTALWINS": "SEJR",
                     "TOTALLOSSES": "NEDERLAG",
                     "TOTALDRAWS": "UAFGJORT",
                     "GOALS": "MÅL FOR",
@@ -87,14 +87,20 @@ def vis_side():
             st.dataframe(
                 df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "BERØRINGER I FELT"}
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "BERØRINGER I FELT", 
+                    "TEAMNAME": "HOLD", 
+                    "GOALS": "MÅL",
+                    "XGSHOT": "xG",
             )
             
         with l_def:
             st.dataframe(
                 df_liga[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")
+                    "TEAMNAME": "HOLD", 
+                    "CONCEDEDGOALS": "MÅL MOD",
+                    "XGSHOTAGAINST": "xG MOD",}
             )
 
     # --- SEKTION 2: HEAD-TO-HEAD ---
