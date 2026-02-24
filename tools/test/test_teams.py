@@ -145,7 +145,7 @@ def vis_side():
                 images=logo_imgs, 
                 barmode='group', 
                 bargap=0.35,  # <-- Dette skaber mellemrum mellem de forskellige metrikker
-                barwidth=None, # Lader Plotly styre bredden automatisk baseret på gap
+                width=None, # Lader Plotly styre bredden automatisk baseret på gap
                 height=400, 
                 margin=dict(t=70, b=20, l=10, r=10),
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
