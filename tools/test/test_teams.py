@@ -1,124 +1,110 @@
 import streamlit as st
 import pandas as pd
-import os
-
-def super_clean(text):
-    if not isinstance(text, str): return text
-    rep = {
-        "ƒç": "č", "ƒá": "ć", "≈°": "š", "≈æ": "ž", "√¶": "æ", "√∏": "ø", "√•": "å",
-        "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å", "√Å": "Á", "√©": "é", "√∂": "ö", "√º": "ü"
-    }
-    for wrong, right in rep.items(): text = text.replace(wrong, right)
-    return text
+from data.data_load import load_snowflake_query
 
 def vis_side():
+    # 1. Styling
     st.markdown("<style>.stDataFrame {border: none;} button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}</style>", unsafe_allow_html=True)
+    st.markdown("""<div class='custom-header'><h3>TEST: HOLDOVERSIGT (SNOWFLAKE LIVE)</h3></div>""", unsafe_allow_html=True)
 
-    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: HOLDSTATISTIK</h3>
-    </div>""", unsafe_allow_html=True)
+    # 2. Data Loading fra Snowflake
+    dp = st.session_state.get("data_package", {})
+    comp_f = dp.get("comp_filter")
+    seas_f = dp.get("season_filter")
+
+    with st.spinner("Henter holddata fra Snowflake..."):
+        df = load_snowflake_query("team_stats_full", comp_f, seas_f)
+
+    if df.empty:
+        st.warning("Ingen holddata fundet i Snowflake for den valgte sæson.")
+        return
+
+    # 3. Filtre
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        ligaer = ["Alle"] + sorted(df['SEASONNAME'].unique().tolist())
+        valgt_liga = st.selectbox("Sæson / Liga", ligaer)
     
-    csv_path = "data/testdata/teams.csv"
-    
-    if os.path.exists(csv_path):
-        try:
-            df = pd.read_csv(csv_path, encoding='utf-8-sig')
-        except:
-            df = pd.read_csv(csv_path, encoding='latin-1')
+    df_liga = df.copy()
+    if valgt_liga != "Alle": 
+        df_liga = df_liga[df_liga['SEASONNAME'] == valgt_liga]
 
-        for col in df.select_dtypes(include=['object']).columns:
-            df[col] = df[col].apply(super_clean)
+    with col_f2:
+        hold_liste = ["Alle"] + sorted(df_liga['TEAMNAME'].unique().tolist())
+        valgt_hold = st.selectbox("Vælg specifikt hold", hold_liste)
 
-        cols_to_fix = ['GOALS', 'XGSHOT', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'SHOTS', 'PPDA']
-        for c in cols_to_fix:
-            df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+    df_filt = df_liga.copy()
+    if valgt_hold != "Alle": 
+        df_filt = df_filt[df_filt['TEAMNAME'] == valgt_hold]
 
-        # Filtre
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            ligaer = ["Alle"] + sorted([str(x) for x in df['SEASONNAME'].unique() if pd.notna(x)])
-            valgt_liga = st.selectbox("Sæson / Liga", ligaer)
-        
-        df_liga = df.copy()
-        if valgt_liga != "Alle": 
-            df_liga = df_liga[df_liga['SEASONNAME'] == valgt_liga]
+    tabs = st.tabs(["Offensivt", "Defensivt", "Stilling"])
 
-        with col_f2:
-            hold_liste = ["Alle"] + sorted(df_liga['TEAMNAME'].unique().tolist())
-            valgt_hold = st.selectbox("Vælg specifikt hold", hold_liste)
+    # --- OFFENSIVT ---
+    with tabs[0]:
+        avg_m = df_liga['GOALS'].mean()
+        avg_x = df_liga['XGSHOT'].mean()
+        avg_s = df_liga['SHOTS'].mean()
 
-        df_filt = df_liga.copy()
-        if valgt_hold != "Alle":
-            df_filt = df_filt[df_filt['TEAMNAME'] == valgt_hold]
+        # Gennemsnit-række [Vægtning: 2, 1, 1, 1]
+        st.write("") 
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        with c1: st.caption(f"Gns. {valgt_liga}")
+        with c2: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_m:.1f}</b></p>", unsafe_allow_html=True)
+        with c3: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_x:.2f}</b></p>", unsafe_allow_html=True)
+        with c4: st.markdown(f"<p style='text-align:center;margin:0;'><b>{int(avg_s)}</b></p>", unsafe_allow_html=True)
 
-        tabs = st.tabs(["Offensivt", "Defensivt", "Stilling"])
+        df_vis = df_filt.copy()
+        # Beregn Diff og formater til tekst for centrering
+        df_vis['xG (Diff)'] = df_vis.apply(lambda r: f"{r['XGSHOT']:.2f} ({'+' if (r['GOALS']-r['XGSHOT']) > 0 else ''}{(r['GOALS']-r['XGSHOT']):.2f})", axis=1)
+        df_vis['Mål'] = df_vis['GOALS'].astype(int).astype(str)
+        df_vis['Skud'] = df_vis['SHOTS'].astype(int).astype(str)
 
-        with tabs[0]: # OFFENSIVT
-            # --- GENNEMSNIT ---
-            avg_m = df_liga['GOALS'].mean()
-            avg_x = df_liga['XGSHOT'].mean()
-            
-            m1, m2, m3, m4 = st.columns([2, 1, 1, 1])
-            with m1: st.caption(f"Gns. {valgt_liga}")
-            with m2: st.markdown(f"<div style='text-align:center'><b>{avg_m:.1f}</b></div>", unsafe_allow_html=True)
-            with m3: st.markdown(f"<div style='text-align:center'><b>{avg_x:.2f}</b></div>", unsafe_allow_html=True)
-            
-            if valgt_hold != "Alle":
-                h_m = df_filt['GOALS'].iloc[0]
-                h_x = df_filt['XGSHOT'].iloc[0]
-                m1, m2, m3, m4 = st.columns([2, 1, 1, 1])
-                with m1: st.caption(f"Hold: {valgt_hold}")
-                with m2: st.markdown(f"<div style='text-align:center'>{h_m}</div>", unsafe_allow_html=True)
-                with m3: st.markdown(f"<div style='text-align:center'>{h_x:.2f}</div>", unsafe_allow_html=True)
+        st.dataframe(
+            df_vis[['TEAMNAME', 'Mål', 'xG (Diff)', 'Skud']],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
+                "Mål": st.column_config.TextColumn("Mål", width="small"),
+                "xG (Diff)": st.column_config.TextColumn("xG (Diff)", width="medium"),
+                "Skud": st.column_config.TextColumn("Shots", width="small")
+            }
+        )
 
-            # --- TABEL ---
-            df_vis = df_filt.copy()
-            # Opretter xG (Diff)
-            df_vis['xG (Diff)'] = df_vis.apply(lambda r: f"{r['XGSHOT']:.2f} ({'+' if (r['GOALS']-r['XGSHOT']) > 0 else ''}{(r['GOALS']-r['XGSHOT']):.2f})", axis=1)
-            
-            # Konverterer tal til tekst for at tvinge centrering uden fejl
-            df_vis['GOALS_TXT'] = df_vis['GOALS'].astype(int).astype(str)
-            df_vis['SHOTS_TXT'] = df_vis['SHOTS'].astype(int).astype(str)
+    # --- DEFENSIVT ---
+    with tabs[1]:
+        avg_im = df_liga['CONCEDEDGOALS'].mean()
+        avg_xim = df_liga['XGSHOTAGAINST'].mean()
+        avg_p = df_liga['PPDA'].mean()
 
-            st.dataframe(
-                df_vis[['TEAMNAME', 'GOALS_TXT', 'xG (Diff)', 'SHOTS_TXT']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "TEAMNAME": st.column_config.TextColumn("Hold"),
-                    "GOALS_TXT": st.column_config.TextColumn("Mål", width="small"),
-                    "xG (Diff)": st.column_config.TextColumn("xG (Diff)", width="medium"),
-                    "SHOTS_TXT": st.column_config.TextColumn("Shots", width="small")
-                }
-            )
+        st.write("")
+        d1, d2, d3, d4 = st.columns([2, 1, 1, 1])
+        with d1: st.caption(f"Gns. {valgt_liga}")
+        with d2: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_im:.1f}</b></p>", unsafe_allow_html=True)
+        with d3: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_xim:.2f}</b></p>", unsafe_allow_html=True)
+        with d4: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_p:.2f}</b></p>", unsafe_allow_html=True)
 
-        with tabs[1]: # DEFENSIVT
-            avg_im = df_liga['CONCEDEDGOALS'].mean()
-            avg_xim = df_liga['XGSHOTAGAINST'].mean()
+        df_vis_def = df_filt.copy()
+        df_vis_def['xG Imod (Diff)'] = df_vis_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({'+' if (r['XGSHOTAGAINST']-r['CONCEDEDGOALS']) > 0 else ''}{(r['XGSHOTAGAINST']-r['CONCEDEDGOALS']):.2f})", axis=1)
+        df_vis_def['Mål Imod'] = df_vis_def['CONCEDEDGOALS'].astype(int).astype(str)
+        df_vis_def['PPDA_STR'] = df_vis_def['PPDA'].round(2).astype(str)
 
-            d1, d2, d3, d4 = st.columns([2, 1, 1, 1])
-            with d1: st.caption(f"Gns. {valgt_liga}")
-            with d2: st.markdown(f"<div style='text-align:center'><b>{avg_im:.1f}</b></div>", unsafe_allow_html=True)
-            with d3: st.markdown(f"<div style='text-align:center'><b>{avg_xim:.2f}</b></div>", unsafe_allow_html=True)
+        st.dataframe(
+            df_vis_def[['TEAMNAME', 'Mål Imod', 'xG Imod (Diff)', 'PPDA_STR']],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "TEAMNAME": "Hold",
+                "Mål Imod": st.column_config.TextColumn("Mål Imod"),
+                "xG Imod (Diff)": st.column_config.TextColumn("xG Imod (Diff)"),
+                "PPDA_STR": st.column_config.TextColumn("PPDA")
+            }
+        )
 
-            df_vis_def = df_filt.copy()
-            df_vis_def['xG Imod (Diff)'] = df_vis_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({'+' if (r['XGSHOTAGAINST']-r['CONCEDEDGOALS']) > 0 else ''}{(r['XGSHOTAGAINST']-r['CONCEDEDGOALS']):.2f})", axis=1)
-            df_vis_def['IMOD_TXT'] = df_vis_def['CONCEDEDGOALS'].astype(int).astype(str)
-            df_vis_def['PPDA_TXT'] = df_vis_def['PPDA'].round(2).astype(str)
-
-            st.dataframe(
-                df_vis_def[['TEAMNAME', 'IMOD_TXT', 'xG Imod (Diff)', 'PPDA_TXT']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "TEAMNAME": "Hold",
-                    "IMOD_TXT": st.column_config.TextColumn("Mål Imod"),
-                    "xG Imod (Diff)": st.column_config.TextColumn("xG Imod (Diff)"),
-                    "PPDA_TXT": st.column_config.TextColumn("PPDA")
-                }
-            )
-
-        with tabs[2]: # STILLING
-            st.dataframe(df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], use_container_width=True, hide_index=True)
-    else:
-        st.error("Filen mangler.")
+    # --- STILLING ---
+    with tabs[2]:
+        st.dataframe(
+            df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
+            use_container_width=True, 
+            hide_index=True
+        )
