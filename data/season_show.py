@@ -1,6 +1,6 @@
 # --- Sæson og eget hold ---
 SEASONNAME = "2025/2026"
-TEAM_WYID = 7470
+TEAM_WYID = 7490
 
 # --- Turneringer (IDs) ---
 COMPETITION_WYID = (328, 329, 43319, 331, 1305, 330)
