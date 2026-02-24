@@ -98,23 +98,27 @@ def get_queries(comp_filter, season_filter):
                 ON tm.TEAM_WYID = adv.TEAM_WYID
         """,
         "team_stats_full": f"""
-            SELECT 
-                t.TEAMNAME, 
-                s.SEASONNAME,
-                ts.GOALS, 
-                ts.XGSHOT, 
-                ts.CONCEDEDGOALS, 
-                ts.XGSHOTAGAINST, 
-                ts.SHOTS, 
-                ts.PPDA,
-                ts.MATCHES,
-                ts.TOTALWINS,
-                ts.TOTALDRAWS,
-                ts.TOTALLOSSES,
-                ts.TOTALPOINTS
-            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL ts
-            JOIN {DB}.WYSCOUT_TEAMS t ON ts.TEAM_WYID = t.TEAM_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON ts.SEASON_WYID = s.SEASON_WYID
+            SSELECT DISTINCT 
+                tm.teamname,
+                t.*,
+                s.seasonname,
+                tm.imagedataurl,
+                st.totalpoints,
+                st.totalplayed,
+                st.totalwins,
+                st.totaldraws,
+                st.totallosses,
+                st.totalgoalsfor,
+                st.totalgoalsagainst,
+                t.team_wyid
+            FROM WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+            JOIN WYSCOUT_seasons AS s
+                ON t.season_wyid = s.season_wyid
+            JOIN WYSCOUT_teams AS tm
+                ON t.team_wyid = tm.team_wyid
+            JOIN WYSCOUT_seasons_standings AS st
+                ON t.team_wyid = st.team_wyid
+                AND t.season_wyid = st.season_wyid  -- Sikrer, at du får data fra samme sæson 
             WHERE ts.COMPETITION_WYID IN {comp_filter}
             AND s.SEASONNAME {season_filter}
         """
