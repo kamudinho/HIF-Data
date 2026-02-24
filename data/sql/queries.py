@@ -44,12 +44,12 @@ def get_queries(comp_filter, season_filter):
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
-                t.IMAGEDATAURL AS IMAGEURLDATA,
+                t.IMAGEDATAURL AS IMAGEvURLDATA,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
             JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
-                AND s.COMPETITION_WYID = p.COMPETITION_WYID
+                AND s.COMPETITION_WYID = pv.COMPETITION_WYID
             JOIN {DB}.WYSCOUT_TEAMS t
                 ON s.TEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
