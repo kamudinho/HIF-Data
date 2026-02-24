@@ -55,11 +55,8 @@ def get_queries(comp_filter, season_filter):
                 t.XGSHOTAGAINST, 
                 t.SHOTS, 
                 t.PPDA,
-                t.SUCCESSFULPASSES,
                 t.PASSESTOFINALTHIRD,
-                t.FORWARDPASSES, 
-                t.SUCCESSFULPASSESTOFINALTHIRD,
-                t.SUCCESSFULFORWARDPASSES,
+                t.TOUCHINBOX
                 st.TOTALPOINTS,
                 st.TOTALPLAYED AS MATCHES,
                 st.TOTALWINS,
