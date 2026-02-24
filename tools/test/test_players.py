@@ -3,22 +3,15 @@ import pandas as pd
 import os
 
 def super_clean(text):
-    """Den ultimative vaskemaskine til alle europæiske tegn (Delač, Ásgeir, Yatéké, Björk, Jørgensen)"""
+    """Den ultimative vaskemaskine til alle europæiske tegn"""
     if not isinstance(text, str):
         return text
-    
-    # Komplet ordbog over symbol-fejl fra CSV/Excel
     rep = {
-        # Østeuropæiske (č, ć, š osv.)
         "ƒç": "č", "ƒá": "ć", "≈°": "š", "≈æ": "ž",
-        
-        # Danske tegn
         "√¶": "æ", "√∏": "ø", "√•": "å",
         "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å",
         "Ã¦": "æ", "Ã¸": "ø", "Ã¥": "å",
         "Ã†": "Æ", "Ã˜": "Ø", "Ã…": "Å",
-        
-        # Islandske / Specialtegn (Ásgeir, Yatéké, Björk)
         "√Å": "Á", "√©": "é", "√∂": "ö", 
         "√º": "ü", "√ñ": "Ö",
         "Ã©": "é", "Ã¡": "Á", "Ã¶": "ö",
@@ -29,19 +22,20 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 1. CSS (Layout match)
+    # 1. CSS (Forbedret til at centrere radio og tabs)
     st.markdown("""
         <style>
-            [data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-start; }
             .stDataFrame { border: none; }
             button[data-baseweb="tab"] { font-size: 14px; }
             button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000; border-bottom-color: #cc0000; }
+            /* Gør radio buttons mere kompakte så de passer på linjen */
+            div[data-testid="stRadio"] > div { gap: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
     # 2. BRANDING BOKS
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: SPILLERSTATISTIK</h3>
+        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">SPILLERSTATISTIK</h3>
     </div>""", unsafe_allow_html=True)
     
     csv_path = "data/testdata/players.csv"
@@ -52,33 +46,30 @@ def vis_side():
         except:
             df = pd.read_csv(csv_path, encoding='latin-1')
         
-        # Rens alle tekst-kolonner (vasker Delač, Ásgeir, Yatéké osv.)
+        # Rens alle tekst-kolonner
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).apply(super_clean)
-            
+        
         # Saml Navn
         df['Navn'] = df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')
         df['Navn'] = df['Navn'].str.strip()
+
+        # --- NAVIGATION LINJE (Positions-tabs + Datatype) ---
+        # Vi definerer de ønskede positioner
+        pos_tabs_labels = ["Alle", "GKP", "DEF", "MID", "FWD"]
         
-        # --- 3. FILTRE ---
-        col1, col2, col3 = st.columns([2, 2, 2])
-        with col1:
-            hold = ["Alle"] + sorted([str(x) for x in df['COMPETITIONNAME'].unique() if x != 'nan'])
-            valgt_hold = st.selectbox("Turnering", hold)
-        with col2:
-            roller = ["Alle"] + sorted([str(x) for x in df['ROLECODE3'].unique() if x != 'nan'])
-            valgt_rolle = st.selectbox("Position", roller)
-        with col3:
-            visningstype = st.radio("Datatype", ["Total", "Pr. 90"], horizontal=True)
+        # Vi laver to kolonner: En bred til tabs og en smal til radio buttons
+        nav_col1, nav_col2 = st.columns([4, 2])
+        
+        with nav_col1:
+            pos_tabs = st.tabs(pos_tabs_labels)
+            
+        with nav_col2:
+            # Flyttet herop så den står på linje med tabs
+            visningstype = st.radio("Visning", ["Total", "Pr. 90"], horizontal=True, label_visibility="collapsed")
 
-        df_filt = df.copy()
-        if valgt_hold != "Alle":
-            df_filt = df_filt[df_filt['COMPETITIONNAME'] == valgt_hold]
-        if valgt_rolle != "Alle":
-            df_filt = df_filt[df_filt['ROLECODE3'] == valgt_rolle]
-
-        # Kolonner
+        # Stats grupper
         stats_groups = {
             "Generelt": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
             "Offensivt": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -86,38 +77,55 @@ def vis_side():
             "Pasninger": ['PASSES', 'SUCCESSFULPASSES', 'CROSSES', 'PROGRESSIVEPASSES']
         }
 
-        # --- 4. FANER ---
-        tabs = st.tabs(list(stats_groups.keys()))
+        # Loop gennem hver positions-tab
+        for idx, p_tab in enumerate(pos_tabs):
+            with p_tab:
+                valgt_pos = pos_tabs_labels[idx]
+                
+                # Filtrer efter position
+                df_pos = df.copy()
+                if valgt_pos != "Alle":
+                    df_pos = df_pos[df_pos['ROLECODE3'] == valgt_pos]
 
-        for i, (group_name, cols) in enumerate(stats_groups.items()):
-            with tabs[i]:
-                display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_filt.columns]
-                df_tab = df_filt[display_cols].copy()
+                # Indlejrede faner til statistikker (Generelt, Offensivt, osv.)
+                stat_tabs = st.tabs(list(stats_groups.keys()))
+                
+                for s_idx, (group_name, cols) in enumerate(stats_groups.items()):
+                    with stat_tabs[s_idx]:
+                        display_cols = ['Navn', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_pos.columns]
+                        df_tab = df_pos[display_cols].copy()
 
-                # Konvertering og beregning
-                df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
-                for c in cols:
-                    if c in df_tab.columns:
-                        df_tab[c] = pd.to_numeric(df_tab[c], errors='coerce').fillna(0)
+                        # Konvertering
+                        df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
+                        for c in cols:
+                            if c in df_tab.columns:
+                                df_tab[c] = pd.to_numeric(df_tab[c], errors='coerce').fillna(0)
 
-                if visningstype == "Pr. 90":
-                    for c in cols:
-                        if c in df_tab.columns:
-                            df_tab[c] = (df_tab[c] / df_tab['MINUTESONFIELD'] * 90).replace([float('inf'), -float('inf')], 0).round(2).fillna(0)
+                        # Beregning af Pr. 90
+                        if visningstype == "Pr. 90":
+                            for c in cols:
+                                if c in df_tab.columns:
+                                    # Undgå division med nul
+                                    mask = df_tab['MINUTESONFIELD'] > 0
+                                    df_tab.loc[mask, c] = (df_tab.loc[mask, c] / df_tab.loc[mask, 'MINUTESONFIELD'] * 90)
+                                    df_tab.loc[~mask, c] = 0
+                                    df_tab[c] = df_tab[c].round(2)
 
-                # Tabel visning
-                calc_height = (len(df_tab) + 1) * 35 + 45
-                st.dataframe(
-                    df_tab,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=calc_height,
-                    column_config={
-                        "Navn": st.column_config.TextColumn("Spiller"),
-                        "ROLECODE3": st.column_config.TextColumn("Pos"),
-                        "MINUTESONFIELD": st.column_config.NumberColumn("Min", format="%d"),
-                        **{c: st.column_config.NumberColumn(c, format="%.2f" if visningstype == "Pr. 90" else "%d") for c in cols}
-                    }
-                )
+                        # Tabel visning
+                        st.dataframe(
+                            df_tab.sort_values(by=cols[0] if cols else 'Navn', ascending=False),
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "Navn": st.column_config.TextColumn("Spiller"),
+                                "ROLECODE3": st.column_config.TextColumn("Pos"),
+                                "MINUTESONFIELD": st.column_config.NumberColumn("Min", format="%d"),
+                                **{c: st.column_config.NumberColumn(c, format="%.2f" if visningstype == "Pr. 90" else "%d") for c in cols}
+                            }
+                        )
     else:
         st.error(f"Filen mangler: {csv_path}")
+
+# Husk at kalde funktionen hvis du kører filen direkte
+if __name__ == "__main__":
+    vis_side()
