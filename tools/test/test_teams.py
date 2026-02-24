@@ -79,7 +79,6 @@ def vis_side():
 
     # --- HEAD-TO-HEAD ---
     with tabs[3]:
-        # Filtrering af hold
         hif_name = "Hvidovre"
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         
@@ -92,18 +91,58 @@ def vis_side():
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
 
-        # Visuel sammenligning
         metrics = ['GOALS', 'XGSHOT', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
         labels = ['Mål', 'xG', 'Mål Imod', 'xG Imod', 'PPDA']
         
         fig = go.Figure()
-        fig.add_trace(go.Bar(name=team1, x=labels, y=[t1_stats[m] for m in metrics], marker_color='#cc0000'))
-        fig.add_trace(go.Bar(name=team2, x=labels, y=[t2_stats[m] for m in metrics], marker_color='#333333'))
+        
+        # Hold 1 Bar
+        fig.add_trace(go.Bar(
+            name=team1, x=labels, y=[t1_stats[m] for m in metrics], 
+            marker_color='#cc0000', offsetgroup=0
+        ))
+        
+        # Hold 2 Bar
+        fig.add_trace(go.Bar(
+            name=team2, x=labels, y=[t2_stats[m] for m in metrics], 
+            marker_color='#333333', offsetgroup=1
+        ))
 
-        fig.update_layout(barmode='group', height=400, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        # Tilføj logoer over hver bar-gruppe (eller centreret)
+        # Vi placerer dem som annotations/images i layoutet
+        logo_list = []
+        
+        # Logo for Hold 1 (placeres lidt til venstre for midten af hver kategori)
+        if pd.notnull(t1_stats['IMAGEDATAURL']):
+            logo_list.append(dict(
+                source=t1_stats['IMAGEDATAURL'],
+                xref="paper", yref="paper",
+                x=0.15, y=1.05, # Juster x/y for placering i toppen
+                sizex=0.1, sizey=0.1,
+                xanchor="center", yanchor="bottom"
+            ))
+
+        # Logo for Hold 2 (placeres lidt til højre)
+        if pd.notnull(t2_stats['IMAGEDATAURL']):
+            logo_list.append(dict(
+                source=t2_stats['IMAGEDATAURL'],
+                xref="paper", yref="paper",
+                x=0.85, y=1.05,
+                sizex=0.1, sizey=0.1,
+                xanchor="center", yanchor="bottom"
+            ))
+
+        fig.update_layout(
+            images=logo_list,
+            barmode='group',
+            height=450,
+            margin=dict(t=80, b=20), # Ekstra margin i toppen til logoer
+            legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5)
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
-        # Rå tal under grafen
+        # Sammenligningstabel
         st.table(pd.DataFrame({
             "Metrik": labels,
             team1: [t1_stats[m] for m in metrics],
