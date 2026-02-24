@@ -24,30 +24,39 @@ def vis_side():
     
     dp = st.session_state["data_package"]
     
-    # Hent rådata
+    # Hent data fra Snowflake
     df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
+    # SIKKERHEDSTJEK A: Er der data?
     if df_raw is None or df_raw.empty:
-        st.warning("Ingen data fundet i Snowflake.")
+        st.error("❌ Ingen data fundet i Snowflake. Prøv at rydde cachen (tast 'C').")
         return
 
-    # --- KRITISK FIX: Tving alle navne til STORE bogstaver og fjern tomme felter ---
+    # SIKKERHEDSTJEK B: Rens kolonner (Tving store bogstaver og fjern mellemrum)
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
-    df = df.fillna(0) # Sikrer at beregninger ikke dør på NULL-værdier
+    df = df.fillna(0) # Undgå beregningsfejl ved NULL-værdier
+
+    # SIKKERHEDSTJEK C: Findes 'PASSES'?
+    if 'PASSES' not in df.columns:
+        st.error(f"⚠️ Kritisk fejl: Kolonnen 'PASSES' mangler i datasættet. Fundne kolonner: {df.columns.tolist()}")
+        return
 
     # Find nyeste sæson og filtrer
     try:
-        nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
+        saesoner = sorted(df['SEASONNAME'].unique().tolist())
+        nyeste_saeson = saesoner[-1]
         df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
-    except Exception:
-        st.error("Fejl ved filtrering af sæson. Tjek kolonnen SEASONNAME.")
+    except Exception as e:
+        st.error(f"Fejl ved behandling af sæson-data: {e}")
         return
 
     # --- BEREGNINGER AF AFLEVERINGSPROCENTER (%) ---
-    # Vi bruger en sikker metode til at beregne procenter
     def safe_pct(success, total):
-        return (success / total * 100) if total > 0 else 0
+        try:
+            return (float(success) / float(total) * 100) if float(total) > 0 else 0
+        except:
+            return 0
 
     df_liga['PASS_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSES'], r['PASSES']), axis=1)
     df_liga['FINAL_THIRD_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSESTOFINALTHIRD'], r['PASSESTOFINALTHIRD']), axis=1)
@@ -65,7 +74,12 @@ def vis_side():
             st.dataframe(
                 df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TEAMNAME": "HOLD", "MATCHES": "K", "TOTALPOINTS": "P"}
+                column_config={
+                    "IMAGEDATAURL": st.column_config.ImageColumn(""), 
+                    "TEAMNAME": "HOLD", 
+                    "MATCHES": "K", 
+                    "TOTALPOINTS": "P"
+                }
             )
         
         with l_off:
@@ -73,25 +87,27 @@ def vis_side():
             df_off['xG (Diff)'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
             st.dataframe(
                 df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)']].sort_values('GOALS', ascending=False), 
-                use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+                use_container_width=True, hide_index=True, 
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
             )
             
         with l_def:
             st.dataframe(
                 df_liga[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
-                use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+                use_container_width=True, hide_index=True, 
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
             )
 
         with l_pass:
             df_p = df_liga.copy()
-            # Formatering til pæn visning
             df_p['Passes (%)'] = df_p.apply(lambda r: f"{int(r['PASSES'])} ({r['PASS_PCT']:.1f}%)", axis=1)
             df_p['Final 3rd (%)'] = df_p.apply(lambda r: f"{int(r['PASSESTOFINALTHIRD'])} ({r['FINAL_THIRD_PCT']:.1f}%)", axis=1)
             df_p['Forward (%)'] = df_p.apply(lambda r: f"{int(r['FORWARDPASSES'])} ({r['FORWARD_PCT']:.1f}%)", axis=1)
             
             st.dataframe(
                 df_p[['IMAGEDATAURL', 'TEAMNAME', 'Passes (%)', 'Final 3rd (%)', 'Forward (%)']].sort_values('PASSES', ascending=False), 
-                use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+                use_container_width=True, hide_index=True, 
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
             )
 
     # --- SEKTION 2: HEAD-TO-HEAD ---
@@ -99,8 +115,10 @@ def vis_side():
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         c_pop, c_t1, c_t2 = st.columns([0.6, 1, 1])
         
-        with c_t1: team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
-        with c_t2: team2 = st.selectbox("Hold 2", [h for h in hold_navne if h != team1], index=0)
+        with c_t1: 
+            team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
+        with c_t2: 
+            team2 = st.selectbox("Hold 2", [h for h in hold_navne if h != team1], index=0)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
