@@ -44,59 +44,6 @@ def get_queries(comp_filter, season_filter):
             WHERE COMPETITION_WYID IN {comp_filter} 
             AND SEASON_WYID IN (SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
         """,
-        "events": f"""
-            SELECT e.TEAM_WYID, e.PRIMARYTYPE, e.LOCATIONX, e.LOCATIONY, e.COMPETITION_WYID 
-            FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON e
-            JOIN {DB}.WYSCOUT_MATCHES m ON e.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-            WHERE e.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
-            AND e.PRIMARYTYPE IN ('pass', 'duel', 'interception')
-        """,
-        "players_snowflake": f"""
-            SELECT 
-                PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, 
-                ROLECODE3, CURRENTTEAM_WYID 
-            FROM {DB}.WYSCOUT_PLAYERS
-            WHERE PLAYER_WYID IN (
-                SELECT DISTINCT PLAYER_WYID 
-                FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                WHERE COMPETITION_WYID IN {comp_filter}
-            )
-        """,
-        "player_seasons": f"""
-            SELECT 
-                s.PLAYER_WYID, ws.SEASONNAME, wc.COMPETITIONNAME,
-                s.SEASON_WYID, s.COMPETITION_WYID
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_BASE s
-            JOIN {DB}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
-            JOIN {DB}.WYSCOUT_COMPETITIONS wc ON s.COMPETITION_WYID = wc.COMPETITION_WYID
-        """,
-        "player_career": f"""
-            SELECT 
-                pc.PLAYER_WYID, s.SEASONNAME, c.COMPETITIONNAME, t.TEAMNAME, 
-                pc.APPEARANCES, pc.MINUTESPLAYED, pc.GOAL, pc.YELLOWCARD, pc.REDCARDS
-            FROM {DB}.WYSCOUT_PLAYERCAREER pc
-            LEFT JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
-            LEFT JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
-            LEFT JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
-            WHERE pc.PLAYER_WYID IN (
-                SELECT DISTINCT PLAYER_WYID 
-                FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-                WHERE COMPETITION_WYID IN {comp_filter}
-            )
-        """,
-        "team_scatter": f"""
-            SELECT 
-                s.SEASONNAME, t.imagedataurl, c.COMPETITIONNAME,
-                t.TEAMNAME, tm.*
-            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL tm
-            JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
-            JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
-            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                ON tm.TEAM_WYID = adv.TEAM_WYID
-        """,
         "team_stats_full": f"""
             SELECT DISTINCT 
                 tm.TEAMNAME,
