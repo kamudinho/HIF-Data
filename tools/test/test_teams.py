@@ -36,8 +36,11 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="custom-header">NORDICBET LIGA: ANALYSE & H2H</div>', unsafe_allow_html=True)
-
+    # 1.2. BRANDING BOKS
+    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
+        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">BETINIA LIGAEN: ANALYSE & H2H</h3>
+    </div>""", unsafe_allow_html=True)
+    
     # 2. Data Loading
     if "data_package" not in st.session_state:
         st.session_state["data_package"] = get_data_package()
