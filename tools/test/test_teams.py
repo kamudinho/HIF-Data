@@ -22,12 +22,14 @@ def vis_side():
         st.session_state["data_package"] = get_data_package()
     
     dp = st.session_state["data_package"]
-    # Vi henter team_stats_full queryen fra din queries.py
     df = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
     if df is None or df.empty:
         st.warning("Ingen data fundet.")
         return
+
+    # --- KRITISK FIX: Tving alle kolonnenavne til STORE bogstaver ---
+    df.columns = [str(c).upper() for c in df.columns]
 
     # Filtrering til nyeste data
     nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
@@ -138,5 +140,3 @@ def vis_side():
                 all_l = ['Pass %', 'Final 3rd %', 'Forward %']
                 table_data = [{"Metrik": l, team1: f"{t1_stats[m]:.1f}%", team2: f"{t2_stats[m]:.1f}%"} for m, l in zip(all_m, all_l)]
                 st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
-
-                st.write("Tilgængelige kolonner:", df.columns.tolist())
