@@ -3,33 +3,38 @@ import pandas as pd
 from data.data_load import load_snowflake_query
 
 def vis_side():
-    # 1. Styling
+    # 1. Styling og CSS til centrering
     st.markdown("""
         <style>
             .stDataFrame {border: none;} 
             button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
             [data-testid="stDataFrame"] td { padding: 2px 5px !important; }
-            .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 5px solid #cc0000; }
+            .stat-header { 
+                font-weight: bold; 
+                font-size: 16px; 
+                text-align: center; 
+                color: #cc0000;
+                margin-bottom: 5px;
+            }
+            .label-header { font-size: 14px; color: #666; padding-top: 10px; }
         </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("""<div class='custom-header'><h3>NORDICBET LIGA: LIVE OVERBLIK</h3></div>""", unsafe_allow_html=True)
+    st.markdown("""<div class='custom-header'><h3>NORDICBET LIGA: LIGAOVERSIGT</h3></div>""", unsafe_allow_html=True)
 
     # 2. Data Loading
     dp = st.session_state.get("data_package", {})
     comp_f = "(328)" 
     seas_f = dp.get("season_filter")
 
-    with st.spinner("Henter live data..."):
+    with st.spinner("Henter data..."):
         df = load_snowflake_query("team_stats_full", comp_f, seas_f)
 
     if df.empty:
-        st.warning("Ingen data fundet for NordicBet Ligaen.")
+        st.warning("Ingen data fundet.")
         return
 
-    # Find nyeste sæson i de hentede data
     nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
-    # Filtrer data så gennemsnit og tabel matcher 100%
     df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
 
     tabs = st.tabs(["Offensivt", "Defensivt", "Stilling"])
@@ -40,12 +45,13 @@ def vis_side():
         avg_x = df_liga['XGSHOT'].mean()
         avg_s = df_liga['SHOTS'].mean()
 
-        st.markdown(f"<div class='stat-box'><b>Gennemsnit for {nyeste_saeson}</b></div>", unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-        with c1: st.caption("Liga-stats pr. hold")
-        with c2: st.markdown(f"<p style='text-align:center;margin:0;'>Mål<br><b>{avg_m:.1f}</b></p>", unsafe_allow_html=True)
-        with c3: st.markdown(f"<p style='text-align:center;margin:0;'>xG<br><b>{avg_x:.2f}</b></p>", unsafe_allow_html=True)
-        with c4: st.markdown(f"<p style='text-align:center;margin:0;'>Skud<br><b>{int(avg_s)}</b></p>", unsafe_allow_html=True)
+        # Layout der matcher kolonnebredden i dataframen [Logo, Navn, Mål, xG, Skud]
+        # Vægtning: 0.5 (logo), 2.0 (navn), 1.0 (mål), 1.0 (xG), 1.0 (skud)
+        c_logo, c_navn, c_m, c_x, c_s = st.columns([0.5, 2, 1, 1, 1])
+        with c_navn: st.markdown(f"<div class='label-header'>Gns. {nyeste_saeson}</div>", unsafe_allow_html=True)
+        with c_m: st.markdown(f"<div class='stat-header'>{avg_m:.1f}</div>", unsafe_allow_html=True)
+        with c_x: st.markdown(f"<div class='stat-header'>{avg_x:.2f}</div>", unsafe_allow_html=True)
+        with c_s: st.markdown(f"<div class='stat-header'>{int(avg_s)}</div>", unsafe_allow_html=True)
 
         df_vis = df_liga.copy()
         df_vis['xG (Diff)'] = df_vis.apply(lambda r: f"{r['XGSHOT']:.2f} ({'+' if (r['GOALS']-r['XGSHOT']) > 0 else ''}{(r['GOALS']-r['XGSHOT']):.2f})", axis=1)
@@ -57,10 +63,10 @@ def vis_side():
             height=480,
             column_config={
                 "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
-                "TEAMNAME": st.column_config.TextColumn("Hold"),
-                "GOALS": st.column_config.NumberColumn("Mål"),
-                "xG (Diff)": st.column_config.TextColumn("xG (Diff)"),
-                "SHOTS": st.column_config.NumberColumn("Skud")
+                "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
+                "GOALS": st.column_config.NumberColumn("Mål", width="small"),
+                "xG (Diff)": st.column_config.TextColumn("xG (Diff)", width="small"),
+                "SHOTS": st.column_config.NumberColumn("Skud", width="small")
             }
         )
 
@@ -70,12 +76,11 @@ def vis_side():
         avg_xim = df_liga['XGSHOTAGAINST'].mean()
         avg_p = df_liga['PPDA'].mean()
 
-        st.markdown(f<div class='stat-box'><b>Gennemsnit for {nyeste_saeson}</b></div>", unsafe_allow_html=True)
-        d1, d2, d3, d4 = st.columns([2, 1, 1, 1])
-        with d1: st.caption("Liga-stats pr. hold")
-        with d2: st.markdown(f"<p style='text-align:center;margin:0;'>Mod<br><b>{avg_im:.1f}</b></p>", unsafe_allow_html=True)
-        with d3: st.markdown(f"<p style='text-align:center;margin:0;'>xGA<br><b>{avg_xim:.2f}</b></p>", unsafe_allow_html=True)
-        with d4: st.markdown(f"<p style='text-align:center;margin:0;'>PPDA<br><b>{avg_p:.2f}</b></p>", unsafe_allow_html=True)
+        d_logo, d_navn, d_im, d_xim, d_p = st.columns([0.5, 2, 1, 1, 1])
+        with d_navn: st.markdown(f"<div class='label-header'>Gns. {nyeste_saeson}</div>", unsafe_allow_html=True)
+        with d_im: st.markdown(f"<div class='stat-header'>{avg_im:.1f}</div>", unsafe_allow_html=True)
+        with d_xim: st.markdown(f"<div class='stat-header'>{avg_xim:.2f}</div>", unsafe_allow_html=True)
+        with d_p: st.markdown(f"<div class='stat-header'>{avg_p:.2f}</div>", unsafe_allow_html=True)
 
         df_def = df_liga.copy()
         df_def['xGA (Diff)'] = df_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({'+' if (r['XGSHOTAGAINST']-r['CONCEDEDGOALS']) > 0 else ''}{(r['XGSHOTAGAINST']-r['CONCEDEDGOALS']):.2f})", axis=1)
@@ -87,10 +92,10 @@ def vis_side():
             height=480,
             column_config={
                 "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
-                "TEAMNAME": "Hold",
-                "CONCEDEDGOALS": st.column_config.NumberColumn("Mål Imod"),
-                "xGA (Diff)": "xG Imod (Diff)",
-                "PPDA": st.column_config.NumberColumn("PPDA")
+                "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
+                "CONCEDEDGOALS": st.column_config.NumberColumn("Mål Imod", width="small"),
+                "xGA (Diff)": st.column_config.TextColumn("xGA (Diff)", width="small"),
+                "PPDA": st.column_config.NumberColumn("PPDA", width="small")
             }
         )
 
@@ -104,7 +109,11 @@ def vis_side():
             height=500,
             column_config={
                 "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
-                "TOTALPOINTS": "Point",
-                "MATCHES": "K", "TOTALWINS": "V", "TOTALDRAWS": "U", "TOTALLOSSES": "T"
+                "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
+                "TOTALPOINTS": st.column_config.NumberColumn("Point", width="small"),
+                "MATCHES": st.column_config.NumberColumn("K", width="small"), 
+                "TOTALWINS": st.column_config.NumberColumn("V", width="small"), 
+                "TOTALDRAWS": st.column_config.NumberColumn("U", width="small"), 
+                "TOTALLOSSES": st.column_config.NumberColumn("T", width="small")
             }
         )
