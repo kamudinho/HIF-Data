@@ -123,14 +123,19 @@ def vis_side():
             for name, stats in [(n1, t1), (n2, t2)]:
                 c = TEAM_COLORS.get(name, {"primary": "#808080", "secondary": "#000000"})
                 
-                # Beregn værdier: enten total eller pr. kamp
-                if per_match and stats['MATCHES'] > 0:
-                    y_vals = [stats[m] / stats['MATCHES'] for m in metrics]
-                    # Formater tekst så den viser 2 decimaler ved pr. kamp
-                    text_vals = [f"{v:.2f}" for v in y_vals]
-                else:
-                    y_vals = [stats[m] for m in metrics]
-                    text_vals = [fmt_val(stats[m]) for m in metrics]
+                y_vals = []
+                text_vals = []
+                
+                for m in metrics:
+                    # Undtagelse: PPDA skal aldrig divideres med kampe, da det er et gennemsnit
+                    if per_match and stats['MATCHES'] > 0 and m != 'PPDA':
+                        val = stats[m] / stats['MATCHES']
+                        y_vals.append(val)
+                        text_vals.append(f"{val:.2f}")
+                    else:
+                        val = stats[m]
+                        y_vals.append(val)
+                        text_vals.append(fmt_val(val))
 
                 fig.add_trace(go.Bar(
                     name=name, x=labels, y=y_vals, 
@@ -159,45 +164,26 @@ def vis_side():
                 xaxis=dict(showgrid=False), 
                 yaxis=dict(showgrid=False, showticklabels=False)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # LØSNING PÅ FEJL: Tilføj unik key baseret på metrics navne
+            chart_key = f"h2h_{'_'.join(metrics)}_{n1}_{n2}"
+            st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
-        # --- Kald af plots med logik for total vs. pr. kamp ---
+        # --- SEKTION: KALD PLOTS (KUN ÉN GANG PR TAB) ---
         with h2h_tabs[0]: 
             # Overblik: Bevares som totaler
-            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2, per_match=False)
+            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], 
+                            ['Point', 'Sejre', 'Kampe'], 
+                            t1_stats, t2_stats, team1, team2, per_match=False)
         
         with h2h_tabs[1]: 
             # Offensiv: Pr. kamp
-            create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
+            create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], 
+                            ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], 
+                            t1_stats, t2_stats, team1, team2, per_match=True)
         
         with h2h_tabs[2]: 
-            # Defensiv: Pr. kamp
-            # Bemærk: PPDA er allerede et gennemsnitstal, så den skal vi passe på med at dividere. 
-            # Jeg har lavet en lille justering herunder:
-            m_def = ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
-            l_def = ['Mål imod/kamp', 'xG imod/kamp', 'PPDA']
-            
-            # For at undgå at dividere PPDA med kampe igen, kan vi sende den separat eller håndtere det i plot-funktionen
-            # Her dividerer vi alt undtagen PPDA:
-            fig_def = go.Figure()
-            for name, stats in [(team1, t1_stats), (team2, t2_stats)]:
-                c = TEAM_COLORS.get(name, {"primary": "#808080", "secondary": "#000000"})
-                # Beregning specifikt for defensiv tab
-                y_def = [
-                    stats['CONCEDEDGOALS'] / stats['MATCHES'], 
-                    stats['XGSHOTAGAINST'] / stats['MATCHES'], 
-                    stats['PPDA'] # PPDA divideres IKKE
-                ]
-                text_def = [f"{y_def[0]:.2f}", f"{y_def[1]:.2f}", f"{y_def[2]:.2f}"]
-                
-                fig_def.add_trace(go.Bar(
-                    name=name, x=l_def, y=y_def, marker_color=c["primary"],
-                    marker_line_color=c["secondary"], marker_line_width=2,
-                    text=text_def, textposition='auto', showlegend=False
-                ))
-            # Genbrug layout logik fra din create_h2h_plot her eller kald den med en special case
-            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
-
-        with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[1]: create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål', 'Skud', 'xG'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
+            # Defensiv: Pr. kamp (PPDA håndteres automatisk som undtagelse i funktionen)
+            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], 
+                            ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], 
+                            t1_stats, t2_stats, team1, team2, per_match=True)
