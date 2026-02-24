@@ -138,3 +138,5 @@ def vis_side():
                 all_l = ['Pass %', 'Final 3rd %', 'Forward %']
                 table_data = [{"Metrik": l, team1: f"{t1_stats[m]:.1f}%", team2: f"{t2_stats[m]:.1f}%"} for m, l in zip(all_m, all_l)]
                 st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
+
+                st.write("Tilgængelige kolonner:", df.columns.tolist())
