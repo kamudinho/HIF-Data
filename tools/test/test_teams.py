@@ -33,7 +33,6 @@ def vis_side():
         st.session_state["data_package"] = get_data_package()
     
     dp = st.session_state["data_package"]
-    
     df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
     if df_raw is None or df_raw.empty:
@@ -65,7 +64,7 @@ def vis_side():
                 df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn(""), 
+                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"), 
                     "TEAMNAME": "HOLD", 
                     "MATCHES": "KAMPE", 
                     "TOTALPOINTS": "POINT",
@@ -79,14 +78,13 @@ def vis_side():
         
         with l_off:
             df_off = df_liga.copy()
-            # xG (Diff) nu som en hjælpe-kolonne i parentes ved siden af xG
             df_off['XG (DIFF)'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
             
             st.dataframe(
                 df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XG (DIFF)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
                 column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn(""), 
+                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"), 
                     "TEAMNAME": "HOLD", 
                     "GOALS": "MÅL",
                     "XG (DIFF)": "xG (DIFF)",
@@ -96,14 +94,13 @@ def vis_side():
             
         with l_def:
             df_def = df_liga.copy()
-            # xG MOD (Diff) for defensiven
             df_def['XG MOD (DIFF)'] = df_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({(r['CONCEDEDGOALS']-r['XGSHOTAGAINST']):+.2f})", axis=1)
             
             st.dataframe(
                 df_def[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XG MOD (DIFF)', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
                 use_container_width=True, hide_index=True, 
                 column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn(""),
+                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
                     "TEAMNAME": "HOLD", 
                     "CONCEDEDGOALS": "MÅL MOD",
                     "XG MOD (DIFF)": "xG MOD (DIFF)",
@@ -114,7 +111,7 @@ def vis_side():
     # --- SEKTION 2: HEAD-TO-HEAD ---
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
-        c_pop, c_t1, c_t2 = st.columns([0.1, 1, 1])
+        _, c_t1, c_t2 = st.columns([0.1, 1, 1])
         
         with c_t1: 
             team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
