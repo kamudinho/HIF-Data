@@ -158,5 +158,5 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[1]: create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål', 'Skud', 'xG''], t1_stats, t2_stats, team1, team2)
+        with h2h_tabs[1]: create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål', 'Skud', 'xG'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
