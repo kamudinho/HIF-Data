@@ -63,15 +63,20 @@ def vis_side():
         l_gen, l_off, l_def = st.tabs(["Stilling", "Offensivt", "Defensivt"])
         
         with l_gen:
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']
+            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'GOALS', 'CONCEDEDGOALS']
             st.dataframe(
                 df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={
                     "IMAGEDATAURL": st.column_config.ImageColumn(""), 
                     "TEAMNAME": "HOLD", 
-                    "MATCHES": "K", 
-                    "TOTALPOINTS": "P"
+                    "MATCHES": "KAMPE", 
+                    "TOTALPOINTS": "POINT",
+                    "TOTALWINS": "SEJRE",
+                    "TOTALLOSSES": "NEDERLAG",
+                    "TOTALDRAWS": "UAFGJORT",
+                    "GOALS": "MÅL FOR",
+                    "CONCEDEDGOALS": "MÅL MOD",
                 }
             )
         
