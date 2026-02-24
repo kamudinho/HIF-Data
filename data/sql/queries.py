@@ -108,14 +108,17 @@ def get_queries(comp_filter, season_filter):
                 t.XGSHOTAGAINST, 
                 t.SHOTS, 
                 t.PPDA,
+                -- Afleveringer Volumen
                 t.PASSES,
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
                 t.PROGRESSIVEPASSES,
+                -- Afleveringer Succes (Til vores % beregninger)
                 t.SUCCESSFULPASSES,
                 t.SUCCESSFULPASSESTOFINALTHIRD,
                 t.SUCCESSFULFORWARDPASSES,
                 t.SUCCESSFULPROGRESSIVEPASSES,
+                -- Stilling og Point
                 st.TOTALPOINTS,
                 st.TOTALPLAYED AS MATCHES,
                 st.TOTALWINS,
