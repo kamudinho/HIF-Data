@@ -5,20 +5,30 @@ import numpy as np
 from data.data_load import load_snowflake_query, get_data_package, get_team_color, fmt_val
 
 def vis_side():
-    # 1. CSS Styling (HIF-stil og rene linjer)
+    # 1. CSS Styling & Header (Matcher HIF standard)
     st.markdown("""
         <style>
             .stDataFrame {border: none;} 
             button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
-            .stat-header { font-weight: bold; font-size: 16px; text-align: center; color: #cc0000; margin-bottom: 5px; }
-            .label-header { font-size: 13px; color: #666; text-align: center; padding-top: 5px; }
-            .stPlotlyChart { margin-top: -20px; }
+            .custom-header {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 60px;
+                background-color: #cc0000;
+                color: white;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                font-weight: bold;
+                font-size: 24px;
+            }
         </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### NORDICBET LIGA: ANALYSE & H2H")
+    # Standardiseret Overskrift
+    st.markdown('<div class="custom-header">NORDICBET LIGA: ANALYSE & H2H</div>', unsafe_allow_html=True)
 
-    # 2. Data Loading & Rensning
+    # 2. Data Loading
     if "data_package" not in st.session_state:
         st.session_state["data_package"] = get_data_package()
     
@@ -27,20 +37,14 @@ def vis_side():
     # Hent data fra Snowflake
     df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
-    # SIKKERHEDSTJEK A: Er der data?
     if df_raw is None or df_raw.empty:
         st.error("❌ Ingen data fundet i Snowflake. Prøv at rydde cachen (tast 'C').")
         return
 
-    # SIKKERHEDSTJEK B: Rens kolonner (Tving store bogstaver og fjern mellemrum)
+    # Rens kolonner (Tving store bogstaver)
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
-    df = df.fillna(0) # Undgå beregningsfejl ved NULL-værdier
-
-    # SIKKERHEDSTJEK C: Findes 'PASSES'?
-    if 'PASSES' not in df.columns:
-        st.error(f"⚠️ Kritisk fejl: Kolonnen 'PASSES' mangler i datasættet. Fundne kolonner: {df.columns.tolist()}")
-        return
+    df = df.fillna(0)
 
     # Find nyeste sæson og filtrer
     try:
@@ -51,23 +55,12 @@ def vis_side():
         st.error(f"Fejl ved behandling af sæson-data: {e}")
         return
 
-    # --- BEREGNINGER AF AFLEVERINGSPROCENTER (%) ---
-    def safe_pct(success, total):
-        try:
-            return (float(success) / float(total) * 100) if float(total) > 0 else 0
-        except:
-            return 0
-
-    df_liga['PASS_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSES'], r['PASSES']), axis=1)
-    df_liga['FINAL_THIRD_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSESTOFINALTHIRD'], r['PASSESTOFINALTHIRD']), axis=1)
-    df_liga['FORWARD_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULFORWARDPASSES'], r['FORWARDPASSES']), axis=1)
-
     # 3. HOVED TABS
-    tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
+    tab_liga_hoved, tab_h2h_hoved = st.tabs(["📊 Ligaoversigt", "⚔️ Head-to-Head"])
 
     # --- SEKTION 1: LIGAOVERSIGT ---
     with tab_liga_hoved:
-        l_gen, l_off, l_def, l_pass = st.tabs(["Stilling", "Offensivt", "Defensivt", "Afleveringer"])
+        l_gen, l_off, l_def = st.tabs(["Stilling", "Offensivt", "Defensivt"])
         
         with l_gen:
             cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']
@@ -85,10 +78,11 @@ def vis_side():
         with l_off:
             df_off = df_liga.copy()
             df_off['xG (Diff)'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
+            # Bruger TOUCHINBOX da PASSES er fjernet fra SQL
             st.dataframe(
-                df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)']].sort_values('GOALS', ascending=False), 
+                df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "Felt-aktioner"}
             )
             
         with l_def:
@@ -98,22 +92,10 @@ def vis_side():
                 column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
             )
 
-        with l_pass:
-            df_p = df_liga.copy()
-            df_p['Passes (%)'] = df_p.apply(lambda r: f"{int(r['PASSES'])} ({r['PASS_PCT']:.1f}%)", axis=1)
-            df_p['Final 3rd (%)'] = df_p.apply(lambda r: f"{int(r['PASSESTOFINALTHIRD'])} ({r['FINAL_THIRD_PCT']:.1f}%)", axis=1)
-            df_p['Forward (%)'] = df_p.apply(lambda r: f"{int(r['FORWARDPASSES'])} ({r['FORWARD_PCT']:.1f}%)", axis=1)
-            
-            st.dataframe(
-                df_p[['IMAGEDATAURL', 'TEAMNAME', 'Passes (%)', 'Final 3rd (%)', 'Forward (%)']].sort_values('PASSES', ascending=False), 
-                use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
-            )
-
     # --- SEKTION 2: HEAD-TO-HEAD ---
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
-        c_pop, c_t1, c_t2 = st.columns([0.6, 1, 1])
+        c_pop, c_t1, c_t2 = st.columns([0.1, 1, 1]) # Flyttet popover lidt til siden
         
         with c_t1: 
             team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
@@ -123,7 +105,7 @@ def vis_side():
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
 
-        h2h_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv", "Afleveringer"])
+        h2h_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2):
             fig = go.Figure()
@@ -153,15 +135,9 @@ def vis_side():
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[1]: create_h2h_plot(['GOALS', 'XGSHOT', 'SHOTS'], ['Mål', 'xG', 'Skud'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[3]: create_h2h_plot(['PASSES', 'PASSESTOFINALTHIRD', 'FORWARDPASSES'], ['Alle', 'Final 3rd', 'Forward'], t1_stats, t2_stats, team1, team2)
-
-        with c_pop:
-            st.write(" ")
-            with st.popover("🔢 % Succes"):
-                all_m = ['PASS_PCT', 'FINAL_THIRD_PCT', 'FORWARD_PCT']
-                all_l = ['Pass %', 'Final 3rd %', 'Forward %']
-                table_data = [{"Metrik": l, team1: f"{t1_stats[m]:.1f}%", team2: f"{t2_stats[m]:.1f}%"} for m, l in zip(all_m, all_l)]
-                st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
+        with h2h_tabs[0]: 
+            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
+        with h2h_tabs[1]: 
+            create_h2h_plot(['GOALS', 'XGSHOT', 'TOUCHINBOX'], ['Mål', 'xG', 'Felt-aktioner'], t1_stats, t2_stats, team1, team2)
+        with h2h_tabs[2]: 
+            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
