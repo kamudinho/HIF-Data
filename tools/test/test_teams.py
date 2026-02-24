@@ -94,30 +94,33 @@ def vis_side():
         metrics = ['GOALS', 'XGSHOT', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
         labels = ['Mål', 'xG', 'Mål Imod', 'xG Imod', 'PPDA']
         
+        # 1. Popover med rå data (Placeret før grafen for nem adgang)
+        with st.popover("🔢 Vis detaljerede tal"):
+            st.markdown(f"**Sammenligning: {team1} vs {team2}**")
+            st.table(pd.DataFrame({
+                "Metrik": labels,
+                team1: [t1_stats[m] for m in metrics],
+                team2: [t2_stats[m] for m in metrics]
+            }))
+
+        # 2. Grafen
         fig = go.Figure()
         
-        # Hold 1 Bar
         fig.add_trace(go.Bar(
             name=team1, x=labels, y=[t1_stats[m] for m in metrics], 
             marker_color='#cc0000', offsetgroup=0,
             text=[t1_stats[m] for m in metrics], textposition='auto'
         ))
         
-        # Hold 2 Bar
         fig.add_trace(go.Bar(
             name=team2, x=labels, y=[t2_stats[m] for m in metrics], 
             marker_color='#333333', offsetgroup=1,
             text=[t2_stats[m] for m in metrics], textposition='auto'
         ))
 
-        # Vi tilføjer logoer som billeder i layoutet
-        # For at centrere dem i baren, bruger vi 'x' koordinater baseret på metrikkerne
+        # Logoer centreret over hver bar
         logo_images = []
-        
-        # Placering af logoer i toppen af hver bar-gruppe
-        # x=0 er midten af den første kategori ('Mål'), x=1 er midten af næste osv.
         for i in range(len(labels)):
-            # Logo for Team 1 (forskudt til venstre)
             if pd.notnull(t1_stats['IMAGEDATAURL']):
                 logo_images.append(dict(
                     source=t1_stats['IMAGEDATAURL'],
@@ -126,7 +129,6 @@ def vis_side():
                     sizex=0.08, sizey=0.08,
                     xanchor="center", yanchor="bottom"
                 ))
-            # Logo for Team 2 (forskudt til højre)
             if pd.notnull(t2_stats['IMAGEDATAURL']):
                 logo_images.append(dict(
                     source=t2_stats['IMAGEDATAURL'],
@@ -140,23 +142,10 @@ def vis_side():
             images=logo_images,
             barmode='group',
             height=500,
-            margin=dict(t=100, b=20), # Plads til logoer i toppen
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.15,
-                xanchor="center",
-                x=0.5
-            ),
+            margin=dict(t=100, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="center", x=0.5),
             xaxis=dict(tickfont=dict(size=14, color='black')),
             yaxis=dict(showgrid=True, gridcolor='lightgray')
         )
 
         st.plotly_chart(fig, use_container_width=True)
-
-        # Sammenligningstabel for præcision
-        st.table(pd.DataFrame({
-            "Metrik": labels,
-            team1: [t1_stats[m] for m in metrics],
-            team2: [t2_stats[m] for m in metrics]
-        }))
