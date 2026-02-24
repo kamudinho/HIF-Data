@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-import os
-from data.data_load import load_snowflake_query, get_data_package, fmt_val
+from data.data_load import load_snowflake_query
 
 # --- 1. DEN ULTIMATIVE VASKEMASKINE ---
 def super_clean(text):
@@ -20,15 +19,11 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 2. CSS FOR LAYOUT & CENTRERING
+    # 2. CSS FOR DESIGN & CENTRERING
     st.markdown("""
         <style>
             .stDataFrame { border: none; }
-            [data-testid="stHeaderTableCell"] {
-                text-align: center !important;
-                display: flex;
-                justify-content: center;
-            }
+            [data-testid="stHeaderTableCell"] { text-align: center !important; display: flex; justify-content: center; }
             button[data-baseweb="tab"] { font-size: 14px; }
             button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000; border-bottom-color: #cc0000; }
             div[data-testid="stRadio"] > div { gap: 15px; padding-top: 5px; }
@@ -42,41 +37,53 @@ def vis_side():
 
     st.markdown('<div class="custom-header"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
     
-    # --- 3. DATA LOADING FRA SQL ---
+    # --- 3. DATA LOADING FRA SNOWFLAKE ---
     if "data_package" not in st.session_state:
-        st.session_state["data_package"] = get_data_package()
+        st.error("Data package ikke fundet. Genindlæs siden.")
+        return
     
     dp = st.session_state["data_package"]
-    # Vi henter 'player_stats_full' (eller hvad din query hedder i queries.py)
-    df_raw = load_snowflake_query("player_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
+    
+    # Vi bruger query 'playerstats' som er defineret i din queries.py
+    with st.spinner("Henter spillerdata..."):
+        df_raw = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
 
     if df_raw is None or df_raw.empty:
-        st.error("❌ Ingen spillerdata fundet i Snowflake.")
+        st.warning("⚠️ Ingen data fundet i Snowflake for de valgte filtre.")
         return
 
-    # Tving alle kolonner til UPPERCASE med det samme for at undgå index-fejl
+    # Klargøring af DataFrame
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
-    df = df.fillna(0)
-
-    # Rens navne og tekst
+    
+    # Vask tekst og navne
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype(str).apply(super_clean)
 
-    # Saml Navn og tjek for Billed-kolonne
-    df['NAVN'] = (df['FIRSTNAME'].replace('0', '') + ' ' + df['LASTNAME'].replace('0', '')).str.strip()
+    # Navn og Billede check
+    # Hvis 'IMAGEURLDATA' ikke findes i SQL, opretter vi den som tom for at undgå fejl
     if 'IMAGEURLDATA' not in df.columns:
-        df['IMAGEURLDATA'] = None
+        df['IMAGEURLDATA'] = ""
+    
+    # Sammensæt navn hvis FIRSTNAME/LASTNAME findes
+    if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
+        df['NAVN'] = (df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')).str.strip()
+    elif 'PLAYERNAME' in df.columns:
+        df['NAVN'] = df['PLAYERNAME']
+    else:
+        df['NAVN'] = "Ukendt Spiller"
 
-    # --- 4. NAVIGATION ---
+    # --- 4. FILTRE & TABS ---
     nav_col1, nav_col2 = st.columns([4, 2])
     pos_labels = ["ALLE", "GKP", "DEF", "MID", "FWD"]
+    
     with nav_col1:
         tabs_pos = st.tabs(pos_labels)
     with nav_col2:
         visningstype = st.radio("VISNING", ["TOTAL", "PR. 90"], horizontal=True, label_visibility="collapsed")
 
+    # Statistik grupper (Matcher kolonnenavne fra din Snowflake tabel)
     stats_groups = {
         "GENERELT": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
         "OFFENSIVT": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -84,48 +91,53 @@ def vis_side():
         "PASNINGER": ['PASSES', 'SUCCESSFULPASSES', 'CROSSES', 'PROGRESSIVEPASSES']
     }
 
-    # --- 5. TABS LOGIK ---
     for idx, p_tab in enumerate(tabs_pos):
         with p_tab:
             valgt_pos = pos_labels[idx]
             df_filt = df.copy()
+            
             if valgt_pos != "ALLE":
-                # Vi antager kolonnen hedder ROLECODE3 (husk den er upper nu)
-                df_filt = df_filt[df_filt['ROLECODE3'] == valgt_pos]
+                # Tjekker om ROLECODE3 eller POSITION findes
+                pos_col = 'ROLECODE3' if 'ROLECODE3' in df.columns else 'POSITION'
+                if pos_col in df_filt.columns:
+                    df_filt = df_filt[df_filt[pos_col] == valgt_pos]
 
             stat_tabs = st.tabs(list(stats_groups.keys()))
             
             for s_idx, (group_name, cols) in enumerate(stats_groups.items()):
                 with stat_tabs[s_idx]:
-                    # Vælg de kolonner der faktisk findes i SQL-trækket
-                    available_cols = [c for c in cols if c in df_filt.columns]
-                    display_cols = ['IMAGEURLDATA', 'NAVN', 'ROLECODE3', 'MINUTESONFIELD'] + available_cols
+                    # Find de kolonner der rent faktisk er med i queryen
+                    available_stats = [c for c in cols if c in df_filt.columns]
+                    display_cols = ['IMAGEURLDATA', 'NAVN', 'MINUTESONFIELD'] + available_stats
+                    
                     df_tab = df_filt[display_cols].copy()
+
+                    # Konvertering til tal
+                    df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
+                    for c in available_stats:
+                        df_tab[c] = pd.to_numeric(df_tab[c], errors='coerce').fillna(0)
 
                     # Beregning af Pr. 90
                     if visningstype == "PR. 90":
-                        for c in available_cols:
+                        for c in available_stats:
                             mask = df_tab['MINUTESONFIELD'] > 0
-                            df_tab.loc[mask, c] = (pd.to_numeric(df_tab.loc[mask, c]) / pd.to_numeric(df_tab.loc[mask, 'MINUTESONFIELD']) * 90)
+                            df_tab.loc[mask, c] = (df_tab.loc[mask, c] / df_tab.loc[mask, 'MINUTESONFIELD'] * 90)
                             df_tab[c] = df_tab[c].round(2)
 
-                    # Tabel højde og visning
+                    # --- TABEL VISNING ---
                     df_height = (len(df_tab) + 1) * 35 + 50
                     if df_height < 150: df_height = 150
+                    if df_height > 800: df_height = 800 # Valgfri: Sæt en max højde hvis listen er enorm
 
                     st.dataframe(
-                        df_tab.sort_values(by=available_cols[0] if available_cols else 'NAVN', ascending=False),
+                        df_tab.sort_values(by=available_stats[0] if available_stats else 'NAVN', ascending=False),
                         use_container_width=True,
                         hide_index=True,
                         height=df_height,
                         column_config={
                             "IMAGEURLDATA": st.column_config.ImageColumn("", width="small"),
                             "NAVN": st.column_config.TextColumn("SPILLER"),
-                            "ROLECODE3": st.column_config.TextColumn("POS"),
                             "MINUTESONFIELD": st.column_config.NumberColumn("MIN", format="%d"),
-                            **{c: st.column_config.NumberColumn(c, format="%.2f" if visningstype == "PR. 90" else "%d") for c in available_cols}
+                            **{c: st.column_config.NumberColumn(c, format="%.2f" if visningstype == "PR. 90" else "%d") for c in available_stats}
                         }
                     )
-
-if __name__ == "__main__":
-    vis_side()
