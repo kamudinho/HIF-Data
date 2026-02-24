@@ -25,7 +25,6 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
     
-    # Standardiseret Overskrift
     st.markdown('<div class="custom-header">NORDICBET LIGA: ANALYSE & H2H</div>', unsafe_allow_html=True)
 
     # 2. Data Loading
@@ -33,20 +32,16 @@ def vis_side():
         st.session_state["data_package"] = get_data_package()
     
     dp = st.session_state["data_package"]
-    
-    # Hent data fra Snowflake
     df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
     if df_raw is None or df_raw.empty:
         st.error("❌ Ingen data fundet i Snowflake. Prøv at rydde cachen (tast 'C').")
         return
 
-    # Rens kolonner (Tving store bogstaver)
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     df = df.fillna(0)
 
-    # Find nyeste sæson og filtrer
     try:
         saesoner = sorted(df['SEASONNAME'].unique().tolist())
         nyeste_saeson = saesoner[-1]
@@ -58,55 +53,64 @@ def vis_side():
     # 3. HOVED TABS
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
-    # --- SEKTION 1: LIGAOVERSIGT ---
     with tab_liga_hoved:
         l_gen, l_off, l_def = st.tabs(["Stilling", "Offensivt", "Defensivt"])
         
         with l_gen:
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'GOALS', 'CONCEDEDGOALS']
+            # Tilføjer kombineret Mål-kolonne til oversigten
+            df_gen = df_liga.copy()
+            df_gen['MÅL (DIF)'] = df_gen.apply(lambda r: f"{int(r['GOALS'])}-{int(r['CONCEDEDGOALS'])} ({int(r['GOALS']-r['CONCEDEDGOALS']):+})", axis=1)
+            
+            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'MÅL (DIF)']
             st.dataframe(
-                df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
+                df_gen[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={
                     "IMAGEDATAURL": st.column_config.ImageColumn(""), 
                     "TEAMNAME": "HOLD", 
-                    "MATCHES": "KAMPE", 
-                    "TOTALPOINTS": "POINT",
-                    "TOTALWINS": "SEJR",
-                    "TOTALLOSSES": "NEDERLAG",
-                    "TOTALDRAWS": "UAFGJORT",
-                    "GOALS": "MÅL FOR",
-                    "CONCEDEDGOALS": "MÅL MOD",
+                    "MATCHES": "K", 
+                    "TOTALPOINTS": "P",
+                    "TOTALWINS": "V",
+                    "TOTALDRAWS": "U",
+                    "TOTALLOSSES": "T"
                 }
             )
         
         with l_off:
             df_off = df_liga.copy()
-            df_off['xG (Diff)'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
-            # Bruger TOUCHINBOX da PASSES er fjernet fra SQL
+            # Mål og xG kombineret med Difference i parentes
+            df_off['MÅL (xG DIFF)'] = df_off.apply(lambda r: f"{int(r['GOALS'])} ({ (r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
+            
             st.dataframe(
-                df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
+                df_off[['IMAGEDATAURL', 'TEAMNAME', 'MÅL (xG DIFF)', 'XGSHOT', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "BERØRINGER I FELT", 
+                column_config={
+                    "IMAGEDATAURL": st.column_config.ImageColumn(""), 
+                    "TOUCHINBOX": "FELT-AKTIONER", 
                     "TEAMNAME": "HOLD", 
-                    "GOALS": "MÅL",
-                    "XGSHOT": "xG",}
+                    "XGSHOT": "TOTAL xG"
+                }
             )
             
         with l_def:
+            df_def = df_liga.copy()
+            # Mål imod og xG imod difference
+            df_def['MÅL IMOD (xG DIFF)'] = df_def.apply(lambda r: f"{int(r['CONCEDEDGOALS'])} ({ (r['CONCEDEDGOALS']-r['XGSHOTAGAINST']):+.2f})", axis=1)
+            
             st.dataframe(
-                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
+                df_def[['IMAGEDATAURL', 'TEAMNAME', 'MÅL IMOD (xG DIFF)', 'XGSHOTAGAINST', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""),
+                column_config={
+                    "IMAGEDATAURL": st.column_config.ImageColumn(""),
                     "TEAMNAME": "HOLD", 
-                    "CONCEDEDGOALS": "MÅL MOD",
-                    "XGSHOTAGAINST": "xG MOD",}
+                    "XGSHOTAGAINST": "xG MOD",
+                }
             )
 
     # --- SEKTION 2: HEAD-TO-HEAD ---
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
-        c_pop, c_t1, c_t2 = st.columns([0.1, 1, 1]) # Flyttet popover lidt til siden
+        _, c_t1, c_t2 = st.columns([0.1, 1, 1])
         
         with c_t1: 
             team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
