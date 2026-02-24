@@ -56,7 +56,7 @@ def vis_side():
         return
 
     # 3. HOVED TABS
-    tab_liga_hoved, tab_h2h_hoved = st.tabs(["📊 Ligaoversigt", "⚔️ Head-to-Head"])
+    tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
     # --- SEKTION 1: LIGAOVERSIGT ---
     with tab_liga_hoved:
@@ -82,7 +82,7 @@ def vis_side():
             st.dataframe(
                 df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'xG (Diff)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "Felt-aktioner"}
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "BERØRINGER I FELT"}
             )
             
         with l_def:
