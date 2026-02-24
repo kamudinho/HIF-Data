@@ -9,8 +9,8 @@ try:
     from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
 except ImportError:
     SEASONNAME = "2025/2026"
-    COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
-    TEAM_WYID = 38331
+    COMPETITION_WYID = (328, 329, 43319, 331, 1305, 335)
+    TEAM_WYID = 7490
 
 def _get_snowflake_conn():
     try:
