@@ -142,10 +142,15 @@ def vis_side():
                         ))
             
             fig.update_layout(
-                images=logo_imgs, barmode='group', height=400, 
+                images=logo_imgs, 
+                barmode='group', 
+                bargap=0.35,  # <-- Dette skaber mellemrum mellem de forskellige metrikker
+                barwidth=None, # Lader Plotly styre bredden automatisk baseret på gap
+                height=400, 
                 margin=dict(t=70, b=20, l=10, r=10),
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(showgrid=False), yaxis=dict(showgrid=False, showticklabels=False)
+                xaxis=dict(showgrid=False), 
+                yaxis=dict(showgrid=False, showticklabels=False)
             )
             st.plotly_chart(fig, use_container_width=True)
 
