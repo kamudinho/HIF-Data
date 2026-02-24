@@ -90,8 +90,7 @@ def vis_side():
         with c_t2:
             team2 = st.selectbox("Hold 2", [h for h in hold_navne if h != team1], index=0)
 
-        t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
-        t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
+        
 
         # H2H Sub-tabs
         h2h_gen, h2h_off, h2h_def = st.tabs(["Overblik", "Offensiv", "Defensiv"])
