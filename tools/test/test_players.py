@@ -4,19 +4,23 @@ import os
 
 # --- HJÆLPEFUNKTIONER ---
 def super_clean(text):
-    """Vaskemaskine til europæiske tegn (Delač, Ásgeir, Yatéké, Björk, Jørgensen)"""
+    """Den ultimative vaskemaskine til islandske og europæiske tegn"""
     if not isinstance(text, str):
         return text
     
     rep = {
-        # Østeuropæiske
+        # Specifikke islandske fejl fra din CSV
+        "√ç": "Í",      # Í i Ísak
+        "√û": "Þ",      # Þ (Thorn) i Þorvaldsson
+        "√°": "á",      # á i Snær (hvis det driller)
+        "√¶": "æ",      # æ i Snær
+        
+        # Andre klassiske fejl
         "ƒç": "č", "ƒá": "ć", "≈°": "š", "≈æ": "ž",
-        # Danske tegn
-        "√¶": "æ", "√∏": "ø", "√•": "å",
+        "√∏": "ø", "√•": "å",
         "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å",
         "Ã¦": "æ", "Ã¸": "ø", "Ã¥": "å",
         "Ã†": "Æ", "Ã˜": "Ø", "Ã…": "Å",
-        # Islandske / Specialtegn
         "√Å": "Á", "√©": "é", "√∂": "ö", 
         "√º": "ü", "√ñ": "Ö",
         "Ã©": "é", "Ã¡": "Á", "Ã¶": "ö",
@@ -27,27 +31,47 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 1. CSS FOR LAYOUT & STYLING
+    # 1. CSS FOR LAYOUT, STYLING & CENTRERING
     st.markdown("""
         <style>
             .stDataFrame { border: none; }
-            /* Gør fanerne mindre og røde når valgt */
+            
+            /* Tvinger tekst i tabel-headers til at være centreret */
+            [data-testid="stHeaderTableCell"] {
+                text-align: center !important;
+                display: flex;
+                justify-content: center;
+            }
+
+            /* Faner styling */
             button[data-baseweb="tab"] { font-size: 14px; padding-left: 10px; padding-right: 10px; }
             button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000; border-bottom-color: #cc0000; }
             
-            /* Fjern overflødig padding i radio-knapper */
+            /* Radio-knapper horisontalt */
             div[data-testid="stRadio"] > div { gap: 15px; padding-top: 5px; }
             
-            /* Header styling */
+            /* Den røde BRANDING BOKS med H3 */
             .custom-header {
-                background-color: #cc0000; padding: 12px; border-radius: 4px; 
-                margin-bottom: 20px; text-align: center; color: white;
-                font-family: sans-serif; font-weight: bold; text-transform: uppercase;
+                background-color: #cc0000; 
+                padding: 15px; 
+                border-radius: 4px; 
+                margin-bottom: 20px; 
+                text-align: center; 
+                color: white;
+            }
+            .custom-header h3 {
+                margin: 0 !important;
+                color: white !important;
+                font-family: sans-serif;
+                font-weight: bold;
+                text-transform: uppercase;
+                font-size: 1.2rem;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="custom-header">TEST: SPILLERSTATISTIK</div>', unsafe_allow_html=True)
+    # Genindsat H3 i den røde boks
+    st.markdown('<div class="custom-header"><h3>TEST: SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
     
     csv_path = "data/testdata/players.csv"
     
@@ -62,7 +86,7 @@ def vis_side():
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).apply(super_clean)
         
-        # Opret Navn-kolonne
+        # Opret Navn-kolonne (først i rækken)
         df['NAVN'] = (df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')).str.strip()
         
         # --- NAVIGATION: POSITIONS-TABS OG DATATYPE PÅ SAMME LINJE ---
@@ -71,11 +95,9 @@ def vis_side():
         pos_labels = ["ALLE", "GKP", "DEF", "MID", "FWD"]
         
         with nav_col1:
-            # Hovedtabs for positioner
             tabs_pos = st.tabs(pos_labels)
             
         with nav_col2:
-            # Datatype-vælger placeret til højre for tabs
             visningstype = st.radio("VISNING", ["TOTAL", "PR. 90"], horizontal=True, label_visibility="collapsed")
 
         # Gruppering af statistikker
@@ -101,7 +123,7 @@ def vis_side():
                 
                 for s_idx, (group_name, cols) in enumerate(stats_groups.items()):
                     with stat_tabs[s_idx]:
-                        # Udvælg og rens data til visning
+                        # Udvælg data
                         display_cols = ['NAVN', 'ROLECODE3', 'MINUTESONFIELD'] + [c for c in cols if c in df_filt.columns]
                         df_tab = df_filt[display_cols].copy()
 
@@ -125,9 +147,8 @@ def vis_side():
                         df_tab.columns = [str(c).upper() for c in df_tab.columns]
                         upper_cols = [c.upper() for c in cols]
 
-                        # 2. Beregn højde for at fjerne scroll (35px pr række + 40px til header)
-                        df_height = (len(df_tab) + 1) * 35 + 40
-                        # Sæt en fornuftig minimumshøjde
+                        # 2. Beregn højde for at fjerne scroll
+                        df_height = (len(df_tab) + 1) * 35 + 45
                         if df_height < 150: df_height = 150
 
                         # 3. Vis tabellen
