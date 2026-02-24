@@ -8,17 +8,17 @@ from data.sql.queries import get_queries
 # Her styres alle holdfarver centralt
 TEAM_COLORS = {
     "Hvidovre": "#cc0000",      # Rød
+    "AaB": "#cc0000",           # Rød/Hvid
+    "AC Horsens": "#ffff00",    # Gul
     "B.93": "#0000ff",          # Blå
     "FC Roskilde": "#add8e6",   # Lyseblå
     "Esbjerg": "#003399",       # Blå/Hvid
-    "OB": "#003366",            # Mørkeblå
-    "AC Horsens": "#ffff00",    # Gul
-    "FC Fredericia": "#cc0000", # Rød
     "Vendsyssel FF": "#ffffff", # Hvid
     "Kolding IF": "#ffffff",    # Hvid
     "Hobro IK": "#ffff00",      # Gul
     "HB Køge": "#000000",       # Sort
-    "Århus Fremad": "#000000"   # Sort
+    "Århus Fremad": "#000000",  # Sort
+    "Hillerød": "#ff6600"       # Orange (hvis de er med i dit datasæt)
 }
 
 try:
