@@ -26,6 +26,9 @@ st.markdown("""
             border-radius: 8px;
             margin-bottom: 20px;
         }
+        /* Styling af tabs så de matcher dit røde HIF tema */
+        button[data-baseweb="tab"] { font-size: 14px; }
+        button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000 !important; border-bottom-color: #cc0000 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -62,30 +65,23 @@ dp = st.session_state["data_package"]
 with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
     
-    # 1. Alle hovedområder (Rækkefølgen i menuen)
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
-    
-    # 2. Hent brugerens restriktioner (hvis ingen findes, er listen tom = alt synligt)
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = user_info.get("restricted", [])
-    
-    # 3. Byg menuen ved at fjerne de låste områder
     synlige_options = [o for o in alle_omraader if o not in restriktioner]
     
-    # 4. Hovedmenu (Uden ikoner, så de rene pile/linjer bevares)
     hoved_omraade = option_menu(
         None, 
         options=synlige_options, 
         default_index=0,
         styles={
             "nav-link-selected": {"background-color": "#0056a3"},
-            "nav-link": {"font-weight": "400"} # Holder teksten ren
+            "nav-link": {"font-weight": "400"}
         }
     )
     
     st.markdown("---")
     
-    # 5. Undermenuer (Præcis som du har dem nu)
     sel = ""
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
@@ -94,8 +90,8 @@ with st.sidebar:
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        # Opdateret med dine nye test-sider
-        sel = option_menu(None, options=["Test Kampe", "Test Spillerstats", "Test Holdoversigt"], 
+        # Disse navne matcher nu de nye tabs-baserede analyseværktøjer
+        sel = option_menu(None, options=["Holdoversigt", "Spillerstats", "Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
@@ -108,20 +104,6 @@ with st.sidebar:
 if not sel: 
     sel = "Oversigt"
 
-# Funktion til sikker hentning af Snowflake data uden at crashe siden
-def safe_load_stats():
-    if dp.get("playerstats") is None:
-        try:
-            # Vi tjekker om vi overhovedet har filtrene klar før vi kalder Snowflake
-            comp_f = dp.get("comp_filter", [])
-            seas_f = dp.get("season_filter", [])
-            
-            with st.spinner("Henter live stats fra Snowflake..."):
-                dp["playerstats"] = load_snowflake_query("playerstats", comp_f, seas_f)
-        except Exception as e:
-            st.warning("⚠️ Snowflake stats kunne ikke hentes. Viser kun lokale data (CSV).")
-            dp["playerstats"] = pd.DataFrame() # Fortsæt med tom dataframe
-
 try:
     # --- TRUPPEN ---
     if hoved_omraade == "TRUPPEN":
@@ -132,42 +114,37 @@ try:
             import tools.squad as sq
             sq.vis_side(dp["players"])
         elif sel == "Spillerstats":
-            safe_load_stats()
             import tools.stats as st_tool
-            st_tool.vis_side(dp["players"], dp["playerstats"])
+            st_tool.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
         elif sel == "Top 5":
-            safe_load_stats()
             import tools.top5 as t5
-            t5.vis_side(dp["players"], dp["playerstats"])
+            t5.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
 
     # --- HIF ANALYSE ---
     elif hoved_omraade == "HIF ANALYSE":
-        # Her kan du tilføje safe_load_stats() hvis de skal bruge Snowflake-data
         if sel == "Afslutninger":
             import tools.player_shots as ps
-            ps.vis_side(dp) # Linker til din analyse-fil
+            ps.vis_side(dp)
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
-            ma.vis_side(dp) # Linker til din modstander-fil
+            ma.vis_side(dp)
         elif sel == "Scatterplots":
-            safe_load_stats()
             import tools.scatters as sc
-            sc.vis_side(dp["playerstats"])
+            sc.vis_side(load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
 
     # --- BETINIA LIGAEN ---
     elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Test Kampe":
-            import tools.test.test_matches as tm
-            # Vi antager her at du har en funktion i filen der hedder vis_side()
-            tm.vis_side() 
+        if sel == "Holdoversigt":
+            import tools.test.test_teams as tt
+            tt.vis_side() # Kalder den nye version med interne tabs
             
-        elif sel == "Test Spillerstats":
+        elif sel == "Spillerstats":
             import tools.test.test_players as tp
             tp.vis_side()
             
-        elif sel == "Test Holdoversigt":
-            import tools.test.test_teams as tt
-            tt.vis_side()
+        elif sel == "Kampe":
+            import tools.test.test_matches as tm
+            tm.vis_side()
 
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
@@ -175,13 +152,11 @@ try:
             import tools.scout_input as si
             si.vis_side(dp)
         elif sel == "Database":
-            safe_load_stats()
             import tools.scout_db as sdb
-            sdb.vis_side(dp["scouting"], dp["players"], dp["playerstats"], None)
+            sdb.vis_side(dp["scouting"], dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), None)
         elif sel == "Sammenligning":
-            safe_load_stats()
             import tools.comparison as comp
-            comp.vis_side(dp["players"], dp["playerstats"], dp["scouting"], None, dp["season_filter"])
+            comp.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), dp["scouting"], None, dp["season_filter"])
 
     # --- ADMIN ---
     elif hoved_omraade == "ADMIN":
@@ -197,4 +172,3 @@ try:
 
 except Exception as e:
     st.error(f"⚠️ Systemfejl på siden '{sel}': {e}")
-    st.info("Dette skyldes ofte manglende filer i 'tools' mappen eller Snowflake-rettigheder.")
