@@ -99,27 +99,32 @@ def get_queries(comp_filter, season_filter):
         """,
         "team_stats_full": f"""
             SELECT DISTINCT 
-                tm.teamname,
-                t.*,
-                s.seasonname,
-                tm.imagedataurl,
-                st.totalpoints,
-                st.totalplayed,
-                st.totalwins,
-                st.totaldraws,
-                st.totallosses,
-                st.totalgoalsfor,
-                st.totalgoalsagainst,
-                t.team_wyid
-            FROM WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
-            JOIN WYSCOUT_seasons AS s
-                ON t.season_wyid = s.season_wyid
-            JOIN WYSCOUT_teams AS tm
-                ON t.team_wyid = tm.team_wyid
-            JOIN WYSCOUT_seasons_standings AS st
-                ON t.team_wyid = st.team_wyid
-                AND t.season_wyid = st.season_wyid  -- Sikrer, at du får data fra samme sæson 
-            WHERE ts.COMPETITION_WYID IN {comp_filter}
+                tm.TEAMNAME,
+                s.SEASONNAME,
+                tm.IMAGEDATAURL,
+                t.GOALS, 
+                t.XGSHOT, 
+                t.CONCEDEDGOALS, 
+                t.XGSHOTAGAINST, 
+                t.SHOTS, 
+                t.PPDA,
+                st.TOTALPOINTS,
+                st.TOTALPLAYED AS MATCHES,
+                st.TOTALWINS,
+                st.TOTALDRAWS,
+                st.TOTALLOSSES,
+                st.TOTALGOALSFOR,
+                st.TOTALGOALSAGAINST,
+                t.TEAM_WYID
+            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+            JOIN {DB}.WYSCOUT_SEASONS AS s
+                ON t.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_TEAMS AS tm
+                ON t.TEAM_WYID = tm.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st
+                ON t.TEAM_WYID = st.TEAM_WYID
+                AND t.SEASON_WYID = st.SEASON_WYID 
+            WHERE t.COMPETITION_WYID IN {comp_filter}
             AND s.SEASONNAME {season_filter}
         """
     }
