@@ -4,7 +4,23 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
 
-# --- 0. KONFIGURATION ---
+# --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
+# Her styres alle holdfarver centralt
+TEAM_COLORS = {
+    "Hvidovre": "#cc0000",      # Rød
+    "B.93": "#0000ff",          # Blå
+    "FC Roskilde": "#add8e6",   # Lyseblå
+    "Esbjerg": "#003399",       # Blå/Hvid
+    "OB": "#003366",            # Mørkeblå
+    "AC Horsens": "#ffff00",    # Gul
+    "FC Fredericia": "#cc0000", # Rød
+    "Vendsyssel FF": "#ffffff", # Hvid
+    "Kolding IF": "#ffffff",    # Hvid
+    "Hobro IK": "#ffff00",      # Gul
+    "HB Køge": "#000000",       # Sort
+    "Århus Fremad": "#000000"   # Sort
+}
+
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
 except ImportError:
@@ -12,34 +28,51 @@ except ImportError:
     COMPETITION_WYID = (328, 329, 43319, 331, 1305, 335)
     TEAM_WYID = 7490
 
+# --- 2. HJÆLPEFUNKTIONER ---
+def get_team_color(name):
+    """Henter holdfarve baseret på navn. Standard er mørkegrå."""
+    if not name: return "#333333"
+    for key, color in TEAM_COLORS.items():
+        if key.lower() in name.lower():
+            return color
+    return "#333333"
+
+def fmt_val(v):
+    """Formaterer tal: 0 decimaler hvis heltal, ellers 2 decimaler."""
+    try:
+        val = float(v)
+        if val == 0 or val.is_integer():
+            return f"{int(val)}"
+        return f"{val:.2f}"
+    except:
+        return str(v)
+
+# --- 3. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
         
-        # 1. Hent og rens den private nøgle
+        # Hent og rens den private nøgle
         p_key_raw = s["private_key"]
-        
         if isinstance(p_key_raw, str):
-            # Fjerner usynlige tegn og håndterer escaped linjeskift
             p_key_pem = p_key_raw.strip().replace("\\n", "\n")
         else:
             p_key_pem = p_key_raw
 
-        # 2. Indlæs den ULÅSTE nøgle
+        # Indlæs den ULÅSTE nøgle
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode('utf-8'),
             password=None, 
             backend=default_backend()
         )
         
-        # 3. Eksporter til DER-format
+        # Eksporter til DER-format
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         
-        # 4. Etabler forbindelsen
         return st.connection(
             "snowflake", 
             type="snowflake", 
@@ -52,20 +85,18 @@ def _get_snowflake_conn():
             private_key=p_key_der
         )
     except Exception as e:
-        # Hvis du ser InvalidByte(0, 45) her, er der et mellemrum før din nøgle i secrets
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
+# --- 4. DATA LOADING FUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_hold_mapping():
     conn = _get_snowflake_conn()
     if not conn: return {}
     try:
-        # Vi tvinger den til at kigge i AXIS skemaet
         df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS")
         return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
     except Exception as e:
-        # Hvis denne fejler med "Object does not exist", har rollen ikke SELECT adgang til AXIS
         st.warning(f"Kunne ikke hente hold-mapping fra AXIS: {e}")
         return {}
 
@@ -95,6 +126,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
             if col in df.columns: df[col] = df[col].astype('float32')
     return df
 
+# --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
     gh_data = load_github_data()
     comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
