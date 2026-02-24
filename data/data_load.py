@@ -1,40 +1,84 @@
 import streamlit as st
-from data.data_load import load_snowflake_query, get_data_package
+import pandas as pd
+import plotly.graph_objects as go
+from data.data_load import load_snowflake_query, get_data_package, get_team_color, fmt_val
 
-def vis_hold_detaljer():
-    # 1. Hent data
-    dp = get_data_package()
-    comp_f = dp["comp_filter"]
-    seas_f = dp["season_filter"]
+def vis_side():
+    # 1. CSS Styling
+    st.markdown("""
+        <style>
+            .stDataFrame {border: none;} 
+            button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
+            .stat-header { font-weight: bold; font-size: 16px; text-align: center; color: #cc0000; margin-bottom: 5px; }
+            .label-header { font-size: 14px; color: #666; text-align: center; padding-top: 10px; }
+        </style>
+    """, unsafe_allow_html=True)
     
-    df = load_snowflake_query("team_stats_full", comp_f, seas_f)
+    st.markdown("### NORDICBET LIGA: ANALYSE")
+
+    # 2. Data Loading
+    if "data_package" not in st.session_state:
+        st.session_state["data_package"] = get_data_package()
     
-    if df.empty:
-        st.error("Kunne ikke hente data.")
+    dp = st.session_state["data_package"]
+    df = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter"))
+
+    if df is None or df.empty:
+        st.warning("Ingen data fundet.")
         return
 
-    st.title("Hold Analyse")
+    nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
+    df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
 
-    # 2. Opret tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Generelt", "⚽ Offensivt", "🛡️ Defensivt"])
+    # 3. OVERORDNEDE TABS
+    tabs_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
-    with tab1:
-        st.subheader("Overblik")
-        # Her viser du f.eks. Stilling, Kampe, Point
-        cols = ['TEAMNAME', 'MATCHES', 'TOTALPOINTS', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES']
-        st.dataframe(df[cols].sort_values("TOTALPOINTS", ascending=False), hide_index=True)
+    # --- LIGAOVERSIGT ---
+    with tabs_hoved[0]:
+        t_sub = st.tabs(["Generelt", "Offensivt", "Defensivt"])
+        
+        with t_sub[0]: # Generelt Oversigt
+            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
+        
+        with t_sub[1]: # Offensiv Oversigt
+            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT']].sort_values('GOALS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
+            
+        with t_sub[2]: # Defensiv Oversigt
+            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST']].sort_values('CONCEDEDGOALS', ascending=True), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
 
-    with tab2:
-        st.subheader("Offensive Stats")
-        # Her viser du Mål, xG, Skud
-        cols_off = ['TEAMNAME', 'GOALS', 'XGSHOT', 'SHOTS']
-        # Vi tilføjer en beregning af effektivitet
-        df_off = df.copy()
-        df_off['Mål pr. xG'] = (df_off['GOALS'] / df_off['XGSHOT']).round(2)
-        st.dataframe(df_off[['TEAMNAME', 'GOALS', 'XGSHOT', 'Mål pr. xG', 'SHOTS']], hide_index=True)
+    # --- HEAD-TO-HEAD MED EGNE TABS ---
+    with tabs_hoved[1]:
+        hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
+        
+        # Valg af hold i toppen
+        c1, c2 = st.columns(2)
+        with c1: team1 = st.selectbox("Vælg Hold 1", hold_navne, index=0)
+        with c2: team2 = st.selectbox("Vælg Hold 2", [h for h in hold_navne if h != team1], index=0)
 
-    with tab3:
-        st.subheader("Defensive Stats")
-        # Her viser du Mål Imod, xG Imod, PPDA
-        cols_def = ['TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
-        st.dataframe(df[cols_def].sort_values("CONCEDEDGOALS", ascending=True), hide_index=True)
+        t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
+        t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
+
+        # Head-to-Head Undersider (Tabs)
+        h2h_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
+
+        def create_h2h_plot(metrics, labels, t1_data, t2_data, t1_name, t2_name):
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name=t1_name, x=labels, y=[t1_data[m] for m in metrics], marker_color=get_team_color(t1_name), text=[fmt_val(t1_data[m]) for m in metrics], textposition='auto'))
+            fig.add_trace(go.Bar(name=t2_name, x=labels, y=[t2_data[m] for m in metrics], marker_color=get_team_color(t2_name), text=[fmt_val(t2_data[m]) for m in metrics], textposition='auto'))
+            fig.update_layout(barmode='group', height=400, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='rgba(0,0,0,0)')
+            return fig
+
+        with h2h_tabs[0]: # H2H Generelt
+            m = ['MATCHES', 'TOTALWINS', 'TOTALPOINTS']
+            l = ['Kampe', 'Sejre', 'Point']
+            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
+
+        with h2h_tabs[1]: # H2H Offensivt
+            m = ['GOALS', 'XGSHOT', 'SHOTS']
+            l = ['Mål', 'xG', 'Skud']
+            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
+
+        with h2h_tabs[2]: # H2H Defensivt
+            m = ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
+            l = ['Mål Imod', 'xG Imod', 'PPDA']
+            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
