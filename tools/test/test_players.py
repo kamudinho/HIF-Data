@@ -19,16 +19,15 @@ def super_clean(text):
     return text
 
 def vis_side():
-    # 1. Hent dp fra session_state med det samme
+    # 1. Hent dp fra session_state
     if "data_package" in st.session_state:
         dp = st.session_state["data_package"]
     else:
-        # Hvis den mangler (f.eks. ved direkte refresh), prøv at genindlæse den
         from data.data_load import get_data_package
         st.session_state["data_package"] = get_data_package()
         dp = st.session_state["data_package"]
         
-    # 2. CSS FOR DESIGN & CENTRERING
+    # 2. CSS FOR DESIGN
     st.markdown("""
         <style>
             .stDataFrame { border: none; }
@@ -46,7 +45,7 @@ def vis_side():
 
     st.markdown('<div class="custom-header"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
     
-    # --- 3. DATA LOADING & NAVNE-FIX ---
+    # --- 3. DATA LOADING & ROBUST KOLONNE-TJEK ---
     df_raw = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
 
     if df_raw is None or df_raw.empty:
@@ -54,28 +53,27 @@ def vis_side():
         return
 
     df = df_raw.copy()
-    # Tvinger alt til store bogstaver og fjerner mellemrum
     df.columns = [str(c).strip().upper() for c in df.columns]
-    
-    # --- DEBUG: Fjern kommentar-tegnet herunder hvis du vil se kolonnenavne ---
-    # st.write(df.columns.tolist()) 
+
+    # --- FIX: Håndtering af billed-kolonne navn fra SQL ---
+    if 'IMAGEURLDATA' not in df.columns:
+        if 'IMAGEDATAURL' in df.columns:
+            df = df.rename(columns={'IMAGEDATAURL': 'IMAGEURLDATA'})
+        else:
+            df['IMAGEURLDATA'] = None
 
     # Robust navne-samler
     if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
-        # Fjerner '0' eller 'None' som ofte kommer fra SQL
         df['NAVN'] = (df['FIRSTNAME'].astype(str).replace(['0', 'nan', 'None'], '') + ' ' + 
                       df['LASTNAME'].astype(str).replace(['0', 'nan', 'None'], '')).str.strip()
     elif 'PLAYERNAME' in df.columns:
         df['NAVN'] = df['PLAYERNAME']
-    elif 'NAME' in df.columns:
-        df['NAVN'] = df['NAME']
     else:
-        # Hvis alt andet fejler, så brug den første tekst-kolonne vi finder
         df['NAVN'] = "Ukendt Spiller"
 
-    # Rens navnet for mærkelige tegn (Ísak Snær fix)
     df['NAVN'] = df['NAVN'].apply(super_clean)
-    # --- 4. FILTRE & TABS ---
+
+    # --- 4. NAVIGATION ---
     nav_col1, nav_col2 = st.columns([4, 2])
     pos_labels = ["ALLE", "GKP", "DEF", "MID", "FWD"]
     
@@ -84,7 +82,6 @@ def vis_side():
     with nav_col2:
         visningstype = st.radio("VISNING", ["TOTAL", "PR. 90"], horizontal=True, label_visibility="collapsed")
 
-    # Statistik grupper (Matcher kolonnenavne fra din Snowflake tabel)
     stats_groups = {
         "GENERELT": ['GOALS', 'ASSISTS', 'YELLOWCARDS', 'MATCHES'],
         "OFFENSIVT": ['SHOTS', 'SHOTSONTARGET', 'XGSHOT', 'DRIBBLES'],
@@ -98,7 +95,6 @@ def vis_side():
             df_filt = df.copy()
             
             if valgt_pos != "ALLE":
-                # Tjekker om ROLECODE3 eller POSITION findes
                 pos_col = 'ROLECODE3' if 'ROLECODE3' in df.columns else 'POSITION'
                 if pos_col in df_filt.columns:
                     df_filt = df_filt[df_filt[pos_col] == valgt_pos]
@@ -107,34 +103,34 @@ def vis_side():
             
             for s_idx, (group_name, cols) in enumerate(stats_groups.items()):
                 with stat_tabs[s_idx]:
-                    # Find de kolonner der rent faktisk er med i queryen
+                    # Filtrer kolonner der faktisk findes i DataFrame
                     available_stats = [c for c in cols if c in df_filt.columns]
-                    display_cols = ['IMAGEURLDATA', 'NAVN', 'MINUTESONFIELD'] + available_stats
                     
-                    df_tab = df_filt[display_cols].copy()
+                    # Sikkerhed: Vi vælger kun kolonner der findes
+                    display_cols = ['IMAGEURLDATA', 'NAVN', 'MINUTESONFIELD'] + available_stats
+                    existing_cols = [c for c in display_cols if c in df_filt.columns]
+                    
+                    df_tab = df_filt[existing_cols].copy()
 
                     # Konvertering til tal
-                    df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
+                    if 'MINUTESONFIELD' in df_tab.columns:
+                        df_tab['MINUTESONFIELD'] = pd.to_numeric(df_tab['MINUTESONFIELD'], errors='coerce').fillna(0)
+                    
                     for c in available_stats:
                         df_tab[c] = pd.to_numeric(df_tab[c], errors='coerce').fillna(0)
 
-                    # Beregning af Pr. 90
-                    if visningstype == "PR. 90":
-                        for c in available_stats:
+                        if visningstype == "PR. 90" and 'MINUTESONFIELD' in df_tab.columns:
                             mask = df_tab['MINUTESONFIELD'] > 0
                             df_tab.loc[mask, c] = (df_tab.loc[mask, c] / df_tab.loc[mask, 'MINUTESONFIELD'] * 90)
                             df_tab[c] = df_tab[c].round(2)
 
                     # --- TABEL VISNING ---
                     df_height = (len(df_tab) + 1) * 35 + 50
-                    if df_height < 150: df_height = 150
-                    if df_height > 800: df_height = 800 # Valgfri: Sæt en max højde hvis listen er enorm
-
                     st.dataframe(
                         df_tab.sort_values(by=available_stats[0] if available_stats else 'NAVN', ascending=False),
                         use_container_width=True,
                         hide_index=True,
-                        height=df_height,
+                        height=min(df_height, 800),
                         column_config={
                             "IMAGEURLDATA": st.column_config.ImageColumn("", width="small"),
                             "NAVN": st.column_config.TextColumn("SPILLER"),
