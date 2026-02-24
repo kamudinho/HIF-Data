@@ -24,8 +24,25 @@ def vis_side():
     # 1. CSS Styling & Header
     st.markdown("""
         <style>
+            /* Fjern kant på alle dataframes */
             .stDataFrame {border: none;} 
+            
+            /* Sørg for at fanerne har den rigtige farve */
             button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
+            
+            /* --- CENTRERING AF ALLE TABELLER --- */
+            /* Centrerer overskrifter (headers) */
+            [data-testid="stHeaderTableCell"] {
+                text-align: center !important;
+                display: flex;
+                justify-content: center;
+            }
+            
+            /* Centrerer indholdet i cellerne */
+            [data-testid="stTableTableCell"] {
+                text-align: center !important;
+            }
+
             .custom-header {
                 display: flex; align-items: center; justify-content: center; height: 60px;
                 background-color: #cc0000; color: white; border-radius: 8px;
