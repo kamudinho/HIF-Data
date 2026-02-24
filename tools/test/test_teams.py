@@ -90,7 +90,7 @@ def vis_side():
                 column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOUCHINBOX": "BERØRINGER I FELT", 
                     "TEAMNAME": "HOLD", 
                     "GOALS": "MÅL",
-                    "XGSHOT": "xG",
+                    "XGSHOT": "xG",}
             )
             
         with l_def:
