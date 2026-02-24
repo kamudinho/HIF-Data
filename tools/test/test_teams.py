@@ -41,9 +41,9 @@ def vis_side():
         
         with l_gen: # Den klassiske tabel
             st.dataframe(
-                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False),
+                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'GOALS', 'CONCEDEDGOALS']].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
-                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TEAMNAME": "HOLD", "MATCHES": "KAMPE", "TOTALPOINTS": "POINT", "TOTALLOSSES": "NEDERLAG", "TOTALWINS": "SEJRE", "TOTALDRAWS": "UAFGJORTE"}
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "GOALS": "MÅL", "CONCEDEDGOALS": "MÅL MOD", "TEAMNAME": "HOLD", "MATCHES": "KAMPE", "TOTALPOINTS": "POINT", "TOTALLOSSES": "NEDERLAG", "TOTALWINS": "SEJRE", "TOTALDRAWS": "UAFGJORTE"}
             )
         
         with l_off: # Offensiv med xG diff og gennemsnit
