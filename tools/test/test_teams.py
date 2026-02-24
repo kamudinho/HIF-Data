@@ -5,29 +5,29 @@ from data.data_load import load_snowflake_query
 def vis_side():
     # 1. Styling
     st.markdown("<style>.stDataFrame {border: none;} button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}</style>", unsafe_allow_html=True)
-    st.markdown("""<div class='custom-header'><h3>TEST: HOLDOVERSIGT (SNOWFLAKE LIVE)</h3></div>""", unsafe_allow_html=True)
+    st.markdown("""<div class='custom-header'><h3>NORDICBET LIGA: HOLDOVERSIGT</h3></div>""", unsafe_allow_html=True)
 
     # 2. Data Loading fra Snowflake
     dp = st.session_state.get("data_package", {})
-    comp_f = dp.get("comp_filter")
+    
+    # Vi overstyrer comp_filter her til kun at være (328) for 1. division
+    comp_f = "(328)" 
     seas_f = dp.get("season_filter")
 
-    with st.spinner("Henter holddata fra Snowflake..."):
+    with st.spinner("Henter live data for 1. division..."):
         df = load_snowflake_query("team_stats_full", comp_f, seas_f)
 
     if df.empty:
-        st.warning("Ingen holddata fundet i Snowflake for den valgte sæson.")
+        st.warning("Ingen holddata fundet for NordicBet Ligaen i den valgte sæson.")
         return
 
-    # 3. Filtre
+    # 3. Filtre (Sæson-vælger bevares, men hold-liste er nu kun 1. division)
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        ligaer = ["Alle"] + sorted(df['SEASONNAME'].unique().tolist())
-        valgt_liga = st.selectbox("Sæson / Liga", ligaer)
+        ligaer = sorted(df['SEASONNAME'].unique().tolist())
+        valgt_liga = st.selectbox("Sæson", ligaer, index=len(ligaer)-1)
     
-    df_liga = df.copy()
-    if valgt_liga != "Alle": 
-        df_liga = df_liga[df_liga['SEASONNAME'] == valgt_liga]
+    df_liga = df[df['SEASONNAME'] == valgt_liga]
 
     with col_f2:
         hold_liste = ["Alle"] + sorted(df_liga['TEAMNAME'].unique().tolist())
@@ -45,16 +45,14 @@ def vis_side():
         avg_x = df_liga['XGSHOT'].mean()
         avg_s = df_liga['SHOTS'].mean()
 
-        # Gennemsnit-række [Vægtning: 2, 1, 1, 1]
         st.write("") 
         c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-        with c1: st.caption(f"Gns. {valgt_liga}")
+        with c1: st.caption(f"Gns. Ligaen ({valgt_liga})")
         with c2: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_m:.1f}</b></p>", unsafe_allow_html=True)
         with c3: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_x:.2f}</b></p>", unsafe_allow_html=True)
         with c4: st.markdown(f"<p style='text-align:center;margin:0;'><b>{int(avg_s)}</b></p>", unsafe_allow_html=True)
 
         df_vis = df_filt.copy()
-        # Beregn Diff og formater til tekst for centrering
         df_vis['xG (Diff)'] = df_vis.apply(lambda r: f"{r['XGSHOT']:.2f} ({'+' if (r['GOALS']-r['XGSHOT']) > 0 else ''}{(r['GOALS']-r['XGSHOT']):.2f})", axis=1)
         df_vis['Mål'] = df_vis['GOALS'].astype(int).astype(str)
         df_vis['Skud'] = df_vis['SHOTS'].astype(int).astype(str)
@@ -79,7 +77,7 @@ def vis_side():
 
         st.write("")
         d1, d2, d3, d4 = st.columns([2, 1, 1, 1])
-        with d1: st.caption(f"Gns. {valgt_liga}")
+        with d1: st.caption(f"Gns. Ligaen ({valgt_liga})")
         with d2: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_im:.1f}</b></p>", unsafe_allow_html=True)
         with d3: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_xim:.2f}</b></p>", unsafe_allow_html=True)
         with d4: st.markdown(f"<p style='text-align:center;margin:0;'><b>{avg_p:.2f}</b></p>", unsafe_allow_html=True)
@@ -103,8 +101,10 @@ def vis_side():
 
     # --- STILLING ---
     with tabs[2]:
+        # Sorterer efter point for at vise en rigtig tabel
+        df_stilling = df_filt.sort_values(by='TOTALPOINTS', ascending=False)
         st.dataframe(
-            df_filt[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
+            df_stilling[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
             use_container_width=True, 
             hide_index=True
         )
