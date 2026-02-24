@@ -37,43 +37,35 @@ def vis_side():
 
     st.markdown('<div class="custom-header"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
     
-    # --- 3. DATA LOADING FRA SNOWFLAKE ---
-    if "data_package" not in st.session_state:
-        st.error("Data package ikke fundet. Genindlæs siden.")
-        return
-    
-    dp = st.session_state["data_package"]
-    
-    # Vi bruger query 'playerstats' som er defineret i din queries.py
-    with st.spinner("Henter spillerdata..."):
-        df_raw = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+    # --- 3. DATA LOADING & NAVNE-FIX ---
+    df_raw = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
 
     if df_raw is None or df_raw.empty:
-        st.warning("⚠️ Ingen data fundet i Snowflake for de valgte filtre.")
+        st.warning("⚠️ Ingen data fundet.")
         return
 
-    # Klargøring af DataFrame
     df = df_raw.copy()
+    # Tvinger alt til store bogstaver og fjerner mellemrum
     df.columns = [str(c).strip().upper() for c in df.columns]
     
-    # Vask tekst og navne
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            df[col] = df[col].astype(str).apply(super_clean)
+    # --- DEBUG: Fjern kommentar-tegnet herunder hvis du vil se kolonnenavne ---
+    # st.write(df.columns.tolist()) 
 
-    # Navn og Billede check
-    # Hvis 'IMAGEURLDATA' ikke findes i SQL, opretter vi den som tom for at undgå fejl
-    if 'IMAGEURLDATA' not in df.columns:
-        df['IMAGEURLDATA'] = ""
-    
-    # Sammensæt navn hvis FIRSTNAME/LASTNAME findes
+    # Robust navne-samler
     if 'FIRSTNAME' in df.columns and 'LASTNAME' in df.columns:
-        df['NAVN'] = (df['FIRSTNAME'].replace('nan', '') + ' ' + df['LASTNAME'].replace('nan', '')).str.strip()
+        # Fjerner '0' eller 'None' som ofte kommer fra SQL
+        df['NAVN'] = (df['FIRSTNAME'].astype(str).replace(['0', 'nan', 'None'], '') + ' ' + 
+                      df['LASTNAME'].astype(str).replace(['0', 'nan', 'None'], '')).str.strip()
     elif 'PLAYERNAME' in df.columns:
         df['NAVN'] = df['PLAYERNAME']
+    elif 'NAME' in df.columns:
+        df['NAVN'] = df['NAME']
     else:
+        # Hvis alt andet fejler, så brug den første tekst-kolonne vi finder
         df['NAVN'] = "Ukendt Spiller"
 
+    # Rens navnet for mærkelige tegn (Ísak Snær fix)
+    df['NAVN'] = df['NAVN'].apply(super_clean)
     # --- 4. FILTRE & TABS ---
     nav_col1, nav_col2 = st.columns([4, 2])
     pos_labels = ["ALLE", "GKP", "DEF", "MID", "FWD"]
