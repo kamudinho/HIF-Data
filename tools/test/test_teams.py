@@ -61,6 +61,7 @@ def vis_side():
             df_vis[['TEAMNAME', 'Mål', 'xG (Diff)', 'Skud']],
             use_container_width=True,
             hide_index=True,
+            height=455,  
             column_config={
                 "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
                 "Mål": st.column_config.TextColumn("Mål", width="small"),
@@ -91,6 +92,7 @@ def vis_side():
             df_vis_def[['TEAMNAME', 'Mål Imod', 'xG Imod (Diff)', 'PPDA_STR']],
             use_container_width=True,
             hide_index=True,
+            height=455,  
             column_config={
                 "TEAMNAME": "Hold",
                 "Mål Imod": st.column_config.TextColumn("Mål Imod"),
@@ -106,5 +108,6 @@ def vis_side():
         st.dataframe(
             df_stilling[['TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']], 
             use_container_width=True, 
-            hide_index=True
+            hide_index=True,
+            height=455,  
         )
