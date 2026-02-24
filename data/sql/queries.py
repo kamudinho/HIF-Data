@@ -55,9 +55,9 @@ def get_queries(comp_filter, season_filter):
                 t.XGSHOTAGAINST, 
                 t.SHOTS, 
                 t.PPDA,
-                -- Afleveringer Volumen
-                t.PASSES AS "PASSES",
-                t.SUCCESSFULPASSES AS "SUCCESSFULPASSES",
+                -- Afleveringer Volumen (FJERN ANFØRSELSTEGN)
+                t.PASSES,
+                t.SUCCESSFULPASSES,
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
                 -- Afleveringer Succes
