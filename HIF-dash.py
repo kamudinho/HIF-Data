@@ -136,6 +136,8 @@ try:
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
+            import importlib
+            importlib.reload(tt)  # Tvinger Python til at læse dine rettelser!
             tt.vis_side()
             
         elif sel == "Spillerstats":
