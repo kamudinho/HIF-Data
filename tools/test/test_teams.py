@@ -105,7 +105,7 @@ def vis_side():
         with c_pop:
             st.write(" ") # Justering for at flugte med selectbox labels
             st.write(" ")
-            with st.popover("🔢 Se tal"):
+            with st.popover("Sammenlign data"):
                 st.markdown(f"**Data: {team1} vs {team2}**")
                 st.table(pd.DataFrame({
                     "Metrik": labels,
