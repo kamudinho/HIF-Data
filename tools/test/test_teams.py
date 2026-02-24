@@ -21,21 +21,6 @@ def vis_side():
         st.warning("Ingen holddata fundet for NordicBet Ligaen i den valgte sæson.")
         return
 
-    # 3. Filtre (Sæson-vælger bevares, men hold-liste er nu kun 1. division)
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        ligaer = sorted(df['SEASONNAME'].unique().tolist())
-        valgt_liga = st.selectbox("Sæson", ligaer, index=len(ligaer)-1)
-    
-    df_liga = df[df['SEASONNAME'] == valgt_liga]
-
-    with col_f2:
-        hold_liste = ["Alle"] + sorted(df_liga['TEAMNAME'].unique().tolist())
-        valgt_hold = st.selectbox("Vælg specifikt hold", hold_liste)
-
-    df_filt = df_liga.copy()
-    if valgt_hold != "Alle": 
-        df_filt = df_filt[df_filt['TEAMNAME'] == valgt_hold]
 
     tabs = st.tabs(["Offensivt", "Defensivt", "Stilling"])
 
