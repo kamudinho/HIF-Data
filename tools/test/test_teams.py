@@ -21,28 +21,23 @@ TEAM_COLORS = {
 }
 
 def vis_side():
-    # 1. CSS Styling & Header
+    # 1. Opdateret CSS (Denne virker kun på st.table)
     st.markdown("""
         <style>
-            /* Fjern kant på alle dataframes */
+            .stTable {
+                width: 100%;
+            }
+            /* Centrer alt i tabellen: både overskrifter (th) og celler (td) */
+            th, td {
+                text-align: center !important;
+                vertical-align: middle !important;
+            }
+            /* Venstrestil dog holdnavnet, så det er læsbart */
+            td:nth-child(2), th:nth-child(2) {
+                text-align: left !important;
+            }
             .stDataFrame {border: none;} 
-            
-            /* Sørg for at fanerne har den rigtige farve */
             button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
-            
-            /* --- CENTRERING AF ALLE TABELLER --- */
-            /* Centrerer overskrifter (headers) */
-            [data-testid="stHeaderTableCell"] {
-                text-align: center !important;
-                display: flex;
-                justify-content: center;
-            }
-            
-            /* Centrerer indholdet i cellerne */
-            [data-testid="stTableTableCell"] {
-                text-align: center !important;
-            }
-
             .custom-header {
                 display: flex; align-items: center; justify-content: center; height: 60px;
                 background-color: #cc0000; color: white; border-radius: 8px;
@@ -50,9 +45,25 @@ def vis_side():
             }
         </style>
     """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="custom-header">NORDICBET LIGA: ANALYSE & H2H</div>', unsafe_allow_html=True)
 
+    # --- SEKTION 1: LIGAOVERSIGT (Her bruger vi nu st.table) ---
+    with tab_liga_hoved:
+        l_gen, l_off, l_def = st.tabs(["Stilling", "Offensivt", "Defensivt"])
+        
+        with l_gen:
+            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'GOALS', 'CONCEDEDGOALS']
+            df_display = df_liga[cols].sort_values('TOTALPOINTS', ascending=False)
+            
+            # Omdøb kolonner manuelt til st.table
+            df_display.columns = ['', 'HOLD', 'KAMPE', 'SEJR', 'UAFGJORT', 'NEDERLAG', 'POINT', 'MÅL FOR', 'MÅL MOD']
+            
+            # Konverter logo-URL til HTML-billede-tag, da st.table ikke har ImageColumn
+            def make_clickable(url):
+                return f'<img src="{url}" width="25">'
+            df_display[''] = df_display[''].apply(make_clickable)
+            
+            # Brug st.write med to_html for at få billederne med
+            st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
     # 2. Data Loading
     if "data_package" not in st.session_state:
         st.session_state["data_package"] = get_data_package()
