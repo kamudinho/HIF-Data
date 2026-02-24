@@ -1,84 +1,145 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from data.data_load import load_snowflake_query, get_data_package, get_team_color, fmt_val
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from data.sql.queries import get_queries
 
-def vis_side():
-    # 1. CSS Styling
-    st.markdown("""
-        <style>
-            .stDataFrame {border: none;} 
-            button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
-            .stat-header { font-weight: bold; font-size: 16px; text-align: center; color: #cc0000; margin-bottom: 5px; }
-            .label-header { font-size: 14px; color: #666; text-align: center; padding-top: 10px; }
-        </style>
-    """, unsafe_allow_html=True)
+# --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
+# Her styres alle holdfarver centralt
+TEAM_COLORS = {
+    "Hvidovre": "#cc0000",      # Rød
+    "B.93": "#0000ff",          # Blå
+    "FC Roskilde": "#add8e6",   # Lyseblå
+    "Esbjerg": "#003399",       # Blå/Hvid
+    "OB": "#003366",            # Mørkeblå
+    "AC Horsens": "#ffff00",    # Gul
+    "FC Fredericia": "#cc0000", # Rød
+    "Vendsyssel FF": "#ffffff", # Hvid
+    "Kolding IF": "#ffffff",    # Hvid
+    "Hobro IK": "#ffff00",      # Gul
+    "HB Køge": "#000000",       # Sort
+    "Århus Fremad": "#000000"   # Sort
+}
+
+try:
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+except ImportError:
+    SEASONNAME = "2025/2026"
+    COMPETITION_WYID = (328, 329, 43319, 331, 1305, 335)
+    TEAM_WYID = 7490
+
+# --- 2. HJÆLPEFUNKTIONER ---
+def get_team_color(name):
+    """Henter holdfarve baseret på navn. Standard er mørkegrå."""
+    if not name: return "#333333"
+    for key, color in TEAM_COLORS.items():
+        if key.lower() in name.lower():
+            return color
+    return "#333333"
+
+def fmt_val(v):
+    """Formaterer tal: 0 decimaler hvis heltal, ellers 2 decimaler."""
+    try:
+        val = float(v)
+        if val == 0 or val.is_integer():
+            return f"{int(val)}"
+        return f"{val:.2f}"
+    except:
+        return str(v)
+
+# --- 3. SNOWFLAKE FORBINDELSE ---
+def _get_snowflake_conn():
+    try:
+        s = st.secrets["connections"]["snowflake"]
+        
+        # Hent og rens den private nøgle
+        p_key_raw = s["private_key"]
+        if isinstance(p_key_raw, str):
+            p_key_pem = p_key_raw.strip().replace("\\n", "\n")
+        else:
+            p_key_pem = p_key_raw
+
+        # Indlæs den ULÅSTE nøgle
+        p_key_obj = serialization.load_pem_private_key(
+            p_key_pem.encode('utf-8'),
+            password=None, 
+            backend=default_backend()
+        )
+        
+        # Eksporter til DER-format
+        p_key_der = p_key_obj.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        
+        return st.connection(
+            "snowflake", 
+            type="snowflake", 
+            account=s["account"], 
+            user=s["user"],
+            role=s["role"], 
+            warehouse=s["warehouse"], 
+            database=s["database"],
+            schema=s["schema"], 
+            private_key=p_key_der
+        )
+    except Exception as e:
+        st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
+        return None
+
+# --- 4. DATA LOADING FUNKTIONER ---
+@st.cache_data(ttl=3600)
+def get_hold_mapping():
+    conn = _get_snowflake_conn()
+    if not conn: return {}
+    try:
+        df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS")
+        return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
+    except Exception as e:
+        st.warning(f"Kunne ikke hente hold-mapping fra AXIS: {e}")
+        return {}
+
+@st.cache_data(ttl=3600)
+def load_github_data():
+    url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
+    def read_gh(file):
+        try:
+            d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            d.columns = [str(c).strip().upper() for c in d.columns]
+            return d
+        except: return pd.DataFrame()
+    return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
+
+@st.cache_data(ttl=3600)
+def load_snowflake_query(query_key, comp_filter, season_filter):
+    conn = _get_snowflake_conn()
+    if not conn: return pd.DataFrame()
+    queries = get_queries(comp_filter, season_filter)
+    q = queries.get(query_key)
+    if not q: return pd.DataFrame()
     
-    st.markdown("### NORDICBET LIGA: ANALYSE")
+    df = conn.query(q)
+    if df is not None:
+        df.columns = [c.upper() for c in df.columns]
+        for col in ['LOCATIONX', 'LOCATIONY']:
+            if col in df.columns: df[col] = df[col].astype('float32')
+    return df
 
-    # 2. Data Loading
-    if "data_package" not in st.session_state:
-        st.session_state["data_package"] = get_data_package()
+# --- 5. DATA PACKAGE BUILDER ---
+def get_data_package():
+    gh_data = load_github_data()
+    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    season_filter = f"='{SEASONNAME}'"
     
-    dp = st.session_state["data_package"]
-    df = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter"))
-
-    if df is None or df.empty:
-        st.warning("Ingen data fundet.")
-        return
-
-    nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
-    df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
-
-    # 3. OVERORDNEDE TABS
-    tabs_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
-
-    # --- LIGAOVERSIGT ---
-    with tabs_hoved[0]:
-        t_sub = st.tabs(["Generelt", "Offensivt", "Defensivt"])
-        
-        with t_sub[0]: # Generelt Oversigt
-            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
-        
-        with t_sub[1]: # Offensiv Oversigt
-            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT']].sort_values('GOALS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
-            
-        with t_sub[2]: # Defensiv Oversigt
-            st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST']].sort_values('CONCEDEDGOALS', ascending=True), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
-
-    # --- HEAD-TO-HEAD MED EGNE TABS ---
-    with tabs_hoved[1]:
-        hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
-        
-        # Valg af hold i toppen
-        c1, c2 = st.columns(2)
-        with c1: team1 = st.selectbox("Vælg Hold 1", hold_navne, index=0)
-        with c2: team2 = st.selectbox("Vælg Hold 2", [h for h in hold_navne if h != team1], index=0)
-
-        t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
-        t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
-
-        # Head-to-Head Undersider (Tabs)
-        h2h_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
-
-        def create_h2h_plot(metrics, labels, t1_data, t2_data, t1_name, t2_name):
-            fig = go.Figure()
-            fig.add_trace(go.Bar(name=t1_name, x=labels, y=[t1_data[m] for m in metrics], marker_color=get_team_color(t1_name), text=[fmt_val(t1_data[m]) for m in metrics], textposition='auto'))
-            fig.add_trace(go.Bar(name=t2_name, x=labels, y=[t2_data[m] for m in metrics], marker_color=get_team_color(t2_name), text=[fmt_val(t2_data[m]) for m in metrics], textposition='auto'))
-            fig.update_layout(barmode='group', height=400, margin=dict(t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='rgba(0,0,0,0)')
-            return fig
-
-        with h2h_tabs[0]: # H2H Generelt
-            m = ['MATCHES', 'TOTALWINS', 'TOTALPOINTS']
-            l = ['Kampe', 'Sejre', 'Point']
-            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
-
-        with h2h_tabs[1]: # H2H Offensivt
-            m = ['GOALS', 'XGSHOT', 'SHOTS']
-            l = ['Mål', 'xG', 'Skud']
-            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
-
-        with h2h_tabs[2]: # H2H Defensivt
-            m = ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
-            l = ['Mål Imod', 'xG Imod', 'PPDA']
-            st.plotly_chart(create_h2h_plot(m, l, t1_stats, t2_stats, team1, team2), use_container_width=True)
+    return {
+        "players": gh_data["players"],
+        "scouting": gh_data["scouting"],
+        "comp_filter": comp_filter,
+        "season_filter": season_filter,
+        "hold_map": get_hold_mapping(),
+        "team_id": TEAM_WYID,
+        "playerstats": None,
+        "team_scatter": None,
+        "team_matches": None
+    }
