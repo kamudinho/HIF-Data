@@ -116,8 +116,11 @@ def vis_side():
         with c_t1:
             default_idx = next((i for i, n in enumerate(hold_navne) if hif_name in n), 0)
             team1 = st.selectbox("Vælg Hold 1", hold_navne, index=default_idx)
+        
         with c_t2:
-            team2 = st.selectbox("Vælg Hold 2", hold_navne, index=0 if team1 != hold_navne[0] else 1)
+            # Vi fjerner team1 fra listen over mulige modstandere for at undgå fejl
+            modstander_liste = [h for h in hold_navne if h != team1]
+            team2 = st.selectbox("Vælg Hold 2", modstander_liste, index=0)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
@@ -130,55 +133,40 @@ def vis_side():
             st.write(" ")
             with st.popover("🔢 Sammenlign data"):
                 st.markdown(f"**Sammenlign data: {team1} vs {team2}**")
-                rows = []
-                for label, m in zip(labels, metrics):
+                
+                # Opbyg data til tabellen
+                data = {"Metrik": labels, team1: [], team2: []}
+                styles = []
+
+                for m in metrics:
                     v1, v2 = float(t1_stats[m]), float(t2_stats[m])
                     is_def = m in ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
+                    
                     t1_better = v1 < v2 if is_def else v1 > v2
                     t2_better = v2 < v1 if is_def else v2 > v1
                     
-                    rows.append({
-                        "Metrik": label,
-                        team1: fmt_val(v1),
-                        team2: fmt_val(v2),
-                        "t1_style": "background-color: #d4edda; color: black;" if t1_better else "",
-                        "t2_style": "background-color: #d4edda; color: black;" if t2_better else ""
+                    data[team1].append(fmt_val(v1))
+                    data[team2].append(fmt_val(v2))
+                    
+                    # Gem styling-instruktion for denne række
+                    styles.append({
+                        team1: "background-color: #d4edda; color: black;" if t1_better else "",
+                        team2: "background-color: #d4edda; color: black;" if t2_better else ""
                     })
                 
-                compare_df = pd.DataFrame(rows)
+                # Opret DataFrame og nulstil index for at undgå "non-unique index" fejl
+                compare_df = pd.DataFrame(data).reset_index(drop=True)
+
+                # Robust styling funktion
+                def apply_row_style(row):
+                    idx = row.name
+                    row_styles = [""] * len(row) # Standard ingen stil for 'Metrik'
+                    row_styles[1] = styles[idx][team1]
+                    row_styles[2] = styles[idx][team2]
+                    return row_styles
+
                 st.dataframe(
-                    compare_df[['Metrik', team1, team2]].style.apply(lambda x: ["" , compare_df.loc[x.name, 't1_style'], compare_df.loc[x.name, 't2_style']], axis=1),
-                    hide_index=True, use_container_width=True
+                    compare_df.style.apply(apply_row_style, axis=1),
+                    hide_index=True, 
+                    use_container_width=True
                 )
-
-        # Plotly Graf
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name=team1, x=labels, y=[t1_stats[m] for m in metrics], 
-            marker_color=get_team_color(team1), offsetgroup=0,
-            text=[fmt_val(t1_stats[m]) for m in metrics], textposition='auto'
-        ))
-        fig.add_trace(go.Bar(
-            name=team2, x=labels, y=[t2_stats[m] for m in metrics], 
-            marker_color=get_team_color(team2), offsetgroup=1,
-            text=[fmt_val(t2_stats[m]) for m in metrics], textposition='auto'
-        ))
-
-        # Logoer i grafen
-        logo_images = []
-        for i in range(len(labels)):
-            for stats, offset in [(t1_stats, -0.17), (t2_stats, 0.17)]:
-                if pd.notnull(stats['IMAGEDATAURL']):
-                    logo_images.append(dict(
-                        source=stats['IMAGEDATAURL'], xref="x", yref="paper",
-                        x=i + offset, y=1.02, sizex=0.07, sizey=0.07,
-                        xanchor="center", yanchor="bottom"
-                    ))
-
-        fig.update_layout(
-            images=logo_images, barmode='group', height=500, margin=dict(t=100, b=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="center", x=0.5),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
