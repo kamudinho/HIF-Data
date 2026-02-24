@@ -118,22 +118,30 @@ def vis_side():
 
         h2h_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
-        def create_h2h_plot(metrics, labels, t1, t2, n1, n2):
+        def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             for name, stats in [(n1, t1), (n2, t2)]:
                 c = TEAM_COLORS.get(name, {"primary": "#808080", "secondary": "#000000"})
+                
+                # Beregn værdier: enten total eller pr. kamp
+                if per_match and stats['MATCHES'] > 0:
+                    y_vals = [stats[m] / stats['MATCHES'] for m in metrics]
+                    # Formater tekst så den viser 2 decimaler ved pr. kamp
+                    text_vals = [f"{v:.2f}" for v in y_vals]
+                else:
+                    y_vals = [stats[m] for m in metrics]
+                    text_vals = [fmt_val(stats[m]) for m in metrics]
+
                 fig.add_trace(go.Bar(
-                    name=name, x=labels, y=[stats[m] for m in metrics], 
+                    name=name, x=labels, y=y_vals, 
                     marker_color=c["primary"],
                     marker_line_color=c["secondary"],
                     marker_line_width=2,
-                    text=[fmt_val(stats[m]) for m in metrics], 
+                    text=text_vals, 
                     textposition='auto', showlegend=False
                 ))
             
             logo_imgs = []
-            # Vi justerer offset en lille smule (fra 0.17 til 0.18) 
-            # for at de passer over de nu smallere søjler
             for idx in range(len(labels)):
                 for s, offset in [(t1, -0.18), (t2, 0.18)]:
                     if pd.notnull(s['IMAGEDATAURL']):
@@ -144,18 +152,51 @@ def vis_side():
                         ))
             
             fig.update_layout(
-                images=logo_imgs, 
-                barmode='group', 
-                bargap=0.4,       # Mellemrum mellem de forskellige metrikker (f.eks. Mål vs xG)
-                bargroupgap=0.1,  # Mellemrum mellem Hold 1 og Hold 2 søjlen
-                height=400, 
+                images=logo_imgs, barmode='group', 
+                bargap=0.4, bargroupgap=0.1, height=400, 
                 margin=dict(t=70, b=20, l=10, r=10),
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 xaxis=dict(showgrid=False), 
                 yaxis=dict(showgrid=False, showticklabels=False)
             )
             st.plotly_chart(fig, use_container_width=True)
+
+        # --- Kald af plots med logik for total vs. pr. kamp ---
+        with h2h_tabs[0]: 
+            # Overblik: Bevares som totaler
+            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2, per_match=False)
+        
+        with h2h_tabs[1]: 
+            # Offensiv: Pr. kamp
+            create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
+        
+        with h2h_tabs[2]: 
+            # Defensiv: Pr. kamp
+            # Bemærk: PPDA er allerede et gennemsnitstal, så den skal vi passe på med at dividere. 
+            # Jeg har lavet en lille justering herunder:
+            m_def = ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
+            l_def = ['Mål imod/kamp', 'xG imod/kamp', 'PPDA']
+            
+            # For at undgå at dividere PPDA med kampe igen, kan vi sende den separat eller håndtere det i plot-funktionen
+            # Her dividerer vi alt undtagen PPDA:
+            fig_def = go.Figure()
+            for name, stats in [(team1, t1_stats), (team2, t2_stats)]:
+                c = TEAM_COLORS.get(name, {"primary": "#808080", "secondary": "#000000"})
+                # Beregning specifikt for defensiv tab
+                y_def = [
+                    stats['CONCEDEDGOALS'] / stats['MATCHES'], 
+                    stats['XGSHOTAGAINST'] / stats['MATCHES'], 
+                    stats['PPDA'] # PPDA divideres IKKE
+                ]
+                text_def = [f"{y_def[0]:.2f}", f"{y_def[1]:.2f}", f"{y_def[2]:.2f}"]
+                
+                fig_def.add_trace(go.Bar(
+                    name=name, x=l_def, y=y_def, marker_color=c["primary"],
+                    marker_line_color=c["secondary"], marker_line_width=2,
+                    text=text_def, textposition='auto', showlegend=False
+                ))
+            # Genbrug layout logik fra din create_h2h_plot her eller kald den med en special case
+            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
 
         with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[1]: create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål', 'Skud', 'xG'], t1_stats, t2_stats, team1, team2)
