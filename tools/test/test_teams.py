@@ -33,9 +33,17 @@ def vis_side():
     nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
     df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
 
-    # Beregn Pass % hvis muligt
-    if 'PASSES' in df_liga.columns and 'ACCURATEPASSES' in df_liga.columns:
-        df_liga['PASS_PCT'] = (df_liga['ACCURATEPASSES'] / df_liga['PASSES'] * 100).round(1)
+    # --- BEREGNINGER AF AFLEVERINGSPROCENTER (%) ---
+    # Vi bruger 'SUCCESSFUL' kolonnerne til at beregne procenterne
+    def calc_pct(row, total_col, success_col):
+        if row[total_col] > 0:
+            return (row[success_col] / row[total_col]) * 100
+        return 0
+
+    df_liga['PASS_PCT'] = df_liga.apply(lambda r: calc_pct(r, 'PASSES', 'SUCCESSFULPASSES'), axis=1)
+    df_liga['FINAL_THIRD_PCT'] = df_liga.apply(lambda r: calc_pct(r, 'PASSESTOFINALTHIRD', 'SUCCESSFULPASSESTOFINALTHIRD'), axis=1)
+    df_liga['FORWARD_PCT'] = df_liga.apply(lambda r: calc_pct(r, 'FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'), axis=1)
+    df_liga['PROGRESSIVE_PCT'] = df_liga.apply(lambda r: calc_pct(r, 'PROGRESSIVEPASSES', 'SUCCESSFULPROGRESSIVEPASSES'), axis=1)
 
     # 3. HOVED TABS
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
@@ -46,7 +54,7 @@ def vis_side():
         
         with l_gen:
             st.dataframe(
-                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS', 'GOALS', 'CONCEDEDGOALS']].sort_values('TOTALPOINTS', ascending=False),
+                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TEAMNAME": "HOLD", "MATCHES": "K", "TOTALPOINTS": "P"}
             )
@@ -67,13 +75,17 @@ def vis_side():
             with c_p: st.markdown(f"<div class='stat-header'>{int(avg_p)}</div>", unsafe_allow_html=True)
             with c_pct: st.markdown(f"<div class='stat-header'>{avg_pct:.1f}%</div>", unsafe_allow_html=True)
 
+            # Formater procenterne som strenge med parenteser til tabellen
+            df_pass_disp = df_liga.copy()
+            df_pass_disp['Passes (%)'] = df_pass_disp.apply(lambda r: f"{int(r['PASSES'])} ({r['PASS_PCT']:.1f}%)", axis=1)
+            df_pass_disp['Final Third (%)'] = df_pass_disp.apply(lambda r: f"{int(r['PASSESTOFINALTHIRD'])} ({r['FINAL_THIRD_PCT']:.1f}%)", axis=1)
+            df_pass_disp['Forward (%)'] = df_pass_disp.apply(lambda r: f"{int(r['FORWARDPASSES'])} ({r['FORWARD_PCT']:.1f}%)", axis=1)
+            df_pass_disp['Progressive (%)'] = df_pass_disp.apply(lambda r: f"{int(r['PROGRESSIVEPASSES'])} ({r['PROGRESSIVE_PCT']:.1f}%)", axis=1)
+
             st.dataframe(
-                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'PASSES', 'PASS_PCT', 'PROGRESSIVEPASSES', 'CROSSES']].sort_values('PASSES', ascending=False),
+                df_pass_disp[['IMAGEDATAURL', 'TEAMNAME', 'Passes (%)', 'Final Third (%)', 'Forward (%)', 'Progressive (%)']].sort_values('PASSES', ascending=False),
                 use_container_width=True, hide_index=True,
-                column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn(""),
-                    "PASSES": "Afleveringer", "PASS_PCT": "%", "PROGRESSIVEPASSES": "Progressive", "CROSSES": "Indlæg"
-                }
+                column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TEAMNAME": "Hold"}
             )
 
     # --- SEKTION 2: HEAD-TO-HEAD ---
@@ -105,13 +117,17 @@ def vis_side():
         with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[1]: create_h2h_plot(['GOALS', 'XGSHOT', 'SHOTS'], ['Mål', 'xG', 'Skud'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[3]: create_h2h_plot(['PASSES', 'PASS_PCT', 'PROGRESSIVEPASSES'], ['Afleveringer', 'Pass %', 'Progressive'], t1_stats, t2_stats, team1, team2)
+        
+        with h2h_tabs[3]: 
+            # I grafen viser vi de rene tal for at holde det overskueligt
+            create_h2h_plot(['PASSES', 'PASSESTOFINALTHIRD', 'FORWARDPASSES', 'PROGRESSIVEPASSES'], ['Alle', 'Final Third', 'Forward', 'Progressive'], t1_stats, t2_stats, team1, team2)
 
         with c_pop:
             st.write(" ")
-            with st.popover("🔢 Rådata"):
-                st.markdown(f"**{team1} vs {team2}**")
-                all_m = ['PASSES', 'PASS_PCT', 'PROGRESSIVEPASSES', 'CROSSES']
-                all_l = ['Afleveringer', 'Pass %', 'Progressive', 'Indlæg']
-                table_data = [{"Metrik": l, team1: fmt_val(t1_stats[m]), team2: fmt_val(t2_stats[m])} for m, l in zip(all_m, all_l)]
+            with st.popover("🔢 Detaljeret Data"):
+                st.markdown(f"**{team1} vs {team2} (% succes)**")
+                # Her viser vi procenterne i tabellen for dybde
+                all_m = ['PASS_PCT', 'FINAL_THIRD_PCT', 'FORWARD_PCT', 'PROGRESSIVE_PCT']
+                all_l = ['Pass %', 'Final Third %', 'Forward %', 'Progressive %']
+                table_data = [{"Metrik": l, team1: f"{t1_stats[m]:.1f}%", team2: f"{t2_stats[m]:.1f}%"} for m, l in zip(all_m, all_l)]
                 st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
