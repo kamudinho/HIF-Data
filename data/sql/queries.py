@@ -56,11 +56,11 @@ def get_queries(comp_filter, season_filter):
                 t.SHOTS, 
                 t.PPDA,
                 -- Afleveringer Volumen
-                t.PASSES,
+                t.PASSES AS "PASSES",
+                t.SUCCESSFULPASSES AS "SUCCESSFULPASSES",
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
                 -- Afleveringer Succes
-                t.SUCCESSFULPASSES,
                 t.SUCCESSFULPASSESTOFINALTHIRD,
                 t.SUCCESSFULFORWARDPASSES,
                 -- Stilling og Point
