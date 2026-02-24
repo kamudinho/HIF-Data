@@ -39,10 +39,23 @@ def get_queries(comp_filter, season_filter):
             WHERE tm.COMPETITION_WYID IN {comp_filter} 
             AND s.SEASONNAME {season_filter}
         """,
-        "playerstats": f"""
-            SELECT * FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
-            WHERE COMPETITION_WYID IN {comp_filter} 
-            AND SEASON_WYID IN (SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter})
+       "playerstats": f"""
+            SELECT 
+                p.FIRSTNAME, 
+                p.LASTNAME, 
+                p.ROLECODE3,
+                t.IMAGEDATAURL AS IMAGEURLDATA,
+                s.*
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+            JOIN {DB}.WYSCOUT_PLAYERS p 
+                ON s.PLAYER_WYID = p.PLAYER_WYID 
+                AND s.COMPETITION_WYID = p.COMPETITION_WYID
+            JOIN {DB}.WYSCOUT_TEAMS t
+                ON s.TEAM_WYID = t.TEAM_WYID
+            WHERE s.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASON_WYID IN (
+                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
+            )
         """,
         "team_stats_full": f"""
             SELECT DISTINCT 
