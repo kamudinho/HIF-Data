@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 from data.data_load import load_snowflake_query, get_data_package, get_team_color, fmt_val
 
 def vis_side():
@@ -17,37 +18,40 @@ def vis_side():
     
     st.markdown("### NORDICBET LIGA: ANALYSE & H2H")
 
-    # 2. Data Loading
+    # 2. Data Loading & Rensning
     if "data_package" not in st.session_state:
         st.session_state["data_package"] = get_data_package()
     
     dp = st.session_state["data_package"]
-    df = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
+    
+    # Hent rådata
+    df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
 
-    if df is None or df.empty:
-        st.warning("Ingen data fundet.")
+    if df_raw is None or df_raw.empty:
+        st.warning("Ingen data fundet i Snowflake.")
         return
 
-    # --- KRITISK FIX: Tving alle kolonnenavne til STORE bogstaver ---
-    df.columns = [str(c).upper() for c in df.columns]
+    # --- KRITISK FIX: Tving alle navne til STORE bogstaver og fjern tomme felter ---
+    df = df_raw.copy()
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    df = df.fillna(0) # Sikrer at beregninger ikke dør på NULL-værdier
 
-    # Filtrering til nyeste data
-    nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
-    df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
+    # Find nyeste sæson og filtrer
+    try:
+        nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
+        df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
+    except Exception:
+        st.error("Fejl ved filtrering af sæson. Tjek kolonnen SEASONNAME.")
+        return
 
     # --- BEREGNINGER AF AFLEVERINGSPROCENTER (%) ---
-    pct_map = {
-        'PASS_PCT': ('PASSES', 'SUCCESSFULPASSES'),
-        'FINAL_THIRD_PCT': ('PASSESTOFINALTHIRD', 'SUCCESSFULPASSESTOFINALTHIRD'),
-        'FORWARD_PCT': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES')
-    }
+    # Vi bruger en sikker metode til at beregne procenter
+    def safe_pct(success, total):
+        return (success / total * 100) if total > 0 else 0
 
-    for pct_col, (total, success) in pct_map.items():
-        if total in df_liga.columns and success in df_liga.columns:
-            # Undgår division med 0 ved hjælp af fillna(0)
-            df_liga[pct_col] = (df_liga[success] / df_liga[total] * 100).fillna(0)
-        else:
-            df_liga[pct_col] = 0
+    df_liga['PASS_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSES'], r['PASSES']), axis=1)
+    df_liga['FINAL_THIRD_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULPASSESTOFINALTHIRD'], r['PASSESTOFINALTHIRD']), axis=1)
+    df_liga['FORWARD_PCT'] = df_liga.apply(lambda r: safe_pct(r['SUCCESSFULFORWARDPASSES'], r['FORWARDPASSES']), axis=1)
 
     # 3. HOVED TABS
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
@@ -57,8 +61,9 @@ def vis_side():
         l_gen, l_off, l_def, l_pass = st.tabs(["Stilling", "Offensivt", "Defensivt", "Afleveringer"])
         
         with l_gen:
+            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']
             st.dataframe(
-                df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False),
+                df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TEAMNAME": "HOLD", "MATCHES": "K", "TOTALPOINTS": "P"}
             )
@@ -79,6 +84,7 @@ def vis_side():
 
         with l_pass:
             df_p = df_liga.copy()
+            # Formatering til pæn visning
             df_p['Passes (%)'] = df_p.apply(lambda r: f"{int(r['PASSES'])} ({r['PASS_PCT']:.1f}%)", axis=1)
             df_p['Final 3rd (%)'] = df_p.apply(lambda r: f"{int(r['PASSESTOFINALTHIRD'])} ({r['FINAL_THIRD_PCT']:.1f}%)", axis=1)
             df_p['Forward (%)'] = df_p.apply(lambda r: f"{int(r['FORWARDPASSES'])} ({r['FORWARD_PCT']:.1f}%)", axis=1)
@@ -92,7 +98,8 @@ def vis_side():
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         c_pop, c_t1, c_t2 = st.columns([0.6, 1, 1])
-        with c_t1: team1 = st.selectbox("Hold 1", hold_navne, index=0)
+        
+        with c_t1: team1 = st.selectbox("Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
         with c_t2: team2 = st.selectbox("Hold 2", [h for h in hold_navne if h != team1], index=0)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
