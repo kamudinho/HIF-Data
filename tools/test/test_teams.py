@@ -46,7 +46,7 @@ def vis_side():
         df_filt = df.copy()
         if valgt_liga != "Alle": df_filt = df_filt[df_filt['SEASONNAME'] == valgt_liga]
 
-        tabs = st.tabs(["Angreb & xG", "Forsvar", "Overblik"])
+        tabs = st.tabs(["Offensivt", "Defensivt", "Stilling"])
 
         with tabs[0]:
             calc_height = (len(df_filt) + 1) * 35 + 45
