@@ -55,15 +55,12 @@ def get_queries(comp_filter, season_filter):
                 t.XGSHOTAGAINST, 
                 t.SHOTS, 
                 t.PPDA,
-                -- Afleveringer Volumen (FJERN ANFØRSELSTEGN)
-                t.PASSES,
+                t.PASSES, -- Ingen anførselstegn her!
                 t.SUCCESSFULPASSES,
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
-                -- Afleveringer Succes
                 t.SUCCESSFULPASSESTOFINALTHIRD,
                 t.SUCCESSFULFORWARDPASSES,
-                -- Stilling og Point
                 st.TOTALPOINTS,
                 st.TOTALPLAYED AS MATCHES,
                 st.TOTALWINS,
@@ -71,11 +68,9 @@ def get_queries(comp_filter, season_filter):
                 st.TOTALLOSSES,
                 t.TEAM_WYID
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
-            JOIN {DB}.WYSCOUT_SEASONS AS s
-                ON t.SEASON_WYID = s.SEASON_WYID
-            JOIN {DB}.WYSCOUT_TEAMS AS tm
-                ON t.TEAM_WYID = tm.TEAM_WYID
-            JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st
+            JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+            LEFT JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st -- LEFT JOIN for at undgå tomme datasæt
                 ON t.TEAM_WYID = st.TEAM_WYID
                 AND t.SEASON_WYID = st.SEASON_WYID 
             WHERE t.COMPETITION_WYID IN {comp_filter}
