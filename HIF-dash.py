@@ -136,7 +136,7 @@ try:
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
-            tt.vis_side() # Kalder den nye version med interne tabs
+            tt.vis_side()
             
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
