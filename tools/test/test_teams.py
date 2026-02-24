@@ -47,7 +47,11 @@ def vis_side():
 
         df_off = df_liga.copy()
         df_off['xG (Diff)'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
-        st.dataframe(df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'xG (Diff)', 'SHOTS']].sort_values('GOALS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
+        st.dataframe(
+            df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'xG (Diff)', 'SHOTS']].sort_values('GOALS', ascending=False), 
+            use_container_width=True, hide_index=True, 
+            column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+        )
 
     # --- DEFENSIVT ---
     with tabs[1]:
@@ -60,18 +64,25 @@ def vis_side():
 
         df_def = df_liga.copy()
         df_def['xGA (Diff)'] = df_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({(r['XGSHOTAGAINST']-r['CONCEDEDGOALS']):+.2f})", axis=1)
-        st.dataframe(df_def[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'xGA (Diff)', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
+        st.dataframe(
+            df_def[['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'xGA (Diff)', 'PPDA']].sort_values('CONCEDEDGOALS', ascending=True), 
+            use_container_width=True, hide_index=True, 
+            column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+        )
 
     # --- STILLING ---
     with tabs[2]:
-        st.dataframe(df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False), use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
+        st.dataframe(
+            df_liga[['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS']].sort_values('TOTALPOINTS', ascending=False), 
+            use_container_width=True, hide_index=True, 
+            column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")}
+        )
 
     # --- HEAD-TO-HEAD ---
     with tabs[3]:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         hif_name = "Hvidovre"
         
-        # Kolonner til valg
         c_pop, c_t1, c_t2 = st.columns([0.6, 1, 1])
         
         with c_t1:
@@ -79,48 +90,42 @@ def vis_side():
             team1 = st.selectbox("Vælg Hold 1", hold_navne, index=default_idx)
         
         with c_t2:
-            # Sikrer at vi ikke vælger det samme hold
             modstander_liste = [h for h in hold_navne if h != team1]
             team2 = st.selectbox("Vælg Hold 2", modstander_liste, index=0)
 
-        # Hent stats
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
 
         metrics = ['GOALS', 'XGSHOT', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
         labels = ['Mål', 'xG', 'Mål Imod', 'xG Imod', 'PPDA']
 
-        # Popover med Sammenlign Data
         with c_pop:
-            st.write(" ") # Spacer for alignment
+            st.write(" ") 
             st.write(" ")
             with st.popover("🔢 Sammenlign data"):
                 st.markdown(f"**{team1} vs {team2}**")
                 
-                # Byg tabel og styles manuelt for at undgå indekseringsfejl
                 table_data = []
                 for m, label in zip(metrics, labels):
                     v1, v2 = float(t1_stats[m]), float(t2_stats[m])
-                    is_def = m in ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
-                    t1_better = v1 < v2 if is_def else v1 > v2
-                    t2_better = v2 < v1 if is_def else v2 > v1
-                    
-                    table_data.append({
-                        "Metrik": label,
-                        team1: fmt_val(v1),
-                        team2: fmt_val(v2),
-                        "t1_bg": "background-color: #d4edda" if t1_better else "",
-                        "t2_bg": "background-color: #d4edda" if t2_better else ""
-                    })
+                    table_data.append({"Metrik": label, team1: v1, team2: v2})
                 
                 comp_df = pd.DataFrame(table_data)
 
-                # Funktion til række-styling
-                def style_compare(row):
-                    return ['', row['t1_bg'], row['t2_bg'], '', '']
+                def style_cells(data):
+                    attr = pd.DataFrame('', index=data.index, columns=data.columns)
+                    for i in range(len(data)):
+                        m_key = metrics[i]
+                        v1, v2 = data.iloc[i, 1], data.iloc[i, 2]
+                        is_def = m_key in ['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
+                        if (v1 < v2 if is_def else v1 > v2):
+                            attr.iloc[i, 1] = 'background-color: #d4edda; color: black;'
+                        if (v2 < v1 if is_def else v2 > v1):
+                            attr.iloc[i, 2] = 'background-color: #d4edda; color: black;'
+                    return attr
 
                 st.dataframe(
-                    comp_df[['Metrik', team1, team2]].style.apply(style_compare, axis=1),
+                    comp_df.style.apply(style_cells, axis=None).format(fmt_val, subset=[team1, team2]),
                     hide_index=True, use_container_width=True
                 )
 
