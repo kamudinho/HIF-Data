@@ -112,20 +112,16 @@ def get_queries(comp_filter, season_filter):
                 t.PASSES,
                 t.PASSESTOFINALTHIRD,
                 t.FORWARDPASSES, 
-                t.PROGRESSIVEPASSES,
-                -- Afleveringer Succes (Til vores % beregninger)
+                -- Afleveringer Succes
                 t.SUCCESSFULPASSES,
                 t.SUCCESSFULPASSESTOFINALTHIRD,
                 t.SUCCESSFULFORWARDPASSES,
-                t.SUCCESSFULPROGRESSIVEPASSES,
                 -- Stilling og Point
                 st.TOTALPOINTS,
                 st.TOTALPLAYED AS MATCHES,
                 st.TOTALWINS,
                 st.TOTALDRAWS,
                 st.TOTALLOSSES,
-                st.TOTALGOALSFOR,
-                st.TOTALGOALSAGAINST,
                 t.TEAM_WYID
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
             JOIN {DB}.WYSCOUT_SEASONS AS s
