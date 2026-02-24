@@ -121,9 +121,15 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     
     df = conn.query(q)
     if df is not None:
-        df.columns = [c.upper() for c in df.columns]
+        # Tving alle navne til store bogstaver og fjern eventuelle usynlige mellemrum
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        
+        # Ekstra tjek for at se om 'PASSES' faktisk er lander rigtigt (kun til debug)
+        # print(df.columns.tolist()) 
+        
         for col in ['LOCATIONX', 'LOCATIONY']:
-            if col in df.columns: df[col] = df[col].astype('float32')
+            if col in df.columns: 
+                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
     return df
 
 # --- 5. DATA PACKAGE BUILDER ---
