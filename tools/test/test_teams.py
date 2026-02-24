@@ -29,16 +29,19 @@ def vis_side():
     nyeste_saeson = sorted(df['SEASONNAME'].unique().tolist())[-1]
     df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
 
-    # --- BEREGNINGER AF AFLEVERINGER ---
+    # --- BEREGNINGER AF AFLEVERINGER (Uden Progressive) ---
     pct_map = {
         'PASS_PCT': ('PASSES', 'SUCCESSFULPASSES'),
         'FINAL_THIRD_PCT': ('PASSESTOFINALTHIRD', 'SUCCESSFULPASSESTOFINALTHIRD'),
-        'FORWARD_PCT': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES'),
-        'PROGRESSIVE_PCT': ('PROGRESSIVEPASSES', 'SUCCESSFULPROGRESSIVEPASSES')
+        'FORWARD_PCT': ('FORWARDPASSES', 'SUCCESSFULFORWARDPASSES')
     }
 
     for pct_col, (total, success) in pct_map.items():
-        df_liga[pct_col] = (df_liga[success] / df_liga[total] * 100).fillna(0)
+        # Sikrer os mod division med nul og manglende kolonner
+        if total in df_liga.columns and success in df_liga.columns:
+            df_liga[pct_col] = (df_liga[success] / df_liga[total] * 100).fillna(0)
+        else:
+            df_liga[pct_col] = 0
 
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
@@ -62,9 +65,8 @@ def vis_side():
             df_p['Passes (%)'] = df_p.apply(lambda r: f"{int(r['PASSES'])} ({r['PASS_PCT']:.1f}%)", axis=1)
             df_p['Final 3rd (%)'] = df_p.apply(lambda r: f"{int(r['PASSESTOFINALTHIRD'])} ({r['FINAL_THIRD_PCT']:.1f}%)", axis=1)
             df_p['Forward (%)'] = df_p.apply(lambda r: f"{int(r['FORWARDPASSES'])} ({r['FORWARD_PCT']:.1f}%)", axis=1)
-            df_p['Prog. (%)'] = df_p.apply(lambda r: f"{int(r['PROGRESSIVEPASSES'])} ({r['PROGRESSIVE_PCT']:.1f}%)", axis=1)
             
-            st.dataframe(df_p[['IMAGEDATAURL', 'TEAMNAME', 'Passes (%)', 'Final 3rd (%)', 'Forward (%)', 'Prog. (%)']].sort_values('PASSES', ascending=False), 
+            st.dataframe(df_p[['IMAGEDATAURL', 'TEAMNAME', 'Passes (%)', 'Final 3rd (%)', 'Forward (%)']].sort_values('PASSES', ascending=False), 
                          use_container_width=True, hide_index=True, column_config={"IMAGEDATAURL": st.column_config.ImageColumn("")})
 
     with tab_h2h_hoved:
@@ -95,11 +97,11 @@ def vis_side():
         with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[1]: create_h2h_plot(['GOALS', 'XGSHOT', 'SHOTS'], ['Mål', 'xG', 'Skud'], t1_stats, t2_stats, team1, team2)
         with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål Imod', 'xG Imod', 'PPDA'], t1_stats, t2_stats, team1, team2)
-        with h2h_tabs[3]: create_h2h_plot(['PASSES', 'PASSESTOFINALTHIRD', 'FORWARDPASSES', 'PROGRESSIVEPASSES'], ['Alle', 'Final 3rd', 'Forward', 'Prog.'], t1_stats, t2_stats, team1, team2)
+        with h2h_tabs[3]: create_h2h_plot(['PASSES', 'PASSESTOFINALTHIRD', 'FORWARDPASSES'], ['Alle', 'Final 3rd', 'Forward'], t1_stats, t2_stats, team1, team2)
 
         with c_pop:
             st.write(" ")
             with st.popover("🔢 % Succes"):
-                all_m = ['PASS_PCT', 'FINAL_THIRD_PCT', 'FORWARD_PCT', 'PROGRESSIVE_PCT']
-                all_l = ['Pass %', 'Final 3rd %', 'Forward %', 'Prog. %']
+                all_m = ['PASS_PCT', 'FINAL_THIRD_PCT', 'FORWARD_PCT']
+                all_l = ['Pass %', 'Final 3rd %', 'Forward %']
                 st.dataframe(pd.DataFrame([{"Metrik": l, team1: f"{t1_stats[m]:.1f}%", team2: f"{t2_stats[m]:.1f}%"} for m, l in zip(all_m, all_l)]), hide_index=True)
