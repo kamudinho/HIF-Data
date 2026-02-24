@@ -89,10 +89,16 @@ def vis_side():
                 df_liga[cols].sort_values('TOTALPOINTS', ascending=False),
                 use_container_width=True, hide_index=True, height=500,
                 column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"), 
-                    "TEAMNAME": "HOLD", "MATCHES": "KAMPE", "TOTALPOINTS": "POINT",
-                    "TOTALWINS": "SEJR", "TOTALLOSSES": "NEDERLAG", "TOTALDRAWS": "UAFGJORT",
-                    "GOALS": "MÅL FOR", "CONCEDEDGOALS": "MÅL MOD"
+                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
+                    "TEAMNAME": st.column_config.TextColumn("HOLD", width="medium"),
+                    # Ved at bruge NumberColumn centrerer Streamlit automatisk
+                    "MATCHES": st.column_config.NumberColumn("KAMPE", format="%d", width="small"),
+                    "TOTALWINS": st.column_config.NumberColumn("SEJR", format="%d", width="small"),
+                    "TOTALDRAWS": st.column_config.NumberColumn("UAFGJORT", format="%d", width="small"),
+                    "TOTALLOSSES": st.column_config.NumberColumn("NEDERLAG", format="%d", width="small"),
+                    "TOTALPOINTS": st.column_config.NumberColumn("POINT", format="%d", width="small"),
+                    "GOALS": st.column_config.NumberColumn("MÅL FOR", format="%d", width="small"),
+                    "CONCEDEDGOALS": st.column_config.NumberColumn("MÅL MOD", format="%d", width="small"),
                 }
             )
         
@@ -103,8 +109,11 @@ def vis_side():
                 df_off[['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XG (DIFF)', 'TOUCHINBOX']].sort_values('GOALS', ascending=False), 
                 use_container_width=True, hide_index=True, 
                 column_config={
-                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"), 
-                    "TEAMNAME": "HOLD", "GOALS": "MÅL", "XG (DIFF)": "xG (DIFF)", "TOUCHINBOX": "BERØRINGER I FELT"
+                    "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
+                    "TEAMNAME": st.column_config.TextColumn("HOLD"),
+                    "GOALS": st.column_config.NumberColumn("MÅL", format="%d"),
+                    "XG (DIFF)": st.column_config.TextColumn("xG (DIFF)"), # Tekst centrerer desværre dårligt
+                    "TOUCHINBOX": st.column_config.NumberColumn("FELT-AKTIONER", format="%d")
                 }
             )
             
@@ -116,7 +125,10 @@ def vis_side():
                 use_container_width=True, hide_index=True, 
                 column_config={
                     "IMAGEDATAURL": st.column_config.ImageColumn("", width="small"),
-                    "TEAMNAME": "HOLD", "CONCEDEDGOALS": "MÅL MOD", "XG MOD (DIFF)": "xG MOD (DIFF)", "PPDA": "PPDA"
+                    "TEAMNAME": st.column_config.TextColumn("HOLD"),
+                    "CONCEDEDGOALS": st.column_config.NumberColumn("MÅL MOD", format="%d"),
+                    "XG MOD (DIFF)": st.column_config.TextColumn("xG MOD (DIFF)"),
+                    "PPDA": st.column_config.NumberColumn("PPDA", format="%.2f")
                 }
             )
 
