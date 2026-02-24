@@ -7,18 +7,18 @@ from data.sql.queries import get_queries
 # --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
 # Her styres alle holdfarver centralt
 TEAM_COLORS = {
-    "Hvidovre": "#cc0000",      # Rød
-    "AaB": "#cc0000",           # Rød/Hvid
-    "AC Horsens": "#ffff00",    # Gul
-    "B.93": "#0000ff",          # Blå
-    "FC Roskilde": "#add8e6",   # Lyseblå
-    "Esbjerg": "#003399",       # Blå/Hvid
-    "Vendsyssel FF": "#ffffff", # Hvid
-    "Kolding IF": "#ffffff",    # Hvid
-    "Hobro IK": "#ffff00",      # Gul
-    "HB Køge": "#000000",       # Sort
-    "Århus Fremad": "#000000",  # Sort
-    "Hillerød": "#ff6600"       # Orange (hvis de er med i dit datasæt)
+    "Hvidovre": "#cc0000",      # Hvidovre Rød
+    "AaB": "#de0000",           # AaB Rød
+    "AC Horsens": "#ffcc00",    # Horsens Gul
+    "B.93": "#0000ff",          # B.93 Blå
+    "Middelfart": "#87ceeb",    # Middelfart Lyseblå (Ny i rækken)
+    "Aarhus Fremad": "#000000", # Aarhus Fremad Sort (Ny i rækken)
+    "Esbjerg": "#003399",       # EfB Blå/Hvid
+    "Kolding IF": "#202a44",    # Kolding Mørkeblå (Bedre kontrast end hvid)
+    "Hobro IK": "#ffff00",      # Hobro Gul
+    "HB Køge": "#000000",       # HB Køge Sort
+    "Hillerød": "#ff6600",      # Hillerød Orange
+    "FC Fredericia": "#cc0000"  # Fredericia Rød
 }
 
 try:
