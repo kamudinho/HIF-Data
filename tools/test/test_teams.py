@@ -112,15 +112,16 @@ def vis_side():
                 with d3: st.write(f"**{h_xg_imod:.2f}**")
 
             st.dataframe(
-                df_filt[['TEAMNAME', 'CONCEDEDGOALS', 'xG Imod (Diff)', 'PPDA']],
+                df_filt[['TEAMNAME', 'GOALS', 'xG (Diff)', 'SHOTS']],
                 use_container_width=True,
                 hide_index=True,
                 height=calc_height,
                 column_config={
-                    "TEAMNAME": st.column_config.TextColumn("Hold"),
-                    "CONCEDEDGOALS": st.column_config.NumberColumn("Mål Imod", alignment="center"),
-                    "xG Imod (Diff)": st.column_config.TextColumn("xG Imod (Diff)", width="medium", alignment="center"),
-                    "PPDA": st.column_config.NumberColumn("PPDA", alignment="center", format="%.2f")
+                    "TEAMNAME": st.column_config.TextColumn("Hold", width="medium"),
+                    # Vi bruger TextColumn her for at tvinge centreringen igennem
+                    "GOALS": st.column_config.TextColumn("Mål", alignment="center"),
+                    "xG (Diff)": st.column_config.TextColumn("xG (Diff)", alignment="center", width="medium"),
+                    "SHOTS": st.column_config.TextColumn("Skud", alignment="center")
                 }
             )
 
