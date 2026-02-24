@@ -96,5 +96,26 @@ def get_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.TEAM_WYID = adv.TEAM_WYID
+        """,
+        "team_stats_full": f"""
+            SELECT 
+                t.TEAMNAME, 
+                s.SEASONNAME,
+                ts.GOALS, 
+                ts.XGSHOT, 
+                ts.CONCEDEDGOALS, 
+                ts.XGSHOTAGAINST, 
+                ts.SHOTS, 
+                ts.PPDA,
+                ts.MATCHES,
+                ts.TOTALWINS,
+                ts.TOTALDRAWS,
+                ts.TOTALLOSSES,
+                ts.TOTALPOINTS
+            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL ts
+            JOIN {DB}.WYSCOUT_TEAMS t ON ts.TEAM_WYID = t.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON ts.SEASON_WYID = s.SEASON_WYID
+            WHERE ts.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASONNAME {season_filter}
         """
     }
