@@ -7,18 +7,18 @@ from data.sql.queries import get_queries
 # --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
 # Her styres alle holdfarver centralt
 TEAM_COLORS = {
-    "Hvidovre": "#cc0000",        # Rød
-    "B.93": "#0000ff",            # Blå
-    "Hillerød": "#ff6600",        # Orange
-    "Esbjerg": "#003399",         # Blå
-    "Lyngby": "#003366",          # Kongeblå
-    "Horsens": "#ffff00",      # Gul
-    "Middelfart": "#0099ff",      # Lys blå
-    "AaB": "#cc0000",             # Rød (AaB spiller typisk i rød/hvid)
-    "Kolding IF": "#ffffff",      # Hvid
-    "Hobro": "#ffff00",           # Gul
-    "HB Køge": "#000000",         # Sort
-    "Aarhus Fremad": "#000000"    # Sort
+    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},    # Rød med blå border
+    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},        # Blå med hvid border
+    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},    # Orange med sort border
+    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},     # Blå med hvid border
+    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},      # Kongeblå med hvid border
+    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},     # Gul med sort border
+    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},  # Lys blå med hvid border
+    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},         # Rød med hvid border
+    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},  # Hvid med blå border
+    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},       # Gul med blå border
+    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},     # Sort med blå border
+    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"} # Sort med gul border
 }
 
 try:
