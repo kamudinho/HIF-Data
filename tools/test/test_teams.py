@@ -86,7 +86,7 @@ def vis_side():
             df_off = df_liga.copy()
             df_off['XG_DIFF'] = df_off.apply(lambda r: f"{r['XGSHOT']:.2f} ({(r['GOALS']-r['XGSHOT']):+.2f})", axis=1)
             cols = ['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XG_DIFF', 'TOUCHINBOX']
-            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'GOALS': 'MÅL', 'XG_DIFF': 'xG (DIFF)', 'TOUCHINBOX': 'FELT-AKTIONER'}
+            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'GOALS': 'MÅL', 'XG_DIFF': 'xG (DIFF)', 'TOUCHINBOX': 'BERØRINGER I FELTET'}
             render_html_table(df_off.sort_values('GOALS', ascending=False), cols, renames)
 
         with l_def:
