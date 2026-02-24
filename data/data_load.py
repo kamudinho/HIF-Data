@@ -12,7 +12,7 @@ TEAM_COLORS = {
     "Hillerød": "#ff6600",        # Orange
     "Esbjerg": "#003399",         # Blå
     "Lyngby": "#003366",          # Kongeblå
-    "AC Horsens": "#ffff00",      # Gul
+    "Horsens": "#ffff00",      # Gul
     "Middelfart": "#0099ff",      # Lys blå
     "AaB": "#cc0000",             # Rød (AaB spiller typisk i rød/hvid)
     "Kolding IF": "#ffffff",      # Hvid
