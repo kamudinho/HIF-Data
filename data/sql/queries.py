@@ -98,7 +98,7 @@ def get_queries(comp_filter, season_filter):
                 ON tm.TEAM_WYID = adv.TEAM_WYID
         """,
         "team_stats_full": f"""
-            SSELECT DISTINCT 
+            SELECT DISTINCT 
                 tm.teamname,
                 t.*,
                 s.seasonname,
