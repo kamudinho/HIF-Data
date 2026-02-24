@@ -77,31 +77,41 @@ def vis_side():
             column_config={"IMAGEDATAURL": st.column_config.ImageColumn(""), "TOTALPOINTS": "Point", "MATCHES": "K"}
         )
 
-    # --- HEAD-TO-HEAD ---
+   # --- HEAD-TO-HEAD ---
     with tabs[3]:
         hif_name = "Hvidovre"
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         
-        col1, col2 = st.columns(2)
-        with col1:
-            team1 = st.selectbox("Vælg Hold 1 (HIF)", hold_navne, index=hold_navne.index([n for n in hold_navne if hif_name in n][0]))
-        with col2:
-            team2 = st.selectbox("Vælg Hold 2 (Modstander)", hold_navne, index=0 if team1 != hold_navne[0] else 1)
+        # Funktion til at formatere tal til 2 decimaler (undtagen ved hele tal/0)
+        def fmt_val(v):
+            if v == 0 or float(v).is_integer():
+                return f"{int(v)}"
+            return f"{v:.2f}"
+
+        # Layout: Popover til venstre, derefter de to holdvalg
+        # Vi bruger [0.6, 1, 1] for at give popoveren en passende bredde yderst til venstre
+        c_pop, c_t1, c_t2 = st.columns([0.6, 1, 1])
+        
+        # Indlæs stats først så vi kan bruge dem i popover
+        team1 = c_t1.selectbox("Vælg Hold 1 (HIF)", hold_navne, index=hold_navne.index([n for n in hold_navne if hif_name in n][0]))
+        team2 = c_t2.selectbox("Vælg Hold 2 (Modstander)", hold_navne, index=0 if team1 != hold_navne[0] else 1)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
 
         metrics = ['GOALS', 'XGSHOT', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
         labels = ['Mål', 'xG', 'Mål Imod', 'xG Imod', 'PPDA']
-        
-        # 1. Popover med rå data (Placeret før grafen for nem adgang)
-        with st.popover("🔢 Vis detaljerede tal"):
-            st.markdown(f"**Sammenligning: {team1} vs {team2}**")
-            st.table(pd.DataFrame({
-                "Metrik": labels,
-                team1: [t1_stats[m] for m in metrics],
-                team2: [t2_stats[m] for m in metrics]
-            }))
+
+        with c_pop:
+            st.write(" ") # Justering for at flugte med selectbox labels
+            st.write(" ")
+            with st.popover("🔢 Se tal"):
+                st.markdown(f"**Data: {team1} vs {team2}**")
+                st.table(pd.DataFrame({
+                    "Metrik": labels,
+                    team1: [fmt_val(t1_stats[m]) for m in metrics],
+                    team2: [fmt_val(t2_stats[m]) for m in metrics]
+                }))
 
         # 2. Grafen
         fig = go.Figure()
@@ -109,16 +119,16 @@ def vis_side():
         fig.add_trace(go.Bar(
             name=team1, x=labels, y=[t1_stats[m] for m in metrics], 
             marker_color='#cc0000', offsetgroup=0,
-            text=[t1_stats[m] for m in metrics], textposition='auto'
+            text=[fmt_val(t1_stats[m]) for m in metrics], textposition='auto'
         ))
         
         fig.add_trace(go.Bar(
             name=team2, x=labels, y=[t2_stats[m] for m in metrics], 
             marker_color='#333333', offsetgroup=1,
-            text=[t2_stats[m] for m in metrics], textposition='auto'
+            text=[fmt_val(t2_stats[m]) for m in metrics], textposition='auto'
         ))
 
-        # Logoer centreret over hver bar
+        # Logo-logik (samme som før, men koordineret med de nye hold)
         logo_images = []
         for i in range(len(labels)):
             if pd.notnull(t1_stats['IMAGEDATAURL']):
