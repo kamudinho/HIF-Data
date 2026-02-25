@@ -27,25 +27,25 @@ def get_queries(comp_filter, season_filter):
 
         # --- 2. SPILLER STATISTIK (Simpel og robust) ---
         "playerstats": f"""
-            SELECT DISTINCT 
+            SELECT 
                 s.PLAYER_WYID,
-                s.MINUTESONFIELD,
-                s.GOALS, 
-                s.ASSISTS, 
-                s.YELLOWCARDS, 
-                s.MATCHES,
-                s.SHOTS,
-                s.SHOTSONTARGET,
-                s.XGSHOT,
-                s.DRIBBLES,
-                s.DEFENSIVEDUELS,
-                s.INTERCEPTIONS,
-                s.RECOVERIES
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+                SUM(s.MINUTESONFIELD) AS MINUTESONFIELD,
+                MAX(s.GOALS) AS GOALS, 
+                MAX(s.ASSISTS) AS ASSISTS, 
+                MAX(s.YELLOWCARDS) AS YELLOWCARDS, 
+                COUNT(DISTINCT s.MATCH_WYID) AS MATCHES, -- Tæller de 18 rækker
+                MAX(s.SHOTS) AS SHOTS,
+                MAX(s.XGSHOT) AS XGSHOT,
+                MAX(s.DRIBBLES) AS DRIBBLES,
+                MAX(s.DEFENSIVEDUELS) AS DEFENSIVEDUELS,
+                MAX(s.INTERCEPTIONS) AS INTERCEPTIONS,
+                MAX(s.RECOVERIES) AS RECOVERIES
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL s
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
+            GROUP BY s.PLAYER_WYID
         """,
         
         # --- 3. LOGOER (Ren opslagstabel) ---
