@@ -131,6 +131,27 @@ def vis_side(df_team_matches, hold_map, df_events=None):
 
     with side_col:
         st.write("**Seneste kampe**")
-        cols_vis = [c for c in ['DATE', 'MATCHLABEL', 'GAMEWEEK'] if c in df_hold_data.columns]
         if not df_hold_data.empty:
-            st.dataframe(df_hold_data[cols_vis].sort_values('DATE', ascending=False), hide_index=True)
+            # Lav en kopi til visning for ikke at ødelægge det originale dataframe
+            df_display = df_hold_data.copy()
+            
+            # 1. Formater Dato (kun DD-MM-YY)
+            if 'DATE' in df_display.columns:
+                df_display['DATE'] = pd.to_datetime(df_display['DATE']).dt.strftime('%d-%m-%y')
+            
+            # 2. Formater Matchlabel (skift ',' ud med ' : ' eller lignende)
+            # Hvis din label er "Hvidovre, B.93", bliver den til "Hvidovre vs. B.93"
+            if 'MATCHLABEL' in df_display.columns:
+                df_display['MATCHLABEL'] = df_display['MATCHLABEL'].str.replace(r',', ' vs.', regex=True)
+
+            # Vælg og omdøb kolonner for et pænere look i tabellen
+            cols_to_show = []
+            if 'DATE' in df_display.columns: cols_to_show.append('DATE')
+            if 'MATCHLABEL' in df_display.columns: cols_to_show.append('MATCHLABEL')
+            
+            # Vis dataframe
+            st.dataframe(
+                df_display[cols_to_show].sort_values('DATE', ascending=False), 
+                hide_index=True,
+                use_container_width=True
+            )
