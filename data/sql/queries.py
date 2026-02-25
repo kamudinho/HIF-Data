@@ -44,16 +44,14 @@ def get_queries(comp_filter, season_filter):
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
-                p.IMAGEDATAURL AS PLAYER_IMAGE,
                 t.IMAGEDATAURL AS TEAM_LOGO,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
             LEFT JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
-            -- Vi kobler team-logoet på via spillerens team-ID i stedet for statistik-tabellens
             LEFT JOIN {DB}.WYSCOUT_TEAMS t
-                ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                ON s.TEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
