@@ -1,6 +1,6 @@
 # --- Sæson og eget hold ---
 SEASONNAME = "2025/2026"
-TEAM_WYID = 7470
+TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 
 # --- Navne til Dashboard (Valgfrit, men gør det pænt) ---
