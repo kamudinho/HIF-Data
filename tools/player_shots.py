@@ -125,8 +125,8 @@ def vis_side(df_spillere=None, hold_map=None):
         
         st.pyplot(fig)
 
-# --- DEBUG PRINT (Fjern når det virker) ---
-st.write("--- DEBUG INFO ---")
-st.write(f"Første 5 ID'er fra din CSV: {list(navne_dict.keys())[:5]}")
-st.write(f"Første 5 ID'er fra Snowflake: {df_s['PLAYER_ID_CLEAN'].unique()[:5].tolist()}")
-# ------------------------------------------
+        # --- DEBUG PRINT (Fjern når det virker) ---
+        st.write("--- DEBUG INFO ---")
+        st.write(f"Første 5 ID'er fra din CSV: {list(navne_dict.keys())[:5]}")
+        st.write(f"Første 5 ID'er fra Snowflake: {df_s['PLAYER_ID_CLEAN'].unique()[:5].tolist()}")
+        # ------------------------------------------
