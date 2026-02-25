@@ -96,11 +96,10 @@ def vis_side(df_spillere=None, hold_map=None):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # 2. Popover (Optimeret bredde med faste pixel-værdier)
+        # 2. Popover (Centreret indhold undtagen navn)
         with st.popover("Oversigt over afslutninger", use_container_width=True):
             if not df_p.empty:
                 tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
-                # Vi bruger ikoner her for at holde kolonnen "Udfald" meget smal
                 tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "SKUD"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
@@ -113,11 +112,11 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.Column(width=35), # Fast bredde i pixels
-                        "Spiller": st.column_config.Column(width=140),
-                        "Min": st.column_config.Column(width=40),
-                        "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
-                        "Udfald": st.column_config.Column(width=65)
+                        "#": st.column_config.Column(width=35, alignment="center"),
+                        "Spiller": st.column_config.Column(width=130), # Ingen alignment = venstrestillet
+                        "Min": st.column_config.Column(width=45, alignment="center"),
+                        "xG": st.column_config.NumberColumn(width=55, format="%.2f", alignment="center"),
+                        "Udfald": st.column_config.Column(width=65, alignment="center")
                     }
                 )
             else:
@@ -143,3 +142,33 @@ def vis_side(df_spillere=None, hold_map=None):
             <h2 style="margin:0;">{total_xg:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
+
+    # --- HER ER BANEN (col_map) SOM MANGLER I DIN KODE ---
+    with col_map:
+        pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', goal_type='box')
+        fig, ax = pitch.draw(figsize=(8, 10))
+        
+        if not df_p.empty:
+            for _, row in df_p.iterrows():
+                is_goal = row['IS_GOAL']
+                ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
+                
+                # Marker-form
+                m_style = 'o' 
+                if 'penalty' in ptype: m_style = 'P'
+                elif 'free_kick' in ptype: m_style = 's'
+            
+                # Størrelse baseret på xG
+                sc_size = (row['SHOTXG'] * 600) + 100
+                
+                pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
+                              s=sc_size, edgecolors='white',
+                              c='gold' if is_goal else TEAM_COLOR,
+                              marker=m_style, ax=ax, zorder=3, alpha=0.8)
+                
+                # Nummerering der matcher popover-tabellen (#)
+                ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
+                        color='black' if is_goal else 'white', 
+                        ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
+        
+        st.pyplot(fig)
