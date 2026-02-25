@@ -21,12 +21,13 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"} # Sort med gul border
 }
 
-try:
-    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
-except ImportError:
-    SEASONNAME = "2025/2026"
-    COMPETITION_WYID = (328, 329, 43319, 331, 1305, 335)
-    TEAM_WYID = 7490
+    try:
+        from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+        
+    except ImportError:
+            SEASONNAME = "2025/2026"
+            COMPETITION_WYID = (328,) # NordicBet Liga som standard
+            TEAM_WYID = 7490
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def get_team_color(name):
