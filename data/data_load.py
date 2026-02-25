@@ -20,7 +20,6 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
-# RETTET INDRYKNING HER
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
 except ImportError:
@@ -85,8 +84,11 @@ def get_hold_mapping():
     conn = _get_snowflake_conn()
     if not conn: return {}
     try:
+        # Henter direkte fra TEAMS tabellen for at sikre korrekt ID-til-Navn mapping
         df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS")
-        return {str(int(r[0])): str(r[1]).strip() for r in df_t.values} if df_t is not None else {}
+        if df_t is not None:
+            return {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
+        return {}
     except Exception as e:
         st.warning(f"Kunne ikke hente hold-mapping fra AXIS: {e}")
         return {}
@@ -97,6 +99,7 @@ def load_github_data():
     def read_gh(file):
         try:
             d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
+            # Standardiser kolonnenavne til UPPERCASE for at matche Snowflake format
             d.columns = [str(c).strip().upper() for c in d.columns]
             return d
         except: return pd.DataFrame()
@@ -106,42 +109,57 @@ def load_github_data():
 def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
+    
+    # Henter query-definitionen fra queries.py
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
-    if not q: return pd.DataFrame()
     
-    df = conn.query(q)
-    if df is not None:
-        df.columns = [str(c).strip().upper() for c in df.columns]
-        for col in ['LOCATIONX', 'LOCATIONY']:
-            if col in df.columns: 
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
-    return df
+    if not q:
+        st.error(f"Query nøgle '{query_key}' blev ikke fundet i queries.py")
+        return pd.DataFrame()
+    
+    try:
+        df = conn.query(q)
+        if df is not None:
+            # VIGTIGT: Tvinger alle kolonnenavne til UPPERCASE for at undgå 'KeyError' i Python
+            df.columns = [str(c).strip().upper() for c in df.columns]
+            
+            # Konverter lokations-data til numerisk format
+            for col in ['LOCATIONX', 'LOCATIONY']:
+                if col in df.columns: 
+                    df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Fejl ved kørsel af query '{query_key}': {e}")
+        return pd.DataFrame()
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
     gh_data = load_github_data()
     
-    if isinstance(COMPETITION_WYID, int):
-        comps = (COMPETITION_WYID,)
+    # Sikrer korrekt tuple-format til SQL 'IN (...)' klausuler
+    if isinstance(COMPETITION_WYID, (int, float)):
+        comps = (int(COMPETITION_WYID),)
     else:
-        comps = COMPETITION_WYID
+        comps = tuple(COMPETITION_WYID)
 
+    # Formaterer comp_filter strengen korrekt (f.eks. '(328)' eller '(328, 331)')
     if len(comps) == 1:
         comp_filter = f"({comps[0]})"
     else:
-        comp_filter = str(tuple(comps))
+        comp_filter = str(comps)
         
     season_filter = f"='{SEASONNAME}'"
     
     return {
-        "players": gh_data["players"],
-        "scouting": gh_data["scouting"],
-        "comp_filter": comp_filter,
-        "season_filter": season_filter,
-        "hold_map": get_hold_mapping(),
+        "players": gh_data["players"],      # Fra GitHub
+        "scouting": gh_data["scouting"],    # Fra GitHub
+        "comp_filter": comp_filter,         # Til Snowflake
+        "season_filter": season_filter,     # Til Snowflake
+        "hold_map": get_hold_mapping(),     # ID -> Navn ordbog
         "team_id": TEAM_WYID,
-        "playerstats": None,
-        "team_scatter": None,
-        "team_matches": None
+        "playerstats": None,                # Pladsholder til session_state
+        "team_scatter": None,               # Pladsholder til session_state
+        "team_matches": None                # Pladsholder til session_state
     }
