@@ -1,4 +1,4 @@
-a# data/sql/queries.py
+# data/sql/queries.py
 
 def get_queries(comp_filter, season_filter):
     """Returnerer en ordbog med SQL-queries til Snowflake (Rettet til KLUB_HVIDOVREIF)."""
