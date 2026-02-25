@@ -5,33 +5,31 @@ from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
 
 # --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
-# Her styres alle holdfarver centralt
 TEAM_COLORS = {
-    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},    # Rød med blå border
-    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},        # Blå med hvid border
-    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},    # Orange med sort border
-    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},     # Blå med hvid border
-    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},      # Kongeblå med hvid border
-    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},     # Gul med sort border
-    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},  # Lys blå med hvid border
-    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},         # Rød med hvid border
-    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},  # Hvid med blå border
-    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},       # Gul med blå border
-    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},     # Sort med blå border
-    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"} # Sort med gul border
+    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
+    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
+    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
+    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
+    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
+    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},
+    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
+    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
+    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},
+    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
+    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
+    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
-    try:
-        from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
-        
-    except ImportError:
-            SEASONNAME = "2025/2026"
-            COMPETITION_WYID = (328,) # NordicBet Liga som standard
-            TEAM_WYID = 7490
+# RETTET INDRYKNING HER
+try:
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+except ImportError:
+    SEASONNAME = "2025/2026"
+    COMPETITION_WYID = (328,) 
+    TEAM_WYID = 7490
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def get_team_color(name):
-    """Henter holdfarve baseret på navn. Standard er mørkegrå."""
     if not name: return "#333333"
     for key, color in TEAM_COLORS.items():
         if key.lower() in name.lower():
@@ -39,7 +37,6 @@ def get_team_color(name):
     return "#333333"
 
 def fmt_val(v):
-    """Formaterer tal: 0 decimaler hvis heltal, ellers 2 decimaler."""
     try:
         val = float(v)
         if val == 0 or val.is_integer():
@@ -52,22 +49,15 @@ def fmt_val(v):
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
-        
-        # Hent og rens den private nøgle
         p_key_raw = s["private_key"]
-        if isinstance(p_key_raw, str):
-            p_key_pem = p_key_raw.strip().replace("\\n", "\n")
-        else:
-            p_key_pem = p_key_raw
+        p_key_pem = p_key_raw.strip().replace("\\n", "\n") if isinstance(p_key_raw, str) else p_key_raw
 
-        # Indlæs den ULÅSTE nøgle
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode('utf-8'),
             password=None, 
             backend=default_backend()
         )
         
-        # Eksporter til DER-format
         p_key_der = p_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
@@ -122,12 +112,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     
     df = conn.query(q)
     if df is not None:
-        # Tving alle navne til store bogstaver og fjern eventuelle usynlige mellemrum
         df.columns = [str(c).strip().upper() for c in df.columns]
-        
-        # Ekstra tjek for at se om 'PASSES' faktisk er lander rigtigt (kun til debug)
-        # print(df.columns.tolist()) 
-        
         for col in ['LOCATIONX', 'LOCATIONY']:
             if col in df.columns: 
                 df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
@@ -137,13 +122,11 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
 def get_data_package():
     gh_data = load_github_data()
     
-    # Sikrer at COMPETITION_WYID altid er en tuple, selv hvis season_show kun har ét tal
     if isinstance(COMPETITION_WYID, int):
         comps = (COMPETITION_WYID,)
     else:
         comps = COMPETITION_WYID
 
-    # Lav SQL filter-strengen: f.eks. "(328)"
     if len(comps) == 1:
         comp_filter = f"({comps[0]})"
     else:
@@ -159,9 +142,6 @@ def get_data_package():
         "hold_map": get_hold_mapping(),
         "team_id": TEAM_WYID,
         "playerstats": None,
-        "team_scatter": None,
-        "team_matches": None
-    }
         "team_scatter": None,
         "team_matches": None
     }
