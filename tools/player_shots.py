@@ -80,7 +80,7 @@ def vis_side(df_spillere=None, hold_map=None):
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
-        # Hent unikke navne og tilføj "Alle spillere" øverst
+        # 1. Dropdown
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgmuligheder = ["Alle spillere"] + spiller_liste
         valgt_spiller = st.selectbox("Vælg spiller (Fra din CSV)", options=valgmuligheder)
@@ -96,60 +96,59 @@ def vis_side(df_spillere=None, hold_map=None):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # Metrics boks
+        # 2. Popover (Placeret under dropdown og over navn/stats)
+        with st.popover("📋 Se alle aktioner", use_container_width=True):
+            if not df_p.empty:
+                tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
+                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "❌ Afslutning"})
+                
+                vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
+                    'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'Min', 'SHOTXG': 'xG', 'RESULTAT': 'Udfald'
+                })
+                
+                # 'height' styres automatisk: viser alle rækker op til 500px, derefter scroll
+                st.dataframe(vis_df, hide_index=True, use_container_width=True, height=min(len(vis_df) * 35 + 38, 500))
+            else:
+                st.write("Ingen data fundet.")
+
+        # 3. Statistik Boks
         total_shots = len(df_p)
         total_goals = int(df_p['IS_GOAL'].sum())
         total_xg = df_p['SHOTXG'].sum()
+        # Konverteringsrate beregning
+        conv_rate = (total_goals / total_shots * 100) if total_shots > 0 else 0
 
         st.markdown(f"""
         <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
-            <h3 style="margin:0;">{overskrift}</h3>
-            <hr>
-            <small>AFSLUTNINGER / MÅL</small>
+            <h3 style="margin:0; color: #333;">{overskrift}</h3>
+            <hr style="margin: 10px 0;">
+            <small style="color:gray; text-transform:uppercase;">Afslutninger / Mål</small>
             <h2 style="margin:0;">{total_shots} / {total_goals}</h2>
-            <br>
-            <small>TOTAL xG</small>
+            <div style="margin: 10px 0;"></div>
+            <small style="color:gray; text-transform:uppercase;">Konvertering</small>
+            <h2 style="margin:0;">{conv_rate:.1f}%</h2>
+            <div style="margin: 10px 0;"></div>
+            <small style="color:gray; text-transform:uppercase;">Total xG</small>
             <h2 style="margin:0;">{total_xg:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
-        # --- NY POPOVER MED DETALJER ---
-        st.write("") # Margin
-        with st.popover("Se detaljeret skudliste", use_container_width=True):
-            if not df_p.empty:
-                # Forbered tabel-data
-                tabel_df = df_p[['NR', 'MINUTE', 'SHOTXG', 'IS_GOAL', 'SPILLER_NAVN']].copy()
-                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "Afslutning"})
-                
-                # Omdøb for pæn visning
-                vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
-                    'NR': '#',
-                    'SPILLER_NAVN': 'Spiller',
-                    'MINUTE': 'Min',
-                    'SHOTXG': 'xG',
-                    'RESULTAT': 'Udfald'
-                })
-                
-                st.dataframe(vis_df, hide_index=True, use_container_width=True)
-            else:
-                st.write("Ingen data at vise.")
-
     with col_map:
+        # Pitch setup (wyscout mål-dimensioner)
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', goal_type='box')
         fig, ax = pitch.draw(figsize=(8, 10))
         
-        # Tegn skud
         if not df_p.empty:
             for _, row in df_p.iterrows():
                 is_goal = row['IS_GOAL']
                 ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
                 
-                # Form skift
+                # Marker-logik
                 m_style = 'o' 
                 if 'penalty' in ptype: m_style = 'P'
                 elif 'free_kick' in ptype: m_style = 's'
             
-                # Skalering af størrelse (xG styret)
+                # Størrelse baseret på xG
                 sc_size = (row['SHOTXG'] * 600) + 100
                 
                 pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
@@ -157,7 +156,7 @@ def vis_side(df_spillere=None, hold_map=None):
                               c='gold' if is_goal else TEAM_COLOR,
                               marker=m_style, ax=ax, zorder=3, alpha=0.8)
                 
-                # Nummerering på banen
+                # Nummerering der matcher popover-tabellen
                 ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
                         color='black' if is_goal else 'white', 
                         ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
