@@ -77,10 +77,8 @@ def vis_side(df_spillere=None, hold_map=None):
         valgmuligheder = ["Alle spillere"] + spiller_liste
         valgt_spiller = st.selectbox("Vælg spiller", options=valgmuligheder)
         
-        # NY KNAP: Mål / Alle
         vis_type = st.radio("Vis afslutninger:", ["Alle", "Kun mål"], horizontal=True)
         
-        # Filtrering baseret på valg
         if valgt_spiller == "Alle spillere":
             df_p = df_s.copy()
             overskrift = "Hele holdet"
@@ -88,7 +86,6 @@ def vis_side(df_spillere=None, hold_map=None):
             df_p = df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
             overskrift = valgt_spiller
 
-        # Filtrer yderligere på mål hvis valgt
         if vis_type == "Kun mål":
             df_p = df_p[df_p['IS_GOAL'] == True].copy()
 
@@ -112,16 +109,16 @@ def vis_side(df_spillere=None, hold_map=None):
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
                         "#": st.column_config.NumberColumn(width=28),
-                        "Spiller": st.column_config.Column(width=138),
-                        "Min": st.column_config.NumberColumn(width=30),
+                        "SPILLER": st.column_config.Column(width=138),
+                        "MIN": st.column_config.NumberColumn(width=30),
                         "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
-                        "Udfald": st.column_config.Column(width=55)
+                        "AKTION": st.column_config.Column(width=55)
                     }
                 )
             else:
-                st.write("Ingen data fundet for dette filter.")
+                st.write("Ingen data fundet.")
                 
-        # 3. Statistik Boks
+        # 3. Statistik Boks med Konverteringsrate
         total_shots = len(df_p)
         total_goals = int(df_p['IS_GOAL'].sum())
         total_xg = df_p['SHOTXG'].sum()
@@ -131,8 +128,11 @@ def vis_side(df_spillere=None, hold_map=None):
         <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
             <h3 style="margin:0; color: #333;">{overskrift}</h3>
             <hr style="margin: 10px 0;">
-            <small style="color:gray; text-transform:uppercase;">Viste afslutninger</small>
-            <h2 style="margin:0;">{total_shots}</h2>
+            <small style="color:gray; text-transform:uppercase;">Viste afslutninger / Mål</small>
+            <h2 style="margin:0;">{total_shots} / {total_goals}</h2>
+            <div style="margin: 10px 0;"></div>
+            <small style="color:gray; text-transform:uppercase;">Konverteringsrate</small>
+            <h2 style="margin:0;">{conv_rate:.1f}%</h2>
             <div style="margin: 10px 0;"></div>
             <small style="color:gray; text-transform:uppercase;">Total xG (Filter)</small>
             <h2 style="margin:0;">{total_xg:.2f}</h2>
@@ -146,11 +146,7 @@ def vis_side(df_spillere=None, hold_map=None):
         if not df_p.empty:
             for _, row in df_p.iterrows():
                 is_goal = row['IS_GOAL']
-                
-                # Alle skud vises nu som cirkler ('o') jf. dit ønske om kun mål/skud
                 sc_size = (row['SHOTXG'] * 600) + 100
-                
-                # FARVE LOGIK: Mål = HIF-rød, Skud = HIF-blå
                 color = HIF_RED if is_goal else HIF_BLUE
                 
                 pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
@@ -162,7 +158,6 @@ def vis_side(df_spillere=None, hold_map=None):
                         color='white', ha='center', va='center', 
                         fontsize=7, fontweight='bold', zorder=4)
 
-        # --- LEGEND ØVERST TIL VENSTRE ---
         from matplotlib.lines import Line2D
         legend_elements = [
             Line2D([0], [0], marker='o', color='w', label='Mål', 
@@ -171,7 +166,6 @@ def vis_side(df_spillere=None, hold_map=None):
                    markerfacecolor=HIF_BLUE, markersize=10)
         ]
         
-        # loc='lower left' kombineret med en bbox_to_anchor over 1.0 placerer den over selve banen
         ax.legend(handles=legend_elements, loc='lower left', bbox_to_anchor=(0, 1.01),
                   ncol=2, fontsize=10, frameon=False)
         
