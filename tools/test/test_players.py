@@ -49,14 +49,11 @@ def vis_side():
                 with s_tabs[j]:
                     exist_stats = [c for c in cols if c in df_f.columns]
                     
-                    # DEFINERER KOLONNERNE DER SKAL VISES (Inkl. logoer)
-                    show_cols = ['TEAM_LOGO', 'PLAYER_IMAGE', 'NAVN', 'MINUTESONFIELD'] + exist_stats
-                    
-                    # Rens listen så vi ikke spørger efter kolonner der mangler
+                    # Kun Hold-logo og Navn som basis
+                    show_cols = ['TEAM_LOGO', 'NAVN', 'MINUTESONFIELD'] + exist_stats
                     actual_show = [c for c in show_cols if c in df_f.columns]
                     df_v = df_f[actual_show].copy()
 
-                    # Pr. 90 logik
                     if visning == "PR. 90" and 'MINUTESONFIELD' in df_v.columns:
                         for c in exist_stats:
                             if c == 'MATCHES': continue 
@@ -64,14 +61,17 @@ def vis_side():
                             min_f = pd.to_numeric(df_v['MINUTESONFIELD'], errors='coerce').fillna(0)
                             df_v[c] = (df_v[c] / min_f * 90).where(min_f > 0, 0).round(2)
 
+                    # Beregn højde for at undgå scroll i lille boks (ca. 35px pr række + header)
+                    dynamic_height = min(len(df_v) * 35 + 40, 800)
+
                     st.dataframe(
                         df_v.sort_values(exist_stats[0] if exist_stats else 'NAVN', ascending=False),
                         use_container_width=True,
                         hide_index=True,
+                        height=dynamic_height, # Her tvinger vi den til at brede sig ud
                         column_config={
                             "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
-                            "PLAYER_IMAGE": st.column_config.ImageColumn("", width="small"),
-                            "NAVN": st.column_config.TextColumn("SPILLER"),
+                            "NAVN": st.column_config.TextColumn("SPILLER", width="medium"),
                             "MINUTESONFIELD": st.column_config.NumberColumn("MIN", format="%d")
                         }
                     )
