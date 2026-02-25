@@ -44,7 +44,7 @@ def get_queries(comp_filter, season_filter):
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
-                t.IMAGEDATAURL AS IMAGEvURLDATA,
+                t.IMAGEDATAURL AS IMAGEURLDATA,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
             JOIN {DB}.WYSCOUT_PLAYERS p 
