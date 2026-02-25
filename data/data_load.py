@@ -133,6 +133,7 @@ def get_data_package():
         "sql_players": df_sql_players,           # Snowflake SQL (Navngivet unikt til dropdown)
         "scouting": gh_data["scouting"],
         "playerstats": df_playerstats,
+        "player_career": df_player_career,
         "team_scatter": df_team_stats,
         "team_matches": df_matches,
         "hold_map": get_hold_mapping(),
