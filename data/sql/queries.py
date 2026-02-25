@@ -47,10 +47,10 @@ def get_queries(comp_filter, season_filter):
                 t.IMAGEDATAURL AS IMAGEURLDATA,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            JOIN {DB}.WYSCOUT_PLAYERS p 
+            LEFT JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
-            JOIN {DB}.WYSCOUT_TEAMS t
+            LEFT JOIN {DB}.WYSCOUT_TEAMS t
                 ON s.TEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
