@@ -28,23 +28,12 @@ def get_queries(comp_filter, season_filter):
         # --- 2. SPILLER STATISTIK (Rå tal fra TOTAL tabellen) ---
         "playerstats": f"""
             SELECT 
-                s.PLAYER_WYID,
-                s.MINUTESONFIELD,
-                s.GOALS,
-                s.ASSISTS,
-                s.YELLOWCARDS,
-                s.MATCHES,
-                s.SHOTS,
-                s.SHOTSONTARGET,
-                s.XGSHOT,
-                s.DRIBBLES,
-                s.DEFENSIVEDUELS,
-                s.INTERCEPTIONS,
-                s.RECOVERIES
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            INNER JOIN {DB}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
-            WHERE s.COMPETITION_WYID IN {comp_filter}
-            AND ws.SEASONNAME {season_filter}
+                PLAYER_WYID, MINUTESONFIELD, GOALS, ASSISTS, 
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
+            WHERE COMPETITION_WYID IN {comp_filter}
+            AND SEASON_WYID IN (
+                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
+            )
         """,
 
         # --- 3. LOGOER (Ren opslagstabel) ---
