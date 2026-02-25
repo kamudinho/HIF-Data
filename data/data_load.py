@@ -25,7 +25,7 @@ try:
 except ImportError:
     SEASONNAME = "2025/2026"
     COMPETITION_WYID = (328,) 
-    TEAM_WYID = 7490
+    TEAM_WYID = 7470
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def get_team_color(name):
