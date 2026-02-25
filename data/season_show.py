@@ -3,9 +3,6 @@ SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 
-# --- Turneringer (IDs) ---
-COMPETITION_WYID = (328, 329, 43319, 331, 1305, 335)
-
 # --- Navne til Dashboard (Valgfrit, men gør det pænt) ---
 # Denne ordbog kan vi bruge i modstanderanalysen til at vise navne i stedet for tal
 COMP_MAP = {
