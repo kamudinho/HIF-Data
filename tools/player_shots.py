@@ -102,7 +102,7 @@ def vis_side(df_spillere=None, hold_map=None):
                 tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "SKUD"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
-                    'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'MIN', 'SHOTXG': 'xG', 'RESULTAT': 'AKTION'
+                    'NR': '#', 'SPILLER_NAVN': 'SPILLER', 'MINUTE': 'MIN', 'SHOTXG': 'xG', 'RESULTAT': 'AKTION'
                 })
                 
                 st.dataframe(
@@ -111,9 +111,9 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.NumberColumn(width=35),
+                        "#": st.column_config.NumberColumn(width=30),
                         "Spiller": st.column_config.Column(width=140),
-                        "Min": st.column_config.NumberColumn(width=35),
+                        "Min": st.column_config.NumberColumn(width=30),
                         "xG": st.column_config.NumberColumn(width=55, format="%.2f"),
                         "Udfald": st.column_config.Column(width=55)
                     }
