@@ -25,32 +25,38 @@ def vis_side(dp):
     # 2. Forbered ordbog til dropdown
     spiller_options = {}
     if not df_ps.empty:
-        # Sikr at vi arbejder med kopier og fjerner NaN
-        temp_df = df_ps.copy()
-        for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
-            if col in temp_df.columns:
-                temp_df[col] = temp_df[col].fillna('')
-
-        for _, r in temp_df.iterrows():
-            p_id = str(int(r['PLAYER_WYID']))
-            t_id = str(int(r['CURRENTTEAM_WYID'])) if r['CURRENTTEAM_WYID'] != '' else ""
-            
-            # Byg fulde navn
-            f_name = str(r['FIRSTNAME']).strip()
-            l_name = str(r['LASTNAME']).strip()
-            full = f"{f_name} {l_name}".strip()
-            if not full: 
-                full = str(r['SHORTNAME']).strip()
-            
-            klub = hold_map.get(t_id, "Ukendt klub")
-            label = f"{full} ({klub})"
-            
-            spiller_options[label] = {
-                "n": full, 
-                "id": p_id, 
-                "pos": r.get('ROLECODE3', '-'), 
-                "klub": klub
-            }
+        for _, r in df_ps.iterrows():
+            try:
+                # Tjek om PLAYER_WYID findes og ikke er NaN
+                if pd.isna(r.get('PLAYER_WYID')):
+                    continue
+                
+                # Konverter sikkert: float -> int -> str
+                p_id = str(int(float(r['PLAYER_WYID'])))
+                
+                # Håndter Team ID sikkert (kan være NaN hvis spilleren er klubløs)
+                t_id_raw = r.get('CURRENTTEAM_WYID')
+                t_id = str(int(float(t_id_raw))) if pd.notnull(t_id_raw) and t_id_raw != "" else ""
+                
+                # Navnehåndtering
+                f_name = str(r['FIRSTNAME'] if pd.notnull(r['FIRSTNAME']) else "").strip()
+                l_name = str(r['LASTNAME'] if pd.notnull(r['LASTNAME']) else "").strip()
+                full = f"{f_name} {l_name}".strip()
+                if not full: 
+                    full = str(r.get('SHORTNAME', 'Ukendt'))
+                
+                klub = hold_map.get(t_id, "Ukendt klub")
+                label = f"{full} ({klub})"
+                
+                spiller_options[label] = {
+                    "n": full, 
+                    "id": p_id, 
+                    "pos": r.get('ROLECODE3', '-'), 
+                    "klub": klub
+                }
+            except (ValueError, TypeError):
+                # Spring spilleren over hvis dataen er helt ødelagt, i stedet for at crashe
+                continue
 
     # 3. Valg af spiller
     metode = st.radio("Vælg spiller via:", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
