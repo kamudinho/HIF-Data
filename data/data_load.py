@@ -136,7 +136,19 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
     gh_data = load_github_data()
-    comp_filter = str(tuple(COMPETITION_WYID)) if len(COMPETITION_WYID) > 1 else f"({COMPETITION_WYID[0]})"
+    
+    # Sikrer at COMPETITION_WYID altid er en tuple, selv hvis season_show kun har ét tal
+    if isinstance(COMPETITION_WYID, int):
+        comps = (COMPETITION_WYID,)
+    else:
+        comps = COMPETITION_WYID
+
+    # Lav SQL filter-strengen: f.eks. "(328)"
+    if len(comps) == 1:
+        comp_filter = f"({comps[0]})"
+    else:
+        comp_filter = str(tuple(comps))
+        
     season_filter = f"='{SEASONNAME}'"
     
     return {
@@ -147,6 +159,9 @@ def get_data_package():
         "hold_map": get_hold_mapping(),
         "team_id": TEAM_WYID,
         "playerstats": None,
+        "team_scatter": None,
+        "team_matches": None
+    }
         "team_scatter": None,
         "team_matches": None
     }
