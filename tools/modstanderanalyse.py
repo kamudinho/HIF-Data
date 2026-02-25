@@ -132,26 +132,27 @@ def vis_side(df_team_matches, hold_map, df_events=None):
     with side_col:
         st.write("**Seneste kampe**")
         if not df_hold_data.empty:
-            # Lav en kopi til visning for ikke at ødelægge det originale dataframe
+            # 1. Lav en kopi og konverter til datetime for korrekt sortering
             df_display = df_hold_data.copy()
+            df_display['DATE'] = pd.to_datetime(df_display['DATE'])
             
-            # 1. Formater Dato (kun DD-MM-YY)
-            if 'DATE' in df_display.columns:
-                df_display['DATE'] = pd.to_datetime(df_display['DATE']).dt.strftime('%d-%m-%y')
+            # 2. Sortér EFTER datoen (nyeste øverst) FØR vi laver det om til tekst
+            df_display = df_display.sort_values('DATE', ascending=False)
             
-            # 2. Formater Matchlabel (skift ',' ud med ' : ' eller lignende)
-            # Hvis din label er "Hvidovre, B.93", bliver den til "Hvidovre vs. B.93"
+            # 3. Formater Dato til DD-MM-YY streng
+            df_display['DATE_STR'] = df_display['DATE'].dt.strftime('%d-%m-%y')
+            
+            # 4. Rens MATCHLABEL: Erstat ',' med ' - ' og fjern overflødige 'vs.' hvis de driller
             if 'MATCHLABEL' in df_display.columns:
-                df_display['MATCHLABEL'] = df_display['MATCHLABEL'].str.replace(r',', ' vs.', regex=True)
+                # Vi fjerner kommaet og indsætter en pæn separator
+                df_display['MATCHLABEL'] = df_display['MATCHLABEL'].str.replace(r',', ' -', regex=True)
 
-            # Vælg og omdøb kolonner for et pænere look i tabellen
-            cols_to_show = []
-            if 'DATE' in df_display.columns: cols_to_show.append('DATE')
-            if 'MATCHLABEL' in df_display.columns: cols_to_show.append('MATCHLABEL')
+            # 5. Vælg kolonner og omdøb for visning
+            # Vi bruger 'DATE_STR' til visning, men holdt 'DATE' til sortering
+            df_final = df_display[['DATE_STR', 'MATCHLABEL']].rename(columns={'DATE_STR': 'DATO', 'MATCHLABEL': 'KAMP'})
             
-            # Vis dataframe
             st.dataframe(
-                df_display[cols_to_show].sort_values('DATE', ascending=False), 
+                df_final, 
                 hide_index=True,
                 use_container_width=True
             )
