@@ -39,22 +39,11 @@ def get_queries(comp_filter, season_filter):
             WHERE tm.COMPETITION_WYID IN {comp_filter} 
             AND s.SEASONNAME {season_filter}
         """,
-        # Opdater disse to i din queries-ordbog
         "playerstats": f"""
             SELECT 
-                PLAYER_WYID,
-                MINUTESONFIELD,
-                GOALS,
-                ASSISTS,
-                YELLOWCARDS,
-                MATCHES,
-                SHOTS,
-                SHOTSONTARGET,
-                XGSHOT,
-                DRIBBLES,
-                DEFENSIVEDUELS,
-                INTERCEPTIONS,
-                RECOVERIES
+                PLAYER_WYID, MINUTESONFIELD, GOALS, ASSISTS, YELLOWCARDS, 
+                MATCHES, SHOTS, SHOTSONTARGET, XGSHOT, DRIBBLES, 
+                DEFENSIVEDUELS, INTERCEPTIONS, RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL
             WHERE COMPETITION_WYID IN {comp_filter}
             AND SEASON_WYID IN (
@@ -64,7 +53,6 @@ def get_queries(comp_filter, season_filter):
         
         "team_logos": f"SELECT TEAM_WYID, IMAGEDATAURL AS TEAM_LOGO FROM {DB}.WYSCOUT_TEAMS",
         
-        # Vi har også brug for basis-info for at koble Navn og Team_ID på statistikken
         "players_basic": f"""
             SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, ROLECODE3, CURRENTTEAM_WYID 
             FROM {DB}.WYSCOUT_PLAYERS
