@@ -15,7 +15,7 @@ def get_queries(comp_filter, season_filter):
     return {
         # --- 1. SPILLER GRUNDDATA (Kun aktuelle i valgte turneringer) ---
         "players": f"""
-            SELECT DISTINCT 
+            SELECT 
                 p.PLAYER_WYID, 
                 p.FIRSTNAME, 
                 p.LASTNAME, 
@@ -23,10 +23,11 @@ def get_queries(comp_filter, season_filter):
                 p.ROLECODE3, 
                 p.CURRENTTEAM_WYID 
             FROM {DB}.WYSCOUT_PLAYERS p
-            -- Vi joiner med statistikkerne for at vide, hvilken liga de optræder i
-            INNER JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL stats 
-                ON p.PLAYER_WYID = stats.PLAYER_WYID
-            WHERE stats.COMPETITION_WYID IN {comp_filter}
+            WHERE p.PLAYER_WYID IN (
+                SELECT DISTINCT PLAYER_WYID 
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+                WHERE COMPETITION_WYID IN {comp_filter}
+            )
         """,
 
         # --- 2. SPILLER STATISTIK (Simpel og robust) ---
