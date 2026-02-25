@@ -2,8 +2,10 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 
-@st.cache_resource
-def build_scatter_plot(df_plot, x_col, y_col, metric_type):
+# Skift til cache_data eller fjern den helt under debugging
+@st.cache_data
+def build_scatter_plot(df_plot, metric_type):
+    # Vi bruger de præcise kolonnenavne vi lige har lavet
     fig = px.scatter(
         df_plot, 
         x='X_PER_GAME', 
@@ -19,7 +21,9 @@ def build_scatter_plot(df_plot, x_col, y_col, metric_type):
         color_discrete_sequence=['#df003b'] 
     )
 
+    # Vender Y-aksen så færre mål imod er i TOPPEN (godt)
     fig.update_yaxes(autorange="reversed")
+    
     fig.update_traces(
         marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         textposition='top center'
@@ -38,33 +42,29 @@ def vis_side(df_scatter):
         st.warning("Ingen scatter-data tilgængelige.")
         return
 
-    # Hent konfiguration fra season_show.py
+    # 1. Standardiser kolonner med det samme
+    df_s = df_scatter.copy()
+    df_s.columns = [c.upper() for c in df_s.columns]
+    
+    # 2. Hent sæson-konfiguration
     try:
         from data.season_show import SEASONNAME
         current_season = str(SEASONNAME).strip()
     except:
         current_season = "2025/2026"
 
-    df_s = df_scatter.copy()
-    df_s.columns = [c.upper() for c in df_s.columns]
-    
-    # --- NY DIAGNOSE: Hvis vi ikke kan finde kolonnen, vis brugeren hvad der findes ---
-    # Vi leder efter alt der minder om 'SEASON'
+    # 3. Find sæson-kolonne
     s_col = next((c for c in df_s.columns if 'SEASON' in c), None)
     
     if not s_col:
-        st.error(f"⚠️ Kolonnefejl! Kunne ikke finde en sæson-kolonne.")
-        st.write("Tilgængelige kolonner i dine data:", list(df_s.columns))
+        st.error("Kunne ikke finde sæson-kolonne.")
         return
 
-    # Rens data og filtrer
     df_s[s_col] = df_s[s_col].astype(str).str.strip()
     df_current = df_s[df_s[s_col] == current_season].copy()
     
     if df_current.empty:
-        st.warning(f"Ingen data fundet for sæsonen: {current_season}")
-        available = df_s[s_col].unique()
-        st.write(f"Sæsoner fundet i databasen: {available}")
+        st.warning(f"Ingen data for {current_season}")
         return
 
     st.markdown('<div class="custom-header"><h3>SCATTERPLOTS</h3></div>', unsafe_allow_html=True)
@@ -79,17 +79,27 @@ def vis_side(df_scatter):
     df_filtered = df_current[df_current['COMPETITIONNAME'] == valgt_league].copy()
     
     if not df_filtered.empty:
+        # Vælg rå kolonner baseret på analyse
         if metric_type == "xG (Expected Goals)":
-            x_col, y_col = 'XGSHOT', 'XGSHOTAGAINST'
+            x_raw, y_raw = 'XGSHOT', 'XGSHOTAGAINST'
         else:
-            x_col, y_col = 'GOALS', 'CONCEDEDGOALS'
+            x_raw, y_raw = 'GOALS', 'CONCEDEDGOALS'
         
-        # Sikre numeriske typer før beregning
-        for col in [x_col, y_col, 'MATCHES']:
+        # SIKKERHED: Tjek om kolonnerne findes før beregning
+        needed = [x_raw, y_raw, 'MATCHES']
+        missing = [c for c in needed if c not in df_filtered.columns]
+        
+        if missing:
+            st.error(f"Mangler kolonner i data: {missing}")
+            return
+
+        # Konverter og beregn
+        for col in needed:
             df_filtered[col] = pd.to_numeric(df_filtered[col], errors='coerce').fillna(0)
 
-        df_filtered['X_PER_GAME'] = df_filtered[x_col] / df_filtered['MATCHES'].replace(0, 1)
-        df_filtered['Y_PER_GAME'] = df_filtered[y_col] / df_filtered['MATCHES'].replace(0, 1)
+        df_filtered['X_PER_GAME'] = df_filtered[x_raw] / df_filtered['MATCHES'].replace(0, 1)
+        df_filtered['Y_PER_GAME'] = df_filtered[y_raw] / df_filtered['MATCHES'].replace(0, 1)
 
-        fig = build_scatter_plot(df_filtered, x_col, y_col, metric_type)
+        # Send data til plot-funktion
+        fig = build_scatter_plot(df_filtered, metric_type)
         st.plotly_chart(fig, use_container_width=True)
