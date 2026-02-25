@@ -50,13 +50,14 @@ def get_queries(comp_filter, season_filter):
             INNER JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
-            -- Vi skifter S.TEAM_WYID ud med P.CURRENTTEAM_WYID for at undgå fejlen
             INNER JOIN {DB}.WYSCOUT_TEAMS t
                 ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
+            -- DENNE LINJE FJERNER DUBLETTER:
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY s.PLAYER_WYID ORDER BY s.MINUTESONFIELD DESC) = 1
         """,
         "team_stats_full": f"""
             SELECT DISTINCT 
