@@ -40,7 +40,7 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
        "playerstats": f"""
-            SELECT 
+            SELECT DISTINCT
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
