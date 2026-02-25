@@ -43,7 +43,8 @@ def get_queries(comp_filter, season_filter):
             SELECT 
                 s.PLAYER_WYID,
                 p.SHORTNAME AS NAVN,
-                p.CURRENTTEAM_WYID,
+                p.ROLECODE3,
+                p.CURRENTTEAM_WYID,  -- DENNE SKAL VÆRE HER!
                 s.MINUTESONFIELD,
                 s.GOALS,
                 s.ASSISTS,
@@ -56,9 +57,9 @@ def get_queries(comp_filter, season_filter):
                 s.DEFENSIVEDUELS,
                 s.INTERCEPTIONS,
                 s.RECOVERIES
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            INNER JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-            INNER JOIN {DB}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+            FROM {{DB}}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+            INNER JOIN {{DB}}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+            INNER JOIN {{DB}}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND ws.SEASONNAME {season_filter}
         """,
