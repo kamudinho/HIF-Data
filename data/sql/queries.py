@@ -52,7 +52,7 @@ def get_queries(comp_filter, season_filter):
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
             LEFT JOIN {DB}.WYSCOUT_TEAMS t
-                ON s.TEAM_WYID = t.TEAM_WYID
+                ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
