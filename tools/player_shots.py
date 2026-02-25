@@ -146,12 +146,8 @@ def vis_side(df_spillere=None, hold_map=None):
         if not df_p.empty:
             for _, row in df_p.iterrows():
                 is_goal = row['IS_GOAL']
-                ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
                 
-                m_style = 'o' 
-                if 'penalty' in ptype: m_style = 'P'
-                elif 'free_kick' in ptype: m_style = 's'
-            
+                # Alle skud vises nu som cirkler ('o') jf. dit ønske om kun mål/skud
                 sc_size = (row['SHOTXG'] * 600) + 100
                 
                 # FARVE LOGIK: Mål = HIF-rød, Skud = HIF-blå
@@ -160,22 +156,23 @@ def vis_side(df_spillere=None, hold_map=None):
                 pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
                               s=sc_size, edgecolors='white',
                               c=color,
-                              marker=m_style, ax=ax, zorder=3, alpha=0.8)
+                              marker='o', ax=ax, zorder=3, alpha=0.8)
                 
                 ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
                         color='white', ha='center', va='center', 
                         fontsize=7, fontweight='bold', zorder=4)
 
-        # --- LEGEND ---
-        # Vi placerer en manuel legend i bunden af figuren
+        # --- LEGEND ØVERST TIL VENSTRE ---
         from matplotlib.lines import Line2D
         legend_elements = [
-            Line2D([0], [0], marker='o', color='w', label='Mål', markerfacecolor=HIF_RED, markersize=10),
-            Line2D([0], [0], marker='o', color='w', label='Skud', markerfacecolor=HIF_BLUE, markersize=10),
-            Line2D([0], [0], marker='s', color='w', label='Frispark', markerfacecolor='gray', markersize=10),
-            Line2D([0], [0], marker='P', color='w', label='Straffe', markerfacecolor='gray', markersize=10)
+            Line2D([0], [0], marker='o', color='w', label='Mål', 
+                   markerfacecolor=HIF_RED, markersize=10),
+            Line2D([0], [0], marker='o', color='w', label='Skud', 
+                   markerfacecolor=HIF_BLUE, markersize=10)
         ]
-        ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05),
-                  ncol=4, fontsize=8, frameon=False)
+        
+        # loc='lower left' kombineret med en bbox_to_anchor over 1.0 placerer den over selve banen
+        ax.legend(handles=legend_elements, loc='lower left', bbox_to_anchor=(0, 1.01),
+                  ncol=2, fontsize=10, frameon=False)
         
         st.pyplot(fig)
