@@ -101,7 +101,7 @@ def vis_side(df_spillere=None, hold_map=None):
             if not df_p.empty:
                 tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
                 # Vi bruger ikoner her for at holde kolonnen "Udfald" meget smal
-                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "❌"})
+                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "SKUD"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
                     'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'Min', 'SHOTXG': 'xG', 'RESULTAT': 'Udfald'
@@ -114,7 +114,7 @@ def vis_side(df_spillere=None, hold_map=None):
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
                         "#": st.column_config.Column(width=35), # Fast bredde i pixels
-                        "Spiller": st.column_config.Column(width=150),
+                        "Spiller": st.column_config.Column(width=140),
                         "Min": st.column_config.Column(width=40),
                         "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
                         "Udfald": st.column_config.Column(width=65)
