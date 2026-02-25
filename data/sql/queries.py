@@ -44,7 +44,8 @@ def get_queries(comp_filter, season_filter):
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
-                t.IMAGEDATAURL AS IMAGEURLDATA,
+                p.IMAGEDATAURL AS PLAYER_IMAGE,
+                t.IMAGEDATAURL AS TEAM_LOGO,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
             LEFT JOIN {DB}.WYSCOUT_PLAYERS p 
