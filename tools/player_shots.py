@@ -102,7 +102,7 @@ def vis_side(df_spillere=None, hold_map=None):
                 tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "SKUD"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
-                    'NR': '#', 'SPILLER_NAVN': 'Spiller', 'Min': 'Min', 'SHOTXG': 'xG', 'RESULTAT': 'Udfald'
+                    'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'MIN', 'SHOTXG': 'xG', 'RESULTAT': 'AKTION'
                 })
                 
                 st.dataframe(
