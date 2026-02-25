@@ -21,8 +21,6 @@ def vis_side():
 
     df = df_raw.copy()
     df.columns = [str(c).upper() for c in df.columns]
-
-    # Navne-samling
     df['NAVN'] = (df['FIRSTNAME'].apply(super_clean) + " " + df['LASTNAME'].apply(super_clean)).str.strip()
     
     col_nav, col_type = st.columns([4, 2])
@@ -40,35 +38,27 @@ def vis_side():
     for i, p_tab in enumerate(tabs_pos):
         with p_tab:
             label = ["ALLE", "GKP", "DEF", "MID", "FWD"][i]
-            df_f = df.copy()
-            if label != "ALLE" and 'ROLECODE3' in df_f.columns:
-                df_f = df_f[df_f['ROLECODE3'] == label]
+            df_f = df[df['ROLECODE3'] == label] if label != "ALLE" else df
 
             s_tabs = st.tabs(list(stats_map.keys()))
             for j, (g_name, cols) in enumerate(stats_map.items()):
                 with s_tabs[j]:
                     exist_stats = [c for c in cols if c in df_f.columns]
-                    
-                    # Kun Hold-logo og Navn som basis
+                    # Kun TEAM_LOGO, ingen spillerbillede
                     show_cols = ['TEAM_LOGO', 'NAVN', 'MINUTESONFIELD'] + exist_stats
-                    actual_show = [c for c in show_cols if c in df_f.columns]
-                    df_v = df_f[actual_show].copy()
+                    df_v = df_f[[c for c in show_cols if c in df_f.columns]].copy()
 
                     if visning == "PR. 90" and 'MINUTESONFIELD' in df_v.columns:
                         for c in exist_stats:
                             if c == 'MATCHES': continue 
-                            df_v[c] = pd.to_numeric(df_v[c], errors='coerce').fillna(0)
-                            min_f = pd.to_numeric(df_v['MINUTESONFIELD'], errors='coerce').fillna(0)
-                            df_v[c] = (df_v[c] / min_f * 90).where(min_f > 0, 0).round(2)
+                            df_v[c] = (pd.to_numeric(df_v[c]) / pd.to_numeric(df_v['MINUTESONFIELD']) * 90).round(2)
 
-                    # Beregn højde for at undgå scroll i lille boks (ca. 35px pr række + header)
-                    dynamic_height = min(len(df_v) * 35 + 40, 800)
-
+                    # Ingen scrollbar i tabellen - den fylder det den skal
                     st.dataframe(
                         df_v.sort_values(exist_stats[0] if exist_stats else 'NAVN', ascending=False),
                         use_container_width=True,
                         hide_index=True,
-                        height=dynamic_height, # Her tvinger vi den til at brede sig ud
+                        height=min(len(df_v) * 35 + 40, 1500), 
                         column_config={
                             "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
                             "NAVN": st.column_config.TextColumn("SPILLER", width="medium"),
