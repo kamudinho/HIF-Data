@@ -115,7 +115,6 @@ try:
             sq.vis_side(dp["players"])
         elif sel == "Spillerstats":
             import tools.stats as st_tool
-            # VIKTIGT: Sørg for at denne funktion kan håndtere den nye playerstats query
             st_tool.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
         elif sel == "Top 5":
             import tools.top5 as t5
@@ -128,12 +127,12 @@ try:
             ps.vis_side(dp["players"], dp["hold_map"])
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
-            # Vi henter team_matches her, så siden har noget at arbejde med med det samme
             df_matches = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
             ma.vis_side(df_matches, dp["hold_map"])
         elif sel == "Scatterplots":
             import tools.scatters as sc
-            sc.vis_side(load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
+            df_scatter = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+            sc.vis_side(df_scatter)
 
     # --- BETINIA LIGAEN (Her var fejlen!) ---
     elif hoved_omraade == "BETINIA LIGAEN":
