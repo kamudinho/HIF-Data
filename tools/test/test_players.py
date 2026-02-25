@@ -12,10 +12,6 @@ def super_clean(val):
 def vis_side():
     st.markdown('<div style="background-color:#cc0000;padding:15px;border-radius:8px;text-align:center;color:white;margin-bottom:20px;"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
 
-    if "data_package" not in st.session_state:
-        st.error("Session fejl. Log venligst ind igen.")
-        return
-    
     dp = st.session_state["data_package"]
     df_raw = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
 
@@ -23,14 +19,12 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
-    # 1. Forbered data
     df = df_raw.copy()
     df.columns = [str(c).upper() for c in df.columns]
 
-    # 2. Robust navne-samling
+    # Navne-samling
     df['NAVN'] = (df['FIRSTNAME'].apply(super_clean) + " " + df['LASTNAME'].apply(super_clean)).str.strip()
     
-    # 3. Layout & Navigation
     col_nav, col_type = st.columns([4, 2])
     with col_nav:
         tabs_pos = st.tabs(["ALLE", "GKP", "DEF", "MID", "FWD"])
@@ -54,13 +48,15 @@ def vis_side():
             for j, (g_name, cols) in enumerate(stats_map.items()):
                 with s_tabs[j]:
                     exist_stats = [c for c in cols if c in df_f.columns]
-                    # Her bruger vi de nye aliasser fra SQL: TEAM_LOGO og PLAYER_IMAGE
-                    base_cols = ['TEAM_LOGO', 'PLAYER_IMAGE', 'NAVN', 'MINUTESONFIELD']
-                    show_cols = [c for c in base_cols if c in df_f.columns] + exist_stats
                     
-                    df_v = df_f[show_cols].copy()
+                    # DEFINERER KOLONNERNE DER SKAL VISES (Inkl. logoer)
+                    show_cols = ['TEAM_LOGO', 'PLAYER_IMAGE', 'NAVN', 'MINUTESONFIELD'] + exist_stats
+                    
+                    # Rens listen så vi ikke spørger efter kolonner der mangler
+                    actual_show = [c for c in show_cols if c in df_f.columns]
+                    df_v = df_f[actual_show].copy()
 
-                    # Pr. 90 logik - vi beregner IKKE 'MATCHES' som pr. 90
+                    # Pr. 90 logik
                     if visning == "PR. 90" and 'MINUTESONFIELD' in df_v.columns:
                         for c in exist_stats:
                             if c == 'MATCHES': continue 
