@@ -128,7 +128,9 @@ try:
             ps.vis_side(dp["players"], dp["hold_map"])
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
-            ma.vis_side(dp)
+            # Vi henter team_matches her, så siden har noget at arbejde med med det samme
+            df_matches = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
+            ma.vis_side(df_matches, dp["hold_map"])
         elif sel == "Scatterplots":
             import tools.scatters as sc
             sc.vis_side(load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
