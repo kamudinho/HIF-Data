@@ -1,4 +1,5 @@
 import streamlit as st
+import pd
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -32,6 +33,8 @@ def vis_spiller_billede(pid, w=110):
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, career_df):
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+    # Sørg for at sammenligne strenge mod strenge
+    full_df['PLAYER_WYID'] = full_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
@@ -48,7 +51,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
     with t1:
-        # Metrikker (8 stk)
         m_cols = st.columns(4)
         metrics = [("Teknik", "TEKNIK"), ("Fart", "FART"), ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
                    ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")]
@@ -60,13 +62,21 @@ def vis_profil(p_data, full_df, s_df, career_df):
         with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
-   with t4:
-        # 1. Sikr dig at vi har et rent tekst-ID uden decimaler
-        clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
-        
+    with t2:
+        st.write("### Historiske rapporter")
+        for _, row in historik.iloc[::-1].iterrows():
+            with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')} | Scout: {row.get('SCOUT')}"):
+                st.write(f"**Vurdering:** {row.get('VURDERING')}")
+
+    with t3:
+        st.write("### Rating udvikling")
+        fig_line = go.Figure(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='lines+markers', line=dict(color='#df003b')))
+        fig_line.update_layout(yaxis=dict(range=[0, 6]), height=300)
+        st.plotly_chart(fig_line, use_container_width=True)
+
+    with t4:
         st.subheader("📊 Sæsonstatistik (Aktuel)")
         if s_df is not None and not s_df.empty:
-            # Vi tvinger både kolonnen og søge-ID til string
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
             
@@ -77,26 +87,22 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 s1.metric("Kampe", f"{int(r.get('MATCHES', 0))}")
                 s2.metric("Mål", f"{int(r.get('GOALS', 0))}")
                 s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
-                # ... resten af dine metrics ...
             else:
                 st.info(f"Ingen aktive stats fundet for ID: {clean_p_id}")
 
         st.divider()
-        
         st.subheader("📜 Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            # Samme rensning her
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
-            
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
                 st.dataframe(df_p[['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME', 'APPEARANCES', 'GOAL']], 
                              use_container_width=True, hide_index=True)
             else:
-                st.info("Ingen historik fundet i databasen.")
+                st.info("Ingen historik fundet.")
+
     with t5:
-        # HER ER DIT ORIGINALE RADAR LAYOUT (3 kolonner)
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
         cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
@@ -109,9 +115,9 @@ def vis_profil(p_data, full_df, s_df, career_df):
             for cat, val in zip(categories, v):
                 st.markdown(f"**{cat}:** <span style='color:#df003b; font-weight:bold;'>{val}</span>", unsafe_allow_html=True)
         with col_mid:
-            fig_radar = go.Figure(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2), fillcolor='rgba(223, 0, 59, 0.3)', marker=dict(size=8, color='#df003b')))
-            fig_radar.update_layout(polar=dict(angularaxis=dict(rotation=90, direction="clockwise", gridcolor="lightgrey"), radialaxis=dict(visible=True, range=[0, 6], tickvals=[1, 2, 3, 4, 5, 6]), gridshape='linear'), showlegend=False, height=450, margin=dict(l=60, r=60, t=30, b=30))
-            st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+            fig_radar = go.Figure(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2)))
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
+            st.plotly_chart(fig_radar, use_container_width=True)
         with col_right:
             st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
@@ -129,7 +135,6 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     
     career_df = st.session_state["player_career_data"]
 
-    # Vi sikrer UPPERCASE for alle kolonner for at undgå fejl
     for d in [scout_df, spillere_df, stats_df, career_df]:
         if d is not None and not d.empty: d.columns = [c.upper() for c in d.columns]
 
