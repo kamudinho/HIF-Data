@@ -13,16 +13,20 @@ def get_queries(comp_filter, season_filter):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
     return {
-        # --- 1. SPILLER GRUNDDATA (Ingen dubletter) ---
+        # --- 1. SPILLER GRUNDDATA (Kun aktuelle i valgte turneringer) ---
         "players": f"""
             SELECT DISTINCT 
-                PLAYER_WYID, 
-                FIRSTNAME, 
-                LASTNAME, 
-                SHORTNAME, 
-                ROLECODE3, 
-                CURRENTTEAM_WYID 
-            FROM {DB}.WYSCOUT_PLAYERS
+                p.PLAYER_WYID, 
+                p.FIRSTNAME, 
+                p.LASTNAME, 
+                p.SHORTNAME, 
+                p.ROLECODE3, 
+                p.CURRENTTEAM_WYID 
+            FROM {DB}.WYSCOUT_PLAYERS p
+            -- Vi joiner med statistikkerne for at vide, hvilken liga de optræder i
+            INNER JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL stats 
+                ON p.PLAYER_WYID = stats.PLAYER_WYID
+            WHERE stats.COMPETITION_WYID IN {comp_filter}
         """,
 
         # --- 2. SPILLER STATISTIK (Simpel og robust) ---
