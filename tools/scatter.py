@@ -66,10 +66,10 @@ def vis_side(df_scatter):
     # --- 1. DEFINER DINE METRICS HER ---
     # Format: "Navn i menu": (Kolonne_For, Kolonne_Imod)
     metric_options = {
-        "xG (Expected Goals)": ("XGSHOT", "XGSHOTAGAINST"),
-        "Mål & Afslutninger": ("GOALS", "CONCEDEDGOALS"),
-        "Skud": ("SHOTS", "SHOTSAGAINST"),
-        "Aktioner i feltet": ("TOUCHINBOX", "TOUCHINBOXAGAINST")
+        "MÅL FOR vs. MÅL IMOD": ("GOALS", "CONCEDEDGOALS"),
+        "TOUCHES IN BOX vs. SKUD": ("TOUCHINBOX", "SHOTS"),
+        "xG vs. MÅL FOR": ("XGSHOT", "GOALS"),
+        "SKUD FOR vs. SKUD MOD": ("SHOTS", "SHOTSAGAINST")
     }
 
     st.markdown(f"""
