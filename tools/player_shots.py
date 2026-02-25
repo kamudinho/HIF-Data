@@ -112,9 +112,9 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.NumberColumn(width=40), # NumberColumn centrerer ofte automatisk
+                        "#": st.column_config.NumberColumn(width=35), # NumberColumn centrerer ofte automatisk
                         "Spiller": st.column_config.Column(width=140),
-                        "Min": st.column_config.NumberColumn(width=40),
+                        "Min": st.column_config.NumberColumn(width=35),
                         "xG": st.column_config.NumberColumn(width=60, format="%.2f"),
                         "Udfald": st.column_config.Column(width=60)
                     }
