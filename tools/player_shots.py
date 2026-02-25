@@ -128,12 +128,11 @@ def vis_side(df_spillere=None, hold_map=None):
         # Placer skud
         for _, row in df_p.iterrows():
             is_goal = row['IS_GOAL']
-            # Wyscout X er længderetning (100 er mål), Y er bredde
             pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
                           s=250 if is_goal else 120,
                           edgecolors='white',
                           c='gold' if is_goal else TEAM_COLOR,
-                          marker='circle',
+                          marker='o', 
                           ax=ax,
                           zorder=3)
             
