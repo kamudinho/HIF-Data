@@ -27,7 +27,7 @@ def build_scatter_plot(df_plot, metric_type):
     fig.update_yaxes(autorange="reversed")
     
     fig.update_traces(
-        marker=dict(size=16, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
+        marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         textposition='top center'
     )
 
