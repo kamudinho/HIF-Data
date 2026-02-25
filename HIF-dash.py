@@ -100,7 +100,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
-# --- 5. ROUTING LOGIK ---
+# --- 5. ROUTING LOGIK (OPDATERET) ---
 if not sel: 
     sel = "Oversigt"
 
@@ -115,6 +115,7 @@ try:
             sq.vis_side(dp["players"])
         elif sel == "Spillerstats":
             import tools.stats as st_tool
+            # VIKTIGT: Sørg for at denne funktion kan håndtere den nye playerstats query
             st_tool.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
         elif sel == "Top 5":
             import tools.top5 as t5
@@ -132,18 +133,18 @@ try:
             import tools.scatters as sc
             sc.vis_side(load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
 
-    # --- BETINIA LIGAEN ---
+    # --- BETINIA LIGAEN (Her var fejlen!) ---
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
             import importlib
-            importlib.reload(tt)  # Tvinger Python til at læse dine rettelser!
+            importlib.reload(tt)
             tt.vis_side()
-            
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
+            import importlib
+            importlib.reload(tp) # Tvinger den til at bruge den nye logik med 'players' query
             tp.vis_side()
-            
         elif sel == "Kampe":
             import tools.test.test_matches as tm
             tm.vis_side()
