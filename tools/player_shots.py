@@ -83,7 +83,7 @@ def vis_side(df_spillere=None, hold_map=None):
         # 1. Dropdown
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
         valgmuligheder = ["Alle spillere"] + spiller_liste
-        valgt_spiller = st.selectbox("Vælg spiller (Fra din CSV)", options=valgmuligheder)
+        valgt_spiller = st.selectbox("Vælg spiller", options=valgmuligheder)
         
         # Filtrering baseret på valg
         if valgt_spiller == "Alle spillere":
@@ -114,9 +114,9 @@ def vis_side(df_spillere=None, hold_map=None):
                     column_config={
                         "#": st.column_config.NumberColumn(width=40), # NumberColumn centrerer ofte automatisk
                         "Spiller": st.column_config.Column(width=140),
-                        "Min": st.column_config.NumberColumn(width=50),
+                        "Min": st.column_config.NumberColumn(width=40),
                         "xG": st.column_config.NumberColumn(width=60, format="%.2f"),
-                        "Udfald": st.column_config.Column(width=70)
+                        "Udfald": st.column_config.Column(width=60)
                     }
                 )
             else:
