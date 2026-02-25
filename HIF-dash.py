@@ -154,14 +154,29 @@ try:
     elif hoved_omraade == "SCOUTING":
         if sel == "Scoutrapport":
             import tools.scout_input as si
-            si.vis_side(dp)
+            # Her sender vi hele 'dp' med, så si.vis_side kan læse dp["sql_players"]
+            si.vis_side(dp) 
+            
         elif sel == "Database":
             import tools.scout_db as sdb
-            sdb.vis_side(dp["scouting"], dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), None)
+            # Vi genbruger de indlæste data fra dp
+            sdb.vis_side(
+                dp["scouting"], 
+                dp["players"], 
+                load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), 
+                None
+            )
+            
         elif sel == "Sammenligning":
             import tools.comparison as comp
-            comp.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), dp["scouting"], None, dp["season_filter"])
-
+            comp.vis_side(
+                dp["players"], 
+                load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), 
+                dp["scouting"], 
+                None, 
+                dp["season_filter"]
+            )
+            
     # --- ADMIN ---
     elif hoved_omraade == "ADMIN":
         if sel == "Brugerstyring":
