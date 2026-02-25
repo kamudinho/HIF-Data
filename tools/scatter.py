@@ -3,8 +3,8 @@ import plotly.express as px
 import pandas as pd
 from data.data_load import get_team_colors
 
- # --- 2. FARVER & KONSTANTER ---
-    hif_rod = "#df003b"
+# --- 2. FARVER & KONSTANTER ---
+hif_rod = "#df003b"
 
 def build_scatter_plot(df_plot, metric_type):
     # Hent farverne fra din centrale konfiguration
@@ -68,8 +68,8 @@ def vis_side(df_scatter):
         return
 
     df_current = df_s[df_s[s_col].astype(str).str.strip() == current_season].copy()
-    
- # --- 4. TOP BRANDING ---
+
+    # --- 4. TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCATTERPLOTS</h3>
