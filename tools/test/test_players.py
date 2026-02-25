@@ -4,19 +4,32 @@ import numpy as np
 from data.data_load import load_snowflake_query
 
 def vis_side():
-    st.markdown('<div class="custom-header"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
-
     dp = st.session_state.get("data_package")
     
-    # 1. Hent de adskilte datasæt (Robust arkitektur)
-    # Bemærk: Vi bruger nu 'players' i stedet for 'players_basic'
+    # 1. Hent rådata
     df_players = load_snowflake_query("players", dp["comp_filter"], dp["season_filter"])
     df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
     df_logos = load_snowflake_query("team_logos", dp["comp_filter"], dp["season_filter"])
 
     if df_players.empty or df_stats.empty:
-        st.warning("Data indlæses eller ingen data fundet for denne kombination...")
+        st.error("Kunne ikke finde data. Tjek om query-navne i queries.py matcher.")
         return
+
+    # --- KRITISK: Tving ID-typer til at matche ---
+    for temp_df in [df_players, df_stats]:
+        temp_df['PLAYER_WYID'] = temp_df['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+    
+    if not df_logos.empty:
+        df_logos['TEAM_WYID'] = df_logos['TEAM_WYID'].astype(str).str.replace('.0', '', regex=False)
+        df_players['CURRENTTEAM_WYID'] = df_players['CURRENTTEAM_WYID'].astype(str).str.replace('.0', '', regex=False)
+
+    # 2. Saml data uden dubletter
+    df_players = df_players.drop_duplicates(subset=['PLAYER_WYID'])
+    df = pd.merge(df_players, df_stats, on="PLAYER_WYID", how="inner")
+
+    # 3. Map logoer
+    logo_map = dict(zip(df_logos["TEAM_WYID"], df_logos["TEAM_LOGO"]))
+    df["TEAM_LOGO"] = df["CURRENTTEAM_WYID"].map(logo_map)
 
     # 2. Saml data (Merge & Map) i Python for at undgå SQL-dubletter
     # Vi sikrer os først, at hver spiller kun optræder én gang i grunddata
