@@ -31,8 +31,6 @@ def vis_spiller_billede(pid, w=110):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, career_df):
-
-    st.write(f"Søger efter karriere for ID: {clean_p_id}")
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     # Sørg for at sammenligne strenge mod strenge
     full_df['PLAYER_WYID'] = full_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
