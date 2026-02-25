@@ -156,17 +156,24 @@ try:
             import tools.scout_input as si
             # Her sender vi hele 'dp' med, så si.vis_side kan læse dp["sql_players"]
             si.vis_side(dp) 
-            
         elif sel == "Database":
             import tools.scout_db as sdb
-            # Vi genbruger de indlæste data fra dp
+            
+            # 1. Hent stats (som du gør nu)
+            df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+            
+            # 2. Hent karriere-data (den nye query du lige har lavet)
+            # Hvis den ikke allerede ligger i dp, henter vi den her:
+            if "player_career" not in st.session_state:
+                 st.session_state["player_career"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
+            
+            # 3. Send det hele ind i modulet
             sdb.vis_side(
                 dp["scouting"], 
                 dp["players"], 
-                load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), 
-                None
-            )
-            
+                df_stats, 
+                st.session_state["player_career"] # Her sender vi dataen med i stedet for None
+            )  
         elif sel == "Sammenligning":
             import tools.comparison as comp
             comp.vis_side(
