@@ -155,4 +155,28 @@ def get_queries(comp_filter, season_filter):
             )
             -- Vi henter alle typer (pass, duel, etc.) for hele ligaen
         """,
+        # --- 8. KARRIEREHISTORIK (Til profil-dialogen) ---
+        "player_career": f"""
+            SELECT DISTINCT
+                pc.PLAYER_WYID, 
+                s.SEASONNAME, 
+                c.COMPETITIONNAME, 
+                t.TEAMNAME, 
+                pc.APPEARANCES, 
+                pc.MINUTESPLAYED, 
+                pc.GOAL, 
+                pc.ASSIST,
+                pc.YELLOWCARD, 
+                pc.REDCARD  -- Rettet fra REDCARDS hvis kolonnen hedder REDCARD
+            FROM {DB}.WYSCOUT_PLAYERCAREER pc
+            LEFT JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+            LEFT JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
+            LEFT JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
+            WHERE pc.PLAYER_WYID IN (
+                -- Optimering: Hent kun karriere for de spillere der findes i de aktive ligaer
+                SELECT DISTINCT PLAYER_WYID 
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+                WHERE COMPETITION_WYID IN {comp_filter}
+            )
+        """,
     }
