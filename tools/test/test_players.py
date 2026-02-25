@@ -9,7 +9,7 @@ def vis_side():
         st.error("Data pakke ikke fundet. Genstart venligst appen.")
         return
     
-    # 1. Hent data (Her henter vi de færdige totaler fra din SQL GROUP BY)
+    # 1. Hent data (Færdige totaler fra SQL)
     df_players = load_snowflake_query("players", dp["comp_filter"], dp["season_filter"])
     df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
     df_logos = load_snowflake_query("team_logos", dp["comp_filter"], dp["season_filter"])
@@ -18,25 +18,23 @@ def vis_side():
         st.error("Kunne ikke finde data.")
         return
 
+    # --- BRANDING FARVE ---
+    hif_rod = "#cc0000"
+
     # --- 2. RENS OG FORBERED DATA ---
-    # Vi behøver ikke groupby her, da SQL har gjort det (GROUP BY ap.PLAYER_WYID)
     df_stats['PLAYER_WYID'] = df_stats['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
     df_players['PLAYER_WYID'] = df_players['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
     
-    # Fjern dubletter i stamdata for en sikkerheds skyld
     df_players_clean = df_players.drop_duplicates(subset=['PLAYER_WYID'])
-
-    # --- 3. MERGE ---
     df = pd.merge(df_players_clean, df_stats, on="PLAYER_WYID", how="inner")
 
-    # Justér minutter (Delač-sikring: max 90 min pr. kamp)
-    # Da din SQL tæller kampe med COUNT(DISTINCT MATCH_WYID), bruger vi den kolonne
+    # Delač-sikring (Loft minutterne)
     if 'MATCHES' in df.columns:
         df['MINUTESONFIELD'] = df.apply(
             lambda x: min(x['MINUTESONFIELD'], x['MATCHES'] * 90), axis=1
         )
 
-    # --- 4. LOGOER OG NAVNE ---
+    # Map logoer og navne
     if not df_logos.empty:
         df_logos['TEAM_WYID'] = df_logos['TEAM_WYID'].astype(str).str.replace('.0', '', regex=False)
         logo_map = dict(zip(df_logos["TEAM_WYID"], df_logos["TEAM_LOGO"]))
@@ -46,7 +44,14 @@ def vis_side():
         (df["FIRSTNAME"].fillna("") + " " + df["LASTNAME"].fillna("")).str.strip()
     )
 
-    # --- 5. UI ---
+    # --- 3. TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # --- 4. UI KONTROLLER ---
     col_nav, col_type = st.columns([4, 2])
     with col_nav:
         tabs_pos = st.tabs(["ALLE", "GKP", "DEF", "MID", "FWD"])
@@ -59,6 +64,7 @@ def vis_side():
         "DEFENSIVT": ["DEFENSIVEDUELS", "INTERCEPTIONS", "RECOVERIES"]
     }
 
+    # --- 5. TABEL VISNING ---
     for i, p_tab in enumerate(tabs_pos):
         with p_tab:
             label = ["ALLE", "GKP", "DEF", "MID", "FWD"][i]
@@ -72,19 +78,21 @@ def vis_side():
             for j, (cat_name, cols) in enumerate(stats_groups.items()):
                 with cat_tabs[j]:
                     active_stats = [c for c in cols if c in df_pos.columns]
+                    # Vi tager alle rækker (ingen .head())
                     df_v = df_pos[["TEAM_LOGO", "NAVN", "MINUTESONFIELD"] + active_stats].copy()
 
                     if visning == "PR. 90":
                         mins = df_v["MINUTESONFIELD"].replace(0, np.nan)
                         for c in active_stats:
                             if c != "MATCHES":
-                                # Sikrer vi regner på float
                                 df_v[c] = (df_v[c].astype(float) / mins * 90).fillna(0).round(2)
 
+                    # Vis HELE tabellen (Streamlit dataframe har automatisk scroll, hvis listen er lang)
                     st.dataframe(
                         df_v.sort_values(active_stats[0] if active_stats else "NAVN", ascending=False),
                         use_container_width=True,
                         hide_index=True,
+                        height=600, # Du kan justere højden her så den viser flere spillere af gangen
                         column_config={
                             "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
                             "NAVN": st.column_config.TextColumn("SPILLER"),
