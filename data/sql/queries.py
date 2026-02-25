@@ -91,23 +91,26 @@ def get_queries(comp_filter, season_filter):
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
         "shotevents": f"""
             SELECT 
-                c.PLAYER_WYID, c.TEAM_WYID, c.MATCH_WYID,
-                c.LOCATIONX, c.LOCATIONY, c.MINUTE,
-                c.PRIMARYTYPE, -- Vigtig til at kende forskel på straffe/frispark
-                s_shot.SHOTISGOAL, s_shot.SHOTONTARGET, s_shot.SHOTXG,
-                s_shot.SHOTBODYPART, m.MATCHLABEL
+                c.PLAYER_WYID,
+                c.LOCATIONX,
+                c.LOCATIONY,
+                c.MINUTE,
+                c.PRIMARYTYPE,
+                s.SHOTBODYPART,
+                s.SHOTISGOAL,
+                s.SHOTXG,
+                m.MATCHLABEL,
+                e.TEAM_WYID
             FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
-            INNER JOIN {DB}.WYSCOUT_MATCHEVENTS_SHOTS s_shot 
-                ON c.EVENT_WYID = s_shot.EVENT_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m 
-                ON c.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s 
-                ON m.SEASON_WYID = s.SEASON_WYID
-            WHERE c.PRIMARYTYPE IN ('shot', 'penalty', 'free_kick') -- Her tilføjer vi dem!
-            AND c.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
+            INNER JOIN {DB}.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
+            INNER JOIN {DB}.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
+            INNER JOIN {DB}.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+            WHERE m.COMPETITION_WYID IN {comp_filter}
+            AND m.SEASON_WYID IN (
+                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
+            )
+            -- Vi filtrerer ikke på team_wyid her, så vi kan bruge den til alle hold i ligaen
         """,
-
         # --- 6. KAMPOVERSIGT ---
         "team_matches": f"""
             SELECT 
