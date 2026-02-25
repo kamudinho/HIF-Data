@@ -76,57 +76,90 @@ def vis_side(df_spillere=None, hold_map=None):
     df_s['IS_GOAL'] = df_s.apply(to_bool, axis=1)
     df_s['SHOTXG'] = pd.to_numeric(df_s['SHOTXG'], errors='coerce').fillna(0)
 
-    # --- 5. VISNING ---
+    # --- 5. UI LAYOUT & VALG ---
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
-        # Listen indeholder nu kun spillere der findes i begge kilder
+        # Hent unikke navne og tilføj "Alle spillere" øverst
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller (Fra din CSV)", options=spiller_liste)
+        valgmuligheder = ["Alle spillere"] + spiller_liste
+        valgt_spiller = st.selectbox("Vælg spiller (Fra din CSV)", options=valgmuligheder)
         
-        df_p = df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
+        # Filtrering baseret på valg
+        if valgt_spiller == "Alle spillere":
+            df_p = df_s.copy()
+            overskrift = "Hele holdet"
+        else:
+            df_p = df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
+            overskrift = valgt_spiller
+
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
         # Metrics boks
+        total_shots = len(df_p)
+        total_goals = int(df_p['IS_GOAL'].sum())
+        total_xg = df_p['SHOTXG'].sum()
+
         st.markdown(f"""
         <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
-            <h3 style="margin:0;">{valgt_spiller}</h3>
+            <h3 style="margin:0;">{overskrift}</h3>
             <hr>
             <small>AFSLUTNINGER / MÅL</small>
-            <h2 style="margin:0;">{len(df_p)} / {int(df_p['IS_GOAL'].sum())}</h2>
+            <h2 style="margin:0;">{total_shots} / {total_goals}</h2>
             <br>
             <small>TOTAL xG</small>
-            <h2 style="margin:0;">{df_p['SHOTXG'].sum():.2f}</h2>
+            <h2 style="margin:0;">{total_xg:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
+
+        # --- NY POPOVER MED DETALJER ---
+        st.write("") # Margin
+        with st.popover("Se detaljeret skudliste", use_container_width=True):
+            if not df_p.empty:
+                # Forbered tabel-data
+                tabel_df = df_p[['NR', 'MINUTE', 'SHOTXG', 'IS_GOAL', 'SPILLER_NAVN']].copy()
+                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "Afslutning"})
+                
+                # Omdøb for pæn visning
+                vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
+                    'NR': '#',
+                    'SPILLER_NAVN': 'Spiller',
+                    'MINUTE': 'Min',
+                    'SHOTXG': 'xG',
+                    'RESULTAT': 'Udfald'
+                })
+                
+                st.dataframe(vis_df, hide_index=True, use_container_width=True)
+            else:
+                st.write("Ingen data at vise.")
 
     with col_map:
         pitch = VerticalPitch(half=True, pitch_type='wyscout', line_color='#444444', goal_type='box')
         fig, ax = pitch.draw(figsize=(8, 10))
         
-        for _, row in df_p.iterrows():
-            is_goal = row['IS_GOAL']
-            ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
-            m_style = 'o' 
-            if 'penalty' in ptype: m_style = 'P'
-            elif 'free_kick' in ptype: m_style = 's'
-        
-            sc_size = (row['SHOTXG'] * 600) + 100
+        # Tegn skud
+        if not df_p.empty:
+            for _, row in df_p.iterrows():
+                is_goal = row['IS_GOAL']
+                ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
+                
+                # Form skift
+                m_style = 'o' 
+                if 'penalty' in ptype: m_style = 'P'
+                elif 'free_kick' in ptype: m_style = 's'
             
-            pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
-                          s=sc_size, edgecolors='white',
-                          c='gold' if is_goal else TEAM_COLOR,
-                          marker=m_style, ax=ax, zorder=3, alpha=0.8)
-            
-            ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
-                    color='black' if is_goal else 'white', 
-                    ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
+                # Skalering af størrelse (xG styret)
+                sc_size = (row['SHOTXG'] * 600) + 100
+                
+                pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
+                              s=sc_size, edgecolors='white',
+                              c='gold' if is_goal else TEAM_COLOR,
+                              marker=m_style, ax=ax, zorder=3, alpha=0.8)
+                
+                # Nummerering på banen
+                ax.text(row['LOCATIONY'], row['LOCATIONX'], str(int(row['NR'])), 
+                        color='black' if is_goal else 'white', 
+                        ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
         
         st.pyplot(fig)
-
-        # --- DEBUG PRINT (Fjern når det virker) ---
-        st.write("--- DEBUG INFO ---")
-        st.write(f"Første 5 ID'er fra din CSV: {list(navne_dict.keys())[:5]}")
-        st.write(f"Første 5 ID'er fra Snowflake: {df_s['PLAYER_ID_CLEAN'].unique()[:5].tolist()}")
-        # ------------------------------------------
