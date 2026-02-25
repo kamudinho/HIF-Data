@@ -51,6 +51,7 @@ def get_queries(comp_filter, season_filter):
             LEFT JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
+            -- Vi kobler team-logoet på via spillerens team-ID i stedet for statistik-tabellens
             LEFT JOIN {DB}.WYSCOUT_TEAMS t
                 ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
