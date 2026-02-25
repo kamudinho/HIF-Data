@@ -3,6 +3,9 @@ import plotly.express as px
 import pandas as pd
 from data.data_load import get_team_colors
 
+ # --- 2. FARVER & KONSTANTER ---
+    hif_rod = "#df003b"
+
 def build_scatter_plot(df_plot, metric_type):
     # Hent farverne fra din centrale konfiguration
     colors_dict = get_team_colors()
