@@ -63,6 +63,7 @@ def get_queries(comp_filter, season_filter):
             SELECT DISTINCT 
                 tm.TEAMNAME,
                 s.SEASONNAME,
+                c.COMPETITIONNAME,  -- Denne linje manglede
                 tm.IMAGEDATAURL,
                 t.GOALS, 
                 t.XGSHOT, 
@@ -81,6 +82,8 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
             JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+            -- Vi skal bruge denne JOIN for at få navnet på ligaen
+            JOIN {DB}.WYSCOUT_COMPETITIONS AS c ON t.COMPETITION_WYID = c.COMPETITION_WYID 
             LEFT JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st
                 ON t.TEAM_WYID = st.TEAM_WYID
                 AND t.SEASON_WYID = st.SEASON_WYID 
