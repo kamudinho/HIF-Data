@@ -25,7 +25,7 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_PLAYERS
         """,
 
-        # --- 2. SPILLER STATISTIK (Forbedret filtrering) ---
+        # --- 2. SPILLER STATISTIK (Simpel og robust) ---
         "playerstats": f"""
             SELECT 
                 s.PLAYER_WYID,
@@ -42,10 +42,10 @@ def get_queries(comp_filter, season_filter):
                 SUM(s.INTERCEPTIONS) as INTERCEPTIONS,
                 SUM(s.RECOVERIES) as RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            JOIN {DB}.WYSCOUT_SEASONS sn ON s.SEASON_WYID = sn.SEASON_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
-            AND sn.SEASONNAME {season_filter}
-            AND s.TEAM_WYID != 0
+            AND s.SEASON_WYID IN (
+                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
+            )
             GROUP BY s.PLAYER_WYID
         """,
         
