@@ -126,5 +126,24 @@ def get_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
             WHERE tm.COMPETITION_WYID IN {comp_filter} 
             AND s.SEASONNAME {season_filter}
-        """
+        """,
+        # --- 7. ALLE EVENTS (Til Heatmaps i Modstanderanalyse) ---
+        "events": f"""
+            SELECT 
+                c.PLAYER_WYID,
+                c.TEAM_WYID,
+                c.MATCH_WYID,
+                c.PRIMARYTYPE,
+                c.LOCATIONX,
+                c.LOCATIONY,
+                c.MINUTE,
+                m.MATCHLABEL
+            FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
+            INNER JOIN {DB}.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
+            WHERE m.COMPETITION_WYID IN {comp_filter}
+            AND m.SEASON_WYID IN (
+                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
+            )
+            -- Vi henter alle typer (pass, duel, etc.) for hele ligaen
+        """,
     }
