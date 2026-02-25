@@ -96,18 +96,29 @@ def vis_side(df_spillere=None, hold_map=None):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # 2. Popover (Placeret under dropdown og over navn/stats)
-        with st.popover("📋 Se alle aktioner", use_container_width=True):
+       with st.popover("Oversigt over afslutninger", use_container_width=True):
             if not df_p.empty:
                 tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
-                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "❌ Afslutning"})
+                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "Afslutning"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
                     'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'Min', 'SHOTXG': 'xG', 'RESULTAT': 'Udfald'
                 })
                 
-                # 'height' styres automatisk: viser alle rækker op til 500px, derefter scroll
-                st.dataframe(vis_df, hide_index=True, use_container_width=True, height=min(len(vis_df) * 35 + 38, 500))
+                # Her definerer vi bredden og justeringen for hver kolonne
+                st.dataframe(
+                    vis_df, 
+                    hide_index=True, 
+                    use_container_width=True, 
+                    height=min(len(vis_df) * 35 + 38, 500),
+                    column_config={
+                        "#": st.column_config.Column(width="small", help="Nummer på banen"),
+                        "Spiller": st.column_config.Column(width="medium"),
+                        "Min": st.column_config.Column(width="small"),
+                        "xG": st.column_config.NumberColumn(width="small", format="%.2f"),
+                        "Udfald": st.column_config.Column(width="medium")
+                    }
+                )
             else:
                 st.write("Ingen data fundet.")
 
