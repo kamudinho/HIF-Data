@@ -157,6 +157,22 @@ def get_data_package():
         comp_filter = str(comps)
         
     season_filter = f"='{SEASONNAME}'"
+
+def get_team_colors():
+    return {
+        "Hvidovre": "#cc0000",
+        "B.93": "#0000ff",
+        "Hillerød": "#ff6600",
+        "Esbjerg": "#003399",
+        "Lyngby": "#003366",
+        "Horsens": "#ffff00",
+        "Middelfart": "#0099ff",
+        "AaB": "#cc0000",
+        "Kolding IF": "#0000ff", # Blå som sekundær
+        "Hobro": "#ffff00",
+        "HB Køge": "#000000",
+        "Aarhus Fremad": "#000000"
+    }
     
     return {
         "players": gh_data["players"],      # Fra GitHub
