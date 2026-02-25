@@ -20,8 +20,8 @@ def build_scatter_plot(df_plot, metric_type):
         height=700,
         template="plotly_white",
         labels={
-            "X_PER_GAME": f"{metric_type} For pr. kamp", 
-            "Y_PER_GAME": f"{metric_type} Imod pr. kamp"
+            "X_PER_GAME": f"{metric_type}", 
+            "Y_PER_GAME": f"{metric_type}"
         }
     )
 
