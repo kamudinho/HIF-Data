@@ -40,33 +40,35 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
        "playerstats": f"""
-            SELECT DISTINCT
+            SELECT 
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
-                t.IMAGEDATAURL AS TEAM_LOGO,
+                MAX(t.IMAGEDATAURL) AS TEAM_LOGO, -- Tager det seneste logo
                 s.PLAYER_WYID,
-                s.MINUTESONFIELD,
-                s.GOALS,
-                s.ASSISTS,
-                s.YELLOWCARDS,
-                s.MATCHES,
-                s.SHOTS,
-                s.SHOTSONTARGET,
-                s.XGSHOT,
-                s.DRIBBLES,
-                s.DEFENSIVEDUELS,
-                s.INTERCEPTIONS,
-                s.RECOVERIES
+                SUM(s.MINUTESONFIELD) AS MINUTESONFIELD,
+                SUM(s.GOALS) AS GOALS,
+                SUM(s.ASSISTS) AS ASSISTS,
+                SUM(s.YELLOWCARDS) AS YELLOWCARDS,
+                SUM(s.MATCHES) AS MATCHES,
+                SUM(s.SHOTS) AS SHOTS,
+                SUM(s.SHOTSONTARGET) AS SHOTSONTARGET,
+                AVG(s.XGSHOT) AS XGSHOT, -- Gennemsnit for xG giver mest mening her
+                SUM(s.DRIBBLES) AS DRIBBLES,
+                SUM(s.DEFENSIVEDUELS) AS DEFENSIVEDUELS,
+                SUM(s.INTERCEPTIONS) AS INTERCEPTIONS,
+                SUM(s.RECOVERIES) AS RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            JOIN {DB}.WYSCOUT_PLAYERS p 
+            INNER JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
-            JOIN {DB}.WYSCOUT_TEAMS t
+            INNER JOIN {DB}.WYSCOUT_TEAMS t
                 ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
+            GROUP BY 
+                p.FIRSTNAME, p.LASTNAME, p.ROLECODE3, s.PLAYER_WYID
         """,
         "team_stats_full": f"""
             SELECT DISTINCT 
