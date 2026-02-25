@@ -23,14 +23,8 @@ def build_scatter_plot(df_plot, metric_type):
         text='TEAMNAME', 
         color='TEAMNAME',
         color_discrete_map=colors_dict,
-        # Vi sender MATCHES med som custom_data så den kan bruges i hover
-        custom_data=['MATCHES'],
         height=700,
-        template="plotly_white",
-        labels={
-            "X_PER_GAME": x_label, 
-            "Y_PER_GAME": y_label
-        }
+        template="plotly_white"
     )
 
     # Vender KUN y-aksen hvis det handler om mål/skud IMOD (da færre er bedre)
@@ -39,16 +33,25 @@ def build_scatter_plot(df_plot, metric_type):
     else:
         fig.update_yaxes(autorange=True)
     
-    # TILPASNING AF HOVER-BOKS
+    # --- HOVER-BOKS TILPASNING ---
     fig.update_traces(
         marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         textposition='top center',
+        # Vi definerer hovertemplate her for at fjerne TEAMNAME-linjen
         hovertemplate=(
             "<b>%{hovertext}</b><br>" + 
             f"{x_label}: %{{x:.2f}}<br>" + 
             f"{y_label}: %{{y:.2f}}<br>" + 
-            "<extra></extra>" # Fjerner trace-navnet i siden
+            "<extra></extra>" 
         )
+    )
+
+    # --- AKSE-TITLER TILPASNING ---
+    fig.update_layout(
+        showlegend=False,
+        xaxis=dict(title=x_label), # Sætter titlen direkte uden "pr. kamp" eller andet
+        yaxis=dict(title=y_label), # Sætter titlen direkte
+        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Rockwell")
     )
 
     # Gennemsnitslinjer
@@ -57,11 +60,6 @@ def build_scatter_plot(df_plot, metric_type):
     fig.add_hline(y=avg_y, line_dash="dot", line_color="grey", opacity=0.5)
     fig.add_vline(x=avg_x, line_dash="dot", line_color="grey", opacity=0.5)
     
-    fig.update_layout(
-        showlegend=False,
-        xaxis_title=x_label,
-        yaxis_title=y_label
-    )
     return fig
 
 def vis_side(df_scatter):
