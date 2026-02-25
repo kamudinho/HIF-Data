@@ -88,11 +88,12 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
 
-        # --- 5. EVENTS (Skudkort etc.) ---
+        # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
         "shotevents": f"""
             SELECT 
                 c.PLAYER_WYID, c.TEAM_WYID, c.MATCH_WYID,
                 c.LOCATIONX, c.LOCATIONY, c.MINUTE,
+                c.PRIMARYTYPE, -- Vigtig til at kende forskel på straffe/frispark
                 s_shot.SHOTISGOAL, s_shot.SHOTONTARGET, s_shot.SHOTXG,
                 s_shot.SHOTBODYPART, m.MATCHLABEL
             FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
@@ -102,7 +103,7 @@ def get_queries(comp_filter, season_filter):
                 ON c.MATCH_WYID = m.MATCH_WYID
             JOIN {DB}.WYSCOUT_SEASONS s 
                 ON m.SEASON_WYID = s.SEASON_WYID
-            WHERE c.PRIMARYTYPE = 'shot' 
+            WHERE c.PRIMARYTYPE IN ('shot', 'penalty', 'free_kick') -- Her tilføjer vi dem!
             AND c.COMPETITION_WYID IN {comp_filter}
             AND s.SEASONNAME {season_filter}
         """,
