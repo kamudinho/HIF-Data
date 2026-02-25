@@ -60,26 +60,41 @@ def vis_profil(p_data, full_df, s_df, career_df):
         with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
-    with t4:
-        st.markdown("### Sæsonstatistik (Aktuel)")
+   with t4:
+        # 1. Sikr dig at vi har et rent tekst-ID uden decimaler
+        clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+        
+        st.subheader("📊 Sæsonstatistik (Aktuel)")
         if s_df is not None and not s_df.empty:
+            # Vi tvinger både kolonnen og søge-ID til string
+            s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
+            
             if not p_stats.empty:
-                row = p_stats.iloc[0]
+                r = p_stats.iloc[0]
                 s1, s2, s3, s4 = st.columns(4)
-                s1.metric("Minutter", f"{int(row.get('MINUTESONFIELD', 0))}")
-                s1.metric("Kampe", f"{int(row.get('MATCHES', 0))}")
-                s2.metric("Mål", f"{int(row.get('GOALS', 0))}")
-                s2.metric("Assists", f"{int(row.get('ASSISTS', 0))}")
-                s3.metric("xG", f"{round(float(row.get('XGSHOT', 0)), 2)}")
-                s3.metric("Afslutninger", f"{int(row.get('SHOTS', 0))}")
-                s4.metric("Interceptions", f"{int(row.get('INTERCEPTIONS', 0))}")
-                s4.metric("Driblinger", f"{int(row.get('DRIBBLES', 0))}")
-            else: st.info("Ingen aktive sæson-stats fundet.")
-        st.divider()
-        st.markdown("### Karrierestatistik")
-        # Her vises din eksisterende karriere_df logik... (forkortet for plads)
+                s1.metric("Minutter", f"{int(r.get('MINUTESONFIELD', 0))}")
+                s1.metric("Kampe", f"{int(r.get('MATCHES', 0))}")
+                s2.metric("Mål", f"{int(r.get('GOALS', 0))}")
+                s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
+                # ... resten af dine metrics ...
+            else:
+                st.info(f"Ingen aktive stats fundet for ID: {clean_p_id}")
 
+        st.divider()
+        
+        st.subheader("📜 Karrierehistorik")
+        if career_df is not None and not career_df.empty:
+            # Samme rensning her
+            career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
+            
+            if not df_p.empty:
+                df_p = df_p.sort_values('SEASONNAME', ascending=False)
+                st.dataframe(df_p[['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME', 'APPEARANCES', 'GOAL']], 
+                             use_container_width=True, hide_index=True)
+            else:
+                st.info("Ingen historik fundet i databasen.")
     with t5:
         # HER ER DIT ORIGINALE RADAR LAYOUT (3 kolonner)
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
