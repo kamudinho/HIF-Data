@@ -4,7 +4,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
 
-# --- 1. CENTRAL KONFIGURATION (FARVER & WYID) ---
+# --- 1. CENTRAL KONFIGURATION ---
 TEAM_COLORS = {
     "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
     "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
@@ -84,7 +84,6 @@ def get_hold_mapping():
     conn = _get_snowflake_conn()
     if not conn: return {}
     try:
-        # Henter direkte fra TEAMS tabellen for at sikre korrekt ID-til-Navn mapping
         df_t = conn.query("SELECT TEAM_WYID, TEAMNAME FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS")
         if df_t is not None:
             return {str(int(r[0])): str(r[1]).strip() for r in df_t.values}
@@ -98,11 +97,8 @@ def load_github_data():
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
-            # Vi tvinger det til at læse PLAYER_WYID som streng fra starten
             d = pd.read_csv(f"{url_base}{file}", sep=',', engine='python', dtype={'PLAYER_WYID': str})
             d.columns = [str(c).strip().upper() for c in d.columns]
-            
-            # Rens ID'erne for alt der minder om decimaler eller mellemrum
             if 'PLAYER_WYID' in d.columns:
                 d['PLAYER_WYID'] = d['PLAYER_WYID'].fillna('').astype(str).str.split('.').str[0].str.strip()
             return d
@@ -116,7 +112,6 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Henter query-definitionen fra queries.py
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
     
@@ -127,10 +122,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     try:
         df = conn.query(q)
         if df is not None:
-            # VIGTIGT: Tvinger alle kolonnenavne til UPPERCASE for at undgå 'KeyError' i Python
             df.columns = [str(c).strip().upper() for c in df.columns]
-            
-            # Konverter lokations-data til numerisk format
             for col in ['LOCATIONX', 'LOCATIONY']:
                 if col in df.columns: 
                     df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
@@ -142,46 +134,31 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
+    # Hent GitHub data
     gh_data = load_github_data()
     
-    # Sikrer korrekt tuple-format til SQL 'IN (...)' klausuler
+    # Konfigurer filtre
     if isinstance(COMPETITION_WYID, (int, float)):
         comps = (int(COMPETITION_WYID),)
     else:
         comps = tuple(COMPETITION_WYID)
 
-    # Formaterer comp_filter strengen korrekt (f.eks. '(328)' eller '(328, 331)')
-    if len(comps) == 1:
-        comp_filter = f"({comps[0]})"
-    else:
-        comp_filter = str(comps)
-        
+    comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
     season_filter = f"='{SEASONNAME}'"
 
-def get_team_colors():
+    # Saml og returner hele pakken i én ordbog
+    # Bemærk: Vi bruger 'players' query nøglen her
+    df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
+
     return {
-        "Hvidovre": "#cc0000",
-        "B.93": "#0000ff",
-        "Hillerød": "#ff6600",
-        "Esbjerg": "#003399",
-        "Lyngby": "#003366",
-        "Horsens": "#ffff00",
-        "Middelfart": "#0099ff",
-        "AaB": "#cc0000",
-        "Kolding IF": "#0000ff", # Blå som sekundær
-        "Hobro": "#ffff00",
-        "HB Køge": "#000000",
-        "Aarhus Fremad": "#000000"
-    }
-    
-    return {
-        "players": gh_data["players"],      # Fra GitHub
-        "scouting": gh_data["scouting"],    # Fra GitHub
-        "comp_filter": comp_filter,         # Til Snowflake
-        "season_filter": season_filter,     # Til Snowflake
-        "hold_map": get_hold_mapping(),     # ID -> Navn ordbog
+        "players": gh_data["players"],           # Data fra GitHub
+        "sql_players": df_sql_players,           # Data fra Snowflake (Query: 'players')
+        "scouting": gh_data["scouting"],         # Data fra GitHub
+        "comp_filter": comp_filter,
+        "season_filter": season_filter,
+        "hold_map": get_hold_mapping(),
         "team_id": TEAM_WYID,
-        "playerstats": None,                # Pladsholder til session_state
-        "team_scatter": None,               # Pladsholder til session_state
-        "team_matches": None                # Pladsholder til session_state
+        "playerstats": None,
+        "team_scatter": None,
+        "team_matches": None
     }
