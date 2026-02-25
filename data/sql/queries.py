@@ -24,9 +24,10 @@ def get_queries(comp_filter, season_filter):
                 p.CURRENTTEAM_WYID 
             FROM {DB}.WYSCOUT_PLAYERS p
             WHERE p.PLAYER_WYID IN (
-                SELECT DISTINCT PLAYER_WYID 
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
-                WHERE COMPETITION_WYID IN {comp_filter}
+                -- Her bruger vi din playerstats-logik til at finde de aktive spillere
+                SELECT DISTINCT ap.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
+                WHERE ap.COMPETITION_WYID IN {comp_filter}
             )
         """,
 
