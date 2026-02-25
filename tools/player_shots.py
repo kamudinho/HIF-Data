@@ -96,11 +96,12 @@ def vis_side(df_spillere=None, hold_map=None):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # 2. Popover - HER VAR FEJLEN (Indrykning rettet)
+        # 2. Popover (Optimeret bredde med faste pixel-værdier)
         with st.popover("Oversigt over afslutninger", use_container_width=True):
             if not df_p.empty:
                 tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
-                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "Afslutning"})
+                # Vi bruger ikoner her for at holde kolonnen "Udfald" meget smal
+                tabel_df['RESULTAT'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "❌"})
                 
                 vis_df = tabel_df[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'RESULTAT']].rename(columns={
                     'NR': '#', 'SPILLER_NAVN': 'Spiller', 'MINUTE': 'Min', 'SHOTXG': 'xG', 'RESULTAT': 'Udfald'
@@ -112,16 +113,16 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.Column(width="small", help="Nummer på banen"),
-                        "Spiller": st.column_config.Column(width="medium"),
-                        "Min": st.column_config.Column(width="small"),
-                        "xG": st.column_config.NumberColumn(width="small", format="%.2f"),
-                        "Udfald": st.column_config.Column(width="medium")
+                        "#": st.column_config.Column(width=35), # Fast bredde i pixels
+                        "Spiller": st.column_config.Column(width=150),
+                        "Min": st.column_config.Column(width=40),
+                        "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
+                        "Udfald": st.column_config.Column(width=65)
                     }
                 )
             else:
                 st.write("Ingen data fundet.")
-
+                
         # 3. Statistik Boks
         total_shots = len(df_p)
         total_goals = int(df_p['IS_GOAL'].sum())
