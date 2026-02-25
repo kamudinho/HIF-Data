@@ -114,7 +114,7 @@ def vis_side(df_spillere=None, hold_map=None):
                         "#": st.column_config.NumberColumn(width=30),
                         "Spiller": st.column_config.Column(width=138),
                         "Min": st.column_config.NumberColumn(width=30),
-                        "xG": st.column_config.NumberColumn(width=52, format="%.2f"),
+                        "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
                         "Udfald": st.column_config.Column(width=55)
                     }
                 )
