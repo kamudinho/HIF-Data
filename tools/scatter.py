@@ -26,8 +26,8 @@ def build_scatter_plot(df_plot, metric_type):
         # Tilpas hover-boks her:
         hover_data={
             'TEAMNAME': False, # Gemt da den er hover_name
-            'X_PER_GAME': ':.2f', 
-            'Y_PER_GAME': ':.2f',
+            'X': ':.2f', 
+            'Y': ':.2f',
             'MATCHES': True
         },
         height=700,
