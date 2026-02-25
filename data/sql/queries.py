@@ -15,7 +15,7 @@ def get_queries(comp_filter, season_filter):
     return {
         # --- 1. SPILLER GRUNDDATA (Ingen dubletter) ---
         "players": f"""
-            SELECT 
+            SELECT DISTINCT 
                 PLAYER_WYID, 
                 FIRSTNAME, 
                 LASTNAME, 
