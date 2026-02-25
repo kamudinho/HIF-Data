@@ -98,11 +98,17 @@ def load_github_data():
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
         try:
-            d = pd.read_csv(f"{url_base}{file}", sep=None, engine='python')
-            # Standardiser kolonnenavne til UPPERCASE for at matche Snowflake format
+            # Vi tvinger det til at læse PLAYER_WYID som streng fra starten
+            d = pd.read_csv(f"{url_base}{file}", sep=',', engine='python', dtype={'PLAYER_WYID': str})
             d.columns = [str(c).strip().upper() for c in d.columns]
+            
+            # Rens ID'erne for alt der minder om decimaler eller mellemrum
+            if 'PLAYER_WYID' in d.columns:
+                d['PLAYER_WYID'] = d['PLAYER_WYID'].fillna('').astype(str).str.split('.').str[0].str.strip()
             return d
-        except: return pd.DataFrame()
+        except Exception as e: 
+            st.error(f"Fejl ved indlæsning af {file}: {e}")
+            return pd.DataFrame()
     return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
 
 @st.cache_data(ttl=3600)
