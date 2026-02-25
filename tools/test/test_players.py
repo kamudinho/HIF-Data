@@ -19,33 +19,41 @@ def vis_side():
         return
 
     # --- 2. AGGREGERING OG RENSNING ---
+    # Vi renser ID'er først så de matcher på tværs af tabeller
+    df_stats_raw['PLAYER_WYID'] = df_stats_raw['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
+    
+    # Definer hvordan hver kolonne skal behandles
     agg_logic = {
         "MINUTESONFIELD": "sum",
-        # Brug MAX for ting der er akkumulerede totaler i Wyscout rækken
         "GOALS": "max",
         "ASSISTS": "max",
         "YELLOWCARDS": "max",
-        # Brug SUM for ting der er kampspecifikke (tjek dit dump!)
-        "SHOTS": "sum",
-        "SHOTSONTARGET": "sum",
-        "XGSHOT": "sum",
+        "SHOTS": "sum",          # Ændret til sum for at få alle skud med
+        "SHOTSONTARGET": "sum",   # Ændret til sum
+        "XGSHOT": "sum",          # Ændret til sum
         "DRIBBLES": "sum",
         "DEFENSIVEDUELS": "sum",
         "INTERCEPTIONS": "sum",
         "RECOVERIES": "sum"
     }
-
-    # --- 3. MINUT-LOGIK (Max 1620 ved 18 kampe) ---
-    # Vi tvinger minutterne til aldrig at overstige antal kampe * 90
+    
+    # 1. Skab df_stats ved at gruppere rådata
+    df_stats = df_stats_raw.groupby("PLAYER_WYID").agg(agg_logic).reset_index()
+    
+    # 2. Tæl antallet af unikke kampe (MATCH_WYID skal findes i din SQL query)
+    # Hvis MATCH_WYID ikke er i din SQL, så brug .size()
+    if 'MATCH_WYID' in df_stats_raw.columns:
+        df_counts = df_stats_raw.groupby("PLAYER_WYID")['MATCH_WYID'].nunique().reset_index(name='MATCHES')
+    else:
+        df_counts = df_stats_raw.groupby("PLAYER_WYID").size().reset_index(name='MATCHES')
+    
+    # 3. Merge stats og kamp-antal
+    df_stats = pd.merge(df_stats, df_counts, on="PLAYER_WYID")
+    
+    # 4. Loft minutterne til 90 x antal kampe (Delač-sikring)
     df_stats['MINUTESONFIELD'] = df_stats.apply(
         lambda x: min(x['MINUTESONFIELD'], x['MATCHES'] * 90), axis=1
     )
-
-    # --- 4. MERGE MED STAMDATA ---
-    df_players['PLAYER_WYID'] = df_players['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
-    df_players = df_players.drop_duplicates(subset=['PLAYER_WYID'])
-    
-    df = pd.merge(df_players, df_stats, on="PLAYER_WYID", how="inner")
 
     # Map logoer
     if not df_logos.empty:
