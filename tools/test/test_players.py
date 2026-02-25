@@ -3,66 +3,77 @@ import pandas as pd
 from data.data_load import load_snowflake_query
 
 def vis_side():
-    st.markdown('<div style="background-color:#cc0000;padding:15px;border-radius:8px;text-align:center;color:white;margin-bottom:20px;"><h3>SPILLERSTATISTIK</h3></div>', unsafe_allow_html=True)
+    # Header styling
+    st.markdown('<div class="custom-header"><h3>BETINIA LIGAEN: SPILLERSTATS</h3></div>', unsafe_allow_html=True)
 
-    dp = st.session_state["data_package"]
-    
-    # Hent de tre nødvendige datakilder
+    dp = st.session_state.get("data_package")
+    if not dp: return
+
+    # 1. LOAD DATA FRA SNOWFLAKE
     df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
-    df_players = load_snowflake_query("players_basic", dp["comp_filter"], dp["season_filter"]) # Antager du har denne til navne
+    df_meta = load_snowflake_query("players_basic", dp["comp_filter"], dp["season_filter"])
     df_logos = load_snowflake_query("team_logos", dp["comp_filter"], dp["season_filter"])
 
-    if df_stats is None or df_stats.empty:
-        st.warning("Ingen data fundet.")
+    if df_stats.empty or df_meta.empty:
+        st.warning("Kunne ikke hente komplette data.")
         return
 
-    # Standardiser kolonnenavne til UPPER
-    for d in [df_stats, df_players, df_logos]:
-        d.columns = [c.upper() for c in d.columns]
+    # 2. MERGE STATS MED SPILLER-INFO (Navne og Position)
+    # Dette sikrer at vi har 1 række pr PLAYER_WYID
+    df = pd.merge(df_stats, df_meta, on="PLAYER_WYID", how="inner")
 
-    # --- LOGIKKEN ---
-    
-    # 1. Merge stats med spiller-info (Navne og Position)
-    # Vi joiner på PLAYER_WYID
-    df = pd.merge(df_stats, df_players[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME', 'ROLECODE3', 'CURRENTTEAM_WYID']], 
-                  on='PLAYER_WYID', how='left')
+    # 3. KOBLE LOGO PÅ (Logo-load logik)
+    # Vi laver en ordbog for lynhurtig mapping
+    logo_map = dict(zip(df_logos["TEAM_WYID"], df_logos["TEAM_LOGO"]))
+    df["TEAM_LOGO"] = df["CURRENTTEAM_WYID"].map(logo_map)
 
-    # 2. Map logoer på via CURRENTTEAM_WYID
-    # Vi laver en dictionary: {328: 'url_til_logo', ...}
-    logo_dict = dict(zip(df_logos['TEAM_WYID'], df_logos['TEAM_LOGO']))
-    df['TEAM_LOGO'] = df['CURRENTTEAM_WYID'].map(logo_dict)
+    # 4. RENS NAVNE
+    def clean_name(f, l):
+        return f"{str(f or '')} {str(l or '')}".strip()
+    df["NAVN"] = df.apply(lambda r: clean_name(r["FIRSTNAME"], r["LASTNAME"]), axis=1)
 
-    # 3. Navne-vask
-    df['NAVN'] = (df['FIRSTNAME'].fillna('') + " " + df['LASTNAME'].fillna('')).str.strip()
-    
-    # --- UI & VISNING ---
+    # --- UI ---
     col_nav, col_type = st.columns([4, 2])
     with col_nav:
         tabs_pos = st.tabs(["ALLE", "GKP", "DEF", "MID", "FWD"])
     with col_type:
-        visning = st.radio("VISNING", ["TOTAL", "PR. 90"], horizontal=True)
+        visning = st.radio("VISNING", ["TOTAL", "PR. 90"], horizontal=True, label_visibility="collapsed")
+
+    stats_map = {
+        "GENERELT": ["GOALS", "ASSISTS", "MATCHES"],
+        "OFFENSIVT": ["SHOTS", "XGSHOT", "DRIBBLES"],
+        "DEFENSIVT": ["DEFENSIVEDUELS", "INTERCEPTIONS", "RECOVERIES"]
+    }
 
     for i, p_tab in enumerate(tabs_pos):
         with p_tab:
             label = ["ALLE", "GKP", "DEF", "MID", "FWD"][i]
-            df_f = df[df['ROLECODE3'] == label] if label != "ALLE" else df
-            
-            # Pr. 90 beregning (Kun på relevante kolonner)
-            stats_cols = ['GOALS', 'ASSISTS', 'SHOTS', 'INTERCEPTIONS']
-            df_display = df_f[['TEAM_LOGO', 'NAVN', 'MINUTESONFIELD'] + stats_cols].copy()
+            df_f = df[df["ROLECODE3"] == label].copy() if label != "ALLE" else df.copy()
 
-            if visning == "PR. 90":
-                for c in stats_cols:
-                    df_display[c] = (df_display[c] / df_display['MINUTESONFIELD'] * 90).round(2)
+            s_tabs = st.tabs(list(stats_map.keys()))
+            for j, (g_name, cols) in enumerate(stats_map.items()):
+                with s_tabs[j]:
+                    # Filtrer kolonner der findes
+                    exist_cols = [c for c in cols if c in df_f.columns]
+                    display_cols = ["TEAM_LOGO", "NAVN", "MINUTESONFIELD"] + exist_cols
+                    
+                    df_v = df_f[display_cols].copy()
 
-            st.dataframe(
-                df_display,
-                use_container_width=True,
-                hide_index=True,
-                height=800,
-                column_config={
-                    "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
-                    "NAVN": "SPILLER",
-                    "MINUTESONFIELD": "MIN"
-                }
-            )
+                    # Beregn Pr. 90 hvis valgt
+                    if visning == "PR. 90":
+                        for c in exist_cols:
+                            if c == "MATCHES": continue
+                            df_v[c] = (df_v[c] / df_v["MINUTESONFIELD"] * 90).round(2)
+
+                    # Tabelvisning uden intern scroll
+                    st.dataframe(
+                        df_v.sort_values(exist_cols[0] if exist_cols else "NAVN", ascending=False),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(len(df_v) * 35 + 40, 1200),
+                        column_config={
+                            "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
+                            "NAVN": st.column_config.TextColumn("SPILLER", width="medium"),
+                            "MINUTESONFIELD": st.column_config.NumberColumn("MIN", format="%d")
+                        }
+                    )
