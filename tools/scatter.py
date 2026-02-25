@@ -23,36 +23,32 @@ def build_scatter_plot(df_plot, metric_type):
         text='TEAMNAME', 
         color='TEAMNAME',
         color_discrete_map=colors_dict,
-        # Tilpas hover-boks her:
-        hover_data={
-            'TEAMNAME': False, # Gemt da den er hover_name
-            'X': ':.2f', 
-            'Y': ':.2f',
-            'MATCHES': True
-        },
+        # Vi sender MATCHES med som custom_data så den kan bruges i hover
+        custom_data=['MATCHES'],
         height=700,
         template="plotly_white",
         labels={
-            "X_PER_GAME": f"{x_label} (pr. kamp)", 
-            "Y_PER_GAME": f"{y_label} (pr. kamp)",
-            "MATCHES": "Kampe"
+            "X_PER_GAME": x_label, 
+            "Y_PER_GAME": y_label
         }
     )
 
     # Vender KUN y-aksen hvis det handler om mål/skud IMOD (da færre er bedre)
-    if "MOD" in y_label or "IMOD" in y_label or "CONCEDED" in y_label:
+    if any(word in y_label for word in ["MOD", "IMOD", "CONCEDED"]):
         fig.update_yaxes(autorange="reversed")
     else:
         fig.update_yaxes(autorange=True)
     
+    # TILPASNING AF HOVER-BOKS
     fig.update_traces(
         marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         textposition='top center',
-        # Dette definerer selve teksten i hover-boksen
-        hovertemplate="<b>%{hovertext}</b><br><br>" + 
-                      f"{x_label}: %{{x:.2f}}<br>" + 
-                      f"{y_label}: %{{y:.2f}}<br>" + 
-                      "Kampe: %{customdata[0]}<extra></extra>"
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>" + 
+            f"{x_label}: %{{x:.2f}}<br>" + 
+            f"{y_label}: %{{y:.2f}}<br>" + 
+            "<extra></extra>" # Fjerner trace-navnet i siden
+        )
     )
 
     # Gennemsnitslinjer
@@ -61,7 +57,11 @@ def build_scatter_plot(df_plot, metric_type):
     fig.add_hline(y=avg_y, line_dash="dot", line_color="grey", opacity=0.5)
     fig.add_vline(x=avg_x, line_dash="dot", line_color="grey", opacity=0.5)
     
-    fig.update_layout(showlegend=False)
+    fig.update_layout(
+        showlegend=False,
+        xaxis_title=x_label,
+        yaxis_title=y_label
+    )
     return fig
 
 def vis_side(df_scatter):
@@ -85,8 +85,7 @@ def vis_side(df_scatter):
 
     df_current = df_s[df_s[s_col].astype(str).str.strip() == current_season].copy()
 
-    # --- 1. DEFINER DINE METRICS HER ---
-    # Format: "Navn i menu": (Kolonne_For, Kolonne_Imod)
+    # --- DEFINITION AF METRICS ---
     metric_options = {
         "MÅL FOR vs. MÅL IMOD": ("GOALS", "CONCEDEDGOALS"),
         "TOUCHES IN BOX vs. SKUD": ("TOUCHINBOX", "SHOTS"),
@@ -105,22 +104,18 @@ def vis_side(df_scatter):
         leagues = sorted(df_current['COMPETITIONNAME'].unique()) if 'COMPETITIONNAME' in df_current.columns else []
         valgt_league = st.selectbox("Vælg Turnering", leagues)
     with c2:
-        # Her bruger vi nøglerne fra vores metric_options ordbog
         metric_type = st.selectbox("Vælg Analyse", list(metric_options.keys()))
 
     df_filtered = df_current[df_current['COMPETITIONNAME'] == valgt_league].copy()
     
     if not df_filtered.empty:
-        # Hent de korrekte kolonnenavne ud fra ordbogen
         x_raw, y_raw = metric_options[metric_type]
         
-        # Sikr at kolonnerne findes i data (ellers sæt til 0)
         for col in [x_raw, y_raw, 'MATCHES']:
             if col not in df_filtered.columns:
                 df_filtered[col] = 0
             df_filtered[col] = pd.to_numeric(df_filtered[col], errors='coerce').fillna(0)
 
-        # Beregn pr. kamp
         df_filtered['X_PER_GAME'] = df_filtered[x_raw] / df_filtered['MATCHES'].replace(0, 1)
         df_filtered['Y_PER_GAME'] = df_filtered[y_raw] / df_filtered['MATCHES'].replace(0, 1)
 
