@@ -20,74 +20,59 @@ except ImportError:
 def vis_side(dp):
     st.write("### 📝 Ny Scoutrapport")
 
-    # 1. Hent data
+    # 1. Hent den filtrerede spillerliste fra Snowflake
+    # 'players_snowflake' er nu begrænset af dit comp_filter via SQL
     df_ps = dp.get("players_snowflake", pd.DataFrame())
     hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
-    # Initialiser session state hvis den ikke findes
     if 'scout_temp_data' not in st.session_state:
         st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
 
-    # 2. Forbered spillerlisten (kun hvis den er tom)
+    # 2. Forbered ordbog til dropdown (Navn + Klub for nem søgning)
+    spiller_options = {}
     if not df_ps.empty:
-        # Filtrer på ligaer
-        if 'COMPETITION_WYID' in df_ps.columns:
-            df_ps = df_ps[df_ps['COMPETITION_WYID'].isin(COMPETITION_WYID)]
-
-        # Rens navne
-        for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
-            df_ps[col] = df_ps[col].astype(str).replace(['None', 'nan', '<NA>'], '')
-
-        def build_name(r):
-            full = f"{r['FIRSTNAME']} {r['LASTNAME']}".strip()
-            return full if full != "" else r['SHORTNAME'].strip()
-
-        df_ps['FULL_NAME'] = df_ps.apply(build_name, axis=1)
-        
-        lookup_data = []
         for _, r in df_ps.iterrows():
-            if not r['FULL_NAME'] or pd.isna(r['PLAYER_WYID']):
-                continue
+            p_id = str(int(r['PLAYER_WYID']))
             t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
-            lookup_data.append({
-                "Navn": r['FULL_NAME'],
-                "ID": str(int(r['PLAYER_WYID'])),
-                "Klub": hold_map.get(t_id, "Ukendt klub"),
-                "Pos": r.get('ROLECODE3', '-')
-            })
-        m_df = pd.DataFrame(lookup_data).drop_duplicates(subset=['ID']).sort_values('Navn')
-    else:
-        m_df = pd.DataFrame(columns=["Navn", "ID", "Klub", "Pos"])
+            
+            f_name = str(r['FIRSTNAME'] if r['FIRSTNAME'] else "").strip()
+            l_name = str(r['LASTNAME'] if r['LASTNAME'] else "").strip()
+            full = f"{f_name} {l_name}".strip()
+            if not full: full = str(r['SHORTNAME'])
+            
+            klub = hold_map.get(t_id, "Ukendt klub")
+            # Label i dropdown: "Lamine Yamal (Barcelona)"
+            label = f"{full} ({klub})"
+            
+            spiller_options[label] = {
+                "n": full, "id": p_id, "pos": r['ROLECODE3'], "klub": klub
+            }
 
     # 3. Valg af spiller
     metode = st.radio("Vælg spiller via:", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
     if metode == "Søg i systemet":
-        selected = st.selectbox("Find spiller på tværs af ligaer", options=[""] + m_df['Navn'].tolist())
-        if selected:
-            row = m_df[m_df['Navn'] == selected].iloc[0]
-            st.session_state.scout_temp_data = {
-                "n": row['Navn'], 
-                "id": row['ID'], 
-                "pos": row['Pos'], 
-                "klub": row['Klub']
-            }
+        # Sorter listen alfabetisk
+        sorted_labels = sorted(list(spiller_options.keys()))
+        selected = st.selectbox("Find spiller (Aktuelle ligaer)", options=[""] + sorted_labels)
         
-        if st.session_state.scout_temp_data["id"]:
+        if selected:
+            # Opdater session state med data fra den valgte spiller
+            st.session_state.scout_temp_data = spiller_options[selected]
             st.caption(f"System ID: {st.session_state.scout_temp_data['id']}")
     else:
+        # Manuel logik (behold din eksisterende kode her...)
         c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
-        # Generer et kort unikt ID hvis manuel
         if not st.session_state.scout_temp_data["id"] or len(str(st.session_state.scout_temp_data["id"])) > 10:
             st.session_state.scout_temp_data["id"] = f"M-{str(uuid.uuid4().int)[:6]}"
-        st.session_state.scout_temp_data["id"] = c2.text_input("ID (Manuel)", value=st.session_state.scout_temp_data["id"])
+        st.session_state.scout_temp_data["id"] = c2.text_input("ID", value=st.session_state.scout_temp_data["id"])
 
-    # 4. Selve formularen
+    # 4. Formularen (Brug f_pos og f_klub som før...)
     with st.form("scout_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([2, 2, 1])
-        # Vi bruger st.session_state som default værdier
+        # Nu udfyldes disse automatisk når du vælger i dropdown!
         f_pos = col1.text_input("Position", value=st.session_state.scout_temp_data["pos"])
         f_klub = col2.text_input("Klub", value=st.session_state.scout_temp_data["klub"])
         f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
