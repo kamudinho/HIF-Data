@@ -143,7 +143,8 @@ def vis_side(df_spillere=None, hold_map=None):
             if ptype == 'penalty': m_style = 'P' # Plus-tegn for straffe
             elif ptype == 'free_kick': m_style = 's' # Firkant for frispark
         
-            pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
+           pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
+                          s=row['SHOTXG'] * 500 + 100, # Skalerer størrelsen lineært med xG
                           s=250 if is_goal else 120,
                           edgecolors='white',
                           c='gold' if is_goal else TEAM_COLOR,
