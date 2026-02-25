@@ -125,7 +125,7 @@ try:
     elif hoved_omraade == "HIF ANALYSE":
         if sel == "Afslutninger":
             import tools.player_shots as ps
-            ps.vis_side(dp)
+            ps.vis_side(dp["players"], dp["hold_map"])
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
             ma.vis_side(dp)
