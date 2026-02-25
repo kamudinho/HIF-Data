@@ -121,19 +121,26 @@ def get_data_package():
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
     season_filter = f"='{SEASONNAME}'"
 
-    # C. Hent fra Snowflake (Brug query-nøglen "players" fra queries.py)
+    # C. Hent fra Snowflake
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
     df_matches = load_snowflake_query("team_matches", comp_filter, season_filter)
+    
+    # --- FIX: Her henter vi de manglende karriere-data ---
+    df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
+    
+    # Sikkerhed: Hvis Snowflake returnerer None, lav en tom DF så appen ikke går ned
+    if df_player_career is None:
+        df_player_career = pd.DataFrame()
 
     # D. RETURNER ALT
     return {
-        "players": gh_data["players"],           # GitHub CSV (VIGTIG: Bevarer det gamle navn)
-        "sql_players": df_sql_players,           # Snowflake SQL (Navngivet unikt til dropdown)
+        "players": gh_data["players"],           
+        "sql_players": df_sql_players,           
         "scouting": gh_data["scouting"],
         "playerstats": df_playerstats,
-        "player_career": df_player_career,
+        "player_career": df_player_career,       # Nu findes variablen!
         "team_scatter": df_team_stats,
         "team_matches": df_matches,
         "hold_map": get_hold_mapping(),
