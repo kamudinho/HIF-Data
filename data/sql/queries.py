@@ -30,17 +30,17 @@ def get_queries(comp_filter, season_filter):
             SELECT 
                 ap.PLAYER_WYID,
                 SUM(ap.MINUTESONFIELD) AS MINUTESONFIELD,
-                MAX(ap.GOALS) AS GOALS, 
-                MAX(ap.ASSISTS) AS ASSISTS, 
-                MAX(ap.YELLOWCARDS) AS YELLOWCARDS, 
+                SUM(ap.GOALS) AS GOALS, 
+                SUM(ap.ASSISTS) AS ASSISTS, 
+                SUM(ap.YELLOWCARDS) AS YELLOWCARDS, 
                 COUNT(DISTINCT ap.MATCH_WYID) AS MATCHES,
-                MAX(ap.SHOTS) AS SHOTS,
-                MAX(ap.SHOTSONTARGET) AS SHOTSONTARGET,
-                MAX(ap.XGSHOT) AS XGSHOT,
-                MAX(ap.DRIBBLES) AS DRIBBLES,
-                MAX(ap.DEFENSIVEDUELS) AS DEFENSIVEDUELS,
-                MAX(ap.INTERCEPTIONS) AS INTERCEPTIONS,
-                MAX(ap.RECOVERIES) AS RECOVERIES
+                SUM(ap.SHOTS) AS SHOTS,
+                SUM(ap.SHOTSONTARGET) AS SHOTSONTARGET,
+                SUM(ap.XGSHOT) AS XGSHOT,
+                SUM(ap.DRIBBLES) AS DRIBBLES,
+                SUM(ap.DEFENSIVEDUELS) AS DEFENSIVEDUELS,
+                SUM(ap.INTERCEPTIONS) AS INTERCEPTIONS,
+                SUM(ap.RECOVERIES) AS RECOVERIES
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
             JOIN {DB}.WYSCOUT_MATCHES tm ON tm.MATCH_WYID = ap.MATCH_WYID
             WHERE ap.COMPETITION_WYID IN {comp_filter}
