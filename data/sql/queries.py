@@ -47,10 +47,11 @@ def get_queries(comp_filter, season_filter):
                 t.IMAGEDATAURL AS TEAM_LOGO,
                 s.*
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            LEFT JOIN {DB}.WYSCOUT_PLAYERS p 
+            INNER JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
                 AND s.COMPETITION_WYID = p.COMPETITION_WYID
-            LEFT JOIN {DB}.WYSCOUT_TEAMS t
+            -- Denne join sikrer, at vi kun får det korrekte holdlogo og ingen dubletter
+            INNER JOIN {DB}.WYSCOUT_TEAMS t
                 ON s.TEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
