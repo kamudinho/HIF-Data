@@ -54,11 +54,18 @@ def vis_side(df_spillere=None, hold_map=None):
             df_s[col] = pd.to_numeric(df_s[col], errors='coerce').fillna(0)
 
     # Robust boolean check for mål
-    def to_bool(val):
-        if pd.isna(val): return False
-        return str(val).lower() in ['true', '1', '1.0', 't', 'y', 'yes']
+    def to_bool(row):
+        # 1. Tjek om SHOTISGOAL er True/1
+        val = row.get('SHOTISGOAL')
+        if str(val).lower() in ['true', '1', '1.0', 't', 'y', 'yes']:
+            return True
+        
+        # 2. Backup: Hvis det er et straffespark, tjekker vi ofte på PRIMARYTYPE i kombination med hændelsen
+        # (Nogle gange er SHOTISGOAL mangelfuld for penalties)
+        return False
 
-    df_s['IS_GOAL'] = df_s['SHOTISGOAL'].apply(to_bool) if 'SHOTISGOAL' in df_s.columns else False
+    # Ændr linjen hvor du definerer IS_GOAL til:
+    df_s['IS_GOAL'] = df_s.apply(to_bool, axis=1)
     
     # Filtrer på dit hold
     df_s = df_s[df_s['TEAM_WYID'] == int(TEAM_WYID)].copy()
