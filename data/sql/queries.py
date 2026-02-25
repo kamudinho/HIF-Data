@@ -40,24 +40,33 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
        "playerstats": f"""
-            SELECT 
+            SELECT DISTINCT
                 p.FIRSTNAME, 
                 p.LASTNAME, 
                 p.ROLECODE3,
                 t.IMAGEDATAURL AS TEAM_LOGO,
-                s.*
+                s.PLAYER_WYID,
+                s.MINUTESONFIELD,
+                s.GOALS,
+                s.ASSISTS,
+                s.YELLOWCARDS,
+                s.MATCHES,
+                s.SHOTS,
+                s.SHOTSONTARGET,
+                s.XGSHOT,
+                s.DRIBBLES,
+                s.DEFENSIVEDUELS,
+                s.INTERCEPTIONS,
+                s.RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            INNER JOIN {DB}.WYSCOUT_PLAYERS p 
+            JOIN {DB}.WYSCOUT_PLAYERS p 
                 ON s.PLAYER_WYID = p.PLAYER_WYID 
-                AND s.COMPETITION_WYID = p.COMPETITION_WYID
-            INNER JOIN {DB}.WYSCOUT_TEAMS t
+            JOIN {DB}.WYSCOUT_TEAMS t
                 ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND s.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
-            -- DENNE LINJE FJERNER DUBLETTER:
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY s.PLAYER_WYID ORDER BY s.MINUTESONFIELD DESC) = 1
         """,
         "team_stats_full": f"""
             SELECT DISTINCT 
