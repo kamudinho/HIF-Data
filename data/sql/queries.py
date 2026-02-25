@@ -41,26 +41,26 @@ def get_queries(comp_filter, season_filter):
         """,
         "playerstats": f"""
             SELECT 
-                s.PLAYER_WYID, 
-                SUM(s.MINUTESONFIELD) as MINUTESONFIELD, 
-                SUM(s.GOALS) as GOALS, 
-                SUM(s.ASSISTS) as ASSISTS, 
-                SUM(s.YELLOWCARDS) as YELLOWCARDS, 
-                SUM(s.MATCHES) as MATCHES,
-                SUM(s.SHOTS) as SHOTS,
-                SUM(s.SHOTSONTARGET) as SHOTSONTARGET,
-                SUM(s.XGSHOT) as XGSHOT,
-                SUM(s.DRIBBLES) as DRIBBLES,
-                SUM(s.DEFENSIVEDUELS) as DEFENSIVEDUELS,
-                SUM(s.INTERCEPTIONS) as INTERCEPTIONS,
-                SUM(s.RECOVERIES) as RECOVERIES
+                s.PLAYER_WYID,
+                p.SHORTNAME AS NAVN,
+                p.CURRENTTEAM_WYID,
+                s.MINUTESONFIELD,
+                s.GOALS,
+                s.ASSISTS,
+                s.YELLOWCARDS,
+                s.MATCHES,
+                s.SHOTS,
+                s.SHOTSONTARGET,
+                s.XGSHOT,
+                s.DRIBBLES,
+                s.DEFENSIVEDUELS,
+                s.INTERCEPTIONS,
+                s.RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            JOIN {DB}.WYSCOUT_MATCHES m ON s.MATCH_WYID = m.MATCH_WYID
-            WHERE m.COMPETITION_WYID IN {comp_filter}
-            AND m.SEASON_WYID IN (
-                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
-            )
-            GROUP BY s.PLAYER_WYID
+            INNER JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+            INNER JOIN {DB}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+            WHERE s.COMPETITION_WYID IN {comp_filter}
+            AND ws.SEASONNAME {season_filter}
         """,
         
         "team_logos": f"SELECT TEAM_WYID, IMAGEDATAURL AS TEAM_LOGO FROM {DB}.WYSCOUT_TEAMS",
