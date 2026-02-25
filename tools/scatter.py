@@ -9,6 +9,12 @@ hif_rod = "#df003b"
 def build_scatter_plot(df_plot, metric_type):
     colors_dict = get_team_colors()
     
+    # Split metric_type (f.eks. "xG vs. MÅL FOR") til to labels
+    if " vs. " in metric_type:
+        x_label, y_label = metric_type.split(" vs. ")
+    else:
+        x_label, y_label = "X", "Y"
+
     fig = px.scatter(
         df_plot, 
         x='X_PER_GAME', 
@@ -17,20 +23,36 @@ def build_scatter_plot(df_plot, metric_type):
         text='TEAMNAME', 
         color='TEAMNAME',
         color_discrete_map=colors_dict,
+        # Tilpas hover-boks her:
+        hover_data={
+            'TEAMNAME': False, # Gemt da den er hover_name
+            'X_PER_GAME': ':.2f', 
+            'Y_PER_GAME': ':.2f',
+            'MATCHES': True
+        },
         height=700,
         template="plotly_white",
         labels={
-            "X_PER_GAME": f"{metric_type}", 
-            "Y_PER_GAME": f"{metric_type}"
+            "X_PER_GAME": f"{x_label} (pr. kamp)", 
+            "Y_PER_GAME": f"{y_label} (pr. kamp)",
+            "MATCHES": "Kampe"
         }
     )
 
-    # Vender Y-aksen (færre mål/skud imod i toppen er godt)
-    fig.update_yaxes(autorange="reversed")
+    # Vender KUN y-aksen hvis det handler om mål/skud IMOD (da færre er bedre)
+    if "MOD" in y_label or "IMOD" in y_label or "CONCEDED" in y_label:
+        fig.update_yaxes(autorange="reversed")
+    else:
+        fig.update_yaxes(autorange=True)
     
     fig.update_traces(
         marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
-        textposition='top center'
+        textposition='top center',
+        # Dette definerer selve teksten i hover-boksen
+        hovertemplate="<b>%{hovertext}</b><br><br>" + 
+                      f"{x_label}: %{{x:.2f}}<br>" + 
+                      f"{y_label}: %{{y:.2f}}<br>" + 
+                      "Kampe: %{customdata[0]}<extra></extra>"
     )
 
     # Gennemsnitslinjer
