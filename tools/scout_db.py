@@ -94,61 +94,40 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        st.markdown("### Karrierestatistik")
-        if career_df is not None and not career_df.empty:
-            df_c = career_df.copy()
-            df_c.columns = [c.upper() for c in df_c.columns]
+        st.markdown("### Sæsonstatistik (Aktuel)")
+        if stats_df is not None and not stats_df.empty:
+            # Filtrer for den specifikke spiller
+            current_stats = stats_df[stats_df['PLAYER_WYID'] == clean_p_id]
             
-            if 'PLAYER_WYID' in df_c.columns:
-                df_c['PLAYER_WYID'] = df_c['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-
-            df_p = df_c[df_c['PLAYER_WYID'] == clean_p_id].copy()
-
-            if not df_p.empty:
-                df_p = df_p.drop_duplicates()
-                df_p = df_p.rename(columns={
-                    'SEASONNAME': 'SÆSON',
-                    'COMPETITIONNAME': 'TURNERING',
-                    'TEAMNAME': 'HOLD',
-                    'APPEARANCES': 'KAMPE',
-                    'MINUTESPLAYED': 'MIN',
-                    'GOAL': 'MÅL',
-                    'ASSIST': 'ASS',
-                    'YELLOWCARD': 'GULE',
-                    'REDCARD': 'RØDE'
-                })
-
-                ungdom_filter = ['U15', 'U14', 'U13']
-                pattern = '|'.join(ungdom_filter)
-                df_p = df_p[~df_p['TURNERING'].str.contains(pattern, case=False, na=False)]
+            if not current_stats.empty:
+                # Opret kolonner til overskuelig visning af nøgletal
+                s1, s2, s3, s4 = st.columns(4)
                 
-                stats_cols = ['KAMPE', 'MIN', 'MÅL']
-                df_p = df_p.dropna(subset=stats_cols, how='all')
-                df_p = df_p[~((df_p['KAMPE'] == 0) & (df_p['MIN'] == 0) & (df_p['MÅL'] == 0))]
+                # Hjælpefunktion til at hente værdi sikkert
+                def get_stat(col):
+                    val = current_stats.iloc[0].get(col, 0)
+                    return val if pd.notnull(val) else 0
 
-                vis_cols = ['SÆSON', 'TURNERING', 'HOLD', 'KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']
-                existing_cols = [c for c in vis_cols if c in df_p.columns]
+                s1.metric("Minutter", f"{int(get_stat('MINUTESONFIELD'))}")
+                s1.metric("Kampe", f"{int(get_stat('MATCHES'))}")
                 
-                col_config = {}
-                for c in existing_cols:
-                    if c in ['KAMPE', 'MIN', 'MÅL', 'ASS', 'GULE', 'RØDE']:
-                        col_config[c] = st.column_config.NumberColumn(c, format="%d")
-                    else:
-                        col_config[c] = st.column_config.Column(c)
-
-                if not df_p.empty:
-                    st.dataframe(
-                        df_p[existing_cols].sort_values(['SÆSON', 'KAMPE'], ascending=False),
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config=col_config
-                    )
-                else:
-                    st.info("Ingen relevante karrierestatistikker fundet (U16+).")
+                s2.metric("Mål", f"{int(get_stat('GOALS'))}")
+                s2.metric("Assists", f"{int(get_stat('ASSISTS'))}")
+                
+                s3.metric("xG", f"{round(get_stat('XGSHOT'), 2)}")
+                s3.metric("Afslutninger", f"{int(get_stat('SHOTS'))}")
+                
+                s4.metric("Interceptions", f"{int(get_stat('INTERCEPTIONS'))}")
+                s4.metric("Driblinger", f"{int(get_stat('DRIBBLES'))}")
+                
+                st.divider()
             else:
-                st.info("Ingen historiske karrierestatistikker fundet for denne spiller.")
-        else:
-            st.warning("Karriere-data er ikke tilgængelige.")
+                st.info("Ingen aktive sæson-stats fundet for denne spiller i de valgte ligaer.")
+        
+        # --- Eksisterende Karrierestatistik (vises nedenunder) ---
+        st.markdown("### Karrierestatistik (Historik)")
+        if career_df is not None and not career_df.empty:
+            # ... (Resten af din eksisterende career_df logik her)
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
