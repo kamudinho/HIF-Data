@@ -96,7 +96,7 @@ def vis_side(df_spillere=None, hold_map=None):
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        # 2. Popover (Korrekt centrering via specifikke søjletyper)
+        # 2. Popover (Stabilitets-sikret version)
         with st.popover("Oversigt over afslutninger", use_container_width=True):
             if not df_p.empty:
                 tabel_df = df_p[['NR', 'SPILLER_NAVN', 'MINUTE', 'SHOTXG', 'IS_GOAL']].copy()
@@ -112,11 +112,11 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.TextColumn(width=35, alignment="center"),
-                        "Spiller": st.column_config.TextColumn(width=130), # Standard er venstre
-                        "Min": st.column_config.TextColumn(width=45, alignment="center"),
-                        "xG": st.column_config.NumberColumn(width=55, format="%.2f", alignment="center"),
-                        "Udfald": st.column_config.TextColumn(width=65, alignment="center")
+                        "#": st.column_config.NumberColumn(width=40), # NumberColumn centrerer ofte automatisk
+                        "Spiller": st.column_config.Column(width=140),
+                        "Min": st.column_config.NumberColumn(width=50),
+                        "xG": st.column_config.NumberColumn(width=60, format="%.2f"),
+                        "Udfald": st.column_config.Column(width=70)
                     }
                 )
             else:
