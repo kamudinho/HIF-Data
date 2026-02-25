@@ -111,7 +111,7 @@ def vis_side(df_spillere=None, hold_map=None):
                     use_container_width=True, 
                     height=min(len(vis_df) * 35 + 38, 500),
                     column_config={
-                        "#": st.column_config.NumberColumn(width=30),
+                        "#": st.column_config.NumberColumn(width=28),
                         "Spiller": st.column_config.Column(width=138),
                         "Min": st.column_config.NumberColumn(width=30),
                         "xG": st.column_config.NumberColumn(width=50, format="%.2f"),
