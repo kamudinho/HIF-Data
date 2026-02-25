@@ -21,6 +21,8 @@ def vis_side():
 
     df = df_raw.copy()
     df.columns = [str(c).upper() for c in df.columns]
+    
+    # Navne-vask
     df['NAVN'] = (df['FIRSTNAME'].apply(super_clean) + " " + df['LASTNAME'].apply(super_clean)).str.strip()
     
     col_nav, col_type = st.columns([4, 2])
@@ -44,21 +46,23 @@ def vis_side():
             for j, (g_name, cols) in enumerate(stats_map.items()):
                 with s_tabs[j]:
                     exist_stats = [c for c in cols if c in df_f.columns]
-                    # Kun TEAM_LOGO, ingen spillerbillede
                     show_cols = ['TEAM_LOGO', 'NAVN', 'MINUTESONFIELD'] + exist_stats
                     df_v = df_f[[c for c in show_cols if c in df_f.columns]].copy()
 
                     if visning == "PR. 90" and 'MINUTESONFIELD' in df_v.columns:
                         for c in exist_stats:
                             if c == 'MATCHES': continue 
-                            df_v[c] = (pd.to_numeric(df_v[c]) / pd.to_numeric(df_v['MINUTESONFIELD']) * 90).round(2)
+                            # Sikker beregning pr 90
+                            mins = pd.to_numeric(df_v['MINUTESONFIELD'], errors='coerce').fillna(0)
+                            vals = pd.to_numeric(df_v[c], errors='coerce').fillna(0)
+                            df_v[c] = (vals / mins * 90).where(mins > 0, 0).round(2)
 
-                    # Ingen scrollbar i tabellen - den fylder det den skal
+                    # Tabel uden scroll-boks
                     st.dataframe(
                         df_v.sort_values(exist_stats[0] if exist_stats else 'NAVN', ascending=False),
                         use_container_width=True,
                         hide_index=True,
-                        height=min(len(df_v) * 35 + 40, 1500), 
+                        height=min(len(df_v) * 35 + 40, 2000), # Sat højt så vi undgår scroll
                         column_config={
                             "TEAM_LOGO": st.column_config.ImageColumn("", width="small"),
                             "NAVN": st.column_config.TextColumn("SPILLER", width="medium"),
