@@ -25,11 +25,11 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_PLAYERS
         """,
 
-        # --- 2. SPILLER STATISTIK (Rå tal fra TOTAL tabellen) ---
+        # --- 2. SPILLER STATISTIK (Forbedret filtrering) ---
         "playerstats": f"""
             SELECT 
                 s.PLAYER_WYID,
-                SUM(s.MINUTESONFIELD) as MINUTESONFIELD, -- Vi summerer her for at være sikre
+                SUM(s.MINUTESONFIELD) as MINUTESONFIELD,
                 SUM(s.GOALS) as GOALS, 
                 SUM(s.ASSISTS) as ASSISTS, 
                 SUM(s.YELLOWCARDS) as YELLOWCARDS, 
@@ -42,12 +42,13 @@ def get_queries(comp_filter, season_filter):
                 SUM(s.INTERCEPTIONS) as INTERCEPTIONS,
                 SUM(s.RECOVERIES) as RECOVERIES
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+            JOIN {DB}.WYSCOUT_SEASONS sn ON s.SEASON_WYID = sn.SEASON_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASON_WYID IN (
-                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
-            )
+            AND sn.SEASONNAME {season_filter}
+            AND s.TEAM_WYID != 0
             GROUP BY s.PLAYER_WYID
         """,
+        
         # --- 3. LOGOER (Ren opslagstabel) ---
         "team_logos": f"""
             SELECT 
