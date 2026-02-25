@@ -22,53 +22,52 @@ def vis_side(df_spillere=None, hold_map=None):
         st.error("Data pakke ikke fundet.")
         return
 
-    # --- 1. DATA LOADING ---
+    # --- 1. HENT DATA ---
     if "shotevents_data" not in st.session_state:
-        with st.spinner("Henter skuddata..."):
+        with st.spinner("Henter skud..."):
             st.session_state["shotevents_data"] = load_snowflake_query(
                 "shotevents", dp["comp_filter"], dp["season_filter"]
             )
         st.rerun()
 
     df_shots = st.session_state["shotevents_data"]
-    df_spillere_hif = df_spillere if df_spillere is not None else dp.get("players")
+    df_trup = df_spillere if df_spillere is not None else dp.get("players")
 
-    if df_shots is None or df_shots.empty or df_spillere_hif is None:
-        st.warning("Kunne ikke indlæse data.")
+    if df_shots is None or df_trup is None:
+        st.warning("Data mangler.")
         return
 
-    # --- 2. FORBERED HVIDOVRE SPILLERLISTE (DIN CSV) ---
-    s_df = df_spillere_hif.copy()
+    # --- 2. BEHANDL DIN CSV (Sandheden) ---
+    s_df = df_trup.copy()
+    # Rens kolonnenavne (fjerner whitespace og gør dem store)
     s_df.columns = [str(c).upper().strip() for c in s_df.columns]
 
     def clean_id(val):
         if pd.isna(val): return "0"
         return str(val).split('.')[0].replace('.0', '').strip()
 
-    # Opret PLAYER_ID_CLEAN på din Hvidovre-liste
+    # Opret renset ID kolonne fra din CSV
     s_df['PLAYER_ID_CLEAN'] = s_df['PLAYER_WYID'].apply(clean_id)
     
-    # Lav en liste over de PLAYER_IDs der må vises (dem fra din Hvidovre-CSV)
-    tilladte_hif_ids = s_df['PLAYER_ID_CLEAN'].unique().tolist()
-    
-    # Lav navne-ordbog KUN for disse spillere
-    navne_dict = dict(zip(s_df['PLAYER_ID_CLEAN'], s_df['SHORTNAME']))
+    # Lav ordbog KUN med PLAYER_WYID og NAVN fra din fil
+    # Hvis et ID findes flere gange, tager den den sidste
+    navne_dict = dict(zip(s_df['PLAYER_ID_CLEAN'], s_df['NAVN']))
 
-    # --- 3. FILTRER SKUDDATA ---
+    # --- 3. FILTRER SNOWFLAKE DATA ---
     df_s = df_shots.copy()
     df_s['PLAYER_ID_CLEAN'] = df_s['PLAYER_WYID'].apply(clean_id)
     
-    # KRITISK FILTRERING: Behold kun skud fra spillere, der findes i tilladte_hif_ids
-    df_s = df_s[df_s['PLAYER_ID_CLEAN'].isin(tilladte_hif_ids)].copy()
-
-    # Map navnene
+    # TEST-LOGIK: Vi beholder KUN skud, hvor ID findes i din players.csv
+    df_s = df_s[df_s['PLAYER_ID_CLEAN'].isin(navne_dict.keys())].copy()
+    
+    # Map NAVN fra din csv over på skuddata
     df_s['SPILLER_NAVN'] = df_s['PLAYER_ID_CLEAN'].map(navne_dict)
 
     if df_s.empty:
-        st.warning("Ingen af spillerne fra din players.csv har registreret skud i Snowflake endnu.")
+        st.info("Ingen match fundet mellem Snowflake-skud og de ID'er, du har i din players.csv.")
         return
 
-    # --- 4. MÅL & xG LOGIK ---
+    # --- 4. STATS LOGIK ---
     def to_bool(row):
         is_goal_flag = str(row.get('SHOTISGOAL')).lower() in ['true', '1', '1.0', 't', 'y', 'yes']
         is_goal_type = str(row.get('PRIMARYTYPE')).lower() in ['goal', 'penalty_goal']
@@ -77,31 +76,28 @@ def vis_side(df_spillere=None, hold_map=None):
     df_s['IS_GOAL'] = df_s.apply(to_bool, axis=1)
     df_s['SHOTXG'] = pd.to_numeric(df_s['SHOTXG'], errors='coerce').fillna(0)
 
-    # --- 5. UI LAYOUT ---
+    # --- 5. VISNING ---
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
+        # Listen indeholder nu kun spillere der findes i begge kilder
         spiller_liste = sorted(df_s['SPILLER_NAVN'].unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller (Fra Hvidovre-trup)", options=spiller_liste)
+        valgt_spiller = st.selectbox("Vælg spiller (Fra din CSV)", options=spiller_liste)
         
         df_p = df_s[df_s['SPILLER_NAVN'] == valgt_spiller].copy()
         df_p = df_p.sort_values(by=['MINUTE']).reset_index(drop=True)
         df_p['NR'] = df_p.index + 1
 
-        total_shots = len(df_p)
-        total_goals = int(df_p['IS_GOAL'].sum())
-        total_xg = df_p['SHOTXG'].sum()
-        conv_rate = (total_goals / total_shots * 100) if total_shots > 0 else 0
-
+        # Metrics boks
         st.markdown(f"""
         <div style="border-left: 5px solid {TEAM_COLOR}; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
-            <h3 style="margin:0; color: {TEAM_COLOR};">{valgt_spiller}</h3>
+            <h3 style="margin:0;">{valgt_spiller}</h3>
             <hr>
-            <small style="text-transform:uppercase; color:gray;">Afslutninger / Mål</small>
-            <h2 style="margin:0;">{total_shots} / {total_goals}</h2>
+            <small>AFSLUTNINGER / MÅL</small>
+            <h2 style="margin:0;">{len(df_p)} / {int(df_p['IS_GOAL'].sum())}</h2>
             <br>
-            <small style="text-transform:uppercase; color:gray;">Total xG</small>
-            <h2 style="margin:0;">{total_xg:.2f}</h2>
+            <small>TOTAL xG</small>
+            <h2 style="margin:0;">{df_p['SHOTXG'].sum():.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -117,7 +113,6 @@ def vis_side(df_spillere=None, hold_map=None):
             elif 'free_kick' in ptype: m_style = 's'
         
             sc_size = (row['SHOTXG'] * 600) + 100
-            if is_goal: sc_size += 150
             
             pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
                           s=sc_size, edgecolors='white',
