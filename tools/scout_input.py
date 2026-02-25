@@ -1,4 +1,3 @@
-# tools/scout_input.py
 import streamlit as st
 import pandas as pd
 import uuid
@@ -6,73 +5,74 @@ import time
 from datetime import datetime
 from io import StringIO
 
-# Try/Except blokke er gode til debugging af filstier
+# Try/Except blokke til github utils
 try:
     from utils.github import get_github_file, push_to_github
 except ImportError:
     st.error("Kunne ikke finde github.py i utils mappen.")
 
-try:
-    from data.season_show import COMPETITION_WYID
-except ImportError:
-    COMPETITION_WYID = (3134, 329, 43319, 331, 1305, 1570)
-
 def vis_side(dp):
-    st.write("### 📝 Ny Scoutrapport")
+    st.write("### Ny Scoutrapport")
 
-    # 1. Hent den filtrerede spillerliste fra Snowflake
-    # 'players_snowflake' er nu begrænset af dit comp_filter via SQL
-    df_ps = dp.get("players_snowflake", pd.DataFrame())
+    # 1. Hent data fra Snowflake (BEMÆRK: Nøglen er nu 'sql_players')
+    df_ps = dp.get("sql_players", pd.DataFrame())
     hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
     if 'scout_temp_data' not in st.session_state:
         st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
 
-    # 2. Forbered ordbog til dropdown (Navn + Klub for nem søgning)
+    # 2. Forbered ordbog til dropdown
     spiller_options = {}
     if not df_ps.empty:
-        for _, r in df_ps.iterrows():
+        # Sikr at vi arbejder med kopier og fjerner NaN
+        temp_df = df_ps.copy()
+        for col in ['FIRSTNAME', 'LASTNAME', 'SHORTNAME']:
+            if col in temp_df.columns:
+                temp_df[col] = temp_df[col].fillna('')
+
+        for _, r in temp_df.iterrows():
             p_id = str(int(r['PLAYER_WYID']))
-            t_id = str(int(r['CURRENTTEAM_WYID'])) if pd.notnull(r['CURRENTTEAM_WYID']) else ""
+            t_id = str(int(r['CURRENTTEAM_WYID'])) if r['CURRENTTEAM_WYID'] != '' else ""
             
-            f_name = str(r['FIRSTNAME'] if r['FIRSTNAME'] else "").strip()
-            l_name = str(r['LASTNAME'] if r['LASTNAME'] else "").strip()
+            # Byg fulde navn
+            f_name = str(r['FIRSTNAME']).strip()
+            l_name = str(r['LASTNAME']).strip()
             full = f"{f_name} {l_name}".strip()
-            if not full: full = str(r['SHORTNAME'])
+            if not full: 
+                full = str(r['SHORTNAME']).strip()
             
             klub = hold_map.get(t_id, "Ukendt klub")
-            # Label i dropdown: "Lamine Yamal (Barcelona)"
             label = f"{full} ({klub})"
             
             spiller_options[label] = {
-                "n": full, "id": p_id, "pos": r['ROLECODE3'], "klub": klub
+                "n": full, 
+                "id": p_id, 
+                "pos": r.get('ROLECODE3', '-'), 
+                "klub": klub
             }
 
     # 3. Valg af spiller
     metode = st.radio("Vælg spiller via:", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
     
     if metode == "Søg i systemet":
-        # Sorter listen alfabetisk
         sorted_labels = sorted(list(spiller_options.keys()))
         selected = st.selectbox("Find spiller (Aktuelle ligaer)", options=[""] + sorted_labels)
         
         if selected:
-            # Opdater session state med data fra den valgte spiller
             st.session_state.scout_temp_data = spiller_options[selected]
             st.caption(f"System ID: {st.session_state.scout_temp_data['id']}")
     else:
-        # Manuel logik (behold din eksisterende kode her...)
         c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
-        if not st.session_state.scout_temp_data["id"] or len(str(st.session_state.scout_temp_data["id"])) > 10:
+        # Generer manuelt ID hvis det mangler
+        if not st.session_state.scout_temp_data["id"] or "M-" not in str(st.session_state.scout_temp_data["id"]):
             st.session_state.scout_temp_data["id"] = f"M-{str(uuid.uuid4().int)[:6]}"
         st.session_state.scout_temp_data["id"] = c2.text_input("ID", value=st.session_state.scout_temp_data["id"])
 
-    # 4. Formularen (Brug f_pos og f_klub som før...)
+    # 4. Formularen
     with st.form("scout_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([2, 2, 1])
-        # Nu udfyldes disse automatisk når du vælger i dropdown!
         f_pos = col1.text_input("Position", value=st.session_state.scout_temp_data["pos"])
         f_klub = col2.text_input("Klub", value=st.session_state.scout_temp_data["klub"])
         f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
@@ -104,7 +104,6 @@ def vis_side(dp):
             if not st.session_state.scout_temp_data["n"]:
                 st.error("❌ Fejl: Du skal vælge eller indtaste en spiller først.")
             else:
-                # Beregn gennemsnit
                 ratings = [fart, teknik, spil_i, f_beslut, f_aggro, attit, fysik, ledere]
                 avg = round(sum(ratings) / len(ratings), 1)
                 
@@ -131,12 +130,10 @@ def vis_side(dp):
                     "Scout": curr_user
                 }
                 
-                # GitHub integration
                 file_path = "data/scouting_db.csv"
                 with st.spinner("Gemmer rapport på GitHub..."):
                     try:
                         content, sha = get_github_file(file_path)
-                        
                         if content is not None:
                             df_old = pd.read_csv(StringIO(content))
                             df_new = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
@@ -148,14 +145,11 @@ def vis_side(dp):
                         
                         if result in [200, 201]:
                             st.balloons()
-                            st.success(f"✅ Rapport for {ny_rapport['Navn']} er gemt korrekt!")
-                            # Nulstil data
-                            st.session_state.scout_temp_state = {"n": "", "id": "", "pos": "", "klub": ""}
-                            time.sleep(2)
+                            st.success(f"✅ Rapport for {ny_rapport['Navn']} er gemt!")
+                            st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
+                            time.sleep(1)
                             st.rerun()
                         else:
-                            st.error(f"GitHub fejlkode: {result}")
+                            st.error(f"GitHub fejl: {result}")
                     except Exception as e:
-                        st.error(f"Der skete en fejl: {str(e)}")
-
-# Husk at kalde vis_side(dp) i din main fil.
+                        st.error(f"Fejl: {str(e)}")
