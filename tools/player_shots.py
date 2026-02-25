@@ -114,7 +114,7 @@ def vis_side(df_spillere=None, hold_map=None):
 
         with st.popover("Se alle afslutninger", use_container_width=True):
             tabel_df = df_p.copy()
-            tabel_df['RES'] = tabel_df['IS_GOAL'].map({True: "⚽ MÅL", False: "Afslutning"})
+            tabel_df['RES'] = tabel_df['IS_GOAL'].map({True: "MÅL", False: "Afslutning"})
             st.dataframe(
                 tabel_df[['NR', 'MINUTE', 'SHOTXG', 'RES']].rename(columns={'NR':'#','MINUTE':'Min','SHOTXG':'xG','RES':'Resultat'}),
                 hide_index=True
@@ -126,13 +126,21 @@ def vis_side(df_spillere=None, hold_map=None):
         fig, ax = pitch.draw(figsize=(8, 10))
         
         # Placer skud
+        # Inde i loopet i player_shots.py
         for _, row in df_p.iterrows():
             is_goal = row['IS_GOAL']
+            ptype = str(row.get('PRIMARYTYPE', 'shot')).lower()
+            
+            # Skift form baseret på type
+            m_style = 'o' # Cirkel for normale skud
+            if ptype == 'penalty': m_style = 'P' # Plus-tegn for straffe
+            elif ptype == 'free_kick': m_style = 's' # Firkant for frispark
+        
             pitch.scatter(row['LOCATIONX'], row['LOCATIONY'], 
                           s=250 if is_goal else 120,
                           edgecolors='white',
                           c='gold' if is_goal else TEAM_COLOR,
-                          marker='o', 
+                          marker=m_style, 
                           ax=ax,
                           zorder=3)
             
