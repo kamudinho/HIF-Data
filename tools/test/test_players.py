@@ -18,23 +18,38 @@ def vis_side():
         st.error("Kunne ikke finde data.")
         return
 
-    # --- 2. AGGREGERING AF KAMP-DATA ---
-    # Liste over kolonner der skal lægges sammen
-    cols_to_sum = [
-        "MINUTESONFIELD", "GOALS", "ASSISTS", "YELLOWCARDS", "SHOTS", 
-        "SHOTSONTARGET", "XGSHOT", "DRIBBLES", "DEFENSIVEDUELS", 
-        "INTERCEPTIONS", "RECOVERIES"
-    ]
-
-    # Rens ID'er før gruppering
+    # --- 2. AGGREGERING OG RENSNING ---
+    # Vi skal summere minutterne, men tage MAX af mål/assists 
+    # (da rækkerne i dit dump ser ud til at indeholde akkumulerede totaler)
+    
+    agg_logic = {
+        "MINUTESONFIELD": "sum",
+        "GOALS": "max",
+        "ASSISTS": "max",
+        "YELLOWCARDS": "max",
+        "SHOTS": "max",
+        "SHOTSONTARGET": "max",
+        "XGSHOT": "max",
+        "DRIBBLES": "max",
+        "DEFENSIVEDUELS": "max",
+        "INTERCEPTIONS": "max",
+        "RECOVERIES": "max"
+    }
+    
+    # Rens ID'er
     df_stats_raw['PLAYER_WYID'] = df_stats_raw['PLAYER_WYID'].astype(str).str.replace('.0', '', regex=False)
     
-    # Lav selve sammentællingen
-    df_stats_agg = df_stats_raw.groupby("PLAYER_WYID")[cols_to_sum].sum().reset_index()
+    # Gruppér data
+    df_stats = df_stats_raw.groupby("PLAYER_WYID").agg(agg_logic).reset_index()
     
-    # Tæl antal kampe (rækker i rådata pr. spiller)
+    # Tæl rigtige antal kampe
     df_counts = df_stats_raw.groupby("PLAYER_WYID").size().reset_index(name='MATCHES')
-    df_stats = pd.merge(df_stats_agg, df_counts, on="PLAYER_WYID")
+    df_stats = pd.merge(df_stats, df_counts, on="PLAYER_WYID")
+    
+    # Loft minutterne til 90 x antal kampe
+    df_stats['MINUTESONFIELD'] = df_stats.apply(
+        lambda x: min(x['MINUTESONFIELD'], x['MATCHES'] * 90), axis=1
+    )
 
     # --- 3. MINUT-LOGIK (Max 1620 ved 18 kampe) ---
     # Vi tvinger minutterne til aldrig at overstige antal kampe * 90
