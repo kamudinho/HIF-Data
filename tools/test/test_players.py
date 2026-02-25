@@ -17,13 +17,11 @@ def vis_side():
         st.warning("Data indlæses...")
         return
 
-    # --- NYT: Sikr at vi summerer stats pr. spiller først ---
-    # Dette sikrer, at hvis en spiller har spillet for to hold, bliver hans stats lagt sammen
-    df_stats = df_stats.groupby('PLAYER_WYID').sum().reset_index()
-
-    # 2. Saml data i Python
-    df_meta = df_meta.drop_duplicates('PLAYER_WYID')
+    # 2. Saml data
     df = pd.merge(df_stats, df_meta, on="PLAYER_WYID", how="inner")
+    
+    # TILFØJ DENNE LINJE FOR AT DRÆBE EVENTUELLE RESTER AF DUBLETTER:
+    df = df.drop_duplicates(subset=['PLAYER_WYID'])
 
     # Map logoer via CURRENTTEAM_WYID
     logo_map = dict(zip(df_logos["TEAM_WYID"], df_logos["TEAM_LOGO"]))
