@@ -9,7 +9,7 @@ from data.data_load import load_snowflake_query
 try:
     from data.season_show import TEAM_WYID, SEASONNAME
 except ImportError:
-    TEAM_WYID = 7470  # Standard (f.eks. Hvidovre)
+    TEAM_WYID = 7490  # Standard (f.eks. Hvidovre)
     SEASONNAME = "2025/2026"
 
 TEAM_COLOR = '#cc0000' # HIF Rød
