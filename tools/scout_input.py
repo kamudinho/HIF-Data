@@ -14,8 +14,15 @@ except ImportError:
 def vis_side(dp):
     st.write("### Ny Scoutrapport")
 
-    # 1. Hent data fra Snowflake (BEMÆRK: Nøglen er nu 'sql_players')
-    df_ps = dp.get("sql_players", pd.DataFrame())
+    # 1. Hent data og fjern dubletter med det samme
+    df_ps_raw = dp.get("sql_players", pd.DataFrame())
+    
+    # Her er "hammeren": Vi beholder kun den NYESTE registrering pr. PLAYER_WYID
+    if not df_ps_raw.empty:
+        df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
+    else:
+        df_ps = df_ps_raw
+
     hold_map = dp.get("hold_map", {})
     curr_user = st.session_state.get("user", "System").upper()
 
@@ -27,16 +34,15 @@ def vis_side(dp):
     if not df_ps.empty:
         for _, r in df_ps.iterrows():
             try:
-                # Tjek om PLAYER_WYID findes og ikke er NaN
                 if pd.isna(r.get('PLAYER_WYID')):
                     continue
                 
-                # Konverter sikkert: float -> int -> str
                 p_id = str(int(float(r['PLAYER_WYID'])))
                 
-                # Håndter Team ID sikkert (kan være NaN hvis spilleren er klubløs)
+                # Håndter klubnavn
                 t_id_raw = r.get('CURRENTTEAM_WYID')
                 t_id = str(int(float(t_id_raw))) if pd.notnull(t_id_raw) and t_id_raw != "" else ""
+                klub = hold_map.get(t_id, "Ukendt klub")
                 
                 # Navnehåndtering
                 f_name = str(r['FIRSTNAME'] if pd.notnull(r['FIRSTNAME']) else "").strip()
@@ -45,7 +51,7 @@ def vis_side(dp):
                 if not full: 
                     full = str(r.get('SHORTNAME', 'Ukendt'))
                 
-                klub = hold_map.get(t_id, "Ukendt klub")
+                # Unik label pr. spiller
                 label = f"{full} ({klub})"
                 
                 spiller_options[label] = {
@@ -55,7 +61,6 @@ def vis_side(dp):
                     "klub": klub
                 }
             except (ValueError, TypeError):
-                # Spring spilleren over hvis dataen er helt ødelagt, i stedet for at crashe
                 continue
 
     # 3. Valg af spiller
