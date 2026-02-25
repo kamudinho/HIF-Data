@@ -1,50 +1,34 @@
 # data/sql/queries.py
 
 def get_queries(comp_filter, season_filter):
-    """Returnerer en ordbog med SQL-queries til Snowflake (Rettet til KLUB_HVIDOVREIF)."""
+    """
+    Returnerer en ordbog med SQL-queries til Snowflake.
+    Logikken er nu adskilt for at undgå dubletter:
+    1. 'players' henter stamdata (navn, position, nuværende hold).
+    2. 'playerstats' henter rå statistikker pr. liga/sæson.
+    3. 'team_logos' er en ren opslagstabel til logoer.
+    """
     
     # Præfiks til alle tabeller
     DB = "KLUB_HVIDOVREIF.AXIS"
     
     return {
-        "shotevents": f"""
+        # --- 1. SPILLER GRUNDDATA (Ingen dubletter) ---
+        "players": f"""
             SELECT 
-                c.PLAYER_WYID, c.TEAM_WYID, c.MATCH_WYID,
-                c.LOCATIONX, c.LOCATIONY, c.MINUTE,
-                s_shot.SHOTISGOAL, s_shot.SHOTONTARGET, s_shot.SHOTXG,
-                s_shot.SHOTBODYPART, m.MATCHLABEL
-            FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
-            INNER JOIN {DB}.WYSCOUT_MATCHEVENTS_SHOTS s_shot 
-                ON c.EVENT_WYID = s_shot.EVENT_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m 
-                ON c.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s 
-                ON m.SEASON_WYID = s.SEASON_WYID
-            WHERE c.PRIMARYTYPE = 'shot' 
-            AND c.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
+                PLAYER_WYID, 
+                FIRSTNAME, 
+                LASTNAME, 
+                SHORTNAME, 
+                ROLECODE3, 
+                CURRENTTEAM_WYID 
+            FROM {DB}.WYSCOUT_PLAYERS
         """,
-        "team_matches": f"""
-            SELECT 
-                tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
-                tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
-                c.COMPETITIONNAME AS COMPETITION_NAME, 
-                adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
-            FROM {DB}.WYSCOUT_TEAMMATCHES tm
-            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-            JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-            WHERE tm.COMPETITION_WYID IN {comp_filter} 
-            AND s.SEASONNAME {season_filter}
-        """,
+
+        # --- 2. SPILLER STATISTIK (Rå tal fra TOTAL tabellen) ---
         "playerstats": f"""
             SELECT 
                 s.PLAYER_WYID,
-                p.SHORTNAME AS NAVN,
-                p.ROLECODE3,
-                p.CURRENTTEAM_WYID,  -- DENNE SKAL VÆRE HER!
                 s.MINUTESONFIELD,
                 s.GOALS,
                 s.ASSISTS,
@@ -57,20 +41,21 @@ def get_queries(comp_filter, season_filter):
                 s.DEFENSIVEDUELS,
                 s.INTERCEPTIONS,
                 s.RECOVERIES
-            FROM {{DB}}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
-            INNER JOIN {{DB}}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-            INNER JOIN {{DB}}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL s
+            INNER JOIN {DB}.WYSCOUT_SEASONS ws ON s.SEASON_WYID = ws.SEASON_WYID
             WHERE s.COMPETITION_WYID IN {comp_filter}
             AND ws.SEASONNAME {season_filter}
         """,
-        
-        "team_logos": f"SELECT TEAM_WYID, IMAGEDATAURL AS TEAM_LOGO FROM {DB}.WYSCOUT_TEAMS",
-        
-        "players_basic": f"""
-            SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, ROLECODE3, CURRENTTEAM_WYID 
-            FROM {DB}.WYSCOUT_PLAYERS
-            WHERE COMPETITION_WYID IN {comp_filter}
+
+        # --- 3. LOGOER (Ren opslagstabel) ---
+        "team_logos": f"""
+            SELECT 
+                TEAM_WYID, 
+                IMAGEDATAURL AS TEAM_LOGO 
+            FROM {DB}.WYSCOUT_TEAMS
         """,
+
+        # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
         "team_stats_full": f"""
             SELECT DISTINCT 
                 tm.TEAMNAME,
@@ -93,10 +78,46 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
             JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
-            LEFT JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st -- LEFT JOIN for at undgå tomme datasæt
+            LEFT JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st
                 ON t.TEAM_WYID = st.TEAM_WYID
                 AND t.SEASON_WYID = st.SEASON_WYID 
             WHERE t.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASONNAME {season_filter}
+        """,
+
+        # --- 5. EVENTS (Skudkort etc.) ---
+        "shotevents": f"""
+            SELECT 
+                c.PLAYER_WYID, c.TEAM_WYID, c.MATCH_WYID,
+                c.LOCATIONX, c.LOCATIONY, c.MINUTE,
+                s_shot.SHOTISGOAL, s_shot.SHOTONTARGET, s_shot.SHOTXG,
+                s_shot.SHOTBODYPART, m.MATCHLABEL
+            FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
+            INNER JOIN {DB}.WYSCOUT_MATCHEVENTS_SHOTS s_shot 
+                ON c.EVENT_WYID = s_shot.EVENT_WYID
+            JOIN {DB}.WYSCOUT_MATCHES m 
+                ON c.MATCH_WYID = m.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s 
+                ON m.SEASON_WYID = s.SEASON_WYID
+            WHERE c.PRIMARYTYPE = 'shot' 
+            AND c.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASONNAME {season_filter}
+        """,
+
+        # --- 6. KAMPOVERSIGT ---
+        "team_matches": f"""
+            SELECT 
+                tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
+                tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+                c.COMPETITIONNAME AS COMPETITION_NAME, 
+                adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
+            FROM {DB}.WYSCOUT_TEAMMATCHES tm
+            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
+            WHERE tm.COMPETITION_WYID IN {comp_filter} 
             AND s.SEASONNAME {season_filter}
         """
     }
