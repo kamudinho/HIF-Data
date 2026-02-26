@@ -61,9 +61,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         if match.empty: return None
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        # Find rækken i spiller-data (hvor IMAGEDATAURL bor)
-        p_info = df_p[df_p['PLAYER_WYID'] == pid]
-        img_url = None
+        
 
         # INDSÆT DENNE LINJE HER FOR AT SE DATA:
         p_info = df_p[df_p['PLAYER_WYID'] == pid]
