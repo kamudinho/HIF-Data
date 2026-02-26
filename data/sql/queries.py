@@ -144,28 +144,24 @@ LEFT JOIN AXIS.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
         """,
         # --- 8. KARRIEREHISTORIK (Til profil-dialogen) ---
         "player_career": f"""
-            SELECT
-                pc.PLAYER_WYID, 
+            SELECT DISTINCT
+                CAST(pc.PLAYER_WYID AS STRING) as PLAYER_WYID, 
                 s.SEASONNAME, 
                 c.COMPETITIONNAME, 
                 t.TEAMNAME, 
                 pc.APPEARANCES, 
                 pc.MINUTESPLAYED, 
                 pc.GOAL, 
-                pc.ASSIST,
+                pc.ASSIST, -- Tilføjet assist da den ofte er rar at have
                 pc.YELLOWCARD, 
                 pc.REDCARDS,
                 pc.SUBSTITUTEIN,
                 pc.SUBSTITUTEOUT
             FROM {DB}.WYSCOUT_PLAYERCAREER pc
-            LEFT JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
-            LEFT JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
-            LEFT JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
-            WHERE pc.PLAYER_WYID IN (
-                -- Optimering: Hent kun karriere for de spillere der findes i de aktive ligaer
-                SELECT DISTINCT PLAYER_WYID 
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
-                WHERE COMPETITION_WYID IN {comp_filter}
-            )
+            INNER JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+            INNER JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
+            INNER JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
+            -- Vi fjerner WHERE pc.PLAYER_WYID IN (...) filteret helt her.
+            -- Det sikrer at vi henter data for alle spillere i databasen.
         """,
     }
