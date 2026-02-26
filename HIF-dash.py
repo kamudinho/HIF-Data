@@ -163,9 +163,9 @@ try:
             df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             
             # 2. Hent karriere-data (Brug et konsistent navn i session_state)
-            if "player_career" not in st.session_state:
+            if "player_career_data" not in st.session_state:
                 with st.spinner("Henter karrierehistorik..."):
-                    st.session_state["player_career"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
+                    st.session_state["player_career_data"] = load_snowflake_query("player_career_data", dp["comp_filter"], dp["season_filter"])
             
             # 3. Kald modulet
             # Sørg for at rækkefølgen matcher: scout, spillere, stats, career
@@ -173,7 +173,7 @@ try:
                 dp["scouting"], 
                 dp["players"], 
                 df_stats, 
-                st.session_state["player_career"]
+                st.session_state["player_career_data"]
             )
         elif sel == "Sammenligning":
             import tools.comparison as comp
