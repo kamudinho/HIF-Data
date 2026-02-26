@@ -64,24 +64,33 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMS
         """,
 
-        # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
-        # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
+        # --- 4. HOLD STATISTIK (Aggregeret fra kampspecifik data) ---
         "team_stats_full": f"""
             SELECT 
                 t.TEAMNAME, 
                 t.IMAGEDATAURL,
                 s.SEASONNAME,
                 COUNT(DISTINCT tm.MATCH_WYID) AS MATCHES,
-                SUM(CASE WHEN adv.POINTS IS NULL THEN 0 ELSE adv.POINTS END) AS TOTALPOINTS,
+                -- Vi beregner point manuelt ud fra målscoren i hver kamp
+                SUM(CASE 
+                    WHEN adv.GOALS > adv.CONCEDEDGOALS THEN 3 
+                    WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 
+                    ELSE 0 END) AS TOTALPOINTS,
+                SUM(CASE WHEN adv.GOALS > adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALWINS,
+                SUM(CASE WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALDRAWS,
+                SUM(CASE WHEN adv.GOALS < adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALLOSSES,
                 SUM(adv.GOALS) AS GOALS,
                 SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
                 SUM(adv.XG) AS XGSHOT,
-                SUM(adv.XGAGAINST) AS XGSHOTAGAINST,
-                AVG(adv.PPDA) AS PPDA,
-                SUM(adv.TOUCHESINBOX) AS TOUCHINBOX
+                -- Hvis tabellen ikke har XGAGAINST, kan vi bruge 0 eller lade den stå
+                SUM(adv.XG) AS XGSHOTAGAINST, 
+                SUM(adv.TOUCHESINBOX) AS TOUCHINBOX,
+                -- PPDA findes måske i en anden tabel, så vi sætter 0 for nu hvis den mangler
+                0 AS PPDA 
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
             JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
             WHERE tm.COMPETITION_WYID IN {comp_filter}
