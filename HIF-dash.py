@@ -159,21 +159,22 @@ try:
         elif sel == "Database":
             import tools.scout_db as sdb
             
-            # 1. Hent stats (som du gør nu)
+            # 1. Hent stats
             df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             
-            # 2. Hent karriere-data (den nye query du lige har lavet)
-            # Hvis den ikke allerede ligger i dp, henter vi den her:
+            # 2. Hent karriere-data (Brug et konsistent navn i session_state)
             if "player_career" not in st.session_state:
-                 st.session_state["player_career"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
+                with st.spinner("Henter karrierehistorik..."):
+                    st.session_state["player_career"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
             
-            # 3. Send det hele ind i modulet
+            # 3. Kald modulet
+            # Sørg for at rækkefølgen matcher: scout, spillere, stats, career
             sdb.vis_side(
                 dp["scouting"], 
                 dp["players"], 
                 df_stats, 
-                st.session_state["player_career"] # Her sender vi dataen med i stedet for None
-            )  
+                st.session_state["player_career"]
+            )
         elif sel == "Sammenligning":
             import tools.comparison as comp
             comp.vis_side(
