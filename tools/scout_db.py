@@ -79,6 +79,10 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
+
+        st.write(f"Søger efter ID: {clean_p_id}")
+        st.write(f"Antal rækker i hele karriere-datasættet: {len(career_df)}")
+    
         st.subheader("Sæsonstatistik (Aktuel)")
         if s_df is not None and not s_df.empty:
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
