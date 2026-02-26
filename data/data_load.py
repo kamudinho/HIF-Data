@@ -142,6 +142,7 @@ def get_data_package():
         "playerstats": df_playerstats,
         "player_career": df_player_career,       # Nu findes variablen!
         "team_scatter": df_team_stats,
+        "team_stats_full": df_team_stats_full,
         "team_matches": df_matches,
         "hold_map": get_hold_mapping(),
         "comp_filter": comp_filter,
