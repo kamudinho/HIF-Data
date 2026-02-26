@@ -171,7 +171,7 @@ try:
             # Sørg for at rækkefølgen matcher: scout, spillere, stats, career
             sdb.vis_side(
                 dp["scouting"], 
-                dp["players"], 
+                dp["sql_players"], 
                 df_stats, 
                 st.session_state["player_career"]
             )
