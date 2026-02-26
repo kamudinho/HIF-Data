@@ -21,7 +21,8 @@ def get_queries(comp_filter, season_filter):
                 p.LASTNAME, 
                 p.SHORTNAME, 
                 p.ROLECODE3, 
-                p.CURRENTTEAM_WYID 
+                p.CURRENTTEAM_WYID,
+                p.IMAGEDAGEURL
             FROM {DB}.WYSCOUT_PLAYERS p
             WHERE p.PLAYER_WYID IN (
                 -- Her bruger vi din playerstats-logik til at finde de aktive spillere
