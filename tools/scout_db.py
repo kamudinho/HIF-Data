@@ -121,16 +121,14 @@ def vis_profil(p_data, full_df, s_df, career_df):
     with t5:
         st.subheader(f"Seneste Rapport Overblik ({nyeste.get('DATO')})")
         
-        # Vi holder fast i 3 kolonner [Venstre, Midte, Højre]
-        c_detaljer, c_radar, c_noter = st.columns([1, 2, 1.5])
+        # Vi definerer de 3 kolonner
+        c_left, c_mid, c_right = st.columns([1, 2, 1.5])
 
-        # --- VENSTRE KOLONNE: Tættere tekst ---
-        with c_detaljer:
+        with c_left:
             st.markdown("### Info & Ratings")
             st.write(f"**Dato:** {nyeste.get('DATO', '-')}")
             st.write(f"**Scout:** {nyeste.get('SCOUT', '-')}")
-            # Ingen divider her for at holde det tæt
-            st.write("---") # En tynd linje
+            st.write("---")
             
             metrics = [
                 ("Beslutning", "BESLUTSOMHED"), ("Fart", "FART"), 
@@ -140,41 +138,36 @@ def vis_profil(p_data, full_df, s_df, career_df):
             ]
             for label, col in metrics:
                 val = rens_metrik_vaerdi(nyeste.get(col, 0))
-                # Bruger markdown for at fjerne ekstra padding/afstand
                 st.markdown(f"**{label}:** `{val}`")
 
-        # --- MIDTERSTE KOLONNE: Den 8-kantede radar ---
-        with c_radar:
+        with c_mid:
+            # Data til radaren
             categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
             cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-            
             v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-            v_closed = v + [v[0]]
-            cat_closed = categories + [categories[0]]
             
             fig_radar = go.Figure(go.Scatterpolar(
-                r=v_closed, 
-                theta=cat_closed, 
+                r=v + [v[0]], 
+                theta=categories + [categories[0]], 
                 fill='toself', 
                 line=dict(color='#df003b', width=2),
                 fillcolor='rgba(223, 0, 59, 0.3)',
-                mode='lines+markers' # Tilføjer punkter i hjørnerne for at markere de 8 kanter
+                mode='lines+markers'
             ))
             
             fig_radar.update_layout(
                 polar=dict(
-                    gridshape='linear', # HER GØRES DEN KANTET (Oktagon) i stedet for rund
-                    radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=8)),
-                    angularaxis=dict(tickfont=dict(size=10), rotation=90, direction="clockwise")
+                    gridshape='linear', # <--- DETTE GØR DEN 8-KANTET
+                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=8)),
+                    angularaxis=dict(rotation=90, direction="clockwise")
                 ),
                 showlegend=False,
                 height=400,
-                margin=dict(l=60, r=60, t=20, b=20)
+                margin=dict(l=50, r=50, t=40, b=40)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
 
-        # --- HØJRE KOLONNE: Noter ---
-        with c_noter:
+        with c_right:
             st.markdown("### Vurdering")
             st.info(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
