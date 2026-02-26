@@ -4,4 +4,6 @@ primaryColor="#df003b"
 backgroundColor="#ffffff"
 secondaryBackgroundColor="#f0f2f6"
 textColor="#31333F"
-font="sans serif"
+
+[server]
+headless = true
