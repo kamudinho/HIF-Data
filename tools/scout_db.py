@@ -94,17 +94,35 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.divider()
         st.subheader("Karrierehistorik")
         if career_df is not None and not career_df.empty:
+            # Tving kolonnenavne til UPPERCASE for at matche mapping
+            career_df.columns = [c.upper() for c in career_df.columns]
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
+            
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
+                
+                # Definerer de ønskede kolonner (SKAL være store bogstaver her)
                 mapping_dict = {
                     'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering',
                     'APPEARANCES': 'Kampe', 'MINUTESPLAYED': 'Min.', 'GOAL': 'Mål',
                     'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde', 'SUBSTITUTEIN': 'Ind', 'SUBSTITUTEOUT': 'Ud'
                 }
-                final_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
-                st.dataframe(df_p[final_cols].rename(columns=mapping_dict), use_container_width=True, hide_index=True)
+                
+                # Filtrer kolonner der rent faktisk findes
+                eksisterende_kolonner = [c for c in mapping_dict.keys() if c in df_p.columns]
+                
+                if eksisterende_kolonner:
+                    tabellen = df_p[eksisterende_kolonner].rename(columns=mapping_dict)
+                    st.dataframe(tabellen, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Data fundet, men kolonnenavne matcher ikke systemet.")
+                    st.write("Fundne kolonner:", list(df_p.columns))
+            else:
+                st.info(f"Ingen karrierehistorik fundet for spiller ID: {clean_p_id}")
+        else:
+            st.warning("Karriere-datasæt er tomt eller ikke indlæst.")
 
     with t5:
         st.subheader("Egenskabsprofil")
@@ -123,14 +141,8 @@ def vis_profil(p_data, full_df, s_df, career_df):
             ))
             fig_radar.update_layout(
                 polar=dict(
-                    radialaxis=dict(
-                        visible=True, range=[0, 6], 
-                        tickvals=[0, 1, 2, 3, 4, 5, 6],
-                        tickfont=dict(size=10) # RETTET: Brug tickfont i stedet for font
-                    ),
-                    angularaxis=dict(
-                        tickfont=dict(size=12) # RETTET: Brug tickfont i stedet for font
-                    )
+                    radialaxis=dict(visible=True, range=[0, 6], tickvals=[0, 1, 2, 3, 4, 5, 6], tickfont=dict(size=10)),
+                    angularaxis=dict(tickfont=dict(size=12))
                 ),
                 showlegend=False, height=450
             )
@@ -142,13 +154,16 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     
     if "player_career_data" not in st.session_state:
         with st.spinner("Henter system-data..."):
+            # Henter uden filter for at få historikken med
             df_career = load_snowflake_query("player_career", "('dummy')", "LIKE '%%'")
-            df_career.columns = [c.upper() for c in df_career.columns]
+            if df_career is not None:
+                df_career.columns = [c.upper() for c in df_career.columns]
             st.session_state["player_career_data"] = df_career
             st.rerun()
     
     career_df = st.session_state["player_career_data"]
 
+    # Rens kolonnenavne på alt
     for d in [scout_df, spillere_df, stats_df, career_df]:
         if d is not None and not d.empty:
             d.columns = [c.upper() for c in d.columns]
@@ -158,7 +173,10 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
         return df
 
-    scout_df, spillere_df, stats_df, career_df = map(clean_id, [scout_df, spillere_df, stats_df, career_df])
+    scout_df = clean_id(scout_df)
+    spillere_df = clean_id(spillere_df)
+    stats_df = clean_id(stats_df)
+    career_df = clean_id(career_df)
 
     if scout_df is None or scout_df.empty:
         st.warning("Databasen er tom.")
