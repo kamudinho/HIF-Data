@@ -64,34 +64,36 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMS
         """,
 
-        # --- 4. HOLD STATISTIK (Rettet til at matche din virkende SQL) ---
+        # --- 4. HOLD STATISTIK (Ny optimeret version) ---
         "team_stats_full": f"""
-            SELECT 
-                t.TEAMNAME, 
-                t.IMAGEDATAURL,
+            SELECT DISTINCT 
+                tm.TEAMNAME,
                 s.SEASONNAME,
-                COUNT(DISTINCT tm.MATCH_WYID) AS MATCHES,
-                SUM(CASE 
-                    WHEN adv.GOALS > adv.CONCEDEDGOALS THEN 3 
-                    WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 
-                    ELSE 0 END) AS TOTALPOINTS,
-                SUM(CASE WHEN adv.GOALS > adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALWINS,
-                SUM(CASE WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALDRAWS,
-                SUM(CASE WHEN adv.GOALS < adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALLOSSES,
-                SUM(adv.GOALS) AS GOALS,
-                SUM(adv.XG) AS XGSHOT,
-                SUM(adv.CONCEDEDXG) AS XGSHOTAGAINST, 
-                SUM(adv.TOUCHESINBOX) AS TOUCHINBOX,
-                0 AS PPDA 
-            FROM {DB}.WYSCOUT_TEAMMATCHES tm
-            JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            WHERE tm.COMPETITION_WYID = '328'  -- Vi bruger faste strenge som i din test
-            AND s.SEASONNAME = '2025/2026'    -- Vi bruger faste strenge som i din test
-            GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
+                tm.IMAGEDATAURL,
+                t.GOALS, 
+                t.XGSHOT, 
+                t.CONCEDEDGOALS, -- Vi henter den til baggrundsberegning, men viser den ikke
+                t.XGSHOTAGAINST, 
+                t.SHOTS, 
+                t.PPDA,
+                -- Afleveringsdata til dybere analyse
+                t.PASSESTOFINALTHIRD,
+                t.FORWARDPASSES, 
+                t.SUCCESSFULPASSESTOFINALTHIRD,
+                -- Stilling og Point fra den officielle tabel
+                st.TOTALPOINTS,
+                st.TOTALPLAYED AS MATCHES,
+                st.TOTALWINS,
+                st.TOTALDRAWS,
+                st.TOTALLOSSES,
+                t.TEAM_WYID
+            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+            JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st 
+                ON t.TEAM_WYID = st.TEAM_WYID AND t.SEASON_WYID = st.SEASON_WYID
+            WHERE t.COMPETITION_WYID = 328
+            AND s.SEASONNAME = '2025/2026'
         """,
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
         "shotevents": f"""
