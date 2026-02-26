@@ -97,7 +97,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
 
         st.divider()
-        st.subheader("Karrierehistorik")
         if career_df is not None and not career_df.empty:
             # career_df har fået .upper() i vis_side()
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
