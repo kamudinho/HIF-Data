@@ -22,7 +22,6 @@ TEAM_COLORS = {
 
 def vis_side(df_raw=None): 
     # --- 1. DATA INITIALISERING ---
-    # Hvis df_raw mangler, henter vi den fra session_state eller direkte fra Snowflake
     if df_raw is None or df_raw.empty:
         if "data_package" not in st.session_state:
             st.session_state["data_package"] = get_data_package()
@@ -30,7 +29,6 @@ def vis_side(df_raw=None):
         dp = st.session_state["data_package"]
         df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
 
-    # Hvis der stadig ingen data er, vis advarsel og stop
     if df_raw is None or df_raw.empty:
         st.warning("⚠️ Ingen data fundet for den valgte sæson og liga.")
         if st.button("Genindlæs systemet (Ryd Cache)"):
@@ -94,10 +92,11 @@ def vis_side(df_raw=None):
 
         with l_def:
             df_def = df_liga.copy()
-            df_def['XG_MOD_DIFF'] = df_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f} ({(r['CONCEDEDGOALS']-r['XGSHOTAGAINST']):+.2f})", axis=1)
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XG_MOD_DIFF', 'PPDA']
-            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'CONCEDEDGOALS': 'MÅL MOD', 'XG_MOD_DIFF': 'xG MOD (DIFF)', 'PPDA': 'PPDA'}
-            render_html_table(df_def.sort_values('CONCEDEDGOALS', ascending=True), cols, renames)
+            # CONCEDEDGOALS er fjernet herfra
+            df_def['XG_MOD_DIFF'] = df_def.apply(lambda r: f"{r['XGSHOTAGAINST']:.2f}", axis=1)
+            cols = ['IMAGEDATAURL', 'TEAMNAME', 'XG_MOD_DIFF', 'PPDA']
+            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'XG_MOD_DIFF': 'xG MOD', 'PPDA': 'PPDA'}
+            render_html_table(df_def.sort_values('XGSHOTAGAINST', ascending=True), cols, renames)
 
     # --- SEKTION 2: HEAD-TO-HEAD ---
     with tab_h2h_hoved:
@@ -132,7 +131,6 @@ def vis_side(df_raw=None):
                     marker_line_width=2, text=text_vals, textposition='auto'
                 ))
             
-            # Tilføj logoer
             logo_imgs = []
             for idx in range(len(labels)):
                 for s, offset in [(t1, -0.2), (t2, 0.2)]:
@@ -156,4 +154,5 @@ def vis_side(df_raw=None):
         with h2h_sub_tabs[1]: 
             create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
         with h2h_sub_tabs[2]: 
-            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
+            # CONCEDEDGOALS fjernet fra listen herunder
+            create_h2h_plot(['XGSHOTAGAINST', 'PPDA'], ['xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
