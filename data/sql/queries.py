@@ -66,35 +66,23 @@ def get_queries(comp_filter, season_filter):
 
         # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
         "team_stats_full": f"""
-            SELECT DISTINCT 
-                tm.TEAMNAME,
-                s.SEASONNAME,
-                c.COMPETITIONNAME,  -- Denne linje manglede
-                tm.IMAGEDATAURL,
-                t.GOALS, 
-                t.XGSHOT, 
-                t.CONCEDEDGOALS, 
-                t.XGSHOTAGAINST, 
-                t.SHOTS, 
-                t.PPDA,
-                t.PASSESTOFINALTHIRD,
-                t.TOUCHINBOX,
-                st.TOTALPOINTS,
-                st.TOTALPLAYED AS MATCHES,
-                st.TOTALWINS,
-                st.TOTALDRAWS,
-                st.TOTALLOSSES,
-                t.TEAM_WYID
-            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
-            JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
-            JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
-            -- Vi skal bruge denne JOIN for at få navnet på ligaen
-            JOIN {DB}.WYSCOUT_COMPETITIONS AS c ON t.COMPETITION_WYID = c.COMPETITION_WYID 
-            LEFT JOIN {DB}.WYSCOUT_SEASONS_STANDINGS AS st
-                ON t.TEAM_WYID = st.TEAM_WYID
-                AND t.SEASON_WYID = st.SEASON_WYID 
-            WHERE t.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
+            SELECT 
+    CAST(pc.PLAYER_WYID AS STRING) as PLAYER_WYID, -- Tving til streng med det samme
+    s.SEASONNAME, 
+    c.COMPETITIONNAME, 
+    t.TEAMNAME, 
+    pc.APPEARANCES, 
+    pc.MINUTESPLAYED, 
+    pc.GOAL, 
+    pc.ASSIST,
+    pc.YELLOWCARD, 
+    pc.REDCARDS,
+    pc.SUBSTITUTEIN,
+    pc.SUBSTITUTEOUT
+FROM AXIS.WYSCOUT_PLAYERCAREER pc
+LEFT JOIN AXIS.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+LEFT JOIN AXIS.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
+LEFT JOIN AXIS.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
         """,
 
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
@@ -118,7 +106,6 @@ def get_queries(comp_filter, season_filter):
             AND m.SEASON_WYID IN (
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
-            -- Vi filtrerer ikke på team_wyid her, så vi kan bruge den til alle hold i ligaen
         """,
         # --- 6. KAMPOVERSIGT ---
         "team_matches": f"""
