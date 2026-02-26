@@ -33,7 +33,6 @@ def vis_spiller_billede(pid, w=110):
 def vis_profil(p_data, full_df, s_df, career_df):
     # 1. SIKKER ID-HÅNDTERING (Tvinger altid til ren integer-streng)
     try:
-        # Håndterer både '12345', '12345.0' og NaN
         raw_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
         clean_p_id = str(int(float(raw_id)))
     except:
@@ -86,7 +85,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
     with t4:
         st.subheader("📊 Sæsonstatistik")
         if s_df is not None and not s_df.empty:
-            # Sørg for at stats-ID er renset
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
             
@@ -104,39 +102,35 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.subheader("📜 Karrierehistorik (HIF)")
         
         if career_df is not None and not career_df.empty:
-            # VIGTIGT: Tving career_df ID til string før filteret
+            # Tving career_df ID til string før filteret
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
-            # Lav filteret
-            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()            
+            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
                 
-                # Mapping der matcher din SQL (pc.substitutein -> SUBSTITUTEIN pga. .upper())
                 mapping_dict = {
                     'SEASONNAME': 'Sæson',
                     'COMPETITIONNAME': 'Turnering',
+                    'TEAMNAME': 'Hold',
                     'APPEARANCES': 'Kampe',
                     'MINUTESPLAYED': 'Minutter',
                     'GOAL': 'Mål',
+                    'ASSIST': 'Assists',
                     'YELLOWCARD': 'Gule',
                     'REDCARDS': 'Røde',
                     'SUBSTITUTEIN': 'Indsk.',
                     'SUBSTITUTEOUT': 'Udsk.'
                 }
                 
-                # Filtrér kun kolonner der faktisk findes i career_df
-                final_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
+                present_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
                 
-                # VIS TABELLEN
                 st.dataframe(
-                    df_p[final_cols].rename(columns=mapping_dict),
+                    df_p[present_cols].rename(columns=mapping_dict),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                # Debug-hjælp hvis tabellen stadig er tom
                 st.info(f"Ingen karriere-data fundet for ID: {clean_p_id}")
 
     with t5:
@@ -154,6 +148,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
         with col_mid:
             fig_radar = go.Figure(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b', width=2)))
             fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
+            # Centrer figur og gør den læsbar
             st.plotly_chart(fig_radar, use_container_width=True)
         with col_right:
             st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
@@ -164,18 +159,22 @@ def vis_profil(p_data, full_df, s_df, career_df):
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     
+    # 1. Sikr data indlæsning
     if "player_career_data" not in st.session_state:
         with st.spinner("Henter karriere-data..."):
             dp = st.session_state["data_package"]
-            # Hent data
             df_career = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
-            # Rens kolonner med det samme før det gemmes
+            # Tving kolonnenavne til upper med det samme
             df_career.columns = [c.upper() for c in df_career.columns]
             st.session_state["player_career_data"] = df_career
-            st.rerun() # Dette tvinger appen til at tegne alt forfra med de nye data
+            st.rerun()
+    
+    career_df = st.session_state["player_career_data"]
 
+    # 2. Universal kolonne-rensning (Kører kun hvis DF ikke er None)
     for d in [scout_df, spillere_df, stats_df, career_df]:
-        if d is not None and not d.empty: d.columns = [c.upper() for c in d.columns]
+        if d is not None and not d.empty:
+            d.columns = [c.upper() for c in d.columns]
 
     def clean_id(df):
         if df is not None and 'PLAYER_WYID' in df.columns:
@@ -197,16 +196,28 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
+    
+    # Gruppér for at få seneste rapport pr. spiller
     f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
     
     search = st.text_input("Søg...", placeholder="Navn, klub eller position...")
     if search:
-        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False) | f_df['POSITION_VISNING'].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | 
+                    f_df['KLUB'].str.contains(search, case=False, na=False) | 
+                    f_df['POSITION_VISNING'].str.contains(search, case=False, na=False)]
     
     disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
     disp.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'STATUS', 'DATO', 'SCOUT']
     
-    event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", height=400)
+    event = st.dataframe(
+        disp, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row", 
+        height=400
+    )
 
     if len(event.selection.rows) > 0:
+        # Send career_df med ind i dialogen
         vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
