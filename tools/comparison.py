@@ -62,6 +62,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             return None
         
         pid = str(match.iloc[0]['PLAYER_WYID'])
+        st.write(f"Søger efter spiller med PID: {pid}") # Tjek om PID er korrekt
 
         # Standardværdier
         img_url = None
