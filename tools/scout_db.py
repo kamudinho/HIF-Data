@@ -127,7 +127,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.markdown(f"""
             **Dato:** {nyeste.get('DATO', '-')}  
             **Scout:** {nyeste.get('SCOUT', '-')}
-            """)
+        """)
             
             metrics = [
                 ("Beslutning", "BESLUTSOMHED"), ("Fart", "FART"), 
