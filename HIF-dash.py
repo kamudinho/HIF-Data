@@ -131,7 +131,8 @@ try:
             ma.vis_side(df_matches, dp["hold_map"])
         elif sel == "Scatterplots":
             import tools.scatter as sc
-            df_scatter = load_snowflake_query("team_stats", dp["comp_filter"], dp["season_filter"])
+            # RET HER: Fra "team_stats" til "team_stats_full"
+            df_scatter = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
             sc.vis_side(df_scatter)
 
     # --- BETINIA LIGAEN (Her var fejlen!) ---
