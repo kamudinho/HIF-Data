@@ -21,12 +21,24 @@ TEAM_COLORS = {
 }
 
 def vis_side(df_raw=None): 
-    # Hvis df_raw er None, skal vi sikre os, at vi ikke crasher
-    if df_raw is None:
-        # Valgfrit: Hent data selv hvis main ikke sender det
-        from data.data_load import load_snowflake_query, get_data_package
-        dp = get_data_package()
+    # 1. HENT DATA HVIS DET MANGLER
+    if df_raw is None or df_raw.empty:
+        if "data_package" not in st.session_state:
+            from data.data_load import get_data_package
+            st.session_state["data_package"] = get_data_package()
+        
+        dp = st.session_state["data_package"]
+        # Her sikrer vi os, at vi bruger de præcise filtre fra pakken
         df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+
+    # 2. TJEK IGEN - Hvis den stadig er tom, er der ingen data i Snowflake
+    if df_raw is None or df_raw.empty:
+        st.warning("⚠️ Ingen data fundet for den valgte sæson og liga.")
+        # Tilføj en knap til at rydde cachen direkte
+        if st.button("Genindlæs data (Ryd Cache)"):
+            st.cache_data.clear()
+            st.rerun()
+        return
         
     # 1. CSS til centrering af st.table (HTML)
     st.markdown("""
