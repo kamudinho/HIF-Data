@@ -105,11 +105,10 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     q = queries.get(query_key)
     try:
         df = conn.query(q)
-        if df is not None:
-            df.columns = [str(c).strip().upper() for c in df.columns]
-            return df
+        return df # SIKR DIG AT DENNE LINJE ER DER
+    except Exception as e:
+        st.error(f"SQL Fejl: {e}") # Dette vil afsløre hvis SQL'en er gal
         return pd.DataFrame()
-    except: return pd.DataFrame()
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
