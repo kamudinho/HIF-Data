@@ -31,21 +31,31 @@ def vis_spiller_billede(pid, w=110):
 # --- 3. PROFIL DIALOG ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, career_df):
-    clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
-    # Sørg for at sammenligne strenge mod strenge
+    # 1. SIKKER ID-HÅNDTERING (Tvinger altid til ren integer-streng)
+    try:
+        # Håndterer både '12345', '12345.0' og NaN
+        raw_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+        clean_p_id = str(int(float(raw_id)))
+    except:
+        clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
+
+    # Sørg for at historik-filteret bruger samme rene format
     full_df['PLAYER_WYID'] = full_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     
     if historik.empty:
-        st.error("Ingen historiske data fundet.")
+        st.error(f"Ingen historiske data fundet for ID: {clean_p_id}")
         return
+    
     nyeste = historik.iloc[-1]
     
+    # --- HEADER MED BILLEDE OG NAVN ---
     head_col1, head_col2 = st.columns([1, 4])
-    with head_col1: vis_spiller_billede(clean_p_id, w=115)
+    with head_col1: 
+        vis_spiller_billede(clean_p_id, w=115)
     with head_col2:
-        st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
-        st.markdown(f"**{nyeste.get('KLUB', '')}** | {nyeste.get('POSITION_VISNING', '')} | Snit: `{nyeste.get('RATING_AVG', 0)}`")
+        st.markdown(f"## {nyeste.get('NAVN', 'Ukendt spiler')}")
+        st.markdown(f"**{nyeste.get('KLUB', 'Ingen klub')}** | {nyeste.get('POSITION_VISNING', 'Ukendt position')} | Snit: `{nyeste.get('RATING_AVG', 0)}`")
 
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
@@ -76,6 +86,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
     with t4:
         st.subheader("📊 Sæsonstatistik (Aktuel)")
         if s_df is not None and not s_df.empty:
+            # Rens ID'er i stats-data før opslag
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
             
@@ -87,31 +98,30 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 s2.metric("Mål", f"{int(r.get('GOALS', 0))}")
                 s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
             else:
-                st.info(f"Ingen aktive stats fundet for ID: {clean_p_id}")
+                st.info("Ingen aktive stats fundet i den valgte turnering.")
 
-            st.divider()
-            st.subheader("📜 Karrierehistorik")
+        st.divider()
+        st.subheader("📜 Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            # Vi sikrer os, at vi kun kigger på den valgte spiller
+            # Rens ID'er i karriere-data før opslag
+            career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
-                # Sorterer så nyeste sæson er øverst
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
                 
-                # Vælg og omdøb kolonner så de er læsevenlige
+                # MAPPING: Sørg for at nøglerne matcher din SQL-query (Queries.py) præcis!
                 kolonner = {
-                'SEASONNAME': 'Sæson',
-                'TEAMNAME': 'Hold',
-                'COMPETITIONNAME': 'Turnering',
-                'APPEARANCES': 'Kampe',
-                'GOAL': 'Mål',
-                'ASSIST': 'Assists',      # Rettet fra ASSISTS
-                'YELLOWCARD': 'Gule Kort', # Rettet fra YELLOWCARDS
-                'REDCARDS': 'Røde Kort'     # Tilføjet
-            }
+                    'SEASONNAME': 'Sæson',
+                    'TEAMNAME': 'Hold',
+                    'COMPETITIONNAME': 'Turnering',
+                    'APPEARANCES': 'Kampe',
+                    'GOAL': 'Mål',
+                    'ASSIST': 'Assists',      # Rettet til ental pga. din SQL
+                    'YELLOWCARD': 'Gule Kort' # Rettet til ental pga. din SQL
+                }
                 
-                # Vi tjekker hvilke af kolonnerne der rent faktisk findes i din Snowflake-data
+                # Dynamisk filtrering så vi kun viser de kolonner, der findes
                 eksisterende_kolonner = [k for k in kolonner.keys() if k in df_p.columns]
                 
                 st.dataframe(
@@ -120,7 +130,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     hide_index=True
                 )
             else:
-                st.info(f"Ingen karrierehistorik fundet i databasen for ID: {clean_p_id}")
+                st.info(f"Ingen karrierehistorik fundet for ID: {clean_p_id}")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
