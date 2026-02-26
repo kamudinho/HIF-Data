@@ -161,30 +161,42 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
 
     def vis_metric_row(label, val1, val2, suffix="", higher_is_better=True):
         c1, c2, c3 = st.columns([3, 2, 3])
-        v1, v2 = float(val1), float(val2)
-        c1_color = "#28a745" if (v1 > v2 and higher_is_better) or (v1 < v2 and not higher_is_better) else "white"
-        c3_color = "#28a745" if (v2 > v1 and higher_is_better) or (v2 < v1 and not higher_is_better) else "white"
-        if v1 == v2: c1_color = c3_color = "white"
-        c1.markdown(f"<p style='text-align:right; color:{c1_color}; font-size:18px; font-weight:bold; margin:0;'>{val1}{suffix}</p>", unsafe_allow_html=True)
-        c2.markdown(f"<p style='text-align:center; color:#888; margin:0;'>{label}</p>", unsafe_allow_html=True)
-        c3.markdown(f"<p style='text-align:left; color:{c3_color}; font-size:18px; font-weight:bold; margin:0;'>{val2}{suffix}</p>", unsafe_allow_html=True)
+        
+        # Konverter til float for at kunne sammenligne tal
+        try:
+            v1 = float(val1)
+            v2 = float(val2)
+        except:
+            v1 = v2 = 0
 
+        # Bestem farve-logik
+        c1_color = "white"
+        c3_color = "white"
+
+        if v1 > v2:
+            c1_color = "#28a745" if higher_is_better else "white"
+            c3_color = "white" if higher_is_better else "#28a745"
+        elif v2 > v1:
+            c3_color = "#28a745" if higher_is_better else "white"
+            c1_color = "white" if higher_is_better else "#28a745"
+
+        # Render rækken
+        c1.markdown(f"<p style='text-align:right; color:{c1_color}; font-size:20px; font-weight:bold; margin:0;'>{val1}{suffix}</p>", unsafe_allow_html=True)
+        c2.markdown(f"<p style='text-align:center; color:#888; margin:0; line-height:2;'>{label}</p>", unsafe_allow_html=True)
+        c3.markdown(f"<p style='text-align:left; color:{c3_color}; font-size:20px; font-weight:bold; margin:0;'>{val2}{suffix}</p>", unsafe_allow_html=True)
+
+    # --- TABS SEKTIONEN ---
     if res1 and res2:
         with t_off:
             st.markdown("<br>", unsafe_allow_html=True)
-            vis_metric_row("xG Total", res1[3]['OFF']['xG'], res2[3]['OFF']['xG'])
-            vis_metric_row("Skud", res1[3]['OFF']['SKUD'], res2[3]['OFF']['SKUD'])
-            vis_metric_row("Driblinger", res1[3]['OFF']['DRIBBLES'], res2[3]['OFF']['DRIBBLES'])
+            vis_metric_row("Mål Total", res1[3]['OFF']['MÅL'], res2[3]['OFF']['MÅL'])
+            vis_metric_row("xG (P90)", res1[3]['OFF']['xG'], res2[3]['OFF']['xG'])
+            vis_metric_row("Skud (P90)", res1[3]['OFF']['SKUD'], res2[3]['OFF']['SKUD'])
+            vis_metric_row("Driblinger (P90)", res1[3]['OFF']['DRIBBLES'], res2[3]['OFF']['DRIBBLES'])
+            
         with t_def:
             st.markdown("<br>", unsafe_allow_html=True)
-            vis_metric_row("Interceptions", res1[3]['DEF']['INTERCEPTIONS'], res2[3]['DEF']['INTERCEPTIONS'])
-            vis_metric_row("Erobringer", res1[3]['DEF']['RECOVERIES'], res2[3]['DEF']['RECOVERIES'])
-
-    st.markdown("---")
-    sc1, sc2 = st.columns(2)
-    for r, col, color in [(res1, sc1, "#df003b"), (res2, sc2, "#0056a3")]:
-        if r:
-            with col:
-                st.markdown(f"<h4 style='color:{color}; text-align:center;'>Notater</h4>", unsafe_allow_html=True)
-                tab_s, tab_u, tab_v = st.tabs(["Styrker", "Udvikling", "Vurdering"])
-                tab_s.info(r[5]['s']); tab_u.warning(r[5]['u']); tab_v.success(r[5]['v'])
+            vis_metric_row("Interceptions (P90)", res1[3]['DEF']['INTERCEPTIONS'], res2[3]['DEF']['INTERCEPTIONS'])
+            vis_metric_row("Erobringer (P90)", res1[3]['DEF']['RECOVERIES'], res2[3]['DEF']['RECOVERIES'])
+            # Eksempel på 'lower is better' (hvis du f.eks. havde gule kort):
+            # vis_metric_row("Gule kort", res1[3]['GEN']['GULE'], res2[3]['GEN']['GULE'], higher_is_better=False)
