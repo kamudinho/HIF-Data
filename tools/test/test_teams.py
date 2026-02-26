@@ -20,7 +20,14 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
-def vis_side():
+def vis_side(df_raw=None): 
+    # Hvis df_raw er None, skal vi sikre os, at vi ikke crasher
+    if df_raw is None:
+        # Valgfrit: Hent data selv hvis main ikke sender det
+        from data.data_load import load_snowflake_query, get_data_package
+        dp = get_data_package()
+        df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+        
     # 1. CSS til centrering af st.table (HTML)
     st.markdown("""
         <style>
