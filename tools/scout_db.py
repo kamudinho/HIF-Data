@@ -119,14 +119,57 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        categories = ['Teknik', 'Spilintelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
-        cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
-        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        v_closed = v + [v[0]]
-        cat_closed = categories + [categories[0]]
-        fig_radar = go.Figure(go.Scatterpolar(r=v_closed, theta=cat_closed, fill='toself', line=dict(color='#df003b')))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=10))), showlegend=False)
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.subheader(f"Seneste Rapport Overblik ({nyeste.get('DATO')})")
+        
+        # Opretter 3 kolonner: [Venstre (Tal), Midte (Radar), Højre (Tekst)]
+        col_left, col_mid, col_right = st.columns([1, 2, 1.5])
+        
+        # --- VENSTRE SIDE: TAL/METRIKKER ---
+        with col_left:
+            st.markdown("### Ratings")
+            metrics = [
+                ("Teknik", "TEKNIK"), ("Fart", "FART"), 
+                ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
+                ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), 
+                ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")
+            ]
+            for label, col in metrics:
+                val = rens_metrik_vaerdi(nyeste.get(col, 0))
+                # Viser en lille bar eller bare tallet pænt
+                st.write(f"**{label}:** `{val}`")
+        
+        # --- MIDTEN: RADAR CHART ---
+        with col_mid:
+            categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
+            cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
+            
+            v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
+            v_closed = v + [v[0]]
+            cat_closed = categories + [categories[0]]
+            
+            fig_radar = go.Figure(go.Scatterpolar(
+                r=v_closed, 
+                theta=cat_closed, 
+                fill='toself', 
+                line=dict(color='#cc0000'),
+                fillcolor='rgba(204, 0, 0, 0.3)'
+            ))
+            
+            fig_radar.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[0, 6])),
+                showlegend=False,
+                height=350,
+                margin=dict(l=40, r=40, t=20, b=20)
+            )
+            st.plotly_chart(fig_radar, use_container_width=True)
+            
+        # --- HØJRE SIDE: BESKRIVELSER ---
+        with col_right:
+            st.markdown("### Vurdering")
+            
+            st.info(f"**Styrker:**\n\n{nyeste.get('STYRKER', '-')}")
+            st.warning(f"**Udvikling:**\n\n{nyeste.get('UDVIKLING', '-')}")
+            st.success(f"**Vurdering:**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
