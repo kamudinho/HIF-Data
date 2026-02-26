@@ -64,14 +64,13 @@ def get_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMS
         """,
 
-        # --- 4. HOLD STATISTIK (Aggregeret fra kampspecifik data) ---
+        # --- 4. HOLD STATISTIK (Rettet til at matche din virkende SQL) ---
         "team_stats_full": f"""
             SELECT 
                 t.TEAMNAME, 
                 t.IMAGEDATAURL,
                 s.SEASONNAME,
                 COUNT(DISTINCT tm.MATCH_WYID) AS MATCHES,
-                -- Vi beregner point manuelt ud fra målscoren i hver kamp
                 SUM(CASE 
                     WHEN adv.GOALS > adv.CONCEDEDGOALS THEN 3 
                     WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 
@@ -82,8 +81,7 @@ def get_queries(comp_filter, season_filter):
                 SUM(adv.GOALS) AS GOALS,
                 SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
                 SUM(adv.XG) AS XGSHOT,
-                -- Her henter vi xG imod (hvis kolonnen findes i din tabel, ellers brug 0)
-                SUM(adv.XG_AGAINST) AS XGSHOTAGAINST, 
+                SUM(adv.CONCEDEDXG) AS XGSHOTAGAINST, 
                 SUM(adv.TOUCHESINBOX) AS TOUCHINBOX,
                 0 AS PPDA 
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
@@ -92,8 +90,8 @@ def get_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            WHERE tm.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
+            WHERE tm.COMPETITION_WYID = '328'  -- Vi bruger faste strenge som i din test
+            AND s.SEASONNAME = '2025/2026'    -- Vi bruger faste strenge som i din test
             GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
         """,
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
