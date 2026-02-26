@@ -84,12 +84,10 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        st.subheader("📊 Sæsonstatistik (Aktuel)")
+        st.subheader("Sæsonstatistik")
         if s_df is not None and not s_df.empty:
-            # Rens ID'er i stats-data før opslag
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
-            
             if not p_stats.empty:
                 r = p_stats.iloc[0]
                 s1, s2, s3, s4 = st.columns(4)
@@ -97,40 +95,40 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 s1.metric("Kampe", f"{int(r.get('MATCHES', 0))}")
                 s2.metric("Mål", f"{int(r.get('GOALS', 0))}")
                 s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
-            else:
-                st.info("Ingen aktive stats fundet i den valgte turnering.")
 
         st.divider()
-        st.subheader("📜 Karrierehistorik")
+        st.subheader("Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            # Rens ID'er i karriere-data før opslag
-            career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            # career_df har fået .upper() i vis_side()
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
                 
-                # MAPPING: Sørg for at nøglerne matcher din SQL-query (Queries.py) præcis!
-                kolonner = {
+                # VIGTIGT: Nøglerne her SKAL være UPPERCASE pga. din vis_side logik
+                # Og de skal matche navnene fra din SQL SELECT (pc.substitutein bliver til SUBSTITUTEIN)
+                mapping_dict = {
                     'SEASONNAME': 'Sæson',
-                    'TEAMNAME': 'Hold',
                     'COMPETITIONNAME': 'Turnering',
                     'APPEARANCES': 'Kampe',
+                    'MINUTESPLAYED': 'Minutter',
                     'GOAL': 'Mål',
-                    'ASSIST': 'Assists',      # Rettet til ental pga. din SQL
-                    'YELLOWCARD': 'Gule Kort' # Rettet til ental pga. din SQL
+                    'YELLOWCARD': 'Gule',
+                    'REDCARDS': 'Røde',
+                    'SUBSTITUTEIN': 'Indsk.',
+                    'SUBSTITUTEOUT': 'Udsk.'
                 }
                 
-                # Dynamisk filtrering så vi kun viser de kolonner, der findes
-                eksisterende_kolonner = [k for k in kolonner.keys() if k in df_p.columns]
+                # Vi tjekker hvilke af de omdøbte kolonner der faktisk er til stede
+                present_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
                 
                 st.dataframe(
-                    df_p[eksisterende_kolonner].rename(columns=kolonner),
+                    df_p[present_cols].rename(columns=mapping_dict),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                st.info(f"Ingen karrierehistorik fundet for ID: {clean_p_id}")
+                st.info("Ingen HIF karriere-data fundet.")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
