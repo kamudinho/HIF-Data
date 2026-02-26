@@ -49,14 +49,17 @@ def vis_side(df_raw=None):
     </div>""", unsafe_allow_html=True)
     
     # 2. Data Loading
-    if "data_package" not in st.session_state:
-        st.session_state["data_package"] = get_data_package()
+    if df_raw is None:
+        if "data_package" not in st.session_state:
+            st.session_state["data_package"] = get_data_package()
+        dp = st.session_state["data_package"]
+        df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
     
-    dp = st.session_state["data_package"]
-    df_raw = load_snowflake_query("team_stats_full", "(328)", dp.get("season_filter", "='2025/2026'"))
+    # Slet den linje der hedder df_raw = load_snowflake_query("team_stats_full", "(328)", ...) 
+    # da den overskriver den data, vi lige har fået!
 
     if df_raw is None or df_raw.empty:
-        st.error("❌ Ingen data fundet.")
+        st.error("❌ Ingen data fundet i team_stats_full queryen.")
         return
 
     df = df_raw.copy()
