@@ -148,28 +148,30 @@ def vis_profil(p_data, full_df, s_df, career_df):
             )
             st.plotly_chart(fig_radar, use_container_width=True)
 
-# --- 4. HOVEDFUNKTION ---
+# --- 4. HOVEDFUNKTION (OPDATERET DEBUG) ---
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     
-    if "player_career_data" not in st.session_state:
-        with st.spinner("Henter system-data..."):
-            # Henter uden filter for at få historikken med
+    # 1. TJEK SESSION STATE
+    if "player_career_data" not in st.session_state or st.session_state["player_career_data"] is None:
+        with st.spinner("Henter karriere-data fra Snowflake..."):
+            # Prøv at hente ALL data uden begrænsninger først for at tjekke forbindelsen
             df_career = load_snowflake_query("player_career", "('dummy')", "LIKE '%%'")
-            if df_career is not None:
+            
+            if df_career is not None and not df_career.empty:
                 df_career.columns = [c.upper() for c in df_career.columns]
-            st.session_state["player_career_data"] = df_career
-            st.rerun()
-    
-    career_df = st.session_state["player_career_data"]
+                st.session_state["player_career_data"] = df_career
+                st.success(f"Indlæste {len(df_career)} historiske rækker.")
+                st.rerun()
+            else:
+                st.error("Kunne ikke hente karriere-data. Tjek om tabellen 'player_career' findes i Snowflake.")
+                st.session_state["player_career_data"] = pd.DataFrame() # Undgå uendelig loop
 
-    # Rens kolonnenavne på alt
-    for d in [scout_df, spillere_df, stats_df, career_df]:
-        if d is not None and not d.empty:
-            d.columns = [c.upper() for c in d.columns]
+    career_df = st.session_state.get("player_career_data", pd.DataFrame())
 
+    # 2. RENS ID'ER PÅ ALT DATA
     def clean_id(df):
-        if df is not None and 'PLAYER_WYID' in df.columns:
+        if df is not None and not df.empty and 'PLAYER_WYID' in df.columns:
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
         return df
 
@@ -179,9 +181,10 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     career_df = clean_id(career_df)
 
     if scout_df is None or scout_df.empty:
-        st.warning("Databasen er tom.")
+        st.warning("Scouting-databasen er tom.")
         return
 
+    # 3. MERGE OG VIS OVERBLIK
     df = scout_df.copy()
     if spillere_df is not None and not spillere_df.empty:
         df = df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
