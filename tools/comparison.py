@@ -73,6 +73,8 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         p_info = df_p[df_p['PLAYER_WYID'] == pid]
         if p_info.empty and df_spillere is not None:
             p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
+        
+        st.write("Indhold af p_info:", p_info) # Her ser du om tabellen er tom eller har data
 
         if not p_info.empty:
             row = p_info.iloc[0]
