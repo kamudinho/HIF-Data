@@ -65,26 +65,26 @@ def get_queries(comp_filter, season_filter):
         """,
 
         # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
+        # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
         "team_stats_full": f"""
             SELECT 
                 t.TEAMNAME, 
                 t.IMAGEDATAURL,
                 s.SEASONNAME,
-                COUNT(DISTINCT adv.MATCH_WYID) AS MATCHES,
+                COUNT(DISTINCT tm.MATCH_WYID) AS MATCHES,
                 SUM(CASE WHEN adv.POINTS IS NULL THEN 0 ELSE adv.POINTS END) AS TOTALPOINTS,
-                SUM(CASE WHEN adv.WINS IS NULL THEN 0 ELSE adv.WINS END) AS TOTALWINS,
-                SUM(CASE WHEN adv.DRAWS IS NULL THEN 0 ELSE adv.DRAWS END) AS TOTALDRAWS,
-                SUM(CASE WHEN adv.LOSSES IS NULL THEN 0 ELSE adv.LOSSES END) AS TOTALLOSSES,
                 SUM(adv.GOALS) AS GOALS,
                 SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
                 SUM(adv.XG) AS XGSHOT,
                 SUM(adv.XGAGAINST) AS XGSHOTAGAINST,
                 AVG(adv.PPDA) AS PPDA,
                 SUM(adv.TOUCHESINBOX) AS TOUCHINBOX
-            FROM {DB}.WYSCOUT_TEAMMATCHES_STATS_ADVANCED adv
-            JOIN {DB}.WYSCOUT_TEAMS t ON adv.TEAM_WYID = t.TEAM_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON adv.SEASON_WYID = s.SEASON_WYID
-            WHERE adv.COMPETITION_WYID IN {comp_filter}
+            FROM {DB}.WYSCOUT_TEAMMATCHES tm
+            JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
+            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+            WHERE tm.COMPETITION_WYID IN {comp_filter}
             AND s.SEASONNAME {season_filter}
             GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
         """,
