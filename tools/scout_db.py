@@ -99,7 +99,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        st.subheader(f"Seneste rapport: {nyeste.get('DATO', '')}")
+        st.subheader(f"Seneste rapport:")
         c_left, c_mid, c_right = st.columns([1, 2, 1.5])
 
         with c_left:
