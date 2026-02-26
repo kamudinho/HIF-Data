@@ -108,7 +108,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             
             # Lav filteret
-            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
+            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()            
             
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
