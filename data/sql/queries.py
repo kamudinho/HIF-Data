@@ -79,7 +79,6 @@ def get_queries(comp_filter, season_filter):
                 SUM(CASE WHEN adv.GOALS = adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALDRAWS,
                 SUM(CASE WHEN adv.GOALS < adv.CONCEDEDGOALS THEN 1 ELSE 0 END) AS TOTALLOSSES,
                 SUM(adv.GOALS) AS GOALS,
-                SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
                 SUM(adv.XG) AS XGSHOT,
                 SUM(adv.CONCEDEDXG) AS XGSHOTAGAINST, 
                 SUM(adv.TOUCHESINBOX) AS TOUCHINBOX,
