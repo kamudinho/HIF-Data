@@ -119,57 +119,63 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        st.subheader(f"Seneste Rapport Overblik ({nyeste.get('DATO')})")
-        
-        # Opretter 3 kolonner: [Venstre (Tal), Midte (Radar), Højre (Tekst)]
-        col_left, col_mid, col_right = st.columns([1, 2, 1.5])
-        
-        # --- VENSTRE SIDE: TAL/METRIKKER ---
-        with col_left:
-            st.markdown("### Ratings")
+        # 1. Layout-opdeling (Smalle kolonner i siderne, bred i midten)
+        # Vi bruger [1, 2, 1.2] for at give plads til radaren i midten
+        c_detaljer, c_radar, c_noter = st.columns([1, 2, 1.2])
+
+        # --- VENSTRE KOLONNE: DETALJER & RATINGS ---
+        with c_detaljer:
+            st.markdown("### Detaljer")
+            st.caption(f"Dato: {nyeste.get('DATO', '-')}")
+            st.caption(f"Scout: {nyeste.get('SCOUT', '-')}")
+            st.divider()
+            
+            # Liste med alle 8 ratings
             metrics = [
-                ("Teknik", "TEKNIK"), ("Fart", "FART"), 
+                ("Beslutsomhed", "BESLUTSOMHED"), ("Fart", "FART"), 
                 ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
-                ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), 
-                ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")
+                ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
+                ("Teknik", "TEKNIK"), ("Spilintelligens", "SPILINTELLIGENS")
             ]
             for label, col in metrics:
                 val = rens_metrik_vaerdi(nyeste.get(col, 0))
-                # Viser en lille bar eller bare tallet pænt
-                st.write(f"**{label}:** `{val}`")
-        
-        # --- MIDTEN: RADAR CHART ---
-        with col_mid:
-            categories = ['Teknik', 'Intelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
-            cols = ['TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'LEDEREGENSKABER', 'UDHOLDENHED', 'FART', 'AGGRESIVITET', 'ATTITUDE']
+                st.markdown(f"**{label}:** <span style='color:#df003b'>{val}</span>", unsafe_allow_html=True)
+
+        # --- MIDTERSTE KOLONNE: RADAR ---
+        with c_radar:
+            # Sørg for at kategorierne her matcher rækkefølgen i metrics for overskuelighed
+            categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
+            cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
             
             v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
             v_closed = v + [v[0]]
             cat_closed = categories + [categories[0]]
             
             fig_radar = go.Figure(go.Scatterpolar(
-                r=v_closed, 
-                theta=cat_closed, 
-                fill='toself', 
-                line=dict(color='#cc0000'),
-                fillcolor='rgba(204, 0, 0, 0.3)'
+                r=v_closed, theta=cat_closed, fill='toself', 
+                line=dict(color='#df003b', width=2),
+                fillcolor='rgba(223, 0, 59, 0.3)'
             ))
             
             fig_radar.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 6])),
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=9)),
+                    angularaxis=dict(tickfont=dict(size=10))
+                ),
                 showlegend=False,
-                height=350,
-                margin=dict(l=40, r=40, t=20, b=20)
+                height=400, # Fast højde så den ikke fylder hele skærmen
+                margin=dict(l=50, r=50, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
+
+        # --- HØJRE KOLONNE: BEMÆRKNINGER ---
+        with c_noter:
+            st.markdown("### Bemærkninger")
             
-        # --- HØJRE SIDE: BESKRIVELSER ---
-        with col_right:
-            st.markdown("### Vurdering")
-            
-            st.info(f"**Styrker:**\n\n{nyeste.get('STYRKER', '-')}")
-            st.warning(f"**Udvikling:**\n\n{nyeste.get('UDVIKLING', '-')}")
-            st.success(f"**Vurdering:**\n\n{nyeste.get('VURDERING', '-')}")
+            # Styling af boksene så de minder om dem på billedet
+            st.info(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
+            st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
+            st.success(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
