@@ -63,8 +63,6 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        st.write(f"Tjekker data for ID: {pid}", p_info[['PLAYER_WYID', 'IMAGEDATAURL']] if not p_info.empty else "Ingen data fundet")
-
         # Standardværdier
         img_url = None
         klub = "Ukendt"
@@ -87,7 +85,8 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
                 row = sc_info.iloc[-1]
                 klub = row.get('KLUB', 'Scouting')
                 pos = map_position(row.get('POSITION', ''))
-                # Scouting rækker har sjældent IMAGEDATAURL, så den forbliver None (standardbillede)
+
+        st.write(f"Tjekker data for ID: {pid}", p_info[['PLAYER_WYID', 'IMAGEDATAURL']] if not p_info.empty else "Ingen data fundet")
 
         # --- RESTEN AF KODEN (Stats og Ratings) SKAL KØRE NU ---
         stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0}
