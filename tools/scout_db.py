@@ -119,31 +119,32 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        # 1. Layout-opdeling (Smalle kolonner i siderne, bred i midten)
-        # Vi bruger [1, 2, 1.2] for at give plads til radaren i midten
-        c_detaljer, c_radar, c_noter = st.columns([1, 2, 1.2])
+        st.subheader(f"Seneste Rapport Overblik ({nyeste.get('DATO')})")
+        
+        # Vi holder fast i 3 kolonner [Venstre, Midte, Højre]
+        c_detaljer, c_radar, c_noter = st.columns([1, 2, 1.5])
 
-        # --- VENSTRE KOLONNE: DETALJER & RATINGS ---
+        # --- VENSTRE KOLONNE: Tættere tekst ---
         with c_detaljer:
-            st.markdown("### Detaljer")
-            st.caption(f"Dato: {nyeste.get('DATO', '-')}")
-            st.caption(f"Scout: {nyeste.get('SCOUT', '-')}")
-            st.divider()
+            st.markdown("### Info & Ratings")
+            st.write(f"**Dato:** {nyeste.get('DATO', '-')}")
+            st.write(f"**Scout:** {nyeste.get('SCOUT', '-')}")
+            # Ingen divider her for at holde det tæt
+            st.write("---") # En tynd linje
             
-            # Liste med alle 8 ratings
             metrics = [
-                ("Beslutsomhed", "BESLUTSOMHED"), ("Fart", "FART"), 
+                ("Beslutning", "BESLUTSOMHED"), ("Fart", "FART"), 
                 ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
-                ("Udholdenhed", "UDHOLDENHED"), ("Lederegenskaber", "LEDEREGENSKABER"), 
-                ("Teknik", "TEKNIK"), ("Spilintelligens", "SPILINTELLIGENS")
+                ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), 
+                ("Teknik", "TEKNIK"), ("Intelligens", "SPILINTELLIGENS")
             ]
             for label, col in metrics:
                 val = rens_metrik_vaerdi(nyeste.get(col, 0))
-                st.markdown(f"**{label}:** <span style='color:#df003b'>{val}</span>", unsafe_allow_html=True)
+                # Bruger markdown for at fjerne ekstra padding/afstand
+                st.markdown(f"**{label}:** `{val}`")
 
-        # --- MIDTERSTE KOLONNE: RADAR ---
+        # --- MIDTERSTE KOLONNE: Den 8-kantede radar ---
         with c_radar:
-            # Sørg for at kategorierne her matcher rækkefølgen i metrics for overskuelighed
             categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
             cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
             
@@ -152,31 +153,33 @@ def vis_profil(p_data, full_df, s_df, career_df):
             cat_closed = categories + [categories[0]]
             
             fig_radar = go.Figure(go.Scatterpolar(
-                r=v_closed, theta=cat_closed, fill='toself', 
+                r=v_closed, 
+                theta=cat_closed, 
+                fill='toself', 
                 line=dict(color='#df003b', width=2),
-                fillcolor='rgba(223, 0, 59, 0.3)'
+                fillcolor='rgba(223, 0, 59, 0.3)',
+                mode='lines+markers' # Tilføjer punkter i hjørnerne for at markere de 8 kanter
             ))
             
             fig_radar.update_layout(
                 polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=9)),
-                    angularaxis=dict(tickfont=dict(size=10))
+                    gridshape='linear', # HER GØRES DEN KANTET (Oktagon) i stedet for rund
+                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=8)),
+                    angularaxis=dict(tickfont=dict(size=10), rotation=90, direction="clockwise")
                 ),
                 showlegend=False,
-                height=400, # Fast højde så den ikke fylder hele skærmen
-                margin=dict(l=50, r=50, t=20, b=20)
+                height=400,
+                margin=dict(l=60, r=60, t=20, b=20)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
 
-        # --- HØJRE KOLONNE: BEMÆRKNINGER ---
+        # --- HØJRE KOLONNE: Noter ---
         with c_noter:
-            st.markdown("### Bemærkninger")
-            
-            # Styling af boksene så de minder om dem på billedet
+            st.markdown("### Vurdering")
             st.info(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
-            st.success(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
-
+            st.success(f"**Samlet**\n\n{nyeste.get('VURDERING', '-')}")
+            
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
