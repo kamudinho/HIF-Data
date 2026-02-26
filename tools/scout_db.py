@@ -89,17 +89,37 @@ def vis_profil(p_data, full_df, s_df, career_df):
             else:
                 st.info(f"Ingen aktive stats fundet for ID: {clean_p_id}")
 
-        st.divider()
-        st.subheader("📜 Karrierehistorik")
+            st.divider()
+            st.subheader("📜 Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            # Vi sikrer os, at vi kun kigger på den valgte spiller
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
+            
             if not df_p.empty:
+                # Sorterer så nyeste sæson er øverst
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
-                st.dataframe(df_p[['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME', 'APPEARANCES', 'GOAL']], 
-                             use_container_width=True, hide_index=True)
+                
+                # Vælg og omdøb kolonner så de er læsevenlige
+                kolonner = {
+                    'SEASONNAME': 'Sæson',
+                    'TEAMNAME': 'Hold',
+                    'COMPETITIONNAME': 'Turnering',
+                    'APPEARANCES': 'Kampe',
+                    'GOAL': 'Mål',
+                    'ASSISTS': 'Assists',
+                    'YELLOWCARDS': 'Gule Kort'
+                }
+                
+                # Vi tjekker hvilke af kolonnerne der rent faktisk findes i din Snowflake-data
+                eksisterende_kolonner = [k for k in kolonner.keys() if k in df_p.columns]
+                
+                st.dataframe(
+                    df_p[eksisterende_kolonner].rename(columns=kolonner),
+                    use_container_width=True,
+                    hide_index=True
+                )
             else:
-                st.info("Ingen historik fundet.")
+                st.info(f"Ingen karrierehistorik fundet i databasen for ID: {clean_p_id}")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
