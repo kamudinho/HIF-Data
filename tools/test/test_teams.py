@@ -21,59 +21,38 @@ TEAM_COLORS = {
 }
 
 def vis_side(df_raw=None): 
-    # 1. HENT DATA HVIS DET MANGLER
+    # --- 1. DATA INITIALISERING ---
+    # Hvis df_raw mangler, henter vi den fra session_state eller direkte fra Snowflake
     if df_raw is None or df_raw.empty:
         if "data_package" not in st.session_state:
-            from data.data_load import get_data_package
             st.session_state["data_package"] = get_data_package()
         
         dp = st.session_state["data_package"]
-        # Her sikrer vi os, at vi bruger de præcise filtre fra pakken
         df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
 
-    # 2. TJEK IGEN - Hvis den stadig er tom, er der ingen data i Snowflake
+    # Hvis der stadig ingen data er, vis advarsel og stop
     if df_raw is None or df_raw.empty:
         st.warning("⚠️ Ingen data fundet for den valgte sæson og liga.")
-        # Tilføj en knap til at rydde cachen direkte
-        if st.button("Genindlæs data (Ryd Cache)"):
+        if st.button("Genindlæs systemet (Ryd Cache)"):
             st.cache_data.clear()
             st.rerun()
         return
-        
-    # 1. CSS til centrering af st.table (HTML)
+
+    # --- 2. CSS & STYLING ---
     st.markdown("""
         <style>
             .stTable { width: 100%; }
-            th, td { text-align: center !important; vertical-align: middle !important; }
-            td:nth-child(2), th:nth-child(2) { text-align: left !important; } /* Holdnavn venstrestillet */
+            th, td { text-align: center !important; vertical-align: middle !important; font-family: sans-serif; }
+            td:nth-child(2), th:nth-child(2) { text-align: left !important; }
             button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
-            .custom-header {
-                display: flex; align-items: center; justify-content: center; height: 60px;
-                background-color: #cc0000; color: white; border-radius: 8px;
-                margin-bottom: 20px; font-weight: bold; font-size: 24px;
-            }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1.2. BRANDING BOKS
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
         <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">BETINIA LIGAEN: ANALYSE & H2H</h3>
     </div>""", unsafe_allow_html=True)
-    
-    # 2. Data Loading
-    if df_raw is None:
-        if "data_package" not in st.session_state:
-            st.session_state["data_package"] = get_data_package()
-        dp = st.session_state["data_package"]
-        df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
-    
-    # Slet den linje der hedder df_raw = load_snowflake_query("team_stats_full", "(328)", ...) 
-    # da den overskriver den data, vi lige har fået!
 
-    if df_raw is None or df_raw.empty:
-        st.error("❌ Ingen data fundet i team_stats_full queryen.")
-        return
-
+    # --- 3. DATA PREPARATION ---
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     df = df.fillna(0)
@@ -83,10 +62,10 @@ def vis_side(df_raw=None):
         nyeste_saeson = saesoner[-1]
         df_liga = df[df['SEASONNAME'] == nyeste_saeson].copy()
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved sortering af sæsoner: {e}")
         return
 
-    # 3. HOVED TABS (Defineres her før de bruges!)
+    # --- 4. TABS STRUKTUR ---
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
     # --- SEKTION 1: LIGAOVERSIGT ---
@@ -95,7 +74,6 @@ def vis_side(df_raw=None):
         
         def render_html_table(dataframe, columns, rename_dict):
             temp_df = dataframe[columns].copy()
-            # Lav logoer til HTML
             if 'IMAGEDATAURL' in temp_df.columns:
                 temp_df['IMAGEDATAURL'] = temp_df['IMAGEDATAURL'].apply(lambda x: f'<img src="{x}" width="25">')
             temp_df = temp_df.rename(columns=rename_dict)
@@ -124,13 +102,14 @@ def vis_side(df_raw=None):
     # --- SEKTION 2: HEAD-TO-HEAD ---
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
-        _, c_t1, c_t2 = st.columns([0.1, 1, 1])
-        with c_t1: team1 = st.selectbox("Hold 1", hold_navne, index=0)
-        with c_t2: team2 = st.selectbox("Hold 2", [h for h in hold_navne if h != team1], index=0)
+        c1, c2 = st.columns(2)
+        with c1: team1 = st.selectbox("Vælg Hold 1", hold_navne, index=0)
+        with c2: team2 = st.selectbox("Vælg Hold 2", [h for h in hold_navne if h != team1], index=0)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
         t2_stats = df_liga[df_liga['TEAMNAME'] == team2].iloc[0]
-        h2h_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
+        
+        h2h_sub_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
@@ -139,23 +118,42 @@ def vis_side(df_raw=None):
                 y_vals = []
                 text_vals = []
                 for m in metrics:
+                    val = stats[m]
                     if per_match and stats['MATCHES'] > 0 and m != 'PPDA':
-                        val = stats[m] / stats['MATCHES']
-                        y_vals.append(val); text_vals.append(f"{val:.2f}")
+                        val = val / stats['MATCHES']
+                        text_vals.append(f"{val:.2f}")
                     else:
-                        val = stats[m]
-                        y_vals.append(val); text_vals.append(fmt_val(val))
-                fig.add_trace(go.Bar(name=name, x=labels, y=y_vals, marker_color=c["primary"], marker_line_color=c["secondary"], marker_line_width=2, text=text_vals, textposition='auto', showlegend=False))
+                        text_vals.append(fmt_val(val))
+                    y_vals.append(val)
+                
+                fig.add_trace(go.Bar(
+                    name=name, x=labels, y=y_vals, 
+                    marker_color=c["primary"], marker_line_color=c["secondary"], 
+                    marker_line_width=2, text=text_vals, textposition='auto'
+                ))
             
+            # Tilføj logoer
             logo_imgs = []
             for idx in range(len(labels)):
-                for s, offset in [(t1, -0.18), (t2, 0.18)]:
+                for s, offset in [(t1, -0.2), (t2, 0.2)]:
                     if pd.notnull(s['IMAGEDATAURL']):
-                        logo_imgs.append(dict(source=s['IMAGEDATAURL'], xref="x", yref="paper", x=idx + offset, y=1.02, sizex=0.07, sizey=0.07, xanchor="center", yanchor="bottom"))
+                        logo_imgs.append(dict(
+                            source=s['IMAGEDATAURL'], xref="x", yref="paper", 
+                            x=idx + offset, y=1.05, sizex=0.08, sizey=0.08, 
+                            xanchor="center", yanchor="bottom"
+                        ))
             
-            fig.update_layout(images=logo_imgs, barmode='group', bargap=0.4, bargroupgap=0.1, height=400, margin=dict(t=70, b=20, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis=dict(showgrid=False), yaxis=dict(showgrid=False, showticklabels=False))
-            st.plotly_chart(fig, use_container_width=True, key=f"h2h_{'_'.join(metrics)}_{n1}_{n2}")
+            fig.update_layout(
+                images=logo_imgs, barmode='group', height=450, 
+                margin=dict(t=80, b=20, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(showgrid=False), yaxis=dict(showgrid=False, showticklabels=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        with h2h_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2, per_match=False)
-        with h2h_tabs[1]: create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
-        with h2h_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
+        with h2h_sub_tabs[0]: 
+            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
+        with h2h_sub_tabs[1]: 
+            create_h2h_plot(['GOALS', 'SHOTS', 'XGSHOT'], ['Mål/kamp', 'Skud/kamp', 'xG/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
+        with h2h_sub_tabs[2]: 
+            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
