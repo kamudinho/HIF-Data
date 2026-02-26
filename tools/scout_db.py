@@ -84,10 +84,12 @@ def vis_profil(p_data, full_df, s_df, career_df):
         st.plotly_chart(fig_line, use_container_width=True)
 
     with t4:
-        st.subheader("Sæsonstatistik")
+        st.subheader("📊 Sæsonstatistik")
         if s_df is not None and not s_df.empty:
+            # Sørg for at stats-ID er renset
             s_df['PLAYER_WYID'] = s_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             p_stats = s_df[s_df['PLAYER_WYID'] == clean_p_id]
+            
             if not p_stats.empty:
                 r = p_stats.iloc[0]
                 s1, s2, s3, s4 = st.columns(4)
@@ -95,17 +97,23 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 s1.metric("Kampe", f"{int(r.get('MATCHES', 0))}")
                 s2.metric("Mål", f"{int(r.get('GOALS', 0))}")
                 s2.metric("Assists", f"{int(r.get('ASSISTS', 0))}")
+            else:
+                st.info("Ingen aktive stats fundet for denne spiller.")
 
         st.divider()
+        st.subheader("📜 Karrierehistorik (HIF)")
+        
         if career_df is not None and not career_df.empty:
-            # career_df har fået .upper() i vis_side()
+            # VIGTIGT: Tving career_df ID til string før filteret
+            career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
+            # Lav filteret
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
                 
-                # VIGTIGT: Nøglerne her SKAL være UPPERCASE pga. din vis_side logik
-                # Og de skal matche navnene fra din SQL SELECT (pc.substitutein bliver til SUBSTITUTEIN)
+                # Mapping der matcher din SQL (pc.substitutein -> SUBSTITUTEIN pga. .upper())
                 mapping_dict = {
                     'SEASONNAME': 'Sæson',
                     'COMPETITIONNAME': 'Turnering',
@@ -118,16 +126,18 @@ def vis_profil(p_data, full_df, s_df, career_df):
                     'SUBSTITUTEOUT': 'Udsk.'
                 }
                 
-                # Vi tjekker hvilke af de omdøbte kolonner der faktisk er til stede
-                present_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
+                # Filtrér kun kolonner der faktisk findes i career_df
+                final_cols = [c for c in mapping_dict.keys() if c in df_p.columns]
                 
+                # VIS TABELLEN
                 st.dataframe(
-                    df_p[present_cols].rename(columns=mapping_dict),
+                    df_p[final_cols].rename(columns=mapping_dict),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                st.info("Ingen HIF karriere-data fundet.")
+                # Debug-hjælp hvis tabellen stadig er tom
+                st.info(f"Ingen karriere-data fundet for ID: {clean_p_id}")
 
     with t5:
         categories = ['Tekniske færdigheder', 'Spilintelligens', 'Beslutsomhed', 'Lederegenskaber', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
