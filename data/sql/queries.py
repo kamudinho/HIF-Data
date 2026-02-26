@@ -82,10 +82,9 @@ def get_queries(comp_filter, season_filter):
                 SUM(adv.GOALS) AS GOALS,
                 SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
                 SUM(adv.XG) AS XGSHOT,
-                -- Hvis tabellen ikke har XGAGAINST, kan vi bruge 0 eller lade den stå
-                SUM(adv.XG) AS XGSHOTAGAINST, 
+                -- Her henter vi xG imod (hvis kolonnen findes i din tabel, ellers brug 0)
+                SUM(adv.XG_AGAINST) AS XGSHOTAGAINST, 
                 SUM(adv.TOUCHESINBOX) AS TOUCHINBOX,
-                -- PPDA findes måske i en anden tabel, så vi sætter 0 for nu hvis den mangler
                 0 AS PPDA 
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
             JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
@@ -93,8 +92,8 @@ def get_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            WHERE tm.COMPETITION_WYID = '328'
-            AND s.SEASONNAME = '2025/2026'
+            WHERE tm.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASONNAME {season_filter}
             GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
         """,
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
