@@ -93,8 +93,8 @@ def get_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            WHERE tm.COMPETITION_WYID IN {comp_filter}
-            AND s.SEASONNAME {season_filter}
+            WHERE tm.COMPETITION_WYID = '328'
+            AND s.SEASONNAME = '2025/2026'
             GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
         """,
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
