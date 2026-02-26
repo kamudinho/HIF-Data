@@ -7,7 +7,13 @@ from data.data_load import get_team_colors
 hif_rod = "#df003b"
 
 def build_scatter_plot(df_plot, x_label, y_label):
+    from data.data_load import get_team_colors
     colors_dict = get_team_colors()
+    
+    # FIX: Plotly kan ikke lide ordbøger i ordbøger. 
+    # Vi trækker kun 'primary' hex-koden ud.
+    simple_colors = {team: (val["primary"] if isinstance(val, dict) else val) 
+                     for team, val in colors_dict.items()}
     
     fig = px.scatter(
         df_plot, 
@@ -16,7 +22,7 @@ def build_scatter_plot(df_plot, x_label, y_label):
         hover_name='TEAMNAME',
         text='TEAMNAME', 
         color='TEAMNAME',
-        color_discrete_map=colors_dict,
+        color_discrete_map=simple_colors, # Brug det rensede map her
         height=700,
         template="plotly_white"
     )
