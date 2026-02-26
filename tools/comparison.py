@@ -63,40 +63,31 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        # 1. Tjek først i din lokale CSV (df_p)
-        p_info = df_p[df_p['PLAYER_WYID'] == pid]
-        
-        # 2. Hvis den er tom, så tjek i Snowflake-data (df_spillere)
-        if p_info.empty and df_spillere is not None:
-            p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
-
-        # Nu kan vi begynde at udtrække informationen
+        # Standardværdier
         img_url = None
         klub = "Ukendt"
         pos = "Ukendt"
 
+        # 1. Tjek først i spiller-data (CSV eller Snowflake)
+        p_info = df_p[df_p['PLAYER_WYID'] == pid]
+        if p_info.empty and df_spillere is not None:
+            p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
+
         if not p_info.empty:
             row = p_info.iloc[0]
-            # HER kan vi skrive rækken ud for at fejlfinde:
-            # st.write(f"Data fundet for {navn}:", row) 
-            
             img_url = row.get('IMAGEDATAURL', None)
             klub = row.get('TEAMNAME', 'Ukendt')
             pos = map_position(row.get('ROLECODE3', row.get('POS', '')))
         else:
-            # Hvis spilleren slet ikke er i p_info, tjekker vi scouting data
+            # 2. Hvis ikke fundet i p_info, tjek scouting data
             sc_info = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_info.empty:
                 row = sc_info.iloc[-1]
                 klub = row.get('KLUB', 'Scouting')
                 pos = map_position(row.get('POSITION', ''))
-    
-        else:
-            sc_info = df_s[df_s['PLAYER_WYID'] == pid]
-            klub = sc_info.iloc[-1].get('KLUB', 'Scouting') if not sc_info.empty else "Ukendt"
-            pos = map_position(sc_info.iloc[-1].get('POSITION', '')) if not sc_info.empty else "Ukendt"
+                # Scouting rækker har sjældent IMAGEDATAURL, så den forbliver None (standardbillede)
 
-        # Stats (Mål, Kampe, Minutter)
+        # --- RESTEN AF KODEN (Stats og Ratings) SKAL KØRE NU ---
         stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0}
         if playerstats is not None and not playerstats.empty:
             df_st = playerstats[playerstats['PLAYER_WYID'] == pid]
@@ -105,7 +96,6 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
                 stats['MIN'] = int(df_st['MINUTESONFIELD'].sum())
                 stats['MÅL'] = int(df_st['GOALS'].sum())
 
-        # Ratings (De 8 kategorier)
         tech = {k: 0 for k in ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']}
         if not df_s.empty:
             sc_m = df_s[df_s['PLAYER_WYID'] == pid]
