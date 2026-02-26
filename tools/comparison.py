@@ -57,24 +57,39 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
-    match = combined_lookup[combined_lookup['NAVN'] == navn]
-    if match.empty: return None
-    pid = str(match.iloc[0]['PLAYER_WYID'])
+        match = combined_lookup[combined_lookup['NAVN'] == navn]
+        if match.empty: 
+            return None
+        
+        pid = str(match.iloc[0]['PLAYER_WYID'])
 
-    st.write(row)
-    # 1. Tjek først i din lokale CSV (df_p)
-    p_info = df_p[df_p['PLAYER_WYID'] == pid]
-    
-    # 2. Hvis den er tom, så tjek i Snowflake-data (df_spillere/sql_players)
-    if p_info.empty:
-        p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
+        # 1. Tjek først i din lokale CSV (df_p)
+        p_info = df_p[df_p['PLAYER_WYID'] == pid]
+        
+        # 2. Hvis den er tom, så tjek i Snowflake-data (df_spillere)
+        if p_info.empty and df_spillere is not None:
+            p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
 
-    if not p_info.empty:
-        row = p_info.iloc[0]
-        # Her henter vi nu URL'en fra Snowflake, hvis den ikke var i CSV'en
-        img_url = row.get('IMAGEDATAURL', None)
-        klub = row.get('TEAMNAME', 'Ukendt')
-        pos = map_position(row.get('ROLECODE3', row.get('POS', '')))
+        # Nu kan vi begynde at udtrække informationen
+        img_url = None
+        klub = "Ukendt"
+        pos = "Ukendt"
+
+        if not p_info.empty:
+            row = p_info.iloc[0]
+            # HER kan vi skrive rækken ud for at fejlfinde:
+            # st.write(f"Data fundet for {navn}:", row) 
+            
+            img_url = row.get('IMAGEDATAURL', None)
+            klub = row.get('TEAMNAME', 'Ukendt')
+            pos = map_position(row.get('ROLECODE3', row.get('POS', '')))
+        else:
+            # Hvis spilleren slet ikke er i p_info, tjekker vi scouting data
+            sc_info = df_s[df_s['PLAYER_WYID'] == pid]
+            if not sc_info.empty:
+                row = sc_info.iloc[-1]
+                klub = row.get('KLUB', 'Scouting')
+                pos = map_position(row.get('POSITION', ''))
     
         else:
             sc_info = df_s[df_s['PLAYER_WYID'] == pid]
