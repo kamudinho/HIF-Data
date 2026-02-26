@@ -101,14 +101,15 @@ def vis_profil(p_data, full_df, s_df, career_df):
                 
                 # Vælg og omdøb kolonner så de er læsevenlige
                 kolonner = {
-                    'SEASONNAME': 'Sæson',
-                    'TEAMNAME': 'Hold',
-                    'COMPETITIONNAME': 'Turnering',
-                    'APPEARANCES': 'Kampe',
-                    'GOAL': 'Mål',
-                    'ASSISTS': 'Assists',
-                    'YELLOWCARDS': 'Gule Kort'
-                }
+                'SEASONNAME': 'Sæson',
+                'TEAMNAME': 'Hold',
+                'COMPETITIONNAME': 'Turnering',
+                'APPEARANCES': 'Kampe',
+                'GOAL': 'Mål',
+                'ASSIST': 'Assists',      # Rettet fra ASSISTS
+                'YELLOWCARD': 'Gule Kort', # Rettet fra YELLOWCARDS
+                'REDCARDS': 'Røde Kort'     # Tilføjet
+            }
                 
                 # Vi tjekker hvilke af kolonnerne der rent faktisk findes i din Snowflake-data
                 eksisterende_kolonner = [k for k in kolonner.keys() if k in df_p.columns]
