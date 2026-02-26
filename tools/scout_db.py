@@ -216,7 +216,17 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
     disp.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'STATUS', 'DATO', 'SCOUT']
     
-    event = st.dataframe(disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    tabel_hoejde = (len(f_df) + 1) * 35 + 10 
+    
+    # 2. Vis tabellen med dynamisk højde
+    event = st.dataframe(
+        disp, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row",
+        height=tabel_hoejde # <--- Dette fjerner scrollbaren indeni tabellen
+    )
 
     if len(event.selection.rows) > 0:
         vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
