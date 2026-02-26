@@ -164,7 +164,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             fig_radar.update_layout(
                 polar=dict(
                     gridshape='linear', # HER GØRES DEN KANTET (Oktagon) i stedet for rund
-                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=8)),
+                    radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=8)),
                     angularaxis=dict(tickfont=dict(size=10), rotation=90, direction="clockwise")
                 ),
                 showlegend=False,
