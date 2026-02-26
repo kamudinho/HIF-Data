@@ -81,25 +81,42 @@ def vis_profil(p_data, full_df, s_df, career_df):
     with t4:
         st.subheader("Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            # Sørg for at alt er strenge og rens ID
+            # Sørg for at ID'er er ens formateret (fjern .0 hvis det er en float)
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             
-            # Filtrér på den valgte spiller
+            # Filtrér på den specifikke spiller vi har åbnet
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
+                # Sortér så nyeste sæson er øverst
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
+                
+                # Mapping til pæne danske navne
                 mapping = {
-                    'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering',
-                    'APPEARANCES': 'Kampe', 'MINUTESPLAYED': 'Min.', 'GOAL': 'Mål',
-                    'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde', 'SUBSTITUTEIN': 'Ind', 'SUBSTITUTEOUT': 'Ud'
+                    'SEASONNAME': 'Sæson', 
+                    'TEAMNAME': 'Klub', 
+                    'COMPETITIONNAME': 'Turnering',
+                    'APPEARANCES': 'Kampe', 
+                    'MINUTESPLAYED': 'Min.', 
+                    'GOAL': 'Mål',
+                    'YELLOWCARD': 'Gule', 
+                    'REDCARDS': 'Røde', 
+                    'SUBSTITUTEIN': 'Ind', 
+                    'SUBSTITUTEOUT': 'Ud'
                 }
-                cols = [c for c in mapping.keys() if c in df_p.columns]
-                st.dataframe(df_p[cols].rename(columns=mapping), use_container_width=True, hide_index=True)
+                
+                # Find kun de kolonner der faktisk findes i datasættet
+                vis_kolonner = [c for c in mapping.keys() if c in df_p.columns]
+                
+                st.dataframe(
+                    df_p[vis_kolonner].rename(columns=mapping), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
-                st.info(f"Ingen karriere-data fundet for ID {clean_p_id} i den hentede tabel.")
+                st.info(f"Ingen karrieredata fundet i databasen for ID: {clean_p_id}")
         else:
-            st.error("Karriere-data kunne ikke indlæses fra Snowflake.")
+            st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
         categories = ['Teknik', 'Spilintelligens', 'Beslutning', 'Leder', 'Udholdenhed', 'Fart', 'Aggresivitet', 'Attitude']
