@@ -15,9 +15,7 @@ def map_position(pos_code):
     return pos_map.get(s_code, "Ukendt")
 
 def vis_spiller_billede(img_url, w=110):
-    """Bruger direkte URL fra IMAGEDATAURL eller standard fallback"""
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    # Tjek om img_url er valid (ikke NaN, None eller tom)
     if pd.isna(img_url) or img_url == "" or img_url is None:
         st.image(std, width=w)
     else:
@@ -30,7 +28,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         if d is not None: 
             d.columns = [c.upper() for c in d.columns]
             if 'PLAYER_WYID' in d.columns:
-                d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+                d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).split('.').str[0].str.strip()
 
     # 1. Saml navne (Trup + Scouting)
     df_p = spillere.copy() if spillere is not None else pd.DataFrame()
@@ -60,7 +58,6 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         if match.empty: return None
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        # Hent basis info og BILLEDE fra 'spillere' (df_p)
         p_info = df_p[df_p['PLAYER_WYID'] == pid]
         img_url = None
         
@@ -75,7 +72,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
 
         s = {
             'GEN': {'KAMPE': 0, 'MIN': 0},
-            'OFF': {'MÅL': 0, 'ASSISTS': 0, 'xG': 0.0, 'SKUD': 0.0, 'DRIBBLES': 0.0},
+            'OFF': {'MÅL': 0, 'xG': 0.0, 'SKUD': 0.0, 'DRIBBLES': 0.0},
             'DEF': {'INTERCEPTIONS': 0.0, 'RECOVERIES': 0.0}
         }
         
@@ -103,7 +100,8 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
                     try: tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
                     except: tech[k] = 0
         
-        return pid, klub, pos, s, tech, img_url
+        # Returnerer nu også NAVN som res[6]
+        return pid, klub, pos, s, tech, img_url, navn
 
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
@@ -113,10 +111,11 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     
     def vis_profil(res, side, color):
         if not res: return
-        pid, klub, pos, s, tech, img_url = res
+        pid, klub, pos, s, tech, img_url, navn = res # Henter navn her
         align = "left" if side == "venstre" else "right"
         
-        st.markdown(f"<div style='text-align:{align};'><h3 style='color:{color}; margin-bottom:0;'>{res1[0] if side=='venstre' else res2[0]}</h3>"
+        # Her bruger vi 'navn' variablen i stedet for ID'et
+        st.markdown(f"<div style='text-align:{align};'><h3 style='color:{color}; margin-bottom:0;'>{navn}</h3>"
                     f"<p style='color:gray; margin-top:0;'>{pos}<br>{klub}</p></div>", unsafe_allow_html=True)
         
         c_img, c_txt = (st.columns([1, 1.5]) if side == "venstre" else st.columns([1.5, 1]))
@@ -133,6 +132,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
 
     with col2:
         if res1 and res2:
+            # Radar chart logik her...
             categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
             def get_vals(t):
                 v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
@@ -146,8 +146,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40, r=40, t=20, b=20), showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("---")
-    t_off, t_def = st.tabs(["Offensiv (P90)", "Defensiv (P90)"])
+    # ... fortsæt med tabs og rækker
     
     def vis_metric_row(label, val1, val2, suffix="", higher_is_better=True):
         # 1. Sikr at vi har tal til sammenligning og strenge til visning
