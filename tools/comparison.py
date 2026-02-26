@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import requests
 
 # --- HJÆLPEFUNKTIONER ---
 def map_position(pos_code):
@@ -15,21 +14,14 @@ def map_position(pos_code):
     s_code = str(pos_code).split('.')[0].upper()
     return pos_map.get(s_code, "Ukendt")
 
-def vis_spiller_billede(pid, w=90):
-    pid_clean = str(pid).split('.')[0].strip()
-    # Undgå "M-" (manuelt oprettede spillere) i billed-URL
-    if "M-" in pid_clean:
-        std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-        st.image(std, width=w)
-        return
-        
-    url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
+def vis_spiller_billede(img_url, w=110):
+    """Bruger direkte URL fra IMAGEDATAURL eller standard fallback"""
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    try:
-        resp = requests.head(url, timeout=0.8)
-        st.image(url if resp.status_code == 200 else std, width=w)
-    except:
+    # Tjek om img_url er valid (ikke NaN, None eller tom)
+    if pd.isna(img_url) or img_url == "" or img_url is None:
         st.image(std, width=w)
+    else:
+        st.image(img_url, width=w)
 
 # --- HOVEDFUNKTION ---
 def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
@@ -54,38 +46,39 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     navne_liste = sorted(combined_lookup['NAVN'].unique())
 
     if not navne_liste:
-        st.warning("Ingen spillere fundet i systemet eller scouting-databasen.")
+        st.warning("Ingen spillere fundet.")
         return
 
     st.markdown("### Spillersammenligning")
 
     c_sel1, c_sel2 = st.columns(2)
-    with c_sel1: s1_navn = st.selectbox("Vælg Spiller 1", navne_liste, index=0)
-    with c_sel2: s2_navn = st.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
+    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
+    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
 
     def hent_info(navn):
         match = combined_lookup[combined_lookup['NAVN'] == navn]
         if match.empty: return None
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        # Hent basis info
+        # Hent basis info og BILLEDE fra 'spillere' (df_p)
         p_info = df_p[df_p['PLAYER_WYID'] == pid]
+        img_url = None
+        
         if not p_info.empty:
             klub = p_info.iloc[0].get('TEAMNAME', 'Ukendt Klub')
             pos = map_position(p_info.iloc[0].get('ROLECODE3', p_info.iloc[0].get('POS', '')))
+            img_url = p_info.iloc[0].get('IMAGEDATAURL', None)
         else:
-            # Tjek scouting-filen hvis ikke i truppen
             sc_info = df_s[df_s['PLAYER_WYID'] == pid]
             klub = sc_info.iloc[-1].get('KLUB', 'Ekstern/Scouting') if not sc_info.empty else "Ukendt"
             pos = map_position(sc_info.iloc[-1].get('POSITION', '')) if not sc_info.empty else "Ukendt"
 
         s = {
             'GEN': {'KAMPE': 0, 'MIN': 0},
-            'OFF': {'MÅL': 0, 'ASSISTS': 0, 'xG': 0.0, 'SKUD': 0.0, 'KEYPASS': 0.0, 'DRIBBLES': 0.0, 'TOUCHBOX': 0.0},
-            'DEF': {'DUEL_PCT': 0.0, 'AERIAL_PCT': 0.0, 'INTERCEPTIONS': 0.0, 'RECOVERIES': 0.0}
+            'OFF': {'MÅL': 0, 'ASSISTS': 0, 'xG': 0.0, 'SKUD': 0.0, 'DRIBBLES': 0.0},
+            'DEF': {'INTERCEPTIONS': 0.0, 'RECOVERIES': 0.0}
         }
         
-        # Hent stats fra Snowflake
         if playerstats is not None and not playerstats.empty:
             df = playerstats[playerstats['PLAYER_WYID'] == pid]
             if not df.empty:
@@ -94,71 +87,68 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
                 s['GEN']['KAMPE'] = int(df['MATCHES'].sum())
                 s['GEN']['MIN'] = int(t_min)
                 s['OFF']['MÅL'] = int(df['GOALS'].sum())
-                s['OFF']['ASSISTS'] = int(df['ASSISTS'].sum())
+                s['OFF']['xG'] = round(float(df.get('XGSHOT', 0).sum()), 2)
                 if p90 > 0:
-                    s['OFF']['xG'] = round(float(df.get('XGSHOT', 0).sum()), 2)
                     s['OFF']['SKUD'] = round(float(df.get('SHOTS', 0).sum() / p90), 1)
                     s['OFF']['DRIBBLES'] = round(float(df.get('DRIBBLES', 0).sum() / p90), 1)
                     s['DEF']['INTERCEPTIONS'] = round(float(df.get('INTERCEPTIONS', 0).sum() / p90), 1)
                     s['DEF']['RECOVERIES'] = round(float(df.get('RECOVERIES', 0).sum() / p90), 1)
 
-        # Hent scouting-ratings (Radarchart)
         tech = {k: 0 for k in ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']}
-        scout_txt = {'s': '-', 'u': '-', 'v': '-'}
         if not df_s.empty:
             sc_match = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_match.empty:
                 n = sc_match.iloc[-1]
                 for k in tech.keys():
-                    try: 
-                        tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
+                    try: tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
                     except: tech[k] = 0
-                scout_txt = {'s': n.get('STYRKER', '-'), 'u': n.get('UDVIKLING', '-'), 'v': n.get('VURDERING', '-')}
         
-        return pid, klub, pos, s, tech, scout_txt
+        return pid, klub, pos, s, tech, img_url
 
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
 
+    # --- VISNING ---
     col1, col2, col3 = st.columns([3, 4, 3])
     
-    def vis_top(navn, res, side, color):
+    def vis_profil(res, side, color):
         if not res: return
-        pid, klub, pos, s, _, _ = res
+        pid, klub, pos, s, tech, img_url = res
         align = "left" if side == "venstre" else "right"
-        st.markdown(f"<div style='text-align:{align}; margin-bottom:10px;'><h3 style='color:{color}; margin:0;'>{navn}</h3><p style='color:gray; margin:0;'>{pos} | {klub}</p></div>", unsafe_allow_html=True)
-        c1, c2 = (st.columns([1, 2]) if side == "venstre" else st.columns([2, 1]))
-        with (c1 if side == "venstre" else c2): vis_spiller_billede(pid)
-        st.markdown("<br>", unsafe_allow_html=True)
-        m1, m2, m3 = st.columns(3)
+        
+        st.markdown(f"<div style='text-align:{align};'><h3 style='color:{color}; margin-bottom:0;'>{res1[0] if side=='venstre' else res2[0]}</h3>"
+                    f"<p style='color:gray; margin-top:0;'>{pos}<br>{klub}</p></div>", unsafe_allow_html=True)
+        
+        c_img, c_txt = (st.columns([1, 1.5]) if side == "venstre" else st.columns([1.5, 1]))
+        with (c_img if side == "venstre" else c_txt):
+            vis_spiller_billede(img_url)
+        
+        st.write(" ")
+        m1, m2 = st.columns(2)
         m1.metric("Kampe", s['GEN']['KAMPE'])
-        m2.metric("Min", s['GEN']['MIN'])
-        m3.metric("Mål", s['OFF']['MÅL'])
+        m2.metric("Minutter", s['GEN']['MIN'])
 
-    with col1: vis_top(s1_navn, res1, "venstre", "#df003b")
-    with col3: vis_top(s2_navn, res2, "højre", "#0056a3")
+    with col1: vis_profil(res1, "venstre", "#df003b")
+    with col3: vis_profil(res2, "højre", "#0056a3")
 
     with col2:
-        categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
-        def get_vals(t):
-            v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
-                 t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
-            v.append(v[0])
-            return v
-        
-        fig = go.Figure()
-        if res1: fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories+[categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
-        if res2: fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
-        
-        fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
-            height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if res1 and res2:
+            categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
+            def get_vals(t):
+                v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
+                     t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
+                v.append(v[0])
+                return v
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories+[categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
+            fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40, r=40, t=20, b=20), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    t_off, t_def = st.tabs(["OFFENSIVT (P90)", "DEFENSIVT"])
-
+    t_off, t_def = st.tabs(["Offensiv (P90)", "Defensiv (P90)"])
+    
     def vis_metric_row(label, val1, val2, suffix="", higher_is_better=True):
         # 1. Sikr at vi har tal til sammenligning og strenge til visning
         try:
