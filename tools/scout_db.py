@@ -119,7 +119,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        st.subheader(f"Seneste Rapport Overblik ({nyeste.get('DATO')})")
+        st.subheader(f"Seneste rapport: ({nyeste.get('DATO')})")
         
         # Vi definerer de 3 kolonner
         c_left, c_mid, c_right = st.columns([1, 2, 1.5])
@@ -156,7 +156,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             fig_radar.update_layout(
                 polar=dict(
                     gridshape='linear', # <--- DETTE GØR DEN 8-KANTET
-                    radialaxis=dict(visible=True, range=[0, 5], tickfont=dict(size=8)),
+                    radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=8)),
                     angularaxis=dict(rotation=90, direction="clockwise")
                 ),
                 showlegend=False,
