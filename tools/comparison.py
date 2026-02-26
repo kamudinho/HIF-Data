@@ -63,6 +63,8 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         
         pid = str(match.iloc[0]['PLAYER_WYID'])
 
+        st.write(f"Tjekker data for ID: {pid}", p_info[['PLAYER_WYID', 'IMAGEDATAURL']] if not p_info.empty else "Ingen data fundet")
+
         # Standardværdier
         img_url = None
         klub = "Ukendt"
