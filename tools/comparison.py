@@ -78,9 +78,9 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
 
         if not p_info.empty:
         row = p_info.iloc[0]
-        st.write("Fundet række (row):", row) # Se alle tilgængelige kolonner i rækken
+            st.write("Fundet række (row):", row) # Se alle tilgængelige kolonner i rækken
         img_url = row.get('IMAGEDATAURL', None)
-        st.write(f"Udtrukket URL: {img_url}") # Se om URL'en er en tekststreng eller 'None'
+            st.write(f"Udtrukket URL: {img_url}") # Se om URL'en er en tekststreng eller 'None'
 
     else:
             # 2. Hvis ikke fundet i p_info, tjek scouting data
