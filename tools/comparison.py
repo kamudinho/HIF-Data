@@ -191,7 +191,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             st.markdown(f"<p style='text-align:right; color:{color1}; font-size:22px; font-weight:800; margin:0;'>{display_v1}{suffix}</p>", unsafe_allow_html=True)
         
         with c2:
-            st.markdown(f"<div style='text-align:center; background-color:#888888; border-radius:4px; border:1px solid #333;'><span style='color:#bbb; font-size:12px; font-weight:bold; text-transform:uppercase;'>{label}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; background-color:#888888; border-radius:4px; border:1px solid #888888;'><span style='color:#000000; font-size:12px; font-weight:bold; text-transform:uppercase;'>{label}</span></div>", unsafe_allow_html=True)
         
         with c3:
             st.markdown(f"<p style='text-align:left; color:{color2}; font-size:22px; font-weight:800; margin:0;'>{display_v2}{suffix}</p>", unsafe_allow_html=True)
