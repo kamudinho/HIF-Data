@@ -157,7 +157,7 @@ def get_queries(comp_filter, season_filter):
         """,
         # --- 8. KARRIEREHISTORIK (Til profil-dialogen) ---
         "player_career": f"""
-            SELECT DISTINCT
+            SELECT
                 pc.PLAYER_WYID, 
                 s.SEASONNAME, 
                 c.COMPETITIONNAME, 
