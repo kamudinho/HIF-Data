@@ -14,10 +14,9 @@ except ImportError:
 def vis_side(dp):
     st.write("### Ny Scoutrapport")
 
-    # 1. Hent data og fjern dubletter med det samme
+    # 1. Hent data og fjern dubletter
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
     
-    # Her er "hammeren": Vi beholder kun den NYESTE registrering pr. PLAYER_WYID
     if not df_ps_raw.empty:
         df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
     else:
@@ -39,25 +38,22 @@ def vis_side(dp):
                 
                 p_id = str(int(float(r['PLAYER_WYID'])))
                 
-                # Håndter klubnavn
                 t_id_raw = r.get('CURRENTTEAM_WYID')
                 t_id = str(int(float(t_id_raw))) if pd.notnull(t_id_raw) and t_id_raw != "" else ""
                 klub = hold_map.get(t_id, "Ukendt klub")
                 
-                # Navnehåndtering
                 f_name = str(r['FIRSTNAME'] if pd.notnull(r['FIRSTNAME']) else "").strip()
                 l_name = str(r['LASTNAME'] if pd.notnull(r['LASTNAME']) else "").strip()
                 full = f"{f_name} {l_name}".strip()
                 if not full: 
                     full = str(r.get('SHORTNAME', 'Ukendt'))
                 
-                # Unik label pr. spiller
                 label = f"{full} ({klub})"
                 
                 spiller_options[label] = {
                     "n": full, 
                     "id": p_id, 
-                    "pos": r.get('ROLECODE3', '-'), 
+                    "pos": str(r.get('ROLECODE3', '')).strip().upper(), 
                     "klub": klub
                 }
             except (ValueError, TypeError):
@@ -76,7 +72,6 @@ def vis_side(dp):
     else:
         c1, c2 = st.columns([3, 1])
         st.session_state.scout_temp_data["n"] = c1.text_input("Navn", value=st.session_state.scout_temp_data["n"])
-        # Generer manuelt ID hvis det mangler
         if not st.session_state.scout_temp_data["id"] or "M-" not in str(st.session_state.scout_temp_data["id"]):
             st.session_state.scout_temp_data["id"] = f"M-{str(uuid.uuid4().int)[:6]}"
         st.session_state.scout_temp_data["id"] = c2.text_input("ID", value=st.session_state.scout_temp_data["id"])
@@ -84,7 +79,25 @@ def vis_side(dp):
     # 4. Formularen
     with st.form("scout_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([2, 2, 1])
-        f_pos = col1.text_input("Position", value=st.session_state.scout_temp_data["pos"])
+        
+        # --- NY POSITION DROPDOWN LOGIK ---
+        pos_valg = {
+            "Målmand": "GKP",
+            "Forsvarsspiller": "DEF",
+            "Midtbanespiller": "MID",
+            "Angriber": "FWD"
+        }
+        
+        # Find index baseret på nuværende data (hvis spilleren er fundet i systemet)
+        nu_pos = st.session_state.scout_temp_data["pos"]
+        def_idx = 1 # Default til Forsvar
+        if nu_pos in ["GKP", "GK"]: def_idx = 0
+        elif nu_pos == "MID": def_idx = 2
+        elif nu_pos == "FWD": def_idx = 3
+        
+        valgt_pos_label = col1.selectbox("Position", options=list(pos_valg.keys()), index=def_idx)
+        f_pos = pos_valg[valgt_pos_label]
+        
         f_klub = col2.text_input("Klub", value=st.session_state.scout_temp_data["klub"])
         f_scout = col3.text_input("Scout", value=curr_user, disabled=True)
 
