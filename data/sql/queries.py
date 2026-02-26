@@ -152,7 +152,6 @@ LEFT JOIN AXIS.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
                 pc.APPEARANCES, 
                 pc.MINUTESPLAYED, 
                 pc.GOAL, 
-                pc.ASSIST, -- Tilføjet assist da den ofte er rar at have
                 pc.YELLOWCARD, 
                 pc.REDCARDS,
                 pc.SUBSTITUTEIN,
@@ -161,7 +160,6 @@ LEFT JOIN AXIS.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
             INNER JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
             INNER JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
             INNER JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
-            -- Vi fjerner WHERE pc.PLAYER_WYID IN (...) filteret helt her.
-            -- Det sikrer at vi henter data for alle spillere i databasen.
+            -- VI FJERNER WHERE-FILTERET HER, SÅ VI HENTER ALT DATA
         """,
     }
