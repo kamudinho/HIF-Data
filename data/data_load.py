@@ -73,7 +73,7 @@ def _get_snowflake_conn():
         return None
 
 # --- 4. DATA LOADING FUNKTIONER ---
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1200)
 def get_hold_mapping():
     conn = _get_snowflake_conn()
     if not conn: return {}
@@ -84,7 +84,7 @@ def get_hold_mapping():
         return {}
     except: return {}
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1200)
 def load_github_data():
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
     def read_gh(file):
@@ -97,7 +97,7 @@ def load_github_data():
         except: return pd.DataFrame()
     return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
