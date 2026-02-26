@@ -124,7 +124,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
         c_left, c_mid, c_right = st.columns([1, 2, 1.5])
 
         with c_left:
-           st.markdown(f"""
+        st.markdown(f"""
             **Dato:** {nyeste.get('DATO', '-')}  
             **Scout:** {nyeste.get('SCOUT', '-')}
             """)
