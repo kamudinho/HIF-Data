@@ -167,7 +167,9 @@ def get_queries(comp_filter, season_filter):
                 pc.GOAL, 
                 pc.ASSIST,
                 pc.YELLOWCARD, 
-                pc.REDCARD  -- Rettet fra REDCARDS hvis kolonnen hedder REDCARD
+                pc.REDCARDS,
+                pc.SUBSTITUTEIN,
+                pc.SUBSTITUTEOUT
             FROM {DB}.WYSCOUT_PLAYERCAREER pc
             LEFT JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
             LEFT JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
