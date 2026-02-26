@@ -15,14 +15,10 @@ def map_position(pos_code):
 
 def vis_spiller_billede(img_url, w=110):
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    if pd.isna(img_url) or str(img_url).strip() == "" or img_url is None:
+    if pd.isna(img_url) or str(img_url).strip() == "" or img_url is None or str(img_url).lower() == 'nan':
         st.image(std, width=w)
     else:
-        # Sikrer at vi ikke får URL'er med "nan" strenge
-        if str(img_url).lower() == 'nan':
-            st.image(std, width=w)
-        else:
-            st.image(img_url, width=w)
+        st.image(img_url, width=w)
 
 def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     # 0. Standardiser kolonner på tværs af alle kilder
@@ -62,37 +58,31 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             return None
         
         pid = str(match.iloc[0]['PLAYER_WYID'])
-        st.write(f"Søger efter spiller med PID: {pid}") # Tjek om PID er korrekt
 
         # Standardværdier
         img_url = None
         klub = "Ukendt"
         pos = "Ukendt"
 
-        # 1. Tjek først i spiller-data (CSV eller Snowflake)
+        # 1. Hent stamdata (Billede, klub, position)
         p_info = df_p[df_p['PLAYER_WYID'] == pid]
         if p_info.empty and df_spillere is not None:
             p_info = df_spillere[df_spillere['PLAYER_WYID'] == pid]
-        
-        st.write("Indhold af p_info:", p_info) # Her ser du om tabellen er tom eller har data
 
         if not p_info.empty:
             row = p_info.iloc[0]
-            st.write("Fundet række (row):", row) # Se alle tilgængelige kolonner i rækken
             img_url = row.get('IMAGEDATAURL', None)
-            st.write(f"Udtrukket URL: {img_url}") # Se om URL'en er en tekststreng eller 'None'
-
-    else:
-            # 2. Hvis ikke fundet i p_info, tjek scouting data
+            klub = row.get('TEAMNAME', 'Ukendt')
+            pos = map_position(row.get('ROLECODE3', row.get('POS', '')))
+        else:
+            # Tjek scouting data hvis stamdata mangler
             sc_info = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_info.empty:
-                row = sc_info.iloc[-1]
-                klub = row.get('KLUB', 'Scouting')
-                pos = map_position(row.get('POSITION', ''))
+                row_s = sc_info.iloc[-1]
+                klub = row_s.get('KLUB', 'Scouting')
+                pos = map_position(row_s.get('POSITION', ''))
 
-        st.write(f"Tjekker data for ID: {pid}", p_info[['PLAYER_WYID', 'IMAGEDATAURL']] if not p_info.empty else "Ingen data fundet")
-
-        # --- RESTEN AF KODEN (Stats og Ratings) SKAL KØRE NU ---
+        # 2. Hent Stats (Mål, Kampe, Minutter)
         stats = {'KAMPE': 0, 'MIN': 0, 'MÅL': 0}
         if playerstats is not None and not playerstats.empty:
             df_st = playerstats[playerstats['PLAYER_WYID'] == pid]
@@ -101,14 +91,18 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
                 stats['MIN'] = int(df_st['MINUTESONFIELD'].sum())
                 stats['MÅL'] = int(df_st['GOALS'].sum())
 
+        # 3. Hent Ratings fra scouting-ark
         tech = {k: 0 for k in ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']}
         if not df_s.empty:
             sc_m = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_m.empty:
                 n = sc_m.iloc[-1]
                 for k in tech.keys():
-                    try: tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
-                    except: tech[k] = 0
+                    try: 
+                        val = n.get(k, 0)
+                        tech[k] = float(str(val).replace(',', '.')) if pd.notna(val) else 0
+                    except: 
+                        tech[k] = 0
         
         return pid, klub, pos, stats, tech, img_url, navn
 
@@ -139,7 +133,6 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     with col2:
         if res1 and res2:
             categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslut.', 'Attitude', 'Leder', 'Aggres.']
-            # Map kategorierne præcis til tech-nøglerne
             def get_radar_vals(t):
                 v = [t['FART'], t['UDHOLDENHED'], t['TEKNIK'], t['SPILINTELLIGENS'], 
                      t['BESLUTSOMHED'], t['ATTITUDE'], t['LEDEREGENSKABER'], t['AGGRESIVITET']]
