@@ -1,7 +1,4 @@
 PLAYER_WYID,Dato,Navn,Klub,Position,Rating_Avg,Status,Potentiale,Styrker,Udvikling,Vurdering,Beslutsomhed,Fart,Aggresivitet,Attitude,Udholdenhed,Lederegenskaber,Teknik,Spilintelligens,Scout
-48809,2026-02-10,Konrad,SSBK,Fisker,3.0,Hold øje,Lavt,God indstilling,Teknisk niveau,Skal ses an over tid,3,3,2,4,3,2,3,3,Christian
-48809,2026-03-12,Konrad,SSBK,Fisker,3.5,Kig nærmere,Lavt,Arbejder hårdt,Placeringsevne,Viser god fremgang,4,3,3,4,4,3,3,4,Christian
-48809,2026-04-15,Konrad,SSBK,Fisker,4.0,Prioritet,Lavt,Vigtig for holdet,Fysisk overskud,Stabil profil nu,4,4,4,5,4,4,4,4,Christian
 626639,2026-02-11,Victor Vestby,Næsby,Stopper,3.8,Hold øje,Middel,Rolig på bolden,Forsvarsspillet generelt,Godt venstre ben,3,3,2,4,3,4,3,4,Christian
 626639,2026-03-15,Victor Vestby,Næsby,Stopper,4.1,Kig nærmere,Top,Stærk i duellerne,Kommunikation,Styrer bagkæden flot,4,3,4,5,4,5,3,5,Christian
 626639,2026-04-20,Victor Vestby,Næsby,Stopper,4.5,Køb,Top,Fantastisk overblik,Ingen markante mangler,En klassespiller,5,3,4,6,5,6,4,6,Christian
@@ -53,18 +50,12 @@ PLAYER_WYID,Dato,Navn,Klub,Position,Rating_Avg,Status,Potentiale,Styrker,Udvikli
 435879,2026-02-25,Oliver Kjærgaard,Hvidovre IF,MID,3.5,Hold øje,Højt,God teknik,Fysisk gennemslagskraft,Spændende midtbane,3,4,3,4,4,3,4,4,CEO
 435879,2026-04-11,Oliver Kjærgaard,Hvidovre IF,MID,4.0,Kig nærmere,Højt,Driblestærk i små rum,Beslutningstagen,Stort potentiale,4,4,4,4,4,4,5,4,CEO
 435879,2026-05-16,Oliver Kjærgaard,Hvidovre IF,MID,4.3,Prioritet,Højt,Spilintelligent,Mangler slutprodukt,Meget seværdig,4,4,4,5,4,4,5,5,CEO
-449795,2026-02-26,Mehmet Cokusun,Hvidovre IF,DEF,3.0,Hold øje,Middel,God fysik,Koncentration over 90 min,Solid backup,3,3,4,3,3,3,3,3,Kasper
-449795,2026-04-13,Mehmet Cokusun,Hvidovre IF,DEF,3.3,Hold øje,Middel,Stærk i duellerne,Fart,Arbejder godt,3,3,4,4,4,3,3,4,Kasper
-449795,2026-05-18,Mehmet Cokusun,Hvidovre IF,DEF,3.6,Kig nærmere,Middel,God markeringsspiller,Teknik under pres,Vigtig i rotationen,4,3,4,4,4,4,3,4,Kasper
 505392,2026-02-27,Marius Elvius,Hvidovre IF,MID,3.7,Kig nærmere,Højt,Stor hurtighed,Tekniske detaljer,Meget lovende,3,5,3,4,4,3,4,4,MR
 505392,2026-04-15,Marius Elvius,Hvidovre IF,MID,4.1,Prioritet,Højt,Farlig i kontrafasen,Indlæg i fart,Højt tempo i dag,4,5,4,4,5,3,4,4,MR
 505392,2026-05-20,Marius Elvius,Hvidovre IF,MID,4.4,Køb,Højt,Dominerende på kanten,Hold øje med fysikken,Topspiller for holdet,4,5,4,5,5,4,5,4,MR
 579393,2026-02-28,Nicolaj Jungvig,Hvidovre IF,DEF,3.0,Hold øje,Højt,God indstilling,Taktisk disciplin,Ung spiller i udvikling,3,3,3,4,3,3,3,3,KD
 579393,2026-04-17,Nicolaj Jungvig,Hvidovre IF,DEF,3.2,Hold øje,Højt,Gør det simpelt,Fysisk styrke,Lærer hele tiden,3,3,4,4,4,3,3,3,KD
 579393,2026-05-22,Nicolaj Jungvig,Hvidovre IF,DEF,3.5,Kig nærmere,Højt,Pålidelig back,Sikkerhed på bolden,Tager næste skridt,4,4,4,4,4,3,3,4,KD
-775167,2026-03-01,Alfred Maslen,Hvidovre IF,GKP,2.8,Hold øje,Højt,Gode reflekser,Erfaring i feltet,Potentiale til fremtiden,2,3,3,4,3,3,3,3,CG
-775167,2026-04-19,Alfred Maslen,Hvidovre IF,GKP,3.1,Hold øje,Højt,God rækkevidde,Kommunikation,Vokser med opgaven,3,3,3,4,3,3,3,4,CG
-775167,2026-05-24,Alfred Maslen,Hvidovre IF,GKP,3.4,Hold øje,Højt,Sikker på stregen,Spillet med fødderne,Lovende keeper,3,3,4,4,3,4,3,4,CG
 620821,2026-03-02,Zamir Alji,Hvidovre IF,MID,3.0,Hold øje,Højt,Teknisk flair,Fysisk overskud,Lille tekniker,3,3,2,4,3,2,4,4,CEO
 620821,2026-04-21,Zamir Alji,Hvidovre IF,MID,3.3,Hold øje,Højt,Gode vendinger,Defensivt arbejde,Spændende talent,3,4,3,4,4,3,4,4,CEO
 620821,2026-05-26,Zamir Alji,Hvidovre IF,MID,3.6,Kig nærmere,Højt,Blik for spillet,Dueller,Markant bedring,4,4,3,4,4,3,5,4,CEO
