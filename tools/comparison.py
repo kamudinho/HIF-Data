@@ -9,13 +9,20 @@ def map_position(pos_code):
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
         "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
         "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
-        "10": "Offensiv Midt", "11": "Venstre Kant"
+        "10": "Offensiv Midt", "11": "Venstre Kant",
+        "GKP": "Målmand", "DEF": "Forsvar", "MID": "Midtbane", "FWD": "Angreb"
     }
-    s_code = str(pos_code).split('.')[0]
+    s_code = str(pos_code).split('.')[0].upper()
     return pos_map.get(s_code, "Ukendt")
 
 def vis_spiller_billede(pid, w=90):
     pid_clean = str(pid).split('.')[0].strip()
+    # Undgå "M-" (manuelt oprettede spillere) i billed-URL
+    if "M-" in pid_clean:
+        std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
+        st.image(std, width=w)
+        return
+        
     url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     try:
@@ -26,10 +33,12 @@ def vis_spiller_billede(pid, w=90):
 
 # --- HOVEDFUNKTION ---
 def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
-    # 0. Standardiser kolonner
+    # 0. Standardiser kolonner og ID'er
     for d in [spillere, playerstats, df_scout, player_seasons]:
         if d is not None: 
             d.columns = [c.upper() for c in d.columns]
+            if 'PLAYER_WYID' in d.columns:
+                d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
     # 1. Saml navne (Trup + Scouting)
     df_p = spillere.copy() if spillere is not None else pd.DataFrame()
@@ -37,6 +46,7 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         df_p['NAVN'] = (df_p.get('FIRSTNAME', '').fillna('') + " " + df_p.get('LASTNAME', '').fillna('')).str.strip()
     
     df_s = df_scout.copy() if df_scout is not None else pd.DataFrame()
+    
     p_lookup = df_p[['NAVN', 'PLAYER_WYID']].dropna() if not df_p.empty else pd.DataFrame()
     s_lookup = df_s[['NAVN', 'PLAYER_WYID']].dropna() if not df_s.empty else pd.DataFrame()
     
@@ -44,10 +54,9 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     navne_liste = sorted(combined_lookup['NAVN'].unique())
 
     if not navne_liste:
-        st.warning("Ingen spillere fundet.")
+        st.warning("Ingen spillere fundet i systemet eller scouting-databasen.")
         return
 
-    # Overskrift uden ikon
     st.markdown("### Spillersammenligning")
 
     c_sel1, c_sel2 = st.columns(2)
@@ -57,65 +66,55 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     def hent_info(navn):
         match = combined_lookup[combined_lookup['NAVN'] == navn]
         if match.empty: return None
-        try:
-            pid = int(float(str(match.iloc[0]['PLAYER_WYID'])))
-        except (ValueError, TypeError, IndexError): return None
+        pid = str(match.iloc[0]['PLAYER_WYID'])
 
-        p_info = df_p[df_p['NAVN'] == navn]
+        # Hent basis info
+        p_info = df_p[df_p['PLAYER_WYID'] == pid]
         if not p_info.empty:
             klub = p_info.iloc[0].get('TEAMNAME', 'Ukendt Klub')
-            pos = map_position(p_info.iloc[0].get('POS', ''))
+            pos = map_position(p_info.iloc[0].get('ROLECODE3', p_info.iloc[0].get('POS', '')))
         else:
-            klub = "Scouting / Ekstern"
-            pos = "Ukendt"
+            # Tjek scouting-filen hvis ikke i truppen
+            sc_info = df_s[df_s['PLAYER_WYID'] == pid]
+            klub = sc_info.iloc[-1].get('KLUB', 'Ekstern/Scouting') if not sc_info.empty else "Ukendt"
+            pos = map_position(sc_info.iloc[-1].get('POSITION', '')) if not sc_info.empty else "Ukendt"
 
         s = {
-            'GEN': {'KAMPE': 0, 'MIN': 0, 'START': 0},
+            'GEN': {'KAMPE': 0, 'MIN': 0},
             'OFF': {'MÅL': 0, 'ASSISTS': 0, 'xG': 0.0, 'SKUD': 0.0, 'KEYPASS': 0.0, 'DRIBBLES': 0.0, 'TOUCHBOX': 0.0},
-            'DEF': {'DUEL_PCT': 0.0, 'AERIAL_PCT': 0.0, 'INTERCEPTIONS': 0.0, 'DEF_ACTIONS': 0.0, 'RECOVERIES': 0.0}
+            'DEF': {'DUEL_PCT': 0.0, 'AERIAL_PCT': 0.0, 'INTERCEPTIONS': 0.0, 'RECOVERIES': 0.0}
         }
         
-        if player_seasons is not None and not player_seasons.empty:
-            clean_season = season_filter.replace("=", "").replace("'", "").strip()
-            temp_seasons = player_seasons.copy()
-            temp_seasons['PLAYER_WYID'] = pd.to_numeric(temp_seasons['PLAYER_WYID'], errors='coerce')
-            s_match = temp_seasons[(temp_seasons['PLAYER_WYID'] == pid) & (temp_seasons['SEASONNAME'].astype(str).str.strip() == clean_season)]
-            
-            if not s_match.empty and playerstats is not None:
-                try:
-                    target_season_id = int(float(str(s_match.iloc[0]['SEASON_WYID'])))
-                    df = playerstats[(pd.to_numeric(playerstats['PLAYER_WYID'], errors='coerce') == pid) & 
-                                     (pd.to_numeric(playerstats['SEASON_WYID'], errors='coerce') == target_season_id)]
-                    if not df.empty:
-                        t_min = df['MINUTESTAGGED'].sum()
-                        p90 = t_min / 90 if t_min > 0 else 0
-                        s['GEN']['KAMPE'] = int(df['MATCHES'].sum())
-                        s['GEN']['MIN'] = int(t_min)
-                        s['OFF']['MÅL'] = int(df['GOALS'].sum())
-                        if p90 > 0:
-                            s['OFF']['xG'] = round(float(df['XGSHOT'].sum() + df['XGASSIST'].sum()), 2)
-                            s['OFF']['SKUD'] = round(float(df['SHOTS'].sum() / p90), 1)
-                            s['OFF']['KEYPASS'] = round(float(df['KEYPASSES'].sum() / p90), 1)
-                            s['OFF']['DRIBBLES'] = round(float(df['DRIBBLES'].sum() / p90), 1)
-                            s['OFF']['TOUCHBOX'] = round(float(df['TOUCHINBOX'].sum() / p90), 1)
-                            s['DEF']['INTERCEPTIONS'] = round(float(df['INTERCEPTIONS'].sum() / p90), 1)
-                            s['DEF']['RECOVERIES'] = round(float(df['RECOVERIES'].sum() / p90), 1)
-                        if df['DUELS'].sum() > 0:
-                            s['DEF']['DUEL_PCT'] = round((df['DUELSWON'].sum() / df['DUELS'].sum()) * 100, 1)
-                except: pass
+        # Hent stats fra Snowflake
+        if playerstats is not None and not playerstats.empty:
+            df = playerstats[playerstats['PLAYER_WYID'] == pid]
+            if not df.empty:
+                t_min = df['MINUTESONFIELD'].sum()
+                p90 = t_min / 90 if t_min > 0 else 0
+                s['GEN']['KAMPE'] = int(df['MATCHES'].sum())
+                s['GEN']['MIN'] = int(t_min)
+                s['OFF']['MÅL'] = int(df['GOALS'].sum())
+                s['OFF']['ASSISTS'] = int(df['ASSISTS'].sum())
+                if p90 > 0:
+                    s['OFF']['xG'] = round(float(df.get('XGSHOT', 0).sum()), 2)
+                    s['OFF']['SKUD'] = round(float(df.get('SHOTS', 0).sum() / p90), 1)
+                    s['OFF']['DRIBBLES'] = round(float(df.get('DRIBBLES', 0).sum() / p90), 1)
+                    s['DEF']['INTERCEPTIONS'] = round(float(df.get('INTERCEPTIONS', 0).sum() / p90), 1)
+                    s['DEF']['RECOVERIES'] = round(float(df.get('RECOVERIES', 0).sum() / p90), 1)
 
+        # Hent scouting-ratings (Radarchart)
         tech = {k: 0 for k in ['FART', 'UDHOLDENHED', 'TEKNIK', 'SPILINTELLIGENS', 'BESLUTSOMHED', 'ATTITUDE', 'LEDEREGENSKABER', 'AGGRESIVITET']}
         scout_txt = {'s': '-', 'u': '-', 'v': '-'}
         if not df_s.empty:
-            sc_match = df_s[df_s['NAVN'] == navn]
+            sc_match = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_match.empty:
                 n = sc_match.iloc[-1]
                 for k in tech.keys():
                     try: 
-                        v = str(n.get(k, 0)).replace(',', '.')
-                        tech[k] = float(v) if v != 'None' else 0
+                        tech[k] = float(str(n.get(k, 0)).replace(',', '.'))
                     except: tech[k] = 0
                 scout_txt = {'s': n.get('STYRKER', '-'), 'u': n.get('UDVIKLING', '-'), 'v': n.get('VURDERING', '-')}
+        
         return pid, klub, pos, s, tech, scout_txt
 
     res1 = hent_info(s1_navn)
@@ -140,59 +139,24 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     with col3: vis_top(s2_navn, res2, "højre", "#0056a3")
 
     with col2:
-        # 8-kantet Radarchart konfiguration
         categories = ['Fart', 'Udholdenhed', 'Teknik', 'Spil-int.', 'Beslutsomhed', 'Attitude', 'Lederevner', 'Aggressivitet']
-        
         def get_vals(t):
             v = [t.get('FART',0), t.get('UDHOLDENHED',0), t.get('TEKNIK',0), t.get('SPILINTELLIGENS',0), 
                  t.get('BESLUTSOMHED',0), t.get('ATTITUDE',0), t.get('LEDEREGENSKABER',0), t.get('AGGRESIVITET',0)]
-            v.append(v[0]) # Lukker formen
+            v.append(v[0])
             return v
         
         fig = go.Figure()
-        
-        if res1: 
-            fig.add_trace(go.Scatterpolar(
-                r=get_vals(res1[4]), 
-                theta=categories+[categories[0]], 
-                fill='toself', 
-                name=s1_navn, 
-                line_color='#df003b'
-            ))
-            
-        if res2: 
-            fig.add_trace(go.Scatterpolar(
-                r=get_vals(res2[4]), 
-                theta=categories+[categories[0]], 
-                fill='toself', 
-                name=s2_navn, 
-                line_color='#0056a3'
-            ))
+        if res1: fig.add_trace(go.Scatterpolar(r=get_vals(res1[4]), theta=categories+[categories[0]], fill='toself', name=s1_navn, line_color='#df003b'))
+        if res2: fig.add_trace(go.Scatterpolar(r=get_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
         
         fig.update_layout(
-            polar=dict(
-                # RETTET: 'linear' skaber den kantede polygon-form i Plotly
-                gridshape='linear', 
-                radialaxis=dict(
-                    visible=True, 
-                    range=[0, 6],
-                    gridcolor="#e5e5e5",
-                ),
-                angularaxis=dict(
-                    direction="clockwise",
-                    period=8,
-                    gridcolor="#e5e5e5",
-                    linecolor="black"
-                )
-            ), 
-            height=380, 
-            margin=dict(l=50, r=50, t=30, b=30), 
-            showlegend=False
+            polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
+            height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    # Tabs uden ikoner
     t_off, t_def = st.tabs(["OFFENSIVT (P90)", "DEFENSIVT"])
 
     def vis_metric_row(label, val1, val2, suffix="", higher_is_better=True):
@@ -201,7 +165,6 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         c1_color = "#28a745" if (v1 > v2 and higher_is_better) or (v1 < v2 and not higher_is_better) else "white"
         c3_color = "#28a745" if (v2 > v1 and higher_is_better) or (v2 < v1 and not higher_is_better) else "white"
         if v1 == v2: c1_color = c3_color = "white"
-        
         c1.markdown(f"<p style='text-align:right; color:{c1_color}; font-size:18px; font-weight:bold; margin:0;'>{val1}{suffix}</p>", unsafe_allow_html=True)
         c2.markdown(f"<p style='text-align:center; color:#888; margin:0;'>{label}</p>", unsafe_allow_html=True)
         c3.markdown(f"<p style='text-align:left; color:{c3_color}; font-size:18px; font-weight:bold; margin:0;'>{val2}{suffix}</p>", unsafe_allow_html=True)
@@ -211,13 +174,9 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
             st.markdown("<br>", unsafe_allow_html=True)
             vis_metric_row("xG Total", res1[3]['OFF']['xG'], res2[3]['OFF']['xG'])
             vis_metric_row("Skud", res1[3]['OFF']['SKUD'], res2[3]['OFF']['SKUD'])
-            vis_metric_row("Key Passes", res1[3]['OFF']['KEYPASS'], res2[3]['OFF']['KEYPASS'])
             vis_metric_row("Driblinger", res1[3]['OFF']['DRIBBLES'], res2[3]['OFF']['DRIBBLES'])
-            vis_metric_row("Touches i felt", res1[3]['OFF']['TOUCHBOX'], res2[3]['OFF']['TOUCHBOX'])
         with t_def:
             st.markdown("<br>", unsafe_allow_html=True)
-            vis_metric_row("Duel vundet %", res1[3]['DEF']['DUEL_PCT'], res2[3]['DEF']['DUEL_PCT'], suffix="%")
-            vis_metric_row("Aerial vundet %", res1[3]['DEF']['AERIAL_PCT'], res2[3]['DEF']['AERIAL_PCT'], suffix="%")
             vis_metric_row("Interceptions", res1[3]['DEF']['INTERCEPTIONS'], res2[3]['DEF']['INTERCEPTIONS'])
             vis_metric_row("Erobringer", res1[3]['DEF']['RECOVERIES'], res2[3]['DEF']['RECOVERIES'])
 
@@ -227,6 +186,5 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
         if r:
             with col:
                 st.markdown(f"<h4 style='color:{color}; text-align:center;'>Notater</h4>", unsafe_allow_html=True)
-                # Tabs uden ikoner
                 tab_s, tab_u, tab_v = st.tabs(["Styrker", "Udvikling", "Vurdering"])
                 tab_s.info(r[5]['s']); tab_u.warning(r[5]['u']); tab_v.success(r[5]['v'])
