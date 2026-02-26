@@ -81,66 +81,44 @@ def vis_profil(p_data, full_df, s_df, career_df):
     with t4:
         st.subheader("Karrierehistorik")
         if career_df is not None and not career_df.empty:
-            # Sørg for at ID'er er ens formateret (fjern .0 hvis det er en float)
             career_df['PLAYER_WYID'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
-            # Filtrér på den specifikke spiller vi har åbnet
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
-                # Sortér så nyeste sæson er øverst
                 df_p = df_p.sort_values('SEASONNAME', ascending=False)
-                
-                # Mapping til pæne danske navne
                 mapping = {
-                    'SEASONNAME': 'Sæson', 
-                    'TEAMNAME': 'Klub', 
-                    'COMPETITIONNAME': 'Turnering',
-                    'APPEARANCES': 'Kampe', 
-                    'MINUTESPLAYED': 'Min.', 
-                    'GOAL': 'Mål',
-                    'YELLOWCARD': 'Gule', 
-                    'REDCARDS': 'Røde', 
-                    'SUBSTITUTEIN': 'Ind', 
-                    'SUBSTITUTEOUT': 'Ud'
+                    'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering',
+                    'APPEARANCES': 'Kampe', 'MINUTESPLAYED': 'Min.', 'GOAL': 'Mål',
+                    'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde', 'SUBSTITUTEIN': 'Ind', 'SUBSTITUTEOUT': 'Ud'
                 }
-                
-                # Find kun de kolonner der faktisk findes i datasættet
                 vis_kolonner = [c for c in mapping.keys() if c in df_p.columns]
-                
-                st.dataframe(
-                    df_p[vis_kolonner].rename(columns=mapping), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                st.dataframe(df_p[vis_kolonner].rename(columns=mapping), use_container_width=True, hide_index=True)
             else:
                 st.info(f"Ingen karrieredata fundet i databasen for ID: {clean_p_id}")
         else:
             st.error("Kunne ikke få kontakt til karriere-tabellen i Snowflake.")
 
     with t5:
-        st.subheader(f"Seneste rapport:")        
-        # Vi definerer de 3 kolonner
+        st.subheader(f"Seneste rapport: {nyeste.get('DATO', '')}")
         c_left, c_mid, c_right = st.columns([1, 2, 1.5])
 
         with c_left:
-        st.markdown(f"""
-        **Dato:** {nyeste.get('DATO', '-')}  
-        **Scout:** {nyeste.get('SCOUT', '-')}
-        """)
+            st.markdown(f"""
+            **Dato:** {nyeste.get('DATO', '-')}  
+            **Scout:** {nyeste.get('SCOUT', '-')}
+            """)
             
-            metrics = [
+            metrics_list = [
                 ("Beslutning", "BESLUTSOMHED"), ("Fart", "FART"), 
                 ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
                 ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), 
                 ("Teknik", "TEKNIK"), ("Intelligens", "SPILINTELLIGENS")
             ]
-            for label, col in metrics:
+            for label, col in metrics_list:
                 val = rens_metrik_vaerdi(nyeste.get(col, 0))
                 st.markdown(f"**{label}:** `{val}`")
 
         with c_mid:
-            # Data til radaren
             categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
             cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
             v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
@@ -156,7 +134,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             
             fig_radar.update_layout(
                 polar=dict(
-                    gridshape='linear', # <--- DETTE GØR DEN 8-KANTET
+                    gridshape='linear',
                     radialaxis=dict(visible=True, range=[0, 6], tickfont=dict(size=8)),
                     angularaxis=dict(rotation=90, direction="clockwise")
                 ),
@@ -176,11 +154,8 @@ def vis_profil(p_data, full_df, s_df, career_df):
 def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     
-    # Vedligehold af karriere-data i session_state
     if "player_career_data" not in st.session_state or st.session_state["player_career_data"] is None:
         with st.spinner("Henter historik..."):
-            # VIGTIGT: Her henter vi data. 
-            # Hvis din SQL fil har en WHERE på et specifikt ID, vil dette kun virke for den ene spiller!
             df_career = load_snowflake_query("player_career", "('dummy')", "LIKE '%%'")
             if df_career is not None:
                 df_career.columns = [c.upper() for c in df_career.columns]
@@ -189,7 +164,6 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
 
     career_df = st.session_state.get("player_career_data", pd.DataFrame())
 
-    # Rens ID'er
     def clean_df(df):
         if df is not None and not df.empty and 'PLAYER_WYID' in df.columns:
             df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
@@ -199,7 +173,6 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     spillere_df = clean_df(spillere_df)
     career_df = clean_df(career_df)
 
-    # Merge og vis tabel
     df = scout_df.copy()
     if spillere_df is not None and not spillere_df.empty:
         df = df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
@@ -217,14 +190,13 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     
     tabel_hoejde = (len(f_df) + 1) * 35 + 10 
     
-    # 2. Vis tabellen med dynamisk højde
     event = st.dataframe(
         disp, 
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=tabel_hoejde # <--- Dette fjerner scrollbaren indeni tabellen
+        height=tabel_hoejde
     )
 
     if len(event.selection.rows) > 0:
