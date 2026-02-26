@@ -160,51 +160,55 @@ def vis_side(spillere, playerstats, df_scout, player_seasons, season_filter):
     t_off, t_def = st.tabs(["OFFENSIVT (P90)", "DEFENSIVT"])
 
     def vis_metric_row(label, val1, val2, suffix="", higher_is_better=True):
-        # 1. Konvertering til tal for sammenligning
+        # 1. Sikr at vi har tal til sammenligning og strenge til visning
         try:
-            v1 = float(val1)
-            v2 = float(val2)
-        except (ValueError, TypeError):
+            v1 = float(val1) if val1 is not None else 0.0
+            v2 = float(val2) if val2 is not None else 0.0
+        except:
             v1 = v2 = 0.0
+            
+        display_v1 = str(val1) if val1 is not None else "0"
+        display_v2 = str(val2) if val2 is not None else "0"
 
-        # 2. Farve-logik (Ingen hvide tal)
+        # 2. Farve-logik (Grøn = vinder, Rød = taber, Grå = ens)
         neutral_grey = "#888888"
         win_green = "#28a745"
         lose_red = "#dc3545"
 
         if v1 == v2:
-            # Hvis de er ens (inkl. begge 0), så brug grå til begge
             color1 = color2 = neutral_grey
         elif v1 > v2:
             color1 = win_green if higher_is_better else lose_red
             color2 = lose_red if higher_is_better else win_green
-        else: # v2 > v1
+        else:
             color1 = lose_red if higher_is_better else win_green
             color2 = win_green if higher_is_better else lose_red
 
-        # 3. HTML Layout
+        # 3. Layout med columns
         c1, c2, c3 = st.columns([3, 2, 3])
         
-        # Spiller 1
-        c1.markdown(
-            f"<div style='text-align:right; padding-right:20px;'>"
-            f"<span style='color:{color1}; font-size:22px; font-weight:800;'>{val1}{suffix}</span>"
-            f"</div>", 
-            unsafe_allow_html=True
-        )
+        with c1:
+            st.markdown(f"<p style='text-align:right; color:{color1}; font-size:22px; font-weight:800; margin:0;'>{display_v1}{suffix}</p>", unsafe_allow_html=True)
         
-        # Midter Label
-        c2.markdown(
-            f"<div style='text-align:center; background-color:#1a1c23; border-radius:4px; padding:4px; border: 1px solid #333;'>"
-            f"<span style='color:#bbb; font-size:12px; font-weight:bold; text-transform:uppercase;'>{label}</span>"
-            f"</div>", 
-            unsafe_allow_html=True
-        )
+        with c2:
+            st.markdown(f"<div style='text-align:center; background-color:#1a1c23; border-radius:4px; border:1px solid #333;'><span style='color:#bbb; font-size:12px; font-weight:bold; text-transform:uppercase;'>{label}</span></div>", unsafe_allow_html=True)
         
-        # Spiller 2
-        c3.markdown(
-            f"<div style='text-align:left; padding-left:20px;'>"
-            f"<span style='color:{color2}; font-size:22px; font-weight:800;'>{val2}{suffix}</span>"
-            f"</div>", 
-            unsafe_allow_html=True
-        )
+        with c3:
+            st.markdown(f"<p style='text-align:left; color:{color2}; font-size:22px; font-weight:800; margin:0;'>{display_v2}{suffix}</p>", unsafe_allow_html=True)
+
+    # --- TJEK OM DATA FINDES FØR VISNING ---
+    if res1 and res2:
+        with t_off:
+            st.write(" ") # Skaber lidt luft
+            # Hent tallene specifikt fra din dictionary struktur: res[3]['OFF']...
+            vis_metric_row("Mål", res1[3]['OFF']['MÅL'], res2[3]['OFF']['MÅL'])
+            vis_metric_row("xG Total", res1[3]['OFF']['xG'], res2[3]['OFF']['xG'])
+            vis_metric_row("Skud", res1[3]['OFF']['SKUD'], res2[3]['OFF']['SKUD'])
+            vis_metric_row("Driblinger", res1[3]['OFF']['DRIBBLES'], res2[3]['OFF']['DRIBBLES'])
+        
+        with t_def:
+            st.write(" ")
+            vis_metric_row("Interceptions", res1[3]['DEF']['INTERCEPTIONS'], res2[3]['DEF']['INTERCEPTIONS'])
+            vis_metric_row("Erobringer", res1[3]['DEF']['RECOVERIES'], res2[3]['DEF']['RECOVERIES'])
+    else:
+        st.info("Vælg to spillere for at se sammenligningen.")
