@@ -66,7 +66,10 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         img_url = None
 
         # INDSÆT DENNE LINJE HER FOR AT SE DATA:
-        st.write(f"Data fundet for {navn}:", p_info)
+        p_info = df_p[df_p['PLAYER_WYID'] == pid]
+
+        if p_info.empty and 'sql_players' in locals():
+            p_info = sql_players[sql_players['PLAYER_WYID'] == pid]
     
         if not p_info.empty:
             row = p_info.iloc[0]
