@@ -162,19 +162,20 @@ try:
             # 1. Hent stats
             df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             
-            # 2. Hent karriere-data (Brug et konsistent navn i session_state)
+            # 2. Hent karriere-data
             if "player_career_data" not in st.session_state:
                 with st.spinner("Henter karrierehistorik..."):
-                    st.session_state["player_career_data"] = load_snowflake_query("player_career_data", dp["comp_filter"], dp["season_filter"])
+                    # HER SKAL DER STÅ "player_career" (det navn dit system kender)
+                    st.session_state["player_career_data"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
             
-            # 3. Kald modulet
-            # Sørg for at rækkefølgen matcher: scout, spillere, stats, career
+            # 3. Kald modulet med den data vi lige har hentet
             sdb.vis_side(
                 dp["scouting"], 
                 dp["players"], 
                 df_stats, 
                 st.session_state["player_career_data"]
             )
+            
         elif sel == "Sammenligning":
             import tools.comparison as comp
             comp.vis_side(
