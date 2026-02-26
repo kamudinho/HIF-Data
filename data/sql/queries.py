@@ -67,24 +67,27 @@ def get_queries(comp_filter, season_filter):
         # --- 4. HOLD STATISTIK (Dashboard oversigt) ---
         "team_stats_full": f"""
             SELECT 
-    CAST(pc.PLAYER_WYID AS STRING) as PLAYER_WYID, -- Tving til streng med det samme
-    s.SEASONNAME, 
-    c.COMPETITIONNAME, 
-    t.TEAMNAME, 
-    pc.APPEARANCES, 
-    pc.MINUTESPLAYED, 
-    pc.GOAL, 
-    pc.ASSIST,
-    pc.YELLOWCARD, 
-    pc.REDCARDS,
-    pc.SUBSTITUTEIN,
-    pc.SUBSTITUTEOUT
-FROM AXIS.WYSCOUT_PLAYERCAREER pc
-LEFT JOIN AXIS.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
-LEFT JOIN AXIS.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
-LEFT JOIN AXIS.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
+                t.TEAMNAME, 
+                t.IMAGEDATAURL,
+                s.SEASONNAME,
+                COUNT(DISTINCT adv.MATCH_WYID) AS MATCHES,
+                SUM(CASE WHEN adv.POINTS IS NULL THEN 0 ELSE adv.POINTS END) AS TOTALPOINTS,
+                SUM(CASE WHEN adv.WINS IS NULL THEN 0 ELSE adv.WINS END) AS TOTALWINS,
+                SUM(CASE WHEN adv.DRAWS IS NULL THEN 0 ELSE adv.DRAWS END) AS TOTALDRAWS,
+                SUM(CASE WHEN adv.LOSSES IS NULL THEN 0 ELSE adv.LOSSES END) AS TOTALLOSSES,
+                SUM(adv.GOALS) AS GOALS,
+                SUM(adv.CONCEDEDGOALS) AS CONCEDEDGOALS,
+                SUM(adv.XG) AS XGSHOT,
+                SUM(adv.XGAGAINST) AS XGSHOTAGAINST,
+                AVG(adv.PPDA) AS PPDA,
+                SUM(adv.TOUCHESINBOX) AS TOUCHINBOX
+            FROM {DB}.WYSCOUT_TEAMMATCHES_STATS_ADVANCED adv
+            JOIN {DB}.WYSCOUT_TEAMS t ON adv.TEAM_WYID = t.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON adv.SEASON_WYID = s.SEASON_WYID
+            WHERE adv.COMPETITION_WYID IN {comp_filter}
+            AND s.SEASONNAME {season_filter}
+            GROUP BY t.TEAMNAME, t.IMAGEDATAURL, s.SEASONNAME
         """,
-
         # --- 5. EVENTS (Inkluderer nu straffe og frispark) ---
         "shotevents": f"""
             SELECT 
