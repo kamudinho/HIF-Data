@@ -182,7 +182,7 @@ try:
                 dp["players"], 
                 load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), 
                 dp["scouting"], 
-                None, 
+                dp["player_career"], # Nu sender vi karriere-data med!
                 dp["season_filter"]
             )
             
