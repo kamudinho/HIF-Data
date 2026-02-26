@@ -61,6 +61,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     if match.empty: return None
     pid = str(match.iloc[0]['PLAYER_WYID'])
 
+    st.write(row)
     # 1. Tjek først i din lokale CSV (df_p)
     p_info = df_p[df_p['PLAYER_WYID'] == pid]
     
