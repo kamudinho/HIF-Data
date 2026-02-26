@@ -165,12 +165,14 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     
     if "player_career_data" not in st.session_state:
-        with st.spinner("Henter data..."):
+        with st.spinner("Henter karriere-data..."):
             dp = st.session_state["data_package"]
-            st.session_state["player_career_data"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
-            st.rerun()
-    
-    career_df = st.session_state["player_career_data"]
+            # Hent data
+            df_career = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
+            # Rens kolonner med det samme før det gemmes
+            df_career.columns = [c.upper() for c in df_career.columns]
+            st.session_state["player_career_data"] = df_career
+            st.rerun() # Dette tvinger appen til at tegne alt forfra med de nye data
 
     for d in [scout_df, spillere_df, stats_df, career_df]:
         if d is not None and not d.empty: d.columns = [c.upper() for c in d.columns]
