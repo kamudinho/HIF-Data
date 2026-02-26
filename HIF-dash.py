@@ -138,9 +138,9 @@ try:
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
-            import importlib
-            importlib.reload(tt)
-            tt.vis_side()
+            # Hent dataen her i main, før du sender den til modulet
+            df_for_teams = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+            tt.vis_side(df_for_teams) # Send data med!
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
             import importlib
