@@ -174,21 +174,19 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         """Viser stats side-om-side med fremhævning af bedste værdi"""
         c1, c2, c3 = st.columns([2, 1, 2])
         
-        # Håndter konvertering til tal
         try:
             v1_num = float(str(val1).replace(',', '.')) if pd.notna(val1) else 0.0
             v2_num = float(str(val2).replace(',', '.')) if pd.notna(val2) else 0.0
         except:
             v1_num, v2_num = 0.0, 0.0
         
-        # Farve-logik
         v1_color = "black"
         v2_color = "black"
         
         if v1_num != v2_num:
             if højere_er_bedre:
-                if v1_num > v2_num: v1_color = "#df003b" # Rød (Spiller 1's farve)
-                else: v2_color = "#0056a3" # Blå (Spiller 2's farve)
+                if v1_num > v2_num: v1_color = "#df003b" 
+                else: v2_color = "#0056a3"
             else:
                 if v1_num < v2_num: v1_color = "#df003b"
                 else: v2_color = "#0056a3"
@@ -200,15 +198,22 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         c2.markdown(f"<div style='text-align:center; color:gray; font-size:0.85rem;'>{label}</div>", unsafe_allow_html=True)
         c3.markdown(f"<div style='text-align:left; font-weight:bold; color:{v2_color};'>{v2_txt}</div>", unsafe_allow_html=True)
 
-    def hent_spiller_data(pid):
+    def hent_spiller_data(pid, season):
         if playerstats is not None and not playerstats.empty:
-            match = playerstats[playerstats['PLAYER_WYID'] == pid]
+            # Matcher både på ID og den valgte sæson fra dit filter
+            match = playerstats[(playerstats['PLAYER_WYID'] == pid) & (playerstats['SEASON'] == season)]
             if not match.empty:
                 return match.iloc[0]
+            else:
+                # Hvis ingen data for valgt sæson, prøv at tage nyeste tilgængelige
+                match_any = playerstats[playerstats['PLAYER_WYID'] == pid]
+                if not match_any.empty:
+                    return match_any.iloc[-1]
         return pd.Series()
 
-    s1_data = hent_spiller_data(res1[0]) if res1 else pd.Series()
-    s2_data = hent_spiller_data(res2[0]) if res2 else pd.Series()
+    # Hent data for de to valgte spillere
+    s1_data = hent_spiller_data(res1[0], season_filter) if res1 else pd.Series()
+    s2_data = hent_data_2 = hent_spiller_data(res2[0], season_filter) if res2 else pd.Series()
 
     with tab1:
         st.write("### Overordnede tal")
@@ -237,10 +242,10 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown(f"**{res1[6]}**")
-                note1 = sc1.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc1.empty else "Ingen data"
+                st.markdown(f"<p style='color:#df003b; font-weight:bold; margin-bottom:5px;'>{res1[6]}</p>", unsafe_allow_html=True)
+                note1 = sc1.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc1.empty else "Ingen data tilgængelig"
                 st.info(note1)
             with c2:
-                st.markdown(f"**{res2[6]}**")
-                note2 = sc2.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc2.empty else "Ingen data"
+                st.markdown(f"<p style='color:#0056a3; font-weight:bold; margin-bottom:5px;'>{res2[6]}</p>", unsafe_allow_html=True)
+                note2 = sc2.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc2.empty else "Ingen data tilgængelig"
                 st.info(note2)
