@@ -79,6 +79,9 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             sc_info = df_s[df_s['PLAYER_WYID'] == pid]
             if not sc_info.empty:
                 row_s = sc_info.iloc[-1]
+                # TILFØJ DENNE LINJE:
+                img_url = row_s.get('IMAGEDATAURL', None) 
+                
                 klub = row_s.get('KLUB', 'Scouting')
                 pos = map_position(row_s.get('POSITION', ''))
 
