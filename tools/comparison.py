@@ -166,9 +166,81 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- NY SEKTION: TABS UNDER RADAR ---
-    st.divider() # En lille visuel adskillelse
+    # --- TABS SEKTION ---
+    st.divider()
     tab1, tab2, tab3, tab4 = st.tabs(["Generelt", "Offensivt", "Defensivt", "Scouting"])
 
+    def vis_sammenligning_række(label, val1, val2, format_str="{:.1f}", højere_er_bedre=True):
+        """Viser stats side-om-side med fremhævning af bedste værdi"""
+        c1, c2, c3 = st.columns([2, 1, 2])
+        
+        # Håndter konvertering til tal
+        try:
+            v1_num = float(str(val1).replace(',', '.')) if pd.notna(val1) else 0.0
+            v2_num = float(str(val2).replace(',', '.')) if pd.notna(val2) else 0.0
+        except:
+            v1_num, v2_num = 0.0, 0.0
+        
+        # Farve-logik
+        v1_color = "black"
+        v2_color = "black"
+        
+        if v1_num != v2_num:
+            if højere_er_bedre:
+                if v1_num > v2_num: v1_color = "#df003b" # Rød (Spiller 1's farve)
+                else: v2_color = "#0056a3" # Blå (Spiller 2's farve)
+            else:
+                if v1_num < v2_num: v1_color = "#df003b"
+                else: v2_color = "#0056a3"
+
+        v1_txt = format_str.format(v1_num)
+        v2_txt = format_str.format(v2_num)
+
+        c1.markdown(f"<div style='text-align:right; font-weight:bold; color:{v1_color};'>{v1_txt}</div>", unsafe_allow_html=True)
+        c2.markdown(f"<div style='text-align:center; color:gray; font-size:0.85rem;'>{label}</div>", unsafe_allow_html=True)
+        c3.markdown(f"<div style='text-align:left; font-weight:bold; color:{v2_color};'>{v2_txt}</div>", unsafe_allow_html=True)
+
+    def hent_spiller_data(pid):
+        if playerstats is not None and not playerstats.empty:
+            match = playerstats[playerstats['PLAYER_WYID'] == pid]
+            if not match.empty:
+                return match.iloc[0]
+        return pd.Series()
+
+    s1_data = hent_spiller_data(res1[0]) if res1 else pd.Series()
+    s2_data = hent_spiller_data(res2[0]) if res2 else pd.Series()
+
     with tab1:
-        st.write("Her skal de overordnede stats stå")
+        st.write("### Overordnede tal")
+        vis_sammenligning_række("Kampe", s1_data.get('MATCHES', 0), s2_data.get('MATCHES', 0), "{:.0f}")
+        vis_sammenligning_række("Minutter", s1_data.get('MINUTESONFIELD', 0), s2_data.get('MINUTESONFIELD', 0), "{:,.0f}")
+        vis_sammenligning_række("Gule kort", s1_data.get('YELLOWCARDS', 0), s2_data.get('YELLOWCARDS', 0), "{:.0f}", højere_er_bedre=False)
+
+    with tab2:
+        st.write("### Offensive stats")
+        vis_sammenligning_række("Mål", s1_data.get('GOALS', 0), s2_data.get('GOALS', 0))
+        vis_sammenligning_række("Assists", s1_data.get('ASSISTS', 0), s2_data.get('ASSISTS', 0))
+        vis_sammenligning_række("Skud", s1_data.get('SHOTS', 0), s2_data.get('SHOTS', 0))
+        vis_sammenligning_række("Driblinger %", s1_data.get('SUCCESSFUL_DRIBBLES_PRC', 0), s2_data.get('SUCCESSFUL_DRIBBLES_PRC', 0))
+
+    with tab3:
+        st.write("### Defensive stats")
+        vis_sammenligning_række("Dueller vundet %", s1_data.get('DEFENSIVE_DUELS_WON_PRC', 0), s2_data.get('DEFENSIVE_DUELS_WON_PRC', 0))
+        vis_sammenligning_række("Interceptions", s1_data.get('INTERCEPTIONS', 0), s2_data.get('INTERCEPTIONS', 0))
+        vis_sammenligning_række("Boldtab", s1_data.get('LOSSES', 0), s2_data.get('LOSSES', 0), højere_er_bedre=False)
+
+    with tab4:
+        st.write("### Scouting data")
+        if res1 and res2:
+            sc1 = df_s[df_s['PLAYER_WYID'] == res1[0]]
+            sc2 = df_s[df_s['PLAYER_WYID'] == res2[0]]
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**{res1[6]}**")
+                note1 = sc1.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc1.empty else "Ingen data"
+                st.info(note1)
+            with c2:
+                st.markdown(f"**{res2[6]}**")
+                note2 = sc2.iloc[-1].get('NOTER', 'Ingen noter fundet') if not sc2.empty else "Ingen data"
+                st.info(note2)
