@@ -182,8 +182,8 @@ try:
             comp.vis_side(
                 dp["players"], 
                 load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), 
-                dp["scouting"], 
-                dp["player_career"], # Nu sender vi karriere-data med!
+                dp["scouting_image"], # Den nye med billeder 🚀
+                dp["player_career"],
                 dp["season_filter"]
             )
             
