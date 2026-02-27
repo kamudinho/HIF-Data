@@ -26,26 +26,26 @@ def vis_side(dp):
         </div>
     """, unsafe_allow_html=True)
     
-    # 1. Hent data
+    # 1. Hent data og ordbøger ud af pakken med det samme
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
+    hold_map = dp.get("hold_map", {})  # <--- Dette løser din 'not defined' fejl
     
+    # 2. Rens kolonnenavne og filtrér (som vi aftalte tidligere)
     if not df_ps_raw.empty:
         df_ps_raw.columns = [str(c).strip().upper() for c in df_ps_raw.columns]
         
-        # --- NY LIGA-FILTRERING BASERET PÅ DIN CONFIG ---
-        # Vi tjekker om spillerens liga (COMPETITION_WYID) er i din liste fra season_show.py
+        # Liga filtrering fra din config
         from data.season_show import COMPETITION_WYID
-        
         if 'COMPETITION_WYID' in df_ps_raw.columns:
-            # Vi sikrer os, at vi sammenligner tal med tal
             df_ps_raw = df_ps_raw[df_ps_raw['COMPETITION_WYID'].isin(COMPETITION_WYID)]
-        # ------------------------------------------------
-        
-        # Sortering for at få nyeste klub (som vi fiksede før)
+            
+        # Sortering for at få nyeste klub
         if 'SEASONNAME' in df_ps_raw.columns:
             df_ps_raw = df_ps_raw.sort_values(by='SEASONNAME', ascending=False)
-        
+            
         df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
+    else:
+        df_ps = df_ps_raw
         
     # 2. Forbered ordbog til dropdown
     spiller_options = {}
