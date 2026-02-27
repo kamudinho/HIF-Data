@@ -133,11 +133,15 @@ def get_data_package():
     if df_player_career is None:
         df_player_career = pd.DataFrame()
 
-    # --- NY LOGIK: Flet billeder ind i CSV-data ---
+    # --- Flet billeder ind i CSV-data ---
     df_hvidovre_csv = gh_data["players"]
     
     if df_sql_players is not None and not df_hvidovre_csv.empty:
-        # Vi tager alle fra CSV og kigger i Snowflake efter deres billede
+        # 1. TVING BEGGE KOLONNER TIL AT VÆRE TEKST (Indsæt disse to linjer her)
+        df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
+        df_sql_players['PLAYER_WYID'] = df_sql_players['PLAYER_WYID'].astype(str)
+
+        # 2. NU KAN VI FLETTE UDEN FEJL
         df_hvidovre_csv = pd.merge(
             df_hvidovre_csv, 
             df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], 
