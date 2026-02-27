@@ -46,8 +46,13 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         st.warning("Ingen spillere fundet.")
         return
 
-    st.markdown("### Spillersammenligning")
-
+    # --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SAMMENLIGNING</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
     c_sel1, c_sel2 = st.columns(2)
     s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
     s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=1 if len(navne_liste) > 1 else 0)
