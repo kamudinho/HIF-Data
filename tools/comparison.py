@@ -119,7 +119,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
                         tech[k] = 0
         
         return pid, klub, pos, stats, tech, img_url, navn
-
+    
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
 
@@ -198,19 +198,28 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         c2.markdown(f"<div style='text-align:center; color:gray; font-size:0.85rem;'>{label}</div>", unsafe_allow_html=True)
         c3.markdown(f"<div style='text-align:left; font-weight:bold; color:{v2_color};'>{v2_txt}</div>", unsafe_allow_html=True)
 
-    def hent_spiller_data(pid, season):
-        if playerstats is not None and not playerstats.empty:
-            # Matcher både på ID og den valgte sæson fra dit filter
-            match = playerstats[(playerstats['PLAYER_WYID'] == pid) & (playerstats['SEASON'] == season)]
-            if not match.empty:
-                return match.iloc[0]
-            else:
-                # Hvis ingen data for valgt sæson, prøv at tage nyeste tilgængelige
-                match_any = playerstats[playerstats['PLAYER_WYID'] == pid]
-                if not match_any.empty:
-                    return match_any.iloc[-1]
-        return pd.Series()
-
+    def hent_spiller_data(pid, stats_df):
+    """Henter data for den specifikke spiller og den aktive sæson"""
+    if stats_df is not None and not stats_df.empty:
+        # Vi renser PLAYER_WYID for at sikre match (fjerner evt. .0 fra float-konvertering)
+        pid_s = str(pid).split('.')[0].strip()
+        
+        s_col = 'SEASONNAME' if 'SEASONNAME' in stats_df.columns else 'SEASON'
+        
+        match = stats_df[
+            (stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)) & 
+            (stats_df[s_col].astype(str).str.contains(SEASONNAME))
+        ]
+        
+        if not match.empty:
+            return match.iloc[0]
+            
+        # Fallback: Hvis ingen data for 25/26, tag nyeste række for spilleren
+        backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
+        if not backup.empty:
+            return backup.sort_values(s_col).iloc[-1]
+            
+    return pd.Series()
     # Hent data for de to valgte spillere
     s1_data = hent_spiller_data(res1[0], season_filter) if res1 else pd.Series()
     s2_data = hent_data_2 = hent_spiller_data(res2[0], season_filter) if res2 else pd.Series()
