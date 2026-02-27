@@ -22,15 +22,20 @@ def vis_spiller_billede(img_url, w=110):
         st.image(img_url, width=w)
 
 def hent_spiller_data(pid, stats_df):
-    """Henter data for den specifikke spiller og den aktive sæson"""
     if stats_df is not None and not stats_df.empty:
-        # Rens PLAYER_WYID (fjerner evt. .0)
         pid_s = str(pid).split('.')[0].strip()
         
-        # Tjek for SEASONNAME kolonne (fra din Snowflake data)
-        s_col = 'SEASONNAME' if 'SEASONNAME' in stats_df.columns else 'SEASON'
+        # --- FIX STARTER HER ---
+        # Tjek hvilken sæson-kolonne der rent faktisk findes i dit datasæt
+        if 'SEASONNAME' in stats_df.columns:
+            s_col = 'SEASONNAME'
+        elif 'SEASON' in stats_df.columns:
+            s_col = 'SEASON'
+        else:
+            # Hvis ingen af delene findes, returner den nyeste række for spilleren
+            return stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)].iloc[-1] if not stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)].empty else pd.Series()
+        # --- FIX SLUTTER HER ---
         
-        # Filtrering baseret på SEASONNAME fra din data_load config
         match = stats_df[
             (stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)) & 
             (stats_df[s_col].astype(str).str.contains(SEASONNAME))
@@ -38,6 +43,8 @@ def hent_spiller_data(pid, stats_df):
         
         if not match.empty:
             return match.iloc[0]
+            
+    return pd.Series()
             
         # Fallback: Tag nyeste række hvis den valgte sæson ikke findes
         backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
