@@ -59,8 +59,9 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     for d in [df_spillere, playerstats, df_scout]:
         if d is not None:
             d.columns = [c.upper() for c in d.columns]
-            if 'PLAYER_WYID' in d.columns:
-                d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            # Sørg for at SEASON altid hedder SEASONNAME (eller omvendt)
+            if 'SEASON' in d.columns and 'SEASONNAME' not in d.columns:
+                d.rename(columns={'SEASON': 'SEASONNAME'}, inplace=True)
 
     # 1. Byg navne-lookup
     df_p = df_spillere.copy() if df_spillere is not None else pd.DataFrame()
