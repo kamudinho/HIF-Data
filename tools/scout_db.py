@@ -193,7 +193,6 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
-    # Konfigurer kolonner til visning – her tilføjer vi billedet yderst til venstre 📸
     # Vi bruger 'IMAGEDATAURL' hvis den findes i scout_df
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
     disp.columns = ['', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
@@ -207,7 +206,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     on_select="rerun", 
     selection_mode="single-row",
     column_config={
-        "Foto": st.column_config.ImageColumn(" ", width=1), 
+        "Foto": st.column_config.ImageColumn("Foto", width=1), 
         "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
     },
     height=tabel_hoejde
