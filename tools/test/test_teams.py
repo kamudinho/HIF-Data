@@ -103,12 +103,11 @@ def vis_side(df_raw=None):
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             
-            # Beregn y-værdier for Hold 1
+            # Beregn y-værdier
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
-            # Beregn y-værdier for Hold 2
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
-            # Tilføj Bar for Hold 1
+            # Bar for Hold 1
             c1 = TEAM_COLORS.get(n1, {"primary": "#808080", "secondary": "#000000"})
             fig.add_trace(go.Bar(
                 name=n1, x=labels, y=y1_vals, 
@@ -117,7 +116,7 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y1_vals], textposition='auto'
             ))
 
-            # Tilføj Bar for Hold 2
+            # Bar for Hold 2
             c2 = TEAM_COLORS.get(n2, {"primary": "#808080", "secondary": "#000000"})
             fig.add_trace(go.Bar(
                 name=n2, x=labels, y=y2_vals, 
@@ -126,42 +125,39 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
             ))
 
-            # --- PLACERING AF MINI-IKONER OVER HVER BAR (Annotations) ---
-            # Vi placerer ikonerne over hver bar ved hjælp af annotations
-            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
-            
+            # --- PLACERING AF MINI-IKONER PÅ SAMME HØJDE ---
             for i, label in enumerate(labels):
-                # Logo over Hold 1's bar (venstre side af gruppen)
+                # Logo 1: Låst til toppen (y=1.02) men følger kategorien på x-aksen
                 fig.add_layout_image(
                     dict(
                         source=t1['IMAGEDATAURL'],
-                        xref="x", yref="y",
-                        x=label, y=y1_vals[i],
-                        sizex=0.2, sizey=max_y * 0.1, # Skalerer ift. data
+                        xref="x", yref="paper",
+                        x=label, y=1.02,
+                        sizex=0.2, sizey=0.1,
                         xanchor="right", yanchor="bottom",
-                        opacity=0.9
+                        opacity=1.0
                     )
                 )
-                # Logo over Hold 2's bar (højre side af gruppen)
+                # Logo 2: Låst til toppen (y=1.02) men følger kategorien på x-aksen
                 fig.add_layout_image(
                     dict(
                         source=t2['IMAGEDATAURL'],
-                        xref="x", yref="y",
-                        x=label, y=y2_vals[i],
-                        sizex=0.2, sizey=max_y * 0.1,
+                        xref="x", yref="paper",
+                        x=label, y=1.02,
+                        sizex=0.2, sizey=0.1,
                         xanchor="left", yanchor="bottom",
-                        opacity=0.9
+                        opacity=1.0
                     )
                 )
 
             fig.update_layout(
                 barmode='group', 
                 height=400,
-                margin=dict(t=50, b=20, l=10, r=10),
+                margin=dict(t=60, b=20, l=10, r=10), # God plads i toppen til de linet logoer
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
-                yaxis=dict(range=[0, max_y * 1.3], showgrid=False) # Giver 30% ekstra plads i toppen
+                yaxis=dict(showgrid=False, zeroline=True, zerolinecolor='lightgray')
             )
             
             st.plotly_chart(fig, use_container_width=True)
