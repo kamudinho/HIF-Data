@@ -103,11 +103,10 @@ def vis_side(df_raw=None):
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             
-            # Beregn y-værdier
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
-            # Bar for Hold 1
+            # Hold 1 Bar
             c1 = TEAM_COLORS.get(n1, {"primary": "#808080", "secondary": "#000000"})
             fig.add_trace(go.Bar(
                 name=n1, x=labels, y=y1_vals, 
@@ -116,7 +115,7 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y1_vals], textposition='auto'
             ))
 
-            # Bar for Hold 2
+            # Hold 2 Bar
             c2 = TEAM_COLORS.get(n2, {"primary": "#808080", "secondary": "#000000"})
             fig.add_trace(go.Bar(
                 name=n2, x=labels, y=y2_vals, 
@@ -125,47 +124,48 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
             ))
 
-            # --- NY LOGIK: MINI-IKONER I FAST PIXEL-STØRRELSE ---
+            # Max værdi til skalering af y-aksen
+            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
+
+            # --- PLACERING AF MINI-IKONER MED X-SHIFT ---
             for i, label in enumerate(labels):
-                # Logo for Hold 1 (Venstre)
+                # Logo for Hold 1 (Rykket 25 pixels til venstre)
                 fig.add_layout_image(
                     dict(
                         source=t1['IMAGEDATAURL'],
                         xref="x", yref="paper",
-                        x=label, y=1.08,  # Lidt højere oppe
-                        sizex=0.25, sizey=0.25, # Justeret skalering
-                        xanchor="right", yanchor="middle",
+                        x=label, y=1.05,
+                        sizex=0.08, sizey=0.08, # Gjort lidt mindre som ønsket
+                        xanchor="center", yanchor="middle",
+                        xshift=-25, # <--- HER SKUBBER VI DET TIL VENSTRE
                         sizing="contain"
                     )
                 )
-                # Logo for Hold 2 (Højre)
+                # Logo for Hold 2 (Rykket 25 pixels til højre)
                 fig.add_layout_image(
                     dict(
                         source=t2['IMAGEDATAURL'],
                         xref="x", yref="paper",
-                        x=label, y=1.08,
-                        sizex=0.25, sizey=0.25,
-                        xanchor="left", yanchor="middle",
+                        x=label, y=1.05,
+                        sizex=0.08, sizey=0.08,
+                        xanchor="center", yanchor="middle",
+                        xshift=25, # <--- HER SKUBBER VI DET TIL HØJRE
                         sizing="contain"
                     )
                 )
 
-            # Find max y for at sikre at teksten på søjlerne ikke rammer logoerne
-            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
-
             fig.update_layout(
                 barmode='group', 
                 height=450,
-                margin=dict(t=100, b=40, l=10, r=10), # Masser af plads i toppen
+                margin=dict(t=100, b=40, l=10, r=10),
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
                 yaxis=dict(
-                    range=[0, max_y * 1.3], # Tvinger aksen op, så der er luft til logoerne
+                    range=[0, max_y * 1.3], # Giver plads til logoerne
                     showgrid=False, 
                     zeroline=True
-                ),
-                xaxis=dict(tickfont=dict(size=12))
+                )
             )
             
             st.plotly_chart(fig, use_container_width=True)
