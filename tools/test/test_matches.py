@@ -15,7 +15,7 @@ def vis_side():
     st.markdown("<style>[data-testid='column'] {display: flex; flex-direction: column;} .stDataFrame {border: none;}</style>", unsafe_allow_html=True)
 
     st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TEST: KAMPSTATISTIK</h3>
+        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">BETINIA LIGAEN: KAMPOVERSIGT</h3>
     </div>""", unsafe_allow_html=True)
     
     csv_path = "data/testdata/matches.csv"
