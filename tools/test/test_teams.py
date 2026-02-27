@@ -135,7 +135,7 @@ def vis_side(df_raw=None):
                         source=t1['IMAGEDATAURL'],
                         xref="x", yref="paper",
                         x=label, y=1.05,
-                        sizex=0.08, sizey=0.08, # Gjort lidt mindre som ønsket
+                        sizex=0.02, sizey=0.02, # Gjort lidt mindre som ønsket
                         xanchor="center", yanchor="middle",
                         xshift=-25, # <--- HER SKUBBER VI DET TIL VENSTRE
                         sizing="contain"
