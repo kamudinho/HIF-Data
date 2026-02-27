@@ -163,20 +163,18 @@ try:
             # 1. Hent stats
             df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
             
-            # 2. Hent karriere-data
+            # 2. Hent karriere-data (tjekkes om det er i session_state)
             if "player_career_data" not in st.session_state:
                 with st.spinner("Henter karrierehistorik..."):
-                    # HER SKAL DER STÅ "player_career" (det navn dit system kender)
                     st.session_state["player_career_data"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
             
-            # 3. Kald modulet med den data vi lige har hentet
+            # 3. Kald modulet - HER SKAL VI BRUGE 'scouting_image' 📸
             sdb.vis_side(
-                dp["scouting"], 
+                dp["scouting_image"], # Vi skifter fra dp["scouting"] til dp["scouting_image"]
                 dp["players"], 
                 df_stats, 
                 st.session_state["player_career_data"]
             )
-            
         elif sel == "Sammenligning":
             import tools.comparison as comp
             comp.vis_side(
