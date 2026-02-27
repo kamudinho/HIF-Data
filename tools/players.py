@@ -49,15 +49,22 @@ def vis_side(df_spillere):
 
     # 3. DATA
     df_working = df_spillere.copy()
+    
+    # --- NY FILTRERING START ---
+    # 1. Sørg for kolonnenavne er ens (upper)
+    df_working.columns = [str(c).upper() for c in df_working.columns]
+    
+    # 2. Filtrér på SEASONNAME fra din config (hvis den findes)
+    if 'SEASONNAME' in df_working.columns:
+        df_working = df_working[df_working['SEASONNAME'] == SEASONNAME]
+        
+    # 3. Fjern dubletter så vi kun har én række pr. spiller-ID
+    # Vi tager den nyeste (keep='first'), hvis der stadig er dubletter
+    if 'PLAYER_WYID' in df_working.columns:
+        df_working = df_working.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
+    # --- NY FILTRERING SLUT ---
+
     idag = datetime.now()
-    df_working['BIRTHDATE'] = pd.to_datetime(df_working['BIRTHDATE'], dayfirst=True, errors='coerce')
-    df_working['CONTRACT'] = pd.to_datetime(df_working['CONTRACT'], dayfirst=True, errors='coerce')
-    df_working['HEIGHT'] = pd.to_numeric(df_working['HEIGHT'], errors='coerce')
-    df_working['ALDER'] = df_working['BIRTHDATE'].apply(lambda x: idag.year - x.year - ((idag.month, idag.day) < (x.month, x.day)) if pd.notna(x) else None)
-    df_working['POS_NAVN'] = df_working['POS'].apply(map_position_detail)
-    sort_map = {"GKP": 1, "DEF": 2, "MID": 3, "FWD": 4}
-    df_working['sort_order'] = df_working['ROLECODE3'].map(sort_map).fillna(5)
-    df_working = df_working.sort_values(by=['sort_order', 'LASTNAME'])
 
     # 4. SØG
     search = st.text_input("", placeholder="Søg...", label_visibility="collapsed")
