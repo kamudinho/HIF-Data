@@ -201,17 +201,16 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     tabel_hoejde = (len(f_df) + 1) * 35 + 10 
     
     event = st.dataframe(
-        disp, 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row",
-        column_config={
-            "Foto": st.column_config.ImageColumn("📸", width="small"),
-            "Rating": st.column_config.NumberColumn("Rating", format="%.1f ⭐")
-        },
-        height=tabel_hoejde
-    )
-
+    disp, 
+    use_container_width=True, 
+    hide_index=True, 
+    on_select="rerun", 
+    selection_mode="single-row",
+    column_config={
+        "Foto": st.column_config.ImageColumn("Foto", width=50), 
+        "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
+    },
+    height=tabel_hoejde
+)
     if len(event.selection.rows) > 0:
         vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
