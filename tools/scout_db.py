@@ -207,7 +207,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     on_select="rerun", 
     selection_mode="single-row",
     column_config={
-        "Foto": st.column_config.ImageColumn("Foto", width=15), 
+        "Foto": st.column_config.ImageColumn("Foto", width=5), 
         "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
     },
     height=tabel_hoejde
