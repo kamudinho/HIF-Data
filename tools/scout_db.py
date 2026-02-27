@@ -193,17 +193,22 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
-    disp = f_df[['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'DATO', 'SCOUT']].copy()
-    disp.columns = ['NAVN', 'POSITION', 'KLUB', 'RATING', 'STATUS', 'DATO', 'SCOUT']
+    disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
+
+    # 2. Vi giver kolonnerne pæne navne til visning
+    disp.columns = ['Foto', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
     
-    tabel_hoejde = (len(f_df) + 1) * 35 + 10 
-    
+    # 3. Vi opsætter dataframe med column_config for at rendere billedet
     event = st.dataframe(
         disp, 
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
+        column_config={
+            "Foto": st.column_config.ImageColumn("", width="small"),
+            "Rating": st.column_config.NumberColumn("Rating", format="%.1f ⭐")
+        },
         height=tabel_hoejde
     )
 
