@@ -29,7 +29,9 @@ def vis_side(dp):
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
     
     if not df_ps_raw.empty:
-        df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
+    # Sortér så nyeste data kommer først (antaget at du har en kolonne som SEASONNAME eller DATE)
+    df_ps = df_ps_raw.sort_values(by=['SEASONNAME'], ascending=False) 
+    df_ps = df_ps.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
     else:
         df_ps = df_ps_raw
 
