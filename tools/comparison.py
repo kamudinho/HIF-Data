@@ -118,7 +118,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
                     except: 
                         tech[k] = 0
         
-        return pid, klub, pos, stats, tech, img_url, navn
+    return pid, klub, pos, stats, tech, img_url, navn
     
     res1 = hent_info(s1_navn)
     res2 = hent_info(s2_navn)
