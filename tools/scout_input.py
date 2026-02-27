@@ -4,6 +4,7 @@ import uuid
 import time
 from datetime import datetime
 from io import StringIO
+from data.season_show import COMPETITION_WYID, COMP_MAP
 
 # Try/Except blokke til github utils
 try:
