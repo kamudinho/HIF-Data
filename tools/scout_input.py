@@ -83,7 +83,7 @@ def vis_side(dp):
     # Fjern denne blok når fejlen er fundet
     if not df_ps.empty:
         with st.expander("🔍 Debug: Tjek rådata for spiller"):
-            test_navn = "Nygaard" # Del af navnet på den spiller der driller
+            test_navn = "Andersen" # Del af navnet på den spiller der driller
             debug_df = df_ps[df_ps['LASTNAME'].str.contains(test_navn, na=False, case=False)]
             st.write(f"Antal rækker fundet med '{test_navn}':", len(debug_df))
             st.dataframe(debug_df[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME', 'CURRENTTEAM_WYID']])
