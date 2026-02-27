@@ -125,37 +125,47 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
             ))
 
-            # --- PLACERING AF MINI-IKONER (Begge logoer tvunget frem) ---
-            images = []
+            # --- NY LOGIK: MINI-IKONER I FAST PIXEL-STØRRELSE ---
             for i, label in enumerate(labels):
-                # Logo for Hold 1 (Venstre-justeret over kategorien)
-                images.append(dict(
-                    source=t1['IMAGEDATAURL'],
-                    xref="x", yref="paper",
-                    x=label, y=1.05,
-                    sizex=0.2, sizey=0.1,
-                    xanchor="right", yanchor="bottom",
-                    opacity=1.0
-                ))
-                # Logo for Hold 2 (Højre-justeret over kategorien)
-                images.append(dict(
-                    source=t2['IMAGEDATAURL'],
-                    xref="x", yref="paper",
-                    x=label, y=1.05,
-                    sizex=0.2, sizey=0.1,
-                    xanchor="left", yanchor="bottom",
-                    opacity=1.0
-                ))
+                # Logo for Hold 1 (Venstre)
+                fig.add_layout_image(
+                    dict(
+                        source=t1['IMAGEDATAURL'],
+                        xref="x", yref="paper",
+                        x=label, y=1.08,  # Lidt højere oppe
+                        sizex=0.25, sizey=0.25, # Justeret skalering
+                        xanchor="right", yanchor="middle",
+                        sizing="contain"
+                    )
+                )
+                # Logo for Hold 2 (Højre)
+                fig.add_layout_image(
+                    dict(
+                        source=t2['IMAGEDATAURL'],
+                        xref="x", yref="paper",
+                        x=label, y=1.08,
+                        sizex=0.25, sizey=0.25,
+                        xanchor="left", yanchor="middle",
+                        sizing="contain"
+                    )
+                )
+
+            # Find max y for at sikre at teksten på søjlerne ikke rammer logoerne
+            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
 
             fig.update_layout(
-                images=images, # Vi sender hele listen af billeder ind samlet
                 barmode='group', 
-                height=400,
-                margin=dict(t=70, b=20, l=10, r=10),
+                height=450,
+                margin=dict(t=100, b=40, l=10, r=10), # Masser af plads i toppen
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
-                yaxis=dict(showgrid=False, zeroline=True)
+                yaxis=dict(
+                    range=[0, max_y * 1.3], # Tvinger aksen op, så der er luft til logoerne
+                    showgrid=False, 
+                    zeroline=True
+                ),
+                xaxis=dict(tickfont=dict(size=12))
             )
             
             st.plotly_chart(fig, use_container_width=True)
