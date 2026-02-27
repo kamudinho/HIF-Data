@@ -46,7 +46,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
     
     nyeste = historik.iloc[-1]
     
-    # Header sektion 🖼️
+    # Header sektion 
     img_url = p_data.get('IMAGEDATAURL')
     h1, h2 = st.columns([1, 4])
     
@@ -196,7 +196,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     std_placeholder = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     # 2. Forbered data til visning og håndter manglende billeder
     f_df['IMAGEDATAURL'] = f_df['IMAGEDATAURL'].fillna(std_placeholder)
-    f_df.loc[f_df['IMAGEDATAURL'].str.strip() == "", 'IMAGEDATAURL'] = std_placeholder
+    f_df.loc[f_df['IMAGEDATAURL'].str.strip() == " ", 'IMAGEDATAURL'] = std_placeholder
 
     # 3. Vælg kolonner (Vi kalder billed-kolonnen 'Foto' her for at matche config)
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
