@@ -150,7 +150,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             def get_radar_vals(t):
                 v = [t['FART'], t['UDHOLDENHED'], t['TEKNIK'], t['SPILINTELLIGENS'], 
                      t['BESLUTSOMHED'], t['ATTITUDE'], t['LEDEREGENSKABER'], t['AGGRESIVITET']]
-                v.append(v[0]) # Luk cirklen
+                v.append(v[0]) # Luk formen
                 return v
             
             fig = go.Figure()
@@ -158,7 +158,17 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             fig.add_trace(go.Scatterpolar(r=get_radar_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
             
             fig.update_layout(
-                polar=dict(radialaxis="linear"(visible=True, range=[0, 6])),
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 6]),
+                    gridshape='linear'  # HER skifter vi fra cirkel til 8-kant 🛑
+                ),
                 height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
             )
             st.plotly_chart(fig, use_container_width=True)
+
+    # --- NY SEKTION: TABS UNDER RADAR ---
+    st.divider() # En lille visuel adskillelse
+    tab1, tab2, tab3, tab4 = st.tabs(["Generelt", "Offensivt", "Defensivt", "Scouting"])
+
+    with tab1:
+        st.write("Her skal de overordnede stats stå")
