@@ -133,21 +133,23 @@ def get_data_package():
     if df_player_career is None:
         df_player_career = pd.DataFrame()
 
-    # --- Flet billeder ind i CSV-data ---
+    # 1. Gør klar til fletning (Konvertér alle ID'er til tekst)
     df_hvidovre_csv = gh_data["players"]
+    df_scout_csv = gh_data["scouting"]
     
-    if df_sql_players is not None and not df_hvidovre_csv.empty:
-        # 1. TVING BEGGE KOLONNER TIL AT VÆRE TEKST (Indsæt disse to linjer her)
-        df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
+    if df_sql_players is not None:
+        # Vi tvinger alle PLAYER_WYID til at være tekst (str), så de kan matches
         df_sql_players['PLAYER_WYID'] = df_sql_players['PLAYER_WYID'].astype(str)
-
-        # 2. NU KAN VI FLETTE UDEN FEJL
-        df_hvidovre_csv = pd.merge(
-            df_hvidovre_csv, 
-            df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], 
-            on='PLAYER_WYID', 
-            how='left'
-        )
+        
+        # Flet billeder på truppen 
+        if not df_hvidovre_csv.empty:
+            df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
+            df_hvidovre_csv = pd.merge(df_hvidovre_csv, df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
+    
+        # Flet billeder på scouting-listen
+        if not df_scout_csv.empty:
+            df_scout_csv['PLAYER_WYID'] = df_scout_csv['PLAYER_WYID'].astype(str)
+            df_scout_csv = pd.merge(df_scout_csv, df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
 
     # D. RETURNER ALT
     return {
