@@ -158,7 +158,7 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
             fig.add_trace(go.Scatterpolar(r=get_radar_vals(res2[4]), theta=categories+[categories[0]], fill='toself', name=s2_navn, line_color='#0056a3'))
             
             fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 6])),
+                polar=dict(radialaxis="linear"(visible=True, range=[0, 6])),
                 height=380, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
             )
             st.plotly_chart(fig, use_container_width=True)
