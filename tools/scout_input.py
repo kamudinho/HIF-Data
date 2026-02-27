@@ -12,8 +12,19 @@ except ImportError:
     st.error("Kunne ikke finde github.py i utils mappen.")
 
 def vis_side(dp):
-    st.write("### Ny Scoutrapport")
-
+    # --- 2. FARVER & KONSTANTER ---
+    hif_rod = "#df003b"
+    gul_udlob = "#ffffcc"
+    leje_gra = "#d3d3d3"
+    rod_udlob = "#ffcccc"
+    
+     # --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCOUTING: INDSEND RAPPORT</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
     # 1. Hent data og fjern dubletter
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
     
