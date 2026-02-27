@@ -194,8 +194,8 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
     # 2. Forbered data til visning og håndter manglende billeder
-    f_df['IMAGEDATAURL'] = f_df['IMAGEDATAURL'].fillna(std_placeholder)
-    f_df.loc[f_df['IMAGEDATAURL'].str.strip() == "", 'IMAGEDATAURL'] = std_placeholder
+    f_df['IMAGEDATAURL'] = f_df['IMAGEDATAURL'].fillna(std)
+    f_df.loc[f_df['IMAGEDATAURL'].str.strip() == "", 'IMAGEDATAURL'] = std
 
     # 3. Vælg kolonner (Vi kalder billed-kolonnen 'Foto' her for at matche config)
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
