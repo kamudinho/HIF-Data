@@ -60,7 +60,13 @@ def vis_side(dp):
                 
                 t_id_raw = r.get('CURRENTTEAM_WYID')
                 t_id = str(int(float(t_id_raw))) if pd.notnull(t_id_raw) and t_id_raw != "" else ""
+                
                 klub = hold_map.get(t_id, "Ukendt klub")
+                
+                # --- NY FILTRERING ---
+                if klub == "Ukendt klub":
+                    continue # Spring spilleren over, hvis klubben ikke kendes
+                # ----------------------
                 
                 f_name = str(r['FIRSTNAME'] if pd.notnull(r['FIRSTNAME']) else "").strip()
                 l_name = str(r['LASTNAME'] if pd.notnull(r['LASTNAME']) else "").strip()
@@ -78,16 +84,6 @@ def vis_side(dp):
                 }
             except (ValueError, TypeError):
                 continue
-    
-    # --- DEBUG START ---
-    # Fjern denne blok når fejlen er fundet
-    if not df_ps.empty:
-        with st.expander("🔍 Debug: Tjek rådata for spiller"):
-            test_navn = "Andersen" # Del af navnet på den spiller der driller
-            debug_df = df_ps[df_ps['LASTNAME'].str.contains(test_navn, na=False, case=False)]
-            st.write(f"Antal rækker fundet med '{test_navn}':", len(debug_df))
-            st.dataframe(debug_df[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME', 'CURRENTTEAM_WYID']])
-    # --- DEBUG SLUT ---
     
     # 3. Valg af spiller
     metode = st.radio("Vælg spiller via:", ["Søg i systemet", "Manuel oprettelse"], horizontal=True)
