@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from data.season_show import SEASONNAME
 
 # --- 1. HJÆLPEFUNKTIONER ---
 def map_position(pos_code):
@@ -22,20 +23,23 @@ def vis_spiller_billede(img_url, w=110):
         st.image(img_url, width=w)
 
 def hent_spiller_data(pid, stats_df):
+    """Henter data for den specifikke spiller og den aktive sæson"""
     if stats_df is not None and not stats_df.empty:
+        # Rens ID
         pid_s = str(pid).split('.')[0].strip()
         
-        # Find den rigtige sæson-kolonne
+        # Identificer sæson-kolonne
         if 'SEASONNAME' in stats_df.columns:
             s_col = 'SEASONNAME'
         elif 'SEASON' in stats_df.columns:
             s_col = 'SEASON'
         else:
-            # Hvis ingen sæson-kolonne findes, returner nyeste data for spilleren
+            # Ingen sæson-kolonne? Tag hvad vi har på spilleren
             backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
             return backup.iloc[-1] if not backup.empty else pd.Series()
         
-        # Forsøg at matche på den specifikke sæson (SEASONNAME fra config)
+        # 1. Forsøg match på SEASONNAME (fra din config/data_load)
+        # Vi bruger str.contains for at være robuste overfor formater som '2025/2026'
         match = stats_df[
             (stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)) & 
             (stats_df[s_col].astype(str).str.contains(SEASONNAME))
@@ -43,20 +47,22 @@ def hent_spiller_data(pid, stats_df):
         
         if not match.empty:
             return match.iloc[0]
-        
-        # Fallback: Hvis den specifikke sæson ikke findes, tag den nyeste tilgængelige
+            
+        # 2. Fallback: Hvis den specifikke sæson ikke findes, tag nyeste data
         backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
         if not backup.empty:
             return backup.sort_values(s_col).iloc[-1]
             
     return pd.Series()
-            
-        # Fallback: Tag nyeste række hvis den valgte sæson ikke findes
-        backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
-        if not backup.empty:
-            return backup.sort_values(s_col).iloc[-1]
-            
-    return pd.Series()
+
+# --- 2. HOVEDFUNKTION FOR SIDEN ---
+def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
+    # 0. Standardiser kolonner
+    for d in [df_spillere, playerstats, df_scout]:
+        if d is not None:
+            d.columns = [c.upper() for c in d.columns]
+            if 'SEASON' in d.columns and 'SEASONNAME' not in d.columns:
+                d.rename(columns={'SEASON': 'SEASONNAME'}, inplace=True)
 
 # --- 2. HOVEDFUNKTION FOR SIDEN ---
 def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
