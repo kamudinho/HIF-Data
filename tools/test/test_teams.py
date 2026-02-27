@@ -33,7 +33,7 @@ def vis_side(df_raw=None):
         st.warning("Ingen data fundet for den valgte sæson og liga.")
         return
 
-    # --- 2. CSS & STYLING (Helt rent design) ---
+    # --- 2. CSS & STYLING ---
     st.markdown("""
         <style>
             .stTable { width: 100%; }
@@ -71,7 +71,6 @@ def vis_side(df_raw=None):
             st.write(temp_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         with l_gen:
-            # Her er CONCEDEDGOALS med igen
             cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'GOALS', 'CONCEDEDGOALS', 'TOTALPOINTS']
             renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'MATCHES': 'K', 'TOTALWINS': 'V', 'TOTALDRAWS': 'U', 
                        'TOTALLOSSES': 'T', 'GOALS': 'M+', 'CONCEDEDGOALS': 'M-', 'TOTALPOINTS': 'P'}
@@ -83,7 +82,6 @@ def vis_side(df_raw=None):
             render_html_table(df_liga.sort_values('GOALS', ascending=False), cols, renames)
 
         with l_def:
-            # Her er CONCEDEDGOALS også med i den defensive tabel
             cols = ['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
             renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'CONCEDEDGOALS': 'MÅL IMOD', 'XGSHOTAGAINST': 'xG IMOD', 'PPDA': 'PPDA'}
             render_html_table(df_liga.sort_values('CONCEDEDGOALS', ascending=True), cols, renames)
@@ -100,75 +98,76 @@ def vis_side(df_raw=None):
         
         h2h_sub_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
-    def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
-        fig = go.Figure()
-        
-        y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
-        y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
-        
-        # Bar for Hold 1
-        c1 = TEAM_COLORS.get(n1, {"primary": "#808080", "secondary": "#000000"})
-        fig.add_trace(go.Bar(
-            name=n1, x=labels, y=y1_vals, 
-            marker_color=c1["primary"], marker_line_color=c1["secondary"], 
-            marker_line_width=1, showlegend=False,
-            text=[f"{v:.1f}" for v in y1_vals], textposition='auto'
-        ))
-    
-        # Bar for Hold 2
-        c2 = TEAM_COLORS.get(n2, {"primary": "#808080", "secondary": "#000000"})
-        fig.add_trace(go.Bar(
-            name=n2, x=labels, y=y2_vals, 
-            marker_color=c2["primary"], marker_line_color=c2["secondary"], 
-            marker_line_width=1, showlegend=False,
-            text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
-        ))
-    
-        max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
-    
-        # --- PLACERING AF SMÅ LOGOER VED BRUG AF X-OFFSET ---
-        for i, label in enumerate(labels):
-            # Logo for Hold 1 (Forskudt til venstre ved at trække 0.15 fra index)
-            fig.add_layout_image(
-                dict(
-                    source=t1['IMAGEDATAURL'],
-                    xref="x", yref="paper",
-                    x=i - 0.15,  # Bruger indexet for at styre positionen præcist
-                    y=1.03,
-                    sizex=0.07, sizey=0.07,
-                    xanchor="center", yanchor="middle",
-                    sizing="contain"
-                )
-            )
-            # Logo for Hold 2 (Forskudt til højre ved at lægge 0.15 til index)
-            fig.add_layout_image(
-                dict(
-                    source=t2['IMAGEDATAURL'],
-                    xref="x", yref="paper",
-                    x=i + 0.15,
-                    y=1.03,
-                    sizex=0.07, sizey=0.07,
-                    xanchor="center", yanchor="middle",
-                    sizing="contain"
-                )
-            )
-    
-        fig.update_layout(
-            barmode='group', 
-            height=400,
-            margin=dict(t=80, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)',
-            showlegend=False,
-            yaxis=dict(range=[0, max_y * 1.25], showgrid=False)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        # Definition af plot-funktion (flyttet ind i vis_side)
+        def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
+            fig = go.Figure()
             
+            y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
+            y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
+            
+            # Bar for Hold 1
+            c1_color = TEAM_COLORS.get(n1, {"primary": "#808080", "secondary": "#000000"})
+            fig.add_trace(go.Bar(
+                name=n1, x=labels, y=y1_vals, 
+                marker_color=c1_color["primary"], marker_line_color=c1_color["secondary"], 
+                marker_line_width=1, showlegend=False,
+                text=[f"{v:.1f}" for v in y1_vals], textposition='auto'
+            ))
+        
+            # Bar for Hold 2
+            c2_color = TEAM_COLORS.get(n2, {"primary": "#808080", "secondary": "#000000"})
+            fig.add_trace(go.Bar(
+                name=n2, x=labels, y=y2_vals, 
+                marker_color=c2_color["primary"], marker_line_color=c2_color["secondary"], 
+                marker_line_width=1, showlegend=False,
+                text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
+            ))
+        
+            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
+        
+            # --- PLACERING AF SMÅ LOGOER ---
+            for i, label in enumerate(labels):
+                # Logo for Hold 1
+                fig.add_layout_image(
+                    dict(
+                        source=t1['IMAGEDATAURL'],
+                        xref="x", yref="paper",
+                        x=i - 0.15,
+                        y=1.03,
+                        sizex=0.07, sizey=0.07,
+                        xanchor="center", yanchor="middle",
+                        sizing="contain"
+                    )
+                )
+                # Logo for Hold 2
+                fig.add_layout_image(
+                    dict(
+                        source=t2['IMAGEDATAURL'],
+                        xref="x", yref="paper",
+                        x=i + 0.15,
+                        y=1.03,
+                        sizex=0.07, sizey=0.07,
+                        xanchor="center", yanchor="middle",
+                        sizing="contain"
+                    )
+                )
+        
+            fig.update_layout(
+                barmode='group', 
+                height=400,
+                margin=dict(t=80, b=40, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False,
+                yaxis=dict(range=[0, max_y * 1.25], showgrid=False)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Kald af plot-funktionen inde i h2h_sub_tabs
         with h2h_sub_tabs[0]: 
             create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
         with h2h_sub_tabs[1]: 
             create_h2h_plot(['GOALS', 'XGSHOT', 'PASSESTOFINALTHIRD'], ['Mål/kamp', 'xG/kamp', 'Pass 3.del/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
         with h2h_sub_tabs[2]: 
-            # CONCEDEDGOALS er nu med i H2H defensiv grafen
             create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG Imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
