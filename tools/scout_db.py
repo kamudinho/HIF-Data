@@ -28,7 +28,7 @@ def vis_spiller_billede(pid, w=110):
         st.image(url if resp.status_code == 200 else std, width=w)
     except: st.image(std, width=w)
 
-# --- 3. PROFIL DIALOG ---
+# --- 3. PROFIL DIALOG (Opdateret med korrekt indrykning og billede) ---
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, s_df, career_df):
     try:
@@ -37,7 +37,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
     except:
         clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
 
-    # Rens historik
     full_df['PLAYER_WYID'] = full_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     
@@ -47,12 +46,12 @@ def vis_profil(p_data, full_df, s_df, career_df):
     
     nyeste = historik.iloc[-1]
     
-    # Header
+    # Header sektion 🖼️
     img_url = p_data.get('IMAGEDATAURL')
-
     h1, h2 = st.columns([1, 4])
+    
     with h1:
-        # Alt herunder er nu rykket ind og hører til 'h1' kolonnen
+        # Her var fejlen – disse linjer er nu korrekt indrykket
         if pd.notna(img_url) and str(img_url).startswith("http"):
             st.image(img_url, width=115)
         else:
@@ -159,7 +158,7 @@ def vis_profil(p_data, full_df, s_df, career_df):
             st.success(f"**Samlet**\n\n{nyeste.get('VURDERING', '-')}")
             
 # --- 4. HOVEDFUNKTION ---
-def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
+def vis_side(scout_df, spillere_df, stats_df, career_df):
     st.markdown('<div class="custom-header"><h3>Scouting-database</h3></div>', unsafe_allow_html=True)
     
     if "player_career_data" not in st.session_state or st.session_state["player_career_data"] is None:
@@ -183,6 +182,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
 
     df = scout_df.copy()
     if spillere_df is not None and not spillere_df.empty:
+        # Sørg for at få billed-URL med over i din filtrerede dataframe
         df = df.merge(spillere_df[['PLAYER_WYID', 'POS', 'ROLECODE3']].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
     
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
@@ -193,12 +193,13 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
+    # Konfigurer kolonner til visning – her tilføjer vi billedet yderst til venstre 📸
+    # Vi bruger 'IMAGEDATAURL' hvis den findes i scout_df
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
-
-    # 2. Vi giver kolonnerne pæne navne til visning
     disp.columns = ['Foto', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
     
-    # 3. Vi opsætter dataframe med column_config for at rendere billedet
+    tabel_hoejde = (len(f_df) + 1) * 35 + 10 
+    
     event = st.dataframe(
         disp, 
         use_container_width=True, 
@@ -206,7 +207,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_placeholder):
         on_select="rerun", 
         selection_mode="single-row",
         column_config={
-            "Foto": st.column_config.ImageColumn("", width="small"),
+            "Foto": st.column_config.ImageColumn("📸", width="small"),
             "Rating": st.column_config.NumberColumn("Rating", format="%.1f ⭐")
         },
         height=tabel_hoejde
