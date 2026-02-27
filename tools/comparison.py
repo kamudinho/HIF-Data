@@ -197,20 +197,17 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
     s2_tab_data = hent_spiller_data(res2[0], playerstats) if res2 else pd.Series()
 
     with tab1:
-        st.write("### Overordnede tal")
         vis_sammenligning_række("Kampe", s1_tab_data.get('MATCHES', 0), s2_tab_data.get('MATCHES', 0), "{:.0f}")
         vis_sammenligning_række("Minutter", s1_tab_data.get('MINUTESONFIELD', 0), s2_tab_data.get('MINUTESONFIELD', 0), "{:,.0f}")
         vis_sammenligning_række("Gule kort", s1_tab_data.get('YELLOWCARDS', 0), s2_tab_data.get('YELLOWCARDS', 0), "{:.0f}", højere_er_bedre=False)
 
     with tab2:
-        st.write("### Offensive stats")
         vis_sammenligning_række("Mål", s1_tab_data.get('GOALS', 0), s2_tab_data.get('GOALS', 0))
         vis_sammenligning_række("Assists", s1_tab_data.get('ASSISTS', 0), s2_tab_data.get('ASSISTS', 0))
         vis_sammenligning_række("Skud", s1_tab_data.get('SHOTS', 0), s2_tab_data.get('SHOTS', 0))
         vis_sammenligning_række("Driblinger %", s1_tab_data.get('SUCCESSFUL_DRIBBLES_PRC', 0), s2_tab_data.get('SUCCESSFUL_DRIBBLES_PRC', 0))
 
     with tab3:
-        st.write("### Defensive stats")
         vis_sammenligning_række("Dueller vundet %", s1_tab_data.get('DEFENSIVE_DUELS_WON_PRC', 0), s2_tab_data.get('DEFENSIVE_DUELS_WON_PRC', 0))
         vis_sammenligning_række("Interceptions", s1_tab_data.get('INTERCEPTIONS', 0), s2_tab_data.get('INTERCEPTIONS', 0))
         vis_sammenligning_række("Boldtab", s1_tab_data.get('LOSSES', 0), s2_tab_data.get('LOSSES', 0), højere_er_bedre=False)
@@ -220,6 +217,6 @@ def vis_side(df_spillere, playerstats, df_scout, player_seasons, season_filter):
         if res1 and res2:
             c1, c2 = st.columns(2)
             with c1:
-                st.info(df_s[df_s['PLAYER_WYID'] == res1[0]].iloc[-1].get('NOTER', 'Ingen noter')) if not df_s[df_s['PLAYER_WYID'] == res1[0]].empty else st.write("Ingen data")
+                st.info(df_s[df_s['PLAYER_WYID'] == res1[0]].iloc[-1].get('VURDERING', 'Ingen noter')) if not df_s[df_s['PLAYER_WYID'] == res1[0]].empty else st.write("Ingen data")
             with c2:
-                st.info(df_s[df_s['PLAYER_WYID'] == res2[0]].iloc[-1].get('NOTER', 'Ingen noter')) if not df_s[df_s['PLAYER_WYID'] == res2[0]].empty else st.write("Ingen data")
+                st.info(df_s[df_s['PLAYER_WYID'] == res2[0]].iloc[-1].get('VURDERING', 'Ingen noter')) if not df_s[df_s['PLAYER_WYID'] == res2[0]].empty else st.write("Ingen data")
