@@ -25,29 +25,27 @@ def vis_side(dp):
         </div>
     """, unsafe_allow_html=True)
     
-    # 1. Hent data og fjern dubletter
+    # 1. Hent data
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
     
     if not df_ps_raw.empty:
-        # Tving kolonnenavne til upper for en sikkerheds skyld
-        df_ps_raw.columns = [str(c).upper() for c in df_ps_raw.columns]
+        df_ps_raw.columns = [str(c).strip().upper() for c in df_ps_raw.columns]
         
-        # SORTERING ER NØGLEN:
-        # Vi sorterer efter SEASONNAME (f.eks. '2024/2025' før '2023/2024') 
-        # så keep='first' tager den nyeste klub.
+        # --- NY LIGA-FILTRERING BASERET PÅ DIN CONFIG ---
+        # Vi tjekker om spillerens liga (COMPETITION_WYID) er i din liste fra season_show.py
+        from data.season_show import COMPETITION_WYID
+        
+        if 'COMPETITION_WYID' in df_ps_raw.columns:
+            # Vi sikrer os, at vi sammenligner tal med tal
+            df_ps_raw = df_ps_raw[df_ps_raw['COMPETITION_WYID'].isin(COMPETITION_WYID)]
+        # ------------------------------------------------
+        
+        # Sortering for at få nyeste klub (som vi fiksede før)
         if 'SEASONNAME' in df_ps_raw.columns:
             df_ps_raw = df_ps_raw.sort_values(by='SEASONNAME', ascending=False)
-            
+        
         df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
-    else:
-        df_ps = df_ps_raw
-
-    hold_map = dp.get("hold_map", {})
-    curr_user = st.session_state.get("user", "System").upper()
-
-    if 'scout_temp_data' not in st.session_state:
-        st.session_state.scout_temp_data = {"n": "", "id": "", "pos": "", "klub": ""}
-
+        
     # 2. Forbered ordbog til dropdown
     spiller_options = {}
     if not df_ps.empty:
