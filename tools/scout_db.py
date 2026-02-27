@@ -159,6 +159,13 @@ def vis_profil(p_data, full_df, s_df, career_df):
             
 # --- 4. HOVEDFUNKTION ---
 def vis_side(scout_df, spillere_df, stats_df, career_df):
+
+    # --- 2. FARVER & KONSTANTER ---
+    hif_rod = "#df003b"
+    gul_udlob = "#ffffcc"
+    leje_gra = "#d3d3d3"
+    rod_udlob = "#ffcccc"
+    
      # --- TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
