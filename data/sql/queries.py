@@ -32,10 +32,11 @@ def get_queries(comp_filter, season_filter):
             )
         """,
 
-        # --- 2. SPILLER STATISTIK (Simpel og robust) ---
+        # --- 2. SPILLER STATISTIK (Opdateret med SEASONNAME) ---
         "playerstats": f"""
             SELECT 
                 ap.PLAYER_WYID,
+                s.SEASONNAME,  -- TILFØJET: Så Pandas kan se hvilken sæson det er
                 SUM(ap.MINUTESONFIELD) AS MINUTESONFIELD,
                 SUM(ap.GOALS) AS GOALS, 
                 SUM(ap.ASSISTS) AS ASSISTS, 
@@ -45,16 +46,19 @@ def get_queries(comp_filter, season_filter):
                 SUM(ap.SHOTSONTARGET) AS SHOTSONTARGET,
                 SUM(ap.XGSHOT) AS XGSHOT,
                 SUM(ap.DRIBBLES) AS DRIBBLES,
+                -- Beregning af procenter direkte i SQL er ofte mere sikkert:
+                CASE WHEN SUM(ap.DRIBBLES) > 0 THEN (SUM(ap.SUCCESSFULDRIBBLES) / SUM(ap.DRIBBLES)) * 100 ELSE 0 END AS SUCCESSFUL_DRIBBLES_PRC,
                 SUM(ap.DEFENSIVEDUELS) AS DEFENSIVEDUELS,
+                CASE WHEN SUM(ap.DEFENSIVEDUELS) > 0 THEN (SUM(ap.DEFENSIVEDUELSWON) / SUM(ap.DEFENSIVEDUELS)) * 100 ELSE 0 END AS DEFENSIVE_DUELS_WON_PRC,
                 SUM(ap.INTERCEPTIONS) AS INTERCEPTIONS,
-                SUM(ap.RECOVERIES) AS RECOVERIES
+                SUM(ap.RECOVERIES) AS RECOVERIES,
+                SUM(ap.LOSSES) AS LOSSES
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
             JOIN {DB}.WYSCOUT_MATCHES tm ON tm.MATCH_WYID = ap.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID -- TILFØJET
             WHERE ap.COMPETITION_WYID IN {comp_filter}
-            AND tm.SEASON_WYID IN (
-                SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
-            )
-            GROUP BY ap.PLAYER_WYID
+            AND s.SEASONNAME {season_filter}
+            GROUP BY ap.PLAYER_WYID, s.SEASONNAME -- TILFØJET s.SEASONNAME
         """,
         
         # --- 3. LOGOER (Ren opslagstabel) ---
