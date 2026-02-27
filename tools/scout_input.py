@@ -86,7 +86,7 @@ def vis_side(dp):
             test_navn = "Nygaard" # Del af navnet på den spiller der driller
             debug_df = df_ps[df_ps['LASTNAME'].str.contains(test_navn, na=False, case=False)]
             st.write(f"Antal rækker fundet med '{test_navn}':", len(debug_df))
-            st.dataframe(debug_df[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME', 'CURRENTTEAM_WYID', 'SEASONNAME']])
+            st.dataframe(debug_df[['PLAYER_WYID', 'FIRSTNAME', 'LASTNAME', 'CURRENTTEAM_WYID']])
     # --- DEBUG SLUT ---
     
     # 3. Valg af spiller
