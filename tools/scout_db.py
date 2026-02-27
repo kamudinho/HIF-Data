@@ -200,7 +200,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
 
     # 3. Vælg kolonner (Vi kalder billed-kolonnen 'Foto' her for at matche config)
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
-    disp.columns = ['Foto', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
+    disp.columns = ['', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
     
     tabel_hoejde = (len(f_df) + 1) * 35 + 10 
     
