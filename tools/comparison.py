@@ -25,17 +25,17 @@ def hent_spiller_data(pid, stats_df):
     if stats_df is not None and not stats_df.empty:
         pid_s = str(pid).split('.')[0].strip()
         
-        # --- FIX STARTER HER ---
-        # Tjek hvilken sæson-kolonne der rent faktisk findes i dit datasæt
+        # Find den rigtige sæson-kolonne
         if 'SEASONNAME' in stats_df.columns:
             s_col = 'SEASONNAME'
         elif 'SEASON' in stats_df.columns:
             s_col = 'SEASON'
         else:
-            # Hvis ingen af delene findes, returner den nyeste række for spilleren
-            return stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)].iloc[-1] if not stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)].empty else pd.Series()
-        # --- FIX SLUTTER HER ---
+            # Hvis ingen sæson-kolonne findes, returner nyeste data for spilleren
+            backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
+            return backup.iloc[-1] if not backup.empty else pd.Series()
         
+        # Forsøg at matche på den specifikke sæson (SEASONNAME fra config)
         match = stats_df[
             (stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)) & 
             (stats_df[s_col].astype(str).str.contains(SEASONNAME))
@@ -43,6 +43,11 @@ def hent_spiller_data(pid, stats_df):
         
         if not match.empty:
             return match.iloc[0]
+        
+        # Fallback: Hvis den specifikke sæson ikke findes, tag den nyeste tilgængelige
+        backup = stats_df[stats_df['PLAYER_WYID'].astype(str).str.contains(pid_s)]
+        if not backup.empty:
+            return backup.sort_values(s_col).iloc[-1]
             
     return pd.Series()
             
