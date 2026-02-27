@@ -125,39 +125,37 @@ def vis_side(df_raw=None):
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
             ))
 
-            # --- PLACERING AF MINI-IKONER PÅ SAMME HØJDE ---
+            # --- PLACERING AF MINI-IKONER (Begge logoer tvunget frem) ---
+            images = []
             for i, label in enumerate(labels):
-                # Logo 1: Låst til toppen (y=1.02) men følger kategorien på x-aksen
-                fig.add_layout_image(
-                    dict(
-                        source=t1['IMAGEDATAURL'],
-                        xref="x", yref="paper",
-                        x=label, y=1.02,
-                        sizex=0.2, sizey=0.1,
-                        xanchor="right", yanchor="bottom",
-                        opacity=1.0
-                    )
-                )
-                # Logo 2: Låst til toppen (y=1.02) men følger kategorien på x-aksen
-                fig.add_layout_image(
-                    dict(
-                        source=t2['IMAGEDATAURL'],
-                        xref="x", yref="paper",
-                        x=label, y=1.02,
-                        sizex=0.2, sizey=0.1,
-                        xanchor="left", yanchor="bottom",
-                        opacity=1.0
-                    )
-                )
+                # Logo for Hold 1 (Venstre-justeret over kategorien)
+                images.append(dict(
+                    source=t1['IMAGEDATAURL'],
+                    xref="x", yref="paper",
+                    x=label, y=1.05,
+                    sizex=0.2, sizey=0.1,
+                    xanchor="right", yanchor="bottom",
+                    opacity=1.0
+                ))
+                # Logo for Hold 2 (Højre-justeret over kategorien)
+                images.append(dict(
+                    source=t2['IMAGEDATAURL'],
+                    xref="x", yref="paper",
+                    x=label, y=1.05,
+                    sizex=0.2, sizey=0.1,
+                    xanchor="left", yanchor="bottom",
+                    opacity=1.0
+                ))
 
             fig.update_layout(
+                images=images, # Vi sender hele listen af billeder ind samlet
                 barmode='group', 
                 height=400,
-                margin=dict(t=60, b=20, l=10, r=10), # God plads i toppen til de linet logoer
+                margin=dict(t=70, b=20, l=10, r=10),
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
-                yaxis=dict(showgrid=False, zeroline=True, zerolinecolor='lightgray')
+                yaxis=dict(showgrid=False, zeroline=True)
             )
             
             st.plotly_chart(fig, use_container_width=True)
