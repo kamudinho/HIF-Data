@@ -52,15 +52,16 @@ def vis_profil(p_data, full_df, s_df, career_df):
 
     h1, h2 = st.columns([1, 4])
     with h1:
-    # Hvis vi har en URL, bruger vi den. Ellers bruger vi din fallback-funktion.
-    if pd.notna(img_url) and str(img_url).startswith("http"):
-        st.image(img_url, width=115)
-    else:
-        vis_spiller_billede(clean_p_id, w=115)
+        # Alt herunder er nu rykket ind og hører til 'h1' kolonnen
+        if pd.notna(img_url) and str(img_url).startswith("http"):
+            st.image(img_url, width=115)
+        else:
+            vis_spiller_billede(clean_p_id, w=115)
+            
     with h2:
         st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
         st.markdown(f"**{nyeste.get('KLUB', 'Ingen klub')}** | {nyeste.get('POSITION_VISNING', 'Ukendt')} | Snit: `{nyeste.get('RATING_AVG', 0)}`")
-
+        
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
     with t1:
