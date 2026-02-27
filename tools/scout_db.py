@@ -193,23 +193,29 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
     
-    # Vi bruger 'IMAGEDATAURL' hvis den findes i scout_df
+    # 2. Forbered data til visning og håndter manglende billeder
+    f_df['IMAGEDATAURL'] = f_df['IMAGEDATAURL'].fillna(std_placeholder)
+    f_df.loc[f_df['IMAGEDATAURL'].str.strip() == "", 'IMAGEDATAURL'] = std_placeholder
+
+    # 3. Vælg kolonner (Vi kalder billed-kolonnen 'Foto' her for at matche config)
     disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']].copy()
-    disp.columns = ['', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
+    disp.columns = ['Foto', 'Navn', 'Position', 'Klub', 'Rating', 'Status']
     
     tabel_hoejde = (len(f_df) + 1) * 35 + 10 
     
+    # 4. Vis tabellen
     event = st.dataframe(
-    disp, 
-    use_container_width=True, 
-    hide_index=True, 
-    on_select="rerun", 
-    selection_mode="single-row",
-    column_config={
-        "Foto": st.column_config.ImageColumn("Foto", width=1), 
-        "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
-    },
-    height=tabel_hoejde
-)
+        disp, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row",
+        column_config={
+            # Nøglen her SKAL matche navnet i disp.columns ('Foto')
+            "Foto": st.column_config.ImageColumn("Foto", width="small"), 
+            "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
+        },
+        height=tabel_hoejde
+    )
     if len(event.selection.rows) > 0:
         vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
