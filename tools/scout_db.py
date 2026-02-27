@@ -213,7 +213,7 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
         selection_mode="single-row",
         column_config={
             # Nøglen her SKAL matche navnet i disp.columns ('Foto')
-            " ": st.column_config.ImageColumn(" ", width=5), 
+            " ": st.column_config.ImageColumn(" ", width=1), 
             "Rating": st.column_config.NumberColumn("Rating", format="%.1f")
         },
         height=tabel_hoejde
