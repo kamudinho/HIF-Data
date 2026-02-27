@@ -155,11 +155,12 @@ def get_data_package():
     return {
         "players": df_hvidovre_csv,
         "sql_players": df_sql_players,                     
-        "scouting": gh_data["scouting"],
+        "scouting": gh_data["scouting"],       # Bevarer din originale data 1:1
+        "scouting_image": df_scout_csv,        # Ny nøgle med billed-links tilføjet
         "playerstats": df_playerstats,
-        "player_career": df_player_career,       # Nu findes variablen!
-        "team_scatter": df_team_stats,      # Dette link bruger scatter.py
-        "team_stats_full": df_team_stats,   # Dette link bruger ligatabellen (RETTET NAVN)
+        "player_career": df_player_career,
+        "team_scatter": df_team_stats,
+        "team_stats_full": df_team_stats,
         "team_matches": df_matches,
         "hold_map": get_hold_mapping(),
         "comp_filter": comp_filter,
