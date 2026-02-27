@@ -29,9 +29,16 @@ def vis_side(dp):
     df_ps_raw = dp.get("sql_players", pd.DataFrame())
     
     if not df_ps_raw.empty:
-        # Sortér så nyeste data kommer først (antaget at du har en kolonne som SEASONNAME eller DATE)
-        df_ps = df_ps_raw.sort_values(by=['SEASONNAME'], ascending=False) 
-        df_ps = df_ps.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
+        # Tving kolonnenavne til upper for en sikkerheds skyld
+        df_ps_raw.columns = [str(c).upper() for c in df_ps_raw.columns]
+        
+        # SORTERING ER NØGLEN:
+        # Vi sorterer efter SEASONNAME (f.eks. '2024/2025' før '2023/2024') 
+        # så keep='first' tager den nyeste klub.
+        if 'SEASONNAME' in df_ps_raw.columns:
+            df_ps_raw = df_ps_raw.sort_values(by='SEASONNAME', ascending=False)
+            
+        df_ps = df_ps_raw.drop_duplicates(subset=['PLAYER_WYID'], keep='first')
     else:
         df_ps = df_ps_raw
 
