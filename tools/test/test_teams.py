@@ -102,18 +102,64 @@ def vis_side(df_raw=None):
 
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
+            
+            # Vi gemmer y-værdier for at kunne beregne logo-placering
+            all_y_vals = []
+            
             for name, stats in [(n1, t1), (n2, t2)]:
                 c = TEAM_COLORS.get(name, {"primary": "#808080", "secondary": "#000000"})
+                # Beregn værdier
                 y_vals = [stats[m] / stats['MATCHES'] if per_match and stats['MATCHES'] > 0 and m != 'PPDA' else stats[m] for m in metrics]
+                all_y_vals.append(y_vals)
                 
                 fig.add_trace(go.Bar(
-                    name=name, x=labels, y=y_vals, 
-                    marker_color=c["primary"], marker_line_color=c["secondary"], 
-                    marker_line_width=1, text=[f"{v:.2f}" if per_match else fmt_val(v) for v in y_vals], textposition='auto'
+                    name=name, 
+                    x=labels, 
+                    y=y_vals, 
+                    marker_color=c["primary"], 
+                    marker_line_color=c["secondary"], 
+                    marker_line_width=1, 
+                    text=[f"{v:.2f}" if per_match else fmt_val(v) for v in y_vals], 
+                    textposition='auto',
+                    showlegend=False  # FJERNER LEGEND FOR DENNE TRACE
                 ))
             
-            fig.update_layout(barmode='group', height=400, margin=dict(t=30, b=20, l=10, r=10),
-                              plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+            # --- LOGO PLACERING (Annotations) ---
+            # Vi finder de maksimale y-værdier for at placere logoer over søjlerne
+            max_y = max([max(v) for v in all_y_vals]) if all_y_vals else 1
+            
+            # Tilføj logo for Hold 1 (venstre side af gruppen)
+            fig.add_layout_image(
+                dict(
+                    source=t1['IMAGEDATAURL'],
+                    xref="paper", yref="paper",
+                    x=0.25, y=1.1, # Placeret over den første del af grafen
+                    sizex=0.15, sizey=0.15,
+                    xanchor="center", yanchor="bottom"
+                )
+            )
+            
+            # Tilføj logo for Hold 2 (højre side af gruppen)
+            fig.add_layout_image(
+                dict(
+                    source=t2['IMAGEDATAURL'],
+                    xref="paper", yref="paper",
+                    x=0.75, y=1.1,
+                    sizex=0.15, sizey=0.15,
+                    xanchor="center", yanchor="bottom"
+                )
+            )
+            
+            fig.update_layout(
+                barmode='group', 
+                height=450, # Øget lidt for at give plads til logoer
+                margin=dict(t=80, b=20, l=10, r=10), # Mere top-margin til logoerne
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False, # EKSTRA SIKKERHED: Fjerner legend helt
+                yaxis=dict(range=[0, max_y * 1.2]) # Gør plads i toppen af aksen
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
 
         with h2h_sub_tabs[0]: 
