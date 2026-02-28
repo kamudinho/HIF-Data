@@ -141,6 +141,12 @@ def get_data_package():
             df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
             df_hvidovre_csv = pd.merge(df_hvidovre_csv, df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
 
+    hold_map = {
+        info["team_wyid"]: name 
+        for name, info in TEAMS.items() 
+        if "team_wyid" in info
+    }
+
     return {
         "players": df_hvidovre_csv,
         "sql_players": df_sql_players,                     
