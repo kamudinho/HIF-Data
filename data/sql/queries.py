@@ -8,6 +8,8 @@ def get_queries(comp_filter, season_filter):
     
     # Præfiks til alle tabeller
     DB = "KLUB_HVIDOVREIF.AXIS"
+
+    clean_season = str(season_filter).replace("='", "").replace("'", "").strip()
     
     return {
         # --- 1. SPILLER GRUNDDATA ---
