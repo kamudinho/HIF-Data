@@ -71,22 +71,22 @@ def vis_side(df):
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
 
-    # Sikrer os at kolonnerne findes (hvis Opta-queryen f.eks. mangler SHOTS)
-    for col in ['GOALS', 'XG', 'SHOTS', 'GAMEWEEK']:
-        if col not in f_df.columns:
-            f_df[col] = 0
+    # Vi bygger en flot resultat-kolonne: "3 - 3"
+    # Vi bruger .astype(str) for at sikre, at vi kan samle dem
+    f_df['Resultat'] = f_df['HOME_GOALS'].astype(int).astype(str) + " - " + f_df['AWAY_GOALS'].astype(int).astype(str)
 
-    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'GOALS', 'XG', 'SHOTS']].copy()
+    # Vælg de kolonner vi vil vise
+    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'Resultat', 'XG', 'SHOTS']].copy()
     disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
 
     st.dataframe(
         disp,
         use_container_width=True,
         hide_index=True,
-        height=min((len(disp) + 1) * 35 + 10, 800),
         column_config={
             "Dato": st.column_config.TextColumn(width="small"),
             "Rd.": st.column_config.NumberColumn(width="small"),
+            "Mål": st.column_config.TextColumn(width="small"), # Nu som tekst "3 - 3"
             "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
