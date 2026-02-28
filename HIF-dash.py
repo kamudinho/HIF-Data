@@ -150,8 +150,14 @@ try:
             
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            # tm.vis_side modtager nu hele dp og håndterer selv sorteringen
-            tm.vis_side(dp)
+            # Vi henter en frisk query direkte fra Snowflake i stedet for at bruge dp["team_matches"]
+            friske_kampe = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
+            
+            # Vi skaber en midlertidig pakke til modulet
+            match_dp = dp.copy()
+            match_dp["team_matches"] = friske_kampe
+            
+            tm.vis_side(match_dp)
             
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
