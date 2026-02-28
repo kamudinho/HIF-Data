@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(df):
-    # --- 1. BRANDING (HIF Rød) ---
+    # --- 1. BRANDING ---
     hif_rod = "#df003b"
     
     st.markdown(f"""
@@ -15,7 +15,7 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED DATA (MATCHLABEL renses) ---
+    # --- 2. FORBERED DATA ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
     hold_set = set()
@@ -26,17 +26,16 @@ def vis_side(df):
     
     valgbare_hold = sorted(list(hold_set))
 
-    # --- 3. FILTER & INFO SEKTION (To kolonner) ---
+    # --- 3. FILTER & INFO SEKTION ---
     c1, c2 = st.columns([1, 2])
     
     with c1:
-        # Hvidovre som standardvalg
         default_index = 0
         if "Hvidovre" in valgbare_hold:
             default_index = valgbare_hold.index("Hvidovre") + 1
         valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
 
-    # --- 4. FILTRERING & DUBLETTER ---
+    # --- 4. FILTRERING ---
     if valgt_hold != "Alle hold":
         kampe_id_liste = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)]['MATCH_WYID'].unique()
         f_df = df[df['MATCH_WYID'].isin(kampe_id_liste)].copy()
@@ -44,18 +43,20 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. INFO-TEKST OG CAPTION (I højre kolonne) ---
+    # --- 5. HØJRE SIDE (Kun captions) ---
     with c2:
-        # Justering af højde så det matcher selectbox-linjen
-        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
+        # Flyt captions ned så de flugter med selectboxen
+        st.markdown("<div style='padding-top: 20px;'></div>", unsafe_allow_html=True)
         
-        # Hovedinfo
-        st.write(f"📊 **{len(f_df)} unikke kampe for {valgt_hold}**")
+        # Linje 1: Antal kampe (uden ikon)
+        st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
         
-        # Caption til manglende data (tjekker for 0 eller NaN i SHOTS/XG)
-        tomme_stats = f_df[f_df['SHOTS'].isna() | (f_df['SHOTS'] == 0)].shape[0]
-        if tomme_stats > 0:
-            st.caption(f"⚠️ Obs: {tomme_stats} rækker i databasen mangler data.")
+        # Linje 2: Manglende data (Vi tæller rækker hvor Skud er 0 eller mangler)
+        # Vi tjekker i f_df (den filtrerede liste)
+        mangler = f_df[f_df['SHOTS'].isna() | (f_df['SHOTS'] == 0)].shape[0]
+        
+        if mangler > 0:
+            st.caption(f"⚠️ Obs: {mangler} rækker i databasen mangler data")
 
     # --- 6. TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
