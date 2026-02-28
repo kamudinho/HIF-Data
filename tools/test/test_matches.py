@@ -1,67 +1,76 @@
 import streamlit as st
 import pandas as pd
 
-def super_clean(text):
-    if not isinstance(text, str): return text
-    rep = {
-        "ƒç": "č", "ƒá": "ć", "≈°": "š", "≈æ": "ž", "√¶": "æ", "√∏": "ø", "√•": "å",
-        "√Ü": "Æ", "√ò": "Ø", "√Ö": "Å", "√Å": "Á", "√©": "é", "√∂": "ö", "√º": "ü", "Yat√©k√©": "Yatéké"
-    }
-    for wrong, right in rep.items(): text = text.replace(wrong, right)
-    return text
-
 def vis_side(dp):
-    # Styling
-    st.markdown("<style>[data-testid='column'] {display: flex; flex-direction: column;} .stDataFrame {border: none;}</style>", unsafe_allow_html=True)
-
-    # Overskrift
-    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">BETINIA LIGAEN: KAMPOVERSIGT (LIVE)</h3>
-    </div>""", unsafe_allow_html=True)
+    """
+    Viser kampoversigt fra Snowflake. 
+    Modtager 'dp' (data_package) fra main.py
+    """
     
-    # --- 1. HENT DATA ---
+    # 1. Styling af tabellen og layout
+    st.markdown("""
+        <style>
+            [data-testid='column'] {display: flex; flex-direction: column;} 
+            .stDataFrame {border: none;}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Rød HIF-overskrift
+    st.markdown(f"""
+        <div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">
+                BETINIA LIGAEN: KAMPOVERSIGT (LIVE)
+            </h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # 2. Hent data fra pakken (team_matches er navnet i din get_data_package)
     df = dp.get("team_matches", pd.DataFrame())
     
     if not df.empty:
-        # Rens kolonnenavne
+        # Rens kolonnenavne (Snowflake returnerer ofte uppercase)
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- 2. DATO-LOGIK & SORTERING ---
-        # Konvertér til datetime for at kunne sortere korrekt
+        # --- DATO-LOGIK & SORTERING ---
+        # Konvertér DATE til rigtigt dato-format så vi kan sortere korrekt
         df['DATE'] = pd.to_datetime(df['DATE'], dayfirst=True, errors='coerce')
         
-        # Sortér så nyeste kampe er øverst
+        # SORTERING: Nyeste kampe først (Descending)
         df = df.sort_values(by='DATE', ascending=False)
         
-        # Lav en pæn dato-streng til visning
+        # Lav en pæn dato-streng til visning (DD.MM.YYYY)
         df['DATO_VISNING'] = df['DATE'].dt.strftime('%d.%m.%Y')
 
-        # --- 3. FILTRE ---
+        # --- FILTRE ---
         col1, col2 = st.columns(2)
         
         with col1:
             turneringer = ["Alle"] + sorted([str(x) for x in df['COMPETITION_NAME'].unique() if pd.notna(x)])
-            valgt_turnering = st.selectbox("Turnering", turneringer)
+            valgt_turnering = st.selectbox("Vælg Turnering", turneringer)
             
         with col2:
-            # Find unikke holdnavne fra MATCHLABEL
+            # Vi finder holdnavne ved at kigge på MATCHLABEL (f.eks. "Hvidovre 2 - 0 B.93")
+            # Vi splitter ved tal for at få fat i holdnavnet før scoren
             rå_hold = df['MATCHLABEL'].str.split(' \d').str[0].unique() 
             hold_liste = ["Alle"] + sorted([str(x).strip() for x in rå_hold if pd.notna(x)])
-            valgt_hold = st.selectbox("Vælg Hold", hold_liste)
+            valgt_hold = st.selectbox("Søg efter hold", hold_liste)
 
-        # --- 4. FILTRERING ---
+        # --- FILTRERING ---
+        # Vi laver en kopi af den sorterede DF til filtrering
         df_filt = df.copy()
         
         if valgt_turnering != "Alle": 
             df_filt = df_filt[df_filt['COMPETITION_NAME'] == valgt_turnering]
             
         if valgt_hold != "Alle": 
-            # Vi bruger na=False for at undgå fejl ved tomme rækker
+            # Case-insensitive søgning i MATCHLABEL. na=False forhindrer fejl ved tomme rækker.
             df_filt = df_filt[df_filt['MATCHLABEL'].str.contains(valgt_hold, case=False, na=False)]
 
-        # --- 5. VISNING ---
-        # Vælg de kolonner vi vil se (bemærk vi bruger DATO_VISNING nu)
+        # --- VISNING AF TABEL ---
+        # Vi vælger de kolonner, der giver mening for trænerne
         vis_cols = ['DATO_VISNING', 'MATCHLABEL', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']
+        
+        # Sikr os at kolonnerne findes før vi viser dem
         df_display = df_filt[[c for c in vis_cols if c in df_filt.columns]]
 
         st.dataframe(
@@ -78,9 +87,9 @@ def vis_side(dp):
             }
         )
         
-        # En lille info-box hvis tabellen er tom efter filtrering
+        # Hvis filteret fjerner alt
         if df_display.empty:
-            st.info("Ingen kampe matcher de valgte filtre.")
+            st.info("Ingen kampe matcher dine valgte filtre.")
             
     else:
-        st.warning("Ingen kampdata fundet i Snowflake.")
+        st.warning("⚠️ Ingen kampdata fundet. Tjek om Snowflake-forbindelsen er aktiv.")
