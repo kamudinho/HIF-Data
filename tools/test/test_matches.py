@@ -18,13 +18,13 @@ def vis_side(df):
     # --- 2. RENS DATA & FORBERED FILTER ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
-    alle_hold = set()
+    hold_set = set()
     for label in df['Kamp_Renset'].dropna().unique():
         parts = label.split(' - ')
         for p in parts:
-            alle_hold.add(p.strip())
+            hold_set.add(p.strip())
     
-    valgbare_hold = sorted(list(alle_hold))
+    valgbare_hold = sorted(list(hold_set))
 
     # --- 3. LAYOUT: FILTER (Venstre) & INFO (Højre) ---
     c1, c2 = st.columns([1, 2])
@@ -43,16 +43,19 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. INFO-TEKST TIL HØJRE (Kun captions, ingen ikoner) ---
+    # --- 5. INFO-TEKST TIL HØJRE (Caption) ---
     with c2:
-        # Justering af højde så det flugter med selectbox
+        # Justering af højde
         st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
         
         # Linje 1: Antal kampe
         st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
         
-        # Linje 2: Manglende data (baseret på xG)
-        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
+        # Linje 2: Bredere tjek for manglende data (xG < 0.01 eller NaN)
+        # Dette fanger både 0, None og meget små tekniske værdier
+        mangler_mask = (f_df['XG'].isna()) | (f_df['XG'] < 0.01)
+        tomme_stats = f_df[mangler_mask].shape[0]
+        
         if tomme_stats > 0:
             st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data")
 
