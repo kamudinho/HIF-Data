@@ -1,63 +1,181 @@
+import os
+import sys 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
+from streamlit_option_menu import option_menu
 import pandas as pd
-from data.utils.team_mapping import TEAMS
+from data.data_load import get_data_package, load_snowflake_query
+from data.users import get_users
 
-def vis_side(df):
-    st.markdown('<h3 style="color:#cc0000;">KAMPOVERSIGT</h3>', unsafe_allow_html=True)
+# --- 1. KONFIGURATION ---
+st.set_page_config(page_title="HIF Data Hub", layout="wide")
 
-    # 1. TOTAL SIKRING: Hvis data mangler, stop her.
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        st.warning("Ingen data fundet i Snowflake.")
-        return
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
+        header { visibility: hidden; height: 0px; }
+        h1, h2, h3 { margin: 0 !important; padding: 0 !important; }
+        .custom-header {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 60px;
+            background-color: #cc0000; 
+            color: white; 
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button[data-baseweb="tab"] { font-size: 14px; }
+        button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000 !important; border-bottom-color: #cc0000 !important; }
+    </style>
+""", unsafe_allow_html=True)
 
-    # Lav en kopi og tving kolonner til store bogstaver
-    df = df.copy()
-    df.columns = [c.upper() for c in df.columns]
+# --- 2. LOGIN SYSTEM ---
+USER_DB = get_users()
+if "logged_in" not in st.session_state: 
+    st.session_state["logged_in"] = False
 
-    # 2. FILTER (Dropdown)
-    alle_hold = sorted(list(TEAMS.keys()))
-    valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + alle_hold)
+if not st.session_state["logged_in"]:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='120'></div>", unsafe_allow_html=True)
+        with st.form("login"):
+            u = st.text_input("BRUGER").lower().strip()
+            p = st.text_input("KODE", type="password")
+            if st.form_submit_button("LOG IND", width="stretch"):
+                if u in USER_DB and USER_DB[u]["pass"] == p:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = u
+                    st.session_state["role"] = USER_DB[u]["role"] 
+                    st.rerun()
+                else:
+                    st.error("Ugyldig bruger eller kode")
+    st.stop()
 
-    # 3. KAMP NAVN (Robust version)
-    # Vi laver kolonnen 'KAMP' ved at kigge efter kendte Opta/Wyscout felter
-    if 'MATCHLABEL' in df.columns:
-        df['KAMP'] = df['MATCHLABEL'].astype(str).str.split(',').str[0]
-    elif 'CONTESTANTHOME_NAME' in df.columns:
-        df['KAMP'] = df['CONTESTANTHOME_NAME'].astype(str) + " - " + df['CONTESTANTAWAY_NAME'].astype(str)
-    else:
-        df['KAMP'] = "Ukendt Kamp"
+# --- 3. DATA LOADING ---
+if "data_package" not in st.session_state:
+    with st.spinner("Henter systemdata..."):
+        st.session_state["data_package"] = get_data_package()
 
-    # 4. UDFØR FILTER
-    if valgt_hold != "Alle hold":
-        # Vi søger efter en del af navnet (f.eks. "Hvidovre") for at være sikre
-        soegestreg = valgt_hold.replace(" IF", "").strip()
-        f_df = df[df['KAMP'].str.contains(soegestreg, case=False, na=False)].copy()
-    else:
-        f_df = df.copy()
+dp = st.session_state["data_package"]
 
-    if f_df.empty:
-        st.info(f"Ingen kampe fundet for {valgt_hold}")
-        return
-
-    # 5. DATO OG MÅL (Uden apply - det er her den plejer at fejle)
-    # Vi bruger .get() med default værdier for at undgå fejl
-    h_mål = f_df.get('TOTAL_HOME_SCORE', f_df.get('HOME_GOALS', 0)).fillna(0).astype(int).astype(str)
-    a_mål = f_df.get('TOTAL_AWAY_SCORE', f_df.get('AWAY_GOALS', 0)).fillna(0).astype(int).astype(str)
-    f_df['RESULTAT'] = h_mål + " - " + a_mål
-
-    # Dato konvertering med 'errors=coerce' så den ikke crasher ved mærkelige datoer
-    dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE', 'DATE_DT'] if c in f_df.columns), None)
-    if dato_col:
-        f_df['DATO_STR'] = pd.to_datetime(f_df[dato_col], errors='coerce').dt.strftime('%d-%m-%Y').fillna("-")
-    else:
-        f_df['DATO_STR'] = "-"
-
-    # 6. VISNING (Vi fjerner height-beregningen midlertidigt for at teste stabilitet)
-    disp = f_df[['DATO_STR', 'KAMP', 'RESULTAT']].copy()
-    disp.columns = ['Dato', 'Kamp', 'Mål']
-
-    st.dataframe(
-        disp,
-        use_container_width=True,
-        hide_index=True
+# --- 4. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.markdown("<div style='text-align: center; padding-bottom: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
+    
+    alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
+    user_info = USER_DB.get(st.session_state["user"], {})
+    restriktioner = user_info.get("restricted", [])
+    synlige_options = [o for o in alle_omraader if o not in restriktioner]
+    
+    hoved_omraade = option_menu(
+        None, 
+        options=synlige_options, 
+        default_index=0,
+        styles={
+            "nav-link-selected": {"background-color": "#0056a3"},
+            "nav-link": {"font-weight": "400"}
+        }
     )
+    
+    st.markdown("---")
+    
+    sel = ""
+    if hoved_omraade == "TRUPPEN":
+        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "HIF ANALYSE":
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "BETINIA LIGAEN":
+        sel = option_menu(None, options=["Holdoversigt", "Spillerstats", "Kampe"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "SCOUTING":
+        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "ADMIN":
+        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
+                         styles={"nav-link-selected": {"background-color": "#333333"}})
+
+# --- 5. ROUTING LOGIK ---
+if not sel: 
+    sel = "Oversigt"
+
+try:
+    # --- TRUPPEN ---
+    if hoved_omraade == "TRUPPEN":
+        if sel == "Oversigt":
+            import tools.players as pl
+            pl.vis_side(dp["players"])
+        elif sel == "Forecast":
+            import tools.squad as sq
+            sq.vis_side(dp["players"])
+        elif sel == "Spillerstats":
+            import tools.stats as st_tool
+            st_tool.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
+        elif sel == "Top 5":
+            import tools.top5 as t5
+            t5.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]))
+
+    # --- HIF ANALYSE ---
+    elif hoved_omraade == "HIF ANALYSE":
+        if sel == "Afslutninger":
+            import tools.player_shots as ps
+            ps.vis_side(dp["players"], dp["hold_map"])
+        elif sel == "Modstanderanalyse":
+            import tools.modstanderanalyse as ma
+            df_matches = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
+            ma.vis_side(df_matches, dp["hold_map"])
+        elif sel == "Scatterplots":
+            import tools.scatter as sc
+            df_scatter = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+            sc.vis_side(df_scatter)
+
+    # --- BETINIA LIGAEN (HER BRUGER VI OPTA DATA) ---
+    elif hoved_omraade == "BETINIA LIGAEN":
+        if sel == "Holdoversigt":
+            import tools.test.test_teams as tt
+            df_for_teams = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
+            tt.vis_side(df_for_teams)
+        elif sel == "Spillerstats":
+            import tools.test.test_players as tp
+            tp.vis_side(dp) 
+        elif sel == "Kampe":
+            import tools.test.test_matches as tm
+            # Vi tjekker om vi har Opta data, ellers bruger vi team_matches som fallback
+            if "opta_matches" in dp and not dp["opta_matches"].empty:
+                tm.vis_side(dp["opta_matches"])
+            else:
+                df_fallback = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
+                tm.vis_side(df_fallback)
+            
+    # --- SCOUTING ---
+    elif hoved_omraade == "SCOUTING":
+        if sel == "Scoutrapport":
+            import tools.scout_input as si
+            si.vis_side(dp) 
+        elif sel == "Database":
+            import tools.scout_db as sdb
+            df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"])
+            if "player_career_data" not in st.session_state:
+                st.session_state["player_career_data"] = load_snowflake_query("player_career", dp["comp_filter"], dp["season_filter"])
+            sdb.vis_side(dp["scouting_image"], dp["players"], df_stats, st.session_state["player_career_data"])
+        elif sel == "Sammenligning":
+            import tools.comparison as comp
+            comp.vis_side(dp["players"], load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"]), dp["scouting_image"], dp["player_career"], dp["season_filter"])
+            
+    # --- ADMIN ---
+    elif hoved_omraade == "ADMIN":
+        if sel == "Brugerstyring":
+            import tools.admin as adm
+            adm.vis_side()
+        elif sel == "System Log":
+            import tools.admin as adm
+            adm.vis_log() 
+        elif sel == "Schema Explorer":
+            import tools.snowflake_test as stest
+            stest.vis_side()
+
+except Exception as e:
+    st.error(f"⚠️ Systemfejl på siden '{sel}': {e}")
