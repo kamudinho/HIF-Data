@@ -125,7 +125,7 @@ def get_queries(comp_filter, season_filter):
 
         # --- 6. KAMPOVERSIGT ---
         "team_matches": f"""
-            SELECT DISTINCT
+            SELECT
                 s.SEASONNAME, 
                 tm.DATE, 
                 m.MATCHLABEL,
