@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(df):
-    # --- 1. BRANDING ---
+    # --- 1. BRANDING (HIF Rød) ---
     hif_rod = "#df003b"
     
     st.markdown(f"""
@@ -15,10 +15,9 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED DATA ---
+    # --- 2. FORBERED DATA (MATCHLABEL renses) ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
-    # Vi bygger listen over hold korrekt
     hold_set = set()
     for label in df['Kamp_Renset'].dropna().unique():
         parts = label.split(' - ')
@@ -27,18 +26,17 @@ def vis_side(df):
     
     valgbare_hold = sorted(list(hold_set))
 
-    # --- 3. FILTER & INFO LINJE (To kolonner) ---
+    # --- 3. FILTER & INFO SEKTION (To kolonner) ---
     c1, c2 = st.columns([1, 2])
     
     with c1:
-        # Nu findes 'valgbare_hold', så denne linje virker:
+        # Hvidovre som standardvalg
         default_index = 0
         if "Hvidovre" in valgbare_hold:
             default_index = valgbare_hold.index("Hvidovre") + 1
-            
         valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
 
-    # --- 4. FILTRERING ---
+    # --- 4. FILTRERING & DUBLETTER ---
     if valgt_hold != "Alle hold":
         kampe_id_liste = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)]['MATCH_WYID'].unique()
         f_df = df[df['MATCH_WYID'].isin(kampe_id_liste)].copy()
@@ -46,22 +44,20 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. INFO TEKST (I kolonne c2 ved siden af vælgeren) ---
+    # --- 5. INFO-TEKST OG CAPTION (I højre kolonne) ---
     with c2:
-        # Justering af højde så teksten flugter med selectbox
-        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        # Justering af højde så det matcher selectbox-linjen
+        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
         
-        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
-        antal_kampe = len(f_df)
+        # Hovedinfo
+        st.write(f"📊 **{len(f_df)} unikke kampe for {valgt_hold}**")
         
-        # Vi bygger en pæn besked
-        besked = f"📊 **{antal_kampe} unikke kampe for {valgt_hold}**"
+        # Caption til manglende data (tjekker for 0 eller NaN i SHOTS/XG)
+        tomme_stats = f_df[f_df['SHOTS'].isna() | (f_df['SHOTS'] == 0)].shape[0]
         if tomme_stats > 0:
-            besked += f" | ⚠️ **{tomme_stats} mangler data**"
-            
-        st.write(besked)
+            st.caption(f"⚠️ Obs: {tomme_stats} rækker i databasen mangler data.")
 
-    # --- 6. TABEL VISNING ---
+    # --- 6. TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
