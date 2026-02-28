@@ -43,17 +43,17 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. HØJRE SIDE (Kun captions) ---
+    # --- 5. HØJRE SIDE (Nu baseret på xG) ---
     with c2:
         # Flyt captions ned så de flugter med selectboxen
         st.markdown("<div style='padding-top: 20px;'></div>", unsafe_allow_html=True)
         
-        # Linje 1: Antal kampe (uden ikon)
+        # Linje 1: Antal kampe
         st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
         
-        # Linje 2: Manglende data (Vi tæller rækker hvor Skud er 0 eller mangler)
-        # Vi tjekker i f_df (den filtrerede liste)
-        mangler = f_df[f_df['SHOTS'].isna() | (f_df['SHOTS'] == 0)].shape[0]
+        # Linje 2: Manglende data (Beregnet på xG)
+        # Vi tæller rækker i f_df hvor xG er NaN eller præcis 0.0
+        mangler = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
         
         if mangler > 0:
             st.caption(f"⚠️ Obs: {mangler} rækker i databasen mangler data")
