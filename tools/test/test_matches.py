@@ -15,26 +15,18 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED DATA (Skal gøres før filter sektionen) ---
+    # --- 2. FORBERED GRUNDDATA ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
-    
-    alle_hold = set()
-    for label in df['Kamp_Renset'].dropna().unique():
-        parts = label.split(' - ')
-        for p in parts:
-            alle_hold.add(p.strip())
-    
-    valgbare_hold = sorted(list(alle_hold))
+    alle_hold = sorted(list(set([p.strip() for label in df['Kamp_Renset'].dropna().unique() for p in label.split(' - ')])))
 
-    # --- 3. FILTER SEKTION ---
-    c1, _ = st.columns([1, 2])
+    # --- 3. FILTER & INFO LINJE (To kolonner) ---
+    c1, c2 = st.columns([1, 2])
+    
     with c1:
-        default_index = 0
-        if "Hvidovre" in valgbare_hold:
-            default_index = valgbare_hold.index("Hvidovre") + 1
-        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
+        default_index = valgbare_hold.index("Hvidovre") + 1 if "Hvidovre" in alle_hold else 0
+        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + alle_hold, index=default_index)
 
-    # --- 4. FILTRERING & DUBLETHÅNDTERING ---
+    # --- 4. FILTRERING ---
     if valgt_hold != "Alle hold":
         kampe_id_liste = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)]['MATCH_WYID'].unique()
         f_df = df[df['MATCH_WYID'].isin(kampe_id_liste)].copy()
@@ -42,15 +34,19 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. TJEK FOR MANGLENDE STATS & VIS CAPTIONS ---
-    # Nu kender Python både f_df og valgt_hold
-    tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
-    
-    st.caption(f"**Der er {len(f_df)} unikke kampe i databasen for {valgt_hold}.**")
-    if tomme_stats > 0:
-        st.caption(f"⚠️ *Obs: {tomme_stats} af disse kampe mangler udvidet data (xG/Skud) i Snowflake.*")
+    # --- 5. INFO TEKST (Placeret i højre kolonne c2) ---
+    with c2:
+        # Vi rykker teksten lidt ned så den flugter med selectboxen
+        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
+        
+        info_str = f"📊 **{len(f_df)} unikke kampe for {valgt_hold}**"
+        if tomme_stats > 0:
+            info_str += f" | ⚠️ **{tomme_stats} mangler data**"
+        
+        st.write(info_str)
 
-    # --- 6. KLARGØR VISNING ---
+    # --- 6. KLARGØR VISNING & TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
