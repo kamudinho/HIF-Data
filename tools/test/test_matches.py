@@ -45,19 +45,21 @@ def vis_side(df):
 
     # --- 5. INFO-TEKST TIL HØJRE (Caption) ---
     with c2:
-        # Justering af højde
+        # Justering af højde og højrestilling via CSS
         st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
         
-        # Linje 1: Antal kampe
-        st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
-        
-        # Linje 2: Bredere tjek for manglende data (xG < 0.01 eller NaN)
-        # Dette fanger både 0, None og meget små tekniske værdier
+        # Beregn manglende stats
         mangler_mask = (f_df['XG'].isna()) | (f_df['XG'] < 0.01)
         tomme_stats = f_df[mangler_mask].shape[0]
         
-        if tomme_stats > 0:
-            st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data")
+        # Vi bruger markdown til at simulere caption-looket (grå farve, lille skrift) men højrestillet
+        info_html = f"""
+            <div style="text-align: right; color: rgba(49, 51, 63, 0.6); font-size: 0.8rem; line-height: 1.2;">
+                Der er {len(f_df)} unikke kampe for {valgt_hold}<br>
+                {"Obs: " + str(tomme_stats) + " rækker i databasen mangler data" if tomme_stats > 0 else ""}
+            </div>
+        """
+        st.markdown(info_html, unsafe_allow_html=True)
 
     # --- 6. KLARGØR VISNING & TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
