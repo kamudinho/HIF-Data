@@ -15,45 +15,57 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. TJEK FOR MANGLENDE STATS (Placeres her for synlighed) ---
-    # Vi tjekker om xG er 0 eller None i de nyeste kampe
-    tomme_stats = df[df['XG'].isna() | (df['XG'] == 0)].shape[0]
-    if tomme_stats > 0:
-        st.warning(f"⚠️ Obs: {tomme_stats} rækker i databasen mangler xG/Skud data. Dette skyldes ofte forsinkelse fra Wyscout.")
-
-    # --- 3. RENS MATCHLABEL OG FIND HOLD ---
+    # --- 2. FORBERED DATA ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
-    alle_hold = set()
+    # Vi bygger listen over hold korrekt
+    hold_set = set()
     for label in df['Kamp_Renset'].dropna().unique():
         parts = label.split(' - ')
         for p in parts:
-            alle_hold.add(p.strip())
+            hold_set.add(p.strip())
     
-    valgbare_hold = sorted(list(alle_hold))
+    valgbare_hold = sorted(list(hold_set))
 
-    # --- 4. FILTER SEKTION ---
-    c1, _ = st.columns([1, 2])
+    # --- 3. FILTER & INFO LINJE (To kolonner) ---
+    c1, c2 = st.columns([1, 2])
+    
     with c1:
+        # Nu findes 'valgbare_hold', så denne linje virker:
         default_index = 0
         if "Hvidovre" in valgbare_hold:
             default_index = valgbare_hold.index("Hvidovre") + 1
+            
         valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
 
-    # --- 5. FILTRERING & DUBLETHÅNDTERING ---
+    # --- 4. FILTRERING ---
     if valgt_hold != "Alle hold":
         kampe_id_liste = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)]['MATCH_WYID'].unique()
         f_df = df[df['MATCH_WYID'].isin(kampe_id_liste)].copy()
-        # drop_duplicates sikrer vi kun ser én række pr. kamp
         f_df = f_df.drop_duplicates(subset=['MATCH_WYID'])
     else:
         f_df = df.copy()
 
+    # --- 5. INFO TEKST (I kolonne c2 ved siden af vælgeren) ---
+    with c2:
+        # Justering af højde så teksten flugter med selectbox
+        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        
+        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
+        antal_kampe = len(f_df)
+        
+        # Vi bygger en pæn besked
+        besked = f"📊 **{antal_kampe} unikke kampe for {valgt_hold}**"
+        if tomme_stats > 0:
+            besked += f" | ⚠️ **{tomme_stats} mangler data**"
+            
+        st.write(besked)
+
+    # --- 6. TABEL VISNING ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
 
-    # --- 6. KLARGØR VISNING ---
     disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'GOALS', 'XG', 'SHOTS']].copy()
     disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
 
@@ -70,9 +82,3 @@ def vis_side(df):
             "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
-
-    # --- 7. TÆLLER UNDER TABELLEN ---
-    st.write(f"📊 **Der er {len(f_df)} kampe i databasen for det valgte filter.**")
-
-    st.divider()
-    st.caption(f"Viser unikke kampe for {valgt_hold}")
