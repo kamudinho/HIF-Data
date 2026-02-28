@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(df):
-    # --- 1. FARVER & BRANDING (Præcis som Scout DB) ---
+    # --- 1. BRANDING (Scout DB Style) ---
     hif_rod = "#df003b"
     
     st.markdown(f"""
@@ -12,57 +12,57 @@ def vis_side(df):
     """, unsafe_allow_html=True)
     
     if df is None or df.empty:
-        st.info("Ingen data fundet for den valgte sæson.")
+        st.info("Ingen data fundet.")
         return
 
-    # --- 2. DATABEHANDLING & BEREGNING AF HOLD ---
-    df['DATE_DT'] = pd.to_datetime(df['DATE'])
-    df = df.sort_values(by='DATE_DT', ascending=False)
-    df['Dato'] = df['DATE_DT'].dt.strftime('%d-%m-%Y')
-
-    # Vi finder alle unikke holdnavne fra MATCHLABEL (f.eks. "Hvidovre - B.93")
-    # Vi splitter ved " - " og samler alle unikke navne til dropdown
+    # --- 2. RENS MATCHLABEL OG FIND HOLD ---
+    # Vi fjerner resultatet (alt efter kommaet)
+    df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
+    
+    # Find alle unikke hold fra de rensede labels
     alle_hold = set()
-    for label in df['MATCHLABEL'].dropna().unique():
+    for label in df['Kamp_Renset'].dropna().unique():
         parts = label.split(' - ')
         for p in parts:
             alle_hold.add(p.strip())
     
     valgbare_hold = sorted(list(alle_hold))
 
-    # --- 3. FILTER SEKTION ---
-    col_filter, col_empty = st.columns([1, 2])
-    with col_filter:
+    # --- 3. FILTER ---
+    c1, _ = st.columns([1, 2])
+    with c1:
         valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + valgbare_hold)
 
-    # Filtrering baseret på dropdown
+    # Filtrering
     if valgt_hold != "Alle hold":
-        # Vi filtrerer MATCHLABEL, så vi ser alle rækker der tilhører den kamp holdet deltog i
-        mask = df['MATCHLABEL'].str.contains(valgt_hold, na=False)
-        f_df = df[mask].copy()
+        f_df = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)].copy()
     else:
         f_df = df.copy()
 
-    # --- 4. FORBEREDELSE AF VISNING ---
-    # Vi omdøber for at matche dit rene tabel-look
-    disp = f_df[['Dato', 'GAMEWEEK', 'MATCHLABEL', 'TEAMNAME', 'GOALS', 'XG', 'SHOTS']].copy()
-    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Statistik for', 'Mål', 'xG', 'Skud']
+    # Sortering
+    f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
+    f_df = f_df.sort_values('DATE_DT', ascending=False)
+    f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
 
-    tabel_hoejde = (len(disp) + 1) * 35 + 10 
+    # --- 4. KLARGØR VISNING (Bruger de korrekte SQL-kolonnenavne) ---
+    # Da TEAMNAME mangler i din SQL, bruger vi MATCHLABEL som reference
+    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']].copy()
+    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud', 'På mål']
 
-    # --- 5. VISNING ---
+    # --- 5. TABEL ---
+    tabel_hoejde = (len(disp) + 1) * 35 + 10
+    
     st.dataframe(
         disp,
         use_container_width=True,
         hide_index=True,
-        height=min(tabel_hoejde, 800), # Vi sætter et max på 800px så det ikke bliver uendeligt
+        height=min(tabel_hoejde, 800),
         column_config={
-            "Dato": st.column_config.TextColumn("Dato", width="small"),
-            "Rd.": st.column_config.NumberColumn("Rd.", width="small"),
-            "xG": st.column_config.NumberColumn("xG", format="%.2f"),
-            "Mål": st.column_config.NumberColumn("Mål", format="%d")
+            "Dato": st.column_config.TextColumn(width="small"),
+            "Rd.": st.column_config.NumberColumn(width="small"),
+            "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
 
     st.divider()
-    st.caption(f"Viser {len(disp)} rækker | Sæson: {df['SEASONNAME'].iloc[0]}")
+    st.caption(f"Viser data for {valgt_hold} | Sæson: {df['SEASONNAME'].iloc[0] if 'SEASONNAME' in df.columns else '2025/2026'}")
