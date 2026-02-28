@@ -122,21 +122,34 @@ def get_queries(comp_filter, season_filter):
                 SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME {season_filter}
             )
         """,
-        # --- 6. KAMPOVERSIGT ---
+        # Find "team_matches" i din queries.py og erstat med denne:
         "team_matches": f"""
             SELECT 
-                tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
-                tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+                tm.SEASON_WYID, 
+                tm.TEAM_WYID, 
+                tm.MATCH_WYID, 
+                tm.DATE, 
+                tm.STATUS, 
+                tm.COMPETITION_WYID, 
+                tm.GAMEWEEK,
                 c.COMPETITIONNAME AS COMPETITION_NAME, 
-                adv.SHOTS, adv.GOALS, adv.XG, adv.SHOTSONTARGET, m.MATCHLABEL 
-            FROM {DB}.WYSCOUT_TEAMMATCHES tm
-            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                adv.SHOTS, 
+                adv.GOALS, 
+                adv.XG, 
+                adv.SHOTSONTARGET, 
+                m.MATCHLABEL 
+            FROM {{DB}}.WYSCOUT_TEAMMATCHES tm
+            -- Vi bruger LEFT JOIN her, så vi ikke mister kampe, hvis adv-stats ikke er klar endnu
+            LEFT JOIN {{DB}}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-            JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-            WHERE tm.COMPETITION_WYID IN {comp_filter} 
-            AND s.SEASONNAME {season_filter}
+            -- Vi skal bruge MATCHES for at få MATCHLABEL (navnet på kampen)
+            JOIN {{DB}}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+            -- HER ER FIXET: Skift til LEFT JOIN så vi ikke dør på manglende sæson-kobling
+            LEFT JOIN {{DB}}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            JOIN {{DB}}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
+            WHERE tm.COMPETITION_WYID IN {comp_filter}
+            -- Hvis 2026 data stadig ikke dukker op, så udkommentér linjen herunder midlertidigt:
+            AND (s.SEASONNAME {season_filter} OR tm.DATE > '2026-01-01')
         """,
         # --- 7. ALLE EVENTS (Til Heatmaps i Modstanderanalyse) ---
         "events": f"""
