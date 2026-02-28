@@ -149,7 +149,7 @@ try:
             tp.vis_side()
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            tm.vis_side()
+            tm.vis_side(dp)
 
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
