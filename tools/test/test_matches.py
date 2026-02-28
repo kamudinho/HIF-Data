@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 def vis_side(df):
     # --- 1. BRANDING ---
@@ -16,7 +15,7 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED DATA ---
+    # --- 2. RENS DATA & FORBERED FILTER ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
     hold_set = set()
@@ -27,97 +26,13 @@ def vis_side(df):
     
     valgbare_hold = sorted(list(hold_set))
 
-    # --- 3. FILTER & INFO SEKTION (To kolonner) ---
+    # --- 3. LAYOUT: FILTER (Venstre) & INFO (Højre) ---
     c1, c2 = st.columns([1, 2])
     
     with c1:
         default_index = 0
         if "Hvidovre" in valgbare_hold:
             default_index = valgbare_hold.index("Hvidovre") + 1
-        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
-
-    # --- 4. FILTRERING & DUBLETTER ---
-    if valgt_hold != "Alle hold":
-        kampe_id_liste = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)]['MATCH_WYID'].unique()
-        f_df = df[df['MATCH_WYID'].isin(kampe_id_liste)].copy()
-        f_df = f_df.drop_duplicates(subset=['MATCH_WYID'])
-    else:
-        f_df = df.copy()
-
-    # --- 5. INFO-TEKST TIL HØJRE (Kun captions, ingen ikoner) ---
-    with c2:
-        # Justering af højde så det flugter med selectbox
-        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
-        
-        # Linje 1: Antal kampe
-        st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
-        
-        # Linje 2: Manglende data (Vi tjekker specifikt for NaN/Null i xG)
-        # Dette vil fange Middelfart-kampen, fordi xG er tom
-        tomme_stats = f_df['XG'].isna().sum()
-        
-        if tomme_stats > 0:
-            st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data")
-
-    # --- 6. TABEL ---
-    f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
-    f_df = f_df.sort_values('DATE_DT', ascending=False)
-    f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
-
-    # Vi sikrer os at vi viser "Mangler" i tabellen hvis data er NULL
-    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'GOALS', 'XG', 'SHOTS']].copy()
-    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
-
-    tabel_hoejde = (len(disp) + 1) * 35 + 10
-    
-    st.dataframe(
-        disp,
-        use_container_width=True,
-        hide_index=True,
-        height=min(tabel_hoejde, 800),
-        column_config={
-            "Dato": st.column_config.TextColumn(width="small"),
-            "Rd.": st.column_config.NumberColumn(width="small"),
-            "xG": st.column_config.NumberColumn(format="%.2f"),
-        }
-    )import streamlit as st
-import pandas as pd
-
-def vis_side(df):
-    # --- 1. BRANDING ---
-    hif_rod = "#df003b"
-    
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TURNERING: KAMPOVERSIGT</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    if df is None or df.empty:
-        st.info("Ingen data fundet.")
-        return
-
-    # --- 2. FORBERED DATA ---
-    df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
-    
-    # Vi bygger listen over hold korrekt
-    hold_set = set()
-    for label in df['Kamp_Renset'].dropna().unique():
-        parts = label.split(' - ')
-        for p in parts:
-            hold_set.add(p.strip())
-    
-    valgbare_hold = sorted(list(hold_set))
-
-    # --- 3. FILTER & INFO LINJE (To kolonner) ---
-    c1, c2 = st.columns([1, 2])
-    
-    with c1:
-        # Nu findes 'valgbare_hold', så denne linje virker:
-        default_index = 0
-        if "Hvidovre" in valgbare_hold:
-            default_index = valgbare_hold.index("Hvidovre") + 1
-            
         valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
 
     # --- 4. FILTRERING ---
@@ -128,22 +43,23 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. INFO TEKST (I kolonne c2 ved siden af vælgeren) ---
+    # --- 5. INFO-TEKST TIL HØJRE (Caption) ---
     with c2:
-        # Justering af højde så teksten flugter med selectbox
-        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        # Justering af højde
+        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
         
-        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
-        antal_kampe = len(f_df)
+        # Linje 1: Antal kampe
+        st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
         
-        # Vi bygger en pæn besked
-        besked = f"**{antal_kampe} unikke kampe for {valgt_hold}**"
+        # Linje 2: Bredere tjek for manglende data (xG < 0.01 eller NaN)
+        # Dette fanger både 0, None og meget små tekniske værdier
+        mangler_mask = (f_df['XG'].isna()) | (f_df['XG'] < 0.01)
+        tomme_stats = f_df[mangler_mask].shape[0]
+        
         if tomme_stats > 0:
-            besked += f" | **{tomme_stats} mangler data**"
-            
-        st.caption(besked)
+            st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data")
 
-    # --- 6. TABEL VISNING ---
+    # --- 6. KLARGØR VISNING & TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
@@ -164,3 +80,6 @@ def vis_side(df):
             "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
+
+    st.divider()
+    st.caption(f"Viser unikke kampe for {valgt_hold}")
