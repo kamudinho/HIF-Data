@@ -26,10 +26,12 @@ def vis_side(dp): # Nu modtager vi 'dp' som er din database-forbindelse
         df.columns = [str(c).strip().upper() for c in df.columns]
 
         # 2. Sørg for at datoen er i rigtigt format
-        # Vi bruger 'dayfirst=True' så 31.10 ikke bliver til en fejl
         df['DATE'] = pd.to_datetime(df['DATE'], dayfirst=True, errors='coerce')
         
-        # Nu hvor det er et rigtigt dato-objekt, formaterer vi det til visning (DD.MM.YYYY)
+        # --- TILFØJ DENNE LINJE FOR SORTERING ---
+        df = df.sort_values(by='DATE', ascending=False)
+        
+        # Derefter formaterer du til visning
         df['DATE_STR'] = df['DATE'].dt.strftime('%d.%m.%Y')
 
         # --- FILTRE ---
