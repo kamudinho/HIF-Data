@@ -19,7 +19,7 @@ def vis_side(df):
     # Vi tjekker om xG er 0 eller None i de nyeste kampe
     tomme_stats = df[df['XG'].isna() | (df['XG'] == 0)].shape[0]
     if tomme_stats > 0:
-        st.warning(f"⚠️ Obs: {tomme_stats} rækker i databasen mangler xG/Skud data. Dette skyldes ofte forsinkelse fra Wyscout.")
+        st.caption(f"Obs: {tomme_stats} rækker i databasen mangler xG/Skud data. Dette skyldes ofte forsinkelse fra Wyscout.")
 
     # --- 3. RENS MATCHLABEL OG FIND HOLD ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
@@ -72,7 +72,5 @@ def vis_side(df):
     )
 
     # --- 7. TÆLLER UNDER TABELLEN ---
-    st.write(f"📊 **Der er {len(f_df)} kampe i databasen for det valgte filter.**")
-
-    st.divider()
+    st.caption(f"**Der er {len(f_df)} kampe i databasen for det valgte filter.**")
     st.caption(f"Viser unikke kampe for {valgt_hold}")
