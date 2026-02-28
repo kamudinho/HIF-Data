@@ -139,19 +139,19 @@ try:
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
-            # Vi henter data her for at sikre friskhed, men sender det med
             df_for_teams = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
             tt.vis_side(df_for_teams)
         
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
-            # Vi sender hele dp med, så tp kan læse 'playerstats' og 'players'
             tp.vis_side(dp) 
             
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            df_matches = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
-            tm.vis_side(df_matches)
+            if not dp["opta_matches"].empty:
+                tm.vis_side(dp["opta_matches"])
+            else:
+                tm.vis_side(dp["team_matches"])
             
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
