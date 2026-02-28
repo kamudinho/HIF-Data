@@ -15,18 +15,18 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED DATA ---
+    # --- 2. RENS DATA & FORBERED FILTER ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
     
-    hold_set = set()
+    alle_hold = set()
     for label in df['Kamp_Renset'].dropna().unique():
         parts = label.split(' - ')
         for p in parts:
-            hold_set.add(p.strip())
+            alle_hold.add(p.strip())
     
-    valgbare_hold = sorted(list(hold_set))
+    valgbare_hold = sorted(list(alle_hold))
 
-    # --- 3. FILTER & INFO SEKTION ---
+    # --- 3. LAYOUT: FILTER (Venstre) & INFO (Højre) ---
     c1, c2 = st.columns([1, 2])
     
     with c1:
@@ -43,22 +43,20 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. HØJRE SIDE (Nu baseret på xG) ---
+    # --- 5. INFO-TEKST TIL HØJRE (Kun captions, ingen ikoner) ---
     with c2:
-        # Flyt captions ned så de flugter med selectboxen
-        st.markdown("<div style='padding-top: 20px;'></div>", unsafe_allow_html=True)
+        # Justering af højde så det flugter med selectbox
+        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
         
         # Linje 1: Antal kampe
         st.caption(f"Der er {len(f_df)} unikke kampe for {valgt_hold}")
         
-        # Linje 2: Manglende data (Beregnet på xG)
-        # Vi tæller rækker i f_df hvor xG er NaN eller præcis 0.0
-        mangler = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
-        
-        if mangler > 0:
-            st.caption(f"⚠️ Obs: {mangler} rækker i databasen mangler data")
+        # Linje 2: Manglende data (baseret på xG)
+        tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
+        if tomme_stats > 0:
+            st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data")
 
-    # --- 6. TABEL ---
+    # --- 6. KLARGØR VISNING & TABEL ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
@@ -79,3 +77,6 @@ def vis_side(df):
             "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
+
+    st.divider()
+    st.caption(f"Viser unikke kampe for {valgt_hold}")
