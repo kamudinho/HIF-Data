@@ -54,9 +54,14 @@ def vis_side(df_team_matches, hold_map, df_events=None):
     # Lav navne_dict
     navne_dict = {}
     for tid in df_filtered_comp['TEAM_WYID'].unique():
-        tid_str = str(int(tid))
-        navn = hold_map.get(tid_str, f"Hold {tid_str}")
-        navne_dict[navn] = tid
+        # Hvis det er et tal (Wyscout), konverter til int. 
+        # Hvis det er en tekst (Opta), behold det som str.
+        try:
+            lookup_id = int(float(tid)) if str(tid).replace('.','').isdigit() else str(tid)
+            navn = hold_map.get(lookup_id, f"Hold {tid}")
+            navne_dict[navn] = tid
+        except:
+            navne_dict[f"Ukendt {tid}"] = tid
     
     with col_sel2:
         valgt_hold_navn = st.selectbox("Vælg Modstander:", options=sorted(navne_dict.keys()))
