@@ -126,10 +126,18 @@ def get_queries(comp_filter, season_filter):
         # --- 6. KAMPOVERSIGT ---
         "team_matches": f"""
             SELECT DISTINCT
-                s.SEASONNAME, tm.SEASON_WYID, tm.TEAM_WYID, t.TEAMNAME, tm.MATCH_WYID, 
-                tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+                s.SEASONNAME, 
+                tm.DATE, 
+                m.MATCHLABEL,
+                t.TEAMNAME, 
+                tm.GAMEWEEK,
                 c.COMPETITIONNAME AS COMPETITION_NAME, 
-                adv.*, m.MATCHLABEL 
+                adv.GOALS, 
+                adv.XG, 
+                adv.SHOTS, 
+                adv.SHOTSONTARGET,
+                adv.CORNERS,
+                adv.YELLOWCARDS
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
                 ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
