@@ -153,6 +153,7 @@ def get_data_package():
         "opta_matches": df_matches_opta,  # Opta kilde (OPTA_MATCHINFO)
         "comp_filter": comp_filter,
         "opta_uuid": opta_uuid,
+        "hold_map": hold_map,  # <-- DENNE MANGLER HØJST SANDSYNLIGT
         "season_filter": season_filter,
         "team_id": TEAM_WYID,
         "colors": TEAM_COLORS
