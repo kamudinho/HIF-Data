@@ -35,24 +35,33 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. RESULTAT-LOGIK (Fixer "Cannot convert non-finite values") ---
+    # --- 5. RESULTAT-LOGIK (Waterproof version) ---
     def format_score(row):
-        # Hvis kampen ikke er spillet eller status er mærkelig
-        if row.get('MATCH_STATUS') != 'Played':
+        # 1. Tjek status - hvis den ikke er 'Played', returner altid '-'
+        status = str(row.get('MATCH_STATUS', '')).strip()
+        if status != 'Played':
             return "-"
             
+        # 2. Prøv at finde hjemme- og udescore i forskellige mulige kolonner
+        # Vi tjekker både TOTAL_ og FT_ (Full Time) for at være sikre
+        h_val = row.get('TOTAL_HOME_SCORE', row.get('HOME_GOALS', row.get('FT_HOME_SCORE')))
+        a_val = row.get('TOTAL_AWAY_SCORE', row.get('AWAY_GOALS', row.get('FT_AWAY_SCORE')))
+        
         try:
-            # Vi tjekker om begge værdier eksisterer og er tal (ikke NaN)
-            h_val = row.get('TOTAL_HOME_SCORE')
-            a_val = row.get('TOTAL_AWAY_SCORE')
-            
+            # Tjek om vi rent faktisk har fået fat i nogle tal
             if pd.notna(h_val) and pd.notna(a_val):
                 return f"{int(float(h_val))} - {int(float(a_val))}"
-            return "-"
+            else:
+                return "0 - 0" # Fallback hvis kampen ER spillet men score er mangler
         except:
-            return "-"
+            return "?" # Hvis alt andet fejler
 
+    # Påfør logikken
     f_df['Mål'] = f_df.apply(format_score, axis=1)
+
+    # VIGTIGT: Tjek lige om kolonnerne overhovedet er med i dit 'disp' udvalg
+    # Vi skal sikre os at 'Mål' er med her:
+    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'Mål', 'XG', 'SHOTS']].copy()
 
     # --- 6. INFO-TEKST ---
     with c2:
