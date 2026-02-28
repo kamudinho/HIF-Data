@@ -1,3 +1,5 @@
+#data/utils/team_mapping.py
+
 TEAMS = {
     # --- Betinia Ligaen (1. division) ---
     "Hvidovre IF": {"wyid": 7490, "uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "league": 328},
