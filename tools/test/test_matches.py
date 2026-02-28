@@ -15,16 +15,28 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. FORBERED GRUNDDATA ---
+    # --- 2. FORBERED DATA ---
     df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
-    alle_hold = sorted(list(set([p.strip() for label in df['Kamp_Renset'].dropna().unique() for p in label.split(' - ')])))
+    
+    # Vi bygger listen over hold korrekt
+    hold_set = set()
+    for label in df['Kamp_Renset'].dropna().unique():
+        parts = label.split(' - ')
+        for p in parts:
+            hold_set.add(p.strip())
+    
+    valgbare_hold = sorted(list(hold_set))
 
     # --- 3. FILTER & INFO LINJE (To kolonner) ---
     c1, c2 = st.columns([1, 2])
     
     with c1:
-        default_index = valgbare_hold.index("Hvidovre") + 1 if "Hvidovre" in alle_hold else 0
-        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + alle_hold, index=default_index)
+        # Nu findes 'valgbare_hold', så denne linje virker:
+        default_index = 0
+        if "Hvidovre" in valgbare_hold:
+            default_index = valgbare_hold.index("Hvidovre") + 1
+            
+        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=default_index)
 
     # --- 4. FILTRERING ---
     if valgt_hold != "Alle hold":
@@ -34,19 +46,22 @@ def vis_side(df):
     else:
         f_df = df.copy()
 
-    # --- 5. INFO TEKST (Placeret i højre kolonne c2) ---
+    # --- 5. INFO TEKST (I kolonne c2 ved siden af vælgeren) ---
     with c2:
-        # Vi rykker teksten lidt ned så den flugter med selectboxen
+        # Justering af højde så teksten flugter med selectbox
         st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        
         tomme_stats = f_df[f_df['XG'].isna() | (f_df['XG'] == 0)].shape[0]
+        antal_kampe = len(f_df)
         
-        info_str = f"📊 **{len(f_df)} unikke kampe for {valgt_hold}**"
+        # Vi bygger en pæn besked
+        besked = f"📊 **{antal_kampe} unikke kampe for {valgt_hold}**"
         if tomme_stats > 0:
-            info_str += f" | ⚠️ **{tomme_stats} mangler data**"
-        
-        st.write(info_str)
+            besked += f" | ⚠️ **{tomme_stats} mangler data**"
+            
+        st.write(besked)
 
-    # --- 6. KLARGØR VISNING & TABEL ---
+    # --- 6. TABEL VISNING ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
