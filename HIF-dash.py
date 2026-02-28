@@ -135,22 +135,24 @@ try:
             df_scatter = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
             sc.vis_side(df_scatter)
 
-    # --- BETINIA LIGAEN (Her var fejlen!) ---
+    # --- BETINIA LIGAEN ---
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
-            # Hent dataen her i main, før du sender den til modulet
+            # Vi henter data her for at sikre friskhed, men sender det med
             df_for_teams = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
-            tt.vis_side(df_for_teams) # Send data med!
+            tt.vis_side(df_for_teams)
+        
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
-            import importlib
-            importlib.reload(tp) # Tvinger den til at bruge den nye logik med 'players' query
-            tp.vis_side()
+            # Vi sender hele dp med, så tp kan læse 'playerstats' og 'players'
+            tp.vis_side(dp) 
+            
         elif sel == "Kampe":
             import tools.test.test_matches as tm
+            # tm.vis_side modtager nu hele dp og håndterer selv sorteringen
             tm.vis_side(dp)
-
+            
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
         if sel == "Scoutrapport":
