@@ -16,75 +16,53 @@ def vis_side(df):
         return
 
     # --- 2. RENS NAVNE (Standardiserer til store bogstaver internt) ---
+    # 1. Standardiser kolonner (VIGTIGT: Snowflake returnerer altid UPPERCASE)
     df.columns = [c.upper() for c in df.columns]
     
-    # Lav 'Kamp_Renset' baseret på hvad der findes
-    if 'MATCHLABEL' in df.columns:
-        df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
+    # 2. MATCHLABEL FIX
+    # Opta-data har ofte ikke 'MATCHLABEL'. Vi bygger den selv hvis den mangler.
+    if 'MATCHLABEL' not in df.columns:
+        # Tjek om vi har de specifikke Opta navne fra din SQL
+        home = df.get('CONTESTANTHOME_NAME', df.get('HOME_TEAM_NAME', 'Hjemme'))
+        away = df.get('CONTESTANTAWAY_NAME', df.get('AWAY_TEAM_NAME', 'Ude'))
+        df['KAMP_RENSET'] = home + " - " + away
     else:
-        df['Kamp_Renset'] = df.get('CONTESTANTHOME_NAME', 'Hjemme') + " - " + df.get('CONTESTANTAWAY_NAME', 'Ude')
+        df['KAMP_RENSET'] = df['MATCHLABEL'].str.split(',').str[0]
 
-    valgbare_hold = sorted(list(TEAMS.keys()))
+    # 3. DATO FIX (Opta bruger MATCH_DATE_FULL)
+    # Vi prøver alle muligheder for dato-kolonnen
+    dato_col = next((c for c in ['DATE', 'MATCH_DATE_FULL', 'DATE_DT'] if c in df.columns), None)
+    if dato_col:
+        df['DATE_DT'] = pd.to_datetime(df[dato_col])
+    else:
+        df['DATE_DT'] = pd.Timestamp.now()
+    
+    df = df.sort_values('DATE_DT', ascending=False)
+    df['VISNINGSDATO'] = df['DATE_DT'].dt.strftime('%d-%m-%Y')
 
-    # --- 3. FILTER ---
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        hvi_idx = valgbare_hold.index("Hvidovre IF") + 1 if "Hvidovre IF" in valgbare_hold else 0
-        valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=hvi_idx)
-
-    # --- 4. FILTRERING ---
-    f_df = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)].copy() if valgt_hold != "Alle hold" else df.copy()
-
-    # --- 5. DATO & RESULTAT-LOGIK (Her fixer vi fejlene) ---
-    # Vi bruger .get() for at undgå 'KeyError' hvis Snowflake har ændret navnet
-    f_df['DATE_DT'] = pd.to_datetime(f_df.get('DATE', f_df.get('MATCH_DATE_FULL', pd.Timestamp.now())))
-    f_df = f_df.sort_values('DATE_DT', ascending=False)
-    f_df['VisningsDato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
-
+    # 4. MÅL FIX (Håndterer Opta's TOTAL_HOME_SCORE)
     def get_score(row):
-        # Tjek status - Opta bruger ofte 'Played' eller 'Closed'
-        status = str(row.get('MATCH_STATUS', '')).strip()
-        if status not in ['Played', 'Closed']:
-            return "-"
-        
-        # Forsøg at finde mål i alle tænkelige kolonner fra din SQL
-        h = row.get('TOTAL_HOME_SCORE', row.get('FT_HOME_SCORE', row.get('HOME_GOALS')))
-        a = row.get('TOTAL_AWAY_SCORE', row.get('FT_AWAY_SCORE', row.get('AWAY_GOALS')))
-        
+        h = row.get('TOTAL_HOME_SCORE', row.get('HOME_GOALS', 0))
+        a = row.get('TOTAL_AWAY_SCORE', row.get('AWAY_GOALS', 0))
+        # Hvis kampen er spillet (Played) eller har score
         if pd.notna(h) and pd.notna(a):
             return f"{int(float(h))} - {int(float(a))}"
         return "-"
 
-    f_df['Mål'] = f_df.apply(get_score, axis=1)
+    df['MÅL'] = df.apply(get_score, axis=1)
 
-    # --- 6. INFO-TEKST ---
-    with c2:
-        st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
-        st.markdown(f"""
-            <div style="text-align: right; color: rgba(49, 51, 63, 0.6); font-size: 0.8rem;">
-                Viser {len(f_df)} kampe for {valgt_hold}
-            </div>
-        """, unsafe_allow_html=True)
-
-    # --- 7. TABEL-VISNING (Brug de nye navne her) ---
-    # Vi vælger de kolonner vi lige har skabt
-    final_cols = ['VisningsDato', 'WEEK', 'Kamp_Renset', 'Mål', 'XG', 'SHOTS']
+    # 5. KLARGØR TIL TABEL
+    # Vi sikrer os at Rd. (WEEK) findes
+    df['RD_VIS'] = df.get('WEEK', df.get('GAMEWEEK', 0))
     
-    # Sikr os at alle kolonner findes i dataframe før visning (fallback til 0)
-    for col in final_cols:
-        if col not in f_df.columns:
-            f_df[col] = 0 if col in ['XG', 'SHOTS', 'WEEK'] else "-"
+    # Vælg de endelige kolonner (brug de navne vi lige har lavet i UPPERCASE)
+    final_cols = ['VISNINGSDATO', 'RD_VIS', 'KAMP_RENSET', 'MÅL', 'XG', 'SHOTS']
+    
+    # Fallback for manglende stats
+    for c in ['XG', 'SHOTS']:
+        if c not in df.columns: df[c] = 0.0
 
-    disp = f_df[final_cols].copy()
+    disp = df[final_cols].copy()
     disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
 
-    st.dataframe(
-        disp,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Dato": st.column_config.TextColumn(width="small"),
-            "Rd.": st.column_config.NumberColumn(width="small"),
-            "xG": st.column_config.NumberColumn(format="%.2f"),
-        }
-    )
+    st.dataframe(disp, use_container_width=True, hide_index=True)
