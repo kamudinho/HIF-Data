@@ -3,66 +3,67 @@ import pandas as pd
 from data.utils.team_mapping import TEAMS
 
 def vis_side(df):
-    # --- 1. BRANDING ---
-    hif_rod = "#df003b"
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TURNERING: KAMPOVERSIGT (OPTA)</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    if df is None or df.empty:
-        st.info("Ingen data fundet.")
+    # 1. VIS OVERSKRIFT MED DET SAMME (Hvis denne ikke ses, dør den før funktionen)
+    st.subheader("KAMPOVERSIGT")
+
+    # 2. TOTAL SIKRING MOD TOM DATA
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        st.warning("Ingen data fundet.")
         return
 
-    # --- 2. RENS NAVNE (Standardiserer til store bogstaver internt) ---
-    # 1. Standardiser kolonner (VIGTIGT: Snowflake returnerer altid UPPERCASE)
-    df.columns = [c.upper() for c in df.columns]
-    
-    # 2. MATCHLABEL FIX
-    # Opta-data har ofte ikke 'MATCHLABEL'. Vi bygger den selv hvis den mangler.
-    if 'MATCHLABEL' not in df.columns:
-        # Tjek om vi har de specifikke Opta navne fra din SQL
-        home = df.get('CONTESTANTHOME_NAME', df.get('HOME_TEAM_NAME', 'Hjemme'))
-        away = df.get('CONTESTANTAWAY_NAME', df.get('AWAY_TEAM_NAME', 'Ude'))
-        df['KAMP_RENSET'] = home + " - " + away
-    else:
-        df['KAMP_RENSET'] = df['MATCHLABEL'].str.split(',').str[0]
+    try:
+        # Lav en kopi og tving alle kolonnenavne til STORE BOGSTAVER
+        df = df.copy()
+        df.columns = [c.upper() for c in df.columns]
 
-    # 3. DATO FIX (Opta bruger MATCH_DATE_FULL)
-    # Vi prøver alle muligheder for dato-kolonnen
-    dato_col = next((c for c in ['DATE', 'MATCH_DATE_FULL', 'DATE_DT'] if c in df.columns), None)
-    if dato_col:
-        df['DATE_DT'] = pd.to_datetime(df[dato_col])
-    else:
-        df['DATE_DT'] = pd.Timestamp.now()
-    
-    df = df.sort_values('DATE_DT', ascending=False)
-    df['VISNINGSDATO'] = df['DATE_DT'].dt.strftime('%d-%m-%Y')
+        # 3. FILTER (Dropdown)
+        alle_hold = sorted(list(TEAMS.keys()))
+        valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + alle_hold)
 
-    # 4. MÅL FIX (Håndterer Opta's TOTAL_HOME_SCORE)
-    def get_score(row):
-        h = row.get('TOTAL_HOME_SCORE', row.get('HOME_GOALS', 0))
-        a = row.get('TOTAL_AWAY_SCORE', row.get('AWAY_GOALS', 0))
-        # Hvis kampen er spillet (Played) eller har score
-        if pd.notna(h) and pd.notna(a):
-            return f"{int(float(h))} - {int(float(a))}"
-        return "-"
+        # 4. KONVERTER ALT TIL STRENG (Fjerner risiko for NaN-fejl)
+        # Vi laver 'KAMP' kolonnen råt
+        if 'MATCHLABEL' in df.columns:
+            df['KAMP_NAVN'] = df['MATCHLABEL'].astype(str)
+        elif 'CONTESTANTHOME_NAME' in df.columns:
+            df['KAMP_NAVN'] = df['CONTESTANTHOME_NAME'].astype(str) + " - " + df['CONTESTANTAWAY_NAME'].astype(str)
+        else:
+            df['KAMP_NAVN'] = "Ukendt Kamp"
 
-    df['MÅL'] = df.apply(get_score, axis=1)
+        # 5. UDFØR FILTER
+        if valgt_hold != "Alle hold":
+            soeg = valgt_hold.replace(" IF", "").strip()
+            df = df[df['KAMP_NAVN'].str.contains(soeg, case=False, na=False)].copy()
 
-    # 5. KLARGØR TIL TABEL
-    # Vi sikrer os at Rd. (WEEK) findes
-    df['RD_VIS'] = df.get('WEEK', df.get('GAMEWEEK', 0))
-    
-    # Vælg de endelige kolonner (brug de navne vi lige har lavet i UPPERCASE)
-    final_cols = ['VISNINGSDATO', 'RD_VIS', 'KAMP_RENSET', 'MÅL', 'XG', 'SHOTS']
-    
-    # Fallback for manglende stats
-    for c in ['XG', 'SHOTS']:
-        if c not in df.columns: df[c] = 0.0
+        # 6. RESULTAT (Super simpel logik)
+        # Vi henter værdier og bruger 0 hvis de mangler
+        h_score = df.get('TOTAL_HOME_SCORE', df.get('HOME_GOALS', 0))
+        a_score = df.get('TOTAL_AWAY_SCORE', df.get('AWAY_GOALS', 0))
+        
+        # Vi bygger resultatet manuelt som tekst
+        df['MÅL'] = h_score.astype(str) + " - " + a_score.astype(str)
+        df['MÅL'] = df['MÅL'].replace("nan - nan", "-") # Fix hvis begge er tomme
 
-    disp = df[final_cols].copy()
-    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
+        # 7. DATO (Rå konvertering)
+        dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE'] if c in df.columns), None)
+        if dato_col:
+            df['DATO_STR'] = df[dato_col].astype(str).str[:10] # Tag kun de første 10 tegn (YYYY-MM-DD)
+        else:
+            df['DATO_STR'] = "-"
 
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+        # 8. VISNING (Vi bruger kun de 3 vigtigste kolonner)
+        final_df = df[['DATO_STR', 'KAMP_NAVN', 'MÅL']].copy()
+        final_df.columns = ['Dato', 'Kamp', 'Mål']
+
+        # Beregn højde (Max 800px for at være sikker)
+        hoejde = min((len(final_df) * 35) + 45, 800)
+
+        st.dataframe(
+            final_df,
+            use_container_width=True,
+            hide_index=True,
+            height=hoejde
+        )
+
+    except Exception as e:
+        # Hvis noget går galt, skriver den fejlen i stedet for at gå i hvidt
+        st.error(f"Der skete en fejl i tabel-genereringen: {e}")
