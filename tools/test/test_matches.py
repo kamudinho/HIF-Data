@@ -19,7 +19,6 @@ def vis_side(df):
     # Vi tjekker om xG er 0 eller None i de nyeste kampe
     tomme_stats = df[df['XG'].isna() | (df['XG'] == 0)].shape[0]
     if tomme_stats > 0:
-
         st.caption(f"**Der er {len(f_df)} kampe i databasen for {valgt_hold}.**")
         st.caption(f"Obs: {tomme_stats} rækker i databasen mangler data. Dette skyldes ofte forsinkelse fra Wyscout.")
 
