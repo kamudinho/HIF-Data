@@ -149,9 +149,9 @@ try:
         elif sel == "Kampe":
             import tools.test.test_matches as tm
             if not dp["opta_matches"].empty:
-            tm.vis_side(dp["opta_matches"])
+                tm.vis_side(dp["opta_matches"])
             else:
-            tm.vis_side(dp["team_matches"])
+                tm.vis_side(dp["team_matches"])
             
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
