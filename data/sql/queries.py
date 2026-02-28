@@ -134,6 +134,24 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
 
+        "opta_matches": f"""
+            SELECT 
+                m.MATCH_ID AS MATCH_WYID, -- Vi aliaser for at genbruge din logik
+                m.DATE_TIME_UTC AS DATE,
+                m.GAMEDAY AS GAMEWEEK,
+                m.HOME_TEAM_NAME || ' - ' || m.AWAY_TEAM_NAME AS MATCHLABEL,
+                m.SCORE_HOME + m.SCORE_AWAY AS GOALS, -- Total mål i kampen
+                m.HOME_TEAM_ID,
+                m.AWAY_TEAM_ID,
+                -- Her kan vi tilføje xG hvis det findes i din OPTA_MATCHINFO tabel
+                0.00 AS XG, 
+                0 AS SHOTS
+            FROM {DB}.OPTA_MATCHINFO m
+            WHERE m.COMPETITION_ID = '6ifaeunfdelecgticvxanikzu' -- Betinia Ligaen UUID
+            AND m.SEASON_ID = '{season_filter.replace("='", "").replace("'", "")}' -- Rens season_filter
+            ORDER BY m.DATE_TIME_UTC DESC
+        """,
+
         # --- 7. ALLE EVENTS ---
         "events": f"""
             SELECT 
