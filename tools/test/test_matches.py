@@ -7,7 +7,7 @@ def vis_side(df):
     
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TURNERING: KAMPOVERSIGT</h3>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">BETINIA LIGAEN: KAMPOVERSIGT</h3>
         </div>
     """, unsafe_allow_html=True)
     
@@ -23,8 +23,8 @@ def vis_side(df):
 
     # --- 3. FORBEREDELSE AF TABEL (Matcher Scout DB layout) ---
     # Vi udvælger og omdøber kolonner for at få et rent look
-    disp = df[['Dato', 'GAMEWEEK', 'MATCHLABEL', 'TEAMNAME', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']].copy()
-    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Hold', 'Mål', 'xG', 'Skud', 'På Mål']
+    disp = df[['Dato', 'GAMEWEEK', 'MATCHLABEL', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']].copy()
+    disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud', 'På Mål']
 
     # Dynamisk højde ligesom i Scout DB
     tabel_hoejde = (len(disp) + 1) * 35 + 10 
