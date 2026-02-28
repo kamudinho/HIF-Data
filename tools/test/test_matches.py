@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from data.utils.team_mapping import TEAMS # Vigtigt til filtrering
+import numpy as np
+from data.utils.team_mapping import TEAMS
 
 def vis_side(df):
     # --- 1. BRANDING ---
@@ -8,7 +9,7 @@ def vis_side(df):
     
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TURNERING: KAMPOVERSIGT (OPTA/WY)</h3>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TURNERING: KAMPOVERSIGT (OPTA)</h3>
         </div>
     """, unsafe_allow_html=True)
     
@@ -16,80 +17,78 @@ def vis_side(df):
         st.info("Ingen data fundet.")
         return
 
-    # --- 2. RENS DATA BASERET PÅ KILDE ---
-    # Opta bruger tit 'MATCHLABEL' direkte, men vi sikrer os at vi kan splitte den
+    # --- 2. RENS DATA ---
     if 'MATCHLABEL' in df.columns:
         df['Kamp_Renset'] = df['MATCHLABEL'].str.split(',').str[0]
-    else:
-        # Hvis det er ren Opta data uden label, bygger vi den selv
-        df['Kamp_Renset'] = df['HOME_TEAM_NAME'] + " - " + df['AWAY_TEAM_NAME']
     
-    # Vi henter hold fra vores centrale mapping i stedet for at stole på rå data
     valgbare_hold = sorted(list(TEAMS.keys()))
 
     # --- 3. LAYOUT: FILTER ---
     c1, c2 = st.columns([1, 2])
-    
     with c1:
-        # Finder Hvidovre IF i listen
         hvi_idx = valgbare_hold.index("Hvidovre IF") + 1 if "Hvidovre IF" in valgbare_hold else 0
         valgt_hold = st.selectbox("Vælg dit hold", ["Alle hold"] + valgbare_hold, index=hvi_idx)
 
-    # --- 4. FILTRERING (Understøtter både WYID og Opta UUID) ---
+    # --- 4. FILTRERING ---
     if valgt_hold != "Alle hold":
-        hvi_info = TEAMS.get(valgt_hold, {})
-        wyid = hvi_info.get("team_wyid")
-        uuid = hvi_info.get("opta_uuid")
-        
-        # Vi filtrerer på navnet i Kamp_Renset for at ramme begge kilder bredt
         f_df = df[df['Kamp_Renset'].str.contains(valgt_hold, na=False)].copy()
-        
-        # Hvis vi har ID'er, så dubbel-tjek for præcision
-        if 'MATCH_WYID' in f_df.columns:
-            f_df = f_df.drop_duplicates(subset=['MATCH_WYID'])
     else:
         f_df = df.copy()
 
-    # --- 5. INFO-TEKST ---
+    # --- 5. RESULTAT-LOGIK (Fixer "Cannot convert non-finite values") ---
+    def format_score(row):
+        # Hvis kampen ikke er spillet eller status er mærkelig
+        if row.get('MATCH_STATUS') != 'Played':
+            return "-"
+            
+        try:
+            # Vi tjekker om begge værdier eksisterer og er tal (ikke NaN)
+            h_val = row.get('TOTAL_HOME_SCORE')
+            a_val = row.get('TOTAL_AWAY_SCORE')
+            
+            if pd.notna(h_val) and pd.notna(a_val):
+                return f"{int(float(h_val))} - {int(float(a_val))}"
+            return "-"
+        except:
+            return "-"
+
+    f_df['Mål'] = f_df.apply(format_score, axis=1)
+
+    # --- 6. INFO-TEKST ---
     with c2:
         st.markdown("<div style='padding-top: 25px;'></div>", unsafe_allow_html=True)
-        
-        # xG håndtering (Opta kan have 0.00 hvis ikke beregnet endnu)
         mangler_mask = (f_df['XG'].isna()) | (f_df['XG'] < 0.01)
         tomme_stats = f_df[mangler_mask].shape[0]
         
         info_html = f"""
             <div style="text-align: right; color: rgba(49, 51, 63, 0.6); font-size: 0.8rem; line-height: 1.2;">
                 Der er {len(f_df)} unikke kampe for {valgt_hold}<br>
-                {"Obs: Mangler xG/Skud data på " + str(tomme_stats) + " kampe" if tomme_stats > 0 else "Alle stats er indlæst"}
+                {"Obs: Mangler data på " + str(tomme_stats) + " rækker" if tomme_stats > 0 else ""}
             </div>
         """
         st.markdown(info_html, unsafe_allow_html=True)
 
-    # --- 6. KLARGØR VISNING ---
+    # --- 7. KLARGØR VISNING ---
     f_df['DATE_DT'] = pd.to_datetime(f_df['DATE'])
     f_df = f_df.sort_values('DATE_DT', ascending=False)
     f_df['Dato'] = f_df['DATE_DT'].dt.strftime('%d-%m-%Y')
 
-    # Vi bygger en flot resultat-kolonne: "3 - 3"
-    # Vi bruger .astype(str) for at sikre, at vi kan samle dem
-    f_df['Resultat'] = f_df['HOME_GOALS'].astype(int).astype(str) + " - " + f_df['AWAY_GOALS'].astype(int).astype(str)
-
-    # Vælg de kolonner vi vil vise
-    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'Resultat', 'XG', 'SHOTS']].copy()
+    # Kolonnevalg
+    disp = f_df[['Dato', 'GAMEWEEK', 'Kamp_Renset', 'Mål', 'XG', 'SHOTS']].copy()
     disp.columns = ['Dato', 'Rd.', 'Kamp', 'Mål', 'xG', 'Skud']
 
     st.dataframe(
         disp,
         use_container_width=True,
         hide_index=True,
+        height=min((len(disp) + 1) * 35 + 10, 800),
         column_config={
             "Dato": st.column_config.TextColumn(width="small"),
             "Rd.": st.column_config.NumberColumn(width="small"),
-            "Mål": st.column_config.TextColumn(width="small"), # Nu som tekst "3 - 3"
+            "Mål": st.column_config.TextColumn(width="small"),
             "xG": st.column_config.NumberColumn(format="%.2f"),
         }
     )
 
     st.divider()
-    st.caption(f"Viser data fra {valgt_hold} (Kilde: Snowflake)")
+    st.caption(f"Viser data fra {valgt_hold} (Kilde: Snowflake/Opta)")
