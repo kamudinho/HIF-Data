@@ -57,3 +57,19 @@ TEAMS = {
     "Sundby": {"wyid": 34555, "league": 43319},
     "Odder": {"wyid": 7588, "league": 43319}
 }
+
+def get_team_name(team_id):
+    """Slår navnet op baseret på enten WYID (int) eller UUID (str)"""
+    for name, info in TEAMS.items():
+        if info.get("wyid") == team_id or info.get("uuid") == team_id:
+            return name
+    return str(team_id) # Returnerer ID hvis navn ikke findes
+
+def get_teams_by_league(league_id):
+    """Henter alle holdnavne for en specifik liga (f.eks. 328)"""
+    return [name for name, info in TEAMS.items() if info["league"] == league_id]
+
+def get_hvi_ids():
+    """Henter de unikke ID'er for Hvidovre IF"""
+    hvi = TEAMS["Hvidovre IF"]
+    return hvi["wyid"], hvi["uuid"]
