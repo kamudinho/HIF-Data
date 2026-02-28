@@ -59,8 +59,8 @@ def vis_side(dp): # Nu modtager vi 'dp' som er din database-forbindelse
         if valgt_hold != "Alle": 
             df_filt = df_filt[df_filt['MATCHLABEL'].str.contains(valgt_hold, case=False)]
 
-        # --- VISNING ---
-        vis_cols = ['DATE', 'MATCHLABEL', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']
+        # Opdater vis_cols til at bruge den formaterede streng
+        vis_cols = ['DATE_STR', 'MATCHLABEL', 'GOALS', 'XG', 'SHOTS', 'SHOTSONTARGET']
         df_display = df_filt[[c for c in vis_cols if c in df_filt.columns]]
 
         st.dataframe(
@@ -68,7 +68,7 @@ def vis_side(dp): # Nu modtager vi 'dp' som er din database-forbindelse
             use_container_width=True,
             hide_index=True,
             column_config={
-                "DATE": st.column_config.TextColumn("Dato"),
+                "DATE_STR": st.column_config.TextColumn("Dato"),
                 "MATCHLABEL": st.column_config.TextColumn("Kamp & Resultat", width="large"),
                 "GOALS": st.column_config.NumberColumn("Mål"),
                 "XG": st.column_config.NumberColumn("xG", format="%.2f"),
