@@ -141,11 +141,20 @@ def get_data_package():
             df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
             df_hvidovre_csv = pd.merge(df_hvidovre_csv, df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
 
-    hold_map = {
-        info["team_wyid"]: name 
-        for name, info in TEAMS.items() 
-        if "team_wyid" in info
-    }
+    # --- SMART HOLD-MAPPING (WYID + UUID) ---
+    hold_map = {}
+    for name, info in TEAMS.items():
+        # 1. Tilføj Wyscout ID (som heltal)
+        if "team_wyid" in info and info["team_wyid"]:
+            try:
+                tid_wy = int(info["team_wyid"])
+                hold_map[tid_wy] = name
+            except: pass
+            
+        # 2. Tilføj Opta UUID (som tekst-streng)
+        if "opta_uuid" in info and info["opta_uuid"]:
+            tid_opta = str(info["opta_uuid"]).strip()
+            hold_map[tid_opta] = name
 
     return {
         "players": df_hvidovre_csv,
