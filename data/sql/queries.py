@@ -137,7 +137,7 @@ def get_queries(comp_filter, season_filter):
         """,
 
         # --- 6. KAMPOVERSIGT ---
-        "opta_match_stats": f"""
+        "opta_matches": f"""
             SELECT 
                 ms.MATCH_OPTAUUID,
                 ms.CONTESTANT_OPTAUUID,
