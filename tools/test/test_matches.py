@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(df):
-    st.markdown('<h3 style="color:#cc0000; margin-bottom:0px;">KAMPOVERSIGT</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="color:#cc0000; margin-bottom:10px;">KAMPOVERSIGT</h3>', unsafe_allow_html=True)
 
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         st.warning("Ingen data fundet.")
@@ -12,23 +12,26 @@ def vis_side(df):
         df = df.copy()
         df.columns = [c.upper() for c in df.columns]
 
-        # 1. LIGA-FILTER (ID 328 - NordicBet Liga)
+        # 1. LIGA-FILTER (ID 328)
         if 'COMPETITION_WYID' in df.columns:
             df = df[df['COMPETITION_WYID'] == 328].copy()
-        elif 'COMPETITION_ID' in df.columns:
-             df = df[df['COMPETITION_ID'] == 328].copy()
+        
+        # Find dato-kolonne og sorter (vigtigt for FORM)
+        dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE', 'MATCH_DATE'] if c in df.columns), None)
+        if dato_col:
+            df[dato_col] = pd.to_datetime(df[dato_col])
+            df = df.sort_values(dato_col, ascending=False)
 
-        # 2. KLARGØR NAVNE OG RESULTATER PÅ HELE SÆTTET
+        # 2. KLARGØR NAVNE OG RESULTATER
         if 'CONTESTANTHOME_NAME' in df.columns:
-            df['KAMP_NAVN'] = df['CONTESTANTHOME_NAME'].astype(str) + " - " + df['CONTESTANTAWAY_NAME'].astype(str)
             df['HOME_TEAM'] = df['CONTESTANTHOME_NAME'].astype(str)
             df['AWAY_TEAM'] = df['CONTESTANTAWAY_NAME'].astype(str)
         else:
-            df['KAMP_NAVN'] = df['MATCHLABEL'].astype(str).str.split(',').str[0]
-            df['HOME_TEAM'] = df['KAMP_NAVN'].str.split(' - ').str[0]
-            df['AWAY_TEAM'] = df['KAMP_NAVN'].str.split(' - ').str[1]
-
-        # Hent mål
+            # Fallback til MATCHLABEL (f.eks. "Hvidovre - Køge")
+            df['HOME_TEAM'] = df['MATCHLABEL'].astype(str).str.split(' - ').str[0]
+            df['AWAY_TEAM'] = df['MATCHLABEL'].astype(str).str.split(' - ').str[1]
+        
+        df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
         df['H_GOALS'] = pd.to_numeric(df.get('TOTAL_HOME_SCORE', df.get('HOME_GOALS', 0)), errors='coerce').fillna(0).astype(int)
         df['A_GOALS'] = pd.to_numeric(df.get('TOTAL_AWAY_SCORE', df.get('AWAY_GOALS', 0)), errors='coerce').fillna(0).astype(int)
 
@@ -36,58 +39,70 @@ def vis_side(df):
         liga_hold = sorted(list(set(df['HOME_TEAM'].unique()) | set(df['AWAY_TEAM'].unique())))
         hvi_index = next((i + 1 for i, h in enumerate(liga_hold) if "Hvidovre" in str(h)), 0)
 
-        # --- 4. LAYOUT: MINDRE DROPDOWN ---
-        col1, col2 = st.columns([1, 2])
-        with col1:
+        # --- 4. TOP BAR LAYOUT (Tre kolonner) ---
+        c1, c2, c3 = st.columns([1.5, 2.5, 2])
+
+        with c1:
             valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + liga_hold, index=hvi_index, label_visibility="collapsed")
 
-        # --- 5. BEREGN STATS (Kun hvis et hold er valgt) ---
+        stats_html = ""
+        form_html = ""
+
         if valgt_hold != "Alle hold":
-            # Filter kampe for valgt hold
             f_df = df[(df['HOME_TEAM'] == valgt_hold) | (df['AWAY_TEAM'] == valgt_hold)].copy()
             
             # Beregn stats
-            kampe = len(f_df)
-            vundne = 0
-            uafgjorte = 0
-            tabte = 0
-            mf = 0
-            mm = 0
-            
+            v, u, t, mf, mm = 0, 0, 0, 0, 0
+            form_items = []
+
             for _, r in f_df.iterrows():
                 is_home = r['HOME_TEAM'] == valgt_hold
-                h_mål, a_mål = r['H_GOALS'], r['A_GOALS']
+                h, a = r['H_GOALS'], r['A_GOALS']
                 
-                # Mål for/imod
-                mf += h_mål if is_home else a_mål
-                mm += a_mål if is_home else h_mål
+                # Mål
+                mf += h if is_home else a
+                mm += a if is_home else h
                 
-                # Resultat
-                if h_mål == a_mål: uafgjorte += 1
-                elif (is_home and h_mål > a_mål) or (not is_home and a_mål > h_mål): vundne += 1
-                else: tabte += 1
-            
-            # Vis stats som diskret caption
-            st.caption(f"**STATS:** {kampe} K | {vundne} V | {uafgjorte} U | {tabte} T | Mål: {mf}-{mm}")
+                # Resultat og farve til form
+                res, color = "U", "#6c757d" # Grå
+                if h == a:
+                    u += 1
+                elif (is_home and h > a) or (not is_home and a > h):
+                    v += 1
+                    res, color = "V", "#28a745" # Grøn
+                else:
+                    t += 1
+                    res, color = "T", "#dc3545" # Rød
+                
+                # Vi gemmer de seneste 5 til form-barren
+                if len(form_items) < 5:
+                    form_items.append(f'<span style="background-color:{color}; color:white; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:12px; font-weight:bold;">{res}</span>')
+
+            stats_html = f"<div style='padding-top:7px;'><span style='font-size:14px; color:#555;'><b>STATS:</b> {len(f_df)}K | {v}V-{u}U-{t}T | {mf}-{mm}</span></div>"
+            # Vi viser formen fra venstre mod højre (nyeste til højre)
+            form_html = f"<div style='padding-top:7px;'><span style='font-size:12px; color:#777; margin-right:8px;'>FORM:</span>{''.join(reversed(form_items))}</div>"
         else:
             f_df = df.copy()
-            st.caption("Viser alle kampe i NordicBet Liga")
+            stats_html = "<div style='padding-top:7px;'><span style='font-size:14px; color:#555;'>Viser alle kampe</span></div>"
 
-        # --- 6. FORMATER TABEL ---
+        with c2:
+            st.markdown(stats_html, unsafe_allow_html=True)
+        with c3:
+            st.markdown(form_html, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
+
+        # --- 5. TABELVISNING ---
         f_df['MÅL'] = f_df['H_GOALS'].astype(str) + " - " + f_df['A_GOALS'].astype(str)
-        
-        dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE'] if c in f_df.columns), None)
         if dato_col:
-            f_df['DATO_STR'] = pd.to_datetime(f_df[dato_col], errors='coerce').dt.strftime('%d-%m-%Y')
+            f_df['DATO_STR'] = f_df[dato_col].dt.strftime('%d-%m-%Y')
         else:
             f_df['DATO_STR'] = "-"
 
-        # Visning
         disp = f_df[['DATO_STR', 'KAMP_NAVN', 'MÅL']].copy()
         disp.columns = ['Dato', 'Kamp', 'Mål']
         
-        hoejde = min((len(disp) * 35) + 45, 800)
-        st.dataframe(disp, use_container_width=True, hide_index=True, height=hoejde)
+        st.dataframe(disp, use_container_width=True, hide_index=True, height=min((len(disp)*35)+45, 800))
 
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl i visning: {e}")
