@@ -16,18 +16,26 @@ def vis_side(df):
         df = df.copy()
         df.columns = [c.upper() for c in df.columns]
 
-        # 3. FILTER (Dropdown)
-        hjemme_hold = df['CONTESTANTHOME_NAME'].unique() if 'CONTESTANTHOME_NAME' in df.columns else []
-        ude_hold = df['CONTESTANTAWAY_NAME'].unique() if 'CONTESTANTAWAY_NAME' in df.columns else []
-        
-        # Saml og sorter unikke holdnavne fra ligaen
-        liga_hold = sorted(list(set(hjemme_hold) | set(ude_hold)))
-        
-        # Hvis listen er tom (fallback til din TEAMS liste, hvis navne-kolonnerne driller)
-        if not liga_hold:
-            liga_hold = sorted(list(TEAMS.keys()))
+        # --- 3. DYNAMISK FILTER (Kun hold fra den aktuelle data) ---
+        # Vi trækker navnene direkte fra hjemme- og udebane kolonnerne i din data
+        if 'CONTESTANTHOME_NAME' in df.columns and 'CONTESTANTAWAY_NAME' in df.columns:
+            hjemme = df['CONTESTANTHOME_NAME'].dropna().unique()
+            ude = df['CONTESTANTAWAY_NAME'].dropna().unique()
+            liga_hold = sorted(list(set(hjemme) | set(ude)))
+        else:
+            # Fallback hvis kolonnenavnene er anderledes (f.eks. i Wyscout data)
+            # Vi prøver at trække navne ud fra MATCHLABEL (f.eks. "Hvidovre - Køge")
+            labels = df['KAMP_NAVN'].str.split(' - ').str[0].dropna().unique()
+            liga_hold = sorted(list(labels))
 
-        valgt_hold = st.selectbox("Vælg hold fra NordicBet Liga", ["Alle hold"] + liga_hold)
+        # Vi finder Hvidovre i den nye korte liste så den er pre-selected
+        hvi_index = 0
+        for i, h in enumerate(liga_hold):
+            if "Hvidovre" in str(h):
+                hvi_index = i + 1 # +1 fordi vi har "Alle hold" øverst
+                break
+
+        valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + liga_hold, index=hvi_index)
 
         # 4. KONVERTER ALT TIL STRENG (Fjerner risiko for NaN-fejl)
         # Vi laver 'KAMP' kolonnen råt
