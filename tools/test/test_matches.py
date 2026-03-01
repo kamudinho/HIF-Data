@@ -22,11 +22,18 @@ def vis_side(df):
             df[dato_col] = pd.to_datetime(df[dato_col])
             df = df.sort_values(dato_col, ascending=False)
 
-        # 2. FORBERED NAVNE OG MÅL
+        # 2. FORBERED NAVNE OG MÅL (Robust version)
         df['HOME_TEAM'] = df['CONTESTANTHOME_NAME'].astype(str) if 'CONTESTANTHOME_NAME' in df.columns else "Hjemme"
         df['AWAY_TEAM'] = df['CONTESTANTAWAY_NAME'].astype(str) if 'CONTESTANTAWAY_NAME' in df.columns else "Ude"
-        df['H_GOALS'] = pd.to_numeric(df.get('TOTAL_HOME_SCORE', 0), errors='coerce').fillna(0).astype(int)
-        df['A_GOALS'] = pd.to_numeric(df.get('TOTAL_AWAY_SCORE', 0), errors='coerce').fillna(0).astype(int)
+        
+        # Her henter vi kolonnerne sikkert. Hvis de ikke findes, laver vi en tom kolonne med 0.
+        h_col = df['TOTAL_HOME_SCORE'] if 'TOTAL_HOME_SCORE' in df.columns else pd.Series(0, index=df.index)
+        a_col = df['TOTAL_AWAY_SCORE'] if 'TOTAL_AWAY_SCORE' in df.columns else pd.Series(0, index=df.index)
+        
+        # Nu kan vi sikkert bruge fillna og to_numeric
+        df['H_GOALS'] = pd.to_numeric(h_col, errors='coerce').fillna(0).astype(int)
+        df['A_GOALS'] = pd.to_numeric(a_col, errors='coerce').fillna(0).astype(int)
+        
         df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
 
         # 3. DROPDOWN LISTE
