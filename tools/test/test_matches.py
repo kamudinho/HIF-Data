@@ -22,28 +22,28 @@ def vis_side(df):
             df[dato_col] = pd.to_datetime(df[dato_col])
             df = df.sort_values(dato_col, ascending=False)
 
-        # 2. FORBERED NAVNE (Vi leder efter de rigtige Snowflake-kolonner)
-        # Vi tjekker forskellige varianter af kolonnenavne for hjemmehold
-        h_name_col = next((c for c in ['CONTESTANTHOME_NAME', 'HOME_TEAM_NAME', 'TEAM_HOME', 'HOME_TEAM'] if c in df.columns), None)
-        # Og for udehold
-        a_name_col = next((c for c in ['CONTESTANTAWAY_NAME', 'AWAY_TEAM_NAME', 'TEAM_AWAY', 'AWAY_TEAM'] if c in df.columns), None)
+        # 2. FORBERED NAVNE OG MÅL (Opta-specifik sikring)
+        # Vi leder efter de korrekte navne-kolonner fra dit Opta-feed
+        h_name_col = next((c for c in ['CONTESTANTHOME_NAME', 'HOME_TEAM_NAME', 'HOME_TEAM'] if c in df.columns), None)
+        a_name_col = next((c for c in ['CONTESTANTAWAY_NAME', 'AWAY_TEAM_NAME', 'AWAY_TEAM'] if c in df.columns), None)
 
-        df['HOME_TEAM'] = df[h_name_col].astype(str) if h_name_col else "Hjemme"
-        df['AWAY_TEAM'] = df[a_name_col].astype(str) if a_name_col else "Ude"
+        # Vi tvinger navnene ind - hvis de mangler, bruger vi 'Ukendt' så vi kan se det fejler
+        df['HOME_TEAM'] = df[h_name_col].astype(str) if h_name_col else "Ukendt H"
+        df['AWAY_TEAM'] = df[a_name_col].astype(str) if a_name_col else "Ukendt U"
         
-        # Mål-kolonner (Sikrer vi ikke får 'int object' fejlen igen)
+        # Mål-logik (Henter fra de rigtige Opta-felter)
         h_score_col = next((c for c in ['TOTAL_HOME_SCORE', 'HOME_SCORE', 'HOME_GOALS'] if c in df.columns), None)
         a_score_col = next((c for c in ['TOTAL_AWAY_SCORE', 'AWAY_SCORE', 'AWAY_GOALS'] if c in df.columns), None)
 
-        # Vi bruger pd.Series(0...) hvis kolonnen mangler helt
-        df['H_GOALS'] = pd.to_numeric(df[h_score_col] if h_score_col else pd.Series(0, index=df.index), errors='coerce').fillna(0).astype(int)
-        df['A_GOALS'] = pd.to_numeric(df[a_score_col] if a_score_col else pd.Series(0, index=df.index), errors='coerce').fillna(0).astype(int)
+        df['H_GOALS'] = pd.to_numeric(df[h_score_col] if h_score_col else 0, errors='coerce').fillna(0).astype(int)
+        df['A_GOALS'] = pd.to_numeric(df[a_score_col] if a_score_col else 0, errors='coerce').fillna(0).astype(int)
         
+        # Vigtigt: Skab KAMP_NAVN her, så filteret i sektion 5 virker!
         df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
 
-        # 3. DROPDOWN LISTE
-        liga_hold = sorted(list(set(df['HOME_TEAM'].unique()) | set(df['AWAY_TEAM'].unique())))
-        hvi_index = next((i + 1 for i, h in enumerate(liga_hold) if "Hvidovre" in str(h)), 0)
+        # 3. DYNAMISK HOLD-LISTE
+        # Nu trækker vi listen fra de faktiske navne vi lige har fundet
+        liga_hold = sorted([h for h in list(set(df['HOME_TEAM'].unique()) | set(df['AWAY_TEAM'].unique())) if "Ukendt" not in h])
 
         # --- 4. TOP BAR LAYOUT ---
         # Vi laver 3 kolonner: Dropdown, Stats, Form
