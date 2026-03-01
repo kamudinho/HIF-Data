@@ -21,7 +21,6 @@ def format_score(val):
     except: return ""
 
 def vis_side(data_package):
-    # Branding / Header
     st.subheader("KAMPOVERSIGT")
     
     df_matches = data_package.get("opta_matches")
@@ -36,13 +35,12 @@ def vis_side(data_package):
         df.columns = [c.upper() for c in df.columns]
         df['HAR_RESULTAT'] = df['TOTAL_HOME_SCORE'].notna()
 
-        # --- NY SEKTION: KONTROLPANEL I 3 KOLONNER ---
-        col1, col2, col3 = st.columns([1, 1, 2]) # [Bredde, Bredde, Dobbelt bredde]
+        # --- KONTROLPANEL I 3 KOLONNER ---
+        col1, col2, col3 = st.columns([1, 1, 1])
 
         with col1:
             visning = st.radio("Status:", ["Spillede", "Kommende"], horizontal=True)
         
-        # Filtrer data baseret på radio-valg med det samme
         if visning == "Spillede":
             df = df[df['HAR_RESULTAT'] == True]
         else:
@@ -52,17 +50,23 @@ def vis_side(data_package):
             liga_hold = sorted(list(set(df['CONTESTANTHOME_NAME'].dropna()) | set(df['CONTESTANTAWAY_NAME'].dropna())))
             valgt_hold = st.selectbox("Vælg hold:", ["Alle hold"] + liga_hold)
 
+        # --- NY POPOVER FILTER SEKTION ---
+        vis_stats = []
         with col3:
-            vis_stats = []
             if valgt_hold != "Alle hold" and visning == "Spillede":
-                mulige_stats = list(OPTA_MAP.values())
-                vis_stats = st.multiselect("Vælg kolonner:", mulige_stats, default=mulige_stats[:4])
+                with st.popover("⚙️ Vælg kolonner"):
+                    st.write("Vælg de statistikker du vil se:")
+                    # Checkboxe for hver stat i OPTA_MAP
+                    for key, dan_name in OPTA_MAP.items():
+                        # Vi gemmer valget direkte i en liste hvis checket
+                        if st.checkbox(dan_name, value=True, key=f"check_{key}"):
+                            vis_stats.append(dan_name)
             else:
-                st.write("") # Holder pladsen hvis intet hold er valgt
+                st.write("")
 
-        st.markdown("---") # Visuel adskillelse fra kontrollere til tabel
+        st.markdown("---")
 
-        # --- DATA BEHANDLING ---
+        # --- DATA BEHANDLING (Dato & Navne) ---
         dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE', 'DATO'] if c in df.columns), None)
         if dato_col:
             df[dato_col] = pd.to_datetime(df[dato_col])
