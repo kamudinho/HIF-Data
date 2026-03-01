@@ -32,7 +32,7 @@ def vis_side(data_package):
 
         # Basis formatering
         df['KAMP'] = df['CONTESTANTHOME_NAME'].astype(str) + " - " + df['CONTESTANTAWAY_NAME'].astype(str)
-        df['RESULTAT'] = df.apply(lambda r: f"{int(r.get('TOTAL_HOME_SCORE', 0))} - {int(r.get('TOTAL_AWAY_SCORE', 0))}" if visning == "Spillede kampe" else "-", axis=1)
+        df['RESULTAT'] = df.apply(lambda r: f"{int(r.get('TOTAL_HOME_SCORE') or 0)} - {int(r.get('TOTAL_AWAY_SCORE') or 0)}" if visning == "Spillede kampe" else "-", axis=1)        
         df['DATO_STR'] = df[dato_col].dt.strftime('%d-%m-%Y') if dato_col else ""
 
         if valgt_hold == "Alle hold":
