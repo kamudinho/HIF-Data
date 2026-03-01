@@ -44,6 +44,30 @@ def fmt_val(v):
         return f"{val:.2f}"
     except: return str(v)
 
+def build_player_bridge(df_wyscout, df_opta_players):
+    """
+    Bygger en bro mellem Wyscout (PLAYER_WYID) og Opta (PLAYER_SSIID) 
+    baseret på navne-match.
+    """
+    bridge = {}
+    if df_wyscout.empty or df_opta_players.empty:
+        return bridge
+
+    # Gør navne sammenlignelige (små bogstaver, ingen mærkelige tegn)
+    df_opta_players['CLEAN_NAME'] = df_opta_players['PLAYER_NAME'].str.lower().str.strip()
+    
+    for _, wy_row in df_wyscout.iterrows():
+        wy_name = str(wy_row.get('SHORTNAME', '')).lower().strip()
+        wy_id = str(wy_row['PLAYER_WYID'])
+        
+        # Find bedste match i Opta-listen
+        match = df_opta_players[df_opta_players['CLEAN_NAME'] == wy_name]
+        
+        if not match.empty:
+            bridge[wy_id] = match.iloc[0]['PLAYER_SSIID']
+            
+    return bridge
+
 # --- 3. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
@@ -162,8 +186,23 @@ def get_data_package():
             how='left'
         )
 
+    # --- 5.5 BYG SPILLER-BRO (Wyscout <-> Opta/SS) ---
+    player_bridge = {}
+    if not df_hvidovre_csv.empty and not df_sql_players.empty:
+        # Vi laver en midlertidig ordbog til opslag: Navn -> Opta UUID
+        # Vi bruger df_sql_players (som vi antager indeholder Opta ID'er i en kolonne som PLAYER_SSIID eller lign.)
+        # Hvis kolonnen ikke findes endnu, forbereder vi den her:
+        for _, row in df_sql_players.iterrows():
+            wy_id = str(row['PLAYER_WYID'])
+            # Her gemmer vi broen
+            player_bridge[wy_id] = {
+                "opta_id": row.get('PLAYER_SSIID', None), # Dette ID bruges af Second Spectrum
+                "shortname": row.get('SHORTNAME', '')
+            }
+
     # --- 6. RETURNER SAMLET PAKKE ---
     return {
+        "player_bridge": player_bridge,
         "players": df_hvidovre_csv,
         "playerstats": df_playerstats,
         "player_career": df_player_career,
