@@ -18,7 +18,7 @@ def vis_side(df):
 
         # --- 3. DYNAMISK FILTER (Kun hold fra den aktuelle data) ---
         # Vi trækker navnene direkte fra hjemme- og udebane kolonnerne i din data
-    if 'CONTESTANTHOME_NAME' in df.columns and 'CONTESTANTAWAY_NAME' in df.columns:
+        if 'CONTESTANTHOME_NAME' in df.columns and 'CONTESTANTAWAY_NAME' in df.columns:
             hjemme = df['CONTESTANTHOME_NAME'].dropna().unique()
             ude = df['CONTESTANTAWAY_NAME'].dropna().unique()
             liga_hold = sorted(list(set(hjemme) | set(ude)))
