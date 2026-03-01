@@ -129,15 +129,26 @@ def get_data_package():
         # Vi sender opta_uuid med som comp_filter til den specifikke query
         df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, f"='{opta_season}'")
 
-    # --- DEBUG MIDLERTIDIG ---
+    # --- NY ROBUST DEBUG ---
     if not df_matches_opta.empty:
-        st.write("### DEBUG: Opta Rådata Tjek")
-        # Vi viser kun de relevante kolonner for at finde fejlen
-        debug_cols = [c for c in ['TOURNAMENTCALENDAR_NAME', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 'MATCHDATE'] if c in df_matches_opta.columns]
-        st.dataframe(df_matches_opta[debug_cols].head(20))
+        st.write("### 🔍 Opta Debug Info")
         
-        # Vi tjekker hvilke unikke sæsonnavne der findes i det ufiltrerede data
-        st.write("Unikke sæsoner fundet i Opta-data:", df_matches_opta['TOURNAMENTCALENDAR_NAME'].unique().tolist())
+        # 1. Vis os hvad kolonnerne rent faktisk hedder
+        fundne_kolonner = df_matches_opta.columns.tolist()
+        st.write("Kolonner i Opta-data:", fundne_kolonner)
+        
+        # 2. Prøv at finde sæson-kolonnen uanset store/små bogstaver
+        season_col = next((c for c in fundne_kolonner if 'SEASON' in c.upper() or 'CALENDAR' in c.upper()), None)
+        
+        if season_col:
+            st.write(f"Fundet sæson-kolonne: `{season_col}`")
+            st.write("Unikke værdier:", df_matches_opta[season_col].unique().tolist())
+        else:
+            st.warning("Kunne ikke finde en kolonne med 'SEASON' eller 'CALENDAR' i navnet.")
+        
+        # 3. Vis de første 5 rækker af alt data så vi kan se indholdet
+        st.write("Første 5 rækker af rå Opta-data:")
+        st.dataframe(df_matches_opta.head(5))
 # -------------------------
 
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
