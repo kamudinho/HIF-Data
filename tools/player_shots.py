@@ -23,46 +23,52 @@ def vis_side(df_spillere=None, hold_map=None):
         st.error("Data pakke ikke fundet.")
         return
 
-    # --- 1. HENT DATA ---
+    # --- 1. HENT DATA FRA SNOWFLAKE ---
     if "shotevents_data" not in st.session_state:
-        with st.spinner("Henter skud..."):
-            # Vi henter værdierne fra din data_package (dp) ved at bruge de korrekte navne
-            # Vi bruger .get() med en fallback til dine standardværdier
-            comp_id = dp.get("COMPETITION_WYID", 328)
-            season_id = dp.get("SEASONNAME", "2025/2026")
+        with st.spinner("Henter skud fra Snowflake..."):
+            c_f = dp.get("comp_filter")
+            s_f = dp.get("season_filter")
             
-            # Nu kalder vi Snowflake med de rigtige variable
-            st.session_state["shotevents_data"] = load_snowflake_query(
-                "shotevents", comp_id, season_id
-            )
+            # Hent alt rådata fra Snowflake for ligaen/sæsonen
+            df_raw = load_snowflake_query("shotevents", c_f, s_f)
+            
+            if df_raw is not None and not df_raw.empty:
+                # Tving altid Snowflake-kolonner til STORE bogstaver med det samme
+                df_raw.columns = [str(c).upper().strip() for c in df_raw.columns]
+                # Rens ID'er fra Snowflake med det samme (fjerner .0)
+                df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
+            st.session_state["shotevents_data"] = df_raw
         st.rerun()
 
     df_shots = st.session_state["shotevents_data"]
-    df_trup = df_spillere if df_spillere is not None else dp.get("players")
+    # Din CSV-fil er 'Sandheden'
+    df_csv_trup = df_spillere if df_spillere is not None else dp.get("players")
 
-    if df_shots is None or df_trup is None:
-        st.warning("Data mangler.")
+    if df_shots is None or df_csv_trup is None:
+        st.warning("Data mangler fra enten Snowflake eller din spillerliste.")
         return
 
-    # --- 2. BEHANDL DIN CSV (Sandheden) ---
-    s_df = df_trup.copy()
-    s_df.columns = [str(c).upper().strip() for c in s_df.columns]
+    # --- 2. FORBERED DIN CSV-FILTER (Sandheden) ---
+    df_csv = df_csv_trup.copy()
+    df_csv.columns = [str(c).upper().strip() for c in df_csv.columns]
+    
+    # Sørg for at ID i CSV er ren tekst (f.eks. "7490")
+    df_csv['PLAYER_ID_CLEAN'] = df_csv['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+    
+    # Lav et opslagsværk: Kun spillere i din CSV må findes
+    # Vi mapper ID -> Navn fra din CSV
+    csv_navne_dict = dict(zip(df_csv['PLAYER_ID_CLEAN'], df_csv['NAVN']))
 
-    def clean_id(val):
-        if pd.isna(val): return "0"
-        return str(val).split('.')[0].replace('.0', '').strip()
+    # --- 3. FILTRER SNOWFLAKE DATA EFTER CSV ---
+    # Her siger vi: Behold kun rækker fra Snowflake, hvis PLAYER_WYID findes i din CSV
+    df_display = df_shots[df_shots['PLAYER_WYID'].isin(csv_navne_dict.keys())].copy()
+    
+    # Tilføj navnet fra din CSV til Snowflake-rækkerne
+    df_display['SPILLER_NAVN'] = df_display['PLAYER_WYID'].map(csv_navne_dict)
 
-    s_df['PLAYER_ID_CLEAN'] = s_df['PLAYER_WYID'].apply(clean_id)
-    navne_dict = dict(zip(s_df['PLAYER_ID_CLEAN'], s_df['NAVN']))
-
-    # --- 3. FILTRER SNOWFLAKE DATA ---
-    df_s = df_shots.copy()
-    df_s['PLAYER_ID_CLEAN'] = df_s['PLAYER_WYID'].apply(clean_id)
-    df_s = df_s[df_s['PLAYER_ID_CLEAN'].isin(navne_dict.keys())].copy()
-    df_s['SPILLER_NAVN'] = df_s['PLAYER_ID_CLEAN'].map(navne_dict)
-
-    if df_s.empty:
-        st.info("Ingen match fundet.")
+    if df_display.empty:
+        st.info("Ingen afslutninger fundet for spillerne i din CSV-liste.")
         return
 
     # --- 4. STATS LOGIK ---
