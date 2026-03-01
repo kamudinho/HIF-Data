@@ -23,7 +23,7 @@ TEAM_COLORS = {
 }
 
 try:
-    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID, COMPETITIONS
 except ImportError:
     SEASONNAME = "2025/2026"
     COMPETITION_WYID = (328,) 
