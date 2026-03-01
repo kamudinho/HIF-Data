@@ -143,12 +143,9 @@ try:
             tp.vis_side(dp) 
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            # Vi tjekker om vi har Opta data, ellers bruger vi team_matches som fallback
-            if "opta_matches" in dp and not dp["opta_matches"].empty:
-                tm.vis_side(dp["opta_matches"])
-            else:
-                df_fallback = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"])
-                tm.vis_side(df_fallback)
+            # RETTELSE HER: Send hele 'dp' i stedet for kun 'dp["opta_matches"]'
+            # Så har siden adgang til både kampe og de dybe stats (opta_stats)
+            tm.vis_side(dp)
             
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
