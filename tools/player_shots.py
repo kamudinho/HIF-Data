@@ -26,8 +26,14 @@ def vis_side(df_spillere=None, hold_map=None):
     # --- 1. HENT DATA ---
     if "shotevents_data" not in st.session_state:
         with st.spinner("Henter skud..."):
+            # Vi henter værdierne fra din data_package (dp) ved at bruge de korrekte navne
+            # Vi bruger .get() med en fallback til dine standardværdier
+            comp_id = dp.get("COMPETITION_WYID", 328)
+            season_id = dp.get("SEASONNAME", "2025/2026")
+            
+            # Nu kalder vi Snowflake med de rigtige variable
             st.session_state["shotevents_data"] = load_snowflake_query(
-                "shotevents", dp["comp_filter"], dp["season_filter"]
+                "shotevents", comp_id, season_id
             )
         st.rerun()
 
