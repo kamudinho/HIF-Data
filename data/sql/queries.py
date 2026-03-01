@@ -138,25 +138,17 @@ def get_queries(comp_filter, season_filter):
 
         "opta_matches": f"""
             SELECT 
-                MATCH_OPTAUUID AS MATCH_WYID,
-                MATCH_DATE_FULL AS DATE,
-                WEEK AS GAMEWEEK,
-                CONTESTANTHOME_NAME || ' - ' || CONTESTANTAWAY_NAME AS MATCHLABEL,
-                -- Vi henter de rå tal i stedet for at lægge dem sammen her
-                TOURNAMENTCALENDAR_NAME, 
-                TOTAL_HOME_SCORE AS HOME_GOALS,
-                TOTAL_AWAY_SCORE AS AWAY_GOALS,
-                TOTAL_HOME_SCORE || '-' || TOTAL_AWAY_SCORE AS SCORE_TEXT,
-                CONTESTANTHOME_OPTAUUID AS HOME_TEAM_ID,
-                CONTESTANTAWAY_OPTAUUID AS AWAY_TEAM_ID,
-                MATCH_STATUS,
-                0.00 AS XG, 
-                0 AS SHOTS
-            FROM {DB}.OPTA_MATCHINFO
+                MATCH_OPTAUUID,
+                MATCH_DATE_FULL,
+                CONTESTANTHOME_NAME,
+                CONTESTANTAWAY_NAME,
+                TOTAL_HOME_SCORE,
+                TOTAL_AWAY_SCORE,
+                TOURNAMENTCALENDAR_NAME, -- VIGTIG: Denne skal med!
+                COMPETITION_NAME
+            FROM OPTA_MATCHINFO
             WHERE COMPETITION_OPTAUUID = '{comp_filter}'
-            AND TOURNAMENTCALENDAR_NAME LIKE '%{clean_season}%'
-            AND MATCH_STATUS = 'Played' -- Vi henter kun de spillede kampe
-            ORDER BY MATCH_DATE_FULL DESC
+              AND TOURNAMENTCALENDAR_NAME {season_filter}
         """,
         # --- 7. ALLE EVENTS ---
         "events": f"""
