@@ -17,8 +17,17 @@ def vis_side(df):
         df.columns = [c.upper() for c in df.columns]
 
         # 3. FILTER (Dropdown)
-        alle_hold = sorted(list(TEAMS.keys()))
-        valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + alle_hold)
+        hjemme_hold = df['CONTESTANTHOME_NAME'].unique() if 'CONTESTANTHOME_NAME' in df.columns else []
+        ude_hold = df['CONTESTANTAWAY_NAME'].unique() if 'CONTESTANTAWAY_NAME' in df.columns else []
+        
+        # Saml og sorter unikke holdnavne fra ligaen
+        liga_hold = sorted(list(set(hjemme_hold) | set(ude_hold)))
+        
+        # Hvis listen er tom (fallback til din TEAMS liste, hvis navne-kolonnerne driller)
+        if not liga_hold:
+            liga_hold = sorted(list(TEAMS.keys()))
+
+        valgt_hold = st.selectbox("Vælg hold fra NordicBet Liga", ["Alle hold"] + liga_hold)
 
         # 4. KONVERTER ALT TIL STRENG (Fjerner risiko for NaN-fejl)
         # Vi laver 'KAMP' kolonnen råt
@@ -29,10 +38,12 @@ def vis_side(df):
         else:
             df['KAMP_NAVN'] = "Ukendt Kamp"
 
-        # 5. UDFØR FILTER
+        # --- 5. UDFØR FILTER ---
         if valgt_hold != "Alle hold":
-            soeg = valgt_hold.replace(" IF", "").strip()
-            df = df[df['KAMP_NAVN'].str.contains(soeg, case=False, na=False)].copy()
+            # Direkte match fungerer bedst her, da navnene kommer direkte fra dataen
+            f_df = df[(df['KAMP_NAVN'].str.contains(valgt_hold, case=False, na=False))].copy()
+        else:
+            f_df = df.copy()
 
         # 6. RESULTAT (Super simpel logik)
         # Vi henter værdier og bruger 0 hvis de mangler
