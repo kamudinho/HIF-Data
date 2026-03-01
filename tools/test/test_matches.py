@@ -13,15 +13,19 @@ def vis_side(data_package):
         return
 
     try:
+        # Standardiser kolonner til store bogstaver
         df = df_matches.copy()
         df.columns = [c.upper() for c in df.columns]
+        
+        if df_stats is not None:
+            df_stats = df_stats.copy()
+            df_stats.columns = [c.upper() for c in df_stats.columns]
 
         # --- 1. FILTRE ---
         col_nav1, col_nav2 = st.columns([2, 2])
         with col_nav1:
             visning = st.radio("Vis:", ["Spillede kampe", "Kommende kampe"], horizontal=True)
 
-        # Dato filtrering
         dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE'] if c in df.columns), None)
         if dato_col:
             df[dato_col] = pd.to_datetime(df[dato_col])
@@ -29,13 +33,12 @@ def vis_side(data_package):
             df = df[df[dato_col] <= nu] if visning == "Spillede kampe" else df[df[dato_col] > nu]
             df = df.sort_values(by=dato_col, ascending=(visning == "Spillede kampe"))
 
-        # Hold vælger
         liga_hold = sorted(list(set(df['CONTESTANTHOME_NAME'].dropna()) | set(df['CONTESTANTAWAY_NAME'].dropna())))
         with col_nav2:
             hvi_index = next((i + 1 for i, h in enumerate(liga_hold) if "Hvidovre" in str(h)), 0)
-            valgt_hold = st.selectbox("Filtrér på hold:", ["Alle hold"] + liga_hold, index=hvi_index)
+            valgt_hold = st.selectbox("Vælg hold:", ["Alle hold"] + liga_hold, index=hvi_index)
 
-        # Klargør labels
+        # Labels til oversigten
         df['KAMP'] = df['CONTESTANTHOME_NAME'] + " - " + df['CONTESTANTAWAY_NAME']
         df['RESULTAT'] = df.apply(lambda r: f"{int(r.get('TOTAL_HOME_SCORE', 0))} - {int(r.get('TOTAL_AWAY_SCORE', 0))}" if visning == "Spillede kampe" else "-", axis=1)
         df['DATO'] = df[dato_col].dt.strftime('%d-%m-%Y')
@@ -43,51 +46,54 @@ def vis_side(data_package):
         # --- 2. VISNINGS-LOGIK ---
 
         if valgt_hold == "Alle hold":
-            # SCENARIE A: Oversigt over alle hold (Simpel tabel)
-            st.write("### Alle Kampe")
+            # Simpel oversigt
             st.dataframe(df[['DATO', 'KAMP', 'RESULTAT']], use_container_width=True, hide_index=True)
         
         else:
-            # SCENARIE B: Enkelt hold (Data-tung tabel)
-            st.write(f"### Statistik for {valgt_hold}")
+            # Enkelt hold visning med alle Opta stats i kolonner
             f_df = df[(df['CONTESTANTHOME_NAME'] == valgt_hold) | (df['CONTESTANTAWAY_NAME'] == valgt_hold)].copy()
             
             if f_df.empty:
-                st.info(f"Ingen kampe fundet for {valgt_hold}")
+                st.info(f"Ingen data for {valgt_hold}")
                 return
 
-            # Her bygger vi rækkerne med stats inddraget
-            match_list = []
-            for _, row in f_df.iterrows():
-                m_uuid = row.get('MATCH_OPTAUUID')
-                # Find uuid for det valgte hold i denne kamp (kan være hjemme eller ude)
-                is_home = row['CONTESTANTHOME_NAME'] == valgt_hold
-                t_uuid = row['CONTESTANTHOME_OPTAUUID'] if is_home else row['CONTESTANTAWAY_OPTAUUID']
+            if df_stats is not None and not df_stats.empty:
+                rows_with_stats = []
                 
-                # Hent alle stats for dette hold i denne kamp
-                m_stats = df_stats[(df_stats['MATCH_OPTAUUID'] == m_uuid) & (df_stats['CONTESTANT_OPTAUUID'] == t_uuid)]
-                
-                # Vi bygger en ordbog for rækken
-                match_data = {
-                    "Dato": row['DATO'],
-                    "Kamp": row['KAMP'],
-                    "Resultat": row['RESULTAT']
-                }
-                
-                # Tilføj alle STAT_TYPE som kolonner dynamisk
-                for _, s_row in m_stats.iterrows():
-                    match_data[s_row['STAT_TYPE']] = s_row['STAT_TOTAL']
-                
-                match_list.append(match_data)
+                for _, match in f_df.iterrows():
+                    m_uuid = match.get('MATCH_OPTAUUID')
+                    # Find ud af om holdet var hjemme eller ude for at hente korrekt UUID
+                    is_home = match['CONTESTANTHOME_NAME'] == valgt_hold
+                    t_uuid = match.get('CONTESTANTHOME_OPTAUUID') if is_home else match.get('CONTESTANTAWAY_OPTAUUID')
+                    
+                    # Basis info
+                    row_data = {
+                        "Dato": match['DATO'],
+                        "Kamp": match['KAMP'],
+                        "Resultat": match['RESULTAT']
+                    }
+                    
+                    # Hent stats fra den store data-klump (filtreret på kamp og hold)
+                    match_stats = df_stats[(df_stats['MATCH_OPTAUUID'] == m_uuid) & 
+                                          (df_stats['CONTESTANT_OPTAUUID'] == t_uuid)]
+                    
+                    # Pivotér: Gør hver STAT_TYPE til en kolonne
+                    for _, s in match_stats.iterrows():
+                        row_data[s['STAT_TYPE']] = s['STAT_TOTAL']
+                    
+                    rows_with_stats.append(row_data)
 
-            # Lav den store tabel
-            full_stats_df = pd.DataFrame(match_list)
-            
-            # Flyt de vigtigste kolonner forrest
-            cols = ["Dato", "Kamp", "Resultat"]
-            rest_cols = [c for c in full_stats_df.columns if c not in cols]
-            
-            st.dataframe(full_stats_df[cols + rest_cols], use_container_width=True, hide_index=True)
+                # Skab den endelige tabel
+                final_df = pd.DataFrame(rows_with_stats)
+                
+                # Sørg for at de vigtigste kolonner står først
+                main_cols = ["Dato", "Kamp", "Resultat"]
+                other_cols = [c for c in final_df.columns if c not in main_cols]
+                
+                st.write(f"### Detaljeret oversigt: {valgt_hold}")
+                st.dataframe(final_df[main_cols + other_cols], use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(f_df[['DATO', 'KAMP', 'RESULTAT']], use_container_width=True, hide_index=True)
 
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Systemfejl: {e}")
