@@ -12,28 +12,37 @@ def vis_side(df):
         df = df.copy()
         df.columns = [c.upper() for c in df.columns]
 
-        # 1. LIGA-FILTER (ID 328)
+        # 1. ULTRA-STRIKT LIGA-FILTER
+        # Vi sikrer os at vi KUN arbejder med NordicBet Liga (328)
         if 'COMPETITION_WYID' in df.columns:
             df = df[df['COMPETITION_WYID'] == 328].copy()
+        elif 'COMPETITION_ID' in df.columns:
+            df = df[df['COMPETITION_ID'] == 328].copy()
+        
+        # Hvis listen stadig indeholder OB/Fredericia her, så tjekker vi for 'Ukendt' i navnene
+        if df.empty:
+            st.info("Ingen kampe fundet for NordicBet Liga (ID 328).")
+            return
+
+        # 2. KLARGØR NAVNE (Vi sikrer at vi ikke tager for meget med)
+        h_name_col = next((c for c in ['CONTESTANTHOME_NAME', 'HOME_TEAM_NAME', 'HOME_NAME'] if c in df.columns), None)
+        a_name_col = next((c for c in ['CONTESTANTAWAY_NAME', 'AWAY_TEAM_NAME', 'AWAY_NAME'] if c in df.columns), None)
+
+        if h_name_col and a_name_col:
+            df['HOME_TEAM'] = df[h_name_col].astype(str)
+            df['AWAY_TEAM'] = df[a_name_col].astype(str)
+            df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
+        else:
+            # Fallback hvis kolonnenavne driller
+            df['KAMP_NAVN'] = df['MATCHLABEL'].astype(str)
+            df['HOME_TEAM'] = df['KAMP_NAVN'].str.split(' - ').str[0]
+            df['AWAY_TEAM'] = df['KAMP_NAVN'].str.split(' - ').str[1]
         
         # Find dato-kolonne og sorter (vigtigt for FORM)
         dato_col = next((c for c in ['MATCH_DATE_FULL', 'DATE', 'MATCH_DATE'] if c in df.columns), None)
         if dato_col:
             df[dato_col] = pd.to_datetime(df[dato_col])
             df = df.sort_values(dato_col, ascending=False)
-
-        # 2. KLARGØR NAVNE OG RESULTATER
-        if 'CONTESTANTHOME_NAME' in df.columns:
-            df['HOME_TEAM'] = df['CONTESTANTHOME_NAME'].astype(str)
-            df['AWAY_TEAM'] = df['CONTESTANTAWAY_NAME'].astype(str)
-        else:
-            # Fallback til MATCHLABEL (f.eks. "Hvidovre - Køge")
-            df['HOME_TEAM'] = df['MATCHLABEL'].astype(str).str.split(' - ').str[0]
-            df['AWAY_TEAM'] = df['MATCHLABEL'].astype(str).str.split(' - ').str[1]
-        
-        df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
-        df['H_GOALS'] = pd.to_numeric(df.get('TOTAL_HOME_SCORE', df.get('HOME_GOALS', 0)), errors='coerce').fillna(0).astype(int)
-        df['A_GOALS'] = pd.to_numeric(df.get('TOTAL_AWAY_SCORE', df.get('AWAY_GOALS', 0)), errors='coerce').fillna(0).astype(int)
 
         # 3. DYNAMISK HOLD-LISTE
         liga_hold = sorted(list(set(df['HOME_TEAM'].unique()) | set(df['AWAY_TEAM'].unique())))
