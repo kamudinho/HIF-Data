@@ -137,20 +137,36 @@ def get_queries(comp_filter, season_filter):
         """,
 
         # --- 6. KAMPOVERSIGT ---
+        # 1. Denne henter selve listen over kampe (Dato, Hold, Resultat)
         "opta_matches": f"""
             SELECT 
-                ms.MATCH_OPTAUUID,
-                ms.CONTESTANT_OPTAUUID,
-                ms.FORMATIONUSED,
-                ms.STAT_TYPE,
-                ms.STAT_FH,
-                ms.STAT_SH,
-                ms.STAT_TOTAL,
-                mi.TOURNAMENTCALENDAR_NAME
-            FROM {DB}.OPTA_MATCHSTATS ms
-            JOIN {DB}.OPTA_MATCHINFO mi ON ms.MATCH_OPTAUUID = mi.MATCH_OPTAUUID
-            WHERE mi.COMPETITION_OPTAUUID = '{comp_filter}'
-              AND mi.TOURNAMENTCALENDAR_NAME {season_filter}
+                MATCH_OPTAUUID,
+                CONTESTANTHOME_NAME,
+                CONTESTANTAWAY_NAME,
+                TOTAL_HOME_SCORE,
+                TOTAL_AWAY_SCORE,
+                MATCH_DATE_FULL,
+                TOURNAMENTCALENDAR_NAME,
+                CONTESTANTHOME_OPTAUUID,
+                CONTESTANTAWAY_OPTAUUID
+            FROM {DB}.OPTA_MATCHINFO
+            WHERE COMPETITION_OPTAUUID = '{comp_filter}'
+              AND TOURNAMENTCALENDAR_NAME {season_filter}
+        """,
+        
+        # 2. Denne henter de dybe statistikker
+        "opta_match_stats": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                CONTESTANT_OPTAUUID,
+                STAT_TYPE,
+                STAT_TOTAL
+            FROM {DB}.OPTA_MATCHSTATS
+            WHERE MATCH_OPTAUUID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE COMPETITION_OPTAUUID = '{comp_filter}' 
+                AND TOURNAMENTCALENDAR_NAME {season_filter}
+            )
         """,
         # --- 7. ALLE EVENTS ---
         "events": f"""
