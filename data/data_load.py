@@ -96,11 +96,10 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
         st.error(f"SQL Fejl ({query_key}): {e}")
         return pd.DataFrame()
 
-# --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
     gh_data = load_github_data()
     
-    # --- 1. SMART HOLD-MAPPING (BYGGES FØRST SÅ DEN KAN BRUGES TIL FILTRERING) ---
+    # --- 1. SMART HOLD-MAPPING ---
     hold_map = {}
     for name, info in TEAMS.items():
         if "team_wyid" in info and info["team_wyid"]:
@@ -109,39 +108,35 @@ def get_data_package():
         if "opta_uuid" in info and info["opta_uuid"]:
             hold_map[str(info["opta_uuid"]).strip()] = name
 
- # Hent det primære ID (328)    
-    opta_season_val = f"='{SEASONNAME}'"
-    target_id = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
+    # --- 2. DEFINER FILTRE (VIGTIGT FOR AFSLUTNINGER) ---
+    comps = tuple(COMPETITION_WYID) if isinstance(COMPETITION_WYID, (list, tuple)) else (COMPETITION_WYID,)
+    comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
+    season_filter = f"='{SEASONNAME}'"
     
-    # Find Opta UUID
+    # Find Opta UUID til de specifikke Opta-kald
+    target_id = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
     opta_uuid = None
     for name, league_info in COMPETITIONS.items():
         if league_info.get("wyid") == target_id:
             opta_uuid = league_info.get("opta_uuid")
             break
-    
-    # NU kan du kalde dine queries sikkert
-    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, opta_season_val)
-    df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, opta_season_val)
 
-    # Standard filtre
-    comps = tuple(COMPETITION_WYID) if isinstance(COMPETITION_WYID, (list, tuple)) else (COMPETITION_WYID,)
-    comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
-    season_filter = f"='{SEASONNAME}'"
-    
-    # --- 3. HENT WYSCOUT DATA ---
+    # --- 3. HENT DATA FRA SNOWFLAKE ---
+    # Opta data
+    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, season_filter)
+    df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, season_filter)
+
+    # Wyscout data
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
     df_matches_wy = load_snowflake_query("team_matches", comp_filter, season_filter)
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
     
-    # --- 5. RENS OG FILTRER OPTA DATA ---
+    # --- 4. RENS OG FILTRER OPTA DATA (For 2026-kompatibilitet) ---
     if not df_matches_opta.empty:
         df_matches_opta.columns = [c.upper() for c in df_matches_opta.columns]
-        # Sæson filter
-        df_matches_opta = df_matches_opta[df_matches_opta['TOURNAMENTCALENDAR_NAME'] == SEASONNAME].copy()
-        # Hold filter (Fjerner støj som Aarhus Fremad/Middelfart hvis de ikke er i din TEAMS mapping)
+        # Vi filtrerer kun på holdene for at fjerne støj fra andre rækker
         kendte_hold_navne = list(TEAMS.keys())
         df_matches_opta = df_matches_opta[
             df_matches_opta['CONTESTANTHOME_NAME'].isin(kendte_hold_navne) | 
@@ -150,17 +145,24 @@ def get_data_package():
 
     if not df_opta_stats.empty:
         df_opta_stats.columns = [c.upper() for c in df_opta_stats.columns]
-        # Sørg for at stats også kun er for den valgte sæson (via join i SQL eller filter her)
-        if 'TOURNAMENTCALENDAR_NAME' in df_opta_stats.columns:
-            df_opta_stats = df_opta_stats[df_opta_stats['TOURNAMENTCALENDAR_NAME'] == SEASONNAME].copy()
 
-    # --- 6. RETURNER SAMLET PAKKE ---
-    df_hvidovre_csv = gh_data["players"]
+    # --- 5. MERGE BILLEDER PÅ SPILLERE ---
+    df_hvidovre_csv = gh_data["players"].copy()
     if not df_sql_players.empty and not df_hvidovre_csv.empty:
+        df_sql_players.columns = [c.upper() for c in df_sql_players.columns]
+        # Sikr PLAYER_WYID er string for merge
         df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
         df_sql_players['PLAYER_WYID'] = df_sql_players['PLAYER_WYID'].astype(str)
-        df_hvidovre_csv = pd.merge(df_hvidovre_csv, df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
+        
+        # Flet IMAGEDATAURL ind i din CSV-data
+        df_hvidovre_csv = pd.merge(
+            df_hvidovre_csv, 
+            df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], 
+            on='PLAYER_WYID', 
+            how='left'
+        )
 
+    # --- 6. RETURNER SAMLET PAKKE ---
     return {
         "players": df_hvidovre_csv,
         "playerstats": df_playerstats,
@@ -168,9 +170,12 @@ def get_data_package():
         "team_stats_full": df_team_stats,
         "team_matches": df_matches_wy,    
         "opta_matches": df_matches_opta,  
-        "opta_stats": df_opta_stats,     # <--- DE DYBE STATS ER NU MED
+        "opta_stats": df_opta_stats,     
         "hold_map": hold_map, 
-        "season_filter": season_filter,
+        "comp_filter": comp_filter,      # Fixer 'Afslutninger' fejlen
+        "season_filter": season_filter,  # Fixer 'Afslutninger' fejlen
+        "COMPETITION_WYID": COMPETITION_WYID,
+        "SEASONNAME": SEASONNAME,
         "team_id": TEAM_WYID,
         "colors": TEAM_COLORS
     }
