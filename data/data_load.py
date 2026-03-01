@@ -97,10 +97,6 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
         return pd.DataFrame()
 
 # --- 5. DATA PACKAGE BUILDER ---
-# data_load.py
-
-# ... (dine eksisterende imports og TEAM_COLORS beholdes)
-
 def get_data_package():
     gh_data = load_github_data()
     
@@ -113,15 +109,12 @@ def get_data_package():
         if "opta_uuid" in info and info["opta_uuid"]:
             hold_map[str(info["opta_uuid"]).strip()] = name
 
-  # --- 2. AUTOMATISK LIGA MAPPING ---
-    # Vi henter det aktuelle ID fra dine settings (328)
+ # Hent det primære ID (328)
     target_id = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
     
+    # Find tilhørende Opta UUID
     opta_uuid = None
-
-    # Vi løber gennem alle ligaer i din COMPETITIONS ordbog
     for name, league_info in COMPETITIONS.items():
-        # Vi bruger .get() for at være 100% sikre på ikke at crashe
         if league_info.get("comp_wyid") == target_id:
             opta_uuid = league_info.get("opta_uuid")
             break
