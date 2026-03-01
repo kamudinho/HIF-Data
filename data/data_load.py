@@ -123,11 +123,22 @@ def get_data_package():
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
     df_matches_wy = load_snowflake_query("team_matches", comp_filter, season_filter)
     
-    # HENT OPTA DATA (Bruger opta_uuid hvis det findes)
-    df_matches_opta = pd.DataFrame()
-    if opta_uuid:
-        # Vi sender opta_uuid med som comp_filter til den specifikke query
-        df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, f"='{opta_season}'")
+    # I data_load.py inde i get_data_package()
+
+    # Vi skal bruge den rå SEASONNAME (f.eks. '2025/2026')
+    opta_season_val = f"='{SEASONNAME}'" 
+    
+    # HENT OPTA DATA
+    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, opta_season_val)
+    
+    if not df_matches_opta.empty:
+        df_matches_opta.columns = [c.upper() for c in df_matches_opta.columns]
+        
+        # EKSTRA SIKKERHED: Python-filter der sletter alt der ikke matcher 2025/2026
+        # Dette dræber OB og Fredericia rækkerne hvis de slap igennem SQL
+        df_matches_opta = df_matches_opta[
+            df_matches_opta['TOURNAMENTCALENDAR_NAME'].astype(str) == SEASONNAME
+        ].copy()
 
     # --- NY ROBUST DEBUG ---
     if not df_matches_opta.empty:
