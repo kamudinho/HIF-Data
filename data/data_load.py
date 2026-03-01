@@ -114,10 +114,15 @@ def get_data_package():
     
     # Find tilhørende Opta UUID
     opta_uuid = None
+    # Brug 'wyid' i stedet for 'comp_wyid' så det matcher din season_show.py
     for name, league_info in COMPETITIONS.items():
-        if league_info.get("comp_wyid") == target_id:
+        if league_info.get("wyid") == target_id: # RETTET HER
             opta_uuid = league_info.get("opta_uuid")
             break
+    
+    # Sørg for at sende opta_uuid med som streng til din SQL
+    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, opta_season_val)
+    df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, opta_season_val)
 
     # Standard filtre
     comps = tuple(COMPETITION_WYID) if isinstance(COMPETITION_WYID, (list, tuple)) else (COMPETITION_WYID,)
@@ -132,13 +137,7 @@ def get_data_package():
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
 
     # --- 4. HENT OPTA DATA (MATCHES + DYBE STATS) ---
-    opta_season_val = f"='{SEASONNAME}'" 
-    
-    # Hent selve kampoversigten
-    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, opta_season_val)
-    
-    # HENT DE DYBE STATS (STAT_FH, STAT_SH, STAT_TOTAL)
-    df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, opta_season_val)
+    opta_season_val = f"='{SEASONNAME}'"
     
     # --- 5. RENS OG FILTRER OPTA DATA ---
     if not df_matches_opta.empty:
