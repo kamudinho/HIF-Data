@@ -113,12 +113,17 @@ def get_data_package():
         if "opta_uuid" in info and info["opta_uuid"]:
             hold_map[str(info["opta_uuid"]).strip()] = name
 
-    # --- 2. AUTOMATISK LIGA MAPPING ---
-    curr_comp_wyid = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
+  # --- 2. AUTOMATISK LIGA MAPPING ---
+    # Vi henter det aktuelle ID fra dine settings (328)
+    target_id = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
+    
     opta_uuid = None
-    for name, info in COMPETITIONS.items():
-        if info["comp_wyid"] == curr_comp_wyid:
-            opta_uuid = info["opta_uuid"]
+
+    # Vi løber gennem alle ligaer i din COMPETITIONS ordbog
+    for name, league_info in COMPETITIONS.items():
+        # Vi bruger .get() for at være 100% sikre på ikke at crashe
+        if league_info.get("comp_wyid") == target_id:
+            opta_uuid = league_info.get("opta_uuid")
             break
 
     # Standard filtre
