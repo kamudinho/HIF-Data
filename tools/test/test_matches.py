@@ -16,23 +16,33 @@ def vis_side(df):
         df = df.copy()
         df.columns = [c.upper() for c in df.columns]
 
-        # --- 3. DYNAMISK FILTER (Kun hold fra den aktuelle data) ---
-        # Vi trækker navnene direkte fra hjemme- og udebane kolonnerne i din data
-        if 'CONTESTANTHOME_NAME' in df.columns and 'CONTESTANTAWAY_NAME' in df.columns:
+        # --- NY LIGA-FILTER (Tvinger visning til kun NordicBet Liga) ---
+        # Vi filtrerer df med det samme, så alt andet (U19, 3. div) skæres væk
+        if 'COMPETITION_WYID' in df.columns:
+            df = df[df['COMPETITION_WYID'] == 328].copy()
+        elif 'COMPETITION_ID' in df.columns:
+             df = df[df['COMPETITION_ID'] == 328].copy()
+
+        # Hvis df bliver tom efter filteret, så stop
+        if df.empty:
+            st.info("Ingen kampe fundet for NordicBet Liga (ID 328).")
+            return
+
+        # --- 3. DYNAMISK FILTER (Nu kun med hold fra den filtrerede data) ---
+        if 'CONTESTANTHOME_NAME' in df.columns:
             hjemme = df['CONTESTANTHOME_NAME'].dropna().unique()
             ude = df['CONTESTANTAWAY_NAME'].dropna().unique()
             liga_hold = sorted(list(set(hjemme) | set(ude)))
         else:
-            # Fallback hvis kolonnenavnene er anderledes (f.eks. i Wyscout data)
-            # Vi prøver at trække navne ud fra MATCHLABEL (f.eks. "Hvidovre - Køge")
-            labels = df['KAMP_NAVN'].str.split(' - ').str[0].dropna().unique()
-            liga_hold = sorted(list(labels))
+            # Fallback til simpel split hvis det er Wyscout data
+            labels = df['MATCHLABEL'].astype(str).str.split(' - ').str[0].unique()
+            liga_hold = sorted([x for x in labels if x and x != 'nan'])
 
-        # Vi finder Hvidovre i den nye korte liste så den er pre-selected
+        # Find Hvidovre index
         hvi_index = 0
         for i, h in enumerate(liga_hold):
             if "Hvidovre" in str(h):
-                hvi_index = i + 1 # +1 fordi vi har "Alle hold" øverst
+                hvi_index = i + 1
                 break
 
         valgt_hold = st.selectbox("Vælg hold", ["Alle hold"] + liga_hold, index=hvi_index)
