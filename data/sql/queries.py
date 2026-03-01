@@ -136,6 +136,7 @@ def get_queries(comp_filter, season_filter):
             AND s.SEASONNAME {season_filter}
         """,
 
+        # --- 6. KAMPOVERSIGT ---
         "opta_matches": f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -144,9 +145,9 @@ def get_queries(comp_filter, season_filter):
                 CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE,
-                TOURNAMENTCALENDAR_NAME, -- VIGTIG: Denne skal med!
+                TOURNAMENTCALENDAR_NAME,
                 COMPETITION_NAME
-            FROM OPTA_MATCHINFO
+            FROM {DB}.OPTA_MATCHINFO  -- Tilføjet DB præfiks her!
             WHERE COMPETITION_OPTAUUID = '{comp_filter}'
               AND TOURNAMENTCALENDAR_NAME {season_filter}
         """,
