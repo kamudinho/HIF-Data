@@ -22,17 +22,22 @@ def vis_side(df):
             df[dato_col] = pd.to_datetime(df[dato_col])
             df = df.sort_values(dato_col, ascending=False)
 
-        # 2. FORBERED NAVNE OG MÅL (Robust version)
-        df['HOME_TEAM'] = df['CONTESTANTHOME_NAME'].astype(str) if 'CONTESTANTHOME_NAME' in df.columns else "Hjemme"
-        df['AWAY_TEAM'] = df['CONTESTANTAWAY_NAME'].astype(str) if 'CONTESTANTAWAY_NAME' in df.columns else "Ude"
+        # 2. FORBERED NAVNE (Vi leder efter de rigtige Snowflake-kolonner)
+        # Vi tjekker forskellige varianter af kolonnenavne for hjemmehold
+        h_name_col = next((c for c in ['CONTESTANTHOME_NAME', 'HOME_TEAM_NAME', 'TEAM_HOME', 'HOME_TEAM'] if c in df.columns), None)
+        # Og for udehold
+        a_name_col = next((c for c in ['CONTESTANTAWAY_NAME', 'AWAY_TEAM_NAME', 'TEAM_AWAY', 'AWAY_TEAM'] if c in df.columns), None)
+
+        df['HOME_TEAM'] = df[h_name_col].astype(str) if h_name_col else "Hjemme"
+        df['AWAY_TEAM'] = df[a_name_col].astype(str) if a_name_col else "Ude"
         
-        # Her henter vi kolonnerne sikkert. Hvis de ikke findes, laver vi en tom kolonne med 0.
-        h_col = df['TOTAL_HOME_SCORE'] if 'TOTAL_HOME_SCORE' in df.columns else pd.Series(0, index=df.index)
-        a_col = df['TOTAL_AWAY_SCORE'] if 'TOTAL_AWAY_SCORE' in df.columns else pd.Series(0, index=df.index)
-        
-        # Nu kan vi sikkert bruge fillna og to_numeric
-        df['H_GOALS'] = pd.to_numeric(h_col, errors='coerce').fillna(0).astype(int)
-        df['A_GOALS'] = pd.to_numeric(a_col, errors='coerce').fillna(0).astype(int)
+        # Mål-kolonner (Sikrer vi ikke får 'int object' fejlen igen)
+        h_score_col = next((c for c in ['TOTAL_HOME_SCORE', 'HOME_SCORE', 'HOME_GOALS'] if c in df.columns), None)
+        a_score_col = next((c for c in ['TOTAL_AWAY_SCORE', 'AWAY_SCORE', 'AWAY_GOALS'] if c in df.columns), None)
+
+        # Vi bruger pd.Series(0...) hvis kolonnen mangler helt
+        df['H_GOALS'] = pd.to_numeric(df[h_score_col] if h_score_col else pd.Series(0, index=df.index), errors='coerce').fillna(0).astype(int)
+        df['A_GOALS'] = pd.to_numeric(df[a_score_col] if a_score_col else pd.Series(0, index=df.index), errors='coerce').fillna(0).astype(int)
         
         df['KAMP_NAVN'] = df['HOME_TEAM'] + " - " + df['AWAY_TEAM']
 
