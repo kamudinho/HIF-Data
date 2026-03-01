@@ -1,8 +1,13 @@
 # season_show.py - CENTRAL STYRING FOR HVIDOVRE-APP 2025/2026
 
-# --- 1. GLOBALE SÆSON-VÆRDIER ---
+# season_show.py
 SEASONNAME = "2025/2026"
-TEAM_WYID = 7490  # Hvidovre IF
+OPTA_SEASON_NAME = "2025/2026" 
+TEAM_WYID = 7490
+
+# Tjek at dette UUID matcher NordicBet Ligaen 25/26 i din Opta data
+COMPETITION_WYID = (328,) 
+OPTA_COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
 # --- 2. AVANCERET TURNERING MAPPING ---
 # Denne struktur sikrer, at appen virker uanset om data kommer fra WYSCOUT eller OPTA
