@@ -129,6 +129,17 @@ def get_data_package():
         # Vi sender opta_uuid med som comp_filter til den specifikke query
         df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, f"='{opta_season}'")
 
+    # --- DEBUG MIDLERTIDIG ---
+    if not df_matches_opta.empty:
+        st.write("### DEBUG: Opta Rådata Tjek")
+        # Vi viser kun de relevante kolonner for at finde fejlen
+        debug_cols = [c for c in ['TOURNAMENTCALENDAR_NAME', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 'MATCHDATE'] if c in df_matches_opta.columns]
+        st.dataframe(df_matches_opta[debug_cols].head(20))
+        
+        # Vi tjekker hvilke unikke sæsonnavne der findes i det ufiltrerede data
+        st.write("Unikke sæsoner fundet i Opta-data:", df_matches_opta['TOURNAMENTCALENDAR_NAME'].unique().tolist())
+# -------------------------
+
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
 
     # --- FLETNING ---
