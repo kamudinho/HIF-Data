@@ -131,14 +131,23 @@ def get_data_package():
     # HENT OPTA DATA
     df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, opta_season_val)
     
+    # data_load.py inde i get_data_package()
+
     if not df_matches_opta.empty:
         df_matches_opta.columns = [c.upper() for c in df_matches_opta.columns]
         
-        # EKSTRA SIKKERHED: Python-filter der sletter alt der ikke matcher 2025/2026
-        # Dette dræber OB og Fredericia rækkerne hvis de slap igennem SQL
-        df_matches_opta = df_matches_opta[
-            df_matches_opta['TOURNAMENTCALENDAR_NAME'].astype(str) == SEASONNAME
-        ].copy()
+        # 1. Sæson filter (Allerede bekræftet virker nu)
+        df_matches_opta = df_matches_opta[df_matches_opta['TOURNAMENTCALENDAR_NAME'] == SEASONNAME].copy()
+    
+        # 2. Hold filter (VIGTIGT): 
+        # Vi vil kun se kampe hvor de hold vi kender fra din TEAMS-liste optræder.
+        # Dette fjerner "støj" fra andre rækker hvis dit comp_filter er for bredt.
+        kendte_hold = list(hold_map.values())
+        if kendte_hold:
+            df_matches_opta = df_matches_opta[
+                df_matches_opta['CONTESTANTHOME_NAME'].isin(kendte_hold) | 
+                df_matches_opta['CONTESTANTAWAY_NAME'].isin(kendte_hold)
+            ].copy()
 
     # --- NY ROBUST DEBUG ---
     if not df_matches_opta.empty:
