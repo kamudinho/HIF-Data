@@ -143,6 +143,7 @@ def get_queries(comp_filter, season_filter):
                 WEEK AS GAMEWEEK,
                 CONTESTANTHOME_NAME || ' - ' || CONTESTANTAWAY_NAME AS MATCHLABEL,
                 -- Vi henter de rå tal i stedet for at lægge dem sammen her
+                TOURNAMENTCALENDAR_NAME, 
                 TOTAL_HOME_SCORE AS HOME_GOALS,
                 TOTAL_AWAY_SCORE AS AWAY_GOALS,
                 TOTAL_HOME_SCORE || '-' || TOTAL_AWAY_SCORE AS SCORE_TEXT,
