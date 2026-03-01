@@ -1,43 +1,69 @@
-# --- Sæson og eget hold ---
-SEASONNAME = "2025/2026"
-TEAM_WYID = 7490
-# Vi holder denne som en tuple for at matche din SQL 'IN' logik
-COMPETITION_WYID = (328,) 
+# season_show.py - CENTRAL STYRING FOR HVIDOVRE-APP 2025/2026
 
-# --- Avanceret Turnering Mapping (COMP_MAP) ---
-# Denne struktur gør det muligt at slå op i begge retninger
+# --- 1. GLOBALE SÆSON-VÆRDIER ---
+SEASONNAME = "2025/2026"
+TEAM_WYID = 7490  # Hvidovre IF
+
+# --- 2. AVANCERET TURNERING MAPPING ---
+# Denne struktur sikrer, at appen virker uanset om data kommer fra WYSCOUT eller OPTA
 COMPETITIONS = {
-    "3F Superliga": {
-        "comp_wyid": 335, 
-        "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n"
-    },
     "Betinia Ligaen": {
-        "comp_wyid": 328, 
+        "wyid": 328, 
         "opta_uuid": "6ifaeunfdelecgticvxanikzu"
     },
+    "3F Superliga": {
+        "wyid": 335, 
+        "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n"
+    },
     "2. division": {
-        "comp_wyid": 329, 
+        "wyid": 329, 
         "opta_uuid": None
     },
     "3. division": {
-        "comp_wyid": 43319, 
+        "wyid": 43319, 
         "opta_uuid": None
     },
     "Oddset Pokalen": {
-        "comp_wyid": 331, 
+        "wyid": 331, 
         "opta_uuid": None
     },
     "U19 Ligaen": {
-        "comp_wyid": 1305, 
+        "wyid": 1305, 
         "opta_uuid": None
     }
 }
 
-# --- Bagudkompatibel COMP_MAP (til dine nuværende dashboards) ---
-# Denne funktion genererer automatisk din gamle COMP_MAP struktur
-# så du ikke behøver rette i alle dine eksisterende filer.
+# --- 3. HJÆLPEFUNKTIONER TIL FILTRERING ---
+
+def get_league_ids(league_name="Betinia Ligaen"):
+    """
+    Returnerer en liste med både Wyscout ID og Opta UUID 
+    for at sikre korrekt filtrering i dine dataframes.
+    """
+    conf = COMPETITIONS.get(league_name, {})
+    ids = []
+    if conf.get("wyid"):
+        ids.append(str(conf["wyid"]))
+    if conf.get("opta_uuid"):
+        ids.append(conf["opta_uuid"])
+    return ids
+
+def get_competition_name(id_val):
+    """
+    Slår et ID (Wyscout eller Opta) op og returnerer det læselige navn.
+    Svarer til din gamle COMP_MAP logik.
+    """
+    id_str = str(id_val)
+    for name, ids in COMPETITIONS.items():
+        if id_str == str(ids["wyid"]) or id_str == ids["opta_uuid"]:
+            return name
+    return "Ukendt Turnering"
+
+# --- 4. BAGUDKOMPATIBEL COMP_MAP ---
+# Genererer den COMP_MAP du plejer at bruge, så dine gamle scripts ikke fejler
 COMP_MAP = {}
 for name, ids in COMPETITIONS.items():
-    COMP_MAP[ids["comp_wyid"]] = name
+    if ids["wyid"]:
+        COMP_MAP[ids["wyid"]] = name
     if ids["opta_uuid"]:
         COMP_MAP[ids["opta_uuid"]] = name
