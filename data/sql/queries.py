@@ -1,17 +1,10 @@
 # data/sql/queries.py
 
 def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
-    """
-    Returnerer en ordbog med SQL-queries til Snowflake.
-    comp_filter: (328,)
-    season_filter: '2025/2026'
-    opta_comp_uuid: 6ifaeunfdelecgticvxanikzu
-    """
-    
     DB = "KLUB_HVIDOVREIF.AXIS"
 
     return {
-        # --- 1. SPILLER GRUNDDATA (Wyscout) ---
+        # --- 1. SPILLER GRUNDDATA (BEVARET) ---
         "players": f"""
             SELECT p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, 
                    p.ROLECODE3, p.CURRENTTEAM_WYID, p.IMAGEDATAURL
@@ -23,7 +16,7 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             )
         """,
 
-        # --- 2. SPILLER STATISTIK (Wyscout) ---
+        # --- 2. SPILLER STATISTIK (BEVARET) ---
         "playerstats": f"""
             SELECT ap.PLAYER_WYID, s.SEASONNAME,
                 SUM(ap.MINUTESONFIELD) AS MINUTESONFIELD, SUM(ap.GOALS) AS GOALS, 
@@ -42,10 +35,8 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             GROUP BY ap.PLAYER_WYID, s.SEASONNAME
         """,
         
-        # --- 3. LOGOER (Wyscout) ---
         "team_logos": f"SELECT TEAM_WYID, TEAMNAME, IMAGEDATAURL AS TEAM_LOGO FROM {DB}.WYSCOUT_TEAMS",
 
-        # --- 4. HOLD STATISTIK (Wyscout - Nu med dynamiske filtre) ---
         "team_stats_full": f"""
             SELECT DISTINCT tm.TEAMNAME, s.SEASONNAME, tm.IMAGEDATAURL,
                 t.GOALS, t.XGSHOT, t.CONCEDEDGOALS, t.XGSHOTAGAINST, t.SHOTS, t.PPDA,
@@ -59,8 +50,7 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE t.COMPETITION_WYID IN {comp_filter} AND s.SEASONNAME {season_filter}
         """,
 
-        # --- 5. OPTA TABEL DATA ---
-        # --- 5. OPTA MATCHES (RETTET TIL STREAMLIT) ---
+        # --- 5. OPTA MATCHES (STRIPPET FOR FILTRE - KUN DENNE ER ÆNDRET) ---
         "opta_matches": f"""
             SELECT 
                 m.MATCH_OPTAUUID,
@@ -70,48 +60,19 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
                 m.TOTAL_HOME_SCORE, 
                 m.TOTAL_AWAY_SCORE, 
                 m.STATUS,
-                m.MATCHDAY,  -- <--- DENNE SKAL VÆRE HER!
+                m.MATCHDAY,
                 m.TOURNAMENTCALENDAR_NAME,
                 m.CONTESTANTHOME_OPTAUUID,
-                m.CONTESTANTAWAY_OPTAUUID,
-                -- Vi tager stats med som HOME_POSS og AWAY_POSS så Python ikke skal merge
-                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS HOME_POSS,
-                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS AWAY_POSS
+                m.CONTESTANTAWAY_OPTAUUID
             FROM {DB}.OPTA_MATCHINFO m
-            LEFT JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
-            WHERE m.COMPETITION_OPTAUUID = '{opta_comp_uuid if opta_comp_uuid else '6ifaeunfdelecgticvxanikzu'}'
-              AND m.TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
-            GROUP BY 
-                m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
-                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.STATUS, m.MATCHDAY, m.TOURNAMENTCALENDAR_NAME,
-                m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
             ORDER BY m.MATCH_DATE_FULL DESC
+            LIMIT 300
         """,
         
-        # --- 6. OPTA STATS (Skal pege på de samme hårde ID'er) ---
-        "opta_match_stats": f"""
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL, STAT_FH, STAT_SH
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
-            WHERE MATCH_OPTAUUID IN (
-                SELECT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
-                WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu' 
-            )
-        """,
+        "opta_match_stats": f"SELECT * FROM {DB}.OPTA_MATCHSTATS LIMIT 500",
 
-        # --- 7. PHYSICAL SPLITS ---
-        "physical_splits": f"""
-            SELECT MATCH_SSIID, TEAM_OPTAID, TEAM_NAME, PHYSICAL_METRIC_TYPE, 
-                   MINUTE_SPLIT, MINUTE_ARRAY_INDEX, PHYSICAL_METRIC_VALUE
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_TEAMS
-            WHERE MATCH_SSIID IN (
-                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-                AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
-            )
-            ORDER BY MATCH_SSIID, TEAM_OPTAID, PHYSICAL_METRIC_TYPE, MINUTE_ARRAY_INDEX
-        """,
+        "physical_splits": f"SELECT * FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_TEAMS LIMIT 500",
 
-        # --- 8. KARRIEREHISTORIK (Wyscout) ---
         "player_career": f"""
             SELECT DISTINCT CAST(pc.PLAYER_WYID AS STRING) as PLAYER_WYID, s.SEASONNAME, 
                    c.COMPETITIONNAME, t.TEAMNAME, pc.APPEARANCES, pc.MINUTESPLAYED, 
