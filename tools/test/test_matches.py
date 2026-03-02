@@ -16,17 +16,27 @@ def vis_side():
         .stat-val {{ font-weight: bold; font-size: 14px; }}
         .form-dot {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 3px; }}
         .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
-        .date-header {{ 
-            background: #eee; padding: 5px 15px; border-radius: 4px; 
-            font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px;
-            color: #444; border-left: 4px solid {hif_rod};
-        }}
+        .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
         .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
         .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. FILTRE (Baseret på navne fra TEAMS, men vi gemmer ID'et) ---
+    if df_matches.empty:
+        st.error("Ingen kampdata fundet i databasen.")
+        return
+
+    # --- FIND RIGTIGE KOLONNENAVNE ---
+    # Vi tjekker dynamisk hvad ID-kolonnen hedder i dit feed
+    cols = df_matches.columns.tolist()
+    h_id_col = next((c for c in cols if 'HOME' in c and 'ID' in c), None)
+    a_id_col = next((c for c in cols if 'AWAY' in c and 'ID' in c), None)
+
+    if not h_id_col:
+        st.error(f"Kunne ikke finde ID-kolonnen. Tilgængelige kolonner: {cols[:5]}...")
+        return
+
+    # --- 1. FILTRE ---
     liga_hold_options = {n: i.get("opta_id") for n, i in TEAMS.items() if i.get("league") == "Betinia Ligaen"}
     
     col_f1, col_f2 = st.columns([2, 1])
@@ -37,33 +47,31 @@ def vis_side():
         view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
     # --- 2. DATA FILTRERING PÅ ID ---
-    # Vi bruger 'CONTESTANTHOME_OPTAID' (eller hvad kolonnen hedder i dit Opta-feed)
-    # Hvis dine Opta-id'er ligger som strings i DF, så husk .astype(str) eller tjek typen
-    is_home = df_matches['CONTESTANTHOME_OPTAID'].astype(float) == float(valgt_id)
-    is_away = df_matches['CONTESTANTAWAY_OPTAID'].astype(float) == float(valgt_id)
-    team_matches = df_matches[is_home | is_away]
+    # Vi sikrer at begge sider sammenlignes som tal (float)
+    df_matches[h_id_col] = pd.to_numeric(df_matches[h_id_col], errors='coerce')
+    df_matches[a_id_col] = pd.to_numeric(df_matches[a_id_col], errors='coerce')
+    
+    team_matches = df_matches[(df_matches[h_id_col] == float(valgt_id)) | 
+                              (df_matches[a_id_col] == float(valgt_id))]
 
     # --- 3. BEREGNING AF STATS ---
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
-    
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
+    
     for _, m in all_played.iterrows():
-        try:
-            curr_is_home = float(m['CONTESTANTHOME_OPTAID']) == float(valgt_id)
-            h_score = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
-            a_score = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
-            
-            m_plus = h_score if curr_is_home else a_score
-            m_minus = a_score if curr_is_home else h_score
-            
-            stats["K"] += 1
-            stats["M+"] += m_plus
-            stats["M-"] += m_minus
-            
-            if m_plus > m_minus: stats["S"] += 1; stats["form"].append("win")
-            elif m_plus == m_minus: stats["U"] += 1; stats["form"].append("draw")
-            else: stats["N"] += 1; stats["form"].append("loss")
-        except: continue
+        curr_is_home = float(m[h_id_col]) == float(valgt_id)
+        h_score = int(m.get('TOTAL_HOME_SCORE', 0)) if pd.notnull(m.get('TOTAL_HOME_SCORE')) else 0
+        a_score = int(m.get('TOTAL_AWAY_SCORE', 0)) if pd.notnull(m.get('TOTAL_AWAY_SCORE')) else 0
+        
+        m_plus = h_score if curr_is_home else a_score
+        m_minus = a_score if curr_is_home else h_score
+        
+        stats["K"] += 1
+        stats["M+"] += m_plus
+        stats["M-"] += m_minus
+        if m_plus > m_minus: stats["S"] += 1; stats["form"].append("win")
+        elif m_plus == m_minus: stats["U"] += 1; stats["form"].append("draw")
+        else: stats["N"] += 1; stats["form"].append("loss")
 
     # --- 4. VISNING AF STATS BAR ---
     st.markdown("#### Team Stats")
@@ -95,12 +103,11 @@ def vis_side():
             current_date = match_date
 
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-        # Vi bruger navnene fra rækken til visning, men ID'et sikrede at vi fandt rækken
         with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{row['CONTESTANTHOME_NAME']}</div>", unsafe_allow_html=True)
         with col2: st.image(logos.get(row['CONTESTANTHOME_NAME'], ""), width=25)
         with col3:
             if status_filter == 'Played':
-                res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
+                res = f"{int(row.get('TOTAL_HOME_SCORE', 0))} - {int(row.get('TOTAL_AWAY_SCORE', 0))}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{row['MATCH_DATE_FULL'].strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
