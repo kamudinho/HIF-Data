@@ -119,6 +119,7 @@ def get_data_package():
     # B. HENT DATA
     # Vi sender nu TOURNAMENTCALENDAR_NAME med til Opta-queryen
     df_matches_opta = load_snowflake_query("opta_matches", comp_filter, wy_season_filter)
+    df_opta_stats = load_snowflake_query("opta_team_stats", comp_filter, wy_season_filter)
     
     # Wyscout queries
     df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
@@ -130,6 +131,7 @@ def get_data_package():
         "playerstats": df_playerstats,
         "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
+        "opta_team_stats": df_opta_stats, # Husk at returnere den!
         "comp_filter": comp_filter,
         "season_filter": wy_season_filter,
         "VALGT_LIGA": VALGT_LIGA,
