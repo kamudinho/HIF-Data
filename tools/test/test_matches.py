@@ -89,35 +89,51 @@ def vis_side():
         st.info(f"Ingen {view_type.lower()} kampe fundet.")
         return
 
+    # --- DANSK DATO OVERSÆTTELSE ---
+    danske_dage = {
+        "Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG",
+        "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"
+    }
+
     current_date = None
     for _, row in display_matches.iterrows():
+        # Formatering af dato til dansk ugedag
         d = pd.to_datetime(row['MATCH_DATE_FULL'])
-        match_date = d.strftime('%A d. %d. %B').upper()
+        eng_dag = d.strftime('%A')
+        dag_navn = danske_dage.get(eng_dag, eng_dag)
+        
+        match_date = f"{dag_navn} D. {d.strftime('%d. %B')}".upper()
+        
         if match_date != current_date:
             st.markdown(f"<div class='date-header'>{match_date}</div>", unsafe_allow_html=True)
             current_date = match_date
 
-        # Brug UUID til at finde DIT navn fra mapping, så logoet kan findes
+        # Brug UUID til at finde DIT navn fra mapping
         h_name = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
         a_name = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
 
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-        with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
         
-        # SIKKER LOGO VISNING: Tjekker om URL findes før st.image kaldes
+        with col1: 
+            st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
+        
         with col2: 
             h_logo = logos.get(h_name)
             if h_logo: st.image(h_logo, width=25)
-            
+        
         with col3:
             if status_filter == 'Played':
                 res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{d.strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
-        
+                # --- BRUGER MATCH_LOCALTIME TIL KOMMENDE KAMPE ---
+                # Vi tager de første 5 tegn af MATCH_LOCALTIME (f.eks. '13:00')
+                tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
+                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+
         with col4: 
             a_logo = logos.get(a_name)
             if a_logo: st.image(a_logo, width=25)
-            
-        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
+        
+        with col5: 
+            st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
