@@ -55,22 +55,39 @@ def vis_side():
            (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
 
-    # --- 3. STATS BEREGNING ---
+    # --- 3. STATS BEREGNING (Nu med hover-data) ---
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        # Find modstanderens navn
+        modstander_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
+        modstander_navn = id_to_name.get(modstander_uuid, "Ukendt")
+        
         try:
             h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
             a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
+            
             stats["K"] += 1
             stats["M+"] += h_s if is_h else a_s
             stats["M-"] += a_s if is_h else h_s
+            
             diff = h_s - a_s if is_h else a_s - h_s
-            if diff > 0: stats["S"] += 1; stats["form"].append("win")
-            elif diff == 0: stats["U"] += 1; stats["form"].append("draw")
-            else: stats["N"] += 1; stats["form"].append("loss")
+            res_str = f"{h_s}-{a_s}"
+            
+            # Gem både resultat-type og en hover-tekst
+            hover_tekst = f"Mod {modstander_navn} ({res_str})"
+            
+            if diff > 0: 
+                stats["S"] += 1
+                stats["form"].append({"res": "win", "note": hover_tekst})
+            elif diff == 0: 
+                stats["U"] += 1
+                stats["form"].append({"res": "draw", "note": hover_tekst})
+            else: 
+                stats["N"] += 1
+                stats["form"].append({"res": "loss", "note": hover_tekst})
         except: continue
 
     # --- 4. VIS STATS BAR ---
@@ -80,7 +97,15 @@ def vis_side():
     with c[0]:
         st.markdown("<div class='stat-label'>Form (Sidste 5)</div>", unsafe_allow_html=True)
         letter_map = {"win": "S", "draw": "U", "loss": "N"}
-        form_html = "".join([f"<span class='form-dot {res}'>{letter_map.get(res)}</span>" for res in stats["form"][-5:]])
+        
+        # Byg HTML med 'title' attribut for hover-effekt
+        form_html = ""
+        for item in stats["form"][-5:]:
+            res_class = item["res"]
+            bogstav = letter_map.get(res_class)
+            note = item["note"]
+            form_html += f"<span class='form-dot {res_class}' title='{note}'>{bogstav}</span>"
+            
         st.markdown(f"<div class='form-container'>{form_html}</div>", unsafe_allow_html=True)
     
     stats_list = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
