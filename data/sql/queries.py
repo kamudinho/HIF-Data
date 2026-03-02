@@ -64,9 +64,9 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_DATE_FULL, STATUS,
                 TOURNAMENTCALENDAR_NAME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDAY
-            FROM {DB}.OPTA_MATCHINFO
-            WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-            AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}' 
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO
+            WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+            AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
             ORDER BY MATCH_DATE_FULL DESC
         """,
         
