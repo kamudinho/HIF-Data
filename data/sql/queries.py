@@ -53,20 +53,20 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
         # --- 5. OPTA MATCHES (STRIPPET FOR FILTRE - KUN DENNE ER ÆNDRET) ---
         "opta_matches": f"""
             SELECT 
-                m.MATCH_OPTAUUID,
-                m.MATCH_DATE_FULL,
-                m.CONTESTANTHOME_NAME, 
-                m.CONTESTANTAWAY_NAME,
-                m.TOTAL_HOME_SCORE, 
-                m.TOTAL_AWAY_SCORE, 
-                m.STATUS,
-                m.MATCHDAY,
-                m.TOURNAMENTCALENDAR_NAME,
-                m.CONTESTANTHOME_OPTAUUID,
-                m.CONTESTANTAWAY_OPTAUUID
-            FROM {DB}.OPTA_MATCHINFO m
-            ORDER BY m.MATCH_DATE_FULL DESC
-            LIMIT 300
+                MATCH_OPTAUUID,
+                MATCH_DATE_FULL,
+                CONTESTANTHOME_NAME, 
+                CONTESTANTAWAY_NAME,
+                TOTAL_HOME_SCORE, 
+                TOTAL_AWAY_SCORE, 
+                STATUS,
+                MATCHDAY,
+                TOURNAMENTCALENDAR_NAME,
+                CONTESTANTHOME_OPTAUUID,
+                CONTESTANTAWAY_OPTAUUID
+            FROM {DB}.OPTA_MATCHINFO
+            ORDER BY MATCH_DATE_FULL DESC
+            LIMIT 100
         """,
         
         "opta_match_stats": f"SELECT * FROM {DB}.OPTA_MATCHSTATS LIMIT 500",
