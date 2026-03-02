@@ -1,4 +1,4 @@
-ar# data/utils/team_mapping.py
+# data/utils/team_mapping.py
 
 # --- Turneringer / Ligaer ---
 COMPETITIONS = {
