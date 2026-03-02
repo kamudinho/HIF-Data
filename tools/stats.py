@@ -40,36 +40,55 @@ def vis_side(spillere, player_stats_sn):
         st.warning("Ingen statistisk data fundet fra Snowflake.")
         return
 
-    # Klargør dataframes og tving kolonnenavne til UPPERCASE med det samme
+    # Klargør dataframes
     s_info = spillere.copy()
     s_stats = player_stats_sn.copy()
     
+    # Tving alle kolonnenavne til UPPERCASE
     s_info.columns = [str(c).upper().strip() for c in s_info.columns]
     s_stats.columns = [str(c).upper().strip() for c in s_stats.columns]
 
-    # Nøgle-kolonne til mapping
+    # --- SIKKERHEDS-CHECK AF KOLONNER ---
+    # Vi tjekker om 'NAVN' findes, ellers prøver vi at finde en kolonne der ligner
+    if 'NAVN' not in s_info.columns:
+        if 'SPILLER' in s_info.columns:
+            s_info = s_info.rename(columns={'SPILLER': 'NAVN'})
+        elif 'PLAYER' in s_info.columns:
+            s_info = s_info.rename(columns={'PLAYER': 'NAVN'})
+        else:
+            st.error(f"Fejl: Kunne ikke finde en navne-kolonne i din CSV. Fundne kolonner: {list(s_info.columns)}")
+            return
+
+    # Vi tjekker om Opta ID findes
     ID_COL = 'PLAYER_OPTAUUID'
+    if ID_COL not in s_info.columns:
+        st.error(f"Fejl: Kolonnen '{ID_COL}' mangler i din players.csv. Fundne kolonner: {list(s_info.columns)}")
+        return
 
-    # Rens ID'er (fjern mellemrum og gør til tekst)
-    if ID_COL in s_info.columns:
-        s_info[ID_COL] = s_info[ID_COL].astype(str).str.strip()
-    if ID_COL in s_stats.columns:
-        s_stats[ID_COL] = s_stats[ID_COL].astype(str).str.strip()
+    # Rens ID'er
+    s_info[ID_COL] = s_info[ID_COL].astype(str).str.strip()
+    s_stats[ID_COL] = s_stats[ID_COL].astype(str).str.strip()
 
-    # Merge stats med spillernes navne fra din CSV
-    df_hif = pd.merge(
-        s_stats, 
-        s_info[[ID_COL, 'NAVN']], 
-        on=ID_COL, 
-        how='inner'
-    ).fillna(0)
+    # --- MERGE ---
+    try:
+        df_hif = pd.merge(
+            s_stats, 
+            s_info[[ID_COL, 'NAVN']], 
+            on=ID_COL, 
+            how='inner'
+        ).fillna(0)
+    except KeyError as e:
+        st.error(f"Merge-fejl: Kolonnen {e} blev ikke fundet.")
+        st.write("CSV kolonner:", list(s_info.columns))
+        st.write("Snowflake kolonner:", list(s_stats.columns))
+        return
 
     if df_hif.empty:
-        st.info("Ingen spillere matchet via PLAYER_OPTAUUID. Tjek om dine CSV-ID'er matcher Snowflake.")
-        # Lille debug-hjælp hvis mergen er tom
-        with st.expander("ID Debugger"):
-            st.write("CSV Eksempel:", s_info[ID_COL].iloc[0] if not s_info.empty else "Tom")
-            st.write("Snowflake Eksempel:", s_stats[ID_COL].iloc[0] if not s_stats.empty else "Tom")
+        st.info("Ingen spillere matchet via PLAYER_OPTAUUID.")
+        # Debug hjælp:
+        with st.expander("Tjek ID-match her"):
+            st.write("Første ID i CSV:", s_info[ID_COL].iloc[0] if not s_info.empty else "Ingen")
+            st.write("Første ID i Snowflake:", s_stats[ID_COL].iloc[0] if not s_stats.empty else "Ingen")
         return
 
     # --- 4. UI KONTROLLER ---
