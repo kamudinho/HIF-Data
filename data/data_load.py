@@ -13,9 +13,9 @@ TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- 2. TURNERING MAPPING (Opdateret til Snowflake-navne) ---
 COMPETITIONS = {
-    "1. Division": {
+    "1. division": {
         "wyid": 328, 
-        "opta_name": "1. Division" # Vi bruger navnet i stedet for UUID
+        "opta_name": "1. division" # Vi bruger navnet i stedet for UUID
     },
     "Superliga": {
         "wyid": 335, 
