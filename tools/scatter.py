@@ -91,13 +91,7 @@ def vis_side(df_scatter):
         "PASNINGER 3. DEL vs. xG": ("PASSESTOFINALTHIRD", "XGSHOT", "PASSES SIDSTE 3.DEL", "xG")
     }
 
-    # 3. UI
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCATTERPLOTS - STRATEGISK OVERBLIK</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    
+    # UI
     c1, c2 = st.columns(2)
     with c1:
         # Hvis du ikke har COMPETITIONNAME i din team_stats_full, kan vi bare vise den aktuelle data
