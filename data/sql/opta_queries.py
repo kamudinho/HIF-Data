@@ -3,30 +3,29 @@
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Vi bruger ILIKE for at være sikre på at fange "1. Division" korrekt
+    # Query til kamplisten (den har vi styr på)
     where_clause = f"WHERE COMPETITION_NAME ILIKE '{liga_navn}'"
     if saeson_navn:
         where_clause += f" AND TOURNAMENTCALENDAR_NAME ILIKE '{saeson_navn}'"
 
     return {
         "opta_matches": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                MATCH_DATE_FULL,
-                MATCH_STATUS,
-                CONTESTANTHOME_NAME,
-                CONTESTANTAWAY_NAME,
-                TOTAL_HOME_SCORE,
-                TOTAL_AWAY_SCORE,
-                FT_HOME_SCORE,
-                FT_AWAY_SCORE,
-                ATTENDANCE,
-                VENUE_LONGNAME,
-                COMPETITION_NAME,
-                TOURNAMENTCALENDAR_NAME
-            FROM {DB}.OPTA_MATCHINFO
+            SELECT * FROM {DB}.OPTA_MATCHINFO
             {where_clause}
             ORDER BY MATCH_DATE_FULL DESC
-            LIMIT 300
+        """,
+        # NY QUERY: Henter alle hold-stats for den valgte liga/sæson
+        "opta_team_stats": f"""
+            SELECT 
+                S.MATCH_OPTAUUID, 
+                S.CONTESTANT_OPTAUUID, 
+                S.STAT_TYPE, 
+                S.STAT_TOTAL,
+                I.CONTESTANTHOME_NAME,
+                I.CONTESTANTAWAY_NAME
+            FROM {DB}.OPTA_MATCHSTATS S
+            JOIN {DB}.OPTA_MATCHINFO I ON S.MATCH_OPTAUUID = I.MATCH_OPTAUUID
+            WHERE I.COMPETITION_NAME ILIKE '{liga_navn}'
+            AND I.TOURNAMENTCALENDAR_NAME ILIKE '{saeson_navn}'
         """
     }
