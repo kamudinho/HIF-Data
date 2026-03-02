@@ -15,7 +15,7 @@ def vis_side():
         .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
         .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
         .stat-val {{ font-weight: bold; font-size: 14px; }}
-        .form-container {{ display: flex; gap: 4px; margin-top: 4px; }}
+        .form-container {{ display: flex; gap: 4px; }}
         .form-dot {{ 
             display: flex; align-items: center; justify-content: center; 
             width: 24px; height: 24px; border-radius: 3px; 
@@ -31,99 +31,97 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-   # --- 1. TOP BAR (Dropdown + Stats på samme linje) ---
-    top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    # --- 1. DATA FORBEREDELSE & FILTRE ---
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    
+    if not liga_hold_options:
+        st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
+        return
 
+    # Top Bar: Dropdown og Stats
+    top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # Tegn stats i top_cols
-    stats_list = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
-    for i, (l, v) in enumerate(stats_list):
+    # Beregn data
+    mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
+    team_matches = df_matches[mask].copy()
+    all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
+    
+    stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
+    for _, m in all_played.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        opp_name = id_to_name.get(m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID'], "Modstander")
+        try:
+            h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
+            a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
+            stats["K"] += 1
+            stats["M+"] += h_s if is_h else a_s
+            stats["M-"] += a_s if is_h else h_s
+            diff = h_s - a_s if is_h else a_s - h_s
+            res_label = f"{h_s}-{a_s}"
+            if diff > 0: stats["S"] += 1; stats["form"].append({"res":"win","txt":"S","hover":f"vs. {opp_name} ({res_label})"})
+            elif diff == 0: stats["U"] += 1; stats["form"].append({"res":"draw","txt":"U","hover":f"vs. {opp_name} ({res_label})"})
+            else: stats["N"] += 1; stats["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name} ({res_label})"})
+        except: continue
+
+    # Tegn Stats
+    stats_display = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
+    for i, (l, v) in enumerate(stats_display):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 2. TABS OG FORM-BAROMETER PÅ SAMME LINJE ---
-    # Vi laver to kolonner: en bred til tabs og en smal til form
-    tab_col, form_col = st.columns([5, 1])
+    st.write("") # Lille afstand
 
-    with tab_col:
-        tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
-
-    with form_col:
-        # Vi tilføjer lidt margin-top for at flugte med tabs-teksten
-        form_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
-        st.markdown(f"""
-            <div style='display: flex; justify-content: flex-end; margin-top: 12px;'>
-                <div class='form-container'>{form_html}</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # --- 3. INDHOLD I TABS ---
-    # (Her bruger vi din tegn_kampe funktion inde i hver tab)
-    with tab_played:
-        df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
-        tegn_kampe(df_p, True)
-
-    with tab_fixtures:
-        df_f = team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
-        tegn_kampe(df_f, False)
-        
-    # --- 4. FORM BAR (Lige under top bar) ---
-    form_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
-    st.markdown(f"<div class='form-container' style='margin-bottom:10px;'>{form_html}</div>", unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # --- 5. TABS TIL KAMPOVERSIGT ---
-    tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
-
-    # Hjælpefunktion til at tegne kampene for at undgå dobbelt kode
+    # --- 2. HJÆLPEFUNKTION TIL KAMPE ---
     def tegn_kampe(matches, is_played):
         if matches.empty:
             st.info("Ingen kampe fundet.")
             return
-
-        danske_dage = {"Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG", "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"}
-        danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
-
-        current_date = None
+        d_dage = {"Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG", "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"}
+        d_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
+        
+        cur_date = None
         for _, row in matches.iterrows():
             d = pd.to_datetime(row['MATCH_DATE_FULL'])
-            match_date = f"{danske_dage.get(d.strftime('%A'), d.strftime('%A'))} D. {d.day}. {danske_maaneder.get(d.strftime('%B'), d.strftime('%B'))}".upper()
+            m_date = f"{d_dage.get(d.strftime('%A'), d.strftime('%A'))} D. {d.day}. {d_maaneder.get(d.strftime('%B'), d.strftime('%B'))}".upper()
+            if m_date != cur_date:
+                st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
+                cur_date = m_date
             
-            if match_date != current_date:
-                st.markdown(f"<div class='date-header'>{match_date}</div>", unsafe_allow_html=True)
-                current_date = match_date
-
-            h_name = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
-            a_name = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
-
-            col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-            with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
-            with col2: 
-                h_logo = logos.get(h_name)
-                if h_logo: st.image(h_logo, width=25)
+            h_n = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
+            a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
             
-            with col3:
+            c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+            with c1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_n}</div>", unsafe_allow_html=True)
+            with c2: 
+                h_l = logos.get(h_n)
+                if h_l: st.image(h_l, width=25)
+            with c3:
                 if is_played:
-                    h_s = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
-                    a_s = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
-                    st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
                     st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+            with c4:
+                a_l = logos.get(a_n)
+                if a_l: st.image(a_l, width=25)
+            with c5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_n}</div>", unsafe_allow_html=True)
 
-            with col4: 
-                a_logo = logos.get(a_name)
-                if a_logo: st.image(a_logo, width=25)
-            with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
+    # --- 3. TABS OG FORM PÅ SAMME LINJE ---
+    tab_col, form_col = st.columns([5, 1])
+    with tab_col:
+        tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
+    with form_col:
+        f_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
+        st.markdown(f"<div style='display: flex; justify-content: flex-end; margin-top: 12px;'><div class='form-container'>{f_html}</div></div>", unsafe_allow_html=True)
 
+    # --- 4. INDHOLD I TABS ---
     with tab_played:
         df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
         tegn_kampe(df_p, True)
-
     with tab_fixtures:
         df_f = team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
         tegn_kampe(df_f, False)
