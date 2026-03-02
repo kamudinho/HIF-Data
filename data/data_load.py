@@ -118,6 +118,7 @@ def get_data_package():
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
     df_logos_raw = load_snowflake_query("team_logos", None, None)
+    df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
     
     # Wyscout queries
     df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
@@ -133,7 +134,8 @@ def get_data_package():
 
     return {
         "players": df_sql_players,
-        "playerstats": df_playerstats,
+        "playerstats": df_opta_player_stats, # Skift her for at bruge Opta-stats i stats.py
+        "playerstats_wy": df_playerstats,    # Behold evt. den gamle under et andet navn
         "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
