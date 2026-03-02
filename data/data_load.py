@@ -109,19 +109,17 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
         return pd.DataFrame()
 
 def get_data_package():
-    # A. FILTRE
+    # A. FILTRE (Kun til Wyscout)
     comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
-    
-    # Wyscout bruger stadig formatet ='2025/2026'
     wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
 
-    # B. HENT DATA
-    # Vi sender nu TOURNAMENTCALENDAR_NAME med til Opta-queryen
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, wy_season_filter)
-    df_opta_stats = load_snowflake_query("opta_team_stats", comp_filter, wy_season_filter)
+    # B. HENT DATA (Opta)
+    # Vi sender None/None, da get_opta_queries selv henter sine variable globalt
+    df_matches_opta = load_snowflake_query("opta_matches", None, None)
+    df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
     
-    # Wyscout queries
+    # Wyscout queries (Her SKAL de bruges)
     df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, wy_season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
@@ -131,11 +129,11 @@ def get_data_package():
         "playerstats": df_playerstats,
         "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
-        "opta_team_stats": df_opta_stats, # Husk at returnere den!
+        "opta_stats": df_opta_stats,     # RETTET: Navnet skal være 'opta_stats' for at matche vis_side()
         "comp_filter": comp_filter,
         "season_filter": wy_season_filter,
         "VALGT_LIGA": VALGT_LIGA,
-        "SEASON_NAME": TOURNAMENTCALENDAR_NAME, # Gemt til brug i UI
+        "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS,
         "logo_map": {row['TEAMNAME']: row['IMAGEDATAURL'] for _, row in df_team_stats.iterrows()} if not df_team_stats.empty else {}
     }
