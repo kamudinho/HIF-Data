@@ -155,14 +155,16 @@ def get_data_package():
     comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
     
-    # Det præcise UUID fra dit SQL-udtræk
-    opta_season_uuid = "dyjr458hcmrcy87fsabfsy87o" 
+    # VI BRUGER EN BRED SØGNING I STEDET FOR DEN SPECIFIKKE UUID LIGE NU
+    season_search = "2025/2026" 
     wyscout_season_filter = f"='{SEASONNAME}'"
 
     # --- B. HENT DATA ---
-    # Vi sender opta_season_uuid til Opta-queries
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, "2025/2026", OPTA_COMP_UUID)
-    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, opta_season_uuid, OPTA_COMP_UUID)
+    # Vi sender 'season_search' i stedet for den låste UUID
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, season_search, OPTA_COMP_UUID)
+    
+    # VIGTIGT: Vi gør det samme for stats, så de rent faktisk kan flettes!
+    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, season_search, OPTA_COMP_UUID)
     
     # Vi bruger wyscout_season_filter til de andre
     df_sql_players = load_snowflake_query("players", comp_filter, wyscout_season_filter, OPTA_COMP_UUID)
