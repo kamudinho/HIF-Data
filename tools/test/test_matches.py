@@ -26,21 +26,21 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown(f"<div style='background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:15px;'><h3 style='color:white; margin:0; text-align:center; text-transform:uppercase; font-size:1.1rem;'>Betinia Ligaen: Stats & Kampe</h3></div>", unsafe_allow_html=True)
-
-    # --- 1. FILTRE ---
-    liga_hold = sorted([n for n, i in TEAMS.items() if i.get("league") in ["1. Division", "Betinia Ligaen", "NordicBet Liga"]])
+    # --- 1. FILTRE (Baseret på navne fra TEAMS, men vi gemmer ID'et) ---
+    liga_hold_options = {n: i.get("opta_id") for n, i in TEAMS.items() if i.get("league") == "Betinia Ligaen"}
     
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
-        valgt_hold = st.selectbox("Vælg hold", liga_hold)
+        valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()))
+        valgt_id = liga_hold_options[valgt_navn]
     with col_f2:
         view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. ROBUST DATA FILTRERING ---
-    # Vi bruger 'contains' så "Hvidovre" matcher "Hvidovre IF"
-    is_home = df_matches['CONTESTANTHOME_NAME'].str.contains(valgt_hold, case=False, na=False)
-    is_away = df_matches['CONTESTANTAWAY_NAME'].str.contains(valgt_hold, case=False, na=False)
+    # --- 2. DATA FILTRERING PÅ ID ---
+    # Vi bruger 'CONTESTANTHOME_OPTAID' (eller hvad kolonnen hedder i dit Opta-feed)
+    # Hvis dine Opta-id'er ligger som strings i DF, så husk .astype(str) eller tjek typen
+    is_home = df_matches['CONTESTANTHOME_OPTAID'].astype(float) == float(valgt_id)
+    is_away = df_matches['CONTESTANTAWAY_OPTAID'].astype(float) == float(valgt_id)
     team_matches = df_matches[is_home | is_away]
 
     # --- 3. BEREGNING AF STATS ---
@@ -49,13 +49,12 @@ def vis_side():
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     for _, m in all_played.iterrows():
         try:
-            # Tjek om valgt hold var hjemme i denne specifikke kamp
-            current_is_home = valgt_hold.lower() in m['CONTESTANTHOME_NAME'].lower()
+            curr_is_home = float(m['CONTESTANTHOME_OPTAID']) == float(valgt_id)
             h_score = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
             a_score = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
             
-            m_plus = h_score if current_is_home else a_score
-            m_minus = a_score if current_is_home else h_score
+            m_plus = h_score if curr_is_home else a_score
+            m_minus = a_score if curr_is_home else h_score
             
             stats["K"] += 1
             stats["M+"] += m_plus
@@ -74,7 +73,8 @@ def vis_side():
         form_html = "".join([f"<span class='form-dot {res}'></span>" for res in stats["form"][-5:]])
         st.markdown(f"<div>{form_html}</div>", unsafe_allow_html=True)
     
-    for i, (l, v) in enumerate([("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]):
+    label_vals = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
+    for i, (l, v) in enumerate(label_vals):
         with c[i+1]: st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     st.divider()
@@ -84,7 +84,7 @@ def vis_side():
     display_matches = team_matches[team_matches['MATCH_STATUS'] == status_filter].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
     if display_matches.empty:
-        st.info(f"Ingen kampe fundet for {valgt_hold}")
+        st.info(f"Ingen kampe fundet for {valgt_navn}")
         return
 
     current_date = None
@@ -95,6 +95,7 @@ def vis_side():
             current_date = match_date
 
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+        # Vi bruger navnene fra rækken til visning, men ID'et sikrede at vi fandt rækken
         with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{row['CONTESTANTHOME_NAME']}</div>", unsafe_allow_html=True)
         with col2: st.image(logos.get(row['CONTESTANTHOME_NAME'], ""), width=25)
         with col3:
