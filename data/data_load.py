@@ -142,20 +142,21 @@ def get_data_package():
     # --- A. KLARGØR FILTRE ---
     comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
-    # Vi gemmer den rene sæsonstreng til Opta
-    opta_season = "2025/2026" 
-    # Sæsonfilter til Wyscout (med lighedstegn)
-    season_filter = f"='{SEASONNAME}'"
+    
+    # Det præcise UUID fra dit SQL-udtræk
+    opta_season_uuid = "dyjr458hcmrcy87fsabfsy87o" 
+    wyscout_season_filter = f"='{SEASONNAME}'"
 
     # --- B. HENT DATA ---
-    # Vi bruger opta_season direkte her for at matche dit SQL-udtræk
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, opta_season, OPTA_COMP_UUID)
-    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, opta_season, OPTA_COMP_UUID)
+    # Vi sender opta_season_uuid til Opta-queries
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, opta_season_uuid, OPTA_COMP_UUID)
+    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, opta_season_uuid, OPTA_COMP_UUID)
     
-    df_sql_players = load_snowflake_query("players", comp_filter, season_filter, OPTA_COMP_UUID)
-    df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter, OPTA_COMP_UUID)
-    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter, OPTA_COMP_UUID)
-    df_player_career = load_snowflake_query("player_career", comp_filter, season_filter, OPTA_COMP_UUID)
+    # Vi bruger wyscout_season_filter til de andre
+    df_sql_players = load_snowflake_query("players", comp_filter, wyscout_season_filter, OPTA_COMP_UUID)
+    df_playerstats = load_snowflake_query("playerstats", comp_filter, wyscout_season_filter, OPTA_COMP_UUID)
+    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wyscout_season_filter, OPTA_COMP_UUID)
+    df_player_career = load_snowflake_query("player_career", comp_filter, wyscout_season_filter, OPTA_COMP_UUID)
     
     # --- C. PROCESSERING ---
     df_matches_final = _process_opta_stats(df_matches_opta, df_opta_stats)
