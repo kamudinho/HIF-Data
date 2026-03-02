@@ -65,16 +65,17 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
                 TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_DATE_FULL, STATUS,
                 TOURNAMENTCALENDAR_NAME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDAY
             FROM {DB}.OPTA_MATCHINFO
-            WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' AND TOURNAMENTCALENDAR_NAME {season_filter}
+            WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
+            AND (TOURNAMENTCALENDAR_NAME LIKE '%2025%' OR TOURNAMENTCALENDAR_NAME LIKE '%25/26%')
         """,
         
-        # --- 6. OPTA STATS (Opta) ---
         "opta_match_stats": f"""
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
+            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL, STAT_FH, STAT_SH
             FROM {DB}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (
                 SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' AND TOURNAMENTCALENDAR_NAME {season_filter}
+                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
+                AND (TOURNAMENTCALENDAR_NAME LIKE '%2025%' OR TOURNAMENTCALENDAR_NAME LIKE '%25/26%')
             )
         """,
 
