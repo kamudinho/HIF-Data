@@ -4,26 +4,16 @@ def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
     return {
-        "opta_player_stats": f"""
+        "opta_matches": f"""
             SELECT 
-                PLAYER_OPTAUUID,
-                PLAYER_NAME,
-                COUNT(DISTINCT MATCH_OPTAUUID) AS MATCHES,
-                SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS,
-                SUM(CASE WHEN EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS PASSES,
-                SUM(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS SUCCESSFULPASSES,
-                SUM(CASE WHEN EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) AS SHOTS,
-                MAX(EVENT_TIMEMIN) AS MINUTESONFIELD,
-                -- Tilføj placeholders for at undgå KeyError i stats.py
-                0 AS ASSISTS,
-                0 AS XGSHOT,
-                0 AS TOUCHINBOX,
-                0 AS PROGRESSIVEPASSES,
-                0 AS DUELS,
-                0 AS DUELSWON
-            FROM {DB}.OPTA_EVENTS
-            WHERE PLAYER_OPTAUUID IS NOT NULL
-            GROUP BY 1, 2
+                MATCH_OPTAUUID,
+                "DATE",  -- Tilføj dobbelte anførselstegn her!
+                HOME_TEAM_NAME,
+                AWAY_TEAM_NAME,
+                HOME_SCORE,
+                AWAY_SCORE
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHES
+            WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
         "opta_matches": f"""
