@@ -3,9 +3,9 @@ import pandas as pd
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
-from data.utils.team_mapping import COMPETITIONS, TEAMS
+from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID, OPTA_COMP_UUID, COMPETITIONS
 
-# --- 1. CENTRAL KONFIGURATION ---
+# --- 1. CENTRAL KONFIGURATION & HJÆLPEFUNKTIONER ---
 TEAM_COLORS = {
     "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
     "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
@@ -21,20 +21,12 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
-try:
-    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
-except ImportError:
-    SEASONNAME = "2025/2026"
-    COMPETITION_WYID = (328,)
-    TEAM_WYID = 7490
-
-# --- 2. HJÆLPEFUNKTIONER ---
 def get_team_colors(): return TEAM_COLORS
 
 def get_team_color(name):
     if not name: return "#333333"
     for key, color in TEAM_COLORS.items():
-        if key.lower() in name.lower(): return color
+        if key.lower() in name.lower(): return color["primary"]
     return "#333333"
 
 def fmt_val(v):
@@ -44,7 +36,7 @@ def fmt_val(v):
         return f"{val:.2f}"
     except: return str(v)
 
-# --- 3. SNOWFLAKE FORBINDELSE ---
+# --- 2. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
@@ -69,7 +61,7 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-# --- 4. DATA LOADING FUNKTIONER ---
+# --- 3. DATA LOADING FUNKTIONER ---
 @st.cache_data(ttl=1200)
 def load_github_data():
     url_base = "https://raw.githubusercontent.com/Kamudinho/HIF-data/main/data/"
@@ -84,11 +76,12 @@ def load_github_data():
     return {"players": read_gh("players.csv"), "scouting": read_gh("scouting_db.csv")}
 
 @st.cache_data(ttl=1200)
-def load_snowflake_query(query_key, comp_filter, season_filter):
+def load_snowflake_query(query_key, comp_filter, season_filter, opta_uuid=None):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    queries = get_queries(comp_filter, season_filter)
+    # Her kalder vi get_queries med ALLE 3 argumenter
+    queries = get_queries(comp_filter, season_filter, opta_uuid)
     q = queries.get(query_key)
     if not q: return pd.DataFrame() 
     
@@ -105,50 +98,28 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
 def get_data_package():
     gh_data = load_github_data()
     
-    # --- 1. SMART HOLD-MAPPING ---
-    hold_map = {}
-    for name, info in TEAMS.items():
-        if "team_wyid" in info and info["team_wyid"]:
-            try: hold_map[int(info["team_wyid"])] = name
-            except: pass
-        if "opta_uuid" in info and info["opta_uuid"]:
-            hold_map[str(info["opta_uuid"]).strip()] = name
-
-    # --- 2. DEFINER FILTRE ---
-    comps = tuple(COMPETITION_WYID) if isinstance(COMPETITION_WYID, (list, tuple)) else (COMPETITION_WYID,)
+    # --- A. KLARGØR FILTRE ---
+    comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
     season_filter = f"='{SEASONNAME}'"
-    
-    # Find Opta UUID via team_mapping.py struktur
-    target_id = comps[0]
-    opta_uuid = None
-    for league_name, league_info in COMPETITIONS.items():
-        if league_info.get("wyid") == target_id:
-            opta_uuid = league_info.get("opta_uuid")
-            break
+    # OPTA_COMP_UUID hentes direkte fra importen i toppen (fra season_show)
 
-    # --- 3. HENT DATA ---
-    df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, season_filter)
-    df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, season_filter)
-    df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
-    df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter)
-    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
-    df_matches_wy = load_snowflake_query("team_matches", comp_filter, season_filter)
-    df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
+    # --- B. HENT DATA ---
+    # Vi sender konsekvent OPTA_COMP_UUID med, queries.py styrer om det bruges
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_sql_players = load_snowflake_query("players", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_player_career = load_snowflake_query("player_career", comp_filter, season_filter, OPTA_COMP_UUID)
     
-    # --- 4. RENS OG FILTRER ---
-    if not df_matches_opta.empty:
-        kendte_hold_navne = list(TEAMS.keys())
-        df_matches_opta = df_matches_opta[
-            df_matches_opta['CONTESTANTHOME_NAME'].isin(kendte_hold_navne) | 
-            df_matches_opta['CONTESTANTAWAY_NAME'].isin(kendte_hold_navne)
-        ].copy()
-
+    # --- C. RENS OG FLET (DIN SPECIFIKKE LOGIK) ---
     df_hvidovre_csv = gh_data["players"].copy()
     if not df_sql_players.empty and not df_hvidovre_csv.empty:
-        df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
         df_sql_players['PLAYER_WYID'] = df_sql_players['PLAYER_WYID'].astype(str)
+        df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
         
+        # Fletter billeder fra Snowflake over på din CSV-trup
         df_hvidovre_csv = pd.merge(
             df_hvidovre_csv, 
             df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], 
@@ -156,20 +127,25 @@ def get_data_package():
             how='left'
         )
 
+    # Generer logo_map til hurtig opslag
+    logo_map = {}
+    if not df_team_stats.empty:
+        logo_map = dict(zip(df_team_stats['TEAMNAME'], df_team_stats['IMAGEDATAURL']))
+
     return {
         "players": df_hvidovre_csv,
         "scouting_image": gh_data["scouting"],
         "playerstats": df_playerstats,
         "player_career": df_player_career,
         "team_stats_full": df_team_stats,
-        "team_matches": df_matches_wy,    
         "opta_matches": df_matches_opta,  
         "opta_stats": df_opta_stats,     
-        "hold_map": hold_map, 
+        "logo_map": logo_map,
         "comp_filter": comp_filter,       
         "season_filter": season_filter,  
         "COMPETITION_WYID": COMPETITION_WYID,
         "SEASONNAME": SEASONNAME,
-        "team_id": TEAM_WYID,
+        "TEAM_WYID": TEAM_WYID,
+        "OP_UUID": OPTA_COMP_UUID,
         "colors": TEAM_COLORS
     }
