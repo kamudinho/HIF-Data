@@ -41,26 +41,30 @@ def vis_side(spillere, player_stats_sn):
         st.warning("Ingen statistisk data fundet fra Snowflake.")
         return
 
+    # Klargør din master-fil (players.csv)
     s_info = spillere.copy()
     s_stats = player_stats_sn.copy()
 
-    # Tving kolonnenavne til UPPERCASE
+    # Tving kolonnenavne til UPPERCASE for at matche SQL og CSV
     s_info.columns = [str(c).upper().strip() for c in s_info.columns]
     s_stats.columns = [str(c).upper().strip() for c in s_stats.columns]
 
-    # Rens PLAYER_WYID
-    s_info['PLAYER_WYID'] = s_info['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    s_stats['PLAYER_WYID'] = s_stats['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    # VIGTIGT: Vi bruger nu PLAYER_OPTAUUID som nøgle i stedet for WYID
+    # Rens PLAYER_OPTAUUID (fjern eventuelle mellemrum)
+    s_info['PLAYER_OPTAUUID'] = s_info['PLAYER_OPTAUUID'].astype(str).str.strip()
+    s_stats['PLAYER_OPTAUUID'] = s_stats['PLAYER_OPTAUUID'].astype(str).str.strip()
 
-    # Navne-merge
-    spillere_clean = s_info.drop_duplicates(subset=['PLAYER_WYID'])
-    if 'NAVN' not in spillere_clean.columns and 'FIRSTNAME' in spillere_clean.columns:
-        spillere_clean['NAVN'] = (spillere_clean['FIRSTNAME'].fillna('') + " " + spillere_clean['LASTNAME'].fillna('')).str.strip()
-
-    df_hif = pd.merge(s_stats, spillere_clean[['PLAYER_WYID', 'NAVN']], on='PLAYER_WYID', how='inner')
+    # Merge stats med din CSV baseret på Opta ID
+    # Dette sikrer at vi får de 'pæne' navne fra din NAVN kolonne
+    df_hif = pd.merge(
+        s_stats, 
+        s_info[['PLAYER_OPTAUUID', 'NAVN', 'PLAYER_WYID']], 
+        on='PLAYER_OPTAUUID', 
+        how='inner'
+    )
 
     if df_hif.empty:
-        st.info(f"Ingen spillere matchet for {SEASONNAME}.")
+        st.info(f"Ingen spillere matchet via PLAYER_OPTAUUID.")
         return
 
     # --- 4. UI KONTROLLER (Præcis som i Top 5) ---
