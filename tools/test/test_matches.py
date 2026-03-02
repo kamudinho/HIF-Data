@@ -7,7 +7,7 @@ def vis_side():
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
 
-    # --- FARVER & CSS ---
+    # --- CSS & DESIGN ---
     hif_rod = "#df003b"
     st.markdown(f"""
         <style>
@@ -16,33 +16,17 @@ def vis_side():
         .stat-val {{ font-weight: bold; font-size: 14px; }}
         .form-dot {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 3px; }}
         .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
-        
-        /* Dato-overskrift */
         .date-header {{ 
             background: #eee; padding: 5px 15px; border-radius: 4px; 
             font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px;
             color: #444; border-left: 4px solid {hif_rod};
         }}
-        /* Score/Tid boks */
-        .score-pill {{
-            background: #333; color: white; border-radius: 4px; 
-            padding: 2px 10px; font-weight: bold; text-align: center;
-            min-width: 70px; display: inline-block;
-        }}
-        .time-pill {{
-            background: #f0f2f6; color: #333; border-radius: 4px; 
-            padding: 2px 10px; font-size: 0.9rem; text-align: center;
-            min-width: 70px; display: inline-block;
-        }}
+        .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
+        .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- TOP BRANDING ---
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:15px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; font-size:1.1rem;">Betinia Ligaen: Stats & Kampe</h3>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"<div style='background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:15px;'><h3 style='color:white; margin:0; text-align:center; text-transform:uppercase; font-size:1.1rem;'>Betinia Ligaen: Stats & Kampe</h3></div>", unsafe_allow_html=True)
 
     # --- 1. FILTRE ---
     liga_hold = sorted([n for n, i in TEAMS.items() if i.get("league") in ["1. Division", "Betinia Ligaen", "NordicBet Liga"]])
@@ -53,22 +37,36 @@ def vis_side():
     with col_f2:
         view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. BEREGNING AF STATS ---
-    all_played = df_matches[(df_matches['MATCH_STATUS'] == 'Played') & 
-                            ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | 
-                             (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))].sort_values('MATCH_DATE_FULL')
+    # --- 2. ROBUST DATA FILTRERING ---
+    # Vi bruger 'contains' så "Hvidovre" matcher "Hvidovre IF"
+    is_home = df_matches['CONTESTANTHOME_NAME'].str.contains(valgt_hold, case=False, na=False)
+    is_away = df_matches['CONTESTANTAWAY_NAME'].str.contains(valgt_hold, case=False, na=False)
+    team_matches = df_matches[is_home | is_away]
 
+    # --- 3. BEREGNING AF STATS ---
+    all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
+    
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     for _, m in all_played.iterrows():
-        is_home = m['CONTESTANTHOME_NAME'] == valgt_hold
-        m_plus = int(m['TOTAL_HOME_SCORE']) if is_home else int(m['TOTAL_AWAY_SCORE'])
-        m_minus = int(m['TOTAL_AWAY_SCORE']) if is_home else int(m['TOTAL_HOME_SCORE'])
-        stats["K"] += 1; stats["M+"] += m_plus; stats["M-"] += m_minus
-        if m_plus > m_minus: stats["S"] += 1; stats["form"].append("win")
-        elif m_plus == m_minus: stats["U"] += 1; stats["form"].append("draw")
-        else: stats["N"] += 1; stats["form"].append("loss")
+        try:
+            # Tjek om valgt hold var hjemme i denne specifikke kamp
+            current_is_home = valgt_hold.lower() in m['CONTESTANTHOME_NAME'].lower()
+            h_score = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
+            a_score = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
+            
+            m_plus = h_score if current_is_home else a_score
+            m_minus = a_score if current_is_home else h_score
+            
+            stats["K"] += 1
+            stats["M+"] += m_plus
+            stats["M-"] += m_minus
+            
+            if m_plus > m_minus: stats["S"] += 1; stats["form"].append("win")
+            elif m_plus == m_minus: stats["U"] += 1; stats["form"].append("draw")
+            else: stats["N"] += 1; stats["form"].append("loss")
+        except: continue
 
-    # --- 3. VISNING AF STATS BAR ---
+    # --- 4. VISNING AF STATS BAR ---
     st.markdown("#### Team Stats")
     c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
     with c[0]:
@@ -76,48 +74,34 @@ def vis_side():
         form_html = "".join([f"<span class='form-dot {res}'></span>" for res in stats["form"][-5:]])
         st.markdown(f"<div>{form_html}</div>", unsafe_allow_html=True)
     
-    labels = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), 
-              ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
-    for i, (label, val) in enumerate(labels):
-        with c[i+1]:
-            st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{val}</div></div>", unsafe_allow_html=True)
+    for i, (l, v) in enumerate([("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]):
+        with c[i+1]: st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # --- 4. KAMPOVERSIGT ---
+    # --- 5. KAMPOVERSIGT ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
-    display_matches = df_matches[(df_matches['MATCH_STATUS'] == status_filter) & 
-                                 ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | 
-                                  (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
+    display_matches = team_matches[team_matches['MATCH_STATUS'] == status_filter].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
+
+    if display_matches.empty:
+        st.info(f"Ingen kampe fundet for {valgt_hold}")
+        return
 
     current_date = None
-    
     for _, row in display_matches.iterrows():
-        h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
-        match_date = row['MATCH_DATE_FULL'].strftime('%A d. %d. %B') # F.eks. "Fredag d. 01. Marts"
-        
-        # Vis dato-overskrift hvis datoen skifter
+        match_date = row['MATCH_DATE_FULL'].strftime('%A d. %d. %B')
         if match_date != current_date:
             st.markdown(f"<div class='date-header'>{match_date.upper()}</div>", unsafe_allow_html=True)
             current_date = match_date
 
-        # Række-layout: [Hjemmehold] [Logo] [Score/Tid] [Logo] [Udehold]
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-        
-        with col1:
-            st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
-        with col2:
-            st.image(logos.get(h_name, ""), width=25)
+        with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{row['CONTESTANTHOME_NAME']}</div>", unsafe_allow_html=True)
+        with col2: st.image(logos.get(row['CONTESTANTHOME_NAME'], ""), width=25)
         with col3:
             if status_filter == 'Played':
                 res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
-                tid = row['MATCH_DATE_FULL'].strftime('%H:%M')
-                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
-        with col4:
-            st.image(logos.get(a_name, ""), width=25)
-        with col5:
-            st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
-
-    st.divider()
+                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{row['MATCH_DATE_FULL'].strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
+        with col4: st.image(logos.get(row['CONTESTANTAWAY_NAME'], ""), width=25)
+        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{row['CONTESTANTAWAY_NAME']}</div>", unsafe_allow_html=True)
