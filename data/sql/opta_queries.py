@@ -8,9 +8,8 @@ def get_opta_queries(liga_navn, saeson_navn):
     
     return {
         "opta_player_stats": f"""
-            SELECT * FROM {DB}.OPTA_EVENTS
-            WHERE COMPETITION_NAME ILIKE '%1. division%'
-            LIMIT 100
+            SELECT * FROM {DB}.OPTA_EVENTS 
+            LIMIT 10
         """,
         
         "opta_matches": f"""
