@@ -11,7 +11,7 @@ def vis_side():
 
     # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+        <div style="background-color:{hif_rod}; padding:3px; border-radius:2px; margin-bottom:3px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">BETINIA LIGAEN: KAMPOVERSIGT</h3>
         </div>
     """, unsafe_allow_html=True)
