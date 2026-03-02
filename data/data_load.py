@@ -8,7 +8,7 @@ from data.sql.opta_queries import get_opta_queries
 
 # --- 1. CENTRAL KONFIGURATION (Flyttet fra season_show) ---
 # --- 1. VALG AF LIGA (Nu med Snowflake-navne) ---
-VALGT_LIGA = "1. Division"  # Tidligere "Betinia Ligaen"
+VALGT_LIGA = "1. division"  # Tidligere "Betinia Ligaen"
 TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- 2. TURNERING MAPPING (Opdateret til Snowflake-navne) ---
