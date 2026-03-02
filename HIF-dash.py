@@ -141,10 +141,10 @@ try:
             tt.vis_side(dp["team_stats_full"], dp["colors"])
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
-            tp.vis_side(dp) # Sender hele dp for at få adgang til Opta-data
+            tp.vis_side() # Sender hele dp for at få adgang til Opta-data
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            tm.vis_side(dp)
+            tm.vis_side()
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
