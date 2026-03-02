@@ -87,8 +87,8 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
+    # Hent queries
     if query_key.startswith("opta_"):
-        # VIGTIGT: Sørg for at disse matcher dine argumenter i opta_queries.py
         queries = get_opta_queries(VALGT_LIGA, TOURNAMENTCALENDAR_NAME)
     else:
         queries = get_wy_queries(comp_filter, season_filter)
@@ -99,10 +99,12 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     try:
         df = conn.query(q)
         if df is not None and not df.empty:
-            # Tving alle kolonner til UPPERCASE og fjern whitespaces
             df.columns = [str(c).upper().strip() for c in df.columns]
             return df
-        return pd.DataFrame()
+        else:
+            # Log det i konsollen så vi ved den er tom
+            print(f"Advarsel: Query {query_key} returnerede ingen rækker.")
+            return pd.DataFrame()
     except Exception as e:
         st.error(f"SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
