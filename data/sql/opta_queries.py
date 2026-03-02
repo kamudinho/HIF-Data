@@ -12,7 +12,7 @@ def get_opta_queries(liga_navn, saeson_navn):
                 AWAY_TEAM_NAME,
                 HOME_SCORE,
                 AWAY_SCORE
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHES
+            FROM {DB}.OPTA_MATCHES
             WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
@@ -26,7 +26,7 @@ def get_opta_queries(liga_navn, saeson_navn):
                 PASSES,
                 SUCCESSFULPASSES,
                 MINUTESONFIELD
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYER_STATS
+            FROM {DB}.OPTA_PLAYER_STATS
             WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
