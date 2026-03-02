@@ -90,6 +90,13 @@ def vis_side():
     def tegn_kampe(matches, is_played):
         if matches.empty: return
 
+        # DIAGNOSE-VÆRKTØJ: Viser os præcis hvad der er galt
+        st.write("--- DEBUG INFO ---")
+        st.write(f"Antal logoer i map: {len(logos)}")
+        if logos:
+            st.write("Eksempel på nøgle i logo_map:", type(list(logos.keys())[0]), list(logos.keys())[0])
+            st.write("Eksempel på WYID vi leder efter:", type(TEAMS["Hvidovre"]["team_wyid"]), TEAMS["Hvidovre"]["team_wyid"])
+            
         # BROEN: Vi finder team_wyid fra TEAMS.py vha. UUID'et fra rækken
         def hent_logo(uuid):
             for name, info in TEAMS.items():
