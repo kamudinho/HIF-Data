@@ -1,31 +1,25 @@
 import streamlit as st
 import pandas as pd
-from data.utils.team_mapping import TEAMS, COMPETITIONS
+from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp")
-    # Vi henter dataen - og sikrer os de er der
     df_matches = dp.get("opta_matches", pd.DataFrame())
     df_stats = dp.get("opta_team_stats", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
-    st.markdown("### 🏟️ Match Center: Betinia Ligaen")
+    st.markdown("### 🏟️ Match Center: 1. Division")
 
-    # --- 1. FILTER: Kun hold fra Betinia Ligaen ---
-    # Vi filtrerer TEAMS listen så vi kun får dem der hører til Betinia Ligaen
+    # --- 1. FILTER: Kun Betinia Ligaen ---
     liga_hold = [navn for navn, info in TEAMS.items() if info.get("league") == "Betinia Ligaen"]
     liga_hold = sorted(liga_hold)
 
-    col1, col2 = st.columns([2, 1])
-    # Vi tilføjer "Alle hold" (i 1. div) som default
-    valgt_hold = col1.selectbox("Filtrer hold i 1. division", ["Hele runden"] + liga_hold)
-    view_type = col2.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
+    col_f1, col_f2 = st.columns([2, 1])
+    valgt_hold = col_f1.selectbox("Filtrer hold", ["Hele runden"] + liga_hold)
+    view_type = col_f2.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. LOGIK: Filtrering på liga-navnet fra din Snowflake query ---
+    # --- 2. LOGIK ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
-    
-    # Vi sikrer os at vi kun ser kampe fra Betinia Ligaen (NordicBet Liga)
-    # Vi bruger navnet direkte som det optræder i din Snowflake-tabel
     mask = (df_matches['MATCH_STATUS'] == status_filter) & \
            (df_matches['COMPETITION_NAME'].str.contains('1. Division|NordicBet|Betinia', case=False, na=False))
     
@@ -34,42 +28,50 @@ def vis_side():
     
     display_df = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
-    # --- 3. VISNING ---
-    if display_df.empty:
-        st.info("Ingen kampe fundet for den valgte filtrering.")
-        return
-
+    # --- 3. VISNING AF RÆKKER ---
     for _, row in display_df.head(15).iterrows():
         h_name = row['CONTESTANTHOME_NAME']
         a_name = row['CONTESTANTAWAY_NAME']
-        h_logo = logos.get(h_name)
         m_id = row['MATCH_OPTAUUID']
         
         score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS"
         
-        # Kompakt Expander med logo
-        with st.expander(f"{h_name}  {score}  {a_name}", icon=h_logo):
-            if status_filter == 'Played' and not df_stats.empty:
-                # Find UUIDs fra din mapping til præcist data-opslag
-                h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
-                a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
+        # Vi laver en container for at holde logo + expander tæt sammen
+        with st.container(border=True):
+            # Toppen af baren: Logoer og Navne (Altid synlig)
+            c_header = st.columns([0.5, 2, 1, 2, 0.5])
+            with c_header[0]:
+                if logos.get(h_name): st.image(logos.get(h_name), width=25)
+            with c_header[1]:
+                st.markdown(f"**{h_name}**")
+            with c_header[2]:
+                st.markdown(f"<div style='text-align:center;'>{score}</div>", unsafe_allow_html=True)
+            with c_header[3]:
+                st.markdown(f"<div style='text-align:right;'>**{a_name}**</div>", unsafe_allow_html=True)
+            with c_header[4]:
+                if logos.get(a_name): st.image(logos.get(a_name), width=25)
 
-                # Dynamisk stat-hentning (Uden hardkodning)
-                def get_s(t_uuid, s_type):
-                    return df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & 
-                                    (df_stats['CONTESTANT_OPTAUUID'] == t_uuid) & 
-                                    (df_stats['STAT_TYPE'] == s_type)]['STAT_TOTAL'].sum()
+            # Expander kun til data (Nu uden 'icon' for at undgå fejl)
+            with st.expander("Se kampstatistik"):
+                if status_filter == 'Played' and not df_stats.empty:
+                    h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
+                    a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
 
-                # Visning af rå data
-                c1, c2, c3 = st.columns([1, 1, 1])
-                c1.metric("xG", f"{get_s(h_uuid, 'expectedGoals'):.2f}")
-                
-                with c2:
-                    pos = get_s(h_uuid, 'possessionPercentage')
-                    st.markdown(f"<p style='text-align:center;font-size:12px;margin-bottom:2px;'>Possession</p>", unsafe_allow_html=True)
-                    st.progress(float(pos)/100 if pos else 0.5)
-                    st.markdown(f"<p style='text-align:center;font-size:11px;'>{pos}% - {100-pos if pos else 50}%</p>", unsafe_allow_html=True)
-                
-                c3.write(f"<p style='text-align:right;'><b>xG</b><br>{get_s(a_uuid, 'expectedGoals'):.2f}</p>", unsafe_allow_html=True)
-            else:
-                st.write(f"🏟️ {row['VENUE_LONGNAME']} | {row['MATCH_DATE_FULL'].strftime('%d/%m kl. %H:%M')}")
+                    def get_s(t_uuid, s_type):
+                        return df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & 
+                                        (df_stats['CONTESTANT_OPTAUUID'] == t_uuid) & 
+                                        (df_stats['STAT_TYPE'] == s_type)]['STAT_TOTAL'].sum()
+
+                    # Data Visning
+                    d1, d2, d3 = st.columns([1, 1, 1])
+                    d1.metric("xG", f"{get_s(h_uuid, 'expectedGoals'):.2f}")
+                    
+                    with d2:
+                        pos = get_s(h_uuid, 'possessionPercentage')
+                        st.markdown("<p style='text-align:center;font-size:11px;'>Possession</p>", unsafe_allow_html=True)
+                        st.progress(float(pos)/100 if pos else 0.5)
+                        st.markdown(f"<p style='text-align:center;font-size:10px;'>{pos}% - {100-pos if pos else 50}%</p>", unsafe_allow_html=True)
+                    
+                    d3.write(f"<p style='text-align:right;'><b>xG</b><br>{get_s(a_uuid, 'expectedGoals'):.2f}</p>", unsafe_allow_html=True)
+                else:
+                    st.caption(f"Spilles på {row['VENUE_LONGNAME']} kl. {row['MATCH_DATE_FULL'].strftime('%H:%M')}")
