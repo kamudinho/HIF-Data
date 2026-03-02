@@ -1,16 +1,17 @@
 import streamlit as st
 import pandas as pd
+from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp")
     df_matches = dp.get("opta_matches", pd.DataFrame())
-    df_stats = dp.get("opta_team_stats", pd.DataFrame()) # Her bor den rigtige data
+    df_stats = dp.get("opta_team_stats", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
     st.markdown("### 🏟️ Opta Match Center")
 
     # --- 1. FILTRE ---
-    alle_hold = sorted(pd.concat([df_matches['CONTESTANTHOME_NAME'], df_matches['CONTESTANTAWAY_NAME']]).unique())
+    alle_hold = sorted(list(TEAMS.keys())) # Vi bruger listen fra din mapping
     col1, col2 = st.columns([2, 1])
     valgt_hold = col1.selectbox("Filtrer hold", ["Alle hold"] + alle_hold)
     view_type = col2.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
@@ -18,6 +19,7 @@ def vis_side():
     # --- 2. LOGIK ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
     mask = df_matches['MATCH_STATUS'] == status_filter
+    
     if valgt_hold != "Alle hold":
         mask = mask & ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))
     
@@ -25,53 +27,40 @@ def vis_side():
 
     # --- 3. KOMPAKT LISTE ---
     for _, row in display_df.head(20).iterrows():
-        m_id = row['MATCH_OPTAUUID']
         h_name = row['CONTESTANTHOME_NAME']
         a_name = row['CONTESTANTAWAY_NAME']
+        m_id = row['MATCH_OPTAUUID']
         
-        # Hent logoer - fallback til bold hvis de ikke findes
-        h_logo = logos.get(h_name, "⚽")
+        # Hent UUIDs fra din mapping-fil
+        h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
+        a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
         
         score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS"
         
-        # Vi placerer hjemmeholdets logo i baren via 'icon'
-        with st.expander(f"{h_name}  {score}  {a_name}", icon=h_logo):
-            
-            if status_filter == 'Played':
-                # HENT RIGTIG DATA FRA SNOWFLAKE (df_stats)
-                match_stats = df_stats[df_stats['MATCH_OPTAUUID'] == m_id]
+        # Expander bar med logo fra map
+        with st.expander(f"{h_name}  {score}  {a_name}", icon=logos.get(h_name)):
+            if status_filter == 'Played' and not df_stats.empty:
                 
-                # Hjælpefunktion til at hente specifik stat dynamisk
-                def get_stat(team_name, stat_type):
-                    val = match_stats[(match_stats['CONTESTANT_NAME'] == team_name) & 
-                                     (match_stats['STAT_TYPE'] == stat_type)]['STAT_TOTAL'].sum()
+                # Hjælpefunktion der bruger UUID i stedet for Navn (Meget mere sikkert!)
+                def get_stat(t_uuid, s_type):
+                    val = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & 
+                                  (df_stats['CONTESTANT_OPTAUUID'] == t_uuid) & 
+                                  (df_stats['STAT_TYPE'] == s_type)]['STAT_TOTAL'].sum()
                     return val
 
-                # Dynamiske værdier
-                h_xg = get_stat(h_name, 'expectedGoals')
-                a_xg = get_stat(a_name, 'expectedGoals')
-                h_pos = get_stat(h_name, 'possessionPercentage')
-                a_pos = get_stat(a_name, 'possessionPercentage')
-                h_shots = get_stat(h_name, 'totalShots')
-                a_shots = get_stat(a_name, 'totalShots')
+                # Rigtige data-opslag
+                h_xg, a_xg = get_stat(h_uuid, 'expectedGoals'), get_stat(a_uuid, 'expectedGoals')
+                h_pos, a_pos = get_stat(h_uuid, 'possessionPercentage'), get_stat(a_uuid, 'possessionPercentage')
 
-                # LAYOUT: Rå data uden ikoner
-                c1, c2, c3 = st.columns([1, 2, 1])
-                
-                with c1:
-                    st.metric("xG", f"{h_xg:.2f}")
-                    st.write(f"Skud: {int(h_shots)}")
+                # Visning (Rå data, ingen ikoner)
+                c1, c2, c3 = st.columns([1, 1, 1])
+                c1.metric("xG", f"{h_xg:.2f}")
                 
                 with c2:
-                    st.markdown(f"<p style='text-align:center; font-size:12px; margin-bottom:0;'>Boldbesiddelse %</p>", unsafe_allow_html=True)
-                    # Progress bar baseret på rigtig possession
-                    st.progress(float(h_pos)/100 if h_pos > 0 else 0.5)
-                    st.markdown(f"<p style='text-align:center; font-size:11px;'>{h_pos}% - {a_pos}%</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center;font-size:12px;'>Possession</p>", unsafe_allow_html=True)
+                    st.progress(float(h_pos)/100 if h_pos else 0.5)
+                    st.markdown(f"<p style='text-align:center;font-size:11px;'>{h_pos}% - {a_pos}%</p>", unsafe_allow_html=True)
                 
-                with c3:
-                    st.metric("xG", f"{a_xg:.2f}")
-                    st.write(f"Skud: {int(a_shots)}")
-                
-                st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Tilskuere: {int(row['ATTENDANCE']):,}")
+                c3.write(f"<p style='text-align:right;'><b>xG</b><br>{a_xg:.2f}</p>", unsafe_allow_html=True)
             else:
-                st.write(f"Kampen spilles på {row['VENUE_LONGNAME']}")
+                st.caption(f"Spilles på {row['VENUE_LONGNAME']}")
