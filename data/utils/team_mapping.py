@@ -40,7 +40,7 @@ TEAMS = {
     "Hobro": {"team_wyid": 7510, "opta_uuid": "4t96h936f01p4v02r76h9h0be", "opta_id": 4802, "league": "Betinia Ligaen"},
     "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "league": "Betinia Ligaen"},
     "Hillerød": {"team_wyid": 7699, "opta_uuid": "6v99668s6p2c68wz2hpg018h3", "opta_id": 6463, "league": "Betinia Ligaen"},
-    "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "6v69668s6p2c68wz2hpg018h2", "opta_id": 2290, "league": "Betinia Ligaen"},
+    "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "Betinia Ligaen"},
     "B.93": {"team_wyid": 7470, "opta_uuid": "7v69668s6p2c68wz2hpg018h2", "opta_id": 2935, "league": "Betinia Ligaen"},
     "Middelfart": {"team_wyid": 7497, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "Betinia Ligaen"},
 
