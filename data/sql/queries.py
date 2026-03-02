@@ -76,7 +76,6 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             FROM {DB}.OPTA_MATCHINFO m
             LEFT JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
             WHERE m.COMPETITION_OPTAUUID = '{opta_comp_uuid if opta_comp_uuid else '6ifaeunfdelecgticvxanikzu'}'
-              AND m.TOURNAMENTCALENDAR_NAME = '{season_filter.replace("=", "").replace("'", "").strip()}'
             GROUP BY 
                 m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
                 m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.STATUS, m.MATCHDAY, m.TOURNAMENTCALENDAR_NAME
