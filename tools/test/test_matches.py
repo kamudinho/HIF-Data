@@ -5,66 +5,67 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
-    df_stats = dp.get("opta_team_stats", dp.get("team_stats_full", pd.DataFrame()))
 
-    st.markdown("### 🏟️ Match Center: Tabeloversigt")
+    st.markdown("### 🏟️ Match Center: 1. Division")
 
     # --- 1. FILTRE ---
     view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
 
     # --- 2. DATA BEHANDLING ---
+    # Filtrer på liga (NordicBet Liga / 1. Division) og status
     mask = (df_matches['MATCH_STATUS'] == status_filter) & \
            (df_matches['COMPETITION_NAME'].str.contains('1. Division|NordicBet|Betinia', case=False, na=False))
     
-    matches = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=False)
+    # Sortér: Nyeste kampe øverst for spillede, kommende kampe i dato-orden
+    sort_order = False if status_filter == 'Played' else True
+    matches = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=sort_order)
 
     if matches.empty:
-        st.info("Ingen kampe fundet.")
+        st.info(f"Ingen {view_type.lower()} kampe fundet.")
         return
 
     # --- 3. BYG TABEL-DATA ---
-    tabel_data = []
+    tabel_rows = []
 
     for _, row in matches.iterrows():
-        h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
-        m_id = row['MATCH_OPTAUUID']
+        h_name = row['CONTESTANTHOME_NAME']
+        a_name = row['CONTESTANTAWAY_NAME']
         
-        # Hent stats for xG eller Besiddelse hvis de findes
-        h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
+        # Merge holdene til "Kamp"
+        kamp_tekst = f"{h_name} vs. {a_name}"
         
-        # Vi prøver at hente besiddelse som en hurtig stat til tabellen
-        poss_val = 0
-        if not df_stats.empty and h_uuid:
-            p_stat = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & 
-                              (df_stats['CONTESTANT_OPTAUUID'] == h_uuid) & 
-                              (df_stats['STAT_TYPE'] == 'possessionPercentage')]
-            poss_val = pd.to_numeric(p_stat['STAT_TOTAL'], errors='coerce').max() if not p_stat.empty else 0
+        # Formater dato (f.eks. 02/03)
+        dato_str = row['MATCH_DATE_FULL'].strftime("%d/%m") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else ""
 
-        entry = {
-            "Dato": row['MATCH_DATE_FULL'].strftime("%d/%m") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else "",
-            "Hjemmehold": h_name,
-            "Res": f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS",
-            "Udehold": a_name,
-            "Besiddelse (H)": f"{poss_val:.0f}%" if poss_val > 0 else "-",
-            "Stadion": row['VENUE_LONGNAME']
-        }
-        tabel_data.append(entry)
+        # Håndter resultat eller tidspunkt
+        if status_filter == 'Played':
+            h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
+            a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
+            res_tekst = f"{h_score} - {a_score}"
+        else:
+            # Vis klokkeslæt for kommende kampe
+            res_tekst = row['MATCH_DATE_FULL'].strftime("%H:%M") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else "VS"
+
+        tabel_rows.append({
+            "Dato": dato_str,
+            "Kamp": kamp_tekst,
+            "Resultat": res_tekst
+        })
 
     # Lav til DataFrame
-    df_vis = pd.DataFrame(tabel_data)
+    df_vis = pd.DataFrame(tabel_rows)
 
     # --- 4. VISNING ---
-    # Vi bruger column_config for at gøre den interaktiv og pæn
     st.dataframe(
         df_vis,
         column_config={
-            "Res": st.column_config.TextColumn("Resultat", help="Slutresultat"),
-            "Besiddelse (H)": st.column_config.TextColumn("Poss %", help="Hjemmeholdets boldbesiddelse"),
-            "Dato": st.column_config.TextColumn("Dato"),
+            "Dato": st.column_config.TextColumn("Dato", width="small"),
+            "Kamp": st.column_config.TextColumn("Kamp", width="large"),
+            "Resultat": st.column_config.TextColumn("Res", width="small"),
         },
         hide_index=True,
         use_container_width=True
     )
 
-    st.caption("💡 Tip: Du kan sortere tabellen ved at klikke på kolonnenavnene.")
+    st.divider()
