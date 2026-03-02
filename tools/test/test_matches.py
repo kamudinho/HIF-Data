@@ -5,49 +5,55 @@ def vis_side():
     dp = st.session_state.get("dp")
     df = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
+    
+    # Vi henter de rå stats (husk at tjekke om de findes i din get_data_package)
+    df_stats = dp.get("opta_team_stats", pd.DataFrame())
 
     st.markdown("### 🏟️ Match Center: 1. Division")
     
-    # 1. Filtre
     view_type = st.radio("Visning", ["Seneste Resultater", "Kommende Kampe"], horizontal=True)
     
-    if view_type == "Seneste Resultater":
-        display_df = df[df['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
-    else:
-        display_df = df[df['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
+    display_df = df[df['MATCH_STATUS'] == ('Played' if view_type == "Seneste Resultater" else 'Fixture')]
+    display_df = display_df.sort_values('MATCH_DATE_FULL', ascending=(view_type != "Seneste Resultater"))
 
-    # Standard logo hvis vi ikke finder et (Sikrer mod "Error opening ''")
-    DEFAULT_LOGO = "https://cdn.pixabay.com/photo/2016/03/31/19/21/ball-1294935_1280.png"
-
-    for _, row in display_df.head(15).iterrows():
+    for _, row in display_df.head(10).iterrows():
         with st.container(border=True):
-            st.caption(f"📅 {row['MATCH_DATE_FULL'].strftime('%d. %b %Y')} | 🏟️ {row['VENUE_LONGNAME']}")
+            # Layout for selve kampen (Logoer og Score)
+            c1, c2, c3 = st.columns([2, 1, 2])
             
-            c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 2])
-            
-            # Hjemmehold - SIKKER LOGO HENTNING
+            # Hjemmehold
             h_name = row['CONTESTANTHOME_NAME']
-            h_logo = logos.get(h_name) if logos.get(h_name) else DEFAULT_LOGO
-            c1.image(h_logo, width=40)
-            c1.markdown(f"**{h_name}**")
-            
-            # Score eller VS
+            c1.image(logos.get(h_name, "https://cdn.pixabay.com/photo/2016/03/31/19/21/ball-1294935_1280.png"), width=40)
+            c1.subheader(h_name)
+
+            # Score i midten
             if row['MATCH_STATUS'] == 'Played':
-                score_html = f"""
-                    <div style='text-align:center; background-color:#1e1e1e; color:white; 
-                         padding:10px; border-radius:5px; font-size:20px; font-weight:bold;'>
-                        {int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}
-                    </div>
-                """
-                c3.markdown(score_html, unsafe_allow_html=True)
+                score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
+                c2.markdown(f"<h2 style='text-align:center;'>{score}</h2>", unsafe_allow_html=True)
             else:
-                c3.markdown("<div style='text-align:center; padding-top:10px;'>VS</div>", unsafe_allow_html=True)
-            
-            # Udehold - SIKKER LOGO HENTNING
+                c2.markdown("<h2 style='text-align:center;'>VS</h2>", unsafe_allow_html=True)
+
+            # Udehold
             a_name = row['CONTESTANTAWAY_NAME']
-            a_logo = logos.get(a_name) if logos.get(a_name) else DEFAULT_LOGO
-            c5.image(a_logo, width=40)
-            c5.markdown(f"<div style='text-align:right;'>**{a_name}**</div>", unsafe_allow_html=True)
-            
-            if row['MATCH_STATUS'] == 'Played' and row['ATTENDANCE'] > 0:
-                st.caption(f"👥 Tilskuere: {int(row['ATTENDANCE']):,}")
+            c3.image(logos.get(a_name, ""), width=40)
+            c3.subheader(a_name)
+
+            # --- HER ÅBNER VI DATAEN ---
+            if row['MATCH_STATUS'] == 'Played':
+                with st.expander("📊 DYK NED I DATA (OPTA)"):
+                    # Her simulerer vi Opta-stats (indtil vi har mappet din opta_team_stats tabel helt)
+                    # Vi laver en bar-chart sammenligning
+                    st.write("**Boldbesiddelse %**")
+                    # Eksempel: Vi fordeler 100% (Dette skal erstattes med rigtige tal fra df_stats)
+                    col_stat_h, col_stat_a = st.columns([50, 50]) 
+                    col_stat_h.markdown("<div style='background:#cc0000; height:10px; border-radius:5px 0 0 5px;'></div>", unsafe_allow_html=True)
+                    col_stat_a.markdown("<div style='background:#333333; height:10px; border-radius:0 5px 5px 0;'></div>", unsafe_allow_html=True)
+                    
+                    st.divider()
+                    
+                    # Visning af xG (Expected Goals)
+                    st.write("**Expected Goals (xG)**")
+                    st.columns(2)[0].metric(h_name, "1.42")
+                    st.columns(2)[1].metric(a_name, "0.85")
+
+            st.caption(f"🏟️ {row['VENUE_LONGNAME']} | 👥 {int(row['ATTENDANCE']):,} tilskuere")
