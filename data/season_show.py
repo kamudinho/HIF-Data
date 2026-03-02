@@ -1,16 +1,10 @@
-# season_show.py - CENTRAL STYRING FOR HVIDOVRE-APP 2025/2026
-
-# season_show.py
-SEASONNAME = "2025/2026"
-OPTA_SEASON_NAME = "2025/2026" 
+# --- 1. VALG AF LIGA (DETTE ER DET ENESTE STED DU RETTER) ---
+VALGT_LIGA = "Betinia Ligaen"  # Skift til "3F Superliga" når de rykker op!
+SEASONNAME = "2025/2026" 
 TEAM_WYID = 7490
-
-# Tjek at dette UUID matcher NordicBet Ligaen 25/26 i din Opta data
-COMPETITION_WYID = (328,) 
-OPTA_COMP_UUID = "6ifaeunfdelecgticvxanikzu"
+TEAM_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 # --- 2. AVANCERET TURNERING MAPPING ---
-# Denne struktur sikrer, at appen virker uanset om data kommer fra WYSCOUT eller OPTA
 COMPETITIONS = {
     "Betinia Ligaen": {
         "wyid": 328, 
@@ -38,37 +32,28 @@ COMPETITIONS = {
     }
 }
 
-# --- 3. HJÆLPEFUNKTIONER TIL FILTRERING ---
+# --- 3. AUTOMATISK OPSÆTNING AF ID'ER (Baseret på VALGT_LIGA) ---
+# Disse linjer henter selv de rigtige ID'er fra din mapping ovenfor
+COMPETITION_WYID = (COMPETITIONS[VALGT_LIGA]["wyid"],)
+OPTA_COMP_UUID = COMPETITIONS[VALGT_LIGA]["opta_uuid"]
 
-def get_league_ids(league_name="Betinia Ligaen"):
-    """
-    Returnerer en liste med både Wyscout ID og Opta UUID 
-    for at sikre korrekt filtrering i dine dataframes.
-    """
+# --- 4. HJÆLPEFUNKTIONER & BAGUDKOMPATIBEL COMP_MAP ---
+def get_league_ids(league_name=VALGT_LIGA):
     conf = COMPETITIONS.get(league_name, {})
     ids = []
-    if conf.get("wyid"):
-        ids.append(str(conf["wyid"]))
-    if conf.get("opta_uuid"):
-        ids.append(conf["opta_uuid"])
+    if conf.get("wyid"): ids.append(str(conf["wyid"]))
+    if conf.get("opta_uuid"): ids.append(conf["opta_uuid"])
     return ids
 
 def get_competition_name(id_val):
-    """
-    Slår et ID (Wyscout eller Opta) op og returnerer det læselige navn.
-    Svarer til din gamle COMP_MAP logik.
-    """
     id_str = str(id_val)
     for name, ids in COMPETITIONS.items():
         if id_str == str(ids["wyid"]) or id_str == ids["opta_uuid"]:
             return name
     return "Ukendt Turnering"
 
-# --- 4. BAGUDKOMPATIBEL COMP_MAP ---
-# Genererer den COMP_MAP du plejer at bruge, så dine gamle scripts ikke fejler
+# Genererer COMP_MAP automatisk
 COMP_MAP = {}
 for name, ids in COMPETITIONS.items():
-    if ids["wyid"]:
-        COMP_MAP[ids["wyid"]] = name
-    if ids["opta_uuid"]:
-        COMP_MAP[ids["opta_uuid"]] = name
+    if ids["wyid"]: COMP_MAP[ids["wyid"]] = name
+    if ids["opta_uuid"]: COMP_MAP[ids["opta_uuid"]] = name
