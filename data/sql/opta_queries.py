@@ -7,7 +7,7 @@ def get_opta_queries(liga_navn, saeson_navn):
         "opta_matches": f"""
             SELECT 
                 MATCH_OPTAUUID,
-                "DATE",  -- Tilføj dobbelte anførselstegn her!
+                "DATE", -- Dobbelte anførselstegn her er magiske i Snowflake
                 HOME_TEAM_NAME,
                 AWAY_TEAM_NAME,
                 HOME_SCORE,
@@ -16,9 +16,18 @@ def get_opta_queries(liga_navn, saeson_navn):
             WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
-        "opta_matches": f"""
-            SELECT * FROM {DB}.OPTA_MATCHINFO
-            ORDER BY DATE DESC
+        "opta_player_stats": f"""
+            SELECT 
+                PLAYER_OPTAUUID, -- VIGTIG: Sørg for at denne kolonne er stavet præcis sådan
+                PLAYER_NAME,
+                GOALS,
+                SHOTS,
+                ASSISTS,
+                PASSES,
+                SUCCESSFULPASSES,
+                MINUTESONFIELD
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYER_STATS
+            WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
         "opta_team_stats": f"""
