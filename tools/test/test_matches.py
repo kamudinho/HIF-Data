@@ -1,32 +1,27 @@
+# tools/test/test_matches.py
 import streamlit as st
 import pandas as pd
 
-def vis_side(df_raw=None):
-    # 1. Hent dataen råt
+def vis_side():
+    st.title("🛰️ Opta Kamp-explorer")
+
     if "dp" not in st.session_state:
-        st.error("Data pakken 'dp' ikke fundet.")
+        st.error("Data pakken 'dp' ikke fundet i session_state.")
         return
         
     dp = st.session_state["dp"]
     df_matches = dp.get("opta_matches", pd.DataFrame())
 
-    st.title("🛰️ Rå Data-forbindelse")
-
-    # 2. Vis hvad vi har i kassen overhovedet
-    if df_matches is None or df_matches.empty:
-        st.error("LORTET ER TOMT: Snowflake returnerede 0 rækker.")
-        st.info("Dette betyder at fejlen ligger i din SQL Query eller i din database-forbindelse.")
+    if df_matches.empty:
+        st.warning("Ingen Opta-kampe fundet i datapakken.")
+        # Vis hvad der rent faktisk er i dp for at debugge
+        st.write("Tilgængelige nøgler i dp:", list(dp.keys()))
         return
 
-    # 3. Tving kolonnenavne til UPPER så vi kan læse dem
-    df_matches.columns = [c.upper() for c in df_matches.columns]
+    st.success(f"Hul igennem! Visning af {len(df_matches)} kampe fra Snowflake.")
+    
+    # Vis dataen
+    st.dataframe(df_matches, use_container_width=True)
 
-    st.success(f"HUL IGENNEM! Vi har fundet {len(df_matches)} rækker.")
-
-    # 4. Smid det hele ind i en tabel - ingen dikkedarer
-    st.write("Her er de første 100 rækker vi fandt:")
-    st.dataframe(df_matches.head(100))
-
-    # 5. En lille hjælper til at finde ud af, hvad kolonnerne hedder
-    if st.checkbox("Vis alle kolonnenavne"):
+    if st.checkbox("Vis rå kolonner"):
         st.write(list(df_matches.columns))
