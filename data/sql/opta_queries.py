@@ -3,7 +3,7 @@
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Query til kamplisten (den har vi styr på)
+    # Standard filtering baseret på liga og sæson
     where_clause = f"WHERE COMPETITION_NAME ILIKE '{liga_navn}'"
     if saeson_navn:
         where_clause += f" AND TOURNAMENTCALENDAR_NAME ILIKE '{saeson_navn}'"
@@ -14,11 +14,11 @@ def get_opta_queries(liga_navn, saeson_navn):
             {where_clause}
             ORDER BY MATCH_DATE_FULL DESC
         """,
-        # NY QUERY: Henter alle hold-stats for den valgte liga/sæson
+        
+        # RETTET: SQL herunder var ødelagt før
         "opta_team_stats": f"""
-            SELECT 
-                SELECT *
+            SELECT *
             FROM {DB}.OPTA_MATCHSTATS
             WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
-
-    }
+        """
+    } # Husk at lukke denne!
