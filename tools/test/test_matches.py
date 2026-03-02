@@ -17,12 +17,24 @@ def vis_side():
     """, unsafe_allow_html=True)
 
     # --- 1. FILTRE ---
-    view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
+    # Hent alle hold fra 1. Division til dropdown
+    liga_hold = sorted([n for n, i in TEAMS.items() if i.get("league") in ["1. Division", "Betinia Ligaen", "NordicBet Liga"]])
+    
+    c_f1, c_f2 = st.columns([2, 1])
+    with c_f1:
+        valgt_hold = st.selectbox("Vælg hold", ["Hele runden"] + liga_hold)
+    with c_f2:
+        view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
+    
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
 
     # --- 2. DATA BEHANDLING ---
     mask = (df_matches['MATCH_STATUS'] == status_filter) & \
            (df_matches['COMPETITION_NAME'].str.contains('1. Division|NordicBet|Betinia', case=False, na=False))
+    
+    # Tilføj hold-filtrering hvis valgt
+    if valgt_hold != "Hele runden":
+        mask = mask & ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))
     
     sort_order = False if status_filter == 'Played' else True
     matches = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=sort_order)
@@ -33,11 +45,9 @@ def vis_side():
 
     # --- 3. BYG TABEL-DATA ---
     tabel_rows = []
-
     for _, row in matches.iterrows():
         h_name = row['CONTESTANTHOME_NAME']
         a_name = row['CONTESTANTAWAY_NAME']
-        
         kamp_tekst = f"{h_name} vs. {a_name}"
         dato_str = row['MATCH_DATE_FULL'].strftime("%d/%m") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else ""
 
@@ -54,10 +64,12 @@ def vis_side():
             "Resultat": res_tekst
         })
 
-    # Lav til DataFrame
     df_vis = pd.DataFrame(tabel_rows)
 
     # --- 4. VISNING ---
+    # Vi beregner højden dynamisk (ca. 35 pixels per række + lidt til header)
+    calc_height = (len(df_vis) + 1) * 35 + 3
+
     st.dataframe(
         df_vis,
         column_config={
@@ -66,7 +78,8 @@ def vis_side():
             "Resultat": st.column_config.TextColumn("Res", width="small"),
         },
         hide_index=True,
-        use_container_width=True
+        use_container_width=True,
+        height=calc_height # Dette fjerner scroll-baren og viser alle rækker
     )
 
     st.divider()
