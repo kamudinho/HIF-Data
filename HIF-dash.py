@@ -96,7 +96,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=[""Kampe"], 
+        sel = option_menu(None, options=["Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
