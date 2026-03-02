@@ -96,7 +96,6 @@ def vis_side():
             h_n = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
 
-            # --- KAMP BOKS START ---
             with st.container(border=True):
                 # 1. LINJE: LOGOER OG SCORE
                 col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -115,29 +114,34 @@ def vis_side():
                     if a_l: st.image(a_l, width=28)
                 with col5: st.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{a_n}</div>", unsafe_allow_html=True)
 
-                # 2. LINJE: OPTA DATA (Kun for spillede kampe)
+                # 2. LINJE: STATISTIK FRA DIN DATA (KUN HVIS SPILLET)
                 if is_played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     s_col1, s_col2, s_col3, s_col4, s_col5 = st.columns(5)
                     
-                    def stat_box(label, h_val, a_val):
-                        # Formatering af tal (f.eks. fjerne decimaler hvis det er heltal)
-                        h_display = f"{h_val}%" if label == "Possession" else f"{h_val}"
-                        a_display = f"{a_val}%" if label == "Possession" else f"{a_val}"
-                        
+                    def stat_box(label, h_val, a_val, is_pct=False):
+                        suffix = "%" if is_pct else ""
                         st.markdown(f"""
                             <div style='text-align:center;'>
-                                <div style='font-size:9px; color:#888; text-transform:uppercase; letter-spacing:1px;'>{label}</div>
-                                <div style='font-size:13px; font-weight:600; color:#333;'>{h_display} — {a_display}</div>
+                                <div style='font-size:9px; color:#888; text-transform:uppercase;'>{label}</div>
+                                <div style='font-size:13px; font-weight:600;'>{h_val}{suffix} — {a_val}{suffix}</div>
                             </div>
                         """, unsafe_allow_html=True)
 
-                    # Vi bruger .get() med 0 som fallback, så koden ikke crasher hvis en kolonne mangler
-                    with s_col1: stat_box("Possession", row.get('POSSESSION_HOME', 0), row.get('POSSESSION_AWAY', 0))
-                    with s_col2: stat_box("Passes", row.get('PASSES_HOME', 0), row.get('PASSES_AWAY', 0))
-                    with s_col3: stat_box("Duels", row.get('DUELS_HOME', 0), row.get('DUELS_AWAY', 0))
-                    with s_col4: stat_box("PPDA", row.get('PPDA_HOME', 0), row.get('PPDA_AWAY', 0))
-                    with s_col5: stat_box("Tackles", row.get('TACKLES_HOME', 0), row.get('TACKLES_AWAY', 0))
+                    # Mapping af dine specifikke Opta-navne fra listen:
+                    # OBS: Vi antager her at 'row' indeholder de aggregerede TOTAL-værdier.
+                    with s_col1: 
+                        stat_box("Possession", row.get('possessionPercentage_HOME', 0), row.get('possessionPercentage_AWAY', 0), True)
+                    with s_col2: 
+                        stat_box("Passes", row.get('totalPass_HOME', 0), row.get('totalPass_AWAY', 0))
+                    with s_col3: 
+                        # Duels er ofte summen af wonTackle eller en specifik Duel-stat
+                        stat_box("Duels Won", row.get('wonTackle_HOME', 0), row.get('wonTackle_AWAY', 0))
+                    with s_col4: 
+                        # PPDA skal ofte beregnes eller hentes fra en specifik række
+                        stat_box("Scoring Att", row.get('totalScoringAtt_HOME', 0), row.get('totalScoringAtt_AWAY', 0))
+                    with s_col5: 
+                        stat_box("Tackles", row.get('totalTackle_HOME', 0), row.get('totalTackle_AWAY', 0))
                         
     # --- 3. TABS OG FORM PÅ SAMME LINJE ---
     tab_col, form_col = st.columns([5, 1])
