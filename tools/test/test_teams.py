@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from data.data_load import load_snowflake_query, get_team_color
+from data.data_load import load_snowflake_query, get_team_color, get_contrast_text_color
 
 def vis_side(df_raw=None, colors_map=None): 
     # --- 1. DATA INITIALISERING ---
@@ -65,24 +65,27 @@ def vis_side(df_raw=None, colors_map=None):
         
         h2h_sub_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
-        # Funktion defineret inde i vis_side for at kunne se logo_map og colors_dict
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             
-            # Beregn værdier
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
             c1 = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
             c2 = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
             
+            # --- NY DYNAMISK TEKSTFARVE LOGIK ---
+            # Vi bruger enten funktionen fra data_load ELLER denne hurtige linje:
+            txt_c1 = "black" if c1["primary"].lower() in ["#ffff00", "#ffffff"] else "white"
+            txt_c2 = "black" if c2["primary"].lower() in ["#ffff00", "#ffffff"] else "white"
+
             # Søjle Hold 1
             fig.add_trace(go.Bar(
                 name=n1, x=labels, y=y1_vals, 
                 marker_color=c1["primary"],
                 marker_line=dict(color=c1["secondary"], width=2),
                 text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
-                textfont=dict(color="white" if c1["primary"].lower() != "#ffffff" else "black")
+                textfont=dict(color=txt_c1) # <--- HER rettet fra fast hvid/sort tjek
             ))
             
             # Søjle Hold 2
@@ -91,9 +94,9 @@ def vis_side(df_raw=None, colors_map=None):
                 marker_color=c2["primary"],
                 marker_line=dict(color=c2["secondary"], width=2),
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
-                textfont=dict(color="white" if c2["primary"].lower() != "#ffffff" else "black")
+                textfont=dict(color=txt_c2) # <--- HER rettet
             ))
-        
+                    
             # Logo-placering (justeret x-offset for at matche de nye mellemrum)
             for i in range(len(labels)):
                 if n1 in logo_map:
