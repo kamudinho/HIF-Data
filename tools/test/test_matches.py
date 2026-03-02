@@ -5,10 +5,23 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
+    
+    # --- HER SKAL LOGIKKEN IND ---
+    # Vi antager df_stats er din rå liste med possessionPercentage, totalPass osv.
+    if "opta_stats" in dp:
+        df_stats = dp["opta_stats"]
+        
+        # 1. Pivotér stats så hver række er én kamp
+        # Vi omdanner STAT_TYPE til kolonner
+        df_stats_wide = df_stats.pivot(index='MATCH_ID', columns='STAT_TYPE', values='STAT_TOTAL').reset_index()
+        
+        # 2. Merge det på df_matches
+        # Vi bruger 'left' for at beholde kampe, selvom de ikke har stats endnu (fixtures)
+        df_matches = pd.merge(df_matches, df_stats_wide, left_on='MATCH_OPTAUUID', right_on='MATCH_ID', how='left')
+    # ------------------------------
+
     logos = dp.get("logo_map", {})
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
-
-    st.write(df_matches.columns.tolist())
     
     # --- CSS ---
     hif_rod = "#df003b"
