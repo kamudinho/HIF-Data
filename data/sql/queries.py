@@ -59,23 +59,25 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE t.COMPETITION_WYID IN {comp_filter} AND s.SEASONNAME {season_filter}
         """,
 
-        # --- 5. OPTA KAMPE (Opta - Bruger TOURNAMENTCALENDAR_NAME og UUID) ---
+        # --- 5. OPTA KAMPE ---
         "opta_matches": f"""
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_DATE_FULL, STATUS,
                 TOURNAMENTCALENDAR_NAME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDAY
             FROM {DB}.OPTA_MATCHINFO
             WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-            AND (TOURNAMENTCALENDAR_NAME LIKE '%2025%' OR TOURNAMENTCALENDAR_NAME LIKE '%25/26%')
+            AND TOURNAMENTCALENDAR_NAME = '2025/2026'
+            ORDER BY MATCH_DATE_FULL DESC
         """,
         
+        # --- 6. OPTA STATS ---
         "opta_match_stats": f"""
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL, STAT_FH, STAT_SH
             FROM {DB}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (
                 SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-                AND (TOURNAMENTCALENDAR_NAME LIKE '%2025%' OR TOURNAMENTCALENDAR_NAME LIKE '%25/26%')
+                AND TOURNAMENTCALENDAR_NAME = '2025/2026'
             )
         """,
 
