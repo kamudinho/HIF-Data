@@ -60,22 +60,24 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
         """,
 
         # --- 5. OPTA TABEL DATA (Den vi lige har lavet) ---
-        "opta_table_view": f"""
+        "opta_matches": f"""
             SELECT 
+                m.MATCH_OPTAUUID,
                 m.MATCH_DATE_FULL,
-                m.CONTESTANTHOME_NAME AS HOME,
-                m.CONTESTANTAWAY_NAME AS AWAY,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'goals' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_GOALS,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'goals' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_GOALS,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'possessionPercentage' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_POSS,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'possessionPercentage' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_POSS,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'totalScoringAtt' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_SHOTS,
-                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'totalScoringAtt' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_SHOTS
-            FROM {DB}.OPTA_MATCHINFO m
-            JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
-            JOIN {DB}.OPTA_TEAMS t ON s.CONTESTANT_OPTAUUID = t.CONTESTANT_OPTAUUID
+                m.CONTESTANTHOME_NAME, 
+                m.CONTESTANTAWAY_NAME,
+                m.TOTAL_HOME_SCORE, 
+                m.TOTAL_AWAY_SCORE, 
+                m.TOURNAMENTCALENDAR_NAME,
+                -- Vi trækker stadig stats med ind, hvis du vil vise dem i expanderen senere
+                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS HOME_POSS,
+                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS AWAY_POSS
+            FROM OPTA_MATCHINFO m
+            LEFT JOIN OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
             WHERE m.COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
-            GROUP BY m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME
+            GROUP BY 
+                m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
+                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.TOURNAMENTCALENDAR_NAME
             ORDER BY m.MATCH_DATE_FULL DESC
         """,
         
