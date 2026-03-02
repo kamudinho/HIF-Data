@@ -18,7 +18,7 @@ def get_opta_queries(liga_navn, saeson_navn):
         "opta_team_stats": f"""
             SELECT 
                 SELECT *
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
+            FROM {DB}.OPTA_MATCHSTATS
             WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
 
     }
