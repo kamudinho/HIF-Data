@@ -7,7 +7,7 @@ TEAMS = {
     "Horsens": {"team_wyid": 7465, "opta_uuid": "a9vw7ikerpr4cuweeeka5aneg", "opta_id": 2289, "league": "Betinia Ligaen"},
     "Lyngby": {"team_wyid": 7484, "opta_uuid": "anga7587r1zv4ey71ge9zxol3", "opta_id": 272, "league": "Betinia Ligaen"},
     "Esbjerg": {"team_wyid": 7451, "opta_uuid": "f1h34qp5zbfl489q8vnkhiq9s", "opta_id": 1409, "league": "Betinia Ligaen"},
-    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "b8oqgvx1ijeyn6y1cn6929ix4", "opta_id": 13253, "league": "Betinia Ligaen"},
+    "Kolding": {"team_wyid": 7622, "opta_uuid": "b8oqgvx1ijeyn6y1cn6929ix4", "opta_id": 13253, "league": "Betinia Ligaen"},
     "Hobro": {"team_wyid": 7510, "opta_uuid": "b2vft81kyjurzbmekvgrqwr64", "opta_id": 4802, "league": "Betinia Ligaen"},
     "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "league": "Betinia Ligaen"},
     "Hillerød Fodbold": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "league": "Betinia Ligaen"},
