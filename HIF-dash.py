@@ -1,21 +1,29 @@
 import os
 import sys 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
+
+# Sikr at vi kan finde vores egne moduler
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from data.data_load import get_data_package, load_snowflake_query
 from data.users import get_users
 
 # --- 1. KONFIGURATION ---
-st.set_page_config(page_title="HIF Data Hub", layout="wide", page_icon="🔴")
+HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 
-st.markdown("""
+st.set_page_config(
+    page_title="HIF Data Hub", 
+    layout="wide", 
+    page_icon=HIF_LOGO_URL
+)
+
+st.markdown(f"""
     <style>
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
-        header { visibility: hidden; height: 0px; }
-        .custom-header {
+        .block-container {{ padding-top: 1rem !important; padding-bottom: 0rem !important; }}
+        header {{ visibility: hidden; height: 0px; }}
+        .custom-header {{
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -24,9 +32,9 @@ st.markdown("""
             color: white; 
             border-radius: 8px;
             margin-bottom: 20px;
-        }
-        button[data-baseweb="tab"] { font-size: 14px; }
-        button[data-baseweb="tab"][aria-selected="true"] { color: #cc0000 !important; border-bottom-color: #cc0000 !important; }
+        }}
+        button[data-baseweb="tab"] {{ font-size: 14px; }}
+        button[data-baseweb="tab"][aria-selected="true"] {{ color: #cc0000 !important; border-bottom-color: #cc0000 !important; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -38,7 +46,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        st.markdown("<div style='text-align: center;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='120'></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center;'><img src='{HIF_LOGO_URL}' width='120'></div>", unsafe_allow_html=True)
         with st.form("login"):
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
@@ -53,7 +61,7 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # --- 3. DATA LOADING ---
-if "dp" not in st.session_state: # Omdøbt fra data_package til dp for enkelthed
+if "dp" not in st.session_state:
     with st.spinner("Henter systemdata..."):
         st.session_state["dp"] = get_data_package()
 
@@ -61,7 +69,7 @@ dp = st.session_state["dp"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown("<div style='text-align: center; padding-bottom: 10px;'><img src='https://cdn5.wyscout.com/photos/team/public/2659_120x120.png' width='60'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='60'></div>", unsafe_allow_html=True)
     
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
@@ -94,7 +102,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Brugerstyring", "System Log", "Schema Explorer"], 
+        sel = option_menu(None, options=["Rå Data Explorer", "Brugerstyring", "System Log"], 
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
 # --- 5. ROUTING LOGIK ---
@@ -112,13 +120,10 @@ try:
             sq.vis_side(dp["players"])
         elif sel == "Spillerstats":
             import tools.stats as st_tool
-            # Vi henter friske stats her via den nye 3-argument query-logik
-            df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"], dp["OP_UUID"])
-            st_tool.vis_side(dp["players"], df_stats)
+            st_tool.vis_side(dp["players"], dp["playerstats"])
         elif sel == "Top 5":
             import tools.top5 as t5
-            df_stats = load_snowflake_query("playerstats", dp["comp_filter"], dp["season_filter"], dp["OP_UUID"])
-            t5.vis_side(dp["players"], df_stats)
+            t5.vis_side(dp["players"], dp["playerstats"])
 
     # --- HIF ANALYSE SEKTION ---
     elif hoved_omraade == "HIF ANALYSE":
@@ -127,11 +132,9 @@ try:
             ps.vis_side(dp["players"], dp["logo_map"])
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
-            df_matches = load_snowflake_query("team_matches", dp["comp_filter"], dp["season_filter"], dp["OP_UUID"])
-            ma.vis_side(df_matches, dp["logo_map"])
+            ma.vis_side(dp["opta_matches"], dp["logo_map"])
         elif sel == "Scatterplots":
             import tools.scatter as sc
-            # Team stats bruges ofte til scatterplots af hele ligaen
             sc.vis_side(dp["team_stats_full"])
 
     # --- BETINIA LIGAEN SEKTION ---
@@ -141,7 +144,7 @@ try:
             tt.vis_side(dp["team_stats_full"], dp["colors"])
         elif sel == "Spillerstats":
             import tools.test.test_players as tp
-            tp.vis_side() # Sender hele dp for at få adgang til Opta-data
+            tp.vis_side(dp) # Sender hele dp for at få adgang til Opta-data
         elif sel == "Kampe":
             import tools.test.test_matches as tm
             tm.vis_side()
@@ -153,22 +156,24 @@ try:
             si.vis_side(dp)
         elif sel == "Database":
             import tools.scout_db as sdb
-            sdb.vis_side(dp["scouting_image"], dp["players"], dp["playerstats"], dp["player_career"])
+            sdb.vis_side(dp.get("scouting_image"), dp["players"], dp["playerstats"], dp["player_career"])
         elif sel == "Sammenligning":
             import tools.comparison as comp
-            comp.vis_side(dp["players"], dp["playerstats"], dp["scouting_image"], dp["player_career"], dp["season_filter"])
+            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp["season_filter"])
 
     # --- ADMIN SEKTION ---
     elif hoved_omraade == "ADMIN":
-        import tools.admin as adm
-        if sel == "Brugerstyring":
+        if sel == "Rå Data Explorer":
+            st.title("🛰️ Rå Data Explorer")
+            st.write("### Opta Matches", dp["opta_matches"].head(50))
+            st.write("### Opta Stats", dp["opta_raw_stats"].head(50))
+        elif sel == "Brugerstyring":
+            import tools.admin as adm
             adm.vis_side()
         elif sel == "System Log":
+            import tools.admin as adm
             adm.vis_log()
-        elif sel == "Schema Explorer":
-            import tools.snowflake_test as stest
-            stest.vis_side()
 
 except Exception as e:
     st.error(f"Kunne ikke indlæse siden '{sel}': {e}")
-    st.info("Dette skyldes ofte en manglende fil i 'tools/' mappen eller en kolonne-fejl i SQL-dataen.")
+    st.info("Dette skyldes ofte en manglende fil i 'tools/' mappen eller en kolonne-fejl.")
