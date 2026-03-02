@@ -8,7 +8,7 @@ def vis_side():
     logos = dp.get("logo_map", {})
     
     # Hent valgt liga fra pakken for at sikre match med TEAMS
-    valgt_liga_global = dp.get("VALGT_LIGA", "1. Division")
+    valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
 
     # --- CSS ---
     hif_rod = "#df003b"
