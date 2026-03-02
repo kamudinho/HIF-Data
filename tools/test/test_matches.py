@@ -8,6 +8,8 @@ def vis_side():
     logos = dp.get("logo_map", {})
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
 
+    st.write(df_matches.columns.tolist())
+    
     # --- CSS ---
     hif_rod = "#df003b"
     st.markdown(f"""
