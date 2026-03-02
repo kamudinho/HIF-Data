@@ -115,31 +115,31 @@ def load_snowflake_query(query_key, comp_filter, season_filter, opta_uuid=None):
         return pd.DataFrame()
 
 def get_data_package():
-    # A. FILTRE (Wyscout bruger stadig disse)
+    # A. FILTRE
     comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
-    wy_season_filter = f"='{SEASONNAME}'"
-
-    # B. HENT DATA (Kun de nødvendige nu)
-    # Vi henter kun opta_matches og dropper stats helt
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, wy_season_filter, OPTA_COMP_UUID)
     
-    # Standard Wyscout data
+    # Wyscout bruger stadig formatet ='2025/2026'
+    wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
+
+    # B. HENT DATA
+    # Vi sender nu TOURNAMENTCALENDAR_NAME med til Opta-queryen
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, wy_season_filter)
+    
+    # Wyscout queries
     df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, wy_season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
-    df_player_career = load_snowflake_query("player_career", comp_filter, wy_season_filter)
 
-    # C. RETURNER PAKKEN (Renset for stats-nøgler)
     return {
         "players": df_sql_players,
         "playerstats": df_playerstats,
-        "player_career": df_player_career,
         "team_stats_full": df_team_stats,
-        "opta_matches": df_matches_opta, # <--- Nu er denne forhåbentlig fyldt med data!
+        "opta_matches": df_matches_opta,
         "comp_filter": comp_filter,
         "season_filter": wy_season_filter,
-        "OP_UUID": OPTA_COMP_UUID,
+        "VALGT_LIGA": VALGT_LIGA,
+        "SEASON_NAME": TOURNAMENTCALENDAR_NAME, # Gemt til brug i UI
         "colors": TEAM_COLORS,
         "logo_map": {row['TEAMNAME']: row['IMAGEDATAURL'] for _, row in df_team_stats.iterrows()} if not df_team_stats.empty else {}
     }
