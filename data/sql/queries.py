@@ -3,9 +3,9 @@
 def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
     """
     Returnerer en ordbog med SQL-queries til Snowflake.
-    comp_filter: Wyscout ID(s) f.eks. (328,)
-    season_filter: Sæson f.eks. "='2025/2026'"
-    opta_comp_uuid: Det rå UUID fra season_show (uden parenteser)
+    comp_filter: (328,)
+    season_filter: '2025/2026'
+    opta_comp_uuid: 6ifaeunfdelecgticvxanikzu
     """
     
     DB = "KLUB_HVIDOVREIF.AXIS"
