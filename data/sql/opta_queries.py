@@ -6,7 +6,7 @@ def get_opta_queries(liga_navn, saeson_navn):
     return {
         "opta_matches": f"""
             SELECT *
-            FROM {DB}.OPTA_MATCHES
+            FROM {DB}.OPTA_MATCHINFO
         """,
         
         "opta_player_stats": f"""
@@ -19,7 +19,7 @@ def get_opta_queries(liga_navn, saeson_navn):
                 PASSES,
                 SUCCESSFULPASSES,
                 MINUTESONFIELD
-            FROM {DB}.OPTA_PLAYER_STATS
+            FROM {DB}.OPTA_EVENTS
             WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
