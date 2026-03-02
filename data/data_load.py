@@ -4,7 +4,7 @@ import pandas as pd
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
-from data.utils.team_mapping import COMPETITIONS, TEAMS # Importerer din nye mapping
+from data.utils.team_mapping import COMPETITIONS, TEAMS  # Din "Single Source of Truth"
 
 # --- 1. CENTRAL KONFIGURATION ---
 TEAM_COLORS = {
@@ -22,51 +22,30 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
+# Hent sæson-specifikke konstanter
 try:
-    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID, COMPETITIONS
+    from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
+    # Bemærk: Vi importerer IKKE COMPETITIONS herfra, da vi bruger team_mapping.py
 except ImportError:
     SEASONNAME = "2025/2026"
     COMPETITION_WYID = (328,) 
     TEAM_WYID = 7490
 
 # --- 2. HJÆLPEFUNKTIONER ---
-# (Behold get_team_colors, get_team_color og fmt_val som de er)
 def get_team_colors(): return TEAM_COLORS
+
 def get_team_color(name):
     if not name: return "#333333"
     for key, color in TEAM_COLORS.items():
         if key.lower() in name.lower(): return color
     return "#333333"
+
 def fmt_val(v):
     try:
         val = float(v)
         if val == 0 or val.is_integer(): return f"{int(val)}"
         return f"{val:.2f}"
     except: return str(v)
-
-def build_player_bridge(df_wyscout, df_opta_players):
-    """
-    Bygger en bro mellem Wyscout (PLAYER_WYID) og Opta (PLAYER_SSIID) 
-    baseret på navne-match.
-    """
-    bridge = {}
-    if df_wyscout.empty or df_opta_players.empty:
-        return bridge
-
-    # Gør navne sammenlignelige (små bogstaver, ingen mærkelige tegn)
-    df_opta_players['CLEAN_NAME'] = df_opta_players['PLAYER_NAME'].str.lower().str.strip()
-    
-    for _, wy_row in df_wyscout.iterrows():
-        wy_name = str(wy_row.get('SHORTNAME', '')).lower().strip()
-        wy_id = str(wy_row['PLAYER_WYID'])
-        
-        # Find bedste match i Opta-listen
-        match = df_opta_players[df_opta_players['CLEAN_NAME'] == wy_name]
-        
-        if not match.empty:
-            bridge[wy_id] = match.iloc[0]['PLAYER_SSIID']
-            
-    return bridge
 
 # --- 3. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
@@ -109,15 +88,24 @@ def load_github_data():
 
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, comp_filter, season_filter):
+    """Sikker loader: Returnerer tom DF ved fejl i stedet for at crashe"""
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
+    
     queries = get_queries(comp_filter, season_filter)
     q = queries.get(query_key)
-    if not q: return pd.DataFrame() # Sikkerhed hvis query ikke findes
+    if not q: return pd.DataFrame() 
+    
     try:
-        return conn.query(q)
+        df = conn.query(q)
+        if df is not None:
+            # Tving altid store bogstaver for kolonnenavne her centralt
+            df.columns = [str(c).upper().strip() for c in df.columns]
+            return df
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"SQL Fejl ({query_key}): {e}")
+        # Logger fejlen i konsollen men lader appen køre videre
+        print(f"SQL Fejl ({query_key}): {e}")
         return pd.DataFrame()
 
 def get_data_package():
@@ -132,53 +120,45 @@ def get_data_package():
         if "opta_uuid" in info and info["opta_uuid"]:
             hold_map[str(info["opta_uuid"]).strip()] = name
 
-    # --- 2. DEFINER FILTRE (VIGTIGT FOR AFSLUTNINGER) ---
+    # --- 2. DEFINER FILTRE ---
     comps = tuple(COMPETITION_WYID) if isinstance(COMPETITION_WYID, (list, tuple)) else (COMPETITION_WYID,)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
     season_filter = f"='{SEASONNAME}'"
     
-    # Find Opta UUID til de specifikke Opta-kald
-    target_id = COMPETITION_WYID[0] if isinstance(COMPETITION_WYID, (list, tuple)) else COMPETITION_WYID
+    # Find Opta UUID via team_mapping.py struktur
+    target_id = comps[0]
     opta_uuid = None
-    for name, league_info in COMPETITIONS.items():
-        if league_info.get("wyid") == target_id:
+    for league_name, league_info in COMPETITIONS.items():
+        if league_info.get("comp_wyid") == target_id:
             opta_uuid = league_info.get("opta_uuid")
             break
 
-    # --- 3. HENT DATA FRA SNOWFLAKE ---
-    # Opta data
+    # --- 3. HENT DATA (Robust indlæsning) ---
+    # Opta
     df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, season_filter)
     df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, season_filter)
 
-    # Wyscout data
+    # Wyscout
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
     df_matches_wy = load_snowflake_query("team_matches", comp_filter, season_filter)
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
     
-    # --- 4. RENS OG FILTRER OPTA DATA (For 2026-kompatibilitet) ---
+    # --- 4. RENS OG FILTRER OPTA DATA ---
     if not df_matches_opta.empty:
-        df_matches_opta.columns = [c.upper() for c in df_matches_opta.columns]
-        # Vi filtrerer kun på holdene for at fjerne støj fra andre rækker
         kendte_hold_navne = list(TEAMS.keys())
         df_matches_opta = df_matches_opta[
             df_matches_opta['CONTESTANTHOME_NAME'].isin(kendte_hold_navne) | 
             df_matches_opta['CONTESTANTAWAY_NAME'].isin(kendte_hold_navne)
         ].copy()
 
-    if not df_opta_stats.empty:
-        df_opta_stats.columns = [c.upper() for c in df_opta_stats.columns]
-
     # --- 5. MERGE BILLEDER PÅ SPILLERE ---
     df_hvidovre_csv = gh_data["players"].copy()
     if not df_sql_players.empty and not df_hvidovre_csv.empty:
-        df_sql_players.columns = [c.upper() for c in df_sql_players.columns]
-        # Sikr PLAYER_WYID er string for merge
         df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
         df_sql_players['PLAYER_WYID'] = df_sql_players['PLAYER_WYID'].astype(str)
         
-        # Flet IMAGEDATAURL ind i din CSV-data
         df_hvidovre_csv = pd.merge(
             df_hvidovre_csv, 
             df_sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], 
@@ -186,24 +166,10 @@ def get_data_package():
             how='left'
         )
 
-    # --- 5.5 BYG SPILLER-BRO (Wyscout <-> Opta/SS) ---
-    player_bridge = {}
-    if not df_hvidovre_csv.empty and not df_sql_players.empty:
-        # Vi laver en midlertidig ordbog til opslag: Navn -> Opta UUID
-        # Vi bruger df_sql_players (som vi antager indeholder Opta ID'er i en kolonne som PLAYER_SSIID eller lign.)
-        # Hvis kolonnen ikke findes endnu, forbereder vi den her:
-        for _, row in df_sql_players.iterrows():
-            wy_id = str(row['PLAYER_WYID'])
-            # Her gemmer vi broen
-            player_bridge[wy_id] = {
-                "opta_id": row.get('PLAYER_SSIID', None), # Dette ID bruges af Second Spectrum
-                "shortname": row.get('SHORTNAME', '')
-            }
-
     # --- 6. RETURNER SAMLET PAKKE ---
     return {
-        "player_bridge": player_bridge,
         "players": df_hvidovre_csv,
+        "scouting_image": gh_data["scouting"],
         "playerstats": df_playerstats,
         "player_career": df_player_career,
         "team_stats_full": df_team_stats,
@@ -211,8 +177,8 @@ def get_data_package():
         "opta_matches": df_matches_opta,  
         "opta_stats": df_opta_stats,     
         "hold_map": hold_map, 
-        "comp_filter": comp_filter,      # Fixer 'Afslutninger' fejlen
-        "season_filter": season_filter,  # Fixer 'Afslutninger' fejlen
+        "comp_filter": comp_filter,      
+        "season_filter": season_filter,  
         "COMPETITION_WYID": COMPETITION_WYID,
         "SEASONNAME": SEASONNAME,
         "team_id": TEAM_WYID,
