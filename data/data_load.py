@@ -88,11 +88,9 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     if not conn: return pd.DataFrame()
     
     if query_key.startswith("opta_"):
-        from data.sql.opta_queries import get_opta_queries
-        # Her sender vi de to tekst-variable med
+        # VIGTIGT: Sørg for at disse matcher dine argumenter i opta_queries.py
         queries = get_opta_queries(VALGT_LIGA, TOURNAMENTCALENDAR_NAME)
     else:
-        from data.sql.wy_queries import get_wy_queries
         queries = get_wy_queries(comp_filter, season_filter)
         
     q = queries.get(query_key)
@@ -100,12 +98,13 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     
     try:
         df = conn.query(q)
-        if df is not None:
+        if df is not None and not df.empty:
+            # Tving alle kolonner til UPPERCASE og fjern whitespaces
             df.columns = [str(c).upper().strip() for c in df.columns]
             return df
         return pd.DataFrame()
     except Exception as e:
-        print(f"SQL Fejl i {query_key}: {e}")
+        st.error(f"SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
 
 def get_data_package():
