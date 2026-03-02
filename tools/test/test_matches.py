@@ -88,22 +88,21 @@ def vis_side():
 
     # --- 4. TEGN FUNKTION (UUID-BASERET LOGO OPSLAG) ---
     def tegn_kampe(matches, is_played):
-        if matches.empty: return
+    if matches.empty: return
 
-        # DIAGNOSE-VÆRKTØJ: Viser os præcis hvad der er galt
-        st.write("--- DEBUG INFO ---")
-        st.write(f"Antal logoer i map: {len(logos)}")
-        if logos:
-            st.write("Eksempel på nøgle i logo_map:", type(list(logos.keys())[0]), list(logos.keys())[0])
-            st.write("Eksempel på WYID vi leder efter:", type(TEAMS["Hvidovre"]["team_wyid"]), TEAMS["Hvidovre"]["team_wyid"])
-            
-        # BROEN: Vi finder team_wyid fra TEAMS.py vha. UUID'et fra rækken
-        def hent_logo(uuid):
-            for name, info in TEAMS.items():
-                if info.get("opta_uuid") == uuid:
-                    wyid = info.get("team_wyid")
-                    return logos.get(wyid)
-            return None
+    def hent_logo(uuid):
+        # Vi leder direkte i TEAMS ordbogen efter logo-URL'en
+        for name, info in TEAMS.items():
+            if info.get("opta_uuid") == uuid:
+                # Vi prioriterer det manuelle logo fra TEAMS.py
+                manual_logo = info.get("logo")
+                if manual_logo:
+                    return manual_logo
+                
+                # Fallback til logo_map (hvis den nogensinde får data)
+                wyid = info.get("team_wyid")
+                return logos.get(wyid)
+        return None
 
         current_date = None
         for _, row in matches.iterrows():
