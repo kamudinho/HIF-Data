@@ -59,15 +59,24 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE t.COMPETITION_WYID IN {comp_filter} AND s.SEASONNAME {season_filter}
         """,
 
-        # --- 5. OPTA KAMPE (Hårdkodet for at eliminere fejl) ---
-        "opta_matches": f"""
-            SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
-                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_DATE_FULL, STATUS,
-                TOURNAMENTCALENDAR_NAME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDAY
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO
-            WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
-            AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-            ORDER BY MATCH_DATE_FULL DESC
+        # --- 5. OPTA TABEL DATA (Den vi lige har lavet) ---
+        "opta_table_view": f"""
+            SELECT 
+                m.MATCH_DATE_FULL,
+                m.CONTESTANTHOME_NAME AS HOME,
+                m.CONTESTANTAWAY_NAME AS AWAY,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'goals' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_GOALS,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'goals' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_GOALS,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'possessionPercentage' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_POSS,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'possessionPercentage' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_POSS,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTHOME_NAME AND s.STAT_TYPE = 'totalScoringAtt' THEN s.STAT_TOTAL ELSE NULL END) AS HOME_SHOTS,
+                MAX(CASE WHEN t.NAME = m.CONTESTANTAWAY_NAME AND s.STAT_TYPE = 'totalScoringAtt' THEN s.STAT_TOTAL ELSE NULL END) AS AWAY_SHOTS
+            FROM {DB}.OPTA_MATCHINFO m
+            JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
+            JOIN {DB}.OPTA_TEAMS t ON s.CONTESTANT_OPTAUUID = t.CONTESTANT_OPTAUUID
+            WHERE m.COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+            GROUP BY m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME
+            ORDER BY m.MATCH_DATE_FULL DESC
         """,
         
         # --- 6. OPTA STATS (Skal pege på de samme hårde ID'er) ---
