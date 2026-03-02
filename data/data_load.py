@@ -114,31 +114,29 @@ def get_data_package():
     wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
 
     # B. HENT DATA
+    # Hent spiller-stats fra Opta (Denne indeholder PLAYER_OPTAUUID)
+    df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
+    
+    # Hent din master-liste (players.csv / SQL players)
+    # VIGTIGT: Din SQL "players" query skal også have PLAYER_OPTAUUID med for at kunne merge!
+    df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
+    
+    # Andre queries...
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
     df_logos_raw = load_snowflake_query("team_logos", None, None)
-    df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
-    
-    # Wyscout queries
-    df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
-    df_playerstats = load_snowflake_query("playerstats", comp_filter, wy_season_filter)
-    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
 
-    # C. BYG LOGO_MAP (LØSNINGEN PÅ DIT PROBLEM)
+    # C. BYG LOGO_MAP
     logo_map = {}
     if not df_logos_raw.empty:
-        # Vi tvinger TEAM_WYID til at være en INT (heltal)
-        # Dette sikrer, at 7490.0 bliver til 7490, så det matcher din TEAMS mapping
         logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows()}
 
     return {
-        "players": df_sql_players,
-        "playerstats": df_opta_player_stats, # Skift her for at bruge Opta-stats i stats.py
-        "playerstats_wy": df_playerstats,    # Behold evt. den gamle under et andet navn
-        "team_stats_full": df_team_stats,
+        "players": df_sql_players,           # Din master-liste (skal have PLAYER_OPTAUUID)
+        "playerstats": df_opta_player_stats,  # Dine stats (skal have PLAYER_OPTAUUID)
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
-        "logo_map": logo_map, # Nu med rene heltal som nøgler!
+        "logo_map": logo_map,
         "VALGT_LIGA": VALGT_LIGA,
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS
