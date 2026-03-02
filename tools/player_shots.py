@@ -15,6 +15,9 @@ except ImportError:
 HIF_RED = '#cc0000' 
 HIF_BLUE = '#0055aa' 
 
+# --- 2. FARVER & KONSTANTER ---
+hif_rod = "#df003b"
+
 def vis_side(df_spillere=None, hold_map=None):
      # --- TOP BRANDING ---
     st.markdown(f"""
