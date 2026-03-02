@@ -73,13 +73,13 @@ def vis_side():
             
             if diff > 0:
                 stats["S"] += 1
-                stats["form"].append({"res": "win", "txt": "S", "hover": f"Mod {opp_name} ({res_label})"})
+                stats["form"].append({"res": "win", "txt": "S", "hover": f"vs. {opp_name} ({res_label})"})
             elif diff == 0:
                 stats["U"] += 1
-                stats["form"].append({"res": "draw", "txt": "U", "hover": f"Mod {opp_name} ({res_label})"})
+                stats["form"].append({"res": "draw", "txt": "U", "hover": f"vs. {opp_name} ({res_label})"})
             else:
                 stats["N"] += 1
-                stats["form"].append({"res": "loss", "txt": "N", "hover": f"Mod {opp_name} ({res_label})"})
+                stats["form"].append({"res": "loss", "txt": "N", "hover": f"vs. {opp_name} ({res_label})"})
         except: continue
 
     # --- 4. VIS STATS BAR ---
