@@ -5,15 +5,8 @@ def get_opta_queries(liga_navn, saeson_navn):
     
     return {
         "opta_matches": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                "DATE", -- Dobbelte anførselstegn her er magiske i Snowflake
-                HOME_TEAM_NAME,
-                AWAY_TEAM_NAME,
-                HOME_SCORE,
-                AWAY_SCORE
+            SELECT *
             FROM {DB}.OPTA_MATCHES
-            WHERE TOURNAMENT_NAME = '{liga_navn}'
         """,
         
         "opta_player_stats": f"""
