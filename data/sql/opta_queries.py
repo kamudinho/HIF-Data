@@ -3,6 +3,9 @@
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
+    # Definer en standard clause til de andre queries
+    where_clause = f"WHERE COMPETITION_NAME ILIKE '%{liga_navn}%' AND TOURNAMENTCALENDAR_NAME ILIKE '%{saeson_navn}%'"
+    
     return {
         "opta_player_stats": f"""
             SELECT 
@@ -10,11 +13,16 @@ def get_opta_queries(liga_navn, saeson_navn):
                 PLAYER_NAME,
                 COUNT(DISTINCT MATCH_OPTAUUID) AS MATCHES,
                 SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS,
+                -- Tilføj disse så kpi_map i stats.py virker:
+                SUM(CASE WHEN EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS PASSES,
+                SUM(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS SUCCESSFULPASSES,
+                0 AS ASSISTS, -- Opta assists kræver ofte specifikke qualifier-checks
+                0 AS XGSHOT,
+                SUM(CASE WHEN EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) AS SHOTS,
                 SUM(EVENT_TIMEMIN) AS MINUTESONFIELD
             FROM {DB}.OPTA_EVENTS
-            WHERE COMPETITION_NAME LIKE '%1. division%' -- Hardcoded test
+            WHERE COMPETITION_NAME ILIKE '%1. division%' 
             GROUP BY 1, 2
-            LIMIT 100
         """,
         
         "opta_matches": f"""
