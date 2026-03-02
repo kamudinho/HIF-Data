@@ -4,80 +4,76 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp", {})
-    if "opta_stats" in dp:
-        st.success(f"✅ Fandt {len(dp['opta_stats'])} rækker med statistik!")
-    else:
-        st.error("❌ Kunne stadig ikke finde 'opta_stats' i data-pakken.")
-        
     df_matches = dp.get("opta_matches", pd.DataFrame())
     
-    # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
-    if "opta_stats" in dp:
-        df_raw_stats = dp["opta_stats"]
+    # --- 1. DATA MERGE LOGIK (OPDATERET MED RIGTIGE KOLONNENAVNE) ---
+    if "opta_stats" in dp and not dp["opta_stats"].empty:
+        df_raw_stats = dp["opta_stats"].copy()
         
-        # 1. Pivotér den rå statistik, så vi får kolonner (STAT_TYPE) pr. hold (CONTESTANT_ID)
-        # Dette omdanner de mange rækker til én række pr. hold pr. kamp
-        df_pivot = df_raw_stats.pivot_table(
-            index=['MATCH_ID', 'CONTESTANT_ID'], 
-            columns='STAT_TYPE', 
-            values='STAT_TOTAL', 
-            aggfunc='first'
-        ).reset_index()
+        # Vi tvinger alt til STORE bogstaver for en sikkerheds skyld
+        df_raw_stats.columns = [c.upper() for c in df_raw_stats.columns]
 
-        # 2. Forbered hjemme-stats (tilføj _HOME suffix)
-        df_home = df_pivot.copy()
-        cols_stats = [c for c in df_home.columns if c not in ['MATCH_ID', 'CONTESTANT_ID']]
-        df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_stats})
-        
-        # 3. Forbered ude-stats (tilføj _AWAY suffix)
-        df_away = df_pivot.copy()
-        df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_stats})
+        # Her bruger vi de navne, du lige har sendt:
+        # Index: MATCH_OPTAUUID, CONTESTANT_OPTAUUID
+        # Kolonner: STAT_TYPE
+        # Værdier: STAT_TOTAL
+        try:
+            df_pivot = df_raw_stats.pivot_table(
+                index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
+                columns='STAT_TYPE', 
+                values='STAT_TOTAL', 
+                aggfunc='first'
+            ).reset_index()
 
-        # 4. Merge Hjemme-stats på df_matches (matcher på kamp-id OG hjemmehold-id)
-        df_matches = pd.merge(
-            df_matches, 
-            df_home, 
-            left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
-            right_on=['MATCH_ID', 'CONTESTANT_ID'], 
-            how='left'
-        ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
+            # Forbered Hjemme-stats
+            df_home = df_pivot.copy()
+            cols_to_rename = [c for c in df_home.columns if c not in ['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID']]
+            df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_to_rename})
+            
+            # Forbered Ude-stats
+            df_away = df_pivot.copy()
+            df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_to_rename})
 
-        # 5. Merge Ude-stats på df_matches (matcher på kamp-id OG udehold-id)
-        df_matches = pd.merge(
-            df_matches, 
-            df_away, 
-            left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
-            right_on=['MATCH_ID', 'CONTESTANT_ID'], 
-            how='left'
-        ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
+            # Merge Hjemme på df_matches
+            df_matches = pd.merge(
+                df_matches, 
+                df_home, 
+                left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
+                right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
+                how='left'
+            ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
 
+            # Merge Ude på df_matches
+            df_matches = pd.merge(
+                df_matches, 
+                df_away, 
+                left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
+                right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
+                how='left'
+            ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+            
+        except Exception as e:
+            st.error(f"Fejl under behandling af stats: {e}")
+
+    # --- 2. RESTEN AF DIN KODE (CSS & LOGIK) ---
     logos = dp.get("logo_map", {})
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
-    
-    # --- CSS ---
     hif_rod = "#df003b"
+    
     st.markdown(f"""
         <style>
         .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
         .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
         .stat-val {{ font-weight: bold; font-size: 14px; }}
         .form-container {{ display: flex; gap: 4px; }}
-        .form-dot {{ 
-            display: flex; align-items: center; justify-content: center; 
-            width: 24px; height: 24px; border-radius: 3px; 
-            color: white; font-size: 11px; font-weight: bold; 
-            cursor: help;
-        }}
-        .win {{ background-color: #28a745; }} 
-        .draw {{ background-color: #ffc107; }} 
-        .loss {{ background-color: #dc3545; }}
+        .form-dot {{ display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 3px; color: white; font-size: 11px; font-weight: bold; cursor: help; }}
+        .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
         .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
         .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
         .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. DATA FORBEREDELSE & FILTRE ---
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     
@@ -94,31 +90,29 @@ def vis_side():
     team_matches = df_matches[mask].copy()
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     
-    stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
+    stats_map = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
         opp_name = id_to_name.get(m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID'], "Modstander")
         try:
             h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
             a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
-            stats["K"] += 1
-            stats["M+"] += h_s if is_h else a_s
-            stats["M-"] += a_s if is_h else h_s
+            stats_map["K"] += 1
+            stats_map["M+"] += h_s if is_h else a_s
+            stats_map["M-"] += a_s if is_h else h_s
             diff = h_s - a_s if is_h else a_s - h_s
             res_label = f"{h_s}-{a_s}"
-            if diff > 0: stats["S"] += 1; stats["form"].append({"res":"win","txt":"S","hover":f"vs. {opp_name} ({res_label})"})
-            elif diff == 0: stats["U"] += 1; stats["form"].append({"res":"draw","txt":"U","hover":f"vs. {opp_name} ({res_label})"})
-            else: stats["N"] += 1; stats["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name} ({res_label})"})
+            if diff > 0: stats_map["S"] += 1; stats_map["form"].append({"res":"win","txt":"S","hover":f"vs. {opp_name} ({res_label})"})
+            elif diff == 0: stats_map["U"] += 1; stats_map["form"].append({"res":"draw","txt":"U","hover":f"vs. {opp_name} ({res_label})"})
+            else: stats_map["N"] += 1; stats_map["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name} ({res_label})"})
         except: continue
 
-    stats_display = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
+    stats_display = [("K", stats_map["K"]), ("S", stats_map["S"]), ("U", stats_map["U"]), ("N", stats_map["N"]), ("M+", stats_map["M+"]), ("M-", stats_map["M-"]), ("+/-", stats_map["M+"]-stats_map["M-"])]
     for i, (l, v) in enumerate(stats_display):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    st.write("")
-
-    # --- 2. HJÆLPEFUNKTION TIL KAMPE ---
+    # --- 3. TEGN FUNKTION ---
     def tegn_kampe(matches, is_played):
         if matches.empty:
             st.info("Ingen kampe fundet.")
@@ -131,7 +125,6 @@ def vis_side():
         for _, row in matches.iterrows():
             d = pd.to_datetime(row['MATCH_DATE_FULL'])
             m_date = f"{d_dage.get(d.strftime('%A'), d.strftime('%A'))} D. {d.day}. {d_maaneder.get(d.strftime('%B'), d.strftime('%B'))}".upper()
-            
             if m_date != current_date:
                 st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
                 current_date = m_date
@@ -162,15 +155,9 @@ def vis_side():
                     
                     def stat_box(label, h_val, a_val, is_pct=False):
                         suffix = "%" if is_pct else ""
-                        # Vi bruger .get() for at undgå fejl hvis data mangler
                         h_val = h_val if pd.notnull(h_val) else 0
                         a_val = a_val if pd.notnull(a_val) else 0
-                        st.markdown(f"""
-                            <div style='text-align:center;'>
-                                <div style='font-size:9px; color:#888; text-transform:uppercase;'>{label}</div>
-                                <div style='font-size:13px; font-weight:600;'>{h_val}{suffix} — {a_val}{suffix}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888; text-transform:uppercase;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_val}{suffix} — {a_val}{suffix}</div></div>", unsafe_allow_html=True)
 
                     with s_col1: stat_box("Possession", row.get('possessionPercentage_HOME'), row.get('possessionPercentage_AWAY'), True)
                     with s_col2: stat_box("Passes", row.get('totalPass_HOME'), row.get('totalPass_AWAY'))
@@ -178,19 +165,16 @@ def vis_side():
                     with s_col4: stat_box("Scoring Att", row.get('totalScoringAtt_HOME'), row.get('totalScoringAtt_AWAY'))
                     with s_col5: stat_box("Tackles", row.get('totalTackle_HOME'), row.get('totalTackle_AWAY'))
 
-    # --- 3. TABS OG FORM ---
     tab_col, form_col = st.columns([5, 1])
     with tab_col:
         tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
     with form_col:
-        f_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
+        f_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats_map["form"][-5:]])
         st.markdown(f"<div style='display: flex; justify-content: flex-end; margin-top: 12px;'><div class='form-container'>{f_html}</div></div>", unsafe_allow_html=True)
 
     with tab_played:
-        df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
-        tegn_kampe(df_p, True)
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
     with tab_fixtures:
-        df_f = team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
-        tegn_kampe(df_f, False)
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True), False)
 
     st.markdown("<div style='margin-bottom: 80px;'></div>", unsafe_allow_html=True)
