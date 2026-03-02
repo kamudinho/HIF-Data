@@ -5,81 +5,96 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
-
-    # --- 2. FARVER & KONSTANTER (Nu korrekt indrykket) ---
+    
+    # --- FARVER & CSS ---
     hif_rod = "#df003b"
-
-    # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:1px; border-radius:1px; margin-bottom:1px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">BETINIA LIGAEN: KAMPOVERSIGT</h3>
+        <style>
+        .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
+        .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
+        .stat-val {{ font-weight: bold; font-size: 14px; }}
+        .form-dot {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 3px; }}
+        .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
+        </style>
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:15px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; font-size:1.1rem;">Betinia Ligaen: Stats & Kampe</h3>
         </div>
     """, unsafe_allow_html=True)
 
     # --- 1. FILTRE ---
-    # Hent alle hold fra 1. Division til dropdown
     liga_hold = sorted([n for n, i in TEAMS.items() if i.get("league") in ["1. Division", "Betinia Ligaen", "NordicBet Liga"]])
     
-    c_f1, c_f2 = st.columns([2, 1])
-    with c_f1:
-        valgt_hold = st.selectbox("Vælg hold", ["Hele runden"] + liga_hold)
-    with c_f2:
-        view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
-    
-    status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
+    col_f1, col_f2 = st.columns([2, 1])
+    with col_f1:
+        valgt_hold = st.selectbox("Vælg hold", liga_hold) # Vi fjerner "Hele runden" for at kunne beregne stats pr. hold
+    with col_f2:
+        view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. DATA BEHANDLING ---
-    mask = (df_matches['MATCH_STATUS'] == status_filter) & \
-           (df_matches['COMPETITION_NAME'].str.contains('1. Division|NordicBet|Betinia', case=False, na=False))
-    
-    # Tilføj hold-filtrering hvis valgt
-    if valgt_hold != "Hele runden":
-        mask = mask & ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))
-    
-    sort_order = False if status_filter == 'Played' else True
-    matches = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=sort_order)
+    # --- 2. BEREGNING AF STATS (FOR DET VALGTE HOLD) ---
+    all_played = df_matches[(df_matches['MATCH_STATUS'] == 'Played') & 
+                            ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | 
+                             (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))].sort_values('MATCH_DATE_FULL')
 
-    if matches.empty:
-        st.info(f"Ingen {view_type.lower()} kampe fundet.")
-        return
+    stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
 
-    # --- 3. BYG TABEL-DATA ---
-    tabel_rows = []
-    for _, row in matches.iterrows():
-        h_name = row['CONTESTANTHOME_NAME']
-        a_name = row['CONTESTANTAWAY_NAME']
-        kamp_tekst = f"{h_name} vs. {a_name}"
-        dato_str = row['MATCH_DATE_FULL'].strftime("%d/%m") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else ""
-
-        if status_filter == 'Played':
-            h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
-            a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
-            res_tekst = f"{h_score} - {a_score}"
+    for _, m in all_played.iterrows():
+        is_home = m['CONTESTANTHOME_NAME'] == valgt_hold
+        m_plus = int(m['TOTAL_HOME_SCORE']) if is_home else int(m['TOTAL_AWAY_SCORE'])
+        m_minus = int(m['TOTAL_AWAY_SCORE']) if is_home else int(m['TOTAL_HOME_SCORE'])
+        
+        stats["K"] += 1
+        stats["M+"] += m_plus
+        stats["M-"] += m_minus
+        
+        if m_plus > m_minus:
+            stats["S"] += 1
+            stats["form"].append("win")
+        elif m_plus == m_minus:
+            stats["U"] += 1
+            stats["form"].append("draw")
         else:
-            res_tekst = row['MATCH_DATE_FULL'].strftime("%H:%M") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else "VS"
+            stats["N"] += 1
+            stats["form"].append("loss")
 
-        tabel_rows.append({
-            "Dato": dato_str,
-            "Kamp": kamp_tekst,
-            "Resultat": res_tekst
-        })
-
-    df_vis = pd.DataFrame(tabel_rows)
-
-    # --- 4. VISNING ---
-    # Vi beregner højden dynamisk (ca. 35 pixels per række + lidt til header)
-    calc_height = (len(df_vis) + 1) * 35 + 3
-
-    st.dataframe(
-        df_vis,
-        column_config={
-            "Dato": st.column_config.TextColumn("Dato", width="small"),
-            "Kamp": st.column_config.TextColumn("Kamp", width="large"),
-            "Resultat": st.column_config.TextColumn("Res", width="small"),
-        },
-        hide_index=True,
-        use_container_width=True,
-        height=calc_height # Dette fjerner scroll-baren og viser alle rækker
-    )
+    # --- 3. VISNING AF STATS BAR ---
+    st.markdown("#### Team Stats")
+    c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
+    
+    # Form-bar (Sidste 5)
+    with c[0]:
+        st.markdown("<div class='stat-label'>Form (Sidste 5)</div>", unsafe_allow_html=True)
+        form_html = "".join([f"<span class='form-dot {res}'></span>" for res in stats["form"][-5:]])
+        st.markdown(f"<div>{form_html}</div>", unsafe_allow_html=True)
+    
+    labels = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), 
+              ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
+    
+    for i, (label, val) in enumerate(labels):
+        with c[i+1]:
+            st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{val}</div></div>", unsafe_allow_html=True)
 
     st.divider()
+
+    # --- 4. KAMPOVERSIGT ---
+    status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
+    display_matches = df_matches[(df_matches['MATCH_STATUS'] == status_filter) & 
+                                 ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | 
+                                  (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
+
+    st.markdown(f"#### {view_type} Kampe")
+    for _, row in display_matches.iterrows():
+        col_date, col_match, col_res = st.columns([1, 4, 1])
+        
+        with col_date:
+            st.write(f"📅 {row['MATCH_DATE_FULL'].strftime('%d/%m')}")
+        
+        with col_match:
+            st.write(f"**{row['CONTESTANTHOME_NAME']}** vs. **{row['CONTESTANTAWAY_NAME']}**")
+        
+        with col_res:
+            if status_filter == 'Played':
+                st.info(f"**{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}**")
+            else:
+                st.warning(f"⏰ {row['MATCH_DATE_FULL'].strftime('%H:%M')}")
+
+vis_side()
