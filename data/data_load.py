@@ -203,12 +203,12 @@ def get_data_package():
         "playerstats": df_playerstats,
         "player_career": df_player_career,
         "team_stats_full": df_team_stats,
-        "opta_matches": df_matches_final,  # <--- Den vigtige flettede data
+        "opta_matches": df_matches_final,
         "opta_raw_stats": df_opta_stats,     
         "logo_map": logo_map,
         "comp_filter": comp_filter,        
-        "season_filter": wyscout_season_filter,  # <--- RETTET HER
-        "opta_season_uuid": opta_season_uuid,    # <--- TILFØJ EVT. DENNE
+        "season_filter": wyscout_season_filter,  
+        "opta_season_uuid": "2025/2026",  # <--- RET DENNE LINJE TIL EN FAST STRENG ELLER SLET DEN
         "COMPETITION_WYID": COMPETITION_WYID,
         "SEASONNAME": SEASONNAME,
         "TEAM_WYID": TEAM_WYID,
