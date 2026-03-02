@@ -26,35 +26,36 @@ def vis_side():
     for _, row in display_df.head(20).iterrows():
         h_name = row['CONTESTANTHOME_NAME']
         a_name = row['CONTESTANTAWAY_NAME']
+        h_logo = logos.get(h_name)
+        
         score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS"
         
-        # Vi laver en ekstremt kompakt titel til expanderen
-        # Vi bruger 'icon' argumentet i expander til at vise det ene logo, 
-        # men for to logoer bygger vi en custom label
-        expander_label = f"{h_name}  {score}  {a_name}"
+        # Vi bygger titlen: "Hjemmehold Score Udehold"
+        # Vi bruger 'icon' til hjemmeholdets logo for at få det ind i baren
+        expander_label = f"{h_name}  ({score})  {a_name}"
         
-        # Vi bruger 'label_visibility' og 'expanded=False' for at holde det stramt
-        with st.expander(expander_label):
-            # Herinde viser vi KUN rå data. Ingen ikoner.
+        with st.expander(expander_label, icon=h_logo):
+            # KUN rå data herinde.
             if status_filter == 'Played':
-                c1, c2, c3 = st.columns([1, 2, 1])
+                # Tre smalle kolonner til ren data-sammenligning
+                c1, c2, c3 = st.columns([1, 1, 1])
                 
-                # Venstre: Hjemmehold stats
-                c1.metric("xG", "1.42")
-                c1.write(f"Skud: 12")
+                # Rækker med rå stats
+                with c1:
+                    st.write(f"**{h_name}**")
+                    st.write(f"xG: 1.42")
+                    st.write(f"Skud: 12")
                 
-                # Midte: Sammenlignings-barer (Rå Opta tal)
                 with c2:
-                    st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:0;'>Boldbesiddelse %</p>", unsafe_allow_html=True)
-                    # En simpel progress bar er den mest "data-agtige" måde at vise det på
-                    st.progress(0.55) 
-                    st.markdown("<p style='text-align:center; font-size:11px;'>55% - 45%</p>", unsafe_allow_html=True)
+                    st.write("<p style='text-align:center;'><b>VS</b></p>", unsafe_allow_html=True)
+                    st.write(f"<p style='text-align:center; font-size:11px;'>Poss: 55% - 45%</p>", unsafe_allow_html=True)
                 
-                # Højre: Udehold stats
-                c3.metric("xG", "0.85")
-                c3.write(f"Skud: 8")
+                with c3:
+                    st.write(f"<p style='text-align:right;'><b>{a_name}</b></p>", unsafe_allow_html=True)
+                    st.write(f"<p style='text-align:right;'>xG: 0.85</p>", unsafe_allow_html=True)
+                    st.write(f"<p style='text-align:right;'>Skud: 8</p>", unsafe_allow_html=True)
                 
+                st.divider()
                 st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Tilskuere: {int(row['ATTENDANCE']):,}")
             else:
-                # For kommende kampe viser vi kun info
-                st.write(f"Spilles på {row['VENUE_LONGNAME']} kl. {row['MATCH_DATE_FULL'].strftime('%H:%M')}")
+                st.write(f"🏟️ {row['VENUE_LONGNAME']} | 📅 {row['MATCH_DATE_FULL'].strftime('%d. %b - %H:%M')}")
