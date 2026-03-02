@@ -30,8 +30,6 @@ COMPETITIONS = {
 
 # --- Hold ---
 TEAMS = {
-    # --- Hold ---
-TEAMS = {
     # --- Betinia Ligaen (NordicBet Liga) ---
     "Hvidovre IF": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "league": "Betinia Ligaen"},
     "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "opta_id": 401, "league": "Betinia Ligaen"},
@@ -58,8 +56,8 @@ TEAMS = {
     "Silkeborg IF": {"team_wyid": 7461, "opta_uuid": "418_uuid_dummy", "opta_id": 418, "league": "3F Superliga"},
     "Vejle Boldklub": {"team_wyid": 7473, "opta_uuid": "2450_uuid_dummy", "opta_id": 2450, "league": "3F Superliga"},
     "OB": {"team_wyid": 7460, "opta_uuid": "5rz9enoyknpg8ji78za5b82p8", "opta_id": 545, "league": "3F Superliga"},
-    "FC Fredericia": {"team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "league": "3F Superliga"}
-}
+    "FC Fredericia": {"team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "league": "3F Superliga"},
+
     # --- 2. division ---
     "AB": {"team_wyid": 7464, "league": "2. division"},
     "Næstved": {"team_wyid": 7475, "league": "2. division"},
@@ -88,35 +86,3 @@ TEAMS = {
     "Sundby": {"team_wyid": 34555, "league": "3. division"},
     "Odder": {"team_wyid": 7588, "league": "3. division"}
 }
-
-# --- Hjælpefunktioner ---
-
-def get_team_name(team_id):
-    """Slår navnet op baseret på team_wyid (int) eller opta_uuid (str)"""
-    for name, info in TEAMS.items():
-        if info.get("team_wyid") == team_id or info.get("opta_uuid") == team_id:
-            return name
-    return str(team_id)
-
-def get_league_name(league_id):
-    """Slår liganavnet op baseret på comp_wyid (int) eller opta_uuid (str)"""
-    for name, info in COMPETITIONS.items():
-        if info.get("comp_wyid") == league_id or info.get("opta_uuid") == league_id:
-            return name
-    return str(league_id)
-
-def get_teams_by_league(league_input):
-    """
-    Henter holdnavne. league_input kan være navn (f.eks. 'Betinia Ligaen') 
-    eller comp_wyid (f.eks. 328).
-    """
-    league_name = league_input
-    if isinstance(league_input, int):
-        league_name = get_league_name(league_input)
-    
-    return [name for name, info in TEAMS.items() if info["league"] == league_name]
-
-def get_hvi_ids():
-    """Henter ID'erne for Hvidovre IF"""
-    hvi = TEAMS["Hvidovre IF"]
-    return hvi["team_wyid"], hvi["opta_uuid"]
