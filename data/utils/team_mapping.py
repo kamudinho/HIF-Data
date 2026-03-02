@@ -33,15 +33,15 @@ TEAMS = {
     # --- Betinia Ligaen (NordicBet Liga) ---
     "Hvidovre IF": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "league": "Betinia Ligaen"},
     "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "opta_id": 401, "league": "Betinia Ligaen"},
-    "Horsens": {"team_wyid": 7465, "opta_uuid": "60msc9045s5v96pghp5px88v", "opta_id": 2289, "league": "Betinia Ligaen"},
-    "Lyngby Boldklub": {"team_wyid": 7484, "opta_uuid": "272_uuid_dummy", "opta_id": 272, "league": "Betinia Ligaen"},
-    "Esbjerg": {"team_wyid": 7451, "opta_uuid": "2v69668s6p2c68wz2hpg018h2", "opta_id": 1409, "league": "Betinia Ligaen"},
-    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "9935j8s3d9m257n9v6p9v6p9v", "opta_id": 13253, "league": "Betinia Ligaen"},
-    "Hobro": {"team_wyid": 7510, "opta_uuid": "4t96h936f01p4v02r76h9h0be", "opta_id": 4802, "league": "Betinia Ligaen"},
+    "Horsens": {"team_wyid": 7465, "opta_uuid": "a9vw7ikerpr4cuweeeka5aneg", "opta_id": 2289, "league": "Betinia Ligaen"},
+    "Lyngby Boldklub": {"team_wyid": 7484, "opta_uuid": "anga7587r1zv4ey71ge9zxol3", "opta_id": 272, "league": "Betinia Ligaen"},
+    "Esbjerg": {"team_wyid": 7451, "opta_uuid": "f1h34qp5zbfl489q8vnkhiq9s", "opta_id": 1409, "league": "Betinia Ligaen"},
+    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "b8oqgvx1ijeyn6y1cn6929ix4", "opta_id": 13253, "league": "Betinia Ligaen"},
+    "Hobro": {"team_wyid": 7510, "opta_uuid": "b2vft81kyjurzbmekvgrqwr64", "opta_id": 4802, "league": "Betinia Ligaen"},
     "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "league": "Betinia Ligaen"},
-    "Hillerød": {"team_wyid": 7699, "opta_uuid": "6v99668s6p2c68wz2hpg018h3", "opta_id": 6463, "league": "Betinia Ligaen"},
+    "Hillerød": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "league": "Betinia Ligaen"},
     "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "Betinia Ligaen"},
-    "B.93": {"team_wyid": 7470, "opta_uuid": "7v69668s6p2c68wz2hpg018h2", "opta_id": 2935, "league": "Betinia Ligaen"},
+    "B.93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "Betinia Ligaen"},
     "Middelfart": {"team_wyid": 7497, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "Betinia Ligaen"},
 
     # --- 3F Superliga ---
