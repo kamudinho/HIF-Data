@@ -117,7 +117,7 @@ def get_data_package():
 
     # --- B. HENT DATA ---
     # Vi sender konsekvent OPTA_COMP_UUID med, queries.py styrer om det bruges
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, season_filter, OPTA_COMP_UUID)
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, "LIKE '%2025%'", OPTA_COMP_UUID)
     df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, season_filter, OPTA_COMP_UUID)
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter, OPTA_COMP_UUID)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter, OPTA_COMP_UUID)
