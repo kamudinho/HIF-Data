@@ -6,13 +6,6 @@ from data.data_load import get_team_colors
 # --- 2. FARVER & KONSTANTER ---
 hif_rod = "#df003b"
 
-    # --- TOP BRANDING ---
-st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCATTERPLOTS</h3>
-        </div>
-    """, unsafe_allow_html=True)
-
 def build_scatter_plot(df_plot, x_label, y_label):
     from data.data_load import get_team_colors
     colors_dict = get_team_colors()
@@ -92,6 +85,12 @@ def vis_side(df_scatter):
     }
 
     # UI
+    # --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCATTERPLOTS</h3>
+        </div>
+    """, unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
         # Hvis du ikke har COMPETITIONNAME i din team_stats_full, kan vi bare vise den aktuelle data
