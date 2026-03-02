@@ -161,7 +161,7 @@ def get_data_package():
 
     # --- B. HENT DATA ---
     # Vi sender opta_season_uuid til Opta-queries
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, opta_season_uuid, OPTA_COMP_UUID)
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, "2025/2026", OPTA_COMP_UUID)
     df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, opta_season_uuid, OPTA_COMP_UUID)
     
     # Vi bruger wyscout_season_filter til de andre
