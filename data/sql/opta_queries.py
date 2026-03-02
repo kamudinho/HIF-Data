@@ -17,15 +17,8 @@ def get_opta_queries(liga_navn, saeson_navn):
         # NY QUERY: Henter alle hold-stats for den valgte liga/sæson
         "opta_team_stats": f"""
             SELECT 
-                S.MATCH_OPTAUUID, 
-                S.CONTESTANT_OPTAUUID, 
-                S.STAT_TYPE, 
-                S.STAT_TOTAL,
-                I.CONTESTANTHOME_NAME,
-                I.CONTESTANTAWAY_NAME
-            FROM {DB}.OPTA_MATCHSTATS S
-            JOIN {DB}.OPTA_MATCHINFO I ON S.MATCH_OPTAUUID = I.MATCH_OPTAUUID
-            WHERE I.COMPETITION_NAME ILIKE '{liga_navn}'
-            AND I.TOURNAMENTCALENDAR_NAME ILIKE '{saeson_navn}'
-        """
+                SELECT *
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
+            WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+
     }
