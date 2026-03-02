@@ -47,8 +47,10 @@ def fmt_val(v):
 
 # --- NY HJÆLPEFUNKTION TIL OPTA FLETNING ---
 def _process_opta_stats(df_matches, df_stats):
-    """Pivotér stats og flet dem på kampene (Hjemme/Ude)."""
-    if df_matches.empty or df_stats.empty:
+    print(f"DEBUG: Antal kampe før merge: {len(df_matches)}")
+    print(f"DEBUG: Antal stats rækker: {len(df_stats)}")
+    
+    if df_matches.empty:
         return df_matches
 
     # Pivotér stats fra lang til bred (kolonner per stat_type)
