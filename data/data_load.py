@@ -29,6 +29,17 @@ def get_team_color(name):
         if key.lower() in name.lower(): return color["primary"]
     return "#333333"
 
+def get_contrast_text_color(hex_color):
+    """Returnerer 'black' for lyse farver (f.eks. gul/hvid) og 'white' for mørke."""
+    try:
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        # Standard Luma-formel for lysstyrke
+        brightness = (r * 0.299 + g * 0.587 + b * 0.114)
+        return "black" if brightness > 150 else "white"
+    except:
+        return "white"
+
 def fmt_val(v):
     try:
         val = float(v)
