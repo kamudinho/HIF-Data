@@ -143,9 +143,7 @@ try:
             tp.vis_side(dp) 
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            # RETTELSE HER: Send hele 'dp' i stedet for kun 'dp["opta_matches"]'
-            # Så har siden adgang til både kampe og de dybe stats (opta_stats)
-            tm.vis_side(dp)
+            tm.vis_side(st.session_state["dp"])
             
     # --- SCOUTING ---
     elif hoved_omraade == "SCOUTING":
