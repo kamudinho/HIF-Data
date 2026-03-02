@@ -131,16 +131,21 @@ def vis_side():
         
         with col3:
             if status_filter == 'Played':
-                res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
+                # Håndterer score for spillede kampe
+                home_s = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
+                away_s = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
+                res = f"{home_s} - {away_s}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
+                # Bruger MATCH_LOCALTIME (HH:MM) for kommende kampe
+                # Vi stripper sekunderne fra '13:00:00' -> '13:00'
                 tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
                 st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
 
+        # --- UDEHOLD LOGO OG NAVN ---
         with col4: 
             a_logo = logos.get(a_name)
             if a_logo: st.image(a_logo, width=25)
-        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
-        
+            
         with col5: 
             st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
