@@ -22,7 +22,7 @@ def vis_side(df_spillere=None, hold_map=None):
      # --- TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCATTERPLOTS</h3>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">AFSLUTNINGER</h3>
         </div>
     """, unsafe_allow_html=True)
     
