@@ -4,6 +4,11 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp", {})
+    if "opta_stats" in dp:
+        st.success(f"✅ Fandt {len(dp['opta_stats'])} rækker med statistik!")
+    else:
+        st.error("❌ Kunne stadig ikke finde 'opta_stats' i data-pakken.")
+        
     df_matches = dp.get("opta_matches", pd.DataFrame())
     
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
