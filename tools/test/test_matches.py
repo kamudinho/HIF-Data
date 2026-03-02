@@ -4,10 +4,11 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp", {})
+    # Vi sikrer os at vi arbejder med det rå data du sendte
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
 
-    # --- CSS & DESIGN ---
+    # --- CSS ---
     hif_rod = "#df003b"
     st.markdown(f"""
         <style>
@@ -22,67 +23,54 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    if df_matches.empty:
-        st.error("Ingen kampdata fundet i databasen.")
-        return
-
-    # --- FIND RIGTIGE KOLONNENAVNE ---
-    # Vi tjekker dynamisk hvad ID-kolonnen hedder i dit feed
-    cols = df_matches.columns.tolist()
-    h_id_col = next((c for c in cols if 'HOME' in c and 'ID' in c), None)
-    a_id_col = next((c for c in cols if 'AWAY' in c and 'ID' in c), None)
-
-    if not h_id_col:
-        st.error(f"Kunne ikke finde ID-kolonnen. Tilgængelige kolonner: {cols[:5]}...")
-        return
-
     # --- 1. FILTRE ---
-    liga_hold_options = {n: i.get("opta_id") for n, i in TEAMS.items() if i.get("league") == "Betinia Ligaen"}
+    # Vi bruger 'opta_uuid' fra din TEAMS definition
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "Betinia Ligaen"}
     
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()))
-        valgt_id = liga_hold_options[valgt_navn]
+        valgt_uuid = liga_hold_options[valgt_navn]
     with col_f2:
         view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. DATA FILTRERING PÅ ID ---
-    # Vi sikrer at begge sider sammenlignes som tal (float)
-    df_matches[h_id_col] = pd.to_numeric(df_matches[h_id_col], errors='coerce')
-    df_matches[a_id_col] = pd.to_numeric(df_matches[a_id_col], errors='coerce')
-    
-    team_matches = df_matches[(df_matches[h_id_col] == float(valgt_id)) | 
-                              (df_matches[a_id_col] == float(valgt_id))]
+    # --- 2. DATA FILTRERING ---
+    # Vi matcher på de UUID kolonner der findes i dit datasæt
+    mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | \
+           (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
+    team_matches = df_matches[mask].copy()
 
-    # --- 3. BEREGNING AF STATS ---
+    # --- 3. STATS BEREGNING ---
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     
     for _, m in all_played.iterrows():
-        curr_is_home = float(m[h_id_col]) == float(valgt_id)
-        h_score = int(m.get('TOTAL_HOME_SCORE', 0)) if pd.notnull(m.get('TOTAL_HOME_SCORE')) else 0
-        a_score = int(m.get('TOTAL_AWAY_SCORE', 0)) if pd.notnull(m.get('TOTAL_AWAY_SCORE')) else 0
-        
-        m_plus = h_score if curr_is_home else a_score
-        m_minus = a_score if curr_is_home else h_score
-        
-        stats["K"] += 1
-        stats["M+"] += m_plus
-        stats["M-"] += m_minus
-        if m_plus > m_minus: stats["S"] += 1; stats["form"].append("win")
-        elif m_plus == m_minus: stats["U"] += 1; stats["form"].append("draw")
-        else: stats["N"] += 1; stats["form"].append("loss")
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        # Vi bruger TOTAL_HOME_SCORE og TOTAL_AWAY_SCORE fra dit feed
+        try:
+            h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
+            a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
+            
+            stats["K"] += 1
+            stats["M+"] += h_s if is_h else a_s
+            stats["M-"] += a_s if is_h else h_s
+            
+            diff = h_s - a_s if is_h else a_s - h_s
+            if diff > 0: stats["S"] += 1; stats["form"].append("win")
+            elif diff == 0: stats["U"] += 1; stats["form"].append("draw")
+            else: stats["N"] += 1; stats["form"].append("loss")
+        except: continue
 
-    # --- 4. VISNING AF STATS BAR ---
-    st.markdown("#### Team Stats")
+    # --- 4. VIS STATS BAR ---
+    st.markdown(f"#### Stats for {valgt_navn}")
     c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
     with c[0]:
-        st.markdown("<div class='stat-label'>Form (Sidste 5)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='stat-label'>Form</div>", unsafe_allow_html=True)
         form_html = "".join([f"<span class='form-dot {res}'></span>" for res in stats["form"][-5:]])
         st.markdown(f"<div>{form_html}</div>", unsafe_allow_html=True)
     
-    label_vals = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
-    for i, (l, v) in enumerate(label_vals):
+    stats_list = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
+    for i, (l, v) in enumerate(stats_list):
         with c[i+1]: st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     st.divider()
@@ -92,14 +80,16 @@ def vis_side():
     display_matches = team_matches[team_matches['MATCH_STATUS'] == status_filter].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
     if display_matches.empty:
-        st.info(f"Ingen kampe fundet for {valgt_navn}")
+        st.info(f"Ingen {view_type.lower()} kampe fundet.")
         return
 
     current_date = None
     for _, row in display_matches.iterrows():
-        match_date = row['MATCH_DATE_FULL'].strftime('%A d. %d. %B')
+        # Formatering af dato
+        d = pd.to_datetime(row['MATCH_DATE_FULL'])
+        match_date = d.strftime('%A d. %d. %B').upper()
         if match_date != current_date:
-            st.markdown(f"<div class='date-header'>{match_date.upper()}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>{match_date}</div>", unsafe_allow_html=True)
             current_date = match_date
 
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -107,9 +97,9 @@ def vis_side():
         with col2: st.image(logos.get(row['CONTESTANTHOME_NAME'], ""), width=25)
         with col3:
             if status_filter == 'Played':
-                res = f"{int(row.get('TOTAL_HOME_SCORE', 0))} - {int(row.get('TOTAL_AWAY_SCORE', 0))}"
+                res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{row['MATCH_DATE_FULL'].strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{d.strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
         with col4: st.image(logos.get(row['CONTESTANTAWAY_NAME'], ""), width=25)
         with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{row['CONTESTANTAWAY_NAME']}</div>", unsafe_allow_html=True)
