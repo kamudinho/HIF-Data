@@ -1,35 +1,21 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
-from data.data_load import load_snowflake_query, get_data_package, get_team_color, fmt_val
+from data.data_load import load_snowflake_query, get_team_color
 
-# 0. Konfiguration af Farver
-TEAM_COLORS = {
-    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
-    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
-    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
-    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
-    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
-    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},
-    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
-    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
-    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},
-    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
-    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
-    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
-}
-
-def vis_side(df_raw=None): 
+def vis_side(df_raw=None, colors_map=None): 
     # --- 1. DATA INITIALISERING ---
-    if df_raw is None or df_raw.empty:
-        if "data_package" not in st.session_state:
-            st.session_state["data_package"] = get_data_package()
+    # Vi bruger 'dp' i stedet for 'data_package' for at matche HIF_dash.py
+    if "dp" not in st.session_state:
+        st.error("Data pakken blev ikke fundet. Genstart venligst appen.")
+        return
         
-        dp = st.session_state["data_package"]
-        df_raw = load_snowflake_query("team_stats_full", dp["comp_filter"], dp["season_filter"])
-
+    dp = st.session_state["dp"]
+    
     if df_raw is None or df_raw.empty:
+        df_raw = dp.get("team_stats_full", pd.DataFrame())
+
+    if df_raw.empty:
         st.warning("Ingen data fundet for den valgte sæson og liga.")
         return
 
@@ -37,27 +23,23 @@ def vis_side(df_raw=None):
     st.markdown("""
         <style>
             .stTable { width: 100%; }
-            th, td { text-align: center !important; vertical-align: middle !important; font-family: sans-serif; font-size: 0.9rem; }
+            th, td { text-align: center !important; vertical-align: middle !important; font-family: sans-serif; font-size: 0.85rem; }
             td:nth-child(2), th:nth-child(2) { text-align: left !important; font-weight: bold; }
-            button[data-baseweb='tab'][aria-selected='true'] {color: #cc0000 !important; border-bottom-color: #cc0000 !important;}
-            div[data-testid="stExpander"] { border: none !important; }
+            /* Hvidovre Rød farve på tabs */
+            button[data-baseweb='tab'][aria-selected='true'] { color: #cc0000 !important; border-bottom-color: #cc0000 !important; }
         </style>
     """, unsafe_allow_html=True)
-
-    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">BETINIA LIGAEN: ANALYSE OG H2H</h3>
-    </div>""", unsafe_allow_html=True)
 
     # --- 3. DATA PREPARATION ---
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     df = df.fillna(0)
     
-    saesoner = sorted(df['SEASONNAME'].unique().tolist())
-    df_liga = df[df['SEASONNAME'] == saesoner[-1]].copy()
+    # Vi tager fat i den nuværende sæson fra data pakken
+    df_liga = df[df['SEASONNAME'] == dp['SEASONNAME']].copy()
 
     # --- 4. TABS STRUKTUR ---
-    tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
+    tab_liga_hoved, tab_h2h_hoved = st.tabs(["📊 Ligaoversigt", "⚔️ Head-to-Head"])
 
     # --- SEKTION 1: LIGAOVERSIGT ---
     with tab_liga_hoved:
@@ -90,7 +72,7 @@ def vis_side(df_raw=None):
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         c1, c2 = st.columns(2)
-        team1 = c1.selectbox("Vælg Hold 1", hold_navne, index=0)
+        team1 = c1.selectbox("Vælg Hold 1", hold_navne, index=hold_navne.index("Hvidovre") if "Hvidovre" in hold_navne else 0)
         team2 = c2.selectbox("Vælg Hold 2", [h for h in hold_navne if h != team1], index=0)
 
         t1_stats = df_liga[df_liga['TEAMNAME'] == team1].iloc[0]
@@ -98,76 +80,29 @@ def vis_side(df_raw=None):
         
         h2h_sub_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
-        # Definition af plot-funktion (flyttet ind i vis_side)
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
-            # Bar for Hold 1
-            c1_color = TEAM_COLORS.get(n1, {"primary": "#808080", "secondary": "#000000"})
-            fig.add_trace(go.Bar(
-                name=n1, x=labels, y=y1_vals, 
-                marker_color=c1_color["primary"], marker_line_color=c1_color["secondary"], 
-                marker_line_width=1, showlegend=False,
-                text=[f"{v:.1f}" for v in y1_vals], textposition='auto'
-            ))
-        
-            # Bar for Hold 2
-            c2_color = TEAM_COLORS.get(n2, {"primary": "#808080", "secondary": "#000000"})
-            fig.add_trace(go.Bar(
-                name=n2, x=labels, y=y2_vals, 
-                marker_color=c2_color["primary"], marker_line_color=c2_color["secondary"], 
-                marker_line_width=1, showlegend=False,
-                text=[f"{v:.1f}" for v in y2_vals], textposition='auto'
-            ))
-        
-            max_y = max(max(y1_vals), max(y2_vals)) if y1_vals and y2_vals else 1
-        
-            # --- PLACERING AF SMÅ LOGOER ---
-            for i, label in enumerate(labels):
-                # Logo for Hold 1
-                fig.add_layout_image(
-                    dict(
-                        source=t1['IMAGEDATAURL'],
-                        xref="x", yref="paper",
-                        x=i - 0.15,
-                        y=1.03,
-                        sizex=0.07, sizey=0.07,
-                        xanchor="center", yanchor="middle",
-                        sizing="contain"
-                    )
-                )
-                # Logo for Hold 2
-                fig.add_layout_image(
-                    dict(
-                        source=t2['IMAGEDATAURL'],
-                        xref="x", yref="paper",
-                        x=i + 0.15,
-                        y=1.03,
-                        sizex=0.07, sizey=0.07,
-                        xanchor="center", yanchor="middle",
-                        sizing="contain"
-                    )
-                )
+            # Farver hentes dynamisk fra get_team_color
+            color1 = get_team_color(n1)
+            color2 = get_team_color(n2)
+            
+            fig.add_trace(go.Bar(name=n1, x=labels, y=y1_vals, marker_color=color1, text=[f"{v:.1f}" for v in y1_vals], textposition='auto'))
+            fig.add_trace(go.Bar(name=n2, x=labels, y=y2_vals, marker_color=color2, text=[f"{v:.1f}" for v in y2_vals], textposition='auto'))
         
             fig.update_layout(
-                barmode='group', 
-                height=400,
-                margin=dict(t=80, b=40, l=10, r=10),
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
-                showlegend=False,
-                yaxis=dict(range=[0, max_y * 1.25], showgrid=False)
+                barmode='group', height=350, margin=dict(t=40, b=40, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            
             st.plotly_chart(fig, use_container_width=True)
 
-        # Kald af plot-funktionen inde i h2h_sub_tabs
         with h2h_sub_tabs[0]: 
             create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
         with h2h_sub_tabs[1]: 
-            create_h2h_plot(['GOALS', 'XGSHOT', 'PASSESTOFINALTHIRD'], ['Mål/kamp', 'xG/kamp', 'Pass 3.del/kamp'], t1_stats, t2_stats, team1, team2, per_match=True)
+            create_h2h_plot(['GOALS', 'XGSHOT', 'PASSESTOFINALTHIRD'], ['Mål/k', 'xG/k', 'Pass 3.del/k'], t1_stats, t2_stats, team1, team2, per_match=True)
         with h2h_sub_tabs[2]: 
-            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/kamp', 'xG Imod/kamp', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
+            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/k', 'xG Imod/k', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
