@@ -68,17 +68,15 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
                 m.CONTESTANTAWAY_NAME,
                 m.TOTAL_HOME_SCORE, 
                 m.TOTAL_AWAY_SCORE, 
-                m.STATUS,
-                m.MATCHDAY,
                 m.TOURNAMENTCALENDAR_NAME,
                 MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS HOME_POSS,
                 MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS AWAY_POSS
             FROM {DB}.OPTA_MATCHINFO m
             LEFT JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
-            WHERE m.COMPETITION_OPTAUUID = '{opta_comp_uuid if opta_comp_uuid else '6ifaeunfdelecgticvxanikzu'}'
+            WHERE m.COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
             GROUP BY 
                 m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
-                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.STATUS, m.MATCHDAY, m.TOURNAMENTCALENDAR_NAME
+                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.TOURNAMENTCALENDAR_NAME
             ORDER BY m.MATCH_DATE_FULL DESC
         """,
         
@@ -89,7 +87,6 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE MATCH_OPTAUUID IN (
                 SELECT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
                 WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu' 
-                AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
             )
         """,
 
