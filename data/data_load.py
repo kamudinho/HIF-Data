@@ -1,10 +1,9 @@
-# data_load.py
 import streamlit as st
 import pandas as pd
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.queries import get_queries
-from data.utils.team_mapping import COMPETITIONS, TEAMS  # Din "Single Source of Truth"
+from data.utils.team_mapping import COMPETITIONS, TEAMS
 
 # --- 1. CENTRAL KONFIGURATION ---
 TEAM_COLORS = {
@@ -22,13 +21,11 @@ TEAM_COLORS = {
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
 
-# Hent sæson-specifikke konstanter
 try:
     from data.season_show import SEASONNAME, COMPETITION_WYID, TEAM_WYID
-    # Bemærk: Vi importerer IKKE COMPETITIONS herfra, da vi bruger team_mapping.py
 except ImportError:
     SEASONNAME = "2025/2026"
-    COMPETITION_WYID = (328,) 
+    COMPETITION_WYID = (328,)
     TEAM_WYID = 7490
 
 # --- 2. HJÆLPEFUNKTIONER ---
@@ -55,7 +52,7 @@ def _get_snowflake_conn():
         p_key_pem = p_key_raw.strip().replace("\\n", "\n") if isinstance(p_key_raw, str) else p_key_raw
         p_key_obj = serialization.load_pem_private_key(
             p_key_pem.encode('utf-8'),
-            password=None, 
+            password=None,
             backend=default_backend()
         )
         p_key_der = p_key_obj.private_bytes(
@@ -88,7 +85,6 @@ def load_github_data():
 
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, comp_filter, season_filter):
-    """Sikker loader: Returnerer tom DF ved fejl i stedet for at crashe"""
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
@@ -99,12 +95,10 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     try:
         df = conn.query(q)
         if df is not None:
-            # Tving altid store bogstaver for kolonnenavne her centralt
             df.columns = [str(c).upper().strip() for c in df.columns]
             return df
         return pd.DataFrame()
     except Exception as e:
-        # Logger fejlen i konsollen men lader appen køre videre
         print(f"SQL Fejl ({query_key}): {e}")
         return pd.DataFrame()
 
@@ -129,23 +123,20 @@ def get_data_package():
     target_id = comps[0]
     opta_uuid = None
     for league_name, league_info in COMPETITIONS.items():
-        if league_info.get("comp_wyid") == target_id:
+        if league_info.get("wyid") == target_id:
             opta_uuid = league_info.get("opta_uuid")
             break
 
-    # --- 3. HENT DATA (Robust indlæsning) ---
-    # Opta
+    # --- 3. HENT DATA ---
     df_matches_opta = load_snowflake_query("opta_matches", opta_uuid, season_filter)
     df_opta_stats = load_snowflake_query("opta_match_stats", opta_uuid, season_filter)
-
-    # Wyscout
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter)
     df_matches_wy = load_snowflake_query("team_matches", comp_filter, season_filter)
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter)
     
-    # --- 4. RENS OG FILTRER OPTA DATA ---
+    # --- 4. RENS OG FILTRER ---
     if not df_matches_opta.empty:
         kendte_hold_navne = list(TEAMS.keys())
         df_matches_opta = df_matches_opta[
@@ -153,7 +144,6 @@ def get_data_package():
             df_matches_opta['CONTESTANTAWAY_NAME'].isin(kendte_hold_navne)
         ].copy()
 
-    # --- 5. MERGE BILLEDER PÅ SPILLERE ---
     df_hvidovre_csv = gh_data["players"].copy()
     if not df_sql_players.empty and not df_hvidovre_csv.empty:
         df_hvidovre_csv['PLAYER_WYID'] = df_hvidovre_csv['PLAYER_WYID'].astype(str)
@@ -166,7 +156,6 @@ def get_data_package():
             how='left'
         )
 
-    # --- 6. RETURNER SAMLET PAKKE ---
     return {
         "players": df_hvidovre_csv,
         "scouting_image": gh_data["scouting"],
@@ -177,7 +166,7 @@ def get_data_package():
         "opta_matches": df_matches_opta,  
         "opta_stats": df_opta_stats,     
         "hold_map": hold_map, 
-        "comp_filter": comp_filter,      
+        "comp_filter": comp_filter,       
         "season_filter": season_filter,  
         "COMPETITION_WYID": COMPETITION_WYID,
         "SEASONNAME": SEASONNAME,
