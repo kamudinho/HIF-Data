@@ -7,7 +7,7 @@ def vis_side():
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
-    # --- 1. DATA MERGE LOGIK (BEVARET PRÆCIS SOM DU HAVDE DEN) ---
+    # --- 1. DATA MERGE LOGIK ---
     if "opta_stats" in dp and not dp["opta_stats"].empty:
         df_raw_stats = dp["opta_stats"].copy()
         df_raw_stats.columns = [c.upper() for c in df_raw_stats.columns]
@@ -32,7 +32,7 @@ def vis_side():
         except Exception as e:
             st.error(f"Fejl under behandling af stats: {e}")
 
-    # --- 2. CSS & UI (DIN ORIGINALE STYLING) ---
+    # --- 2. CSS & UI ---
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
     hif_rod = "#df003b"
     st.markdown(f"""
@@ -40,9 +40,6 @@ def vis_side():
         .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
         .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
         .stat-val {{ font-weight: bold; font-size: 14px; }}
-        .form-container {{ display: flex; gap: 4px; }}
-        .form-dot {{ display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 3px; color: white; font-size: 11px; font-weight: bold; }}
-        .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
         .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
         .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
         .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
@@ -65,11 +62,10 @@ def vis_side():
     team_matches = df_matches[mask].copy()
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     
-    # --- 3. FORM OG STATS (INTAKT) ---
-    stats_map = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
+    # --- 3. STATS BEREGNING ---
+    stats_map = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        opp_name = id_to_name.get(m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID'], "Modstander")
         try:
             h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
             a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
@@ -77,32 +73,31 @@ def vis_side():
             stats_map["M+"] += h_s if is_h else a_s
             stats_map["M-"] += a_s if is_h else h_s
             diff = h_s - a_s if is_h else a_s - h_s
-            if diff > 0: stats_map["S"] += 1; stats_map["form"].append({"res":"win","txt":"S","hover":f"vs. {opp_name}"})
-            elif diff == 0: stats_map["U"] += 1; stats_map["form"].append({"res":"draw","txt":"U","hover":f"vs. {opp_name}"})
-            else: stats_map["N"] += 1; stats_map["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name}"})
+            if diff > 0: stats_map["S"] += 1
+            elif diff == 0: stats_map["U"] += 1
+            else: stats_map["N"] += 1
         except: continue
 
     stats_display = [("K", stats_map["K"]), ("S", stats_map["S"]), ("U", stats_map["U"]), ("N", stats_map["N"]), ("M+", stats_map["M+"]), ("M-", stats_map["M-"]), ("+/-", stats_map["M+"]-stats_map["M-"])]
     for i, (l, v) in enumerate(stats_display):
         with top_cols[i+1]: st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TEGN FUNKTION (UUID-BASERET LOGO OPSLAG) ---
+    # --- 4. TEGN FUNKTION ---
     def tegn_kampe(matches, is_played):
-    if matches.empty: return
+        if matches.empty:
+            st.info("Ingen kampe fundet.")
+            return
 
-    def hent_logo(uuid):
-        # Vi leder direkte i TEAMS ordbogen efter logo-URL'en
-        for name, info in TEAMS.items():
-            if info.get("opta_uuid") == uuid:
-                # Vi prioriterer det manuelle logo fra TEAMS.py
-                manual_logo = info.get("logo")
-                if manual_logo:
-                    return manual_logo
-                
-                # Fallback til logo_map (hvis den nogensinde får data)
-                wyid = info.get("team_wyid")
-                return logos.get(wyid)
-        return None
+        def hent_logo(uuid):
+            for name, info in TEAMS.items():
+                if info.get("opta_uuid") == uuid:
+                    manual_logo = info.get("logo")
+                    if manual_logo and manual_logo != "-":
+                        return manual_logo
+                    # Fallback
+                    wyid = info.get("team_wyid")
+                    return logos.get(wyid)
+            return None
 
         current_date = None
         for _, row in matches.iterrows():
@@ -143,5 +138,7 @@ def vis_side():
                     with s_col5: stat_box_small("Tackles", row.get('totalTackle_HOME'), row.get('totalTackle_AWAY'))
 
     tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
-    with tab_played: tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
-    with tab_fixtures: tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True), False)
+    with tab_played: 
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
+    with tab_fixtures: 
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True), False)
