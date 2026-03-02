@@ -8,15 +8,26 @@ def vis_side():
     df_stats = dp.get("opta_team_stats", dp.get("team_stats_full", pd.DataFrame()))
     logos = dp.get("logo_map", {})
 
-    # --- CSS: TOTAL FJERNELSE AF PIL + CENTRERING ---
+    # --- CSS: MODERNE MATCH CENTER LOOK ---
     st.markdown("""
         <style>
-        [data-testid="stExpander"] svg, [data-testid="stExpanderIcon"] { display: none !important; }
-        [data-testid="stExpander"] summary p { 
-            text-align: center !important; width: 100% !important; 
-            font-weight: bold !important; font-size: 1.1rem !important; margin: 0 !important;
+        .match-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-bottom: 5px;
         }
-        [data-testid="stExpander"] { border: none !important; background: transparent !important; }
+        .team-name { font-weight: 600; font-size: 1.1rem; }
+        .score-box { 
+            background: #333; color: white; padding: 5px 15px; 
+            border-radius: 4px; font-weight: bold; margin: 0 20px;
+            min-width: 60px; text-align: center;
+        }
+        [data-testid="stExpander"] { border: none !important; box-shadow: none !important; background: transparent !important; }
+        [data-testid="stExpander"] svg { display: none !important; }
         .stat-label { text-align: center; color: gray; font-size: 11px; text-transform: uppercase; }
         .stat-val { font-weight: bold; font-size: 14px; }
         </style>
@@ -33,7 +44,7 @@ def vis_side():
     with c_f2:
         view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. LOGIK ---
+    # --- 2. DATA FILTRERING ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
     mask = (df_matches['MATCH_STATUS'] == status_filter) & \
            (df_matches['COMPETITION_NAME'].str.contains('1. Division|NordicBet|Betinia', case=False, na=False))
@@ -47,55 +58,53 @@ def vis_side():
         st.info(f"Ingen {view_type.lower()} kampe fundet.")
         return
 
-    # --- 3. VISNING ---
-    for _, row in display_df.head(15).iterrows():
+    # --- 3. VISNING AF KAMPE ---
+    for _, row in display_df.head(20).iterrows():
         h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
         m_id = row['MATCH_OPTAUUID']
         
-        h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
-        a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
-        score_text = f"{h_score} - {a_score}" if status_filter == 'Played' else "VS"
+        # Formatering af score/tid
+        if status_filter == 'Played':
+            h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
+            a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
+            mid_text = f"{h_score} - {a_score}"
+        else:
+            # Hvis kampen ikke er spillet, vis tidspunktet
+            mid_text = row['MATCH_DATE_FULL'].strftime("%H:%M") if hasattr(row['MATCH_DATE_FULL'], 'strftime') else "VS"
 
-        col_l, col_m, col_r = st.columns([0.6, 4, 0.6])
-        with col_l: 
-            if h_name in logos: st.image(logos[h_name], width=35)
-        with col_r: 
-            if a_name in logos: st.image(logos[a_name], width=35)
+        # Kamp-rækken
+        with st.expander(f"{h_name}   {mid_text}   {a_name}"):
+            # UUIDs til stats
+            h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
+            a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
 
-        with col_m:
-            with st.expander(f"{h_name}   {score_text}   {a_name}"):
-                # --- ALT HERUNDER SKAL VÆRE INDRYKKET FOR AT VISES I EXPANDEREN ---
-                h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
-                a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
+            # Vis kun stats hvis kampen er spillet og vi har UUIDs
+            if status_filter == 'Played' and h_uuid and a_uuid:
+                stats_to_show = [
+                    ('totalScoringAtt', 'Skud total'),
+                    ('ontargetScoringAtt', 'Skud på mål'),
+                    ('wonCorners', 'Hjørnespark'),
+                    ('totalPass', 'Afleveringer'),
+                    ('possessionPercentage', 'Besiddelse %')
+                ]
                 
-                if status_filter == 'Played' and not df_stats.empty and h_uuid:
-                    st.write("") 
+                for key, label in stats_to_show:
+                    h_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == h_uuid) & (df_stats['STAT_TYPE'] == key)]
+                    a_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == a_uuid) & (df_stats['STAT_TYPE'] == key)]
                     
-                    stats_list = [
-                        ('totalScoringAtt', 'Skud total', False),
-                        ('ontargetScoringAtt', 'Skud på mål', False),
-                        ('wonCorners', 'Hjørnespark', False),
-                        ('totalPass', 'Afleveringer', False),
-                        ('possessionPercentage', 'Besiddelse %', True)
-                    ]
-                
-                    for key, label, is_float in stats_list:
-                        h_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == h_uuid) & (df_stats['STAT_TYPE'] == key)]
-                        a_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == a_uuid) & (df_stats['STAT_TYPE'] == key)]
-                        
-                        h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').sum() if not h_rows.empty else 0
-                        a_val = pd.to_numeric(a_rows['STAT_TOTAL'], errors='coerce').sum() if not a_rows.empty else 0
-                        
-                        if key == 'possessionPercentage':
-                            h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').mean() if not h_rows.empty else 0
-                            a_val = 100 - h_val if h_val > 0 else 0
-                
-                        fmt = "{:.1f}" if is_float else "{:.0f}"
-                        
-                        s1, s2, s3 = st.columns([1, 2, 1])
-                        s1.markdown(f"<div class='stat-val'>{fmt.format(h_val)}</div>", unsafe_allow_html=True)
-                        s2.markdown(f"<div class='stat-label'>{label}</div>", unsafe_allow_html=True)
-                        s3.markdown(f"<div class='stat-val' style='text-align:right;'>{fmt.format(a_val)}</div>", unsafe_allow_html=True)
-                else:
-                    st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Ingen detaljeret data fundet.")
-        st.divider()
+                    # Hent værdier
+                    h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').max() if not h_rows.empty else 0
+                    a_val = pd.to_numeric(a_rows['STAT_TOTAL'], errors='coerce').max() if not a_rows.empty else 0
+                    
+                    if key == 'possessionPercentage' and h_val > 0 and a_val == 0:
+                        a_val = 100 - h_val
+
+                    # Vis rækken
+                    s1, s2, s3 = st.columns([1, 2, 1])
+                    s1.markdown(f"<div class='stat-val'>{h_val:g}</div>", unsafe_allow_html=True)
+                    s2.markdown(f"<div class='stat-label'>{label}</div>", unsafe_allow_html=True)
+                    s3.markdown(f"<div class='stat-val' style='text-align:right;'>{a_val:g}</div>", unsafe_allow_html=True)
+            else:
+                st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Ingen kamp-statistik tilgængelig.")
+
+    st.divider()
