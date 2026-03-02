@@ -150,3 +150,22 @@ def vis_side(spillere, player_stats_sn):
     )
     
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # --- 7. TABELVISNING (Indsæt dette efter st.plotly_chart) ---
+    with st.expander("Se datatabel", expanded=False):
+        # Vi forbereder en tabelversion af df_plot
+        df_table = df_plot.sort_values('VAL', ascending=False).copy()
+        
+        # Omdøb kolonner for at gøre det brugervenligt
+        df_table = df_table.rename(columns={
+            'NAVN': 'Spiller',
+            'VAL': f'{valgt_kat} ({visning})',
+            'MINUTESONFIELD': 'Minutter'
+        })
+        
+        # Vis tabellen uden index
+        st.dataframe(
+            df_table[['Spiller', f'{valgt_kat} ({visning})', 'Minutter']], 
+            use_container_width=True,
+            hide_index=True
+        )
