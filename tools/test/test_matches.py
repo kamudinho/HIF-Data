@@ -80,36 +80,65 @@ def vis_side():
         if matches.empty:
             st.info("Ingen kampe fundet.")
             return
+
         d_dage = {"Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG", "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"}
         d_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
-        
-        cur_date = None
+
+        current_date = None
         for _, row in matches.iterrows():
             d = pd.to_datetime(row['MATCH_DATE_FULL'])
             m_date = f"{d_dage.get(d.strftime('%A'), d.strftime('%A'))} D. {d.day}. {d_maaneder.get(d.strftime('%B'), d.strftime('%B'))}".upper()
-            if m_date != cur_date:
-                st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
-                cur_date = m_date
             
+            if m_date != current_date:
+                st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
+                current_date = m_date
+
             h_n = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
-            
-            c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-            with c1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_n}</div>", unsafe_allow_html=True)
-            with c2: 
-                h_l = logos.get(h_n)
-                if h_l: st.image(h_l, width=25)
-            with c3:
-                if is_played:
-                    st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
-                else:
-                    tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
-                    st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
-            with c4:
-                a_l = logos.get(a_n)
-                if a_l: st.image(a_l, width=25)
-            with c5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_n}</div>", unsafe_allow_html=True)
 
+            # --- KAMP BOKS START ---
+            with st.container(border=True):
+                # 1. LINJE: LOGOER OG SCORE
+                col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                with col1: st.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{h_n}</div>", unsafe_allow_html=True)
+                with col2: 
+                    h_l = logos.get(h_n)
+                    if h_l: st.image(h_l, width=28)
+                with col3:
+                    if is_played:
+                        st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
+                    else:
+                        tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
+                        st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+                with col4:
+                    a_l = logos.get(a_n)
+                    if a_l: st.image(a_l, width=28)
+                with col5: st.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{a_n}</div>", unsafe_allow_html=True)
+
+                # 2. LINJE: OPTA DATA (Kun for spillede kampe)
+                if is_played:
+                    st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    s_col1, s_col2, s_col3, s_col4, s_col5 = st.columns(5)
+                    
+                    def stat_box(label, h_val, a_val):
+                        # Formatering af tal (f.eks. fjerne decimaler hvis det er heltal)
+                        h_display = f"{h_val}%" if label == "Possession" else f"{h_val}"
+                        a_display = f"{a_val}%" if label == "Possession" else f"{a_val}"
+                        
+                        st.markdown(f"""
+                            <div style='text-align:center;'>
+                                <div style='font-size:9px; color:#888; text-transform:uppercase; letter-spacing:1px;'>{label}</div>
+                                <div style='font-size:13px; font-weight:600; color:#333;'>{h_display} — {a_display}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                    # Vi bruger .get() med 0 som fallback, så koden ikke crasher hvis en kolonne mangler
+                    with s_col1: stat_box("Possession", row.get('POSSESSION_HOME', 0), row.get('POSSESSION_AWAY', 0))
+                    with s_col2: stat_box("Passes", row.get('PASSES_HOME', 0), row.get('PASSES_AWAY', 0))
+                    with s_col3: stat_box("Duels", row.get('DUELS_HOME', 0), row.get('DUELS_AWAY', 0))
+                    with s_col4: stat_box("PPDA", row.get('PPDA_HOME', 0), row.get('PPDA_AWAY', 0))
+                    with s_col5: stat_box("Tackles", row.get('TACKLES_HOME', 0), row.get('TACKLES_AWAY', 0))
+                        
     # --- 3. TABS OG FORM PÅ SAMME LINJE ---
     tab_col, form_col = st.columns([5, 1])
     with tab_col:
