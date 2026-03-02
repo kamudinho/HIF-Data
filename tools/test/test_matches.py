@@ -5,7 +5,7 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
-    logos = dp.get("logo_map", {}) # Hent logo-mappet her
+    logos = dp.get("logo_map", {})
 
     # --- FARVER & CSS ---
     hif_rod = "#df003b"
@@ -16,9 +16,29 @@ def vis_side():
         .stat-val {{ font-weight: bold; font-size: 14px; }}
         .form-dot {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 3px; }}
         .win {{ background-color: #28a745; }} .draw {{ background-color: #ffc107; }} .loss {{ background-color: #dc3545; }}
-        /* Gør kamp-rækken pænere */
-        .match-container {{ display: flex; align-items: center; gap: 10px; justify-content: center; }}
+        
+        /* Dato-overskrift */
+        .date-header {{ 
+            background: #eee; padding: 5px 15px; border-radius: 4px; 
+            font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px;
+            color: #444; border-left: 4px solid {hif_rod};
+        }}
+        /* Score/Tid boks */
+        .score-pill {{
+            background: #333; color: white; border-radius: 4px; 
+            padding: 2px 10px; font-weight: bold; text-align: center;
+            min-width: 70px; display: inline-block;
+        }}
+        .time-pill {{
+            background: #f0f2f6; color: #333; border-radius: 4px; 
+            padding: 2px 10px; font-size: 0.9rem; text-align: center;
+            min-width: 70px; display: inline-block;
+        }}
         </style>
+    """, unsafe_allow_html=True)
+
+    # --- TOP BRANDING ---
+    st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:15px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; font-size:1.1rem;">Betinia Ligaen: Stats & Kampe</h3>
         </div>
@@ -64,34 +84,40 @@ def vis_side():
 
     st.divider()
 
-    # --- 4. KAMPOVERSIGT MED LOGOER ---
+    # --- 4. KAMPOVERSIGT ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
     display_matches = df_matches[(df_matches['MATCH_STATUS'] == status_filter) & 
                                  ((df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | 
                                   (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold))].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
-    st.markdown(f"#### {view_type} Kampe")
+    current_date = None
+    
     for _, row in display_matches.iterrows():
         h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
+        match_date = row['MATCH_DATE_FULL'].strftime('%A d. %d. %B') # F.eks. "Fredag d. 01. Marts"
         
-        # Opret række med 5 kolonner for at centrere logoer og tekst perfekt
-        col_date, col_h_logo, col_match, col_a_logo, col_res = st.columns([0.8, 0.4, 3, 0.4, 1])
+        # Vis dato-overskrift hvis datoen skifter
+        if match_date != current_date:
+            st.markdown(f"<div class='date-header'>{match_date.upper()}</div>", unsafe_allow_html=True)
+            current_date = match_date
+
+        # Række-layout: [Hjemmehold] [Logo] [Score/Tid] [Logo] [Udehold]
+        col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
         
-        with col_date:
-            st.write(f"📅 {row['MATCH_DATE_FULL'].strftime('%d/%m')}")
-        
-        with col_h_logo:
+        with col1:
+            st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
+        with col2:
             st.image(logos.get(h_name, ""), width=25)
-            
-        with col_match:
-            # Centreret tekst mellem logoerne
-            st.markdown(f"<div style='text-align:center; font-size:0.95rem;'><b>{h_name}</b> vs. <b>{a_name}</b></div>", unsafe_allow_html=True)
-            
-        with col_a_logo:
-            st.image(logos.get(a_name, ""), width=25)
-        
-        with col_res:
+        with col3:
             if status_filter == 'Played':
-                st.markdown(f"<div style='background:#333; color:white; border-radius:4px; text-align:center; font-weight:bold;'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</div>", unsafe_allow_html=True)
+                res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
+                st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div style='background:#f0f2f6; border-radius:4px; text-align:center; font-size:0.8rem;'>⏰ {row['MATCH_DATE_FULL'].strftime('%H:%M')}</div>", unsafe_allow_html=True)
+                tid = row['MATCH_DATE_FULL'].strftime('%H:%M')
+                st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+        with col4:
+            st.image(logos.get(a_name, ""), width=25)
+        with col5:
+            st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
+
+    st.divider()
