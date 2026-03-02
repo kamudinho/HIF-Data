@@ -68,7 +68,6 @@ def vis_side():
         except: continue
 
     # --- 4. VIS STATS BAR ---
-    st.markdown(f"#### Stats for {valgt_navn}")
     c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
     with c[0]:
         st.markdown("<div class='stat-label'>Form</div>", unsafe_allow_html=True)
