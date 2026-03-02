@@ -83,7 +83,6 @@ def vis_side():
         except: continue
 
     # --- 4. VIS STATS BAR ---
-    st.markdown(f"### Statistik for {valgt_navn}")
     c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
     
     with c[0]:
