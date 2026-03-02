@@ -47,41 +47,51 @@ def fmt_val(v):
 
 # --- NY HJÆLPEFUNKTION TIL OPTA FLETNING ---
 def _process_opta_stats(df_matches, df_stats):
-    print(f"DEBUG: Antal kampe før merge: {len(df_matches)}")
-    print(f"DEBUG: Antal stats rækker: {len(df_stats)}")
-    
+    # Hvis df_matches er tom, returner tom DF med det samme
     if df_matches.empty:
         return df_matches
 
-    # Pivotér stats fra lang til bred (kolonner per stat_type)
-    df_stats_wide = df_stats.pivot_table(
-        index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
-        columns='STAT_TYPE',
-        values='STAT_TOTAL',
-        aggfunc='first'
-    ).reset_index()
+    # 1. Tjek om SQL allerede har leveret stats (vores nye pivot-query)
+    # Vi tjekker efter en af de nye stat-kolonner, f.eks. 'HOME_POSS'
+    if "HOME_POSS" in df_matches.columns:
+        return df_matches
 
-    # Merge for Hjemmehold
-    df = pd.merge(
-        df_matches, 
-        df_stats_wide, 
-        left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
-        right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
-        how='left'
-    ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+    # 2. Hvis vi har fået RÅ data (gamle queries), så pivotér manuelt:
+    if df_stats.empty:
+        return df_matches
 
-    # Merge for Udehold
-    df = pd.merge(
-        df, 
-        df_stats_wide, 
-        left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
-        right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
-        how='left',
-        suffixes=('_HOME', '_AWAY')
-    ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+    try:
+        df_stats_wide = df_stats.pivot_table(
+            index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
+            columns='STAT_TYPE',
+            values='STAT_TOTAL',
+            aggfunc='first'
+        ).reset_index()
 
-    return df
+        # Sørg for at kolonnenavnene i df_matches matcher det, vi merger på
+        # Vi merger på MATCH_OPTAUUID og holdets UUID
+        df = pd.merge(
+            df_matches, 
+            df_stats_wide, 
+            left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
+            right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
+            how='left'
+        ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
 
+        df = pd.merge(
+            df, 
+            df_stats_wide, 
+            left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
+            right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'],
+            how='left',
+            suffixes=('_HOME', '_AWAY')
+        ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+        
+        return df
+    except Exception as e:
+        print(f"Fejl i manuel _process_opta_stats: {e}")
+        return df_matches
+        
 # --- 2. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
