@@ -65,60 +65,60 @@ def vis_side(df_raw=None, colors_map=None):
         h2h_sub_tabs = st.tabs(["Overblik", "Offensiv", "Defensiv"])
 
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
-        fig = go.Figure()
+            fig = go.Figure()
+            
+            # Beregn værdier
+            y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
+            y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
+            
+            # Hent farve-objekter fra TEAM_COLORS (via data_load eller direkte fra dp["colors"])
+            # Vi antager her, at get_team_color returnerer hele dict'en eller vi slår op i dp["colors"]
+            c1 = dp["colors"].get(n1, {"primary": "#808080", "secondary": "#000000"})
+            c2 = dp["colors"].get(n2, {"primary": "#808080", "secondary": "#000000"})
+            
+            # Søjle for Hold 1
+            fig.add_trace(go.Bar(
+                name=n1, 
+                x=labels, 
+                y=y1_vals, 
+                marker_color=c1["primary"],
+                marker_line_color=c1["secondary"], # Kantfarve til f.eks. Kolding
+                marker_line_width=2,               # Gør kanten tydelig
+                text=[f"{v:.1f}" for v in y1_vals], 
+                textposition='auto',
+                textfont=dict(color="white" if c1["primary"] != "#ffffff" else "black") # Tekstfarve-fix
+            ))
+            
+            # Søjle for Hold 2
+            fig.add_trace(go.Bar(
+                name=n2, 
+                x=labels, 
+                y=y2_vals, 
+                marker_color=c2["primary"],
+                marker_line_color=c2["secondary"], # Kantfarve
+                marker_line_width=2,
+                text=[f"{v:.1f}" for v in y2_vals], 
+                textposition='auto',
+                textfont=dict(color="white" if c2["primary"] != "#ffffff" else "black")
+            ))
         
-        # Beregn værdier
-        y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
-        y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
+            # Logo-logik (som før)
+            for i in range(len(labels)):
+                if n1 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+                if n2 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
         
-        # Hent farve-objekter fra TEAM_COLORS (via data_load eller direkte fra dp["colors"])
-        # Vi antager her, at get_team_color returnerer hele dict'en eller vi slår op i dp["colors"]
-        c1 = dp["colors"].get(n1, {"primary": "#808080", "secondary": "#000000"})
-        c2 = dp["colors"].get(n2, {"primary": "#808080", "secondary": "#000000"})
-        
-        # Søjle for Hold 1
-        fig.add_trace(go.Bar(
-            name=n1, 
-            x=labels, 
-            y=y1_vals, 
-            marker_color=c1["primary"],
-            marker_line_color=c1["secondary"], # Kantfarve til f.eks. Kolding
-            marker_line_width=2,               # Gør kanten tydelig
-            text=[f"{v:.1f}" for v in y1_vals], 
-            textposition='auto',
-            textfont=dict(color="white" if c1["primary"] != "#ffffff" else "black") # Tekstfarve-fix
-        ))
-        
-        # Søjle for Hold 2
-        fig.add_trace(go.Bar(
-            name=n2, 
-            x=labels, 
-            y=y2_vals, 
-            marker_color=c2["primary"],
-            marker_line_color=c2["secondary"], # Kantfarve
-            marker_line_width=2,
-            text=[f"{v:.1f}" for v in y2_vals], 
-            textposition='auto',
-            textfont=dict(color="white" if c2["primary"] != "#ffffff" else "black")
-        ))
-    
-        # Logo-logik (som før)
-        for i in range(len(labels)):
-            if n1 in logo_map:
-                fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
-            if n2 in logo_map:
-                fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
-    
-        fig.update_layout(
-            barmode='group',
-            height=400,
-            margin=dict(t=100, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            showlegend=False,
-            yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                barmode='group',
+                height=400,
+                margin=dict(t=100, b=40, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False,
+                yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
         # Plot kald
         with h2h_sub_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
