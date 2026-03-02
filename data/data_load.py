@@ -116,30 +116,38 @@ def get_data_package():
     wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
 
     # B. HENT DATA
-    # Hent spiller-stats fra Opta (Denne indeholder PLAYER_OPTAUUID)
+    # Opta Queries
     df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
-    
-    # Hent din master-liste (players.csv / SQL players)
-    # VIGTIGT: Din SQL "players" query skal også have PLAYER_OPTAUUID med for at kunne merge!
-    df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
-    
-    # Andre queries...
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
+    
+    # Wyscout / Master Data Queries
+    df_sql_players = load_snowflake_query("players", comp_filter, wy_season_filter)
+    
+    # --- HER ER DE MANGLENDE TING ---
+    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
+    df_career = load_snowflake_query("player_career", comp_filter, wy_season_filter)
     df_logos_raw = load_snowflake_query("team_logos", None, None)
+    # -------------------------------
 
     # C. BYG LOGO_MAP
     logo_map = {}
     if not df_logos_raw.empty:
-        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows()}
+        # Sikrer at TEAM_WYID er int for at matche din ordbog
+        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row['TEAM_WYID'])}
 
+    # D. RETURNER KOMPLET PAKKE
     return {
-        "players": df_sql_players,           # Din master-liste (skal have PLAYER_OPTAUUID)
-        "playerstats": df_opta_player_stats,  # Dine stats (skal have PLAYER_OPTAUUID)
+        "players": df_sql_players,
+        "playerstats": df_opta_player_stats,
+        "team_stats_full": df_team_stats,      # Til Scatter/Holdoversigt
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
+        "player_career": df_career,           # Til Scouting
         "logo_map": logo_map,
         "VALGT_LIGA": VALGT_LIGA,
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
-        "colors": TEAM_COLORS
+        "season_filter": TOURNAMENTCALENDAR_NAME, # Forventes af comparison.py
+        "colors": TEAM_COLORS,
+        "scouting_image": None                # Kan tilføjes hvis du har en specifik billed-query
     }
