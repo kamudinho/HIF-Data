@@ -4,7 +4,7 @@ import pandas as pd
 from data.data_load import get_team_colors
 
 # --- 2. FARVER & KONSTANTER ---
-    hif_rod = "#df003b"
+hif_rod = "#df003b"
 
     # --- TOP BRANDING ---
     st.markdown(f"""
