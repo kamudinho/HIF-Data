@@ -32,55 +32,44 @@ def vis_side():
     """, unsafe_allow_html=True)
 
    # --- 1. TOP BAR (Dropdown + Stats på samme linje) ---
-    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
-    
-    if not liga_hold_options:
-        st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
-        return
-
-    # Vi laver en række med 8 kolonner (1 til dropdown, 7 til stats)
-    # Juster bredden [2.5, 0.6, 0.6...] så dropdown får nok plads
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
 
     with top_cols[0]:
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # --- 2. DATA FILTRERING & STATS BEREGNING (Sker før vi tegner stats) ---
-    mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | \
-           (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
-    team_matches = df_matches[mask].copy()
-    all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
-    
-    stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
-    for _, m in all_played.iterrows():
-        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        opp_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
-        opp_name = id_to_name.get(opp_uuid, m['CONTESTANTAWAY_NAME'] if is_h else m['CONTESTANTHOME_NAME'])
-        try:
-            h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
-            a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
-            stats["K"] += 1
-            stats["M+"] += h_s if is_h else a_s
-            stats["M-"] += a_s if is_h else h_s
-            diff = h_s - a_s if is_h else a_s - h_s
-            if diff > 0: stats["S"] += 1; stats["form"].append({"res":"win","txt":"S","hover":f"vs. {opp_name} ({h_s}-{a_s})"})
-            elif diff == 0: stats["U"] += 1; stats["form"].append({"res":"draw","txt":"U","hover":f"vs. {opp_name} ({h_s}-{a_s})"})
-            else: stats["N"] += 1; stats["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name} ({h_s}-{a_s})"})
-        except: continue
-
-    # --- 3. TEGN STATS (I de resterende kolonner af top_cols) ---
-    stats_list = [
-        ("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), 
-        ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), 
-        ("+/-", stats["M+"]-stats["M-"])
-    ]
-    
+    # Tegn stats i top_cols
+    stats_list = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
     for i, (l, v) in enumerate(stats_list):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
+    # --- 2. TABS OG FORM-BAROMETER PÅ SAMME LINJE ---
+    # Vi laver to kolonner: en bred til tabs og en smal til form
+    tab_col, form_col = st.columns([5, 1])
+
+    with tab_col:
+        tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
+
+    with form_col:
+        # Vi tilføjer lidt margin-top for at flugte med tabs-teksten
+        form_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
+        st.markdown(f"""
+            <div style='display: flex; justify-content: flex-end; margin-top: 12px;'>
+                <div class='form-container'>{form_html}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # --- 3. INDHOLD I TABS ---
+    # (Her bruger vi din tegn_kampe funktion inde i hver tab)
+    with tab_played:
+        df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
+        tegn_kampe(df_p, True)
+
+    with tab_fixtures:
+        df_f = team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
+        tegn_kampe(df_f, False)
+        
     # --- 4. FORM BAR (Lige under top bar) ---
     form_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
     st.markdown(f"<div class='form-container' style='margin-bottom:10px;'>{form_html}</div>", unsafe_allow_html=True)
