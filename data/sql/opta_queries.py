@@ -3,11 +3,7 @@
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Standard filtering
-    where_clause = f"WHERE COMPETITION_NAME ILIKE '{liga_navn}'"
-    if saeson_navn:
-        where_clause += f" AND TOURNAMENTCALENDAR_NAME ILIKE '{saeson_navn}'"
-
+    
     return {
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO
