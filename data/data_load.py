@@ -142,18 +142,22 @@ def get_data_package():
     # --- A. KLARGØR FILTRE ---
     comps = tuple(COMPETITION_WYID)
     comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
+    # Vi gemmer den rene sæsonstreng til Opta
+    opta_season = "2025/2026" 
+    # Sæsonfilter til Wyscout (med lighedstegn)
     season_filter = f"='{SEASONNAME}'"
 
     # --- B. HENT DATA ---
-    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, "LIKE '%2025%'", OPTA_COMP_UUID)
-    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, season_filter, OPTA_COMP_UUID)
+    # Vi bruger opta_season direkte her for at matche dit SQL-udtræk
+    df_matches_opta = load_snowflake_query("opta_matches", comp_filter, opta_season, OPTA_COMP_UUID)
+    df_opta_stats = load_snowflake_query("opta_match_stats", comp_filter, opta_season, OPTA_COMP_UUID)
+    
     df_sql_players = load_snowflake_query("players", comp_filter, season_filter, OPTA_COMP_UUID)
     df_playerstats = load_snowflake_query("playerstats", comp_filter, season_filter, OPTA_COMP_UUID)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, season_filter, OPTA_COMP_UUID)
     df_player_career = load_snowflake_query("player_career", comp_filter, season_filter, OPTA_COMP_UUID)
     
-    # --- C. PROCESSERING (NYT) ---
-    # Flet Opta stats ind i kampoversigten med det samme
+    # --- C. PROCESSERING ---
     df_matches_final = _process_opta_stats(df_matches_opta, df_opta_stats)
 
     # --- D. RENS OG FLET (Wyscout-logik) ---
@@ -175,7 +179,6 @@ def get_data_package():
             name = row['TEAMNAME']
             url = row['IMAGEDATAURL']
             logo_map[name] = url
-            # Map også uden " IF" / " Boldklub" så det matcher Opta bedre
             clean_name = name.replace(" IF", "").replace(" Boldklub", "").strip()
             logo_map[clean_name] = url
 
@@ -185,7 +188,7 @@ def get_data_package():
         "playerstats": df_playerstats,
         "player_career": df_player_career,
         "team_stats_full": df_team_stats,
-        "opta_matches": df_matches_final,  # <--- Nu med indbyggede stats
+        "opta_matches": df_matches_final,
         "opta_raw_stats": df_opta_stats,     
         "logo_map": logo_map,
         "comp_filter": comp_filter,        
