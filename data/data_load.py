@@ -113,53 +113,63 @@ def get_data_package():
     wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
 
     # B. HENT LOKAL PLAYERS CSV
-    # Vi finder players.csv i data-mappen
     try:
-        # Finder stien relativt til denne fil (data_load.py ligger i data/)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         csv_path = os.path.join(current_dir, 'players.csv')
-        
-        # Hvis den ikke ligger i samme mappe, tjekker vi mappen over (root/data/)
         if not os.path.exists(csv_path):
             base_path = os.path.dirname(current_dir)
             csv_path = os.path.join(base_path, 'data', 'players.csv')
 
         df_csv_players = pd.read_csv(csv_path)
         df_csv_players.columns = [str(c).upper().strip() for c in df_csv_players.columns]
-        
-        # Sikrer at PLAYER_OPTAUUID er string og renset for whitespaces
-        if 'PLAYER_OPTAUUID' in df_csv_players.columns:
-            df_csv_players['PLAYER_OPTAUUID'] = df_csv_players['PLAYER_OPTAUUID'].astype(str).str.strip()
     except Exception as e:
-        st.error(f"⚠️ Kunne ikke indlæse players.csv: {e}")
-        # Fallback til tom dataframe så appen ikke dør helt
+        st.error(f"⚠️ CSV Fejl: {e}")
         df_csv_players = pd.DataFrame()
 
-    # C. HENT SNOWFLAKE DATA
-    # Opta Queries
+    # C. HENT SNOWFLAKE DATA (De rå SELECT * kald)
     df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
     
-    # Wyscout / Master Data Queries
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
     df_career = load_snowflake_query("player_career", comp_filter, wy_season_filter)
     df_logos_raw = load_snowflake_query("team_logos", None, None)
 
-    # D. BYG LOGO_MAP
+    # --- D. OVERSÆTTER-SEKTION (Her sikrer vi navnene!) ---
+    # Fix 'opta_matches' kolonner
+    if not df_matches_opta.empty:
+        rename_map = {
+            'CONTESTANTHOMEID': 'CONTESTANTHOME_OPTAUUID',
+            'CONTESTANTAWAYID': 'CONTESTANTAWAY_OPTAUUID',
+            'MATCHID': 'MATCH_OPTAUUID',
+            'HOME_SCORE': 'TOTAL_HOME_SCORE',
+            'AWAY_SCORE': 'TOTAL_AWAY_SCORE',
+            'DATE': 'MATCH_DATE_FULL',
+            'HOME_TEAM_NAME': 'CONTESTANTHOME_NAME',
+            'AWAY_TEAM_NAME': 'CONTESTANTAWAY_NAME'
+        }
+        df_matches_opta = df_matches_opta.rename(columns=rename_map)
+
+    # Fix 'opta_team_stats' kolonner
+    if not df_opta_stats.empty:
+        df_opta_stats = df_opta_stats.rename(columns={
+            'MATCHID': 'MATCH_OPTAUUID',
+            'CONTESTANTID': 'CONTESTANT_OPTAUUID'
+        })
+
+    # E. BYG LOGO_MAP
     logo_map = {}
     if not df_logos_raw.empty:
-        # Sikrer at TEAM_WYID er int for at matche din ordbog
         logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row['TEAM_WYID'])}
 
-    # E. RETURNER KOMPLET PAKKE
+    # F. RETURNER KOMPLET PAKKE
     return {
-        "players": df_csv_players,           # Bruger nu din lokale CSV som master-liste
+        "players": df_csv_players,
         "playerstats": df_opta_player_stats,
-        "team_stats_full": df_team_stats,     # Til Scatter/Holdoversigt
+        "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
-        "player_career": df_career,          # Til Scouting
+        "player_career": df_career,
         "logo_map": logo_map,
         "VALGT_LIGA": VALGT_LIGA,
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
