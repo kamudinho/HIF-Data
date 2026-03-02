@@ -7,6 +7,9 @@ from mplsoccer import VerticalPitch
 from data.data_load import load_snowflake_query
 
 def vis_side(df_team_matches, hold_map, df_events=None):
+    # --- 2. FARVER & KONSTANTER ---
+    hif_rod = "#df003b"
+
     # --- TOP BRANDING ---
     st.markdown(f"""
         <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
