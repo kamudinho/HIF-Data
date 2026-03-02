@@ -168,6 +168,32 @@ def get_queries(comp_filter, season_filter):
                 AND TOURNAMENTCALENDAR_NAME {season_filter}
             )
         """,
+
+        # --- 9. SECOND SPECTRUM FYSISKE SPLITS (Kamp-niveau) ---
+        "physical_splits": f"""
+            SELECT 
+                MATCH_SSIID,
+                TEAM_OPTAID,
+                TEAM_NAME,
+                PHYSICAL_METRIC_TYPE,
+                MINUTE_SPLIT,
+                MINUTE_ARRAY_INDEX,
+                PHYSICAL_METRIC_VALUE
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_TEAMS
+            WHERE TEAM_OPTAID IN (
+                -- Her kan vi indsætte alle Opta-ID'er fra din mapping 
+                -- eller filtrere bredt på dato/sæson hvis tabellen tillader det
+                SELECT DISTINCT TEAM_OPTAID FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_TEAMS
+            )
+            -- Vi bruger MATCH_DATE fra filnavnet eller en join hvis muligt, 
+            -- men her filtrerer vi på de kampe der findes i din opta_matches query
+            AND MATCH_SSIID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE COMPETITION_OPTAUUID = '{comp_filter}' 
+                AND TOURNAMENTCALENDAR_NAME {season_filter}
+            )
+            ORDER BY MATCH_SSIID, TEAM_OPTAID, PHYSICAL_METRIC_TYPE, MINUTE_ARRAY_INDEX
+        """,
         # --- 7. ALLE EVENTS ---
         "events": f"""
             SELECT 
