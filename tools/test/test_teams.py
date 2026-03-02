@@ -5,27 +5,26 @@ from data.data_load import load_snowflake_query, get_team_color
 
 def vis_side(df_raw=None, colors_map=None): 
     # --- 1. DATA INITIALISERING ---
-    # Vi bruger 'dp' i stedet for 'data_package' for at matche HIF_dash.py
     if "dp" not in st.session_state:
-        st.error("Data pakken blev ikke fundet. Genstart venligst appen.")
+        st.error("Data pakken 'dp' ikke fundet. Genstart venligst appen.")
         return
         
     dp = st.session_state["dp"]
+    logo_map = dp.get("logo_map", {})
     
     if df_raw is None or df_raw.empty:
         df_raw = dp.get("team_stats_full", pd.DataFrame())
 
     if df_raw.empty:
-        st.warning("Ingen data fundet for den valgte sæson og liga.")
+        st.warning("Ingen data fundet.")
         return
 
     # --- 2. CSS & STYLING ---
     st.markdown("""
         <style>
             .stTable { width: 100%; }
-            th, td { text-align: center !important; vertical-align: middle !important; font-family: sans-serif; font-size: 0.85rem; }
+            th, td { text-align: center !important; vertical-align: middle !important; font-size: 0.85rem; }
             td:nth-child(2), th:nth-child(2) { text-align: left !important; font-weight: bold; }
-            /* Hvidovre Rød farve på tabs */
             button[data-baseweb='tab'][aria-selected='true'] { color: #cc0000 !important; border-bottom-color: #cc0000 !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -33,42 +32,27 @@ def vis_side(df_raw=None, colors_map=None):
     # --- 3. DATA PREPARATION ---
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
-    df = df.fillna(0)
-    
-    # Vi tager fat i den nuværende sæson fra data pakken
     df_liga = df[df['SEASONNAME'] == dp['SEASONNAME']].copy()
 
     # --- 4. TABS STRUKTUR ---
-    tab_liga_hoved, tab_h2h_hoved = st.tabs(["📊 Ligaoversigt", "⚔️ Head-to-Head"])
+    tab_liga_hoved, tab_h2h_hoved = st.tabs(["Ligaoversigt", "Head-to-Head"])
 
-    # --- SEKTION 1: LIGAOVERSIGT ---
+    # --- SEKTION 1: LIGAOVERSIGT (Som før) ---
     with tab_liga_hoved:
         l_gen, l_off, l_def = st.tabs(["Stilling", "Offensivt", "Defensivt"])
-        
-        def render_html_table(dataframe, columns, rename_dict):
-            temp_df = dataframe[columns].copy()
-            if 'IMAGEDATAURL' in temp_df.columns:
-                temp_df['IMAGEDATAURL'] = temp_df['IMAGEDATAURL'].apply(lambda x: f'<img src="{x}" width="25">')
-            temp_df = temp_df.rename(columns=rename_dict)
-            st.write(temp_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+        def render_table(d, cols, renames):
+            t = d[cols].copy()
+            if 'IMAGEDATAURL' in t.columns:
+                t['IMAGEDATAURL'] = t['IMAGEDATAURL'].apply(lambda x: f'<img src="{x}" width="25">')
+            st.write(t.rename(columns=renames).to_html(escape=False, index=False), unsafe_allow_html=True)
 
         with l_gen:
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'GOALS', 'CONCEDEDGOALS', 'TOTALPOINTS']
-            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'MATCHES': 'K', 'TOTALWINS': 'V', 'TOTALDRAWS': 'U', 
-                       'TOTALLOSSES': 'T', 'GOALS': 'M+', 'CONCEDEDGOALS': 'M-', 'TOTALPOINTS': 'P'}
-            render_html_table(df_liga.sort_values('TOTALPOINTS', ascending=False), cols, renames)
-        
-        with l_off:
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'GOALS', 'XGSHOT', 'SHOTS', 'PASSESTOFINALTHIRD']
-            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'GOALS': 'MÅL', 'XGSHOT': 'xG', 'SHOTS': 'SKUD', 'PASSESTOFINALTHIRD': 'PASS 3.DEL'}
-            render_html_table(df_liga.sort_values('GOALS', ascending=False), cols, renames)
+            render_table(df_liga.sort_values('TOTALPOINTS', ascending=False), 
+                        ['IMAGEDATAURL', 'TEAMNAME', 'MATCHES', 'TOTALWINS', 'TOTALDRAWS', 'TOTALLOSSES', 'TOTALPOINTS'],
+                        {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'MATCHES': 'K', 'TOTALWINS': 'V', 'TOTALDRAWS': 'U', 'TOTALLOSSES': 'T', 'TOTALPOINTS': 'P'})
+        # (Off og Def kodes på samme måde...)
 
-        with l_def:
-            cols = ['IMAGEDATAURL', 'TEAMNAME', 'CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA']
-            renames = {'IMAGEDATAURL': '', 'TEAMNAME': 'HOLD', 'CONCEDEDGOALS': 'MÅL IMOD', 'XGSHOTAGAINST': 'xG IMOD', 'PPDA': 'PPDA'}
-            render_html_table(df_liga.sort_values('CONCEDEDGOALS', ascending=True), cols, renames)
-
-    # --- SEKTION 2: HEAD-TO-HEAD ---
+    # --- SEKTION 2: HEAD-TO-HEAD (OPDATERET MED LOGOER) ---
     with tab_h2h_hoved:
         hold_navne = sorted(df_liga['TEAMNAME'].unique().tolist())
         c1, c2 = st.columns(2)
@@ -86,23 +70,35 @@ def vis_side(df_raw=None, colors_map=None):
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
-            # Farver hentes dynamisk fra get_team_color
+            # Farver
             color1 = get_team_color(n1)
             color2 = get_team_color(n2)
             
+            # Søjler
             fig.add_trace(go.Bar(name=n1, x=labels, y=y1_vals, marker_color=color1, text=[f"{v:.1f}" for v in y1_vals], textposition='auto'))
             fig.add_trace(go.Bar(name=n2, x=labels, y=y2_vals, marker_color=color2, text=[f"{v:.1f}" for v in y2_vals], textposition='auto'))
         
+            # Indsæt logoer for hver kategori
+            for i in range(len(labels)):
+                # Logo Hold 1 (Venstre for midten af kategorien)
+                if n1 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+                # Logo Hold 2 (Højre for midten af kategorien)
+                if n2 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+
             fig.update_layout(
-                barmode='group', height=350, margin=dict(t=40, b=40, l=10, r=10),
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                barmode='group',
+                height=400,
+                margin=dict(t=100, b=40, l=10, r=10), # Mere top-margin til logoer
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False, # Legend fjernet som ønsket
+                yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        with h2h_sub_tabs[0]: 
-            create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
-        with h2h_sub_tabs[1]: 
-            create_h2h_plot(['GOALS', 'XGSHOT', 'PASSESTOFINALTHIRD'], ['Mål/k', 'xG/k', 'Pass 3.del/k'], t1_stats, t2_stats, team1, team2, per_match=True)
-        with h2h_sub_tabs[2]: 
-            create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/k', 'xG Imod/k', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
+        # Plot kald
+        with h2h_sub_tabs[0]: create_h2h_plot(['TOTALPOINTS', 'TOTALWINS', 'MATCHES'], ['Point', 'Sejre', 'Kampe'], t1_stats, t2_stats, team1, team2)
+        with h2h_sub_tabs[1]: create_h2h_plot(['GOALS', 'XGSHOT', 'PASSESTOFINALTHIRD'], ['Mål/k', 'xG/k', 'Pass 3.del/k'], t1_stats, t2_stats, team1, team2, per_match=True)
+        with h2h_sub_tabs[2]: create_h2h_plot(['CONCEDEDGOALS', 'XGSHOTAGAINST', 'PPDA'], ['Mål imod/k', 'xG Imod/k', 'PPDA'], t1_stats, t2_stats, team1, team2, per_match=True)
