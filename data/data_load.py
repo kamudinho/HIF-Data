@@ -83,27 +83,21 @@ def _get_snowflake_conn():
 
 # --- 3. DATA LOADING FUNKTIONER ---
 @st.cache_data(ttl=1200)
-def load_snowflake_query(query_key, comp_filter, season_filter, opta_uuid=None):
+def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # 1. SPLIT LOGIKKEN HELT AD
     if query_key.startswith("opta_"):
-        # Her bruger vi KUN Opta-filen og sender den valgte liga-tekst med
         from data.sql.opta_queries import get_opta_queries
-        queries = get_opta_queries(VALGT_LIGA)
+        # Her sender vi de to tekst-variable med
+        queries = get_opta_queries(VALGT_LIGA, TOURNAMENTCALENDAR_NAME)
     else:
-        # Her bruger vi KUN Wyscout-filen med dens specifikke filtre
         from data.sql.wy_queries import get_wy_queries
         queries = get_wy_queries(comp_filter, season_filter)
         
-    # 2. HENT SELVE SQL-STRENGEN
     q = queries.get(query_key)
-    if not q: 
-        print(f"ADVARSEL: Query '{query_key}' ikke fundet i ordbogen.")
-        return pd.DataFrame() 
+    if not q: return pd.DataFrame() 
     
-    # 3. KØR QUERY HOS SNOWFLAKE
     try:
         df = conn.query(q)
         if df is not None:
