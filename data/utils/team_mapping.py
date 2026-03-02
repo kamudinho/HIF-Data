@@ -30,34 +30,36 @@ COMPETITIONS = {
 
 # --- Hold ---
 TEAMS = {
-    # --- Betinia Ligaen (1. division) ---
-    "Hvidovre IF": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "league": "Betinia Ligaen"},
-    "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "league": "Betinia Ligaen"},
-    "Horsens": {"team_wyid": 7465, "opta_uuid": "5rz9enoyknpg8ji78za5b82p0", "league": "Betinia Ligaen"},
-    "Lyngby": {"team_wyid": 7484, "opta_uuid": "anga7587r1zv4ey71ge9zxol3", "league": "Betinia Ligaen"},
-    "Esbjerg": {"team_wyid": 7451, "opta_uuid": "2v69668s6p2c68wz2hpg018h2", "league": "Betinia Ligaen"},
-    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "d1zdf956i09p4v02r76h9h0be", "league": "Betinia Ligaen"},
-    "Hobro": {"team_wyid": 7510, "opta_uuid": "4t96h936f01p4v02r76h9h0be", "league": "Betinia Ligaen"},
-    "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "league": "Betinia Ligaen"},
-    "Hillerød": {"team_wyid": 7699, "opta_uuid": "9v69668s6p2c68wz2hpg018h2", "league": "Betinia Ligaen"},
-    "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "6v69668s6p2c68wz2hpg018h2", "league": "Betinia Ligaen"},
-    "B.93": {"team_wyid": 7470, "opta_uuid": "7v69668s6p2c68wz2hpg018h2", "league": "Betinia Ligaen"},
-    "Middelfart": {"team_wyid": 7578, "opta_uuid": "3v69668s6p2c68wz2hpg018h2", "league": "Betinia Ligaen"},
+    # --- Hold ---
+TEAMS = {
+    # --- Betinia Ligaen (NordicBet Liga) ---
+    "Hvidovre IF": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "league": "Betinia Ligaen"},
+    "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "opta_id": 401, "league": "Betinia Ligaen"},
+    "Horsens": {"team_wyid": 7465, "opta_uuid": "60msc9045s5v96pghp5px88v", "opta_id": 2289, "league": "Betinia Ligaen"},
+    "Lyngby Boldklub": {"team_wyid": 7484, "opta_uuid": "272_uuid_dummy", "opta_id": 272, "league": "Betinia Ligaen"},
+    "Esbjerg": {"team_wyid": 7451, "opta_uuid": "2v69668s6p2c68wz2hpg018h2", "opta_id": 1409, "league": "Betinia Ligaen"},
+    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "9935j8s3d9m257n9v6p9v6p9v", "opta_id": 13253, "league": "Betinia Ligaen"},
+    "Hobro": {"team_wyid": 7510, "opta_uuid": "4t96h936f01p4v02r76h9h0be", "opta_id": 4802, "league": "Betinia Ligaen"},
+    "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "league": "Betinia Ligaen"},
+    "Hillerød": {"team_wyid": 7699, "opta_uuid": "6v99668s6p2c68wz2hpg018h3", "opta_id": 6463, "league": "Betinia Ligaen"},
+    "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "6v69668s6p2c68wz2hpg018h2", "opta_id": 2290, "league": "Betinia Ligaen"},
+    "B.93": {"team_wyid": 7470, "opta_uuid": "7v69668s6p2c68wz2hpg018h2", "opta_id": 2935, "league": "Betinia Ligaen"},
+    "FC Roskilde": {"team_wyid": 7497, "opta_uuid": "3050_uuid_dummy", "opta_id": 3050, "league": "Betinia Ligaen"},
 
     # --- 3F Superliga ---
-    "Copenhagen": {"team_wyid": 7452, "opta_uuid": "5rz9enoyknpg8ji78za5b82p1", "league": "3F Superliga"},
-    "Midtjylland": {"team_wyid": 7455, "opta_uuid": "5rz9enoyknpg8ji78za5b82p2", "league": "3F Superliga"},
-    "Brøndby": {"team_wyid": 7453, "opta_uuid": "5rz9enoyknpg8ji78za5b82p3", "league": "3F Superliga"},
-    "AGF": {"team_wyid": 7457, "opta_uuid": "5rz9enoyknpg8ji78za5b82p4", "league": "3F Superliga"},
-    "Nordsjælland": {"team_wyid": 7458, "opta_uuid": "5rz9enoyknpg8ji78za5b82p5", "league": "3F Superliga"},
-    "Viborg": {"team_wyid": 7456, "opta_uuid": "5rz9enoyknpg8ji78za5b82p6", "league": "3F Superliga"},
-    "SønderjyskE": {"team_wyid": 7499, "opta_uuid": "5rz9enoyknpg8ji78za5b82p7", "league": "3F Superliga"},
-    "OB": {"team_wyid": 7460, "opta_uuid": "5rz9enoyknpg8ji78za5b82p8", "league": "3F Superliga"},
-    "Randers": {"team_wyid": 7462, "opta_uuid": "5rz9enoyknpg8ji78za5b82p9", "league": "3F Superliga"},
-    "Fredericia": {"team_wyid": 7469, "opta_uuid": "5rz9enoyknpg8ji78za5b82p0", "league": "3F Superliga"},
-    "Silkeborg": {"team_wyid": 7461, "opta_uuid": "5rz9enoyknpg8ji78za5b82p1", "league": "3F Superliga"},
-    "Vejle": {"team_wyid": 7473, "opta_uuid": "5rz9enoyknpg8ji78za5b82p2", "league": "3F Superliga"},
-
+    "FC København": {"team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "league": "3F Superliga"},
+    "FC Midtjylland": {"team_wyid": 7455, "opta_uuid": "1000_uuid_dummy", "opta_id": 1000, "league": "3F Superliga"},
+    "Brøndby IF": {"team_wyid": 7453, "opta_uuid": "239_uuid_dummy", "opta_id": 239, "league": "3F Superliga"},
+    "AGF": {"team_wyid": 7457, "opta_uuid": "420_uuid_dummy", "opta_id": 420, "league": "3F Superliga"},
+    "FC Nordsjælland": {"team_wyid": 7458, "opta_uuid": "2592_uuid_dummy", "opta_id": 2592, "league": "3F Superliga"},
+    "Viborg FF": {"team_wyid": 7456, "opta_uuid": "547_uuid_dummy", "opta_id": 547, "league": "3F Superliga"},
+    "SønderjyskE": {"team_wyid": 7499, "opta_uuid": "2827_uuid_dummy", "opta_id": 2827, "league": "3F Superliga"},
+    "Randers FC": {"team_wyid": 7462, "opta_uuid": "1943_uuid_dummy", "opta_id": 1943, "league": "3F Superliga"},
+    "Silkeborg IF": {"team_wyid": 7461, "opta_uuid": "418_uuid_dummy", "opta_id": 418, "league": "3F Superliga"},
+    "Vejle Boldklub": {"team_wyid": 7473, "opta_uuid": "2450_uuid_dummy", "opta_id": 2450, "league": "3F Superliga"},
+    "OB": {"team_wyid": 7460, "opta_uuid": "5rz9enoyknpg8ji78za5b82p8", "opta_id": 545, "league": "3F Superliga"},
+    "FC Fredericia": {"team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "league": "3F Superliga"}
+}
     # --- 2. division ---
     "AB": {"team_wyid": 7464, "league": "2. division"},
     "Næstved": {"team_wyid": 7475, "league": "2. division"},
