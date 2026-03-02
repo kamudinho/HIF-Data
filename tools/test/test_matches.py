@@ -8,66 +8,70 @@ def vis_side():
     
     st.markdown("### 🏟️ Opta Match Center")
 
-    # --- 1. HOLD-VÆLGER (DROPDOWN) ---
-    # Vi henter alle unikke holdnavne fra både ude- og hjemmebane
+    # --- 1. FILTRE (Kompakte) ---
     alle_hold = sorted(pd.concat([df['CONTESTANTHOME_NAME'], df['CONTESTANTAWAY_NAME']]).unique())
     
     col_sel1, col_sel2 = st.columns([2, 1])
     with col_sel1:
-        # Vi sætter Hvidovre som standard, hvis de findes i listen
-        default_ix = alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0
-        valgt_hold = st.selectbox("🎯 Vælg hold for at se kampe", ["Alle hold"] + alle_hold, index=default_ix + 1 if "Hvidovre" in alle_hold else 0)
-
+        valgt_hold = st.selectbox("🎯 Filtrer på hold", ["Alle hold"] + alle_hold)
     with col_sel2:
-        view_type = st.radio("Status", ["Spillede", "Kommende"], horizontal=True)
+        view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
 
-    # --- 2. FILTRERING ---
-    # Først på status (Played vs Fixture)
+    # --- 2. LOGIK ---
     status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
     mask = df['MATCH_STATUS'] == status_filter
-    
-    # Derefter på det valgte hold fra dropdown
     if valgt_hold != "Alle hold":
         mask = mask & ((df['CONTESTANTHOME_NAME'] == valgt_hold) | (df['CONTESTANTAWAY_NAME'] == valgt_hold))
     
     display_df = df[mask].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
-    # --- 3. VISNING AF KORT ---
-    if display_df.empty:
-        st.info(f"Ingen {view_type.lower()} kampe fundet for {valgt_hold}.")
-        return
-
-    for _, row in display_df.head(15).iterrows():
-        with st.container(border=True):
-            st.caption(f"📅 {row['MATCH_DATE_FULL'].strftime('%d. %b %Y')} | 🏟️ {row['VENUE_LONGNAME']}")
+    # --- 3. KOMPAKT LISTE-VISNING ---
+    for _, row in display_df.head(20).iterrows():
+        h_name = row['CONTESTANTHOME_NAME']
+        a_name = row['CONTESTANTAWAY_NAME']
+        h_logo = logos.get(h_name, "")
+        a_logo = logos.get(a_name, "")
+        
+        # Vi bygger overskriften på expanderen (Den "lukkede" bar)
+        score_display = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS"
+        dato = row['MATCH_DATE_FULL'].strftime('%d/%m')
+        
+        # Selve expander-titlen skal være kort og præcis
+        label = f"{dato} | {h_name} {score_display} {a_name}"
+        
+        with st.expander(label):
+            # --- DETTE VISES NÅR DEN ÅBNES ---
+            st.caption(f"🏟️ {row['VENUE_LONGNAME']} | 📅 {row['MATCH_DATE_FULL'].strftime('%H:%M - %d. %B %Y')}")
             
             c1, c2, c3 = st.columns([2, 1, 2])
             
             # Hjemmehold
-            h_name = row['CONTESTANTHOME_NAME']
-            h_logo = logos.get(h_name, "")
-            c1.image(h_logo, width=50) if h_logo else c1.write("⚽")
-            # Highlight hvis det er det valgte hold
-            h_label = f":red[{h_name}]" if h_name == valgt_hold else h_name
-            c1.subheader(h_label)
-
-            # Score / VS
-            if row['MATCH_STATUS'] == 'Played':
-                score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
-                c2.markdown(f"<h2 style='text-align:center; background:#1e1e1e; color:white; border-radius:10px;'>{score}</h2>", unsafe_allow_html=True)
-            else:
-                c2.markdown("<h2 style='text-align:center; padding-top:10px;'>VS</h2>", unsafe_allow_html=True)
+            with c1:
+                if h_logo: st.image(h_logo, width=40)
+                st.subheader(h_name)
+            
+            # Score/Info i midten
+            with c2:
+                st.markdown(f"<h1 style='text-align:center;'>{score_display}</h1>", unsafe_allow_html=True)
+                if row['ATTENDANCE'] > 0:
+                    st.write(f"<p style='text-align:center; font-size:12px;'>👥 {int(row['ATTENDANCE']):,}</p>", unsafe_allow_html=True)
 
             # Udehold
-            a_name = row['CONTESTANTAWAY_NAME']
-            a_logo = logos.get(a_name, "")
-            c3.image(a_logo, width=50) if a_logo else c3.write("⚽")
-            a_label = f":red[{a_name}]" if a_name == valgt_hold else a_name
-            c3.subheader(a_label)
+            with c3:
+                if a_logo: st.image(a_logo, width=40)
+                st.subheader(a_name)
 
-            # --- DATA EXPANDER ---
-            if row['MATCH_STATUS'] == 'Played':
-                with st.expander("📊 Se Opta Kamp-data"):
-                    st.write("**Statistik for kampen**")
-                    # Her kan vi indsætte xG og Possession bars senere
-                    st.progress(0.5, text="Boldbesiddelse (Simuleret 50/50)")
+            # --- OPTA STATS BARER ---
+            if status_filter == 'Played':
+                st.divider()
+                st.markdown("#### 📊 Kampstatistik (Opta)")
+                
+                # Eksempel: Boldbesiddelse
+                st.write("**Boldbesiddelse %**")
+                # Her indsætter vi rigtige Opta-stats senere
+                st.progress(0.55, text=f"{h_name} 55% - 45% {a_name}")
+                
+                # Eksempel: xG Metrics
+                col_xg1, col_xg2 = st.columns(2)
+                col_xg1.metric("xG (Expected Goals)", "1.84", delta="Hjemme")
+                col_xg2.metric("xG (Expected Goals)", "0.92", delta="Ude", delta_color="inverse")
