@@ -69,6 +69,7 @@ def vis_side(df_raw=None, colors_map=None):
         def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
             fig = go.Figure()
             
+            # Beregn værdier
             y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
             y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
             
@@ -81,7 +82,7 @@ def vis_side(df_raw=None, colors_map=None):
                 marker_color=c1["primary"],
                 marker_line=dict(color=c1["secondary"], width=2),
                 text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
-                textfont=dict(color="white" if c1["primary"] != "#ffffff" else "black")
+                textfont=dict(color="white" if c1["primary"].lower() != "#ffffff" else "black")
             ))
             
             # Søjle Hold 2
@@ -90,18 +91,24 @@ def vis_side(df_raw=None, colors_map=None):
                 marker_color=c2["primary"],
                 marker_line=dict(color=c2["secondary"], width=2),
                 text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
-                textfont=dict(color="white" if c2["primary"] != "#ffffff" else "black")
+                textfont=dict(color="white" if c2["primary"].lower() != "#ffffff" else "black")
             ))
         
+            # Logo-placering (justeret x-offset for at matche de nye mellemrum)
             for i in range(len(labels)):
                 if n1 in logo_map:
-                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
                 if n2 in logo_map:
-                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.18, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
 
             fig.update_layout(
-                barmode='group', height=400, margin=dict(t=100, b=40, l=10, r=10),
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                barmode='group', 
+                bargap=0.3,       # Mellemrum mellem grupperne (f.eks. mellem 'Point' og 'Sejre')
+                bargroupgap=0.1,  # Det specifikke mellemrum mellem de to barer i gruppen
+                height=400, 
+                margin=dict(t=100, b=40, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
                 yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
             )
