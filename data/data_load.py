@@ -7,20 +7,40 @@ from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 
 # --- 1. CENTRAL KONFIGURATION (Flyttet fra season_show) ---
-VALGT_LIGA = "Betinia Ligaen"
-SEASONNAME = "2025/2026"
-TEAM_WYID = 7490
+# --- 1. VALG AF LIGA (Nu med Snowflake-navne) ---
+VALGT_LIGA = "1. Division"  # Tidligere "Betinia Ligaen"
+TOURNAMENTCALENDAR_NAME = "2025/2026"
 
+# --- 2. TURNERING MAPPING (Opdateret til Snowflake-navne) ---
 COMPETITIONS = {
-    "Betinia Ligaen": {"wyid": 328, "opta_uuid": "6ifaeunfdelecgticvxanikzu"},
-    "3F Superliga": {"wyid": 335, "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n"},
-    "2. division": {"wyid": 329, "opta_uuid": None},
-    "3. division": {"wyid": 43319, "opta_uuid": None},
-    "Oddset Pokalen": {"wyid": 331, "opta_uuid": None},
-    "U19 Ligaen": {"wyid": 1305, "opta_uuid": None}
+    "1. Division": {
+        "wyid": 328, 
+        "opta_name": "1. Division" # Vi bruger navnet i stedet for UUID
+    },
+    "Superliga": {
+        "wyid": 335, 
+        "opta_name": "Superliga"
+    },
+    "2. division": {
+        "wyid": 329, 
+        "opta_uuid": None
+    },
+    "3. division": {
+        "wyid": 43319, 
+        "opta_uuid": None
+    },
+    "Oddset Pokalen": {
+        "wyid": 331, 
+        "opta_uuid": None
+    },
+    "U19 Ligaen": {
+        "wyid": 1305, 
+        "opta_uuid": None
+    }
 }
 
-OPTA_COMP_UUID = COMPETITIONS[VALGT_LIGA]["opta_uuid"]
+# --- 3. HENT FILTER ---
+OPTA_LIGA_NAVN = COMPETITIONS[VALGT_LIGA]["opta_name"]
 COMPETITION_WYID = (COMPETITIONS[VALGT_LIGA]["wyid"],)
 
 TEAM_COLORS = {
