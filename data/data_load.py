@@ -117,9 +117,6 @@ def get_data_package():
     # B. HENT DATA
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
-    
-    # Logo query (Brug din nye query nøgle)
-    # Sørg for at "team_logos" er defineret i din query-fil
     df_logos_raw = load_snowflake_query("team_logos", None, None)
     
     # Wyscout queries
@@ -127,11 +124,12 @@ def get_data_package():
     df_playerstats = load_snowflake_query("playerstats", comp_filter, wy_season_filter)
     df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
 
-    # Byg logo_map med TEAM_WYID som nøgle (Sikrere end navne)
+    # C. BYG LOGO_MAP (LØSNINGEN PÅ DIT PROBLEM)
     logo_map = {}
     if not df_logos_raw.empty:
-        # Vi mapper TEAM_WYID -> TEAM_LOGO (URL)
-        logo_map = {row['TEAM_WYID']: row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows()}
+        # Vi tvinger TEAM_WYID til at være en INT (heltal)
+        # Dette sikrer, at 7490.0 bliver til 7490, så det matcher din TEAMS mapping
+        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows()}
 
     return {
         "players": df_sql_players,
@@ -139,7 +137,7 @@ def get_data_package():
         "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
-        "logo_map": logo_map,
+        "logo_map": logo_map, # Nu med rene heltal som nøgler!
         "VALGT_LIGA": VALGT_LIGA,
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS
