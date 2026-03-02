@@ -108,10 +108,9 @@ def get_queries(comp_filter, season_filter):
                 s.SHOTISGOAL,
                 s.SHOTXG,
                 m.MATCHLABEL,
-                e.TEAM_WYID
+                c.TEAM_WYID
             FROM {DB}.WYSCOUT_MATCHEVENTS_COMMON c
             INNER JOIN {DB}.WYSCOUT_MATCHEVENTS_SHOTS s ON c.EVENT_WYID = s.EVENT_WYID
-            INNER JOIN {DB}.WYSCOUT_MATCHDETAIL_BASE e ON c.MATCH_WYID = e.MATCH_WYID AND c.TEAM_WYID = e.TEAM_WYID
             INNER JOIN {DB}.WYSCOUT_MATCHES m ON c.MATCH_WYID = m.MATCH_WYID
             WHERE m.COMPETITION_WYID IN {comp_filter}
             AND m.SEASON_WYID IN (
