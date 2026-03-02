@@ -59,7 +59,7 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE t.COMPETITION_WYID IN {comp_filter} AND s.SEASONNAME {season_filter}
         """,
 
-        # --- 5. OPTA KAMPE ---
+        # --- 5. OPTA KAMPE (Hårdkodet for at eliminere fejl) ---
         "opta_matches": f"""
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_DATE_FULL, STATUS,
@@ -70,14 +70,14 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             ORDER BY MATCH_DATE_FULL DESC
         """,
         
-        # --- 6. OPTA STATS ---
+        # --- 6. OPTA STATS (Skal pege på de samme hårde ID'er) ---
         "opta_match_stats": f"""
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL, STAT_FH, STAT_SH
-            FROM {DB}.OPTA_MATCHSTATS
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (
-                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-                AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
+                SELECT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
+                WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu' 
+                AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
             )
         """,
 
