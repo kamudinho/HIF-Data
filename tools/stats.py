@@ -10,6 +10,23 @@ except ImportError:
     SEASONNAME = "Aktuel Sæson"
 
 def vis_side(spillere, player_stats_sn):
+    # --- DEBUG SEKTION ---
+    st.subheader("🔍 Data Debugger")
+    if player_stats_sn is None:
+        st.error("Data er helt tom (None). Tjek din Snowflake forbindelse.")
+        return
+    
+    st.write(f"Antal rækker fundet: {len(player_stats_sn)}")
+    
+    if not player_stats_sn.empty:
+        st.write("Tilgængelige kolonner fra Snowflake:", list(player_stats_sn.columns))
+        st.write("Første 5 rækker af rå data:", player_stats_sn.head(5))
+    
+    # Stop her midlertidigt for at se hvad der sker
+    if st.checkbox("Stop her for at se rå data"):
+        st.stop()
+    # ----------------------
+    
     # --- 1. CSS INJECTION (Layout & Centrering) ---
     st.markdown("""
         <style>
