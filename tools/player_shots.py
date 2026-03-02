@@ -24,6 +24,7 @@ def vis_side(df_spillere=None, hold_map=None):
         return
 
     # --- 1. HENT DATA FRA SNOWFLAKE ---
+    # Vi bruger et unikt navn til cachen for denne side (shotevents_data)
     if "shotevents_data" not in st.session_state:
         with st.spinner("Henter skud fra Snowflake..."):
             c_f = dp.get("comp_filter")
@@ -31,17 +32,32 @@ def vis_side(df_spillere=None, hold_map=None):
             
             df_raw = load_snowflake_query("shotevents", c_f, s_f)
             
+            # SIKKERHEDS-CHECK: Er data hentet og er de ikke tomme?
             if df_raw is not None and not df_raw.empty:
-                # Tving altid Snowflake-kolonner til STORE bogstaver
                 df_raw.columns = [str(c).upper().strip() for c in df_raw.columns]
-                # Rens ID'er så de er string (f.eks. "7490")
-                df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
-            st.session_state["shotevents_data"] = df_raw
+                
+                # Tjek om kolonnen rent faktisk findes før vi renser den
+                if 'PLAYER_WYID' in df_raw.columns:
+                    df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+                
+                st.session_state["shotevents_data"] = df_raw
+            else:
+                # Gem en tom dataframe, så appen ikke prøver at hente igen og igen
+                st.session_state["shotevents_data"] = pd.DataFrame()
         st.rerun()
 
-    df_shots = st.session_state["shotevents_data"]
+    # Hent fra cache
+    df_shots = st.session_state.get("shotevents_data", pd.DataFrame())
     df_csv_trup = df_spillere if df_spillere is not None else dp.get("players")
+
+    # --- 2. STOP-KNAP (Hvis data mangler, stopper vi her uden fejl) ---
+    if df_shots.empty:
+        st.info("Ingen afslutninger fundet i databasen for den valgte periode.")
+        return
+
+    if 'PLAYER_WYID' not in df_shots.columns:
+        st.error("Systemfejl: Kolonnen 'PLAYER_WYID' blev ikke fundet i data fra Snowflake.")
+        return
 
     if df_shots is None or df_csv_trup is None:
         st.warning("Data mangler fra enten Snowflake eller din spillerliste.")
