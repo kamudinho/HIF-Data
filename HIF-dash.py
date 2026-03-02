@@ -90,13 +90,13 @@ with st.sidebar:
     
     sel = ""
     if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
+        sel = option_menu(None, options=["Oversigt", "Forecast"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "HIF ANALYSE":
         sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Holdoversigt", "Spillerstats", "Kampe"], 
+        sel = option_menu(None, options=[""Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
@@ -118,12 +118,6 @@ try:
         elif sel == "Forecast":
             import tools.squad as sq
             sq.vis_side(dp["players"])
-        elif sel == "Spillerstats":
-            import tools.stats as st_tool
-            st_tool.vis_side(dp["players"], dp["playerstats"])
-        elif sel == "Top 5":
-            import tools.top5 as t5
-            t5.vis_side(dp["players"], dp["playerstats"])
 
     # --- HIF ANALYSE SEKTION ---
     elif hoved_omraade == "HIF ANALYSE":
@@ -139,13 +133,7 @@ try:
 
     # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Holdoversigt":
-            import tools.test.test_teams as tt
-            tt.vis_side(dp["team_stats_full"], dp["colors"])
-        elif sel == "Spillerstats":
-            import tools.test.test_players as tp
-            tp.vis_side(dp["players"], dp["playerstats"])
-        elif sel == "Kampe":
+        if sel == "Kampe":
             import tools.test.test_matches as tm
             tm.vis_side()
 
