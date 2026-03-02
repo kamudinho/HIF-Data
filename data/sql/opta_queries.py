@@ -9,6 +9,5 @@ def get_opta_queries(opta_comp_uuid=None):
     return {
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO
-            LIMIT 100
         """
     }
