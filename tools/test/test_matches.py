@@ -62,36 +62,42 @@ def vis_side():
 
         with col_m:
             with st.expander(f"{h_name}   {score_text}   {a_name}"):
-                h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
-                a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
-
-                if status_filter == 'Played' and not df_stats.empty and h_uuid:
-                    st.write("") 
+                # --- INDE I DIN EXPANDER ---
+            h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
+            a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
+            
+            if status_filter == 'Played' and not df_stats.empty:
+                st.write("") 
+                
+                # Her bruger vi de korrekte nøgler fra din rå data (Stat_Type)
+                stats_list = [
+                    ('totalScoringAtt', 'Skud total', False),
+                    ('ontargetScoringAtt', 'Skud på mål', False),
+                    ('wonCorners', 'Hjørnespark', False),
+                    ('totalPass', 'Afleveringer', False),
+                    ('possessionPercentage', 'Besiddelse %', True)
+                ]
+            
+                for key, label, is_float in stats_list:
+                    # Filtrer data for denne kamp og de to hold
+                    h_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == h_uuid) & (df_stats['STAT_TYPE'] == key)]
+                    a_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == a_uuid) & (df_stats['STAT_TYPE'] == key)]
                     
-                    stats_list = [
-                        ('expectedGoals', 'Expected Goals (xG)', True),
-                        ('totalShots', 'Skud total', False),
-                        ('shotsOnTarget', 'Skud på mål', False),
-                        ('bigChancesTotal', 'Store chancer', False),
-                        ('possessionPercentage', 'Besiddelse %', False)
-                    ]
-
-                    for key, label, is_float in stats_list:
-                        # FILTRERING OG KONVERTERING TIL TAL (FIXER FEJLEN)
-                        h_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == h_uuid) & (df_stats['STAT_TYPE'] == key)]
-                        a_rows = df_stats[(df_stats['MATCH_OPTAUUID'] == m_id) & (df_stats['CONTESTANT_OPTAUUID'] == a_uuid) & (df_stats['STAT_TYPE'] == key)]
-                        
-                        # pd.to_numeric sikrer at vi ikke prøver at formatere en string
-                        h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').sum() if not h_rows.empty else 0
-                        a_val = pd.to_numeric(a_rows['STAT_TOTAL'], errors='coerce').sum() if not a_rows.empty else 0
-                        
-                        fmt = "{:.2f}" if is_float else "{:.0f}"
-                        
-                        s1, s2, s3 = st.columns([1, 2, 1])
-                        # Vi bruger .format() her for at være helt sikker på typen
-                        s1.markdown(f"<div class='stat-val'>{fmt.format(float(h_val))}</div>", unsafe_allow_html=True)
-                        s2.markdown(f"<div class='stat-label'>{label}</div>", unsafe_allow_html=True)
-                        s3.markdown(f"<div class='stat-val' style='text-align:right;'>{fmt.format(float(a_val))}</div>", unsafe_allow_html=True)
-                else:
-                    st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Ingen detaljeret data tilgængelig.")
+                    # Konverter til tal (STAT_TOTAL er din kolonne)
+                    h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').sum() if not h_rows.empty else 0
+                    a_val = pd.to_numeric(a_rows['STAT_TOTAL'], errors='coerce').sum() if not a_rows.empty else 0
+                    
+                    # Særlig håndtering af besiddelse (vi tager gennemsnittet hvis der er flere rækker)
+                    if key == 'possessionPercentage':
+                        h_val = pd.to_numeric(h_rows['STAT_TOTAL'], errors='coerce').mean() if not h_rows.empty else 0
+                        a_val = 100 - h_val if h_val > 0 else 0
+            
+                    fmt = "{:.1f}" if is_float else "{:.0f}"
+                    
+                    s1, s2, s3 = st.columns([1, 2, 1])
+                    s1.markdown(f"<div class='stat-val'>{fmt.format(h_val)}</div>", unsafe_allow_html=True)
+                    s2.markdown(f"<div class='stat-label'>{label}</div>", unsafe_allow_html=True)
+                    s3.markdown(f"<div class='stat-val' style='text-align:right;'>{fmt.format(a_val)}</div>", unsafe_allow_html=True)
+            else:
+                st.caption(f"🏟️ {row['VENUE_LONGNAME']} | Ingen detaljeret data fundet.")
         st.divider()
