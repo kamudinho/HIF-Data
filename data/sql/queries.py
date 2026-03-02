@@ -66,7 +66,7 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
                 TOURNAMENTCALENDAR_NAME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDAY
             FROM {DB}.OPTA_MATCHINFO
             WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-            AND TOURNAMENTCALENDAR_NAME = '2025/2026'
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}' 
             ORDER BY MATCH_DATE_FULL DESC
         """,
         
@@ -77,18 +77,19 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
             WHERE MATCH_OPTAUUID IN (
                 SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
-                AND TOURNAMENTCALENDAR_NAME = '2025/2026'
+                AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
             )
         """,
 
-        # --- 7. PHYSICAL SPLITS (Second Spectrum - Bruger Opta UUID kobling) ---
+        # --- 7. PHYSICAL SPLITS ---
         "physical_splits": f"""
             SELECT MATCH_SSIID, TEAM_OPTAID, TEAM_NAME, PHYSICAL_METRIC_TYPE, 
                    MINUTE_SPLIT, MINUTE_ARRAY_INDEX, PHYSICAL_METRIC_VALUE
             FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_TEAMS
             WHERE MATCH_SSIID IN (
                 SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' AND TOURNAMENTCALENDAR_NAME {season_filter}
+                WHERE COMPETITION_OPTAUUID = '{opta_comp_uuid}' 
+                AND TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
             )
             ORDER BY MATCH_SSIID, TEAM_OPTAID, PHYSICAL_METRIC_TYPE, MINUTE_ARRAY_INDEX
         """,
