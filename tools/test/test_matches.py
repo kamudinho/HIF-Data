@@ -8,7 +8,7 @@ def vis_side():
     logos = dp.get("logo_map", {})
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
 
-    # --- CSS (Nu med 'cursor: help' for at vise man kan hover) ---
+    # --- CSS ---
     hif_rod = "#df003b"
     st.markdown(f"""
         <style>
@@ -39,25 +39,21 @@ def vis_side():
         st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
         return
 
-    col_f1, col_f2 = st.columns([2, 1])
-    with col_f1:
-        valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()))
-        valgt_uuid = liga_hold_options[valgt_navn]
-    with col_f2:
-        view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
+    # Hold-vælger øverst
+    valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()))
+    valgt_uuid = liga_hold_options[valgt_navn]
 
     # --- 2. DATA FILTRERING ---
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | \
            (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
 
-    # --- 3. STATS BEREGNING (Med hover-logik) ---
+    # --- 3. STATS BEREGNING ---
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0, "form": []}
     
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        # Find modstander
         opp_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
         opp_name = id_to_name.get(opp_uuid, m['CONTESTANTAWAY_NAME'] if is_h else m['CONTESTANTHOME_NAME'])
         
@@ -67,7 +63,6 @@ def vis_side():
             stats["K"] += 1
             stats["M+"] += h_s if is_h else a_s
             stats["M-"] += a_s if is_h else h_s
-            
             diff = h_s - a_s if is_h else a_s - h_s
             res_label = f"{h_s}-{a_s}"
             
@@ -84,13 +79,9 @@ def vis_side():
 
     # --- 4. VIS STATS BAR ---
     c = st.columns([1.5, 0.6, 0.6, 0.6, 0.6, 0.8, 0.8, 0.8])
-    
     with c[0]:
         st.markdown("<div class='stat-label'>Form (Sidste 5)</div>", unsafe_allow_html=True)
-        form_html = "".join([
-            f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" 
-            for f in stats["form"][-5:]
-        ])
+        form_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
         st.markdown(f"<div class='form-container'>{form_html}</div>", unsafe_allow_html=True)
     
     stats_list = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
@@ -99,18 +90,20 @@ def vis_side():
 
     st.divider()
 
-    # --- 5. KAMPOVERSIGT ---
-    status_filter = 'Played' if view_type == "Spillede" else 'Fixture'
-    display_matches = team_matches[team_matches['MATCH_STATUS'] == status_filter].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
+    # --- 5. TABS TIL KAMPOVERSIGT ---
+    tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
 
-    if display_matches.empty:
-        st.info(f"Ingen {view_type.lower()} kampe fundet.")
-    else:
+    # Hjælpefunktion til at tegne kampene for at undgå dobbelt kode
+    def tegn_kampe(matches, is_played):
+        if matches.empty:
+            st.info("Ingen kampe fundet.")
+            return
+
         danske_dage = {"Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG", "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"}
         danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
 
         current_date = None
-        for _, row in display_matches.iterrows():
+        for _, row in matches.iterrows():
             d = pd.to_datetime(row['MATCH_DATE_FULL'])
             match_date = f"{danske_dage.get(d.strftime('%A'), d.strftime('%A'))} D. {d.day}. {danske_maaneder.get(d.strftime('%B'), d.strftime('%B'))}".upper()
             
@@ -124,19 +117,29 @@ def vis_side():
             col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
             with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
             with col2: 
-                h_logo = logos.get(h_name); 
+                h_logo = logos.get(h_name)
                 if h_logo: st.image(h_logo, width=25)
+            
             with col3:
-                if status_filter == 'Played':
+                if is_played:
                     h_s = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
                     a_s = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
                     st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
                     st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+
             with col4: 
-                a_logo = logos.get(a_name); 
+                a_logo = logos.get(a_name)
                 if a_logo: st.image(a_logo, width=25)
             with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
+
+    with tab_played:
+        df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
+        tegn_kampe(df_p, True)
+
+    with tab_fixtures:
+        df_f = team_matches[team_matches['MATCH_STATUS'] == 'Fixture'].sort_values('MATCH_DATE_FULL', ascending=True)
+        tegn_kampe(df_f, False)
 
     st.markdown("<div style='margin-bottom: 80px;'></div>", unsafe_allow_html=True)
