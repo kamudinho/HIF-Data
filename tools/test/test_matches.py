@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-def vis_side(df_raw=None): # Vi tager imod df_raw som de andre sider
-    # --- 1. DATA INITIALISERING ---
+def vis_side(df_raw=None):
     if "dp" not in st.session_state:
         st.error("Data pakken 'dp' ikke fundet.")
         return
@@ -10,15 +9,19 @@ def vis_side(df_raw=None): # Vi tager imod df_raw som de andre sider
     dp = st.session_state["dp"]
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logo_map = dp.get("logo_map", {})
-    
-    # Debug: Hvis du er i tvivl om UUID, kan vi printe den (fjern efter test)
-    # st.write(f"Søger efter kampe for: Hvidovre")
+
+    # DEBUG INFO I SIDEBAR
+    st.sidebar.write("### Debug Info")
+    st.sidebar.write(f"Antal rækker i df_matches: {len(df_matches)}")
+    if not df_matches.empty:
+        st.sidebar.write("Sæsoner fundet:", df_matches['TOURNAMENTCALENDAR_NAME'].unique())
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet i Opta-feedet. Tjek om 'opta_matches' er loadet i data_load.py")
+        st.warning(f"Ingen kampdata fundet for Opta ID: {dp.get('OP_UUID')}")
+        st.info("Tjek om TOURNAMENTCALENDAR_NAME matcher '2025/2026' i Snowflake.")
         return
 
-    # Sørg for at kolonnenavne er konsistente
+    # Resten af din kode fortsætter her...
     df_matches.columns = [c.upper() for c in df_matches.columns]
 
     st.markdown(f"## 🗓️ Kampprogram & Resultater")
