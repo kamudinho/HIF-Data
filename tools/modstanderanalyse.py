@@ -7,8 +7,12 @@ from mplsoccer import VerticalPitch
 from data.data_load import load_snowflake_query
 
 def vis_side(df_team_matches, hold_map, df_events=None):
-    st.markdown('<div class="custom-header"><h3>Modstanderanalyse</h3></div>', unsafe_allow_html=True)
-
+    # --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">MODSTANDERANALYSE</h3>
+        </div>
+    """, unsafe_allow_html=True)
     # --- AUTOMATISK DATA INDLÆSNING ---
     # Vi tjekker om vi allerede har data. Hvis ikke, henter vi det uden at spørge.
     if "events_data" not in st.session_state:
