@@ -1,10 +1,8 @@
-# data/sql/opta_queries.py
+#data/sql/opta_queries.py
 
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Vi bruger UUID'er her, da COMPETITION_NAME ikke findes i EVENTS tabellen
-    # Tip: Hvis du vil køre den helt bredt først, så fjern WHERE linjen
     return {
         "opta_player_stats": f"""
             SELECT 
@@ -14,14 +12,18 @@ def get_opta_queries(liga_navn, saeson_navn):
                 SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS,
                 SUM(CASE WHEN EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS PASSES,
                 SUM(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS SUCCESSFULPASSES,
-                -- Vi tæller skud (Type 13, 14, 15, 16)
                 SUM(CASE WHEN EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) AS SHOTS,
-                -- Vi tager max tid for at estimere minutter (da det er event-baseret)
-                MAX(EVENT_TIMEMIN) AS MINUTESONFIELD 
+                MAX(EVENT_TIMEMIN) AS MINUTESONFIELD,
+                -- Tilføj placeholders for at undgå KeyError i stats.py
+                0 AS ASSISTS,
+                0 AS XGSHOT,
+                0 AS TOUCHINBOX,
+                0 AS PROGRESSIVEPASSES,
+                0 AS DUELS,
+                0 AS DUELSWON
             FROM {DB}.OPTA_EVENTS
             WHERE PLAYER_OPTAUUID IS NOT NULL
             GROUP BY 1, 2
-            ORDER BY GOALS DESC
         """,
         
         "opta_matches": f"""
