@@ -4,9 +4,11 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side():
     dp = st.session_state.get("dp", {})
-    # Vi sikrer os at vi arbejder med det rå data du sendte
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
+    
+    # Hent valgt liga fra pakken for at sikre match med TEAMS
+    valgt_liga_global = dp.get("VALGT_LIGA", "1. Division")
 
     # --- CSS ---
     hif_rod = "#df003b"
@@ -23,10 +25,18 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. FILTRE ---
-    # Vi bruger 'opta_uuid' fra din TEAMS definition
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "Betinia Ligaen"}
+    # --- 1. FILTRE & OVERSÆTTER ---
+    # Vi bygger en ordbog der mapper Opta UUID -> Dit Navn fra team_mapping.py
+    # Dette er "broen" der sikrer at logoer findes.
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
     
+    # Filtrer hold baseret på den valgte liga (1. Division / Superliga)
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    
+    if not liga_hold_options:
+        st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
+        return
+
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()))
@@ -35,7 +45,6 @@ def vis_side():
         view_type = st.segmented_control("Vis", ["Spillede", "Kommende"], default="Spillede")
 
     # --- 2. DATA FILTRERING ---
-    # Vi matcher på de UUID kolonner der findes i dit datasæt
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | \
            (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
@@ -46,15 +55,12 @@ def vis_side():
     
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        # Vi bruger TOTAL_HOME_SCORE og TOTAL_AWAY_SCORE fra dit feed
         try:
             h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
             a_s = int(m['TOTAL_AWAY_SCORE']) if pd.notnull(m['TOTAL_AWAY_SCORE']) else 0
-            
             stats["K"] += 1
             stats["M+"] += h_s if is_h else a_s
             stats["M-"] += a_s if is_h else h_s
-            
             diff = h_s - a_s if is_h else a_s - h_s
             if diff > 0: stats["S"] += 1; stats["form"].append("win")
             elif diff == 0: stats["U"] += 1; stats["form"].append("draw")
@@ -85,21 +91,33 @@ def vis_side():
 
     current_date = None
     for _, row in display_matches.iterrows():
-        # Formatering af dato
         d = pd.to_datetime(row['MATCH_DATE_FULL'])
         match_date = d.strftime('%A d. %d. %B').upper()
         if match_date != current_date:
             st.markdown(f"<div class='date-header'>{match_date}</div>", unsafe_allow_html=True)
             current_date = match_date
 
+        # Brug UUID til at finde DIT navn fra mapping, så logoet kan findes
+        h_name = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
+        a_name = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
+
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-        with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{row['CONTESTANTHOME_NAME']}</div>", unsafe_allow_html=True)
-        with col2: st.image(logos.get(row['CONTESTANTHOME_NAME'], ""), width=25)
+        with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
+        
+        # SIKKER LOGO VISNING: Tjekker om URL findes før st.image kaldes
+        with col2: 
+            h_logo = logos.get(h_name)
+            if h_logo: st.image(h_logo, width=25)
+            
         with col3:
             if status_filter == 'Played':
                 res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{d.strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
-        with col4: st.image(logos.get(row['CONTESTANTAWAY_NAME'], ""), width=25)
-        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{row['CONTESTANTAWAY_NAME']}</div>", unsafe_allow_html=True)
+        
+        with col4: 
+            a_logo = logos.get(a_name)
+            if a_logo: st.image(a_logo, width=25)
+            
+        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
