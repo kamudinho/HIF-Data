@@ -60,6 +60,7 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
         """,
 
         # --- 5. OPTA TABEL DATA ---
+        # --- 5. OPTA MATCHES (RETTET TIL STREAMLIT) ---
         "opta_matches": f"""
             SELECT 
                 m.MATCH_OPTAUUID,
@@ -68,15 +69,22 @@ def get_queries(comp_filter, season_filter, opta_comp_uuid=None):
                 m.CONTESTANTAWAY_NAME,
                 m.TOTAL_HOME_SCORE, 
                 m.TOTAL_AWAY_SCORE, 
+                m.STATUS,
+                m.MATCHDAY,  -- <--- DENNE SKAL VÆRE HER!
                 m.TOURNAMENTCALENDAR_NAME,
+                m.CONTESTANTHOME_OPTAUUID,
+                m.CONTESTANTAWAY_OPTAUUID,
+                -- Vi tager stats med som HOME_POSS og AWAY_POSS så Python ikke skal merge
                 MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS HOME_POSS,
                 MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' AND s.CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN s.STAT_TOTAL ELSE 0 END) AS AWAY_POSS
             FROM {DB}.OPTA_MATCHINFO m
             LEFT JOIN {DB}.OPTA_MATCHSTATS s ON m.MATCH_OPTAUUID = s.MATCH_OPTAUUID
-            WHERE m.COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+            WHERE m.COMPETITION_OPTAUUID = '{opta_comp_uuid if opta_comp_uuid else '6ifaeunfdelecgticvxanikzu'}'
+              AND m.TOURNAMENTCALENDAR_OPTAUUID = '{season_filter}'
             GROUP BY 
                 m.MATCH_OPTAUUID, m.MATCH_DATE_FULL, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
-                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.TOURNAMENTCALENDAR_NAME
+                m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, m.STATUS, m.MATCHDAY, m.TOURNAMENTCALENDAR_NAME,
+                m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
             ORDER BY m.MATCH_DATE_FULL DESC
         """,
         
