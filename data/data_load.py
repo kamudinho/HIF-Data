@@ -135,5 +135,5 @@ def get_data_package():
         "VALGT_LIGA": VALGT_LIGA,
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS,
-        "logo_map": {row['TEAMNAME']: row['IMAGEDATAURL'] for _, row in df_team_stats.iterrows()} if not df_team_stats.empty else {}
+        "logo_map": {row['TEAM_WYID']: row['IMAGEDATAURL'] for _, row in df_team_stats.iterrows()} if not df_team_stats.empty else {}
     }
