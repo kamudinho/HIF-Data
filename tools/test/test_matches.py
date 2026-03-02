@@ -6,7 +6,15 @@ def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
 
-    st.markdown("### 🏟️ Match Center: 1. Division")
+# --- 2. FARVER & KONSTANTER ---
+hif_rod = "#df003b"
+
+     # --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">BETINIA LIGAEN: KAMPOVERSIGT</h3>
+        </div>
+    """, unsafe_allow_html=True)
 
     # --- 1. FILTRE ---
     view_type = st.segmented_control("Status", ["Spillede", "Kommende"], default="Spillede")
