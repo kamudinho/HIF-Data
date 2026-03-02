@@ -3,7 +3,6 @@
 def get_opta_queries(liga_navn, saeson_navn):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Prøv at fjerne saeson_navn midlertidigt for at se om der overhovedet er data
     return {
         "opta_player_stats": f"""
             SELECT 
