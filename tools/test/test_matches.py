@@ -94,29 +94,37 @@ def vis_side():
         "Monday": "MANDAG", "Tuesday": "TIRSDAG", "Wednesday": "ONSDAG",
         "Thursday": "TORSDAG", "Friday": "FREDAG", "Saturday": "LØRDAG", "Sunday": "SØNDAG"
     }
+    
+    danske_maaneder = {
+        "January": "januar", "February": "februar", "March": "marts", "April": "april",
+        "May": "maj", "June": "juni", "July": "juli", "August": "august",
+        "September": "september", "October": "oktober", "November": "november", "December": "december"
+    }
 
     current_date = None
     for _, row in display_matches.iterrows():
-        # Formatering af dato til dansk ugedag
+        # 1. Hent engelske navne
         d = pd.to_datetime(row['MATCH_DATE_FULL'])
         eng_dag = d.strftime('%A')
-        dag_navn = danske_dage.get(eng_dag, eng_dag)
+        eng_maaned = d.strftime('%B')
         
-        match_date = f"{dag_navn} D. {d.strftime('%d. %B')}".upper()
+        # 2. Oversæt via ordbøger
+        dag_navn = danske_dage.get(eng_dag, eng_dag)
+        maaned_navn = danske_maaneder.get(eng_maaned, eng_maaned)
+        
+        # 3. Sammensæt den danske streng (f.eks. MANDAG D. 15. MARTS)
+        match_date = f"{dag_navn} D. {d.day}. {maaned_navn}".upper()
         
         if match_date != current_date:
             st.markdown(f"<div class='date-header'>{match_date}</div>", unsafe_allow_html=True)
             current_date = match_date
 
-        # Brug UUID til at finde DIT navn fra mapping
+        # ... resten af dit loop (holdnavne, logoer og MATCH_LOCALTIME) ...
         h_name = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
         a_name = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
 
         col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-        
-        with col1: 
-            st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
-        
+        with col1: st.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_name}</div>", unsafe_allow_html=True)
         with col2: 
             h_logo = logos.get(h_name)
             if h_logo: st.image(h_logo, width=25)
@@ -126,14 +134,13 @@ def vis_side():
                 res = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}"
                 st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{res}</span></div>", unsafe_allow_html=True)
             else:
-                # --- BRUGER MATCH_LOCALTIME TIL KOMMENDE KAMPE ---
-                # Vi tager de første 5 tegn af MATCH_LOCALTIME (f.eks. '13:00')
                 tid = str(row['MATCH_LOCALTIME'])[:5] if pd.notnull(row['MATCH_LOCALTIME']) else d.strftime('%H:%M')
                 st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
 
         with col4: 
             a_logo = logos.get(a_name)
             if a_logo: st.image(a_logo, width=25)
+        with col5: st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
         
         with col5: 
             st.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_name}</div>", unsafe_allow_html=True)
