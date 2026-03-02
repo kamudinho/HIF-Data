@@ -6,19 +6,45 @@ def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
     
-    # --- HER SKAL LOGIKKEN IND ---
-    # Vi antager df_stats er din rå liste med possessionPercentage, totalPass osv.
+    # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
     if "opta_stats" in dp:
-        df_stats = dp["opta_stats"]
+        df_raw_stats = dp["opta_stats"]
         
-        # 1. Pivotér stats så hver række er én kamp
-        # Vi omdanner STAT_TYPE til kolonner
-        df_stats_wide = df_stats.pivot(index='MATCH_ID', columns='STAT_TYPE', values='STAT_TOTAL').reset_index()
+        # 1. Pivotér den rå statistik, så vi får kolonner (STAT_TYPE) pr. hold (CONTESTANT_ID)
+        # Dette omdanner de mange rækker til én række pr. hold pr. kamp
+        df_pivot = df_raw_stats.pivot_table(
+            index=['MATCH_ID', 'CONTESTANT_ID'], 
+            columns='STAT_TYPE', 
+            values='STAT_TOTAL', 
+            aggfunc='first'
+        ).reset_index()
+
+        # 2. Forbered hjemme-stats (tilføj _HOME suffix)
+        df_home = df_pivot.copy()
+        cols_stats = [c for c in df_home.columns if c not in ['MATCH_ID', 'CONTESTANT_ID']]
+        df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_stats})
         
-        # 2. Merge det på df_matches
-        # Vi bruger 'left' for at beholde kampe, selvom de ikke har stats endnu (fixtures)
-        df_matches = pd.merge(df_matches, df_stats_wide, left_on='MATCH_OPTAUUID', right_on='MATCH_ID', how='left')
-    # ------------------------------
+        # 3. Forbered ude-stats (tilføj _AWAY suffix)
+        df_away = df_pivot.copy()
+        df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_stats})
+
+        # 4. Merge Hjemme-stats på df_matches (matcher på kamp-id OG hjemmehold-id)
+        df_matches = pd.merge(
+            df_matches, 
+            df_home, 
+            left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
+            right_on=['MATCH_ID', 'CONTESTANT_ID'], 
+            how='left'
+        ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
+
+        # 5. Merge Ude-stats på df_matches (matcher på kamp-id OG udehold-id)
+        df_matches = pd.merge(
+            df_matches, 
+            df_away, 
+            left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
+            right_on=['MATCH_ID', 'CONTESTANT_ID'], 
+            how='left'
+        ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
 
     logos = dp.get("logo_map", {})
     valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
@@ -54,13 +80,11 @@ def vis_side():
         st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
         return
 
-    # Top Bar: Dropdown og Stats
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # Beregn data
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
@@ -82,13 +106,12 @@ def vis_side():
             else: stats["N"] += 1; stats["form"].append({"res":"loss","txt":"N","hover":f"vs. {opp_name} ({res_label})"})
         except: continue
 
-    # Tegn Stats
     stats_display = [("K", stats["K"]), ("S", stats["S"]), ("U", stats["U"]), ("N", stats["N"]), ("M+", stats["M+"]), ("M-", stats["M-"]), ("+/-", stats["M+"]-stats["M-"])]
     for i, (l, v) in enumerate(stats_display):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    st.write("") # Lille afstand
+    st.write("")
 
     # --- 2. HJÆLPEFUNKTION TIL KAMPE ---
     def tegn_kampe(matches, is_played):
@@ -112,7 +135,6 @@ def vis_side():
             a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
 
             with st.container(border=True):
-                # 1. LINJE: LOGOER OG SCORE
                 col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 with col1: st.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{h_n}</div>", unsafe_allow_html=True)
                 with col2: 
@@ -129,13 +151,15 @@ def vis_side():
                     if a_l: st.image(a_l, width=28)
                 with col5: st.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{a_n}</div>", unsafe_allow_html=True)
 
-                # 2. LINJE: STATISTIK FRA DIN DATA (KUN HVIS SPILLET)
                 if is_played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     s_col1, s_col2, s_col3, s_col4, s_col5 = st.columns(5)
                     
                     def stat_box(label, h_val, a_val, is_pct=False):
                         suffix = "%" if is_pct else ""
+                        # Vi bruger .get() for at undgå fejl hvis data mangler
+                        h_val = h_val if pd.notnull(h_val) else 0
+                        a_val = a_val if pd.notnull(a_val) else 0
                         st.markdown(f"""
                             <div style='text-align:center;'>
                                 <div style='font-size:9px; color:#888; text-transform:uppercase;'>{label}</div>
@@ -143,22 +167,13 @@ def vis_side():
                             </div>
                         """, unsafe_allow_html=True)
 
-                    # Mapping af dine specifikke Opta-navne fra listen:
-                    # OBS: Vi antager her at 'row' indeholder de aggregerede TOTAL-værdier.
-                    with s_col1: 
-                        stat_box("Possession", row.get('possessionPercentage_HOME', 0), row.get('possessionPercentage_AWAY', 0), True)
-                    with s_col2: 
-                        stat_box("Passes", row.get('totalPass_HOME', 0), row.get('totalPass_AWAY', 0))
-                    with s_col3: 
-                        # Duels er ofte summen af wonTackle eller en specifik Duel-stat
-                        stat_box("Duels Won", row.get('wonTackle_HOME', 0), row.get('wonTackle_AWAY', 0))
-                    with s_col4: 
-                        # PPDA skal ofte beregnes eller hentes fra en specifik række
-                        stat_box("Scoring Att", row.get('totalScoringAtt_HOME', 0), row.get('totalScoringAtt_AWAY', 0))
-                    with s_col5: 
-                        stat_box("Tackles", row.get('totalTackle_HOME', 0), row.get('totalTackle_AWAY', 0))
-                        
-    # --- 3. TABS OG FORM PÅ SAMME LINJE ---
+                    with s_col1: stat_box("Possession", row.get('possessionPercentage_HOME'), row.get('possessionPercentage_AWAY'), True)
+                    with s_col2: stat_box("Passes", row.get('totalPass_HOME'), row.get('totalPass_AWAY'))
+                    with s_col3: stat_box("Duels Won", row.get('wonTackle_HOME'), row.get('wonTackle_AWAY'))
+                    with s_col4: stat_box("Scoring Att", row.get('totalScoringAtt_HOME'), row.get('totalScoringAtt_AWAY'))
+                    with s_col5: stat_box("Tackles", row.get('totalTackle_HOME'), row.get('totalTackle_AWAY'))
+
+    # --- 3. TABS OG FORM ---
     tab_col, form_col = st.columns([5, 1])
     with tab_col:
         tab_played, tab_fixtures = st.tabs(["Resultater", "Kommende kampe"])
@@ -166,7 +181,6 @@ def vis_side():
         f_html = "".join([f"<span class='form-dot {f['res']}' title='{f['hover']}'>{f['txt']}</span>" for f in stats["form"][-5:]])
         st.markdown(f"<div style='display: flex; justify-content: flex-end; margin-top: 12px;'><div class='form-container'>{f_html}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. INDHOLD I TABS ---
     with tab_played:
         df_p = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False)
         tegn_kampe(df_p, True)
