@@ -35,88 +35,61 @@ def vis_side(spillere, player_stats_sn):
         </div>
     """, unsafe_allow_html=True)
 
-    # --- 3. DATA CHECK & PROCESSERING ---
+    # --- 3. DATA PROCESSERING ---
     if player_stats_sn is None or player_stats_sn.empty:
         st.warning("Ingen statistisk data fundet fra Snowflake.")
         return
 
-    # Klargør dataframes
+    # Klargør dataframes og tving kolonnenavne til UPPERCASE
     s_info = spillere.copy()
     s_stats = player_stats_sn.copy()
     
-    # Tving alle kolonnenavne til UPPERCASE
     s_info.columns = [str(c).upper().strip() for c in s_info.columns]
     s_stats.columns = [str(c).upper().strip() for c in s_stats.columns]
 
-    # --- SIKKERHEDS-CHECK AF KOLONNER ---
-    # Vi tjekker om 'NAVN' findes, ellers prøver vi at finde en kolonne der ligner
-    if 'NAVN' not in s_info.columns:
-        if 'SPILLER' in s_info.columns:
-            s_info = s_info.rename(columns={'SPILLER': 'NAVN'})
-        elif 'PLAYER' in s_info.columns:
-            s_info = s_info.rename(columns={'PLAYER': 'NAVN'})
-        else:
-            st.error(f"Fejl: Kunne ikke finde en navne-kolonne i din CSV. Fundne kolonner: {list(s_info.columns)}")
-            return
-
-    # Vi tjekker om Opta ID findes
+    # Nøglen vi har bekræftet i din CSV
     ID_COL = 'PLAYER_OPTAUUID'
-    if ID_COL not in s_info.columns:
-        st.error(f"Fejl: Kolonnen '{ID_COL}' mangler i din players.csv. Fundne kolonner: {list(s_info.columns)}")
-        return
 
-    # Rens ID'er
+    # Rens ID'er for at sikre match (fjerner hvide felter)
     s_info[ID_COL] = s_info[ID_COL].astype(str).str.strip()
     s_stats[ID_COL] = s_stats[ID_COL].astype(str).str.strip()
 
-    # --- MERGE ---
-    try:
-        df_hif = pd.merge(
-            s_stats, 
-            s_info[[ID_COL, 'NAVN']], 
-            on=ID_COL, 
-            how='inner'
-        ).fillna(0)
-    except KeyError as e:
-        st.error(f"Merge-fejl: Kolonnen {e} blev ikke fundet.")
-        st.write("CSV kolonner:", list(s_info.columns))
-        st.write("Snowflake kolonner:", list(s_stats.columns))
-        return
+    # Merge Snowflake-data med din CSV-info
+    # Vi tager kun de kolonner vi skal bruge fra CSV (ID og NAVN)
+    df_hif = pd.merge(
+        s_stats, 
+        s_info[[ID_COL, 'NAVN']], 
+        on=ID_COL, 
+        how='inner'
+    ).fillna(0)
 
     if df_hif.empty:
-        st.info("Ingen spillere matchet via PLAYER_OPTAUUID.")
-        # Debug hjælp:
-        with st.expander("Tjek ID-match her"):
-            st.write("Første ID i CSV:", s_info[ID_COL].iloc[0] if not s_info.empty else "Ingen")
-            st.write("Første ID i Snowflake:", s_stats[ID_COL].iloc[0] if not s_stats.empty else "Ingen")
+        st.info("Ingen spillere matchet. Tjek om PLAYER_OPTAUUID i din CSV stemmer overens med Snowflake.")
         return
 
     # --- 4. UI KONTROLLER ---
     c1, c2 = st.columns([1, 1], gap="large")
     
-    # Mapper UI til dine Snowflake-kolonner (som de er defineret i din SQL)
+    # Mapper UI-navne til dine Snowflake SQL-aliaser
     kpi_map = {
         "Mål": "GOALS", 
-        "Assists": "ASSISTS", 
-        "xG": "XGSHOT", 
         "Skud": "SHOTS", 
         "Minutter": "MINUTESONFIELD",
-        "Touch i feltet": "TOUCHINBOX",
-        "Prog. Pasninger": "PROGRESSIVEPASSES"
+        "Assists": "ASSISTS"
     }
     
     kpi_med_pct = {
-        "Afleveringer": ("PASSES", "SUCCESSFULPASSES"), 
-        "Dueller": ("DUELS", "DUELSWON")
+        "Afleveringer": ("PASSES", "SUCCESSFULPASSES")
     }
     
     alle_kategorier = list(kpi_map.keys()) + list(kpi_med_pct.keys())
+    # Filtrer så vi kun viser knapper for data der rent faktisk er i Snowflake-sættet
     tilgaengelige = [k for k in alle_kategorier if 
                     (k in kpi_map and kpi_map[k] in df_hif.columns) or 
                     (k in kpi_med_pct and kpi_med_pct[k][0] in df_hif.columns)]
 
     with c1:
-        valgt_kat = st.pills("Vælg KPI", tilgaengelige, default=tilgaengelige[0], label_visibility="collapsed")
+        valgt_kat = st.pills("Statistik", tilgaengelige, default=tilgaengelige[0], label_visibility="collapsed")
     with c2:
         visning = st.segmented_control("Visning", ["Total", "Pr. 90"], default="Total", label_visibility="collapsed")
 
@@ -134,7 +107,7 @@ def vis_side(spillere, player_stats_sn):
             res['VAL'] = (res[stat_col] / res[min_col].replace(0, np.nan) * 90).fillna(0)
         else:
             res['VAL'] = res[stat_col]
-        res['LABEL'] = res['VAL'].apply(lambda x: f"{x:.2f}" if (visning == "Pr. 90" or valgt_kat == "xG") else f"{int(x)}")
+        res['LABEL'] = res['VAL'].apply(lambda x: f"{x:.2f}" if visning == "Pr. 90" else f"{int(x)}")
     else:
         tot_col, suc_col = kpi_med_pct[valgt_kat]
         res = df_final.groupby('NAVN', as_index=False).agg({tot_col: 'sum', suc_col: 'sum', min_col: 'sum'})
@@ -147,13 +120,12 @@ def vis_side(spillere, player_stats_sn):
             res['VAL'] = res[tot_col]
             res['LABEL'] = [f"{int(v)} ({int(p)}%)" for v, p in zip(res['VAL'], pct)]
 
-    # Filtrer spillere uden data og sortér
+    # Sorter og klargør til plot
     df_plot = res[res['VAL'] > 0].sort_values('VAL', ascending=True)
 
     # --- 6. PLOTLY GRAF ---
     h = max(450, (len(df_plot) * 32) + 50)
-    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL', 
-                 labels={'VAL': valgt_kat, 'NAVN': ''})
+    fig = px.bar(df_plot, x='VAL', y='NAVN', orientation='h', text='LABEL')
 
     fig.update_traces(
         marker_color='#df003b' if visning == "Total" else '#333',
@@ -177,19 +149,12 @@ def vis_side(spillere, player_stats_sn):
     
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # --- 7. TABELVISNING ---
+    # --- 7. TABEL ---
     with st.expander("📊 Se datatabel", expanded=False):
-        df_table = df_plot.sort_values('VAL', ascending=False).copy()
-        df_table = df_table.rename(columns={
-            'NAVN': 'Spiller',
-            'VAL': f'{valgt_kat}',
-            'MINUTESONFIELD': 'Minutter'
-        })
-        
-        # Formatering af tabel-visning
-        cols_to_show = ['Spiller', f'{valgt_kat}', 'Minutter']
         st.dataframe(
-            df_table[cols_to_show], 
-            use_container_width=True,
+            df_plot.sort_values('VAL', ascending=False)[['NAVN', 'VAL', 'MINUTESONFIELD']].rename(
+                columns={'NAVN': 'Spiller', 'VAL': valgt_kat, 'MINUTESONFIELD': 'Minutter'}
+            ), 
+            use_container_width=True, 
             hide_index=True
         )
