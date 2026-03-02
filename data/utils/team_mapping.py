@@ -13,7 +13,7 @@ TEAMS = {
     "Hillerød Fodbold": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "league": "Betinia Ligaen"},
     "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "Betinia Ligaen"},
     "B.93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "Betinia Ligaen"},
-    "Middelfart G & BK": {"team_wyid": 7497, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "Betinia Ligaen"},
+    "Middelfart": {"team_wyid": 7497, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "Betinia Ligaen"},
 
     # --- 3F Superliga ---
     "FC København": {"team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "league": "3F Superliga"},
