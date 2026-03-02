@@ -25,20 +25,30 @@ def vis_side():
     
     display_df = df_matches[mask].sort_values('MATCH_DATE_FULL', ascending=(status_filter == 'Fixture'))
 
-    # --- 3. VISNING (Den store klikbare række) ---
+    # --- 3. VISNING (Uden icon-parameter for at undgå crash) ---
     for _, row in display_df.head(15).iterrows():
         h_name = row['CONTESTANTHOME_NAME']
         a_name = row['CONTESTANTAWAY_NAME']
         m_id = row['MATCH_OPTAUUID']
         score = f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}" if status_filter == 'Played' else "VS"
         
-        # Vi bygger en titel-streng uden Markdown (da expander-label ikke støtter kolonner/billeder direkte)
-        # Men vi gør den ren og læselig
-        label = f"{h_name}   {score}   {a_name}"
+        # Vi holder titlen helt simpel for at undgå fejl
+        # Logoer vises først når expanderen åbnes, for at holde baren stabil
+        expander_label = f"{h_name}   {score}   {a_name}"
         
-        # Vi bruger 'icon' til hjemmeholdet for at få billedet helt ud til venstre i baren
-        with st.expander(label, icon=logos.get(h_name)):
-            # Herinde viser vi dataen lynhurtigt og stramt
+        with st.expander(expander_label):
+            # Header inde i expanderen med LOGOER (Nu crasher det ikke!)
+            c_header = st.columns([1, 4, 2, 4, 1])
+            with c_header[0]:
+                if logos.get(h_name): st.image(logos.get(h_name), width=30)
+            with c_header[2]:
+                st.markdown(f"<h3 style='text-align:center; margin:0;'>{score}</h3>", unsafe_allow_html=True)
+            with c_header[4]:
+                if logos.get(a_name): st.image(logos.get(a_name), width=30)
+            
+            st.divider()
+
+            # --- OPTA DATA SEKTION ---
             if status_filter == 'Played' and not df_stats.empty:
                 h_uuid = TEAMS.get(h_name, {}).get('opta_uuid')
                 a_uuid = TEAMS.get(a_name, {}).get('opta_uuid')
@@ -48,21 +58,19 @@ def vis_side():
                                     (df_stats['CONTESTANT_OPTAUUID'] == t_uuid) & 
                                     (df_stats['STAT_TYPE'] == s_type)]['STAT_TOTAL'].sum()
 
-                # Selve data-sektionen (Ingen ikoner, rent layout)
+                # Selve tallene - Ingen ikoner, kun data
                 d1, d2, d3 = st.columns([1, 1, 1])
                 
                 with d1:
-                    st.caption(h_name)
                     st.write(f"**xG:** {get_s(h_uuid, 'expectedGoals'):.2f}")
                     st.write(f"**Skud:** {int(get_s(h_uuid, 'totalShots'))}")
 
                 with d2:
                     pos = get_s(h_uuid, 'possessionPercentage')
-                    st.markdown("<p style='text-align:center; font-size:12px;'>Possession</p>", unsafe_allow_html=True)
                     st.progress(float(pos)/100 if pos else 0.5)
-                    st.markdown(f"<p style='text-align:center; font-size:11px;'>{pos}% - {100-pos if pos else 50}%</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-size:10px;'>Poss: {pos}% - {100-pos if pos else 50}%</p>", unsafe_allow_html=True)
 
                 with d3:
-                    st.markdown(f"<div style='text-align:right;'><span style='font-size:12px; color:gray;'>{a_name}</span><br><b>xG:</b> {get_s(a_uuid, 'expectedGoals'):.2f}<br><b>Skud:</b> {int(get_s(a_uuid, 'totalShots'))}</div>", unsafe_allow_html=True)
-            else:
-                st.caption(f"🏟️ {row['VENUE_LONGNAME']} | {row['MATCH_DATE_FULL'].strftime('%d. %b kl. %H:%M')}")
+                    st.markdown(f"<div style='text-align:right;'><b>xG:</b> {get_s(a_uuid, 'expectedGoals'):.2f}<br><b>Skud:</b> {int(get_s(a_uuid, 'totalShots'))}</div>", unsafe_allow_html=True)
+            
+            st.caption(f"🏟️ {row['VENUE_LONGNAME']} | {row['MATCH_DATE_FULL'].strftime('%d. %b kl. %H:%M')}")
