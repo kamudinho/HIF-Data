@@ -6,7 +6,6 @@ from mplsoccer import VerticalPitch
 # --- KONFIGURATION ---
 HIF_RED = '#df003b' 
 HIF_BLUE = '#0055aa'
-# Din specifikke Opta ID for Hvidovre IF
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp=None):
@@ -22,28 +21,28 @@ def vis_side(dp=None):
 
     # Hent rådata
     df_shots = dp.get('playerstats', pd.DataFrame())
-    df_matches = dp.get('opta_matches', pd.DataFrame())
 
     if df_shots.empty:
         st.info("Ingen afslutninger fundet i databasen.")
         return
 
-    # --- 1. FILTRERING: KUN HVIDOVRE SPIL_ID ---
-    # Vi filtrerer på EVENT_CONTESTANT_OPTAUUID for at sikre det er HIF
+    # --- 1. FILTRERING: KUN HVIDOVRE & KONVERTERING ---
+    # Vi sikrer os at EVENT_OUTCOME er et tal, så vi kan regne på det
     df_hif = df_shots[df_shots['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    
+    # Tving outcome til string og rens for at undgå '12/12' fejlen
+    df_hif['EVENT_OUTCOME'] = df_hif['EVENT_OUTCOME'].astype(str).str.strip()
 
     if df_hif.empty:
-        st.warning(f"Ingen data fundet for Hvidovre ID: {HIF_OPTA_UUID}")
+        st.warning(f"Ingen data fundet for Hvidovre.")
         return
 
     # --- 2. UI LAYOUT ---
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
-        # Spiller filter
         spiller_liste = sorted(df_hif['PLAYER_NAME'].dropna().unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
-        
         vis_type = st.radio("Vis:", ["Alle skud", "Kun mål"], horizontal=True)
 
     # Filtrér data baseret på valg
@@ -52,27 +51,27 @@ def vis_side(dp=None):
         df_plot = df_plot[df_plot['PLAYER_NAME'] == valgt_spiller]
     
     if vis_type == "Kun mål":
-        df_plot = df_plot[df_plot['EVENT_OUTCOME'].astype(str) == '1']
+        df_plot = df_plot[df_plot['EVENT_OUTCOME'] == '1']
 
-    # --- 3. STATISTIK BOKS ---
+    # --- 3. STATISTIK BOKS (RETTET LOGIK) ---
     with col_stats:
         total_shots = len(df_plot)
-        total_goals = len(df_plot[df_plot['EVENT_OUTCOME'].astype(str) == '1'])
-        # xG_VAL beregnet i data_load.py
+        # Vi tæller kun rækker hvor outcome er præcis '1'
+        total_goals = len(df_plot[df_plot['EVENT_OUTCOME'] == '1'])
         total_xg = df_plot['XG_VAL'].sum() if 'XG_VAL' in df_plot.columns else 0
         
         st.markdown(f"""
         <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px; margin-top:20px;">
             <h4 style="margin:0; color:{HIF_RED};">{valgt_spiller}</h4>
             <hr>
-            <p style="margin:0; font-size:1.2rem;"><b>{total_shots}</b> skud / <b>{total_goals}</b> mål</p>
+            <p style="margin:0; font-size:1.2rem;"><b>{total_shots}</b> skud</p>
+            <p style="margin:0; font-size:1.2rem; color:{HIF_RED if total_goals > 0 else 'black'};"><b>{total_goals}</b> mål</p>
             <p style="margin:0; font-size:1.2rem;"><b>{total_xg:.2f}</b> total xG</p>
         </div>
         """, unsafe_allow_html=True)
 
     # --- 4. TEGN KORTET ---
     with col_map:
-        # Opta bruger 0-100 skala
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444', goal_type='box')
         fig, ax = pitch.draw(figsize=(8, 10))
         
@@ -81,11 +80,11 @@ def vis_side(dp=None):
 
         if not df_plot.empty:
             for _, row in df_plot.iterrows():
-                is_goal = str(row['EVENT_OUTCOME']) == '1'
+                # Her tjekker vi om det er et mål for at give den røde farve
+                is_goal = row['EVENT_OUTCOME'] == '1'
                 color = HIF_RED if is_goal else HIF_BLUE
-                # Skalér cirklerne efter xG
+                
                 size = (row.get('XG_VAL', 0.05) * 1200) + 100
-                # Trekant for hovedstød (Qualifier 15)
                 marker = '^' if '15' in str(row.get('QUALIFIERS', '')) else 'o'
                 
                 pitch.scatter(row['EVENT_X'], row['EVENT_Y'], 
@@ -94,4 +93,4 @@ def vis_side(dp=None):
                               ax=ax, alpha=0.8, zorder=3)
         
         st.pyplot(fig)
-        st.caption("Cirkel = Fod | Trekant = Hovedstød | Størrelse = xG-værdi")
+        st.caption("Blå = Skud | Rød = Mål | Trekant = Hovedstød")
