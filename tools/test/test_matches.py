@@ -143,18 +143,24 @@ def vis_side(dp):
             h_n = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
+            # HENT TIDSPUNKT FRA MATCH_LOCALTIME
+            # Vi fjerner sekunderne hvis de findes (f.eks. 14:00:00 -> 14:00)
+            raw_time = str(row.get('MATCH_LOCALTIME', dt.strftime('%H:%M')))
+            display_time = raw_time[:5] if ":" in raw_time else raw_time
+
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{h_n}</div>", unsafe_allow_html=True)
                 
-                # Her hentes logoet nu korrekt via team_wyid
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
                 with c3:
                     if played:
+                        # Viser resultat for spillede kampe
                         st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
                     else:
-                        st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{dt.strftime('%H:%M')}</span></div>", unsafe_allow_html=True)
+                        # Viser kamptidspunkt fra MATCH_LOCALTIME for kommende kampe
+                        st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{display_time}</span></div>", unsafe_allow_html=True)
                 
                 c4.image(hent_hold_logo(a_uuid), width=28)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{a_n}</div>", unsafe_allow_html=True)
@@ -162,12 +168,18 @@ def vis_side(dp):
                 if played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
-                    stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Afleveringer", "totalPass", ""), ("Dueller vundet", "wonTackle", ""), ("Afslutninger", "totalScoringAtt", ""), ("Tacklinger", "totalTackle", "")]
+                    stats_map = [
+                        ("Besiddelse", "possessionPercentage", "%"), 
+                        ("Afleveringer", "totalPass", ""), 
+                        ("Dueller vundet", "wonTackle", ""), 
+                        ("Afslutninger", "totalScoringAtt", ""), 
+                        ("Tacklinger", "totalTackle", "")
+                    ]
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         h_v = row.get(f"{s_key}_HOME", 0)
                         a_v = row.get(f"{s_key}_AWAY", 0)
                         sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_v}{suff} — {a_v}{suff}</div></div>", unsafe_allow_html=True)
-
+                        
     with tab_res:
         tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
     with tab_fix:
