@@ -5,22 +5,20 @@ import sys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
-# Sikr at Python kan se 'data' mappen som et modul
+# Tving Python til at kunne se dine moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
-# --- MODUL-TJEK: Import af mappings ---
+# --- 1. SIKKER IMPORT AF MAPPINGS ---
 try:
     from data.utils.mapping import get_event_name
-except ModuleNotFoundError:
-    # Fallback hvis stien driller i Streamlit Cloud
-    def get_event_name(x): return f"ID {x}"
-    st.warning("⚠️ Kunne ikke finde 'data/utils/mappings.py'. Event-navne vil ikke blive mappet.")
+except (ModuleNotFoundError, ImportErr):
+    def get_event_name(x): return f"Event {x}"
 
-# --- 1. SNOWFLAKE FORBINDELSE ---
+# --- 2. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
@@ -43,14 +41,15 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-# --- 2. QUERY LOADER ---
+# --- 3. QUERY LOADER MED AUTO-FIX FOR SCHEMA & SYNTAX ---
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    comp_f = COMPETITION_NAME if COMPETITION_NAME else "NordicBet Liga"
-    season_f = TOURNAMENTCALENDAR_NAME if TOURNAMENTCALENDAR_NAME else "2025/2026"
+    # FIX: Sikr at vi aldrig sender 'None' eller rå tal uden 'anførselstegn' til SQL
+    comp_f = str(COMPETITION_NAME) if COMPETITION_NAME else "NordicBet Liga"
+    season_f = str(TOURNAMENTCALENDAR_NAME) if TOURNAMENTCALENDAR_NAME else "2025/2026"
     
     if is_opta:
         queries = get_opta_queries(comp_f, season_f)
@@ -64,18 +63,24 @@ def load_snowflake_query(query_key, is_opta=False):
         df = conn.query(q)
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
-            # Fix for Timestamp precision
-            for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64']).columns:
-                df[col] = df[col].dt.floor('us')
+            
+            # --- FIX FOR SCHEMA ERROR (index 44: ns vs us) ---
+            # Vi tvinger alle tidsstempler til mikrosekunder ('us')
+            for col in df.columns:
+                if 'TIMESTAMP' in col or 'LASTMODIFIED' in col:
+                    try:
+                        df[col] = pd.to_datetime(df[col], utc=True).dt.floor('us')
+                    except:
+                        pass
             return df
         return pd.DataFrame()
     except Exception as e:
         st.error(f"⚠️ SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
 
-# --- 3. DATA PACKAGE BUILDER ---
+# --- 4. DATA PACKAGE BUILDER ---
 def get_data_package():
-    # Hent data
+    # Hent data fra kilderne
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_opta_player_stats = load_snowflake_query("opta_player_stats", is_opta=True)
@@ -84,14 +89,16 @@ def get_data_package():
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
 
-    # Map Event Navne hvis muligt
+    # MAP OPTA EVENTS (Type ID -> Navn)
     if not df_opta_player_stats.empty and 'EVENT_TYPEID' in df_opta_player_stats.columns:
         df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].astype(str).apply(get_event_name)
 
+    # Logo Mapping
     logo_map = {}
     if not df_logos_raw.empty:
         logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row.get('TEAM_WYID'))}
 
+    # Returner struktureret pakke (inkl. bagudkompatible nøgler)
     return {
         "opta": {
             "matches": df_matches_opta,
@@ -104,6 +111,7 @@ def get_data_package():
             "logos": logo_map,
             "wyid": 7490
         },
+        # Flade nøgler så dine sider (players.py osv.) ikke dør
         "players": df_team_stats_wy, 
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
