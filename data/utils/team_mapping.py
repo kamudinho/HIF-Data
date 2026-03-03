@@ -34,9 +34,8 @@ TEAMS = {
     "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/1941_120x120.png"},
     "Hillerød": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g19126_120x120.png"},
     "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g3686_120x120.png"},
-    "B.93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g620_120x120.png"},
-    "Middelfart": {"team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},
-    
+    "B 93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g620_120x120.png"},
+    "Middelfart": {"team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},    
     # --- 3F Superliga ---
     "FC København": {"team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
     "FC Midtjylland": {"team_wyid": 7455, "opta_uuid": "1000_uuid_dummy", "opta_id": 1000, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/286_120x120.png"},
