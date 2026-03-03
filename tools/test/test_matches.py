@@ -127,9 +127,15 @@ def vis_side(dp):
     # --- KAMPLISTE FUNKTION ---
     def tegn_kampe(df, played):
         for _, row in df.iterrows():
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            # Dato-overskrift fra MATCH_LOCALDATE
+            dt_str = str(row.get('MATCH_LOCALDATE', ''))
+            if not dt_str or dt_str == 'None':
+                continue
+                
+            dt = pd.to_datetime(dt_str)
             dag_dk = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned_dk = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
+            
             st.markdown(f"<div class='date-header'>{dag_dk.upper()} D. {dt.day}. {maaned_dk.upper()}</div>", unsafe_allow_html=True)
             
             h_uuid = row['CONTESTANTHOME_OPTAUUID']
@@ -137,13 +143,9 @@ def vis_side(dp):
             h_n = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
-            # LOGIK FOR TIDSPUNKT
+            # Tidspunkt fra MATCH_LOCALTIME
             raw_time = str(row.get('MATCH_LOCALTIME', ''))
-            # Formatér tid (f.eks. 19:00:00 -> 19:00)
-            if ":" in raw_time:
-                display_time = ":".join(raw_time.split(":")[:2])
-            else:
-                display_time = dt.strftime('%H:%M')
+            display_time = raw_time[:5] if ":" in raw_time else "TBA"
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -167,7 +169,7 @@ def vis_side(dp):
                         h_v = row.get(f"{s_key}_HOME", 0)
                         a_v = row.get(f"{s_key}_AWAY", 0)
                         sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_v}{suff} — {a_v}{suff}</div></div>", unsafe_allow_html=True)
-
+                        
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
         tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
