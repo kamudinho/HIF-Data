@@ -73,7 +73,7 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION (Indlejret Plotly-logo version) ---
     def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
-        # Find data rækkerne for de valgte hold
+        # Hent data
         t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
         t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
         
@@ -82,51 +82,58 @@ def vis_side(df_raw=None):
         y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
         y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 else t2[m] for m in metrics]
         
+        # Farver fra din config
         c1 = colors_dict.get(n1, {"primary": "#cc0000", "secondary": "#000000"})
         c2 = colors_dict.get(n2, {"primary": "#0056a3", "secondary": "#000000"})
         
-        bar_width = 0.35
+        # Søjler
+        bar_width = 0.4 # Øget en smule for bedre fylde
         
         fig.add_trace(go.Bar(
             name=n1, x=labels, y=y1_vals, 
             marker_color=c1["primary"],
-            text=[f"{v:.1f}" if per_match else int(v) for v in y1_vals], textposition='auto',
+            text=[f"{v:.1f}" if per_match else int(v) for v in y1_vals], 
+            textposition='inside',
             width=bar_width,
-            textfont=dict(size=14, color=get_text_color(c1["primary"]), family="Arial Black")
+            insidetextfont=dict(size=16, color=get_text_color(c1["primary"]), family="Arial Black")
         ))
         
         fig.add_trace(go.Bar(
             name=n2, x=labels, y=y2_vals, 
             marker_color=c2["primary"],
-            text=[f"{v:.1f}" if per_match else int(v) for v in y2_vals], textposition='auto',
+            text=[f"{v:.1f}" if per_match else int(v) for v in y2_vals], 
+            textposition='inside',
             width=bar_width,
-            textfont=dict(size=14, color=get_text_color(c2["primary"]), family="Arial Black")
+            insidetextfont=dict(size=16, color=get_text_color(c2["primary"]), family="Arial Black")
         ))
 
-        # Logo-placering (Intern i Plotly)
+        # Logo-placering med optimerede offsets
         for i in range(len(labels)):
-            # Vi henter URL'erne via UUID'erne
             url1 = get_logo_url(t1['UUID'], n1)
             url2 = get_logo_url(t2['UUID'], n2)
             
             if url1:
                 fig.add_layout_image(dict(
-                    source=url1, xref="x", yref="paper", x=i - 0.19, y=1.15,
+                    source=url1, xref="x", yref="paper", x=i - 0.22, y=1.18,
                     sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
                 ))
             if url2:
                 fig.add_layout_image(dict(
-                    source=url2, xref="x", yref="paper", x=i + 0.19, y=1.15,
+                    source=url2, xref="x", yref="paper", x=i + 0.22, y=1.18,
                     sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
                 ))
 
         fig.update_layout(
-            barmode='group', bargap=0.4, bargroupgap=0.05,
-            height=450, margin=dict(t=120, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            barmode='group', 
+            bargap=0.3, # Gør grupperne lidt bredere
+            bargroupgap=0.02, # Minimale mellemrum mellem hold-barerne
+            height=450, 
+            margin=dict(t=120, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)', 
+            paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
             yaxis=dict(visible=False, fixedrange=True),
-            xaxis=dict(fixedrange=True)
+            xaxis=dict(fixedrange=True, tickfont=dict(size=14, family="Arial Black"))
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
