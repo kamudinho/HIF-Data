@@ -28,19 +28,19 @@ def vis_side(dp):
 
     # HENT LOGOER
     def hent_hold_logo(opta_uuid):
-    logo_map = dp.get("logo_map", {})
-    target_uuid = str(opta_uuid).lower().strip()
-    
-    # Find wy_id via mapping
-    wy_id = None
-    for name, info in TEAMS.items():
-        if str(info.get("opta_uuid", "")).lower().strip() == target_uuid:
-            wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
-            break
-            
-    # Returnér URL fra Snowflake (logo_map)
-    if wy_id and int(wy_id) in logo_map:
-        return logo_map[int(wy_id)]
+        logo_map = dp.get("logo_map", {})
+        target_uuid = str(opta_uuid).lower().strip()
+        
+        # Find wy_id via mapping
+        wy_id = None
+        for name, info in TEAMS.items():
+            if str(info.get("opta_uuid", "")).lower().strip() == target_uuid:
+                wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
+                break
+                
+        # Returnér URL fra Snowflake (logo_map)
+        if wy_id and int(wy_id) in logo_map:
+            return logo_map[int(wy_id)]
     
     return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
     
