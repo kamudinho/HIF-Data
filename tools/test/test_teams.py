@@ -19,9 +19,9 @@ def vis_side(df_raw=None):
     # --- 1. DATABEREGNING ---
     stats = {}
     def update_form(current_form, result):
-        form_list = list(current_form)
+        form_list = list(current_form[-4:])
         form_list.append(result)
-        return "".join(form_list[-5:])
+        return "".join(form_list)
 
     for _, row in df.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -49,14 +49,11 @@ def vis_side(df_raw=None):
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    df_liga = pd.DataFrame(stats.values()).sort_values(by=['P', 'M+'], ascending=False).reset_index(drop=True)
-    df_liga.index += 1
-
-    # Hjælpefunktion til tekstfarve (Sort skrift på lyse farver)
+    df_liga = pd.DataFrame(stats.values()).sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
+    
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        # Luminans beregning: hvis lysere end 186 (på skala 0-255), brug sort skrift
         return "black" if (r * 0.299 + g * 0.587 + b * 0.114) > 186 else "white"
 
     # --- 2. TABS ---
@@ -84,7 +81,7 @@ def vis_side(df_raw=None):
         team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
         team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
 
-        sub_gen, sub_off, sub_def = st.tabs(["Generelt", "Offensivt", "Defensivt"])
+        sub_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
 
         def draw_h2h_chart(metrics, labels):
             s1 = df_liga[df_liga['HOLD'] == team1].iloc[0]
@@ -98,38 +95,42 @@ def vis_side(df_raw=None):
 
             fig = go.Figure()
             
-            # Søjler med tekst indeni
+            # Vi bruger x som index 0, 1, 2 for at styre logo-position præcist
+            x_vals = list(range(len(labels)))
+
             fig.add_trace(go.Bar(
-                name=team1, x=labels, y=[s1[m] for m in metrics],
+                x=x_vals, y=[s1[m] for m in metrics],
                 marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-                insidetextfont=dict(color=get_text_color(c1_hex)), offsetgroup=1
+                insidetextfont=dict(color=get_text_color(c1_hex)),
+                width=0.4, offset=-0.21 # Forskyder bar 1 til venstre
             ))
+            
             fig.add_trace(go.Bar(
-                name=team2, x=labels, y=[s2[m] for m in metrics],
+                x=x_vals, y=[s2[m] for m in metrics],
                 marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-                insidetextfont=dict(color=get_text_color(c2_hex)), offsetgroup=2
+                insidetextfont=dict(color=get_text_color(c2_hex)),
+                width=0.4, offset=0.01 # Forskyder bar 2 til højre
             ))
 
-            # Tilføj logoer over hver bar via annotations/images
-            for i in range(len(labels)):
+            for i in x_vals:
                 if logo1:
                     fig.add_layout_image(dict(
-                        source=logo1, x=labels[i], y=s1[metrics[i]], xref="x", yref="y",
-                        sizex=0.25, sizey=0.25, xanchor="right", yanchor="bottom"
+                        source=logo1, x=i-0.21, y=s1[metrics[i]], xref="x", yref="y",
+                        sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"
                     ))
                 if logo2:
                     fig.add_layout_image(dict(
-                        source=logo2, x=labels[i], y=s2[metrics[i]], xref="x", yref="y",
-                        sizex=0.25, sizey=0.25, xanchor="left", yanchor="bottom"
+                        source=logo2, x=i+0.21, y=s2[metrics[i]], xref="x", yref="y",
+                        sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"
                     ))
 
             fig.update_layout(
-                barmode='group', showlegend=False, height=400,
-                margin=dict(t=50, b=20, l=0, r=0),
-                yaxis=dict(visible=False) # Skjuler y-aksen da værdier står i bars
+                showlegend=False, height=400, margin=dict(t=60, b=40, l=0, r=0),
+                xaxis=dict(tickvals=x_vals, ticktext=labels),
+                yaxis=dict(visible=False, range=[0, max(max([s1[m] for m in metrics]), max([s2[m] for m in metrics])) * 1.2])
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        with sub_gen: draw_h2h_chart(['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with sub_off: draw_h2h_chart(['M+'], ['Mål Scoret'])
-        with sub_def: draw_h2h_chart(['M-'], ['Mål Imod'])
+        with sub_tabs[0]: draw_h2h_chart(['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
+        with sub_tabs[1]: draw_h2h_chart(['M+'], ['Mål Scoret'])
+        with sub_tabs[2]: draw_h2h_chart(['M-'], ['Mål Imod'])
