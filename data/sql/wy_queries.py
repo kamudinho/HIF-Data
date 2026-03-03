@@ -49,5 +49,9 @@ def get_wy_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
             WHERE t.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
-        """
+        """,
+        "team_logos": f"""
+            SELECT TEAM_WYID, TEAMNAME, IMAGEDATAURL AS TEAM_LOGO 
+            FROM {DB}.WYSCOUT_TEAMS
+        """,
     }
