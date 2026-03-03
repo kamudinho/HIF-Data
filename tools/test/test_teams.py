@@ -16,12 +16,25 @@ def vis_side(df_raw=None):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # --- 1. HJÆLPEFUNKTIONER ---
+    # --- 1. HJÆLPEFUNKTIONER (NU MED LOGO-LOGIK) ---
+    def get_logo_url(opta_uuid, team_name):
+        """Henter logo URL fra Snowflake eller TEAMS mapping."""
+        # 1. Tjek Snowflake logo_map via Wyscout ID
+        logo_map = dp.get("logo_map", {})
+        wy_id = next((info.get('wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+        
+        if wy_id and wy_id in logo_map:
+            return logo_map[wy_id]
+        
+        # 2. Fallback til statisk mapping
+        return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
+
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        # Luminance > 165 tvinger sort tekst på bl.a. Hobros gule
         luminance = (r * 0.299 + g * 0.587 + b * 0.114)
-        return "black" if luminance > 160 else "white"
+        return "black" if luminance > 165 else "white"
 
     def update_form(current_form, result):
         form_list = list(current_form)
@@ -63,45 +76,33 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION ---
     def draw_h2h_chart(t1, t2, metrics, labels):
-    # Hent holddata
         s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
         s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
         
-        # UUID'er til logo-opslag
         u1, u2 = s1['UUID'], s2['UUID']
-        
-        # Farver
         c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
         c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
         
-        # Robust logo-hentning (Prøver Snowflake først, så TEAMS mapping)
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
     
         fig = go.Figure()
         x_vals = list(range(len(labels)))
     
-        # Venstre Bar
         fig.add_trace(go.Bar(
             x=x_vals, y=[s1[m] for m in metrics],
-            marker_color=c1_hex,
-            text=[s1[m] for m in metrics],
-            textposition='inside',
+            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=14, color=get_text_color(c1_hex), family="Arial Black"),
             width=0.35, offset=-0.38
         ))
         
-        # Højre Bar
         fig.add_trace(go.Bar(
             x=x_vals, y=[s2[m] for m in metrics],
-            marker_color=c2_hex,
-            text=[s2[m] for m in metrics],
-            textposition='inside',
+            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=14, color=get_text_color(c2_hex), family="Arial Black"),
             width=0.35, offset=0.03
         ))
     
-        # Placer logoer over søjlerne
         for i in x_vals:
             if logo1:
                 fig.add_layout_image(dict(
@@ -116,7 +117,6 @@ def vis_side(df_raw=None):
                     layer="above", sizing="contain"
                 ))
     
-        # Dynamisk loft på grafen så logoerne kan være der
         max_val = max([s1[m] for m in metrics] + [s2[m] for m in metrics] + [5])
         
         fig.update_layout(
@@ -126,13 +126,15 @@ def vis_side(df_raw=None):
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
         def get_logo_html(uuid):
-            logo = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == uuid), "")
-            return f'<img src="{logo}" width="20">' if logo else ""
+            # Vi bruger samme logik her for konsistens
+            url = get_logo_url(uuid, "")
+            return f'<img src="{url}" width="20">' if url else ""
             
         def style_form(f):
             res = ""
