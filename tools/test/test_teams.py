@@ -65,7 +65,7 @@ def vis_side(df_raw=None):
     df_liga.index += 1
 
     # --- 2. TABS OPSÆTNING ---
-    tab1, tab2 = st.tabs(["🏆 Ligaoversigt", "📊 Bar Charts"])
+    tab1, tab2 = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with tab1:
         st.subheader("Stilling")
