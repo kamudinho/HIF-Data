@@ -39,10 +39,16 @@ def vis_side(dp):
                 break
                 
         # Returnér URL fra Snowflake (logo_map)
-        if wy_id and int(wy_id) in logo_map:
-            return logo_map[int(wy_id)]
-    
-    return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+        if wy_id:
+            try:
+                wy_id_int = int(wy_id)
+                if wy_id_int in logo_map:
+                    return logo_map[wy_id_int]
+            except:
+                pass
+        
+        # Denne return skal være indrykket korrekt som fallback
+        return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
     
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
     if not df_raw_stats.empty and not df_matches.empty:
