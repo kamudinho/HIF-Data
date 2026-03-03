@@ -84,7 +84,7 @@ def vis_side(df_raw=None):
         c1 = colors_dict.get(n1, {"primary": "#cc0000"})
         c2 = colors_dict.get(n2, {"primary": "#0056a3"})
         
-        bar_width = 0.38
+        bar_width = 0.25
         
         fig.add_trace(go.Bar(
             name=n1, x=labels, y=y1_vals, 
@@ -114,12 +114,12 @@ def vis_side(df_raw=None):
             if url1:
                 fig.add_layout_image(dict(
                     source=url1, xref="x", yref="paper", x=i - 0.20, y=1.15,
-                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="middle"
+                    sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"
                 ))
             if url2:
                 fig.add_layout_image(dict(
                     source=url2, xref="x", yref="paper", x=i + 0.20, y=1.15,
-                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="middle"
+                    sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"
                 ))
 
         fig.update_layout(
