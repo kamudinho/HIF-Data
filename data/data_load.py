@@ -38,8 +38,12 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
+    # Hent UUID fra din centraliserede konfiguration
+    liga_uuid = COMPETITIONS[VALGT_LIGA]["opta_uuid"]
+    
     if query_key.startswith("opta_"):
-        queries = get_opta_queries(VALGT_LIGA, TOURNAMENTCALENDAR_NAME)
+        # Vi sender nu UUID direkte til SQL funktionen
+        queries = get_opta_queries(liga_uuid, TOURNAMENTCALENDAR_NAME)
     else:
         queries = get_wy_queries(comp_filter, season_filter)
         
