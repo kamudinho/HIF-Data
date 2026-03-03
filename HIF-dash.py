@@ -140,11 +140,11 @@ try:
     # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Ligaoversigt":
-            import tools.test.test_teams as t
-            t.vis_side(dp) # Sender hele pakken med
+            import tools.test.test_teams as tt 
+            tt.vis_side()
         elif sel == "Kampe":
             import tools.test.test_matches as tm
-            tm.vis_side(dp) # Sender hele pakken med
+            tm.vis_side(dp)
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
