@@ -31,14 +31,16 @@ def vis_side(dp):
         logo_map = dp.get("logo_map", {})
         target_uuid = str(opta_uuid).lower().strip()
         
-        # Find wy_id via mapping
+        # 1. Find info i din manuelle TEAMS mapping
         wy_id = None
+        mapping_logo = None
         for name, info in TEAMS.items():
             if str(info.get("opta_uuid", "")).lower().strip() == target_uuid:
                 wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
+                mapping_logo = info.get("logo") # Backup fra din Python fil
                 break
-                
-        # Returnér URL fra Snowflake (logo_map)
+        
+        # 2. Prøv først at hente den nyeste URL fra Snowflake (logo_map)
         if wy_id:
             try:
                 wy_id_int = int(wy_id)
@@ -47,7 +49,11 @@ def vis_side(dp):
             except:
                 pass
         
-        # Denne return skal være indrykket korrekt som fallback
+        # 3. Hvis Snowflake fejler, brug logo fra TEAMS mapping
+        if mapping_logo and mapping_logo != "-":
+            return mapping_logo
+            
+        # 4. Ultimativ fallback (Hvidovre)
         return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
     
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
