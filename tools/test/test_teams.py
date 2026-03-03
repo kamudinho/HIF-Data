@@ -24,10 +24,6 @@ def vis_side(df_raw=None):
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
-    def get_logo_html(uuid):
-        url = get_logo_url(uuid, "")
-        return f'<img src="{url}" width="20">' if url else ""
-
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -38,13 +34,6 @@ def vis_side(df_raw=None):
         form_list = list(current_form)
         form_list.append(result)
         return "".join(form_list[-5:])
-
-    def style_form(f):
-        res = ""
-        for char in f:
-            color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
-            res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
-        return res
 
     # --- 2. DATABEREGNING ---
     stats = {}
@@ -77,7 +66,8 @@ def vis_side(df_raw=None):
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
     # Find næste modstander
-    next_opponents = {}
+    next_opponents_names = {}
+    next_opponents_logos = {}
     df_upcoming = df[df['MATCH_STATUS'] != 'Played'].copy()
     for uuid in stats.keys():
         next_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | 
@@ -87,16 +77,21 @@ def vis_side(df_raw=None):
             is_home = row['CONTESTANTHOME_OPTAUUID'] == uuid
             opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
             opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
-            opp_logo = get_logo_url(opp_uuid, opp_name)
-            next_opponents[uuid] = f'<div style="display: flex; align-items: left; justify-content: left;"><img src="{opp_logo}" width="18" style="margin-right:5px;"> {opp_name}</div>'
+            next_opponents_names[uuid] = opp_name
+            next_opponents_logos[uuid] = get_logo_url(opp_uuid, opp_name)
         else:
-            next_opponents[uuid] = "-"
+            next_opponents_names[uuid] = "-"
+            next_opponents_logos[uuid] = None
 
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
-    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents)
+    df_liga['LOGO'] = df_liga['UUID'].apply(lambda x: get_logo_url(x, ""))
+    df_liga['NÆSTE_LOG'] = df_liga['UUID'].map(next_opponents_logos)
+    df_liga['NÆSTE_HOLD'] = df_liga['UUID'].map(next_opponents_names)
+    
+    # Sortering for indledende rank
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
-    df_liga.index += 1
+    df_liga.insert(0, 'RANK', df_liga.index + 1)
 
     # --- 3. GRAF FUNKTION ---
     def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
@@ -140,23 +135,29 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("""
-            <style>
-                .league-table { width: 100%; border-collapse: collapse; }
-                .league-table th { text-align: center !important; padding: 10px; border-bottom: 2px solid #eee; }
-                .league-table td { text-align: center !important; padding: 8px; border-bottom: 1px solid #eee; }
-                /* Index og HOLD til venstre */
-                .league-table td:nth-child(1), .league-table th:nth-child(1) { text-align: left !important; }
-                .league-table td:nth-child(3), .league-table th:nth-child(3) { text-align: left !important; }
-            </style>
-        """, unsafe_allow_html=True)
+        # Forberedelse af data til st.dataframe
+        # Vi samler Logo og Navn i Næste-kolonnen ved hjælp af tekst (da st.dataframe ikke blander billeder/tekst i én celle let)
+        df_view = df_liga[['RANK', 'LOGO', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE_LOG', 'NÆSTE_HOLD']].copy()
 
-        df_disp = df_liga.copy()
-        df_disp.insert(0, ' ', [get_logo_html(u) for u in df_disp['UUID']])
-        df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        
-        vis_cols = [' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']
-        st.write(df_disp[vis_cols].to_html(escape=False, index=True, classes='league-table'), unsafe_allow_html=True)
+        st.dataframe(
+            df_view,
+            column_config={
+                "RANK": st.column_config.NumberColumn("Pos", help="Placering", format="%d"),
+                "LOGO": st.column_config.ImageColumn("", help="Hold logo"),
+                "HOLD": st.column_config.TextColumn("Hold"),
+                "K": st.column_config.NumberColumn("K"),
+                "V": st.column_config.NumberColumn("V"),
+                "U": st.column_config.NumberColumn("U"),
+                "T": st.column_config.NumberColumn("T"),
+                "MD": st.column_config.NumberColumn("MD"),
+                "P": st.column_config.NumberColumn("P"),
+                "FORM": st.column_config.TextColumn("Form"),
+                "NÆSTE_LOG": st.column_config.ImageColumn("Næste"),
+                "NÆSTE_HOLD": st.column_config.TextColumn("Modstander")
+            },
+            hide_index=True,
+            use_container_width=True
+        )
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
