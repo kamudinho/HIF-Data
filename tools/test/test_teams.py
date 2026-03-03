@@ -69,66 +69,53 @@ def vis_side(df_raw=None):
     df_liga.index += 1
 
     # --- 3. GRAF FUNKTION ---
-    def draw_h2h_chart(t1, t2, metrics, labels):
-        s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
-        s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
-        u1, u2 = s1['UUID'], s2['UUID']
+    def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
+            fig = go.Figure()
+            
+            # Beregn værdier
+            y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
+            y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
+            
+            c1 = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
+            c2 = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
+            
+            # Søjle Hold 1
+            fig.add_trace(go.Bar(
+                name=n1, x=labels, y=y1_vals, 
+                marker_color=c1["primary"],
+                marker_line=dict(color=c1["secondary"], width=2),
+                text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
+                textfont=dict(color="white" if c1["primary"].lower() != "#ffffff" else "black")
+            ))
+            
+            # Søjle Hold 2
+            fig.add_trace(go.Bar(
+                name=n2, x=labels, y=y2_vals, 
+                marker_color=c2["primary"],
+                marker_line=dict(color=c2["secondary"], width=2),
+                text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
+                textfont=dict(color="white" if c2["primary"].lower() != "#ffffff" else "black")
+            ))
         
-        c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
-        c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
-        
-        logo1 = get_logo_url(u1, t1)
-        logo2 = get_logo_url(u2, t2)
+            # Logo-placering (justeret x-offset for at matche de nye mellemrum)
+            for i in range(len(labels)):
+                if n1 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+                if n2 in logo_map:
+                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
 
-        # 1. LOGO-RÆKKE (Nu korrekt samlet i én markdown blok)
-        logo_items_html = ""
-        for label in labels:
-            logo_items_html += f"""
-                <div style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 38px;">
-                    <img src="{logo1}" width="30" style="object-fit: contain;">
-                    <img src="{logo2}" width="30" style="object-fit: contain;">
-                </div>
-            """
-
-        st.markdown(
-            f"""
-            <div style="display: flex; width: 100%; padding: 0 40px; margin-bottom: -35px;">
-                {logo_items_html}
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-
-        # 2. PLOTLY GRAF
-        fig = go.Figure()
-        x_vals = list(range(len(labels)))
-
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s1[m] for m in metrics],
-            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.4
-        ))
-        
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s2[m] for m in metrics],
-            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
-            width=0.4
-        ))
-
-        fig.update_layout(
-            showlegend=False, 
-            height=380, 
-            margin=dict(t=10, b=40, l=40, r=40), # Skal matche padding (40px) i HTML ovenfor
-            xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
-            yaxis=dict(visible=False, fixedrange=True),
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)',
-            bargap=0.2,
-            barmode='group'
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            fig.update_layout(
+                barmode='group', 
+                bargap=0.3,       # Mellemrum mellem grupperne (f.eks. mellem 'Point' og 'Sejre')
+                bargroupgap=0.1,  # Det specifikke mellemrum mellem de to barer i gruppen
+                height=400, 
+                margin=dict(t=100, b=40, l=10, r=10),
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False,
+                yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
