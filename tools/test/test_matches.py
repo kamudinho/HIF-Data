@@ -5,16 +5,16 @@ from data.utils.team_mapping import TEAMS
 def vis_side(dp):
     """
     Viser kampside med resultater, kommende kampe og Opta-statistik.
-    Inkluderer dansk datoformatering og dynamisk logo-hentning.
+    Rettet til at bruge 'team_wyid' fra TEAMS mapping.
     """
     # 1. HENT DATA FRA PAKKEN
     df_matches = dp.get("opta_matches", pd.DataFrame())
     df_raw_stats = dp.get("team_stats_full", pd.DataFrame()) 
     
     config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
+    valgt_liga_global = config.get("liga_navn", "1. Division") # Matcher din mapping
 
-    # --- OVERSÆTTELSE AF DATOER ---
+    # --- DANSKE DATOER ---
     danske_dage = {
         "Monday": "Mandag", "Tuesday": "Tirsdag", "Wednesday": "Onsdag",
         "Thursday": "Torsdag", "Friday": "Fredag", "Saturday": "Lørdag", "Sunday": "Søndag"
@@ -26,24 +26,24 @@ def vis_side(dp):
         "October": "oktober", "November": "november", "December": "december"
     }
 
-    # --- HJÆLPEFUNKTION TIL LOGO-OPSLAG ---
+    # --- HJÆLPEFUNKTION TIL LOGO-OPSLAG (RETTET) ---
     def hent_hold_logo(opta_uuid):
         if not opta_uuid:
             return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
             
-        # Gør UUID streng-baseret og lowercase for sikkert match
         target_uuid = str(opta_uuid).lower().strip()
         
         for team_name, info in TEAMS.items():
-            # Hent uuid fra mapping og gør den klar til sammenligning
+            # Vi tjekker mod opta_uuid i din mapping
             map_uuid = str(info.get("opta_uuid", "")).lower().strip()
             
             if map_uuid == target_uuid:
-                wy_id = info.get("TEAM_WYID")
+                # VIGTIG RETTELSE: Din mapping bruger 'team_wyid' (små bogstaver)
+                wy_id = info.get("team_wyid") 
                 if wy_id:
                     return f"https://cdn5.wyscout.com/photos/team/public/{wy_id}_120x120.png"
         
-        # Hvis vi når hertil, blev der ikke fundet et match i TEAMS mapping
+        # Hvis intet match, returner HIF som standard
         return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
@@ -87,7 +87,7 @@ def vis_side(dp):
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     
     if not liga_hold_options:
-        st.warning(f"Ingen hold fundet for {valgt_liga_global}")
+        st.warning(f"Ingen hold fundet for {valgt_liga_global}. Tjek om liga-navnet i mapping matcher '{valgt_liga_global}'.")
         return
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
@@ -98,10 +98,9 @@ def vis_side(dp):
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     
-    # --- FORM & TAB SEKTION ---
+    # Statistik sektion (K, S, U, N...)
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-    
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
         h_s = int(m['TOTAL_HOME_SCORE']) if pd.notnull(m['TOTAL_HOME_SCORE']) else 0
@@ -119,17 +118,15 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
+    # --- KAMPLISTE ---
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     
     def tegn_kampe(df, played):
         for _, row in df.iterrows():
-            # Dansk datoformatering
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
             dag_dk = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned_dk = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
-            dato_str = f"{dag_dk} d. {dt.day}. {maaned_dk}".upper()
-            
-            st.markdown(f"<div class='date-header'>{dato_str}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>{dag_dk.upper()} D. {dt.day}. {maaned_dk.upper()}</div>", unsafe_allow_html=True)
             
             h_uuid = row['CONTESTANTHOME_OPTAUUID']
             a_uuid = row['CONTESTANTAWAY_OPTAUUID']
@@ -139,6 +136,8 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{h_n}</div>", unsafe_allow_html=True)
+                
+                # Her hentes logoet nu korrekt via team_wyid
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
                 with c3:
@@ -153,7 +152,7 @@ def vis_side(dp):
                 if played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
-                    stats_map = [("Possession", "possessionPercentage", "%"), ("Passes", "totalPass", ""), ("Duels Won", "wonTackle", ""), ("Scoring Att", "totalScoringAtt", ""), ("Tackles", "totalTackle", "")]
+                    stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Afleveringer", "totalPass", ""), ("Dueller vundet", "wonTackle", ""), ("Afslutninger", "totalScoringAtt", ""), ("Tacklinger", "totalTackle", "")]
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         h_v = row.get(f"{s_key}_HOME", 0)
                         a_v = row.get(f"{s_key}_AWAY", 0)
