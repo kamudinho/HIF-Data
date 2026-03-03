@@ -34,23 +34,23 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         # --- EVENTS (Schema Fix indbygget) ---
         "opta_player_stats": f"""
             SELECT 
-                MATCH_OPTAUUID,
-                PLAYER_OPTAUUID,
-                PLAYER_NAME,
-                EVENT_TYPEID,
-                EVENT_OUTCOME,
-                EVENT_PERIODID,
-                EVENT_TIMEMIN,
-                EVENT_X,
-                EVENT_Y,
-                -- Vi caster timestamp til streng for at undgå ns/us schema fejlen
-                CAST(EVENT_TIMESTAMP AS STRING) as EVENT_TIMESTAMP_STR
-            FROM {DB}.OPTA_EVENTS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
-                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
-                FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
-            )
+                E.MATCH_OPTAUUID,
+                E.PLAYER_OPTAUUID,
+                E.PLAYER_NAME,
+                E.EVENT_TYPEID,
+                E.EVENT_OUTCOME,
+                E.EVENT_PERIODID,
+                E.EVENT_TIMEMIN,
+                E.EVENT_X,
+                E.EVENT_Y,
+                -- Her samler vi alle qualifiers i én streng per event
+                LISTAGG(Q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY Q.QUALIFIER_QID) as QUALIFIERS,
+                LISTAGG(Q.QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY Q.QUALIFIER_QID) as QUAL_VALUES
+            FROM {DB}.OPTA_EVENTS E
+            LEFT JOIN {DB}.OPTA_EVENTQUALIFIERS Q 
+                ON E.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
+            WHERE E.TOURNAMENTCALENDAR_OPTAUUID IN (...)
+            GROUP BY 1,2,3,4,5,6,7,8,9
         """,
 
         # --- MATCHSTATS ---
