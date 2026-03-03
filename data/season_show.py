@@ -1,16 +1,16 @@
 # --- 1. VALG AF LIGA (DETTE ER DET ENESTE STED DU RETTER) ---
-VALGT_LIGA = "Betinia Ligaen"  # Skift til "3F Superliga" når de rykker op!
+VALGT_LIGA = "1. Division"  # Skift til "3F Superliga" når de rykker op!
 SEASONNAME = "2025/2026" 
 TEAM_WYID = 7490
 TEAM_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 # --- 2. AVANCERET TURNERING MAPPING ---
 COMPETITIONS = {
-    "Betinia Ligaen": {
+    "1. Division": {
         "wyid": 328, 
         "opta_uuid": "6ifaeunfdelecgticvxanikzu"
     },
-    "3F Superliga": {
+    "Superliga": {
         "wyid": 335, 
         "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n"
     },
