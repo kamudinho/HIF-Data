@@ -16,13 +16,20 @@ def vis_side(df_raw=None):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # --- 1. DATABEREGNING ---
-    stats = {}
+    # --- 1. HJÆLPEFUNKTIONER (Defineres først) ---
     def update_form(current_form, result):
         form_list = list(current_form)
         form_list.append(result)
         return "".join(form_list[-5:])
 
+    def get_text_color(hex_color):
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        luminance = (r * 0.299 + g * 0.587 + b * 0.114)
+        return "black" if luminance > 160 else "white"
+
+    # --- 2. DATABEREGNING ---
+    stats = {}
     for _, row in df.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
         h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
@@ -39,7 +46,6 @@ def vis_side(df_raw=None):
             s_h['K'] += 1; s_a['K'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g
             s_a['M+'] += a_g; s_a['M-'] += h_g
-            
             if winner == 'home':
                 s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
                 s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
@@ -51,28 +57,61 @@ def vis_side(df_raw=None):
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
     df_liga = pd.DataFrame(stats.values())
-    # BEREGN MD HER:
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
-    # SORTERING (P, så MD, så M+):
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.index += 1
 
-    def get_text_color(hex_color):
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        return "black" if (r * 0.299 + g * 0.587 + b * 0.114) > 186 else "white"
+    # --- 3. GRAF FUNKTION ---
+    def draw_h2h_chart(t1, t2, metrics, labels):
+        s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
+        s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
+        c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
+        c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
+        logo1 = TEAMS.get(t1, {}).get('logo', "")
+        logo2 = TEAMS.get(t2, {}).get('logo', "")
 
-    # --- 2. TABS ---
+        fig = go.Figure()
+        x_vals = list(range(len(labels)))
+
+        fig.add_trace(go.Bar(
+            x=x_vals, y=[s1[m] for m in metrics],
+            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
+            insidetextfont=dict(size=14, color=get_text_color(c1_hex)),
+            width=0.35, offset=-0.37, cliponaxis=False
+        ))
+        fig.add_trace(go.Bar(
+            x=x_vals, y=[s2[m] for m in metrics],
+            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
+            insidetextfont=dict(size=14, color=get_text_color(c2_hex)),
+            width=0.35, offset=0.02, cliponaxis=False
+        ))
+
+        for i in x_vals:
+            if logo1:
+                fig.add_layout_image(dict(source=logo1, xref="x", yref="y", x=i-0.19, y=s1[metrics[i]],
+                                        sizex=0.15, sizey=0.15, xanchor="center", yanchor="bottom", layer="above"))
+            if logo2:
+                fig.add_layout_image(dict(source=logo2, xref="x", yref="y", x=i+0.20, y=s2[metrics[i]],
+                                        sizex=0.15, sizey=0.15, xanchor="center", yanchor="bottom", layer="above"))
+
+        all_vals = [s1[m] for m in metrics] + [s2[m] for m in metrics]
+        max_v = max(all_vals) if all_vals else 10
+        fig.update_layout(showlegend=False, height=450, margin=dict(t=80, b=40, l=10, r=10),
+                          xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
+                          yaxis=dict(visible=False, range=[0, max_v * 1.4], fixedrange=True),
+                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # --- 4. TABS LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
         def get_logo_html(uuid):
             logo = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == uuid), "")
             return f'<img src="{logo}" width="20">' if logo else ""
-        
-        def style_form(form_str):
+        def style_form(f):
             res = ""
-            for char in form_str:
+            for char in f:
                 color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
                 res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
             return res
@@ -80,8 +119,6 @@ def vis_side(df_raw=None):
         df_disp = df_liga.copy()
         df_disp.insert(0, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        
-        # MD er nu med i kolonne-listen
         st.write(df_disp[[' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=True), unsafe_allow_html=True)
 
     with t_h2h:
@@ -91,83 +128,11 @@ def vis_side(df_raw=None):
         team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
 
         sub_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
-
-        def draw_h2h_chart(metrics, labels):
-            s1 = df_liga[df_liga['HOLD'] == team1].iloc[0]
-            s2 = df_liga[df_liga['HOLD'] == team2].iloc[0]
-            
-            c1_hex = colors_dict.get(team1, {}).get('primary', '#cc0000')
-            c2_hex = colors_dict.get(team2, {}).get('primary', '#0056a3')
-            
-            # Hent rå logo URL'er direkte fra TEAMS mappingen
-            logo1 = TEAMS.get(team1, {}).get('logo', "")
-            logo2 = TEAMS.get(team2, {}).get('logo', "")
-
-            fig = go.Figure()
-            x_vals = list(range(len(labels)))
-
-            # Bar 1 (Venstre)
-            fig.add_trace(go.Bar(
-                x=x_vals, y=[s1[m] for m in metrics],
-                marker_color=c1_hex, 
-                text=[s1[m] for m in metrics], 
-                textposition='inside',
-                insidetextfont=dict(size=14, color=get_text_color(c1_hex)),
-                width=0.35, offset=-0.37,
-                cliponaxis=False # Sikrer at tekst/logo ikke klippes
-            ))
-            
-            # Bar 2 (Højre)
-            fig.add_trace(go.Bar(
-                x=x_vals, y=[s2[m] for m in metrics],
-                marker_color=c2_hex, 
-                text=[s2[m] for m in metrics], 
-                textposition='inside',
-                insidetextfont=dict(size=14, color=get_text_color(c2_hex)),
-                width=0.35, offset=0.02,
-                cliponaxis=False
-            ))
-
-            # Tilføj logoer over hver enkelt bar
-            for i in x_vals:
-                if logo1:
-                    fig.add_layout_image(dict(
-                        source=logo1,
-                        xref="x", yref="y",
-                        x=i - 0.19, y=s1[metrics[i]],
-                        sizex=0.15, sizey=0.15, # Justeret størrelse
-                        xanchor="center", yanchor="bottom",
-                        layer="above"
-                    ))
-                if logo2:
-                    fig.add_layout_image(dict(
-                        source=logo2,
-                        xref="x", yref="y",
-                        x=i + 0.20, y=s2[metrics[i]],
-                        sizex=0.15, sizey=0.15,
-                        xanchor="center", yanchor="bottom",
-                        layer="above"
-                    ))
-
-            # Find den højeste værdi for at sætte loftet på grafen
-            all_vals = [s1[m] for m in metrics] + [s2[m] for m in metrics]
-            max_val = max(all_vals) if all_vals else 10
-
-            fig.update_layout(
-                showlegend=False,
-                height=450, # Lidt højere for at give plads til logoer
-                margin=dict(t=80, b=40, l=10, r=10),
-                xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
-                yaxis=dict(visible=False, range=[0, max_val * 1.4], fixedrange=True),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-    # Opdateret kontrast-check (Rød 186 er for mørk til sort skrift)
-    def get_text_color(hex_color):
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        # Vi sænker grænsen til 150 for at tvinge hvid skrift på bl.a. rød
-        luminance = (r * 0.299 + g * 0.587 + b * 0.114)
-        return "black" if luminance > 160 else "white"
+        
+        # HER KALDER VI FUNKTIONEN:
+        with sub_tabs[0]:
+            draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
+        with sub_tabs[1]:
+            draw_h2h_chart(team1, team2, ['M+'], ['Mål Scoret'])
+        with sub_tabs[2]:
+            draw_h2h_chart(team1, team2, ['M-'], ['Mål Imod'])
