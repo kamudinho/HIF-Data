@@ -3,30 +3,33 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Sikr at vi har gyldige strenge til filtrering
+    # Vi bruger navnene til filter, men bemærk at EVENTS kun har UUID
+    # For en sikkerheds skyld bruger vi de globale værdier hvis intet er sendt
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
     
     return {
-        # --- KAMPLISTE (Hurtig indlæsning) ---
+        # --- MATCHINFO ---
         "opta_matches": f"""
             SELECT 
                 MATCH_OPTAUUID, 
-                CAST(DATE AS DATE) as MATCH_DATE,
+                MATCH_DATE_FULL,
                 MATCH_DESCRIPTION,
-                HOMECONTESTANT_NAME, 
-                AWAYCONTESTANT_NAME,
-                HOMECONTESTANT_OPTAUUID,
-                AWAYCONTESTANT_OPTAUUID,
+                CONTESTANTHOME_NAME, 
+                CONTESTANTAWAY_NAME,
+                CONTESTANTHOME_OPTAUUID,
+                CONTESTANTAWAY_OPTAUUID,
+                FT_HOME_SCORE,
+                FT_AWAY_SCORE,
                 COMPETITION_NAME,
                 TOURNAMENTCALENDAR_NAME
             FROM {DB}.OPTA_MATCHINFO 
             WHERE COMPETITION_NAME = '{liga}' 
             AND TOURNAMENTCALENDAR_NAME = '{saeson}'
-            ORDER BY DATE DESC
+            ORDER BY MATCH_DATE_FULL DESC
         """,
 
-        # --- EVENT DATA (Her lå din Schema-fejl) ---
+        # --- EVENTS (Schema Fix indbygget) ---
         "opta_player_stats": f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -38,23 +41,28 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 EVENT_TIMEMIN,
                 EVENT_X,
                 EVENT_Y,
-                -- Vi caster timestamps til tekst eller dropper dem for at undgå 'ns vs us' fejl
-                CAST(EVENT_TIMESTAMP AS STRING) as EVENT_TIME_STR 
+                -- Vi caster timestamp til streng for at undgå ns/us schema fejlen
+                CAST(EVENT_TIMESTAMP AS STRING) as EVENT_TIMESTAMP_STR
             FROM {DB}.OPTA_EVENTS
-            WHERE COMPETITION_NAME = '{liga}' 
-            AND TOURNAMENTCALENDAR_NAME = '{saeson}'
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+            )
         """,
 
-        # --- TEAM/MATCH STATS ---
+        # --- MATCHSTATS ---
         "opta_team_stats": f"""
             SELECT 
                 MATCH_OPTAUUID,
                 CONTESTANT_OPTAUUID,
-                CONTESTANT_NAME,
-                STATS_TYPE,
-                STATS_VALUE
+                STAT_TYPE,
+                STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
-            WHERE COMPETITION_NAME = '{liga}' 
-            AND TOURNAMENTCALENDAR_NAME = '{saeson}'
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+            )
         """
     }
