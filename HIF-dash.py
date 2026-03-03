@@ -182,11 +182,3 @@ try:
 except Exception as e:
     st.error(f"Kunne ikke indlæse siden '{sel}': {e}")
     st.info("Dette skyldes ofte en manglende fil i 'tools/' mappen eller en kolonne-fejl.")
-
-# Tilføj dette midlertidigt i HIF-dash.py for at finde fejlen
-if st.checkbox("DEBUG: Vis Opta Status"):
-    st.write("Sæson filter brugt:", TOURNAMENTCALENDAR_NAME)
-    st.write("Antal Opta kampe fundet:", len(dp['opta']['matches']))
-    st.write("Antal Opta events fundet:", len(dp['opta']['player_stats']))
-    if not dp['opta']['matches'].empty:
-        st.write("Eksempel på fundne sæsoner i DB:", dp['opta']['matches']['TOURNAMENTCALENDAR_NAME'].unique())
