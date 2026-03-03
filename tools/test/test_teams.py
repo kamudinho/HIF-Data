@@ -70,52 +70,68 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION ---
     def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
-            fig = go.Figure()
-            
-            # Beregn værdier
-            y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
-            y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
-            
-            c1 = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
-            c2 = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
-            
-            # Søjle Hold 1
-            fig.add_trace(go.Bar(
-                name=n1, x=labels, y=y1_vals, 
-                marker_color=c1["primary"],
-                marker_line=dict(color=c1["secondary"], width=2),
-                text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
-                textfont=dict(color="white" if c1["primary"].lower() != "#ffffff" else "black")
-            ))
-            
-            # Søjle Hold 2
-            fig.add_trace(go.Bar(
-                name=n2, x=labels, y=y2_vals, 
-                marker_color=c2["primary"],
-                marker_line=dict(color=c2["secondary"], width=2),
-                text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
-                textfont=dict(color="white" if c2["primary"].lower() != "#ffffff" else "black")
-            ))
-        
-            # Logo-placering (justeret x-offset for at matche de nye mellemrum)
-            for i in range(len(labels)):
-                if n1 in logo_map:
-                    fig.add_layout_image(dict(source=logo_map[n1], xref="x", yref="paper", x=i - 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
-                if n2 in logo_map:
-                    fig.add_layout_image(dict(source=logo_map[n2], xref="x", yref="paper", x=i + 0.2, y=1.1, sizex=0.12, sizey=0.12, xanchor="center", yanchor="middle"))
+    fig = go.Figure()
+    
+    # 1. Beregn værdier
+    y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
+    y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
+    
+    c1 = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
+    c2 = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
+    
+    # 2. Søjler (Vi bruger width for at have fuld kontrol over logo-match)
+    bar_width = 0.35
+    
+    fig.add_trace(go.Bar(
+        name=n1, x=labels, y=y1_vals, 
+        marker_color=c1["primary"],
+        marker_line=dict(color=c1["secondary"], width=2),
+        text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
+        width=bar_width,
+        textfont=dict(size=14, family="Arial Black")
+    ))
+    
+    fig.add_trace(go.Bar(
+        name=n2, x=labels, y=y2_vals, 
+        marker_color=c2["primary"],
+        marker_line=dict(color=c2["secondary"], width=2),
+        text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
+        width=bar_width,
+        textfont=dict(size=14, family="Arial Black")
+    ))
 
-            fig.update_layout(
-                barmode='group', 
-                bargap=0.3,       # Mellemrum mellem grupperne (f.eks. mellem 'Point' og 'Sejre')
-                bargroupgap=0.1,  # Det specifikke mellemrum mellem de to barer i gruppen
-                height=400, 
-                margin=dict(t=100, b=40, l=10, r=10),
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
-                showlegend=False,
-                yaxis=dict(showgrid=False, zeroline=True, showticklabels=False)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+    # 3. Logo-placering (Intern i Plotly)
+    # i er center af gruppen. -0.19 og +0.19 rammer center af barerne når width=0.35 og bargroupgap=0.1
+    for i in range(len(labels)):
+        if n1 in logo_map:
+            fig.add_layout_image(dict(
+                source=logo_map[n1], xref="x", yref="paper",
+                x=i - 0.19, y=1.12, # y=1.12 løfter dem fri af tallene
+                sizex=0.15, sizey=0.15,
+                xanchor="center", yanchor="middle"
+            ))
+        if n2 in logo_map:
+            fig.add_layout_image(dict(
+                source=logo_map[n2], xref="x", yref="paper",
+                x=i + 0.19, y=1.12,
+                sizex=0.15, sizey=0.15,
+                xanchor="center", yanchor="middle"
+            ))
+
+    fig.update_layout(
+        barmode='group', 
+        bargap=0.4,       
+        bargroupgap=0.05, 
+        height=450, # Lidt højere for at give plads til logoerne i toppen
+        margin=dict(t=120, b=40, l=10, r=10),
+        plot_bgcolor='rgba(0,0,0,0)', 
+        paper_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        yaxis=dict(showgrid=False, zeroline=True, showticklabels=False, fixedrange=True),
+        xaxis=dict(fixedrange=True)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
