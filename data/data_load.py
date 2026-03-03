@@ -100,37 +100,57 @@ def load_snowflake_query(query_key, is_opta=False):
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
-    # 1. Hent data fra Snowflake
+    # 1. Hent rå mursten fra Snowflake (Opta)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
-    df_opta_player_stats = load_snowflake_query("opta_player_stats", is_opta=True)
+    
+    # Hent de to rå event-dele i stedet for én stor join
+    df_events_raw = load_snowflake_query("opta_events_raw", is_opta=True)
+    df_quals_raw = load_snowflake_query("opta_qualifiers_raw", is_opta=True)
+
+    # 2. Saml Opta Player Stats (Events + Qualifiers) i Python
+    df_opta_player_stats = pd.DataFrame()
+    
+    if not df_events_raw.empty:
+        if not df_quals_raw.empty:
+            # Vi grupperer qualifiers pr. event, så vi får én række pr. skud
+            # Dette svarer til LISTAGG i SQL, men er mere fejl-sikkert her
+            df_quals_agg = df_quals_raw.groupby('EVENT_OPTAUUID').agg({
+                'QUALIFIER_QID': lambda x: ','.join(x.astype(str)),
+                'QUALIFIER_VALUE': lambda x: ','.join(x.astype(str).replace('None', ''))
+            }).reset_index().rename(columns={
+                'QUALIFIER_QID': 'QUALIFIERS',
+                'QUALIFIER_VALUE': 'QUAL_VALUES'
+            })
+            
+            # Left merge: Behold alle skud, tilføj detaljer hvor de findes
+            df_opta_player_stats = pd.merge(df_events_raw, df_quals_agg, on='EVENT_OPTAUUID', how='left')
+        else:
+            # Hvis ingen qualifiers findes, bruger vi de rå events
+            df_opta_player_stats = df_events_raw
+            df_opta_player_stats['QUALIFIERS'] = ""
+            df_opta_player_stats['QUAL_VALUES'] = ""
+
+    # 3. Hent øvrig data (Wyscout & Lokal)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
-
-    # 2. Hent data fra lokal CSV (Dette fikser TRUPPEN/BIRTHDATE fejlen)
     df_players_csv = load_local_players()
 
-    # 3. Map Opta Events
+    # 4. Map Opta Event Navne (Skud, Mål, osv.)
     if not df_opta_player_stats.empty and 'EVENT_TYPEID' in df_opta_player_stats.columns:
         df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].astype(str).apply(get_event_name)
 
-    # 4. Logo Mapping
-    # --- 5. DATA PACKAGE BUILDER (Opdateret sektion 4) ---
+    # 5. Logo Mapping
     logo_map = {}
     if not df_logos_raw.empty:
-        # Tving alle kolonnenavne til UPPERCASE for at matche SQL AS TEAM_LOGO
-        df_logos_raw.columns = [str(c).upper().strip() for c in df_logos_raw.columns]
-        
         for _, row in df_logos_raw.iterrows():
             try:
-                # Vi ved nu fra din SQL at de hedder TEAM_WYID og TEAM_LOGO
                 w_id = int(row['TEAM_WYID'])
                 url = str(row['TEAM_LOGO'])
                 if url and url != 'None':
                     logo_map[w_id] = url
-            except:
-                continue
+            except: continue
                 
     return {
         "opta": {
@@ -144,7 +164,6 @@ def get_data_package():
             "logos": logo_map,
             "wyid": 7490
         },
-        # VIGTIGT: Vi bruger CSV-dataen til 'players' nøglen
         "players": df_players_csv, 
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
