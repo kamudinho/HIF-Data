@@ -1,3 +1,5 @@
+#data/utils/team_mapping.py
+
 # --- Turneringer ---
 COMPETITIONS = {
     "1. Division": {
