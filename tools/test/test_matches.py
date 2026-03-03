@@ -9,13 +9,13 @@ def vis_side():
     
     # --- 1. FILTRERING TIL AKTUEL SÆSON & LIGA ---
     # Vi henter værdierne fra din centrale konfiguration i dp
-    valgt_saeson = dp.get("SEASON_NAME", "2025/2026")
+    valgt_saeson = dp.get("TOURNAMENTCALENDAR_NAME", "2025/2026")
     valgt_liga = dp.get("VALGT_LIGA", "1. division")
 
     # Filtrér med det samme, så vi ikke bearbejder historiske data (f.eks. AaB's 251 kampe)
     if not df_matches.empty:
         df_matches = df_matches[
-            (df_matches['SEASON_NAME'] == valgt_saeson) & 
+            (df_matches['TOURNAMENTCALENDAR_NAME'] == valgt_saeson) & 
             (df_matches['TOURNAMENT_NAME'] == valgt_liga)
         ]
 
