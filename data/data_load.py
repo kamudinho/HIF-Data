@@ -116,14 +116,22 @@ def get_data_package():
         df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].astype(str).apply(get_event_name)
 
     # 4. Logo Mapping
+    # --- 5. DATA PACKAGE BUILDER (Opdateret sektion 4) ---
     logo_map = {}
     if not df_logos_raw.empty:
-        # RET HER: Vi tjekker begge cases i kolonnenavnet
-        wyid_col = 'TEAM_WYID' if 'TEAM_WYID' in df_logos_raw.columns else 'team_wyid'
-        logo_col = 'TEAM_LOGO' if 'TEAM_LOGO' in df_logos_raw.columns else 'team_logo'
+        # Tving alle kolonnenavne til UPPERCASE for at matche SQL AS TEAM_LOGO
+        df_logos_raw.columns = [str(c).upper().strip() for c in df_logos_raw.columns]
         
-        logo_map = {int(row[wyid_col]): row[logo_col] for _, row in df_logos_raw.iterrows() if pd.notnull(row.get(wyid_col))}
-        
+        for _, row in df_logos_raw.iterrows():
+            try:
+                # Vi ved nu fra din SQL at de hedder TEAM_WYID og TEAM_LOGO
+                w_id = int(row['TEAM_WYID'])
+                url = str(row['TEAM_LOGO'])
+                if url and url != 'None':
+                    logo_map[w_id] = url
+            except:
+                continue
+                
     return {
         "opta": {
             "matches": df_matches_opta,
