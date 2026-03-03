@@ -17,6 +17,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 MATCH_STATUS,          -- TILFØJET: Mangler i din nuværende query
                 TOTAL_HOME_SCORE,      -- TILFØJET: For at vise resultater
                 TOTAL_AWAY_SCORE,      -- TILFØJET: For at vise resultater
+                WINNER,
                 CONTESTANTHOME_OPTAUUID, 
                 CONTESTANTAWAY_OPTAUUID,
                 CONTESTANTHOME_NAME, 
