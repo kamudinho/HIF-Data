@@ -17,40 +17,45 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
 
-    # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
+   # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
     if not df_raw_stats.empty and not df_matches.empty:
         try:
-            # Pivotér statistik: én række pr. hold pr. kamp
+            # 1. Pivotér baseret på de præcise UUID kolonner fra databasen
             df_pivot = df_raw_stats.pivot_table(
-                index=['MATCH_ID', 'CONTESTANT_ID'], 
+                index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
                 columns='STAT_TYPE', 
                 values='STAT_TOTAL', 
                 aggfunc='first'
             ).reset_index()
 
-            # Forbered Hjemme-stats (_HOME)
+            # 2. Forbered Hjemme-stats (_HOME)
+            # Vi fjerner join-nøglerne fra omdøbningen for at holde dem rene til merge
             df_home = df_pivot.copy()
-            cols_stats = [c for c in df_home.columns if c not in ['MATCH_ID', 'CONTESTANT_ID']]
-            df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_stats})
+            cols_to_rename = [c for c in df_home.columns if c not in ['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID']]
+            df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_to_rename})
             
-            # Forbered Ude-stats (_AWAY)
+            # 3. Forbered Ude-stats (_AWAY)
             df_away = df_pivot.copy()
-            df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_stats})
+            df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_to_rename})
 
-            # Merge på df_matches
+            # 4. Merge Hjemme-stats på df_matches
+            # Vi matcher kampens UUID + Hjemmeholdets UUID
             df_matches = pd.merge(
                 df_matches, df_home, 
                 left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
-                right_on=['MATCH_ID', 'CONTESTANT_ID'], 
+                right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
                 how='left'
-            ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
+            ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
 
+            # 5. Merge Ude-stats på df_matches
+            # Vi matcher kampens UUID + Udeholdets UUID
             df_matches = pd.merge(
                 df_matches, df_away, 
                 left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
-                right_on=['MATCH_ID', 'CONTESTANT_ID'], 
+                right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
                 how='left'
-            ).drop(columns=['MATCH_ID', 'CONTESTANT_ID'], errors='ignore')
+            ).drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+
         except Exception as e:
             st.error(f"⚠️ Fejl ved behandling af kampstatistik: {e}")
 
