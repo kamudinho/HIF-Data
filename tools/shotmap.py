@@ -3,14 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
-# --- FARVER ---
+# --- KONFIGURATION ---
 HIF_RED = '#df003b' 
 HIF_BLUE = '#0055aa'
+# Din specifikke Opta ID for Hvidovre IF
+HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp=None):
     st.markdown(f"""
         <div style="background-color:{HIF_RED}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">🎯 HVIDOVRE IF - OPTA SHOTMAP</h3>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">🎯 HVIDOVRE IF - OPTA AFSLUTNINGER</h3>
         </div>
     """, unsafe_allow_html=True)
     
@@ -18,102 +20,78 @@ def vis_side(dp=None):
         st.error("Data pakke ikke fundet.")
         return
 
-    # 1. HENT DATA
+    # Hent rådata
     df_shots = dp.get('playerstats', pd.DataFrame())
     df_matches = dp.get('opta_matches', pd.DataFrame())
 
     if df_shots.empty:
-        st.info("Ingen Opta afslutninger fundet i systemet.")
+        st.info("Ingen afslutninger fundet i databasen.")
         return
 
-    # --- 2. DYNAMISK FIND KOLONNER (Løser 'DATE' fejlen) ---
-    # Vi leder efter kolonnenavne der indeholder bestemte ord
-    def find_col(df, keywords):
-        for col in df.columns:
-            if any(key in col for key in keywords):
-                return col
-        return None
+    # --- 1. FILTRERING: KUN HVIDOVRE SPIL_ID ---
+    # Vi filtrerer på EVENT_CONTESTANT_OPTAUUID for at sikre det er HIF
+    df_hif = df_shots[df_shots['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
 
-    col_date = find_col(df_matches, ['DATE', 'TIMESTAMP'])
-    col_home = find_col(df_matches, ['HOME', 'CONTESTANTHOME'])
-    col_away = find_col(df_matches, ['AWAY', 'CONTESTANTAWAY'])
-    col_match_id = find_col(df_matches, ['MATCH_OPTAUUID', 'MATCH_ID'])
+    if df_hif.empty:
+        st.warning(f"Ingen data fundet for Hvidovre ID: {HIF_OPTA_UUID}")
+        return
 
-    # --- 3. UI LAYOUT ---
+    # --- 2. UI LAYOUT ---
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
-        # Kamp filter
-        if not df_matches.empty and col_date and col_home:
-            # Vi bygger beskrivelsen sikkert
-            df_matches['DESC'] = (
-                df_matches[col_date].astype(str).str[:10] + " - " + 
-                df_matches[col_home].astype(str) + " v " + 
-                df_matches[col_away].astype(str)
-            )
-            match_list = df_matches.sort_values(col_date, ascending=False)
-            valgt_kamp = st.selectbox("Vælg Kamp", ["Alle Kampe"] + match_list['DESC'].tolist())
-        else:
-            valgt_kamp = "Alle Kampe"
-
         # Spiller filter
-        spiller_col = find_col(df_shots, ['PLAYER_NAME', 'NAME'])
-        spiller_liste = sorted(df_shots[spiller_col].dropna().unique().tolist()) if spiller_col else []
-        valgt_spiller = st.selectbox("Vælg spiller", options=["Alle spillere"] + spiller_liste)
+        spiller_liste = sorted(df_hif['PLAYER_NAME'].dropna().unique().tolist())
+        valgt_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
         
-        vis_type = st.radio("Vis afslutninger:", ["Alle", "Kun mål"], horizontal=True)
+        vis_type = st.radio("Vis:", ["Alle skud", "Kun mål"], horizontal=True)
 
-    # --- 4. FILTRERING ---
-    df_p = df_shots.copy()
+    # Filtrér data baseret på valg
+    df_plot = df_hif.copy()
+    if valgt_spiller != "Hele Holdet":
+        df_plot = df_plot[df_plot['PLAYER_NAME'] == valgt_spiller]
+    
+    if vis_type == "Kun mål":
+        df_plot = df_plot[df_plot['EVENT_OUTCOME'].astype(str) == '1']
 
-    if valgt_kamp != "Alle Kampe" and col_match_id:
-        m_id = df_matches[df_matches['DESC'] == valgt_kamp][col_match_id].iloc[0]
-        # Find match_id kolonnen i shots (den hedder ofte MATCH_OPTAUUID)
-        shot_match_col = find_col(df_shots, ['MATCH_OPTAUUID', 'MATCH_ID'])
-        if shot_match_col:
-            df_p = df_p[df_p[shot_match_col].astype(str) == str(m_id)]
-
-    if valgt_spiller != "Alle spillere" and spiller_col:
-        df_p = df_p[df_p[spiller_col] == valgt_spiller]
-
-    outcome_col = find_col(df_shots, ['OUTCOME', 'IS_GOAL'])
-    if vis_type == "Kun mål" and outcome_col:
-        df_p = df_p[df_p[outcome_col].astype(str) == '1']
-
-    # --- 5. STATS BOKS ---
+    # --- 3. STATISTIK BOKS ---
     with col_stats:
-        total_shots = len(df_p)
-        total_goals = len(df_p[df_p[outcome_col].astype(str) == '1']) if outcome_col else 0
-        xg_col = find_col(df_shots, ['XG', 'EXPECTED_GOALS'])
-        total_xg = df_p[xg_col].sum() if xg_col else 0
+        total_shots = len(df_plot)
+        total_goals = len(df_plot[df_plot['EVENT_OUTCOME'].astype(str) == '1'])
+        # xG_VAL beregnet i data_load.py
+        total_xg = df_plot['XG_VAL'].sum() if 'XG_VAL' in df_plot.columns else 0
         
         st.markdown(f"""
-        <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
-            <h4 style="margin:0;">{valgt_spiller if valgt_spiller != "Alle spillere" else "Hele holdet"}</h4>
+        <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px; margin-top:20px;">
+            <h4 style="margin:0; color:{HIF_RED};">{valgt_spiller}</h4>
             <hr>
-            <h2 style="margin:0;">{total_shots} skud / {total_goals} mål</h2>
-            <h2 style="margin:0;">{total_xg:.2f} total xG</h2>
+            <p style="margin:0; font-size:1.2rem;"><b>{total_shots}</b> skud / <b>{total_goals}</b> mål</p>
+            <p style="margin:0; font-size:1.2rem;"><b>{total_xg:.2f}</b> total xG</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # --- 6. TEGN KORTET ---
+    # --- 4. TEGN KORTET ---
     with col_map:
+        # Opta bruger 0-100 skala
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444', goal_type='box')
         fig, ax = pitch.draw(figsize=(8, 10))
         
-        # Golden Zone
+        # Golden Zone visualisering
         ax.add_patch(plt.Rectangle((37, 88.5), 26, 11.5, color='gold', alpha=0.1, zorder=1))
 
-        x_col = find_col(df_shots, ['EVENT_X', 'LOCATION_X', 'X'])
-        y_col = find_col(df_shots, ['EVENT_Y', 'LOCATION_Y', 'Y'])
-
-        if not df_p.empty and x_col and y_col:
-            for i, row in df_p.reset_index().iterrows():
-                is_goal = str(row[outcome_col]) == '1' if outcome_col else False
+        if not df_plot.empty:
+            for _, row in df_plot.iterrows():
+                is_goal = str(row['EVENT_OUTCOME']) == '1'
                 color = HIF_RED if is_goal else HIF_BLUE
-                sc_size = (row[xg_col] * 800) + 100 if xg_col else 200
+                # Skalér cirklerne efter xG
+                size = (row.get('XG_VAL', 0.05) * 1200) + 100
+                # Trekant for hovedstød (Qualifier 15)
+                marker = '^' if '15' in str(row.get('QUALIFIERS', '')) else 'o'
                 
-                pitch.scatter(row[x_col], row[y_col], s=sc_size, c=color, 
-                              edgecolors='white', ax=ax, zorder=3, alpha=0.8)
+                pitch.scatter(row['EVENT_X'], row['EVENT_Y'], 
+                              s=size, c=color, marker=marker,
+                              edgecolors='white', linewidths=1,
+                              ax=ax, alpha=0.8, zorder=3)
         
         st.pyplot(fig)
+        st.caption("Cirkel = Fod | Trekant = Hovedstød | Størrelse = xG-værdi")
