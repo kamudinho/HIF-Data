@@ -1,12 +1,24 @@
 import streamlit as st
 import pandas as pd
 import os
+import sys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+
+# Sikr at Python kan se 'data' mappen som et modul
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
-from data.utils.mappings import get_event_name
+
+# --- MODUL-TJEK: Import af mappings ---
+try:
+    from data.utils.mappings import get_event_name
+except ModuleNotFoundError:
+    # Fallback hvis stien driller i Streamlit Cloud
+    def get_event_name(x): return f"ID {x}"
+    st.warning("⚠️ Kunne ikke finde 'data/utils/mappings.py'. Event-navne vil ikke blive mappet.")
 
 # --- 1. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
@@ -31,14 +43,12 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-# --- 2. QUERY LOADER MED FIX FOR SCHEMA & SYNTAX ---
+# --- 2. QUERY LOADER ---
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
-    if not conn: 
-        return pd.DataFrame()
+    if not conn: return pd.DataFrame()
     
-    # SIKRING: Undgå 'None' i SQL ved at bruge værdier fra team_mapping som fallback
     comp_f = COMPETITION_NAME if COMPETITION_NAME else "NordicBet Liga"
     season_f = TOURNAMENTCALENDAR_NAME if TOURNAMENTCALENDAR_NAME else "2025/2026"
     
@@ -48,35 +58,24 @@ def load_snowflake_query(query_key, is_opta=False):
         queries = get_wy_queries(None, season_f)
         
     q = queries.get(query_key)
-    if not q: 
-        return pd.DataFrame() 
+    if not q: return pd.DataFrame() 
     
     try:
-        # Hent data
         df = conn.query(q)
-        
         if df is not None and not df.empty:
-            # Rens kolonner (upper case og strip)
             df.columns = [str(c).upper().strip() for c in df.columns]
-            
-            # --- FIX 1: SCHEMA CONFLICT (TIMESTAMP PRECISION) ---
-            # Vi tvinger alle tidsstempler til mikrosekunder for at undgå 'ns' vs 'us' fejl
+            # Fix for Timestamp precision
             for col in df.select_dtypes(include=['datetime64[ns]', 'datetime64']).columns:
                 df[col] = df[col].dt.floor('us')
-                
             return df
         return pd.DataFrame()
     except Exception as e:
-        # Dette fanger 'unexpected None' eller '2025' fejl i selve SQL-eksekveringen
         st.error(f"⚠️ SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
 
 # --- 3. DATA PACKAGE BUILDER ---
 def get_data_package():
-    """
-    Samler alt data og mapper Opta Event IDs til læsbar tekst.
-    """
-    # 1. HENT RÅ DATA
+    # Hent data
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_opta_player_stats = load_snowflake_query("opta_player_stats", is_opta=True)
@@ -85,25 +84,19 @@ def get_data_package():
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
 
-    # 2. MAPPING AF OPTA EVENTS (Oversætter f.eks. Type 16 -> Goal)
+    # Map Event Navne hvis muligt
     if not df_opta_player_stats.empty and 'EVENT_TYPEID' in df_opta_player_stats.columns:
-        # Vi laver en ny kolonne 'EVENT_NAME', så vi bevarer det rå ID til logik
-        df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].apply(get_event_name)
+        df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].astype(str).apply(get_event_name)
 
-    # 3. LOGO MAPPING
     logo_map = {}
     if not df_logos_raw.empty:
-        logo_map = {
-            int(row['TEAM_WYID']): row['TEAM_LOGO'] 
-            for _, row in df_logos_raw.iterrows() if pd.notnull(row.get('TEAM_WYID'))
-        }
+        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row.get('TEAM_WYID'))}
 
-    # 4. RETURNER PAKKEN
     return {
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
-            "player_stats": df_opta_player_stats, # Nu med EVENT_NAME!
+            "player_stats": df_opta_player_stats,
         },
         "wyscout": {
             "team_stats": df_team_stats_wy,
@@ -111,7 +104,6 @@ def get_data_package():
             "logos": logo_map,
             "wyid": 7490
         },
-        # Flade nøgler til bagudkompatibilitet
         "players": df_team_stats_wy, 
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
