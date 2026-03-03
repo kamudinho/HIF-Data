@@ -8,14 +8,14 @@ from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 
 # --- 1. CENTRAL KONFIGURATION ---
-VALGT_LIGA = "1. division"
+VALGT_LIGA = "1. Division"
 TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- 2. TURNERING MAPPING ---
 COMPETITIONS = {
-    "1. division": {
+    "1. Division": {
         "wyid": 328, 
-        "opta_name": "1. division"
+        "opta_name": "1. Division"
     },
     "Superliga": {
         "wyid": 335, 
