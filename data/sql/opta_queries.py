@@ -40,7 +40,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             SELECT 
                 e.MATCH_OPTAUUID, 
                 e.EVENT_OPTAUUID, 
-                e.EVENT_CONTESTANT_OPTAUUID, -- Tilføjet for hold-filtrering
+                e.EVENT_CONTESTANT_OPTAUUID,
                 e.PLAYER_NAME, 
                 e.EVENT_X, 
                 e.EVENT_Y, 
