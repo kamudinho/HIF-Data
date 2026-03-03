@@ -7,11 +7,35 @@ def vis_side():
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
-    # --- 1. DATA MERGE LOGIK ---
+    # --- 1. FILTRERING TIL AKTUEL SÆSON & LIGA ---
+    # Vi henter værdierne fra din centrale konfiguration i dp
+    valgt_saeson = dp.get("SEASON_NAME", "2025/2026")
+    valgt_liga = dp.get("VALGT_LIGA", "1. division")
+
+    # Filtrér med det samme, så vi ikke bearbejder historiske data (f.eks. AaB's 251 kampe)
+    if not df_matches.empty:
+        df_matches = df_matches[
+            (df_matches['SEASON_NAME'] == valgt_saeson) & 
+            (df_matches['TOURNAMENT_NAME'] == valgt_liga)
+        ]
+
+    # --- 2. CSS & UI ---
+    hif_rod = "#df003b"
+    st.markdown(f"""
+        <style>
+        .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
+        .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
+        .stat-val {{ font-weight: bold; font-size: 14px; }}
+        .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
+        .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
+        .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 3. DATA MERGE LOGIK (Stats per kamp) ---
     if "opta_stats" in dp and not dp["opta_stats"].empty:
         df_raw_stats = dp["opta_stats"].copy()
         df_raw_stats.columns = [c.upper() for c in df_raw_stats.columns]
-
         try:
             df_pivot = df_raw_stats.pivot_table(
                 index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
@@ -32,25 +56,12 @@ def vis_side():
         except Exception as e:
             st.error(f"Fejl under behandling af stats: {e}")
 
-    # --- 2. CSS & UI ---
-    valgt_liga_global = dp.get("VALGT_LIGA", "1. division")
-    hif_rod = "#df003b"
-    st.markdown(f"""
-        <style>
-        .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
-        .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
-        .stat-val {{ font-weight: bold; font-size: 14px; }}
-        .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
-        .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
-        .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
-        </style>
-    """, unsafe_allow_html=True)
-
+    # --- 4. HOLD VALG & MASK ---
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga}
     
     if not liga_hold_options:
-        st.warning(f"Ingen hold fundet for liga: {valgt_liga_global}")
+        st.warning(f"Ingen hold fundet for liga: {valgt_liga}")
         return
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
@@ -62,7 +73,7 @@ def vis_side():
     team_matches = df_matches[mask].copy()
     all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
     
-    # --- 3. STATS BEREGNING ---
+    # --- 5. STATS BEREGNING (Top bar) ---
     stats_map = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -82,7 +93,7 @@ def vis_side():
     for i, (l, v) in enumerate(stats_display):
         with top_cols[i+1]: st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TEGN FUNKTION ---
+    # --- 6. TEGN FUNKTION ---
     def tegn_kampe(matches, is_played):
         if matches.empty:
             st.info("Ingen kampe fundet.")
@@ -92,9 +103,7 @@ def vis_side():
             for name, info in TEAMS.items():
                 if info.get("opta_uuid") == uuid:
                     manual_logo = info.get("logo")
-                    if manual_logo and manual_logo != "-":
-                        return manual_logo
-                    # Fallback
+                    if manual_logo and manual_logo != "-": return manual_logo
                     wyid = info.get("team_wyid")
                     return logos.get(wyid)
             return None
@@ -107,8 +116,8 @@ def vis_side():
                 st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
                 current_date = m_date
 
-            h_n = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
-            a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
+            h_n = id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row.get('CONTESTANTHOME_NAME', 'Ukendt'))
+            a_n = id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row.get('CONTESTANTAWAY_NAME', 'Ukendt'))
 
             with st.container(border=True):
                 col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -118,7 +127,7 @@ def vis_side():
                     if h_l: st.image(h_l, width=28)
                 with col3:
                     if is_played: st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
-                    else: st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{str(row['MATCH_LOCALTIME'])[:5]}</span></div>", unsafe_allow_html=True)
+                    else: st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{str(row.get('MATCH_LOCALTIME', ''))[:5]}</span></div>", unsafe_allow_html=True)
                 with col4:
                     a_l = hent_logo(row['CONTESTANTAWAY_OPTAUUID'])
                     if a_l: st.image(a_l, width=28)
