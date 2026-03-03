@@ -123,8 +123,8 @@ def vis_side(df_raw=None):
                 ))
 
         fig.update_layout(
-            barmode='group', bargap=0.35, bargroupgap=0.05,
-            height=450, margin=dict(t=130, b=40, l=10, r=10), # Mere top-margin
+            barmode='group', bargap=0.25, bargroupgap=0.05,
+            height=450, margin=dict(t=110, b=40, l=10, r=10), # Mere top-margin
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(y1_vals), max(y2_vals)) * 1.2]),
