@@ -64,58 +64,62 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION (FORBEDRET LOGO-LOGIK) ---
     def draw_h2h_chart(t1, t2, metrics, labels):
-        s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
-        s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
-        c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
-        c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
-        
-        # VIGTIGT: Her henter vi de rå billed-links
-        logo1 = TEAMS.get(t1, {}).get('logo', "")
-        logo2 = TEAMS.get(t2, {}).get('logo', "")
+    s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
+    s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
+    c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
+    c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
+    
+    # Logoer hentes her
+    logo1 = TEAMS.get(t1, {}).get('logo', "")
+    logo2 = TEAMS.get(t2, {}).get('logo', "")
 
-        fig = go.Figure()
-        x_vals = list(range(len(labels)))
+    # 1. Vi tegner logoerne først i Streamlit kolonner over grafen
+    # Vi laver en kolonne for hver bar-gruppe
+    cols = st.columns(len(labels))
+    
+    fig = go.Figure()
+    x_vals = list(range(len(labels)))
 
-        # Søjle 1
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s1[m] for m in metrics],
-            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.35, offset=-0.38
-        ))
-        # Søjle 2
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s2[m] for m in metrics],
-            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
-            width=0.35, offset=0.03
-        ))
+    # Bar-traces
+    fig.add_trace(go.Bar(
+        x=x_vals, y=[s1[m] for m in metrics],
+        marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
+        insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
+        width=0.35, offset=-0.38
+    ))
+    fig.add_trace(go.Bar(
+        x=x_vals, y=[s2[m] for m in metrics],
+        marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
+        insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
+        width=0.35, offset=0.03
+    ))
 
-        # Logo-loop med tvungen lag-styring
-        for i in x_vals:
-            if logo1:
-                fig.add_layout_image(dict(
-                    source=logo1, xref="x", yref="y", x=i-0.20, y=s1[metrics[i]],
-                    sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom",
-                    layer="above", sizing="contain"
-                ))
-            if logo2:
-                fig.add_layout_image(dict(
-                    source=logo2, xref="x", yref="y", x=i+0.21, y=s2[metrics[i]],
-                    sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom",
-                    layer="above", sizing="contain"
-                ))
+    # 2. Hvis Plotly driller med at tegne dem INDE i grafen, 
+    # så bruger vi annotations med 'text' som indeholder <img> tags 
+    # – det er en mere stabil vej i Plotly
+    for i in x_vals:
+        if logo1:
+            fig.add_annotation(
+                x=i-0.18, y=s1[metrics[i]],
+                text=f' <img src="{logo1}" width="30" height="30">',
+                showarrow=False, yanchor="bottom", xanchor="center", yshift=5
+            )
+        if logo2:
+            fig.add_annotation(
+                x=i+0.20, y=s2[metrics[i]],
+                text=f' <img src="{logo2}" width="30" height="30">',
+                showarrow=False, yanchor="bottom", xanchor="center", yshift=5
+            )
 
-        all_vals = [s1[m] for m in metrics] + [s2[m] for m in metrics]
-        max_v = max(all_vals) if all_vals else 10
-        
-        fig.update_layout(
-            showlegend=False, height=500, margin=dict(t=100, b=40, l=10, r=10),
-            xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
-            yaxis=dict(visible=False, range=[0, max_v * 1.5], fixedrange=True),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    max_v = max([s1[m] for m in metrics] + [s2[m] for m in metrics] + [1])
+    
+    fig.update_layout(
+        showlegend=False, height=450, margin=dict(t=50, b=40, l=10, r=10),
+        xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
+        yaxis=dict(visible=False, range=[0, max_v * 1.3], fixedrange=True),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+    )
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
