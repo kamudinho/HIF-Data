@@ -7,48 +7,27 @@ from mplsoccer import VerticalPitch
 HIF_RED = '#df003b' 
 HIF_BLUE = '#0055aa'
 
-def extract_qualifier_value(qual_str, val_str, target_id):
-    if not qual_str or pd.isna(qual_str): return None
-    quals = str(qual_str).split(',')
-    vals = str(val_str).split(',')
-    if str(target_id) in quals:
-        try:
-            return vals[quals.index(str(target_id))]
-        except:
-            return None
-    return None
-
 def vis_shotmap(df):
-    """Selve logikken til at tegne kortet"""
     if df is None or df.empty:
-        st.warning("Ingen skud fundet for denne kamp.")
+        st.warning("Ingen skud fundet for det valgte filter.")
         return None
     
     df.columns = [c.upper() for c in df.columns]
-    shot_ids = ['13', '14', '15', '16']
-    df_shots = df[df['EVENT_TYPEID'].astype(str).isin(shot_ids)].copy()
     
-    if df_shots.empty:
-        return None
-    
-    df_shots['XG_VAL'] = df_shots.apply(
-        lambda r: extract_qualifier_value(r.get('QUALIFIERS'), r.get('QUAL_VALUES'), '460') or 
-                  extract_qualifier_value(r.get('QUALIFIERS'), r.get('QUAL_VALUES'), '321'), 
-        axis=1
-    )
-    df_shots['XG_VAL'] = pd.to_numeric(df_shots['XG_VAL'], errors='coerce').fillna(0.07)
-    df_shots['IS_HEADER'] = df_shots['QUALIFIERS'].apply(lambda x: '15' in str(x))
-
+    # Setup af banen (Opta 0-100 skala)
     pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444', goal_type='box')
     fig, ax = pitch.draw(figsize=(10, 8))
     
     # Golden Zone
     ax.add_patch(plt.Rectangle((37, 88.5), 26, 11.5, color='gold', alpha=0.1, zorder=1))
 
-    for _, row in df_shots.iterrows():
+    for _, row in df.iterrows():
+        # Farve: Rød = Mål, Blå = Miss
         color = HIF_RED if str(row['EVENT_OUTCOME']) == '1' else HIF_BLUE
-        marker = '^' if row['IS_HEADER'] else 'o'
-        size = (row['XG_VAL'] * 900) + 100
+        # Marker: Trekant = Hovedstød (Qualifier 15)
+        marker = '^' if '15' in str(row.get('QUALIFIERS', '')) else 'o'
+        # Størrelse baseret på xG
+        size = (row.get('XG_VAL', 0.05) * 1000) + 100
         
         pitch.scatter(row['EVENT_X'], row['EVENT_Y'], 
                       s=size, c=color, marker=marker,
@@ -57,29 +36,32 @@ def vis_shotmap(df):
     return fig
 
 def vis_side(dp):
-    """Denne funktion kaldes fra HIF-dash.py"""
     st.title("🎯 Hvidovre IF - Opta Shotmap")
     
     # Hent data fra pakken
-    df_events = dp.get('opta', {}).get('player_stats', pd.DataFrame())
-    df_matches = dp.get('opta', {}).get('matches', pd.DataFrame())
+    df_events = dp.get('playerstats', pd.DataFrame())
+    df_matches = dp.get('opta_matches', pd.DataFrame())
 
-    if df_events.empty or df_matches.empty:
-        st.error("Kunne ikke finde Opta-data i systemet.")
+    if df_events.empty:
+        st.error("Ingen skud fundet i systemet.")
         return
 
-    # --- FILTRE I TOPPEN ---
+    # --- FILTRE ---
     col1, col2 = st.columns(2)
     with col1:
-        # Lav en liste over kampe: "Dato - Modstander"
-        match_list = df_matches.sort_values('DATE', ascending=False)
-        match_options = match_list['MATCH_DESCRIPTION'].unique().tolist()
-        valgt_kamp_navn = st.selectbox("Vælg Kamp", ["Alle Kampe"] + match_options)
+        if not df_matches.empty:
+            df_matches['DESC'] = (df_matches['MATCH_DATE_FULL'].astype(str).str[:10] + " - " + 
+                                 df_matches['CONTESTANTHOME_NAME'] + " v " + 
+                                 df_matches['CONTESTANTAWAY_NAME'])
+            
+            match_list = df_matches.sort_values('MATCH_DATE_FULL', ascending=False)
+            valgt_kamp = st.selectbox("Vælg Kamp", ["Alle Kampe"] + match_list['DESC'].tolist())
+        else:
+            valgt_kamp = "Alle Kampe"
 
-    # Filtrér data
-    if valgt_kamp_navn != "Alle Kampe":
-        match_id = match_list[match_list['MATCH_DESCRIPTION'] == valgt_kamp_navn]['MATCH_OPTAUUID'].iloc[0]
-        df_to_plot = df_events[df_events['MATCH_OPTAUUID'] == match_id]
+    if valgt_kamp != "Alle Kampe":
+        m_id = df_matches[df_matches['DESC'] == valgt_kamp]['MATCH_OPTAUUID'].iloc[0]
+        df_to_plot = df_events[df_events['MATCH_OPTAUUID'] == m_id]
     else:
         df_to_plot = df_events
 
@@ -88,6 +70,7 @@ def vis_side(dp):
     
     if fig:
         st.pyplot(fig)
-        st.caption("Størrelsen på prikken indikerer xG. Trekant er hovedstød. Rød er mål.")
-    else:
-        st.info("Ingen afslutninger registreret for det valgte filter.")
+        st.caption("Størrelse = xG | Trekant = Hovedstød | Rød = Mål")
+        
+        mål = len(df_to_plot[df_to_plot['EVENT_OUTCOME'].astype(str) == '1'])
+        st.metric("Total xG", f"{df_to_plot['XG_VAL'].sum():.2f}", delta=f"{mål} mål")
