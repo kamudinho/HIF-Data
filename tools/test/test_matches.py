@@ -8,24 +8,7 @@ def vis_side():
     df_matches = dp.get("opta_matches", pd.DataFrame())
     df_raw_stats = dp.get("opta_stats", pd.DataFrame())
     logos = dp.get("logo_map", {})
-    
-    # RETTELSE HER: Definer liga-navnet fra din datapakke
-    valgt_liga_navn = dp.get("VALGT_LIGA", "1. Division") 
-
-    # --- HOLDVALG ---
-    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
-    
-    liga_hold_options = {}
-    for navn, info in TEAMS.items():
-        # Vi tjekker nu mod den korrekte variabel
-        if info.get("league", "").lower() == valgt_liga_navn.lower():
-            liga_hold_options[navn] = info.get("opta_uuid")
-
-    if not liga_hold_options:
-        st.warning(f"Ingen hold fundet for liga: {valgt_liga_navn}")
-        return
-    
-   
+    valgt_liga_navn = dp.get("VALGT_LIGA", "1. Division")
 
     # --- CSS STYLING ---
     st.markdown("""
@@ -36,7 +19,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # --- PIVOT STATS (Samler hjemme/ude stats på én række) ---
+    # --- PIVOT STATS ---
     if not df_raw_stats.empty and not df_matches.empty:
         try:
             df_pivot = df_raw_stats.pivot_table(
@@ -54,18 +37,17 @@ def vis_side():
         except Exception as e:
             st.error(f"Statistik-fejl: {e}")
 
-    # --- HOLDVALG (Den fejlsikre metode) ---
-    # Vi mapper UUID til Navn for visning senere
+    # --- HOLDVALG ---
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
     
-    # Vi finder holdene ved at tjekke ligaen (case-insensitive)
+    # Her filtreres holdene baseret på liga-navnet i TEAMS ordbogen
     liga_hold_options = {}
     for navn, info in TEAMS.items():
-        if info.get("league", "").lower() == valgt_liga_navn.lower():
+        if info.get("league") == valgt_liga_navn:
             liga_hold_options[navn] = info.get("opta_uuid")
 
     if not liga_hold_options:
-        st.warning(f"Kunne ikke finde hold for {valgt_liga_navn}. Tjek stavemåde i TEAMS ordbogen.")
+        st.warning(f"Ingen hold fundet for {valgt_liga_navn}.")
         return
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
@@ -73,10 +55,10 @@ def vis_side():
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # --- TEGN KAMPE ---
+    # --- TEGN KAMPE FUNKTION ---
     def tegn_kampe(matches, is_played):
         if matches.empty:
-            st.info("Ingen kampe fundet for dette hold.")
+            st.info("Ingen kampe fundet.")
             return
 
         def hent_logo(uuid):
@@ -97,11 +79,15 @@ def vis_side():
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 with c1: st.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], 'H')}</div>", unsafe_allow_html=True)
-                with c2: st.image(hent_logo(row['CONTESTANTHOME_OPTAUUID']), width=28) if hent_logo(row['CONTESTANTHOME_OPTAUUID']) else st.empty()
+                with c2: 
+                    logo = hent_logo(row['CONTESTANTHOME_OPTAUUID'])
+                    if logo: st.image(logo, width=28)
                 with c3:
                     if is_played: st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                     else: st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{str(row.get('MATCH_LOCALTIME', ''))[:5]}</span></div>", unsafe_allow_html=True)
-                with c4: st.image(hent_logo(row['CONTESTANTAWAY_OPTAUUID']), width=28) if hent_logo(row['CONTESTANTAWAY_OPTAUUID']) else st.empty()
+                with c4: 
+                    logo = hent_logo(row['CONTESTANTAWAY_OPTAUUID'])
+                    if logo: st.image(logo, width=28)
                 with c5: st.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], 'A')}</div>", unsafe_allow_html=True)
 
     # --- VIS TABS ---
