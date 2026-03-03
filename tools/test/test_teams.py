@@ -152,7 +152,7 @@ def vis_side(df_raw=None):
                 .league-table td:nth-child(1), .league-table th:nth-child(1) { text-align: center !important; width: 30px; font-weight: bold; }
                 
                 /* Logo kolonne centreret */
-                .league-table td:nth-child(2) { width: 30px; }
+                .league-table td:nth-child(2) { width: 40px; }
                 
                 /* HOLD venstrestillet */
                 .league-table td:nth-child(3), .league-table th:nth-child(3) { text-align: left !important; font-weight: bold; }
