@@ -150,7 +150,7 @@ try:
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
             st.title("🛰️ Rå Data Explorer")
-            # Ret nøglerne her så de matcher din return-struktur
+            # Nu matcher vi den struktur vi lavede i data_load
             st.write("### Opta Matches", dp["opta"]["matches"].head(50))
             st.write("### Opta Stats", dp["opta"]["team_stats"].head(50))
         elif sel == "Brugerstyring":
