@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import TEAMS
 
-def vis_side():
+def vis_side(dp):
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
     
