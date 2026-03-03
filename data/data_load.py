@@ -118,8 +118,12 @@ def get_data_package():
     # 4. Logo Mapping
     logo_map = {}
     if not df_logos_raw.empty:
-        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row.get('TEAM_WYID'))}
-
+        # RET HER: Vi tjekker begge cases i kolonnenavnet
+        wyid_col = 'TEAM_WYID' if 'TEAM_WYID' in df_logos_raw.columns else 'team_wyid'
+        logo_col = 'TEAM_LOGO' if 'TEAM_LOGO' in df_logos_raw.columns else 'team_logo'
+        
+        logo_map = {int(row[wyid_col]): row[logo_col] for _, row in df_logos_raw.iterrows() if pd.notnull(row.get(wyid_col))}
+        
     return {
         "opta": {
             "matches": df_matches_opta,
