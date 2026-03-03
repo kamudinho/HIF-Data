@@ -48,11 +48,14 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 e.EVENT_TYPEID,
                 e.EVENT_PERIODID,
                 e.EVENT_TIMEMIN,
+                -- Tilføj end-points for at kunne tegne assist-pile
+                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_END_X,
+                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_END_Y,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS,
                 LISTAGG(q.QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUAL_VALUES
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
+            WHERE e.EVENT_TYPEID IN (1, 13, 14, 15, 16) -- Tilføjet 1 her for pasninger/assists
             AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
                 FROM {DB}.OPTA_MATCHINFO 
