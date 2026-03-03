@@ -93,6 +93,9 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "HIF ANALYSE":
+        sel = option_menu(None, options=["Skud"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Ligaoversigt", "Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
@@ -136,6 +139,9 @@ try:
         elif sel == "Scatterplots":
             import tools.scatter as sc
             sc.vis_side(dp.get("team_stats_full"))
+        elif sel == "Skud":
+            import tools.shotmap as sm
+            sm.vis_side(dp)
 
     # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
