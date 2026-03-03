@@ -94,7 +94,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Kampe"], 
+        sel = option_menu(None, options=["Ligaoversigt", "Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
@@ -139,7 +139,10 @@ try:
 
     # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Kampe":
+        if sel == "Ligaoversigt":
+            import tools.test.test_teams as t
+            t.vis_side(dp) # Sender hele pakken med
+        elif sel == "Kampe":
             import tools.test.test_matches as tm
             tm.vis_side(dp) # Sender hele pakken med
 
