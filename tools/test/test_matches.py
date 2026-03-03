@@ -126,8 +126,14 @@ def vis_side(dp):
 
     # --- KAMPLISTE FUNKTION ---
     def tegn_kampe(df, played):
+        # TVING ALLE KOLONNER TIL STORE BOGSTAVER FOR EN SIKKERHEDS SKYLD
+        df.columns = [c.upper() for c in df.columns]
+        
         for _, row in df.iterrows():
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            # Brug MATCH_LOCALDATE til overskriften
+            dt_raw = str(row.get('MATCH_LOCALDATE', row.get('MATCH_DATE_FULL', '')))
+            dt = pd.to_datetime(dt_raw)
+            
             dag_dk = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned_dk = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
             st.markdown(f"<div class='date-header'>{dag_dk.upper()} D. {dt.day}. {maaned_dk.upper()}</div>", unsafe_allow_html=True)
@@ -137,13 +143,23 @@ def vis_side(dp):
             h_n = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
-            # LOGIK FOR TIDSPUNKT
+            # --- DENNE DEL FIXER 00:00 PROBLEMET ---
+            # Vi trækker den RÅ værdi ud af rækken før Pandas formaterer den
             raw_time = str(row.get('MATCH_LOCALTIME', ''))
-            # Formatér tid (f.eks. 19:00:00 -> 19:00)
-            if ":" in raw_time:
+            
+            if ":" in raw_time and "00:00:00" not in raw_time:
+                # Hvis vi har en tid som "19:00:00", snup "19:00"
                 display_time = ":".join(raw_time.split(":")[:2])
+            elif " " in str(row.get('MATCH_DATE_FULL', '')):
+                # Hvis tiden gemmer sig i MATCH_DATE_FULL (f.eks. "2023-06-09 19:00:00")
+                full_dt_str = str(row.get('MATCH_DATE_FULL', ''))
+                display_time = full_dt_str.split(" ")[1][:5] if " " in full_dt_str else "TBA"
             else:
-                display_time = dt.strftime('%H:%M')
+                display_time = "TBA"
+            
+            # Ekstra sikkerhed: Hvis den stadig er 00:00, skriv TBA (det er pænere)
+            if display_time == "00:00":
+                display_time = "TBA"
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -154,6 +170,7 @@ def vis_side(dp):
                     if played:
                         st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
                     else:
+                        # Her indsættes den korrekte display_time
                         st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{display_time}</span></div>", unsafe_allow_html=True)
                 
                 c4.image(hent_hold_logo(a_uuid), width=28)
