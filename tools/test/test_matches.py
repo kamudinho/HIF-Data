@@ -9,9 +9,7 @@ def vis_side():
     df_raw_stats = dp.get("opta_stats", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
-    valgt_saeson = dp.get("SEASON_NAME", "2025/2026") 
-    liga_uuid = dp.get("LIGA_UUID")
-    valgt_liga_navn = dp.get("VALGT_LIGA", "1. Division")
+   
 
     # --- CSS STYLING ---
     st.markdown("""
