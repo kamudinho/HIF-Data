@@ -10,6 +10,7 @@ def vis_side(df_raw=None):
         
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
+    logo_map = dp.get("logo_map", {}) # Hentes her så den er tilgængelig i funktioner
     df = dp.get("opta", {}).get("matches", pd.DataFrame())
     
     if df.empty:
@@ -18,7 +19,6 @@ def vis_side(df_raw=None):
 
     # --- 1. HJÆLPEFUNKTIONER ---
     def get_logo_url(opta_uuid, team_name):
-        logo_map = dp.get("logo_map", {})
         wy_id = next((info.get('wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
@@ -46,13 +46,16 @@ def vis_side(df_raw=None):
 
         for uuid, name in [(h_uuid, h_name), (a_uuid, a_name)]:
             if uuid not in stats:
-                stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
+                # Vi tilføjer 'MATCHES' her så din create_h2h_plot ikke fejler ved division
+                stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid, 'MATCHES': 0}
 
         if row['MATCH_STATUS'] == 'Played':
             s_h, s_a = stats[h_uuid], stats[a_uuid]
             s_h['K'] += 1; s_a['K'] += 1
+            s_h['MATCHES'] += 1; s_a['MATCHES'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g
             s_a['M+'] += a_g; s_a['M-'] += h_g
+            # ... (form-logik forbliver uændret)
             if winner == 'home':
                 s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
                 s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
@@ -68,75 +71,70 @@ def vis_side(df_raw=None):
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.index += 1
 
-    # --- 3. GRAF FUNKTION ---
-    def create_h2h_plot(metrics, labels, t1, t2, n1, n2, per_match=False):
-    fig = go.Figure()
-    
-    # 1. Beregn værdier
-    y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 and m != 'PPDA' else t1[m] for m in metrics]
-    y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 and m != 'PPDA' else t2[m] for m in metrics]
-    
-    c1 = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
-    c2 = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
-    
-    # 2. Søjler (Vi bruger width for at have fuld kontrol over logo-match)
-    bar_width = 0.35
-    
-    fig.add_trace(go.Bar(
-        name=n1, x=labels, y=y1_vals, 
-        marker_color=c1["primary"],
-        marker_line=dict(color=c1["secondary"], width=2),
-        text=[f"{v:.1f}" for v in y1_vals], textposition='auto',
-        width=bar_width,
-        textfont=dict(size=14, family="Arial Black")
-    ))
-    
-    fig.add_trace(go.Bar(
-        name=n2, x=labels, y=y2_vals, 
-        marker_color=c2["primary"],
-        marker_line=dict(color=c2["secondary"], width=2),
-        text=[f"{v:.1f}" for v in y2_vals], textposition='auto',
-        width=bar_width,
-        textfont=dict(size=14, family="Arial Black")
-    ))
+    # --- 3. GRAF FUNKTION (Indlejret Plotly-logo version) ---
+    def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
+        # Find data rækkerne for de valgte hold
+        t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
+        t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
+        
+        fig = go.Figure()
+        
+        y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
+        y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 else t2[m] for m in metrics]
+        
+        c1 = colors_dict.get(n1, {"primary": "#cc0000", "secondary": "#000000"})
+        c2 = colors_dict.get(n2, {"primary": "#0056a3", "secondary": "#000000"})
+        
+        bar_width = 0.35
+        
+        fig.add_trace(go.Bar(
+            name=n1, x=labels, y=y1_vals, 
+            marker_color=c1["primary"],
+            text=[f"{v:.1f}" if per_match else int(v) for v in y1_vals], textposition='auto',
+            width=bar_width,
+            textfont=dict(size=14, color=get_text_color(c1["primary"]), family="Arial Black")
+        ))
+        
+        fig.add_trace(go.Bar(
+            name=n2, x=labels, y=y2_vals, 
+            marker_color=c2["primary"],
+            text=[f"{v:.1f}" if per_match else int(v) for v in y2_vals], textposition='auto',
+            width=bar_width,
+            textfont=dict(size=14, color=get_text_color(c2["primary"]), family="Arial Black")
+        ))
 
-    # 3. Logo-placering (Intern i Plotly)
-    # i er center af gruppen. -0.19 og +0.19 rammer center af barerne når width=0.35 og bargroupgap=0.1
-    for i in range(len(labels)):
-        if n1 in logo_map:
-            fig.add_layout_image(dict(
-                source=logo_map[n1], xref="x", yref="paper",
-                x=i - 0.19, y=1.12, # y=1.12 løfter dem fri af tallene
-                sizex=0.15, sizey=0.15,
-                xanchor="center", yanchor="middle"
-            ))
-        if n2 in logo_map:
-            fig.add_layout_image(dict(
-                source=logo_map[n2], xref="x", yref="paper",
-                x=i + 0.19, y=1.12,
-                sizex=0.15, sizey=0.15,
-                xanchor="center", yanchor="middle"
-            ))
+        # Logo-placering (Intern i Plotly)
+        for i in range(len(labels)):
+            # Vi henter URL'erne via UUID'erne
+            url1 = get_logo_url(t1['UUID'], n1)
+            url2 = get_logo_url(t2['UUID'], n2)
+            
+            if url1:
+                fig.add_layout_image(dict(
+                    source=url1, xref="x", yref="paper", x=i - 0.19, y=1.15,
+                    sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
+                ))
+            if url2:
+                fig.add_layout_image(dict(
+                    source=url2, xref="x", yref="paper", x=i + 0.19, y=1.15,
+                    sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
+                ))
 
-    fig.update_layout(
-        barmode='group', 
-        bargap=0.4,       
-        bargroupgap=0.05, 
-        height=450, # Lidt højere for at give plads til logoerne i toppen
-        margin=dict(t=120, b=40, l=10, r=10),
-        plot_bgcolor='rgba(0,0,0,0)', 
-        paper_bgcolor='rgba(0,0,0,0)',
-        showlegend=False,
-        yaxis=dict(showgrid=False, zeroline=True, showticklabels=False, fixedrange=True),
-        xaxis=dict(fixedrange=True)
-    )
-    
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        fig.update_layout(
+            barmode='group', bargap=0.4, bargroupgap=0.05,
+            height=450, margin=dict(t=120, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            yaxis=dict(visible=False, fixedrange=True),
+            xaxis=dict(fixedrange=True)
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
+        # (Din tabel-logik her...)
         def get_logo_html(uuid):
             url = get_logo_url(uuid, "")
             return f'<img src="{url}" width="20">' if url else ""
