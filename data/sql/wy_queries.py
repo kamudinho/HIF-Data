@@ -1,16 +1,25 @@
 def get_wy_queries(comp_filter, season_filter):
     """
     Returnerer queries til Wyscout.
-    Sikrer nu at None-værdier og strenge håndteres korrekt i SQL.
+    Sikrer at IN-clausulen aldrig er tom, hvilket fjerner 'unexpected )' fejlen.
     """
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- SIKKERHEDS-CHECK ---
-    # Hvis comp_filter er None, bruger vi NordicBet Liga (328) som default
-    c_f = comp_filter if comp_filter is not None else (328,)
-    
-    # Hvis season_filter er en rå streng som "2025/2026", 
-    # sørger vi for at den får =' ' omkring sig.
+    # --- SIKRING MOD TOMME FILTRE ---
+    # Hvis comp_filter er None, tom streng eller tom liste/tuple, brug (328,)
+    if not comp_filter:
+        c_f = "(328)"
+    elif isinstance(comp_filter, (list, tuple)):
+        # Hvis det er en tuple med ét element (328,), bliver det til "(328)"
+        # Hvis det er flere (328, 335), bliver det til "(328, 335)"
+        if len(comp_filter) == 1:
+            c_f = f"({comp_filter[0]})"
+        else:
+            c_f = str(tuple(comp_filter))
+    else:
+        c_f = f"({comp_filter})"
+
+    # Sæson-filter håndtering
     if isinstance(season_filter, str) and not season_filter.startswith('='):
         s_f = f" = '{season_filter}'"
     else:
