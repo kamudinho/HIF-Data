@@ -7,46 +7,60 @@ def vis_side():
     df_matches = dp.get("opta_matches", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
-    # 1. Hent filter-værdier fra datapakken
     valgt_saeson = dp.get("SEASON_NAME", "2025/2026") 
     valgt_liga = dp.get("VALGT_LIGA", "1. Division")
 
-    # 2. Filtrering på liga og sæson (Vigtigt: Navne fra Snowflake dump)
+    # --- 1. FILTRERING ---
     if not df_matches.empty:
-        # Vi trimmer for en sikkerheds skyld
-        df_matches['TOURNAMENTCALENDAR_NAME'] = df_matches['TOURNAMENTCALENDAR_NAME'].astype(str).str.strip()
-        df_matches['COMPETITION_NAME'] = df_matches['COMPETITION_NAME'].astype(str).str.strip()
-        
         df_matches = df_matches[
             (df_matches['TOURNAMENTCALENDAR_NAME'] == valgt_saeson) & 
             (df_matches['COMPETITION_NAME'] == valgt_liga)
         ].copy()
 
-    # 3. UI Styling
-    hif_rod = "#df003b"
-    st.markdown(f"""
-        <style>
-        .stat-box {{ text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }}
-        .stat-label {{ font-size: 10px; color: gray; text-transform: uppercase; }}
-        .stat-val {{ font-weight: bold; font-size: 14px; }}
-        .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
-        .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
-        </style>
-    """, unsafe_allow_html=True)
+    # --- 2. STATS MERGE (OPTA_MATCHSTATS) ---
+    if "opta_stats" in dp and not dp["opta_stats"].empty:
+        df_raw_stats = dp["opta_stats"].copy()
+        try:
+            # Pivotér så hver række er en kamp + et hold, og kolonnerne er stat-typer
+            df_pivot = df_raw_stats.pivot_table(
+                index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
+                columns='STAT_TYPE', 
+                values='STAT_TOTAL', 
+                aggfunc='first'
+            ).reset_index()
 
-    # 4. Hold valg logik
+            # Forbered HOME stats
+            df_home = df_pivot.copy()
+            cols_to_rename = [c for c in df_home.columns if c not in ['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID']]
+            df_home = df_home.rename(columns={c: f"{c}_HOME" for c in cols_to_rename})
+            
+            # Forbered AWAY stats
+            df_away = df_pivot.copy()
+            df_away = df_away.rename(columns={c: f"{c}_AWAY" for c in cols_to_rename})
+
+            # Merge ind i df_matches
+            df_matches = pd.merge(df_matches, df_home, left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], how='left').drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+            df_matches = pd.merge(df_matches, df_away, left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], right_on=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], how='left').drop(columns=['CONTESTANT_OPTAUUID'], errors='ignore')
+        except Exception as e:
+            st.error(f"Fejl under behandling af stats: {e}")
+
+    # --- 3. UI & CSS ---
+    st.markdown("""<style> ... din CSS her ... </style>""", unsafe_allow_html=True)
+
+    # --- 4. HOLD VALG ---
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
-    # Sikrer at vi finder holdene selvom der er forskel på stort/lille bogstav i "1. Division"
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if str(i.get("league")).lower() == valgt_liga.lower()}
     
     if not liga_hold_options:
         st.warning(f"Ingen hold fundet for liga: {valgt_liga}")
         return
 
-    valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
-    valgt_uuid = liga_hold_options[valgt_navn]
+    top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    with top_cols[0]:
+        valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
+        valgt_uuid = liga_hold_options[valgt_navn]
 
-    # 5. Filtrér kampe for det valgte hold
+    # --- 5. VISNING ---
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
 
