@@ -113,12 +113,15 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 3. Map Opta Event Navne & xG
+    # Inde i get_data_package() under behandling af df_shotevents:
     if not df_shotevents.empty:
-        # Map navne (Skud, Mål, etc.)
-        if 'EVENT_TYPEID' in df_shotevents.columns:
-            df_shotevents['EVENT_NAME'] = df_shotevents['EVENT_TYPEID'].astype(str).apply(get_event_name)
-        
+        # Konverter PASS_END koordinater til tal
+        for col in ['PASS_END_X', 'PASS_END_Y']:
+            if col in df_shotevents.columns:
+                df_shotevents[col] = pd.to_numeric(df_shotevents[col], errors='coerce')
+    
+    # Eksisterende xG mapping...
+    df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)        
         # Funktion til at fiske xG ud af din QUAL_VALUES streng
         def parse_xg(val_str):
             try:
