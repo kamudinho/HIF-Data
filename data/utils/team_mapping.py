@@ -2,13 +2,13 @@
 COMPETITIONS = {
     "1. Division": {
         "wyid": 328, 
-        "opta_uuid": "6ifaeunfdelecgticvxanikzu",
-        "opta_name": "1. Division"
+        "COMPETITION_OPTAUUID": "6ifaeunfdelecgticvxanikzu",
+        "COMPETITION_NAME": "1. Division"
     },
     "3F Superliga": {
         "wyid": 335, 
-        "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n",
-        "opta_name": "Superliga"
+        "COMPETITION_OPTAUUID": "29actv1ohj8r10kd9hu0jnb0n",
+        "COMPETITION_NAME": "Superliga"
     },
     "2. division": {"wyid": 329, "opta_uuid": None},
     "3. division": {"wyid": 43319, "opta_uuid": None},
