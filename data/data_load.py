@@ -6,9 +6,8 @@ from cryptography.hazmat.primitives import serialization
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITIONS, TEAM_COLORS
-
-# --- CENTRAL KONFIGURATION ---
-TOURNAMENTCALENDAR_NAME = "2025/2026"
+# Vi importerer VALGT_LIGA herfra for at sikre synkronisering
+from data.season_show import VALGT_LIGA, TOURNAMENTCALENDAR_NAME
 
 def _get_snowflake_conn():
     try:
@@ -33,12 +32,12 @@ def _get_snowflake_conn():
         return None
 
 @st.cache_data(ttl=1200)
-def load_snowflake_query(query_key, comp_filter, season_filter, valgt_liga): # Tilføj valgt_liga som parameter
+def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Brug det nye kolonnenavn fra din opdaterede COMPETITIONS ordbog
-    liga_uuid = COMPETITIONS[valgt_liga].get("COMPETITION_OPTAUUID")
+    # Her styres det af TEAM_MAPPING
+    liga_uuid = COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID")
     
     if query_key.startswith("opta_"):
         queries = get_opta_queries(liga_uuid, TOURNAMENTCALENDAR_NAME)
@@ -59,7 +58,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter, valgt_liga): # T
         return pd.DataFrame()
 
 def get_data_package():
-    # A. FILTRE
+    # A. FILTRE (Hentet fra COMPETITIONS via den valgte liga)
     wy_id_val = COMPETITIONS[VALGT_LIGA]["wyid"]
     comp_filter = f"({wy_id_val})"
     
@@ -80,7 +79,7 @@ def get_data_package():
     except:
         df_csv_players = pd.DataFrame()
 
-    # D. OMDØB OPTA KOLONNER (OVERSÆTTER)
+    # D. OMDØB OPTA KOLONNER
     if not df_matches_opta.empty:
         df_matches_opta = df_matches_opta.rename(columns={
             'CONTESTANTHOMEID': 'CONTESTANTHOME_OPTAUUID',
@@ -109,7 +108,7 @@ def get_data_package():
         "player_career": df_career,
         "logo_map": logo_map,
         "VALGT_LIGA": VALGT_LIGA,
-        "LIGA_UUID": COMPETITIONS[VALGT_LIGA]["opta_uuid"],
+        "LIGA_UUID": COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID"),
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS
     }
