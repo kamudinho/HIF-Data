@@ -3,10 +3,6 @@ import pandas as pd
 from data.utils.team_mapping import TEAMS
 
 def vis_side(dp):
-    """
-    Viser kampside med resultater, kommende kampe og Opta-statistik.
-    Nu med korrekt visning af kamptidspunkt via MATCH_LOCALTIME.
-    """
     # 1. HENT DATA FRA PAKKEN
     df_matches = dp.get("opta_matches", pd.DataFrame())
     df_raw_stats = dp.get("team_stats_full", pd.DataFrame()) 
