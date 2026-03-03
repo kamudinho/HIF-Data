@@ -1,103 +1,177 @@
+import os
+import sys 
 import streamlit as st
+from streamlit_option_menu import option_menu
 import pandas as pd
-import matplotlib.pyplot as plt
-from mplsoccer import VerticalPitch
 
-# --- KONFIGURATION ---
-HIF_RED = '#df003b' 
-HIF_BLUE = '#0055aa'
-HIF_GOLD = '#ffd700'
-HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
+# Sikr at vi kan finde vores egne moduler
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def vis_side(dp=None):
-    st.markdown(f"""
-        <div style="background-color:{HIF_RED}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">HVIDOVRE IF - OFFENSIV ANALYSE</h3>
-        </div>
-    """, unsafe_allow_html=True)
+from data.data_load import get_data_package, load_snowflake_query
+from data.users import get_users
+
+# --- 1. KONFIGURATION ---
+HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+
+st.set_page_config(
+    page_title="HIF Data Hub", 
+    layout="wide", 
+    page_icon=HIF_LOGO_URL
+)
+
+st.markdown(f"""
+    <style>
+        .block-container {{ padding-top: 1rem !important; padding-bottom: 0rem !important; }}
+        header {{ visibility: hidden; height: 0px; }}
+        .custom-header {{
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 60px;
+            background-color: #cc0000; 
+            color: white; 
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }}
+        button[data-baseweb="tab"] {{ font-size: 14px; }}
+        button[data-baseweb="tab"][aria-selected="true"] {{ color: #cc0000 !important; border-bottom-color: #cc0000 !important; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. LOGIN SYSTEM ---
+USER_DB = get_users()
+if "logged_in" not in st.session_state: 
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown(f"<div style='text-align: center;'><img src='{HIF_LOGO_URL}' width='120'></div>", unsafe_allow_html=True)
+        with st.form("login"):
+            u = st.text_input("BRUGER").lower().strip()
+            p = st.text_input("KODE", type="password")
+            if st.form_submit_button("LOG IND"):
+                if u in USER_DB and USER_DB[u]["pass"] == p:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = u
+                    st.session_state["role"] = USER_DB[u]["role"] 
+                    st.rerun()
+                else:
+                    st.error("Ugyldig bruger eller kode")
+    st.stop()
+
+# --- 3. DATA LOADING ---
+if "dp" not in st.session_state:
+    with st.spinner("Henter systemdata..."):
+        st.session_state["dp"] = get_data_package()
+
+dp = st.session_state["dp"]
+
+# --- 4. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='60'></div>", unsafe_allow_html=True)
     
-    df_raw = dp.get('playerstats', pd.DataFrame())
-    if df_raw.empty:
-        st.info("Ingen data fundet.")
-        return
-
-    # --- 1. DATA RENS ---
-    df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
+    user_info = USER_DB.get(st.session_state["user"], {})
+    restriktioner = user_info.get("restricted", [])
+    synlige_options = [o for o in alle_omraader if o not in restriktioner]
     
-    # Konverter typer til strenge for sikker filtrering
-    df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip().str.upper()
-    df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
-
-    # --- 2. GLOBAL SPILLER DROPDOWN (ØVERST) ---
-    spiller_liste = sorted(df_hif['PLAYER_NAME'].dropna().unique().tolist())
-    valgt_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
+    hoved_omraade = option_menu(
+        None, 
+        options=synlige_options, 
+        default_index=0,
+        styles={
+            "nav-link-selected": {"background-color": "#0056a3"},
+            "nav-link": {"font-weight": "400"}
+        }
+    )
     
-    # --- 3. TABS ---
-    tab1, tab2 = st.tabs(["Skudkort", "Assists"])
+    st.markdown("---")
+    
+    sel = ""
+    if hoved_omraade == "TRUPPEN":
+        sel = option_menu(None, options=["Oversigt", "Forecast"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "HIF ANALYSE":
+        sel = option_menu(None, options=["Afslutninger"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "BETINIA LIGAEN":
+        sel = option_menu(None, options=["Holdoversigt", "Kampe"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "SCOUTING":
+        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
+                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+    elif hoved_omraade == "ADMIN":
+        sel = option_menu(None, options=["Rå Data Explorer", "Brugerstyring", "System Log"], 
+                         styles={"nav-link-selected": {"background-color": "#333333"}})
 
-    # --- TAB 1: SKUDKORT ---
-    with tab1:
-        # Filtrer skud (13, 14, 15, 16, G, PG)
-        skud_typer = ['13', '14', '15', '16', 'G', 'PG', '38']
-        df_skud = df_hif[df_hif['TYPE_STR'].isin(skud_typer)].copy()
-        
-        if valgt_spiller != "Hele Holdet":
-            df_skud = df_skud[df_skud['PLAYER_NAME'] == valgt_spiller]
+# --- 5. ROUTING LOGIK ---
+if not sel: 
+    sel = "Oversigt"
 
-        df_skud['ER_MAAL'] = df_skud['TYPE_STR'].isin(['16', 'G', 'PG'])
+try:
+    # --- TRUPPEN SEKTION ---
+    if hoved_omraade == "TRUPPEN":
+        if sel == "Oversigt":
+            import tools.players as pl
+            pl.vis_side(dp["players"])
+        elif sel == "Forecast":
+            import tools.squad as sq
+            sq.vis_side(dp["players"])
+        elif sel == "Spillerstats":
+            import tools.stats as st_tool
+            st_tool.vis_side(dp["players"], dp["playerstats"])
+        elif sel == "Top 5":
+            import tools.top5 as t5
+            t5.vis_side(dp["players"], dp["playerstats"])
 
-        col_map, col_stats = st.columns([2.2, 1])
-        with col_map:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444')
-            fig, ax = pitch.draw(figsize=(8, 10))
-            if not df_skud.empty:
-                for _, row in df_skud.iterrows():
-                    color = HIF_RED if row['ER_MAAL'] else HIF_BLUE
-                    size = (float(row.get('XG_VAL', 0.1)) * 1500) + 100
-                    # RENE CIRKLER (marker='o')
-                    pitch.scatter(row['EVENT_X'], row['EVENT_Y'], s=size, c=color, 
-                                  marker='o', edgecolors='white', ax=ax, alpha=0.7, zorder=3)
-            st.pyplot(fig)
+    # --- HIF ANALYSE SEKTION ---
+    elif hoved_omraade == "HIF ANALYSE":
+        if sel == "Afslutninger":
+            import tools.player_shots as ps
+            ps.vis_side(dp)
+        elif sel == "Modstanderanalyse":
+            import tools.modstanderanalyse as ma
+            ma.vis_side(dp["opta_matches"], dp["logo_map"])
+        elif sel == "Scatterplots":
+            import tools.scatter as sc
+            sc.vis_side(dp["team_stats_full"])
 
-        with col_stats:
-            st.metric("Skud", len(df_skud))
-            st.metric("Mål", int(df_skud['ER_MAAL'].sum()))
+    # --- BETINIA LIGAEN SEKTION ---
+    elif hoved_omraade == "BETINIA LIGAEN":
+        if sel == "Holdoversigt":
+            import tools.test.test_teams as tt
+            tt.vis_side(dp)
+        elif sel == "Kampe":
+            import tools.test.test_matches as tm
+            tm.vis_side(dp)
 
-    # --- TAB 2: ASSISTS ---
-    with tab2:
-        # Bred assist-logik uden brug af EVENT_ID
-        assist_filter = (
-            (df_hif['TYPE_STR'] == 'AS') | 
-            (df_hif['QUAL_STR'].str.contains('210', na=False)) |
-            (df_hif['QUAL_STR'].str.contains('154', na=False))
-        )
-        
-        # Vi dropper dubletter baseret på tid og sted hvis ID mangler
-        df_assists = df_hif[assist_filter].copy()
-        if not df_assists.empty:
-            df_assists = df_assists.drop_duplicates(subset=['PLAYER_NAME', 'EVENT_X', 'EVENT_Y'])
+    # --- SCOUTING SEKTION ---
+    elif hoved_omraade == "SCOUTING":
+        if sel == "Scoutrapport":
+            import tools.scout_input as si
+            si.vis_side(dp)
+        elif sel == "Database":
+            import tools.scout_db as sdb
+            sdb.vis_side(dp.get("scouting_image"), dp["players"], dp["playerstats"], dp["player_career"])
+        elif sel == "Sammenligning":
+            import tools.comparison as comp
+            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp["season_filter"])
 
-        if valgt_spiller != "Hele Holdet":
-            df_assists = df_assists[df_assists['PLAYER_NAME'] == valgt_spiller]
+    # --- ADMIN SEKTION ---
+    elif hoved_omraade == "ADMIN":
+        if sel == "Rå Data Explorer":
+            st.title("🛰️ Rå Data Explorer")
+            st.write("### Opta Matches", dp["opta_matches"].head(50))
+            st.write("### Opta Stats", dp["opta_raw_stats"].head(50))
+            st.write("### Tjek af alle kolonner", load_snowflake_query("opta_player_stats", None, None).head(10))
+        elif sel == "Brugerstyring":
+            import tools.admin as adm
+            adm.vis_side()
+        elif sel == "System Log":
+            import tools.admin as adm
+            adm.vis_log()
 
-        col_map_a, col_stats_a = st.columns([2.2, 1])
-        with col_map_a:
-            # Half=True og ingen ikoner
-            pitch_a = VerticalPitch(half=True, pitch_type='opta', line_color='#444444')
-            fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
-            
-            if not df_assists.empty:
-                for _, row in df_assists.iterrows():
-                    ex = row.get('PASS_END_X', 95)
-                    ey = row.get('PASS_END_Y', 50)
-                    # Piler og cirkler i guld
-                    pitch_a.arrows(row['EVENT_X'], row['EVENT_Y'], ex, ey, 
-                                   color=HIF_GOLD, width=2, headwidth=4, ax=ax_a, zorder=2)
-                    pitch_a.scatter(row['EVENT_X'], row['EVENT_Y'], color=HIF_GOLD, 
-                                    marker='o', edgecolors='white', s=150, ax=ax_a, zorder=3)
-            else:
-                st.info("Ingen assists fundet for det valgte filter.")
-            st.pyplot(fig_a)
-
-        with col_stats_a:
-            st.metric("Assists", len(df_assists))
+except Exception as e:
+    st.error(f"Kunne ikke indlæse siden '{sel}': {e}")
+    st.info("Dette skyldes ofte en manglende fil i 'tools/' mappen eller en kolonne-fejl.")
