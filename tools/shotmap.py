@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from mplsoccer import VerticalPitch
+from data.data_load import get_data_package
 
 # Vi bruger dine egne farver og mappings
 HIF_RED = '#df003b' 
