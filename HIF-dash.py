@@ -132,7 +132,7 @@ try:
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Kampe":
             import tools.test.test_matches as tm
-            tm.vis_side()
+            tm.vis_side(dp)
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
