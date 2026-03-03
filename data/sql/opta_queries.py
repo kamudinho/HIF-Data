@@ -14,13 +14,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             SELECT 
                 MATCH_OPTAUUID, 
                 MATCH_DATE_FULL,
-                MATCH_DESCRIPTION,
+                MATCH_STATUS,          -- TILFØJET: Mangler i din nuværende query
+                TOTAL_HOME_SCORE,      -- TILFØJET: For at vise resultater
+                TOTAL_AWAY_SCORE,      -- TILFØJET: For at vise resultater
+                CONTESTANTHOME_OPTAUUID, 
+                CONTESTANTAWAY_OPTAUUID,
                 CONTESTANTHOME_NAME, 
                 CONTESTANTAWAY_NAME,
-                CONTESTANTHOME_OPTAUUID,
-                CONTESTANTAWAY_OPTAUUID,
-                FT_HOME_SCORE,
-                FT_AWAY_SCORE,
                 COMPETITION_NAME,
                 TOURNAMENTCALENDAR_NAME
             FROM {DB}.OPTA_MATCHINFO 
