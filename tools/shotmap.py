@@ -11,80 +11,74 @@ HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 def vis_side(dp=None):
     st.markdown(f"""
         <div style="background-color:{HIF_RED}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">🎯 HVIDOVRE IF - OPTA SKUDKORT</h3>
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">🎯 HVIDOVRE IF - OPTA ANALYSE</h3>
         </div>
     """, unsafe_allow_html=True)
     
-    df_shots = dp.get('playerstats', pd.DataFrame())
+    df_raw = dp.get('playerstats', pd.DataFrame())
 
-    if df_shots.empty:
-        st.info("Ingen afslutninger fundet.")
+    if df_raw.empty:
+        st.info("Ingen data fundet.")
         return
 
-    # --- 1. FILTRERING & KORREKT MÅL-TÆLLING ---
-    df_hif = df_shots[df_shots['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    # --- 1. BENHÅRD RENSNING AF DATA ---
+    df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
     
-    # Konverter TYPEID til string for sikker sammenligning
-    df_hif['EVENT_TYPEID'] = df_hif['EVENT_TYPEID'].astype(str).str.strip()
+    # Vi fjerner alt tvivl om typer: konverter til streng, fjern .0, og gør det til store bogstaver
+    df_hif['TYPE_CLEAN'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip().str.upper()
     
-    # DEFINITION AF MÅL: Type 16, G, PG eller OG
-    maal_typer = ['16', 'G', 'PG', 'OG']
-    df_hif['ER_MAAL'] = df_hif['EVENT_TYPEID'].isin(maal_typer)
+    # DEFINITION AF MÅL (Baseret på din liste: 16, G, PG, OG)
+    # Vi tjekker også for 38 (Temp_Goal) for en sikkerheds skyld
+    maal_koder = ['16', 'G', 'PG', 'OG', '38']
+    df_hif['ER_MAAL'] = df_hif['TYPE_CLEAN'].isin(maal_koder)
 
-    # --- 2. LAYOUT ---
+    # --- 2. UI LAYOUT ---
     col_map, col_stats = st.columns([2.2, 1])
 
     with col_stats:
         spiller_liste = sorted(df_hif['PLAYER_NAME'].dropna().unique().tolist())
         valgt_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
-        vis_type = st.radio("Vis:", ["Alle skud", "Kun mål"], horizontal=True)
+        
+        # Filtrering af data baseret på valg
+        df_plot = df_hif.copy()
+        if valgt_spiller != "Hele Holdet":
+            df_plot = df_plot[df_plot['PLAYER_NAME'] == valgt_spiller]
 
-    # Filtrér data til visning
-    df_plot = df_hif.copy()
-    if valgt_spiller != "Hele Holdet":
-        df_plot = df_plot[df_plot['PLAYER_NAME'] == valgt_spiller]
-    
-    if vis_type == "Kun mål":
-        df_plot = df_plot[df_plot['ER_MAAL'] == True]
-
-    # --- 3. STATS BOKS ---
-    with col_stats:
+        # Statistik beregning
         total_skud = len(df_plot)
         total_maal = int(df_plot['ER_MAAL'].sum())
         total_xg = df_plot['XG_VAL'].sum()
 
         st.markdown(f"""
-        <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px; margin-top:20px;">
-            <h4 style="margin:0; color:{HIF_RED};">{valgt_spiller}</h4>
+        <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px; margin-top:10px;">
+            <h4 style="margin:0;">{valgt_spiller}</h4>
             <hr>
-            <p style="margin:0; font-size:1.1rem;"><b>Skud:</b> {total_skud}</p>
-            <p style="margin:0; font-size:1.1rem; color:{HIF_RED if total_maal > 0 else 'black'};"><b>Mål:</b> {total_maal}</p>
-            <p style="margin:0; font-size:1.1rem;"><b>xG i alt:</b> {total_xg:.2f}</p>
+            <h2 style="margin:0; color:{HIF_RED};">{total_skud} skud / {total_maal} mål</h2>
+            <p>Total xG: <b>{total_xg:.2f}</b></p>
         </div>
         """, unsafe_allow_html=True)
 
-    # --- 4. TEGN KORTET ---
+    # --- 3. TEGN KORTET ---
     with col_map:
-        pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444', goal_type='box')
+        pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444')
         fig, ax = pitch.draw(figsize=(8, 10))
         
-        # Golden Zone
-        ax.add_patch(plt.Rectangle((37, 88.5), 26, 11.5, color='gold', alpha=0.1, zorder=1))
-
         if not df_plot.empty:
+            # Sorter så mål tegnes øverst (zorder)
+            df_plot = df_plot.sort_values('ER_MAAL')
+            
             for _, row in df_plot.iterrows():
-                # Farve: Rød for mål, Blå for Miss/Saved/Post
                 color = HIF_RED if row['ER_MAAL'] else HIF_BLUE
-                
-                # Størrelse baseret på xG
-                size = (row.get('XG_VAL', 0.05) * 1200) + 100
-                
-                # Marker: Trekant for hovedstød (Qualifier 15)
-                marker = '^' if '15' in str(row.get('QUALIFIERS', '')) else 'o'
+                # Vi bruger XG_VAL til størrelse, men sætter en minimumstørrelse
+                size = (float(row['XG_VAL']) * 1500) + 100
                 
                 pitch.scatter(row['EVENT_X'], row['EVENT_Y'], 
-                              s=size, c=color, marker=marker,
-                              edgecolors='white', linewidths=1,
-                              ax=ax, alpha=0.8, zorder=3)
-        
+                              s=size, c=color, edgecolors='white', 
+                              ax=ax, alpha=0.7, zorder=4 if row['ER_MAAL'] else 3)
         st.pyplot(fig)
+
+    # --- 4. DEBUG TABEL (Fjern denne når det virker) ---
+    st.write("---")
+    st.subheader("Debug: Hvad ser systemet?")
+    debug_df = df_plot[['PLAYER_NAME', 'TYPE_CLEAN', 'ER_MAAL', 'XG_VAL']].copy()
+    st.dataframe(debug_df.head(20))
