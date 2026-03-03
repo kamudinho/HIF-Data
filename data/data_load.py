@@ -33,15 +33,14 @@ def _get_snowflake_conn():
         return None
 
 @st.cache_data(ttl=1200)
-def load_snowflake_query(query_key, comp_filter, season_filter):
+def load_snowflake_query(query_key, comp_filter, season_filter, valgt_liga): # Tilføj valgt_liga som parameter
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Hent UUID fra din centraliserede konfiguration
-    liga_uuid = COMPETITIONS[VALGT_LIGA]["opta_uuid"]
+    # Brug det nye kolonnenavn fra din opdaterede COMPETITIONS ordbog
+    liga_uuid = COMPETITIONS[valgt_liga].get("COMPETITION_OPTAUUID")
     
     if query_key.startswith("opta_"):
-        # Vi sender nu UUID direkte til SQL funktionen
         queries = get_opta_queries(liga_uuid, TOURNAMENTCALENDAR_NAME)
     else:
         queries = get_wy_queries(comp_filter, season_filter)
