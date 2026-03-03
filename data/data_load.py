@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
+from data.utils.mappings import get_event_name
 
 # --- 1. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
@@ -73,43 +74,44 @@ def load_snowflake_query(query_key, is_opta=False):
 # --- 3. DATA PACKAGE BUILDER ---
 def get_data_package():
     """
-    Samler alt data til dashboardet i én struktureret dictionary (dp).
-    Inkluderer flade nøgler for at sikre bagudkompatibilitet med ældre moduler.
+    Samler alt data og mapper Opta Event IDs til læsbar tekst.
     """
-    # Hent Opta Data
+    # 1. HENT RÅ DATA
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_opta_player_stats = load_snowflake_query("opta_player_stats", is_opta=True)
 
-    # Hent Wyscout Data
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
 
-    # Logo Mapping (Wyscout ID -> URL)
+    # 2. MAPPING AF OPTA EVENTS (Oversætter f.eks. Type 16 -> Goal)
+    if not df_opta_player_stats.empty and 'EVENT_TYPEID' in df_opta_player_stats.columns:
+        # Vi laver en ny kolonne 'EVENT_NAME', så vi bevarer det rå ID til logik
+        df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].apply(get_event_name)
+
+    # 3. LOGO MAPPING
     logo_map = {}
     if not df_logos_raw.empty:
-        # Sikrer at vi mapper mod 'TEAM_WYID' som er numerisk
         logo_map = {
             int(row['TEAM_WYID']): row['TEAM_LOGO'] 
-            for _, row in df_logos_raw.iterrows() 
-            if pd.notnull(row.get('TEAM_WYID'))
+            for _, row in df_logos_raw.iterrows() if pd.notnull(row.get('TEAM_WYID'))
         }
 
-    # Den samlede pakke
+    # 4. RETURNER PAKKEN
     return {
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
-            "player_stats": df_opta_player_stats,
+            "player_stats": df_opta_player_stats, # Nu med EVENT_NAME!
         },
         "wyscout": {
             "team_stats": df_team_stats_wy,
             "career": df_career_wy,
             "logos": logo_map,
-            "wyid": 7490 # Hvidovre IF Fast ID
+            "wyid": 7490
         },
-        # FLADE NØGLER (Til moduler der kalder dp['players'] osv.)
+        # Flade nøgler til bagudkompatibilitet
         "players": df_team_stats_wy, 
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
