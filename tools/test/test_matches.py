@@ -26,32 +26,24 @@ def vis_side(dp):
         "October": "oktober", "November": "november", "December": "december"
     }
 
-    # --- ROBUST HJÆLPEFUNKTION TIL LOGO-OPSLAG ---
+    # HENT LOGOER
     def hent_hold_logo(opta_uuid):
-        # 1. Sikkerheds-tjek: Hvis UUID mangler
-        if not opta_uuid or pd.isna(opta_uuid):
-            return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+    logo_map = dp.get("logo_map", {})
+    target_uuid = str(opta_uuid).lower().strip()
+    
+    # Find wy_id via mapping
+    wy_id = None
+    for name, info in TEAMS.items():
+        if str(info.get("opta_uuid", "")).lower().strip() == target_uuid:
+            wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
+            break
             
-        # 2. Normaliser input UUID (små bogstaver, ingen mellemrum)
-        target_uuid = str(opta_uuid).lower().strip()
-        
-        # 3. Gennemgå TEAMS mapping
-        for team_name, info in TEAMS.items():
-            map_uuid = str(info.get("opta_uuid", "")).lower().strip()
-            
-            if map_uuid == target_uuid:
-                # Prioritér 'team_wyid' (Wyscout ID til billed-URL)
-                wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
-                if wy_id:
-                    return f"https://cdn5.wyscout.com/photos/team/public/{wy_id}_120x120.png"
-                
-                # Hvis vi har et direkte link i mappingen (logo-nøglen)
-                if info.get("logo") and info.get("logo") != "-":
-                    return info.get("logo")
-        
-        # 4. Fallback til Hvidovre logo hvis intet match findes
-        return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
-
+    # Returnér URL fra Snowflake (logo_map)
+    if wy_id and int(wy_id) in logo_map:
+        return logo_map[int(wy_id)]
+    
+    return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+    
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
     if not df_raw_stats.empty and not df_matches.empty:
         try:
