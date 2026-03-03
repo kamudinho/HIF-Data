@@ -19,23 +19,19 @@ def vis_side(dp=None):
         st.error("Data pakke ikke fundet.")
         return
 
-    # Hent rådata
     df_shots = dp.get('playerstats', pd.DataFrame())
 
     if df_shots.empty:
-        st.info("Ingen afslutninger fundet i databasen.")
+        st.info("Ingen afslutninger fundet.")
         return
 
-    # --- 1. FILTRERING: KUN HVIDOVRE & KONVERTERING ---
-    # Vi sikrer os at EVENT_OUTCOME er et tal, så vi kan regne på det
+    # --- 1. RENS DATA & IDENTIFICÉR MÅL ---
+    # Vi laver en eksplicit 'ER_MAAL' kolonne baseret på Opta logik (Outcome = 1 er mål)
     df_hif = df_shots[df_shots['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
     
-    # Tving outcome til string og rens for at undgå '12/12' fejlen
-    df_hif['EVENT_OUTCOME'] = df_hif['EVENT_OUTCOME'].astype(str).str.strip()
-
-    if df_hif.empty:
-        st.warning(f"Ingen data fundet for Hvidovre.")
-        return
+    # Konverterer til string, fjerner decimaler og mellemrum
+    df_hif['EVENT_OUTCOME'] = df_hif['EVENT_OUTCOME'].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_hif['ER_MAAL'] = df_hif['EVENT_OUTCOME'] == '1'
 
     # --- 2. UI LAYOUT ---
     col_map, col_stats = st.columns([2.2, 1])
@@ -45,20 +41,19 @@ def vis_side(dp=None):
         valgt_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
         vis_type = st.radio("Vis:", ["Alle skud", "Kun mål"], horizontal=True)
 
-    # Filtrér data baseret på valg
+    # Filtrér til visning
     df_plot = df_hif.copy()
     if valgt_spiller != "Hele Holdet":
         df_plot = df_plot[df_plot['PLAYER_NAME'] == valgt_spiller]
     
     if vis_type == "Kun mål":
-        df_plot = df_plot[df_plot['EVENT_OUTCOME'] == '1']
+        df_plot = df_plot[df_plot['ER_MAAL'] == True]
 
-    # --- 3. STATISTIK BOKS (RETTET LOGIK) ---
+    # --- 3. STATISTIK BOKS (Nu med korrekt tælling) ---
     with col_stats:
         total_shots = len(df_plot)
-        # Vi tæller kun rækker hvor outcome er præcis '1'
-        total_goals = len(df_plot[df_plot['EVENT_OUTCOME'] == '1'])
-        total_xg = df_plot['XG_VAL'].sum() if 'XG_VAL' in df_plot.columns else 0
+        total_goals = int(df_plot['ER_MAAL'].sum()) # Tæller kun True værdier
+        total_xg = df_plot['XG_VAL'].sum()
         
         st.markdown(f"""
         <div style="border-left: 5px solid {HIF_RED}; padding: 15px; background-color: #f8f9fa; border-radius: 4px; margin-top:20px;">
@@ -75,14 +70,13 @@ def vis_side(dp=None):
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#444444', goal_type='box')
         fig, ax = pitch.draw(figsize=(8, 10))
         
-        # Golden Zone visualisering
+        # Golden Zone
         ax.add_patch(plt.Rectangle((37, 88.5), 26, 11.5, color='gold', alpha=0.1, zorder=1))
 
         if not df_plot.empty:
             for _, row in df_plot.iterrows():
-                # Her tjekker vi om det er et mål for at give den røde farve
-                is_goal = row['EVENT_OUTCOME'] == '1'
-                color = HIF_RED if is_goal else HIF_BLUE
+                # Farve baseret på vores nye ER_MAAL kolonne
+                color = HIF_RED if row['ER_MAAL'] else HIF_BLUE
                 
                 size = (row.get('XG_VAL', 0.05) * 1200) + 100
                 marker = '^' if '15' in str(row.get('QUALIFIERS', '')) else 'o'
