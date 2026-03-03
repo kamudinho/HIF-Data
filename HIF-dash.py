@@ -4,6 +4,7 @@ import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
+from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
