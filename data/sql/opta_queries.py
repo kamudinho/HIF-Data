@@ -35,28 +35,28 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
         """,
 
-        # 3. EVENTS RAW - Her henter vi selve skuddene (13,14,15,16)
-        "opta_events_raw": f"""
+        # 3. SHOT EVENTS - Optimeret med LISTAGG til shotmaps
+        "opta_shotevents": f"""
             SELECT 
-                MATCH_OPTAUUID, EVENT_OPTAUUID, PLAYER_OPTAUUID, PLAYER_NAME,
-                EVENT_TYPEID, EVENT_OUTCOME, EVENT_PERIODID, 
-                EVENT_TIMEMIN, EVENT_X, EVENT_Y, MATCH_DESCRIPTION, DATE
-            FROM {DB}.OPTA_EVENTS 
-            WHERE EVENT_TYPEID IN (13, 14, 15, 16)
-            AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                e.MATCH_OPTAUUID, 
+                e.EVENT_OPTAUUID, 
+                e.PLAYER_NAME, 
+                e.EVENT_X, 
+                e.EVENT_Y, 
+                e.EVENT_OUTCOME,
+                e.EVENT_TYPEID,
+                e.EVENT_PERIODID,
+                e.EVENT_TIMEMIN,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS,
+                LISTAGG(q.QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUAL_VALUES
+            FROM {DB}.OPTA_EVENTS e
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
+            AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
-                FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
-        """,
-
-        # 4. QUALIFIERS RAW - Detaljer som xG og kropsdel (kobles på i Python via EVENT_OPTAUUID)
-        "opta_qualifiers_raw": f"""
-            SELECT 
-                EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE, MATCH_OPTAUUID
-            FROM {DB}.OPTA_QUALIFIERS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
-                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
-                FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
-            )
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """
     }
