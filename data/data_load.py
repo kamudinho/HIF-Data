@@ -107,7 +107,7 @@ def get_data_package():
         "team_stats_full": df_team_stats,
         "player_career": df_career,
         "logo_map": logo_map,
-        "VALGT_LIGA": VALGT_LIGA,
+        "VALGT_LIGA": VALGT_LIGA,  # VIGTIG: Denne sender "1. Division" videre
         "LIGA_UUID": COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID"),
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS
