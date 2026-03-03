@@ -34,7 +34,6 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Henter UUID direkte fra mapping baseret på VALGT_LIGA
     liga_uuid = COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID")
     
     if query_key.startswith("opta_"):
@@ -77,16 +76,17 @@ def get_data_package():
     except:
         df_csv_players = pd.DataFrame()
 
-    # D. OMDØB OPTA KOLONNER
+    # D. OMDØB OPTA KOLONNER (Sikret mod dit rå data udtræk)
     if not df_matches_opta.empty:
-        df_matches_opta = df_matches_opta.rename(columns={
+        # Vi sikrer, at vi altid har de navne koden forventer
+        mapping = {
             'CONTESTANTHOMEID': 'CONTESTANTHOME_OPTAUUID',
             'CONTESTANTAWAYID': 'CONTESTANTAWAY_OPTAUUID',
             'MATCHID': 'MATCH_OPTAUUID',
-            'HOME_SCORE': 'TOTAL_HOME_SCORE',
-            'AWAY_SCORE': 'TOTAL_AWAY_SCORE',
             'DATE': 'MATCH_DATE_FULL'
-        })
+        }
+        # Vi omdøber kun hvis de gamle navne findes i dataen
+        df_matches_opta = df_matches_opta.rename(columns={k: v for k, v in mapping.items() if k in df_matches_opta.columns})
 
     if not df_opta_stats.empty:
         df_opta_stats = df_opta_stats.rename(columns={
@@ -95,7 +95,11 @@ def get_data_package():
         })
 
     # E. LOGO MAP
-    logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row['TEAM_WYID'])} if not df_logos_raw.empty else {}
+    logo_map = {}
+    if not df_logos_raw.empty:
+        for _, row in df_logos_raw.iterrows():
+            if pd.notnull(row.get('TEAM_WYID')):
+                logo_map[int(row['TEAM_WYID'])] = row.get('TEAM_LOGO')
 
     return {
         "players": df_csv_players,
