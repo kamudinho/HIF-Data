@@ -80,12 +80,11 @@ def vis_side(df_raw=None):
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
 
-        # 1. LOGO-RÆKKE (Centreret over barerne)
-        # Vi dropper st.columns og bruger én række med præcis spacing
-        logo_html = ""
+        # 1. LOGO-RÆKKE (Nu korrekt samlet i én markdown blok)
+        logo_items_html = ""
         for label in labels:
-            logo_html += f"""
-                <div style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 30px;">
+            logo_items_html += f"""
+                <div style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 38px;">
                     <img src="{logo1}" width="30" style="object-fit: contain;">
                     <img src="{logo2}" width="30" style="object-fit: contain;">
                 </div>
@@ -94,13 +93,13 @@ def vis_side(df_raw=None):
         st.markdown(
             f"""
             <div style="display: flex; width: 100%; padding: 0 40px; margin-bottom: -35px;">
-                {logo_html}
+                {logo_items_html}
             </div>
             """, 
             unsafe_allow_html=True
         )
 
-        # 2. SELVE GRAFEN
+        # 2. PLOTLY GRAF
         fig = go.Figure()
         x_vals = list(range(len(labels)))
 
@@ -121,8 +120,7 @@ def vis_side(df_raw=None):
         fig.update_layout(
             showlegend=False, 
             height=380, 
-            # Marginerne her (40px) skal matche paddingen i logo-beholderen ovenfor
-            margin=dict(t=10, b=40, l=40, r=40), 
+            margin=dict(t=10, b=40, l=40, r=40), # Skal matche padding (40px) i HTML ovenfor
             xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
             yaxis=dict(visible=False, fixedrange=True),
             plot_bgcolor='rgba(0,0,0,0)', 
