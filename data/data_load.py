@@ -8,7 +8,6 @@ from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITIONS, TEAM_COLORS
 
 # --- CENTRAL KONFIGURATION ---
-VALGT_LIGA = "1. Division"
 TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 def _get_snowflake_conn():
