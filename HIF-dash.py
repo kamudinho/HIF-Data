@@ -129,11 +129,11 @@ try:
             import tools.scatter as sc
             sc.vis_side(dp["team_stats_full"])
 
-    # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Kampe":
-            import tools.test.test_matches as tm
-            tm.vis_side(dp)
+    if sel == "Kampe":
+        import tools.test.test_matches as tm
+        # Her sender vi hele dp-pakken, som vi har hentet i starten af scriptet
+        tm.vis_side(st.session_state["dp"])
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
