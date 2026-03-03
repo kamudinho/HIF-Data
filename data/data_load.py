@@ -5,9 +5,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
-from data.utils.team_mapping import COMPETITIONS, TEAM_COLORS
-# Vi importerer VALGT_LIGA herfra for at sikre synkronisering
-from data.season_show import VALGT_LIGA, TOURNAMENTCALENDAR_NAME
+from data.utils.team_mapping import COMPETITIONS, TEAM_COLORS, VALGT_LIGA, TOURNAMENTCALENDAR_NAME
 
 def _get_snowflake_conn():
     try:
@@ -36,7 +34,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Her styres det af TEAM_MAPPING
+    # Henter UUID direkte fra mapping baseret på VALGT_LIGA
     liga_uuid = COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID")
     
     if query_key.startswith("opta_"):
@@ -58,7 +56,7 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
         return pd.DataFrame()
 
 def get_data_package():
-    # A. FILTRE (Hentet fra COMPETITIONS via den valgte liga)
+    # A. FILTRE
     wy_id_val = COMPETITIONS[VALGT_LIGA]["wyid"]
     comp_filter = f"({wy_id_val})"
     
@@ -107,7 +105,7 @@ def get_data_package():
         "team_stats_full": df_team_stats,
         "player_career": df_career,
         "logo_map": logo_map,
-        "VALGT_LIGA": VALGT_LIGA,  # VIGTIG: Denne sender "1. Division" videre
+        "VALGT_LIGA": VALGT_LIGA,
         "LIGA_UUID": COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID"),
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
         "colors": TEAM_COLORS
