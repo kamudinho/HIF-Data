@@ -5,14 +5,14 @@ from data.utils.team_mapping import TEAMS
 def vis_side(dp):
     """
     Viser kampside med resultater, kommende kampe og Opta-statistik.
-    Rettet til at bruge 'team_wyid' fra TEAMS mapping.
+    Nu med korrekt visning af kamptidspunkt via MATCH_LOCALTIME.
     """
     # 1. HENT DATA FRA PAKKEN
     df_matches = dp.get("opta_matches", pd.DataFrame())
     df_raw_stats = dp.get("team_stats_full", pd.DataFrame()) 
     
     config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "1. Division") # Matcher din mapping
+    valgt_liga_global = config.get("liga_navn", "1. Division")
 
     # --- DANSKE DATOER ---
     danske_dage = {
@@ -31,16 +31,14 @@ def vis_side(dp):
         logo_map = dp.get("logo_map", {})
         target_uuid = str(opta_uuid).lower().strip()
         
-        # 1. Find info i din manuelle TEAMS mapping
         wy_id = None
         mapping_logo = None
         for name, info in TEAMS.items():
             if str(info.get("opta_uuid", "")).lower().strip() == target_uuid:
                 wy_id = info.get("team_wyid") or info.get("TEAM_WYID")
-                mapping_logo = info.get("logo") # Backup fra din Python fil
+                mapping_logo = info.get("logo")
                 break
         
-        # 2. Prøv først at hente den nyeste URL fra Snowflake (logo_map)
         if wy_id:
             try:
                 wy_id_int = int(wy_id)
@@ -49,14 +47,12 @@ def vis_side(dp):
             except:
                 pass
         
-        # 3. Hvis Snowflake fejler, brug logo fra TEAMS mapping
         if mapping_logo and mapping_logo != "-":
             return mapping_logo
             
-        # 4. Ultimativ fallback (Hvidovre)
         return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
     
-    # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
+    # --- DATA MERGE LOGIK ---
     if not df_raw_stats.empty and not df_matches.empty:
         try:
             df_raw_stats.columns = [c.upper() for c in df_raw_stats.columns]
@@ -88,7 +84,7 @@ def vis_side(dp):
         .stat-val {{ font-weight: bold; font-size: 14px; }}
         .date-header {{ background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #444; border-left: 4px solid {hif_rod}; }}
         .score-pill {{ background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }}
-        .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; }}
+        .time-pill {{ background: #f0f2f6; color: #333; border-radius: 4px; padding: 2px 10px; font-size: 0.9rem; min-width: 70px; display: inline-block; text-align: center; font-weight: bold; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -97,7 +93,7 @@ def vis_side(dp):
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     
     if not liga_hold_options:
-        st.warning(f"Ingen hold fundet for {valgt_liga_global}. Tjek om liga-navnet i mapping matcher '{valgt_liga_global}'.")
+        st.warning(f"Ingen hold fundet for {valgt_liga_global}.")
         return
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
@@ -108,8 +104,8 @@ def vis_side(dp):
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     
-    # Statistik sektion (K, S, U, N...)
-    all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL')
+    # Statistik beregning
+    all_played = team_matches[team_matches['MATCH_STATUS'] == 'Played']
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in all_played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -128,9 +124,7 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- KAMPLISTE ---
-    tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
-    
+    # --- KAMPLISTE FUNKTION ---
     def tegn_kampe(df, played):
         for _, row in df.iterrows():
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
@@ -143,23 +137,23 @@ def vis_side(dp):
             h_n = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
-            # HENT TIDSPUNKT FRA MATCH_LOCALTIME
-            # Vi fjerner sekunderne hvis de findes (f.eks. 14:00:00 -> 14:00)
-            raw_time = str(row.get('MATCH_LOCALTIME', dt.strftime('%H:%M')))
-            display_time = raw_time[:5] if ":" in raw_time else raw_time
+            # LOGIK FOR TIDSPUNKT
+            raw_time = str(row.get('MATCH_LOCALTIME', ''))
+            # Formatér tid (f.eks. 19:00:00 -> 19:00)
+            if ":" in raw_time:
+                display_time = ":".join(raw_time.split(":")[:2])
+            else:
+                display_time = dt.strftime('%H:%M')
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{h_n}</div>", unsafe_allow_html=True)
-                
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
                 with c3:
                     if played:
-                        # Viser resultat for spillede kampe
                         st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
                     else:
-                        # Viser kamptidspunkt fra MATCH_LOCALTIME for kommende kampe
                         st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{display_time}</span></div>", unsafe_allow_html=True)
                 
                 c4.image(hent_hold_logo(a_uuid), width=28)
@@ -168,18 +162,13 @@ def vis_side(dp):
                 if played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
-                    stats_map = [
-                        ("Besiddelse", "possessionPercentage", "%"), 
-                        ("Afleveringer", "totalPass", ""), 
-                        ("Dueller vundet", "wonTackle", ""), 
-                        ("Afslutninger", "totalScoringAtt", ""), 
-                        ("Tacklinger", "totalTackle", "")
-                    ]
+                    stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Afleveringer", "totalPass", ""), ("Dueller vundet", "wonTackle", ""), ("Afslutninger", "totalScoringAtt", ""), ("Tacklinger", "totalTackle", "")]
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         h_v = row.get(f"{s_key}_HOME", 0)
                         a_v = row.get(f"{s_key}_AWAY", 0)
                         sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_v}{suff} — {a_v}{suff}</div></div>", unsafe_allow_html=True)
-                        
+
+    tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
         tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
     with tab_fix:
