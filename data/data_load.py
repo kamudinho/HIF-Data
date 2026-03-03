@@ -3,61 +3,14 @@ import pandas as pd
 import os
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-# Importér dine nye separate query-filer
 from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
+from data.utils.team_mapping import COMPETITIONS, TEAM_COLORS
 
-# --- 1. CENTRAL KONFIGURATION ---
+# --- CENTRAL KONFIGURATION ---
 VALGT_LIGA = "1. Division"
 TOURNAMENTCALENDAR_NAME = "2025/2026"
 
-# --- 2. TURNERING MAPPING ---
-COMPETITIONS = {
-    "1. Division": {
-        "wyid": 328, 
-        "opta_name": "1. Division"
-    },
-    "Superliga": {
-        "wyid": 335, 
-        "opta_name": "Superliga"
-    },
-    "2. division": {
-        "wyid": 329, 
-        "opta_uuid": None
-    },
-    "3. division": {
-        "wyid": 43319, 
-        "opta_uuid": None
-    },
-    "Oddset Pokalen": {
-        "wyid": 331, 
-        "opta_uuid": None
-    },
-    "U19 Ligaen": {
-        "wyid": 1305, 
-        "opta_uuid": None
-    }
-}
-
-OPTA_LIGA_NAVN = COMPETITIONS[VALGT_LIGA]["opta_name"]
-COMPETITION_WYID = (COMPETITIONS[VALGT_LIGA]["wyid"],)
-
-TEAM_COLORS = {
-    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
-    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
-    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
-    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
-    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
-    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},
-    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
-    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
-    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},
-    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
-    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
-    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
-}
-
-# --- 3. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
@@ -80,7 +33,6 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-# --- 4. DATA LOADING FUNKTIONER ---
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, comp_filter, season_filter):
     conn = _get_snowflake_conn()
@@ -99,81 +51,63 @@ def load_snowflake_query(query_key, comp_filter, season_filter):
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
             return df
-        else:
-            print(f"Advarsel: Query {query_key} returnerede ingen rækker.")
-            return pd.DataFrame()
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
 
 def get_data_package():
     # A. FILTRE
-    comps = tuple(COMPETITION_WYID)
-    comp_filter = f"({comps[0]})" if len(comps) == 1 else str(comps)
-    wy_season_filter = f"='{TOURNAMENTCALENDAR_NAME}'"
-
-    # B. HENT LOKAL PLAYERS CSV
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_path = os.path.join(current_dir, 'players.csv')
-        if not os.path.exists(csv_path):
-            base_path = os.path.dirname(current_dir)
-            csv_path = os.path.join(base_path, 'data', 'players.csv')
-
-        df_csv_players = pd.read_csv(csv_path)
-        df_csv_players.columns = [str(c).upper().strip() for c in df_csv_players.columns]
-    except Exception as e:
-        st.error(f"⚠️ CSV Fejl: {e}")
-        df_csv_players = pd.DataFrame()
-
-    # C. HENT SNOWFLAKE DATA (De rå SELECT * kald)
+    wy_id_val = COMPETITIONS[VALGT_LIGA]["wyid"]
+    comp_filter = f"({wy_id_val})"
+    
+    # B. HENT DATA
     df_opta_player_stats = load_snowflake_query("opta_player_stats", None, None)
     df_matches_opta = load_snowflake_query("opta_matches", None, None)
     df_opta_stats = load_snowflake_query("opta_team_stats", None, None) 
-    
-    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, wy_season_filter)
-    df_career = load_snowflake_query("player_career", comp_filter, wy_season_filter)
     df_logos_raw = load_snowflake_query("team_logos", None, None)
+    df_team_stats = load_snowflake_query("team_stats_full", comp_filter, TOURNAMENTCALENDAR_NAME)
+    df_career = load_snowflake_query("player_career", comp_filter, TOURNAMENTCALENDAR_NAME)
 
-    # --- D. OVERSÆTTER-SEKTION (Her sikrer vi navnene!) ---
-    # Fix 'opta_matches' kolonner
+    # C. LOKAL CSV
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_path = os.path.join(current_dir, 'players.csv')
+        df_csv_players = pd.read_csv(csv_path)
+        df_csv_players.columns = [str(c).upper().strip() for c in df_csv_players.columns]
+    except:
+        df_csv_players = pd.DataFrame()
+
+    # D. OMDØB OPTA KOLONNER (OVERSÆTTER)
     if not df_matches_opta.empty:
-        rename_map = {
+        df_matches_opta = df_matches_opta.rename(columns={
             'CONTESTANTHOMEID': 'CONTESTANTHOME_OPTAUUID',
             'CONTESTANTAWAYID': 'CONTESTANTAWAY_OPTAUUID',
             'MATCHID': 'MATCH_OPTAUUID',
             'HOME_SCORE': 'TOTAL_HOME_SCORE',
             'AWAY_SCORE': 'TOTAL_AWAY_SCORE',
-            'DATE': 'MATCH_DATE_FULL',
-            'HOME_TEAM_NAME': 'CONTESTANTHOME_NAME',
-            'AWAY_TEAM_NAME': 'CONTESTANTAWAY_NAME'
-        }
-        df_matches_opta = df_matches_opta.rename(columns=rename_map)
+            'DATE': 'MATCH_DATE_FULL'
+        })
 
-    # Fix 'opta_team_stats' kolonner
     if not df_opta_stats.empty:
         df_opta_stats = df_opta_stats.rename(columns={
             'MATCHID': 'MATCH_OPTAUUID',
             'CONTESTANTID': 'CONTESTANT_OPTAUUID'
         })
 
-    # E. BYG LOGO_MAP
-    logo_map = {}
-    if not df_logos_raw.empty:
-        logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row['TEAM_WYID'])}
+    # E. LOGO MAP
+    logo_map = {int(row['TEAM_WYID']): row['TEAM_LOGO'] for _, row in df_logos_raw.iterrows() if pd.notnull(row['TEAM_WYID'])} if not df_logos_raw.empty else {}
 
-    # F. RETURNER KOMPLET PAKKE
     return {
         "players": df_csv_players,
-        "playerstats": df_opta_player_stats,
-        "team_stats_full": df_team_stats,
         "opta_matches": df_matches_opta,
         "opta_stats": df_opta_stats,
+        "playerstats": df_opta_player_stats,
+        "team_stats_full": df_team_stats,
         "player_career": df_career,
         "logo_map": logo_map,
         "VALGT_LIGA": VALGT_LIGA,
+        "LIGA_UUID": COMPETITIONS[VALGT_LIGA]["opta_uuid"],
         "SEASON_NAME": TOURNAMENTCALENDAR_NAME,
-        "season_filter": TOURNAMENTCALENDAR_NAME,
-        "colors": TEAM_COLORS,
-        "scouting_image": None
+        "colors": TEAM_COLORS
     }
