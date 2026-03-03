@@ -117,10 +117,12 @@ try:
     if hoved_omraade == "TRUPPEN":
         if sel == "Oversigt":
             import tools.players as pl
-            pl.vis_side(wyscout_data) # Bruger team_stats fra wyscout
+            # RET HER: Send 'dp.get("players")' i stedet for 'wyscout_data'
+            pl.vis_side(dp.get("players")) 
         elif sel == "Forecast":
             import tools.squad as sq
-            sq.vis_side(wyscout_data)
+            # RET HER: Send 'dp.get("players")'
+            sq.vis_side(dp.get("players"))
 
     # --- HIF ANALYSE SEKTION ---
     elif hoved_omraade == "HIF ANALYSE":
