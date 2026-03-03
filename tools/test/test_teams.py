@@ -73,7 +73,6 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION (Indlejret Plotly-logo version) ---
     def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
-        # Hent data
         t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
         t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
         
@@ -82,12 +81,10 @@ def vis_side(df_raw=None):
         y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
         y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 else t2[m] for m in metrics]
         
-        # Farver fra din config
-        c1 = colors_dict.get(n1, {"primary": "#cc0000", "secondary": "#000000"})
-        c2 = colors_dict.get(n2, {"primary": "#0056a3", "secondary": "#000000"})
+        c1 = colors_dict.get(n1, {"primary": "#cc0000"})
+        c2 = colors_dict.get(n2, {"primary": "#0056a3"})
         
-        # Søjler
-        bar_width = 0.4 # Øget en smule for bedre fylde
+        bar_width = 0.38
         
         fig.add_trace(go.Bar(
             name=n1, x=labels, y=y1_vals, 
@@ -107,32 +104,30 @@ def vis_side(df_raw=None):
             insidetextfont=dict(size=16, color=get_text_color(c2["primary"]), family="Arial Black")
         ))
 
-        # Logo-placering med optimerede offsets
+        # --- FORBEDRET LOGO-LOGIK ---
         for i in range(len(labels)):
-            url1 = get_logo_url(t1['UUID'], n1)
-            url2 = get_logo_url(t2['UUID'], n2)
+            # Vi prøver 3 metoder for at finde logoet: 
+            # 1. Direkte i logo_map via navn, 2. Via din get_logo_url funktion, 3. Fallback
+            url1 = logo_map.get(n1) or get_logo_url(t1['UUID'], n1)
+            url2 = logo_map.get(n2) or get_logo_url(t2['UUID'], n2)
             
             if url1:
                 fig.add_layout_image(dict(
-                    source=url1, xref="x", yref="paper", x=i - 0.22, y=1.18,
-                    sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
+                    source=url1, xref="x", yref="paper", x=i - 0.20, y=1.15,
+                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="middle"
                 ))
             if url2:
                 fig.add_layout_image(dict(
-                    source=url2, xref="x", yref="paper", x=i + 0.22, y=1.18,
-                    sizex=0.15, sizey=0.15, xanchor="center", yanchor="middle"
+                    source=url2, xref="x", yref="paper", x=i + 0.20, y=1.15,
+                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="middle"
                 ))
 
         fig.update_layout(
-            barmode='group', 
-            bargap=0.3, # Gør grupperne lidt bredere
-            bargroupgap=0.02, # Minimale mellemrum mellem hold-barerne
-            height=450, 
-            margin=dict(t=120, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)',
+            barmode='group', bargap=0.35, bargroupgap=0.05,
+            height=450, margin=dict(t=130, b=40, l=10, r=10), # Mere top-margin
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True),
+            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(y1_vals), max(y2_vals)) * 1.2]),
             xaxis=dict(fixedrange=True, tickfont=dict(size=14, family="Arial Black"))
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
