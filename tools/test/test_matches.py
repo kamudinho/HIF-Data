@@ -5,19 +5,18 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     dp = st.session_state.get("dp", {})
     df_matches = dp.get("opta_matches", pd.DataFrame())
-    logos = dp.get("logo_map", {})
     
-    # --- 1. FILTRERING TIL AKTUEL SÆSON & LIGA ---
-    # Vi henter værdierne fra din centrale konfiguration i dp
-    valgt_saeson = dp.get("TOURNAMENTCALENDAR_NAME", "2025/2026")
+    # Her henter vi de værdier, du definerede i get_data_package
+    # Vi bruger .get(KEY, FALLBACK)
+    valgt_saeson = dp.get("SEASON_NAME", "2025/2026") 
     valgt_liga = dp.get("VALGT_LIGA", "1. Division")
 
-    # Filtrér med det samme, så vi ikke bearbejder historiske data (f.eks. AaB's 251 kampe)
     if not df_matches.empty:
+        # I selve dataframe-kolonnen fra Snowflake hedder den TOURNAMENTCALENDAR_NAME
+        # Så vi filtrerer kolonnen med variablen valgt_saeson
         df_matches = df_matches[
-            (df_matches['TOURNAMENTCALENDAR_NAME'] == valgt_saeson) & 
-            (df_matches['COMPETITION_NAME'] == valgt_liga)
-        ]
+            (df_matches['TOURNAMENTCALENDAR_NAME'] == valgt_saeson)
+        ].copy()
 
     # --- 2. CSS & UI ---
     hif_rod = "#df003b"
