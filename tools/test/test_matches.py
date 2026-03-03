@@ -2,18 +2,17 @@ import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import TEAMS
 
-def vis_side():
-    dp = st.session_state.get("dp", {})
+def vis_side(dp=None): # Tilføj dp som argument
+    if dp is None:
+        dp = st.session_state.get("dp", {})
     
-    # 1. Sikker hentning af data
+    # TRÆK DATA FRA DIN NYE STRUKTUR
     opta_data = dp.get("opta", {})
     df_all_matches = opta_data.get("matches", pd.DataFrame())
     df_raw_stats = opta_data.get("team_stats", pd.DataFrame())
-    logos = dp.get("wyscout", {}).get("logos", {})
-
-    if df_all_matches.empty:
-        st.error("❌ Ingen kampdata fundet. Tjek om din SQL query returnerer rækker.")
-        return
+    
+    wyscout_data = dp.get("wyscout", {})
+    logos = wyscout_data.get("logos", {})
 
     # --- RENS DATA (Vigtigt når vi henter alt) ---
     # Sørg for at datoer er rigtige og fjern dubletter
