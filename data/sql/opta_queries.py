@@ -33,6 +33,19 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
 
         # --- EVENTS (Schema Fix indbygget) ---
         "opta_player_stats": f"""
+            WITH match_filter AS (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+            ),
+            qual_agg AS (
+                SELECT 
+                    EVENT_OPTAUUID,
+                    LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUALIFIERS,
+                    LISTAGG(QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUAL_VALUES
+                FROM {DB}.OPTA_QUALIFIERS
+                GROUP BY EVENT_OPTAUUID
+            )
             SELECT 
                 E.MATCH_OPTAUUID,
                 E.PLAYER_OPTAUUID,
@@ -43,16 +56,14 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 E.EVENT_TIMEMIN,
                 E.EVENT_X,
                 E.EVENT_Y,
-                -- Her samler vi alle qualifiers i én streng per event
-                LISTAGG(Q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY Q.QUALIFIER_QID) as QUALIFIERS,
-                LISTAGG(Q.QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY Q.QUALIFIER_QID) as QUAL_VALUES
+                CAST(E.EVENT_TIMESTAMP AS STRING) as EVENT_TIMESTAMP_STR,
+                Q.QUALIFIERS,
+                Q.QUAL_VALUES
             FROM {DB}.OPTA_EVENTS E
-            LEFT JOIN {DB}.OPTA_EVENTQUALIFIERS Q 
-                ON E.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
-            WHERE E.TOURNAMENTCALENDAR_OPTAUUID IN (...)
-            GROUP BY 1,2,3,4,5,6,7,8,9
+            LEFT JOIN qual_agg Q ON E.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
+            INNER JOIN match_filter M ON E.TOURNAMENTCALENDAR_OPTAUUID = M.TOURNAMENTCALENDAR_OPTAUUID
+            WHERE E.EVENT_TYPEID IN (13, 14, 15, 16) -- Hent kun skud med det samme for performance
         """,
-
         # --- MATCHSTATS ---
         "opta_team_stats": f"""
             SELECT 
