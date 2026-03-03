@@ -69,7 +69,6 @@ def vis_side(df_raw=None):
     df_liga.index += 1
 
     # --- 3. GRAF FUNKTION ---
-    # --- 3. GRAF FUNKTION (OPDATERET MED LOGO-AFSTAND) ---
     def draw_h2h_chart(t1, t2, metrics, labels):
         s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
         s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
@@ -81,10 +80,11 @@ def vis_side(df_raw=None):
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
 
-        # 1. Logoer i kolonner med præcis afstand (gap) der matcher bar-bredden
+        # 1. Logoer i kolonner
         cols = st.columns(len(labels))
         for col in cols:
             with col:
+                # Gap på 45px passer ofte til bredden på 0.4 barer
                 st.markdown(
                     f"""
                     <div style="display: flex; justify-content: center; gap: 45px; margin-bottom: -35px;">
@@ -95,16 +95,15 @@ def vis_side(df_raw=None):
                     unsafe_allow_html=True
                 )
 
-        # 2. Selve grafen
+        # 2. Plotly figur
         fig = go.Figure()
         x_vals = list(range(len(labels)))
 
-        # Vi bruger en fast bredde og bargap for at sikre, at Streamlit-kolonnerne og Plotly-barerne matcher
         fig.add_trace(go.Bar(
             x=x_vals, y=[s1[m] for m in metrics],
             marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.4  # Øget en smule for bedre fylde
+            width=0.4 
         ))
         
         fig.add_trace(go.Bar(
@@ -134,6 +133,7 @@ def vis_side(df_raw=None):
         def get_logo_html(uuid):
             url = get_logo_url(uuid, "")
             return f'<img src="{url}" width="20">' if url else ""
+        
         def style_form(f):
             res = ""
             for char in f:
