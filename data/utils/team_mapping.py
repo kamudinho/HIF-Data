@@ -1,4 +1,21 @@
-# data/utils/team_mapping.py
+# --- Turneringer ---
+COMPETITIONS = {
+    "1. Division": {
+        "wyid": 328, 
+        "opta_uuid": "6ifaeunfdelecgticvxanikzu",
+        "opta_name": "1. Division"
+    },
+    "3F Superliga": {
+        "wyid": 335, 
+        "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n",
+        "opta_name": "3F Superliga"
+    },
+    "2. division": {"wyid": 329, "opta_uuid": None},
+    "3. division": {"wyid": 43319, "opta_uuid": None},
+    "Oddset Pokalen": {"wyid": 331, "opta_uuid": None},
+    "U19 Ligaen": {"wyid": 1305, "opta_uuid": None}
+}
+
 # --- Hold ---
 TEAMS = {
     "Hvidovre": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "league": "1. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"},
@@ -56,3 +73,19 @@ TEAMS = {
     "Sundby": {"team_wyid": 34555, "league": "3. division", "logo": "-"},
     "Odder": {"team_wyid": 7588, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11044_120x120.png"}
 }
+
+TEAM_COLORS = {
+    "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
+    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
+    "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
+    "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
+    "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
+    "Horsens": {"primary": "#ffff00", "secondary": "#000000"},
+    "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
+    "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
+    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},
+    "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
+    "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
+    "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
+}
+
