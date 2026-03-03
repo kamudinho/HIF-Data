@@ -9,6 +9,22 @@ def vis_side():
     df_raw_stats = dp.get("opta_stats", pd.DataFrame())
     logos = dp.get("logo_map", {})
     
+    # RETTELSE HER: Definer liga-navnet fra din datapakke
+    valgt_liga_navn = dp.get("VALGT_LIGA", "1. Division") 
+
+    # --- HOLDVALG ---
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+    
+    liga_hold_options = {}
+    for navn, info in TEAMS.items():
+        # Vi tjekker nu mod den korrekte variabel
+        if info.get("league", "").lower() == valgt_liga_navn.lower():
+            liga_hold_options[navn] = info.get("opta_uuid")
+
+    if not liga_hold_options:
+        st.warning(f"Ingen hold fundet for liga: {valgt_liga_navn}")
+        return
+    
    
 
     # --- CSS STYLING ---
