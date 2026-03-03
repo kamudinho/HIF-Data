@@ -58,4 +58,49 @@ def vis_side():
         valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # --- 5. TEGN KAM
+    # --- 5. TEGN KAMPE FUNKTION ---
+    def tegn_kampe(matches, is_played):
+        if matches.empty:
+            st.info("Ingen kampe fundet.")
+            return
+
+        def hent_logo(uuid):
+            for name, info in TEAMS.items():
+                if info.get("opta_uuid") == uuid:
+                    if info.get("logo") and info.get("logo") != "-": return info.get("logo")
+                    return logos.get(info.get("team_wyid"))
+            return None
+
+        current_date = None
+        for _, row in matches.iterrows():
+            d = pd.to_datetime(row['MATCH_DATE_FULL'])
+            m_date = f"{d.day}. {d.strftime('%B')} {d.year}".upper()
+            if m_date != current_date:
+                st.markdown(f"<div class='date-header'>{m_date}</div>", unsafe_allow_html=True)
+                current_date = m_date
+
+            with st.container(border=True):
+                col1, col2, col3, col4, col5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                with col1: st.markdown(f"<div style='text-align:right; font-weight:bold; margin-top:5px;'>{id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], 'H')}</div>", unsafe_allow_html=True)
+                with col2: st.image(hent_logo(row['CONTESTANTHOME_OPTAUUID']), width=28) if hent_logo(row['CONTESTANTHOME_OPTAUUID']) else st.empty()
+                with col3:
+                    if is_played: st.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
+                    else: st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{str(row.get('MATCH_LOCALTIME', ''))[:5]}</span></div>", unsafe_allow_html=True)
+                with col4: st.image(hent_logo(row['CONTESTANTAWAY_OPTAUUID']), width=28) if hent_logo(row['CONTESTANTAWAY_OPTAUUID']) else st.empty()
+                with col5: st.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], 'A')}</div>", unsafe_allow_html=True)
+
+                if is_played:
+                    st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    s_cols = st.columns(5)
+                    stats_to_show = [("Possession", "possessionPercentage"), ("Passes", "totalPass"), ("Duels Won", "wonTackle"), ("Scoring Att", "totalScoringAtt"), ("Tackles", "totalTackle")]
+                    for i, (label, s_key) in enumerate(stats_to_show):
+                        with s_cols[i]:
+                            h_val = row.get(f"{s_key}_HOME", 0)
+                            a_val = row.get(f"{s_key}_AWAY", 0)
+                            st.markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_val} — {a_val}</div></div>", unsafe_allow_html=True)
+
+    # --- 6. VIS TABS ---
+    team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)]
+    tab1, tab2 = st.tabs(["Resultater", "Kommende"])
+    with tab1: tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
+    with tab2: tegn_kampe(team_matches[team_matches['MATCH_STATUS'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
