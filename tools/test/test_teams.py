@@ -10,7 +10,7 @@ def vis_side(df_raw=None):
         
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
-    logo_map = dp.get("logo_map", {}) # Hentes her så den er tilgængelig i funktioner
+    logo_map = dp.get("logo_map", {})
     df = dp.get("opta", {}).get("matches", pd.DataFrame())
     
     if df.empty:
@@ -24,6 +24,10 @@ def vis_side(df_raw=None):
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
+    def get_logo_html(uuid):
+        url = get_logo_url(uuid, "")
+        return f'<img src="{url}" width="20">' if url else ""
+
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -34,6 +38,13 @@ def vis_side(df_raw=None):
         form_list = list(current_form)
         form_list.append(result)
         return "".join(form_list[-5:])
+
+    def style_form(f):
+        res = ""
+        for char in f:
+            color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
+            res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
+        return res
 
     # --- 2. DATABEREGNING ---
     stats = {}
@@ -46,7 +57,6 @@ def vis_side(df_raw=None):
 
         for uuid, name in [(h_uuid, h_name), (a_uuid, a_name)]:
             if uuid not in stats:
-                # Vi tilføjer 'MATCHES' her så din create_h2h_plot ikke fejler ved division
                 stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid, 'MATCHES': 0}
 
         if row['MATCH_STATUS'] == 'Played':
@@ -55,7 +65,7 @@ def vis_side(df_raw=None):
             s_h['MATCHES'] += 1; s_a['MATCHES'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g
             s_a['M+'] += a_g; s_a['M-'] += h_g
-            # ... (form-logik forbliver uændret)
+            
             if winner == 'home':
                 s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
                 s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
@@ -66,16 +76,32 @@ def vis_side(df_raw=None):
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
+    # Find næste modstander
+    next_opponents = {}
+    df_upcoming = df[df['MATCH_STATUS'] != 'Played'].copy()
+    for uuid in stats.keys():
+        next_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | 
+                             (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)].head(1)
+        if not next_m.empty:
+            row = next_m.iloc[0]
+            is_home = row['CONTESTANTHOME_OPTAUUID'] == uuid
+            opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
+            opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
+            opp_logo = get_logo_url(opp_uuid, opp_name)
+            next_opponents[uuid] = f'<div style="display: flex; align-items: center; justify-content: center;"><img src="{opp_logo}" width="18" style="margin-right:5px;"> {opp_name}</div>'
+        else:
+            next_opponents[uuid] = "-"
+
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents)
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.index += 1
 
-    # --- 3. GRAF FUNKTION (Indlejret Plotly-logo version) ---
+    # --- 3. GRAF FUNKTION ---
     def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
         t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
         t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
-        
         fig = go.Figure()
         
         y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
@@ -85,48 +111,26 @@ def vis_side(df_raw=None):
         c2 = colors_dict.get(n2, {"primary": "#0056a3"})
         
         bar_width = 0.25
-        
-        fig.add_trace(go.Bar(
-            name=n1, x=labels, y=y1_vals, 
-            marker_color=c1["primary"],
-            text=[f"{v:.1f}" if per_match else int(v) for v in y1_vals], 
-            textposition='inside',
-            width=bar_width,
-            insidetextfont=dict(size=16, color=get_text_color(c1["primary"]), family="Arial Black")
-        ))
-        
-        fig.add_trace(go.Bar(
-            name=n2, x=labels, y=y2_vals, 
-            marker_color=c2["primary"],
-            text=[f"{v:.1f}" if per_match else int(v) for v in y2_vals], 
-            textposition='inside',
-            width=bar_width,
-            insidetextfont=dict(size=16, color=get_text_color(c2["primary"]), family="Arial Black")
-        ))
+        for i, trace in enumerate([(n1, y1_vals, c1), (n2, y2_vals, c2)]):
+            fig.add_trace(go.Bar(
+                name=trace[0], x=labels, y=trace[1], 
+                marker_color=trace[2]["primary"],
+                text=[f"{v:.1f}" if per_match else int(v) for v in trace[1]], 
+                textposition='inside', width=bar_width,
+                insidetextfont=dict(size=16, color=get_text_color(trace[2]["primary"]), family="Arial Black")
+            ))
 
-        # --- FORBEDRET LOGO-LOGIK ---
         for i in range(len(labels)):
-            # Vi prøver 3 metoder for at finde logoet: 
-            # 1. Direkte i logo_map via navn, 2. Via din get_logo_url funktion, 3. Fallback
             url1 = logo_map.get(n1) or get_logo_url(t1['UUID'], n1)
             url2 = logo_map.get(n2) or get_logo_url(t2['UUID'], n2)
-            
             if url1:
-                fig.add_layout_image(dict(
-                    source=url1, xref="x", yref="paper", x=i - 0.20, y=1.15,
-                    sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"
-                ))
+                fig.add_layout_image(dict(source=url1, xref="x", yref="paper", x=i-0.20, y=1.15, sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"))
             if url2:
-                fig.add_layout_image(dict(
-                    source=url2, xref="x", yref="paper", x=i + 0.20, y=1.15,
-                    sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"
-                ))
+                fig.add_layout_image(dict(source=url2, xref="x", yref="paper", x=i+0.20, y=1.15, sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"))
 
         fig.update_layout(
-            barmode='group', bargap=0.25, bargroupgap=0.05,
-            height=450, margin=dict(t=110, b=40, l=10, r=10), # Mere top-margin
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            showlegend=False,
+            barmode='group', bargap=0.25, height=450, margin=dict(t=110, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False,
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(y1_vals), max(y2_vals)) * 1.2]),
             xaxis=dict(fixedrange=True, tickfont=dict(size=14, family="Arial Black"))
         )
@@ -136,22 +140,23 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        # (Din tabel-logik her...)
-        def get_logo_html(uuid):
-            url = get_logo_url(uuid, "")
-            return f'<img src="{url}" width="20">' if url else ""
-        
-        def style_form(f):
-            res = ""
-            for char in f:
-                color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
-                res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
-            return res
+        st.markdown("""
+            <style>
+                .league-table { width: 100%; border-collapse: collapse; }
+                .league-table th { text-align: center !important; padding: 10px; border-bottom: 2px solid #eee; }
+                .league-table td { text-align: center !important; padding: 8px; border-bottom: 1px solid #eee; }
+                /* Index og HOLD til venstre */
+                .league-table td:nth-child(1), .league-table th:nth-child(1) { text-align: left !important; }
+                .league-table td:nth-child(3), .league-table th:nth-child(3) { text-align: left !important; }
+            </style>
+        """, unsafe_allow_html=True)
 
         df_disp = df_liga.copy()
         df_disp.insert(0, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        st.write(df_disp[[' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=True), unsafe_allow_html=True)
+        
+        vis_cols = [' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']
+        st.write(df_disp[vis_cols].to_html(escape=False, index=True, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
@@ -160,9 +165,6 @@ def vis_side(df_raw=None):
         team2 = c2.selectbox("Vælg Hold 2", [h for h in h_list if h != team1])
 
         sub_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
-        with sub_tabs[0]:
-            draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with sub_tabs[1]:
-            draw_h2h_chart(team1, team2, ['M+'], ['Mål Scoret'])
-        with sub_tabs[2]:
-            draw_h2h_chart(team1, team2, ['M-'], ['Mål Imod'])
+        with sub_tabs[0]: draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
+        with sub_tabs[1]: draw_h2h_chart(team1, team2, ['M+'], ['Mål Scoret'])
+        with sub_tabs[2]: draw_h2h_chart(team1, team2, ['M-'], ['Mål Imod'])
