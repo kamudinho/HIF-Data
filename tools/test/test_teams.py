@@ -99,47 +99,75 @@ def vis_side(df_raw=None):
             c1_hex = colors_dict.get(team1, {}).get('primary', '#cc0000')
             c2_hex = colors_dict.get(team2, {}).get('primary', '#0056a3')
             
+            # Hent rå logo URL'er direkte fra TEAMS mappingen
             logo1 = TEAMS.get(team1, {}).get('logo', "")
             logo2 = TEAMS.get(team2, {}).get('logo', "")
 
             fig = go.Figure()
             x_vals = list(range(len(labels)))
 
-            # Bar 1
+            # Bar 1 (Venstre)
             fig.add_trace(go.Bar(
                 x=x_vals, y=[s1[m] for m in metrics],
-                marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-                insidetextfont=dict(color=get_text_color(c1_hex)),
-                width=0.35, offset=-0.37
+                marker_color=c1_hex, 
+                text=[s1[m] for m in metrics], 
+                textposition='inside',
+                insidetextfont=dict(size=14, color=get_text_color(c1_hex)),
+                width=0.35, offset=-0.37,
+                cliponaxis=False # Sikrer at tekst/logo ikke klippes
             ))
-            # Bar 2
+            
+            # Bar 2 (Højre)
             fig.add_trace(go.Bar(
                 x=x_vals, y=[s2[m] for m in metrics],
-                marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-                insidetextfont=dict(color=get_text_color(c2_hex)),
-                width=0.35, offset=0.02
+                marker_color=c2_hex, 
+                text=[s2[m] for m in metrics], 
+                textposition='inside',
+                insidetextfont=dict(size=14, color=get_text_color(c2_hex)),
+                width=0.35, offset=0.02,
+                cliponaxis=False
             ))
 
+            # Tilføj logoer over hver enkelt bar
             for i in x_vals:
                 if logo1:
                     fig.add_layout_image(dict(
-                        source=logo1, x=i-0.19, y=s1[metrics[i]], xref="x", yref="y",
-                        sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom"
+                        source=logo1,
+                        xref="x", yref="y",
+                        x=i - 0.19, y=s1[metrics[i]],
+                        sizex=0.15, sizey=0.15, # Justeret størrelse
+                        xanchor="center", yanchor="bottom",
+                        layer="above"
                     ))
                 if logo2:
                     fig.add_layout_image(dict(
-                        source=logo2, x=i+0.20, y=s2[metrics[i]], xref="x", yref="y",
-                        sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom"
+                        source=logo2,
+                        xref="x", yref="y",
+                        x=i + 0.20, y=s2[metrics[i]],
+                        sizex=0.15, sizey=0.15,
+                        xanchor="center", yanchor="bottom",
+                        layer="above"
                     ))
 
-            max_val = max(max([s1[m] for m in metrics]), max([s2[m] for m in metrics]), 1)
-            fig.update_layout(
-                showlegend=False, height=400, margin=dict(t=60, b=40, l=10, r=10),
-                xaxis=dict(tickvals=x_vals, ticktext=labels),
-                yaxis=dict(visible=False, range=[0, max_val * 1.3])
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Find den højeste værdi for at sætte loftet på grafen
+            all_vals = [s1[m] for m in metrics] + [s2[m] for m in metrics]
+            max_val = max(all_vals) if all_vals else 10
 
-        with sub_tabs[0]: draw_h2h_chart(['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with sub_tabs[1]: draw_h2h_chart(['M+'], ['Mål Scoret'])
-        with sub_tabs[2]: draw_h2h_chart(['M-'], ['Mål Imod'])
+            fig.update_layout(
+                showlegend=False,
+                height=450, # Lidt højere for at give plads til logoer
+                margin=dict(t=80, b=40, l=10, r=10),
+                xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
+                yaxis=dict(visible=False, range=[0, max_val * 1.4], fixedrange=True),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # Opdateret kontrast-check (Rød 186 er for mørk til sort skrift)
+    def get_text_color(hex_color):
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        # Vi sænker grænsen til 150 for at tvinge hvid skrift på bl.a. rød
+        luminance = (r * 0.299 + g * 0.587 + b * 0.114)
+        return "black" if luminance > 160 else "white"
