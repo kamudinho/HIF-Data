@@ -19,9 +19,9 @@ def vis_side(df_raw=None):
     # --- 1. DATABEREGNING ---
     stats = {}
     def update_form(current_form, result):
-        form_list = list(current_form[-4:])
+        form_list = list(current_form)
         form_list.append(result)
-        return "".join(form_list)
+        return "".join(form_list[-5:])
 
     for _, row in df.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -39,6 +39,7 @@ def vis_side(df_raw=None):
             s_h['K'] += 1; s_a['K'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g
             s_a['M+'] += a_g; s_a['M-'] += h_g
+            
             if winner == 'home':
                 s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
                 s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
@@ -49,8 +50,13 @@ def vis_side(df_raw=None):
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    df_liga = pd.DataFrame(stats.values()).sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
-    
+    df_liga = pd.DataFrame(stats.values())
+    # BEREGN MD HER:
+    df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+    # SORTERING (P, så MD, så M+):
+    df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
+    df_liga.index += 1
+
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
@@ -63,6 +69,7 @@ def vis_side(df_raw=None):
         def get_logo_html(uuid):
             logo = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == uuid), "")
             return f'<img src="{logo}" width="20">' if logo else ""
+        
         def style_form(form_str):
             res = ""
             for char in form_str:
@@ -73,7 +80,9 @@ def vis_side(df_raw=None):
         df_disp = df_liga.copy()
         df_disp.insert(0, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        st.write(df_disp[[' ', 'HOLD', 'K', 'V', 'U', 'T', 'M+', 'P', 'FORM']].to_html(escape=False, index=True), unsafe_allow_html=True)
+        
+        # MD er nu med i kolonne-listen
+        st.write(df_disp[[' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=True), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
@@ -94,40 +103,40 @@ def vis_side(df_raw=None):
             logo2 = TEAMS.get(team2, {}).get('logo', "")
 
             fig = go.Figure()
-            
-            # Vi bruger x som index 0, 1, 2 for at styre logo-position præcist
             x_vals = list(range(len(labels)))
 
+            # Bar 1
             fig.add_trace(go.Bar(
                 x=x_vals, y=[s1[m] for m in metrics],
                 marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
                 insidetextfont=dict(color=get_text_color(c1_hex)),
-                width=0.4, offset=-0.21 # Forskyder bar 1 til venstre
+                width=0.35, offset=-0.37
             ))
-            
+            # Bar 2
             fig.add_trace(go.Bar(
                 x=x_vals, y=[s2[m] for m in metrics],
                 marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
                 insidetextfont=dict(color=get_text_color(c2_hex)),
-                width=0.4, offset=0.01 # Forskyder bar 2 til højre
+                width=0.35, offset=0.02
             ))
 
             for i in x_vals:
                 if logo1:
                     fig.add_layout_image(dict(
-                        source=logo1, x=i-0.21, y=s1[metrics[i]], xref="x", yref="y",
-                        sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"
+                        source=logo1, x=i-0.19, y=s1[metrics[i]], xref="x", yref="y",
+                        sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom"
                     ))
                 if logo2:
                     fig.add_layout_image(dict(
-                        source=logo2, x=i+0.21, y=s2[metrics[i]], xref="x", yref="y",
-                        sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"
+                        source=logo2, x=i+0.20, y=s2[metrics[i]], xref="x", yref="y",
+                        sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom"
                     ))
 
+            max_val = max(max([s1[m] for m in metrics]), max([s2[m] for m in metrics]), 1)
             fig.update_layout(
-                showlegend=False, height=400, margin=dict(t=60, b=40, l=0, r=0),
+                showlegend=False, height=400, margin=dict(t=60, b=40, l=10, r=10),
                 xaxis=dict(tickvals=x_vals, ticktext=labels),
-                yaxis=dict(visible=False, range=[0, max(max([s1[m] for m in metrics]), max([s2[m] for m in metrics])) * 1.2])
+                yaxis=dict(visible=False, range=[0, max_val * 1.3])
             )
             st.plotly_chart(fig, use_container_width=True)
 
