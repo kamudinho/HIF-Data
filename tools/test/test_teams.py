@@ -69,6 +69,7 @@ def vis_side(df_raw=None):
     df_liga.index += 1
 
     # --- 3. GRAF FUNKTION ---
+    # --- 3. GRAF FUNKTION (OPDATERET MED LOGO-AFSTAND) ---
     def draw_h2h_chart(t1, t2, metrics, labels):
         s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
         s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
@@ -80,41 +81,49 @@ def vis_side(df_raw=None):
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
 
-        # 1. Logoer i kolonner over grafen
+        # 1. Logoer i kolonner med præcis afstand (gap) der matcher bar-bredden
         cols = st.columns(len(labels))
         for col in cols:
             with col:
                 st.markdown(
-                    f"""<div style="display: flex; justify-content: center; gap: 15px; margin-bottom: -35px;">
-                        <img src="{logo1}" width="30" style="object-fit: contain;">
-                        <img src="{logo2}" width="30" style="object-fit: contain;">
-                    </div>""", unsafe_allow_html=True
+                    f"""
+                    <div style="display: flex; justify-content: center; gap: 45px; margin-bottom: -35px;">
+                        <img src="{logo1}" width="32" style="object-fit: contain;">
+                        <img src="{logo2}" width="32" style="object-fit: contain;">
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
                 )
 
         # 2. Selve grafen
         fig = go.Figure()
         x_vals = list(range(len(labels)))
 
+        # Vi bruger en fast bredde og bargap for at sikre, at Streamlit-kolonnerne og Plotly-barerne matcher
         fig.add_trace(go.Bar(
             x=x_vals, y=[s1[m] for m in metrics],
             marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.38
+            width=0.4  # Øget en smule for bedre fylde
         ))
         
         fig.add_trace(go.Bar(
             x=x_vals, y=[s2[m] for m in metrics],
             marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
-            width=0.38
+            width=0.4
         ))
 
         fig.update_layout(
-            showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10),
+            showlegend=False, 
+            height=380, 
+            margin=dict(t=10, b=40, l=10, r=10),
             xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
             yaxis=dict(visible=False, fixedrange=True),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            bargap=0.15
+            plot_bgcolor='rgba(0,0,0,0)', 
+            paper_bgcolor='rgba(0,0,0,0)',
+            bargap=0.15,
+            barmode='group'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
