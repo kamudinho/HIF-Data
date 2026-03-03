@@ -28,11 +28,22 @@ def vis_side(dp):
 
     # --- HJÆLPEFUNKTION TIL LOGO-OPSLAG ---
     def hent_hold_logo(opta_uuid):
+        if not opta_uuid:
+            return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+            
+        # Gør UUID streng-baseret og lowercase for sikkert match
+        target_uuid = str(opta_uuid).lower().strip()
+        
         for team_name, info in TEAMS.items():
-            if info.get("opta_uuid") == opta_uuid:
+            # Hent uuid fra mapping og gør den klar til sammenligning
+            map_uuid = str(info.get("opta_uuid", "")).lower().strip()
+            
+            if map_uuid == target_uuid:
                 wy_id = info.get("TEAM_WYID")
                 if wy_id:
                     return f"https://cdn5.wyscout.com/photos/team/public/{wy_id}_120x120.png"
+        
+        # Hvis vi når hertil, blev der ikke fundet et match i TEAMS mapping
         return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 
     # --- DATA MERGE LOGIK (OPTA MATCHSTATS) ---
