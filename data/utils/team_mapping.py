@@ -81,14 +81,14 @@ TEAMS = {
 
 TEAM_COLORS = {
     "Hvidovre": {"primary": "#cc0000", "secondary": "#0000ff"},
-    "B.93": {"primary": "#0000ff", "secondary": "#ffffff"},
+    "B 93": {"primary": "#0000ff", "secondary": "#ffffff"},
     "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
     "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
     "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
     "Horsens": {"primary": "#ffff00", "secondary": "#000000"},
     "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
     "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
-    "Kolding IF": {"primary": "#ffffff", "secondary": "#0000ff"},
+    "Kolding": {"primary": "#ffffff", "secondary": "#0000ff"},
     "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
     "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
