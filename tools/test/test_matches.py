@@ -48,14 +48,30 @@ def vis_side():
         except Exception as e:
             st.error(f"Fejl i stats-pivot: {e}")
 
-    # --- 4. HOLDVALG ---
+    # --- 4. HOLDVALG (RETTET LOGIK) ---
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
-    # Filtrer options så vi kun ser hold fra den valgte liga
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == dp.get("VALGT_LIGA")}
     
+    # 1. Vi finder holdene ved at kigge på ligaen (uanset om det er "1. Division" eller "1. division")
+    liga_hold_options = {}
+    valgt_liga_fra_dp = dp.get("VALGT_LIGA", "")
+    
+    for navn, info in TEAMS.items():
+        hold_liga = info.get("league", "")
+        # Sammenlign uden at gå op i store/små bogstaver
+        if hold_liga.lower() == valgt_liga_fra_dp.lower():
+            liga_hold_options[navn] = info.get("opta_uuid")
+    
+    # 2. Sikkerhedstjek: Hvis vi ikke finder nogen hold
+    if not liga_hold_options:
+        st.warning(f"Ingen hold fundet for '{valgt_liga_fra_dp}'. Tjek 'league' i din TEAMS-ordbog.")
+        return # Stopper her så vi ikke får fejl i selectboxen
+
+    # 3. Visning af vælgeren
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
-        valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), label_visibility="collapsed")
+        # Vi sorterer holdnavnene alfabetisk
+        mulige_navne = sorted(liga_hold_options.keys())
+        valgt_navn = st.selectbox("Vælg hold", mulige_navne, label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
     # --- 5. TEGN KAMPE FUNKTION ---
