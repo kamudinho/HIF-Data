@@ -1,7 +1,6 @@
 from data.utils.team_mapping import COMPETITIONS
 
 # --- 1. DETTE ER DET ENESTE STED DU RETTER FREMOVER ---
-VALGT_LIGA = "1. Division" 
 TOURNAMENTCALENDAR_NAME = "2025/2026" 
 TEAM_WYID = 7490
 TEAM_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
