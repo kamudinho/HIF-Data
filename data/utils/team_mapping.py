@@ -1,7 +1,7 @@
 #data/utils/team_mapping.py
 
 # --- GLOBAL KONTROL (RET KUN HER) ---
-VALGT_LIGA = "1. Division"
+COMPETITION_NAME = "1. Division"
 TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- Turneringer ---
