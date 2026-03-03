@@ -88,7 +88,7 @@ def vis_side(df_raw=None):
             opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
             opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
             opp_logo = get_logo_url(opp_uuid, opp_name)
-            next_opponents[uuid] = f'<div style="display: flex; align-items: center; justify-content: center;"><img src="{opp_logo}" width="18" style="margin-right:5px;"> {opp_name}</div>'
+            next_opponents[uuid] = f'<div style="display: flex; align-items: left; justify-content: left;"><img src="{opp_logo}" width="18" style="margin-right:5px;"> {opp_name}</div>'
         else:
             next_opponents[uuid] = "-"
 
