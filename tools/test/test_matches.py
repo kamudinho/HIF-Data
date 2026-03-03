@@ -69,7 +69,7 @@ def vis_side(dp):
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
 
-    # --- STATISTIK BEREGNING (OVERBLIK) ---
+    # --- STATISTIK BEREGNING ---
     stats = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in team_matches[team_matches['MATCH_STATUS'] == 'Played'].iterrows():
         try:
@@ -90,24 +90,25 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- KAMPLISTE FUNKTION ---
+    # --- KAMPLISTE FUNKTION (MED NA-FILTER) ---
     def tegn_kampe(df, played):
         if df.empty:
-            st.info("Ingen kampe fundet i denne kategori.")
+            st.info("Ingen kampe fundet.")
             return
             
         for _, row in df.iterrows():
             try:
-                # 1. Håndter Dato (Spring over hvis NaT)
+                # SIKKER DATO-TJEK
                 dt_raw = row.get('MATCH_LOCALDATE')
-                if pd.isna(dt_raw) or str(dt_raw) == "NaT": continue
+                if pd.isna(dt_raw) or str(dt_raw) == "NaT": 
+                    continue # Skipper rækken hvis datoen er ødelagt
                 
                 dt = pd.to_datetime(dt_raw)
                 dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
                 maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
                 st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
 
-                # 2. Håndter Tid
+                # TID
                 t_raw = str(row.get('MATCH_LOCALTIME', ''))
                 t_disp = t_raw[:5] if ":" in t_raw else "TBA"
 
@@ -126,11 +127,14 @@ def vis_side(dp):
                             st.markdown(f"<div style='text-align:center;'><span class='time-pill'>{t_disp}</span></div>", unsafe_allow_html=True)
                     c4.image(hent_hold_logo(a_uuid), width=28)
                     c5.markdown(f"<div style='text-align:left; font-weight:bold; margin-top:5px;'>{a_n}</div>", unsafe_allow_html=True)
-            except: continue
+            except Exception:
+                continue # Fortsæt til næste kamp hvis noget fejler
 
-    # --- TABS VISNING ---
+    # --- TABS ---
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
-        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
+        # Sikrer vi sorterer efter en gyldig kolonne
+        sort_col = 'MATCH_DATE_FULL' if 'MATCH_DATE_FULL' in team_matches.columns else 'MATCH_LOCALDATE'
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values(sort_col, ascending=False), True)
     with tab_fix:
-        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS'] != 'Played'].sort_values(sort_col), False)
