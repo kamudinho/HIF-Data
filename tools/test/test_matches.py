@@ -2,23 +2,28 @@ import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import TEAMS
 
-def vis_side(dp=None): # Tilføj dp som argument
+def vis_side(dp=None):
     if dp is None:
         dp = st.session_state.get("dp", {})
     
-    # TRÆK DATA FRA DIN NYE STRUKTUR
+    # DEBUG: Se om data overhovedet lander i funktionen
+    if not dp:
+        st.error("Ingen data modtaget i vis_side (dp er tom)")
+        return
+
+    # Sørg for at vi rammer de rigtige nøgler fra get_data_package()
     opta_data = dp.get("opta", {})
     df_all_matches = opta_data.get("matches", pd.DataFrame())
     df_raw_stats = opta_data.get("team_stats", pd.DataFrame())
     
-    wyscout_data = dp.get("wyscout", {})
-    logos = wyscout_data.get("logos", {})
-
-    # --- RENS DATA (Vigtigt når vi henter alt) ---
-    # Sørg for at datoer er rigtige og fjern dubletter
-    df_all_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_all_matches['MATCH_DATE_FULL'], errors='coerce')
-    df_all_matches = df_all_matches.dropna(subset=['MATCH_DATE_FULL']).drop_duplicates(subset=['MATCH_OPTAUUID'])
-
+    # Tjek om dataframe er tom
+    if df_all_matches.empty:
+        st.warning("Dataframe 'matches' er tom. Tjek Snowflake forbindelsen eller SQL queries.")
+        # Vis hvad der faktisk er i dp for at fejlsøge
+        with st.expander("Se indhold af data pakke"):
+            st.write(dp.keys())
+        return
+        
     # --- DYNAMISKE FILTRE ---
     # Vi tjekker om kolonnerne findes, før vi bruger dem
     cols = df_all_matches.columns
