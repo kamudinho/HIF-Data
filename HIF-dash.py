@@ -130,10 +130,9 @@ try:
             sc.vis_side(dp["team_stats_full"])
 
     elif hoved_omraade == "BETINIA LIGAEN":
-    if sel == "Kampe":
-        import tools.test.test_matches as tm
-        # Her sender vi hele dp-pakken, som vi har hentet i starten af scriptet
-        tm.vis_side(st.session_state["dp"])
+        if sel == "Kampe": # Fixet indrykning her
+            import tools.test.test_matches as tm
+            tm.vis_side(st.session_state["dp"])
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
