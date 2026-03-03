@@ -100,48 +100,37 @@ def load_snowflake_query(query_key, is_opta=False):
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
-    # 1. Hent rå mursten fra Snowflake (Opta)
+    # 1. Hent data fra Snowflake (Opta)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     
-    # Hent de to rå event-dele i stedet for én stor join
-    df_events_raw = load_snowflake_query("opta_events_raw", is_opta=True)
-    df_quals_raw = load_snowflake_query("opta_qualifiers_raw", is_opta=True)
+    # Her henter vi dine skud via den nye query med LISTAGG
+    df_shotevents = load_snowflake_query("opta_shotevents", is_opta=True)
 
-    # 2. Saml Opta Player Stats (Events + Qualifiers) i Python
-    df_opta_player_stats = pd.DataFrame()
-    
-    if not df_events_raw.empty:
-        if not df_quals_raw.empty:
-            # Vi grupperer qualifiers pr. event, så vi får én række pr. skud
-            # Dette svarer til LISTAGG i SQL, men er mere fejl-sikkert her
-            df_quals_agg = df_quals_raw.groupby('EVENT_OPTAUUID').agg({
-                'QUALIFIER_QID': lambda x: ','.join(x.astype(str)),
-                'QUALIFIER_VALUE': lambda x: ','.join(x.astype(str).replace('None', ''))
-            }).reset_index().rename(columns={
-                'QUALIFIER_QID': 'QUALIFIERS',
-                'QUALIFIER_VALUE': 'QUAL_VALUES'
-            })
-            
-            # Left merge: Behold alle skud, tilføj detaljer hvor de findes
-            df_opta_player_stats = pd.merge(df_events_raw, df_quals_agg, on='EVENT_OPTAUUID', how='left')
-        else:
-            # Hvis ingen qualifiers findes, bruger vi de rå events
-            df_opta_player_stats = df_events_raw
-            df_opta_player_stats['QUALIFIERS'] = ""
-            df_opta_player_stats['QUAL_VALUES'] = ""
-
-    # 3. Hent øvrig data (Wyscout & Lokal)
+    # 2. Hent øvrig data (Wyscout & Lokal)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 4. Map Opta Event Navne (Skud, Mål, osv.)
-    if not df_opta_player_stats.empty and 'EVENT_TYPEID' in df_opta_player_stats.columns:
-        df_opta_player_stats['EVENT_NAME'] = df_opta_player_stats['EVENT_TYPEID'].astype(str).apply(get_event_name)
+    # 3. Map Opta Event Navne & xG
+    if not df_shotevents.empty:
+        # Map navne (Skud, Mål, etc.)
+        if 'EVENT_TYPEID' in df_shotevents.columns:
+            df_shotevents['EVENT_NAME'] = df_shotevents['EVENT_TYPEID'].astype(str).apply(get_event_name)
+        
+        # Funktion til at fiske xG ud af din QUAL_VALUES streng
+        def parse_xg(val_str):
+            try:
+                parts = str(val_str).split(',')
+                for p in parts:
+                    if p.startswith('0.') and len(p) > 5: return float(p)
+            except: pass
+            return 0.05
+            
+        df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)
 
-    # 5. Logo Mapping
+    # 4. Logo Mapping
     logo_map = {}
     if not df_logos_raw.empty:
         for _, row in df_logos_raw.iterrows():
@@ -156,7 +145,7 @@ def get_data_package():
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
-            "player_stats": df_opta_player_stats,
+            "player_stats": df_shotevents, 
         },
         "wyscout": {
             "team_stats": df_team_stats_wy,
@@ -168,7 +157,7 @@ def get_data_package():
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
         "logo_map": logo_map,
-        "playerstats": df_opta_player_stats,
+        "playerstats": df_shotevents, # Denne nøgle bruger dine værktøjer
         "player_career": df_career_wy,
         "config": {
             "liga_navn": COMPETITION_NAME,
