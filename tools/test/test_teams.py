@@ -63,60 +63,69 @@ def vis_side(df_raw=None):
 
     # --- 3. GRAF FUNKTION ---
     def draw_h2h_chart(t1, t2, metrics, labels):
-        # Tjekker om holdene findes
-        if t1 not in df_liga['HOLD'].values or t2 not in df_liga['HOLD'].values:
-            return
+    # Hent holddata
+    s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
+    s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
+    
+    # UUID'er til logo-opslag
+    u1, u2 = s1['UUID'], s2['UUID']
+    
+    # Farver
+    c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
+    c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
+    
+    # Robust logo-hentning (Prøver Snowflake først, så TEAMS mapping)
+    logo1 = get_logo_url(u1, t1)
+    logo2 = get_logo_url(u2, t2)
 
-        s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
-        s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
-        c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
-        c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
-        
-        logo1 = TEAMS.get(t1, {}).get('logo', "")
-        logo2 = TEAMS.get(t2, {}).get('logo', "")
+    fig = go.Figure()
+    x_vals = list(range(len(labels)))
 
-        fig = go.Figure()
-        x_vals = list(range(len(labels)))
+    # Venstre Bar
+    fig.add_trace(go.Bar(
+        x=x_vals, y=[s1[m] for m in metrics],
+        marker_color=c1_hex,
+        text=[s1[m] for m in metrics],
+        textposition='inside',
+        insidetextfont=dict(size=14, color=get_text_color(c1_hex), family="Arial Black"),
+        width=0.35, offset=-0.38
+    ))
+    
+    # Højre Bar
+    fig.add_trace(go.Bar(
+        x=x_vals, y=[s2[m] for m in metrics],
+        marker_color=c2_hex,
+        text=[s2[m] for m in metrics],
+        textposition='inside',
+        insidetextfont=dict(size=14, color=get_text_color(c2_hex), family="Arial Black"),
+        width=0.35, offset=0.03
+    ))
 
-        # Søjler
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s1[m] for m in metrics],
-            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.35, offset=-0.38
-        ))
-        fig.add_trace(go.Bar(
-            x=x_vals, y=[s2[m] for m in metrics],
-            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-            insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
-            width=0.35, offset=0.03
-        ))
+    # Placer logoer over søjlerne
+    for i in x_vals:
+        if logo1:
+            fig.add_layout_image(dict(
+                source=logo1, xref="x", yref="y", x=i-0.20, y=s1[metrics[i]],
+                sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom",
+                layer="above", sizing="contain"
+            ))
+        if logo2:
+            fig.add_layout_image(dict(
+                source=logo2, xref="x", yref="y", x=i+0.21, y=s2[metrics[i]],
+                sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom",
+                layer="above", sizing="contain"
+            ))
 
-        # Logoer via images (nu med mere luft og sizing)
-        for i in x_vals:
-            if logo1:
-                fig.add_layout_image(dict(
-                    source=logo1, xref="x", yref="y", x=i-0.20, y=s1[metrics[i]],
-                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom",
-                    layer="above", sizing="contain"
-                ))
-            if logo2:
-                fig.add_layout_image(dict(
-                    source=logo2, xref="x", yref="y", x=i+0.21, y=s2[metrics[i]],
-                    sizex=0.18, sizey=0.18, xanchor="center", yanchor="bottom",
-                    layer="above", sizing="contain"
-                ))
-
-        max_v = max([s1[m] for m in metrics] + [s2[m] for m in metrics] + [1])
-        
-        fig.update_layout(
-            showlegend=False, height=450, margin=dict(t=60, b=40, l=10, r=10),
-            xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
-            yaxis=dict(visible=False, range=[0, max_v * 1.4], fixedrange=True),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
+    # Dynamisk loft på grafen så logoerne kan være der
+    max_val = max([s1[m] for m in metrics] + [s2[m] for m in metrics] + [5])
+    
+    fig.update_layout(
+        showlegend=False, height=450, margin=dict(t=80, b=40, l=10, r=10),
+        xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
+        yaxis=dict(visible=False, range=[0, max_val * 1.5], fixedrange=True),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+    )
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
