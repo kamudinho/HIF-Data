@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from data.utils.team_mapping import TEAMS  # Vigtig for at mappe navne til logo-ID
+
+# Henter dine globale indstillinger
+from data.utils.team_mapping import TEAMS, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 def vis_side(df_raw=None): 
     # --- 1. DATA INITIALISERING ---
@@ -11,14 +13,15 @@ def vis_side(df_raw=None):
         
     dp = st.session_state["dp"]
     logo_map = dp.get("logo_map", {})
-    colors_dict = dp.get("config", {}).get("colors", {})
-    season_config = dp.get("config", {}).get("season", "2025/2026")
+    
+    # Vi bruger TEAM_COLORS direkte fra din team_mapping.py hvis config er tom
+    colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     
     if df_raw is None or df_raw.empty:
         df_raw = dp.get("team_stats_full", pd.DataFrame())
 
     if df_raw.empty:
-        st.warning("Ingen data fundet i team_stats_full.")
+        st.warning("Ingen data fundet i team_stats_full. Tjek din Snowflake query.")
         return
 
     # --- 2. CSS & STYLING ---
@@ -35,8 +38,19 @@ def vis_side(df_raw=None):
     df = df_raw.copy()
     df.columns = [str(c).strip().upper() for c in df.columns]
     
-    # Filtrér på sæson fra din centrale config
-    df_liga = df[df['SEASONNAME'] == season_config].copy()
+    # Vi bruger TOURNAMENTCALENDAR_NAME fra team_mapping.py (Global Kontrol)
+    # Vi tjekker både for 'SEASONNAME' og 'TOURNAMENTCALENDAR_NAME' i kolonne-overskrifterne
+    s_col = next((c for c in df.columns if c in ['SEASONNAME', 'TOURNAMENTCALENDAR_NAME']), None)
+    
+    if s_col:
+        df_liga = df[df[s_col] == TOURNAMENTCALENDAR_NAME].copy()
+    else:
+        st.error(f"Fejl: Kunne ikke finde en sæson-kolonne. Kolonner i data: {list(df.columns)}")
+        return
+
+    if df_liga.empty:
+        st.warning(f"Ingen data fundet for sæsonen: {TOURNAMENTCALENDAR_NAME}")
+        return
 
     # --- 4. TABS STRUKTUR ---
     tab_liga_hoved, tab_h2h_hoved = st.tabs(["🏆 Ligaoversigt", "📊 Head-to-Head"])
@@ -47,9 +61,10 @@ def vis_side(df_raw=None):
         
         def render_table(d, cols, renames):
             t = d[cols].copy()
-            # Brug IMAGEDATAURL fra SQL hvis den findes
+            # Tilføj logo via IMAGEDATAURL eller slå det op via TEAMS mapping
             if 'IMAGEDATAURL' in t.columns:
                 t['IMAGEDATAURL'] = t['IMAGEDATAURL'].apply(lambda x: f'<img src="{x}" width="25">')
+            
             st.write(t.rename(columns=renames).to_html(escape=False, index=False), unsafe_allow_html=True)
 
         with l_gen:
@@ -88,11 +103,9 @@ def vis_side(df_raw=None):
             c1_cfg = colors_dict.get(n1, {"primary": "#808080", "secondary": "#000000"})
             c2_cfg = colors_dict.get(n2, {"primary": "#808080", "secondary": "#000000"})
             
-            # Dynamisk tekstfarve
             txt_c1 = "black" if c1_cfg["primary"].lower() in ["#ffff00", "#ffffff"] else "white"
             txt_c2 = "black" if c2_cfg["primary"].lower() in ["#ffff00", "#ffffff"] else "white"
 
-            # Søjle Hold 1
             fig.add_trace(go.Bar(
                 name=n1, x=labels, y=y1_vals, 
                 marker_color=c1_cfg["primary"],
@@ -101,7 +114,6 @@ def vis_side(df_raw=None):
                 textfont=dict(color=txt_c1)
             ))
             
-            # Søjle Hold 2
             fig.add_trace(go.Bar(
                 name=n2, x=labels, y=y2_vals, 
                 marker_color=c2_cfg["primary"],
@@ -110,7 +122,6 @@ def vis_side(df_raw=None):
                 textfont=dict(color=txt_c2)
             ))
                     
-            # Logo-placering (Mapper navn -> WYID -> Logo URL)
             for i in range(len(labels)):
                 id1 = next((info.get("team_wyid") for name, info in TEAMS.items() if name == n1), None)
                 id2 = next((info.get("team_wyid") for name, info in TEAMS.items() if name == n2), None)
