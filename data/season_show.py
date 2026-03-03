@@ -1,42 +1,23 @@
-# --- 1. VALG AF LIGA (DETTE ER DET ENESTE STED DU RETTER) ---
-VALGT_LIGA = "1. Division"  # Skift til "3F Superliga" når de rykker op!
+from data.utils.team_mapping import COMPETITIONS
+
+# --- 1. VALG AF LIGA ---
+VALGT_LIGA = "1. Division" 
 SEASONNAME = "2025/2026" 
 TEAM_WYID = 7490
-TEAM_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 TOURNAMENTCALENDAR_NAME = "2025/2026" 
 
-# --- 2. AVANCERET TURNERING MAPPING ---
-COMPETITIONS = {
-    "1. Division": {
-        "wyid": 328, 
-        "opta_uuid": "6ifaeunfdelecgticvxanikzu"
-    },
-    "Superliga": {
-        "wyid": 335, 
-        "opta_uuid": "29actv1ohj8r10kd9hu0jnb0n"
-    },
-    "2. division": {
-        "wyid": 329, 
-        "opta_uuid": None
-    },
-    "3. division": {
-        "wyid": 43319, 
-        "opta_uuid": None
-    },
-    "Oddset Pokalen": {
-        "wyid": 331, 
-        "opta_uuid": None
-    },
-    "U19 Ligaen": {
-        "wyid": 1305, 
-        "opta_uuid": None
-    }
-}
+# --- 2. HENT INFO FRA CENTRAL MAPPING ---
+# Nu bruger vi de nye kolonnenavne du lige har lavet
+liga_info = COMPETITIONS.get(VALGT_LIGA, {})
+COMPETITION_WYID = (liga_info.get("wyid"),)
+OPTA_COMP_UUID = liga_info.get("COMPETITION_OPTAUUID")
 
-# --- 3. AUTOMATISK OPSÆTNING AF ID'ER (Baseret på VALGT_LIGA) ---
-# Disse linjer henter selv de rigtige ID'er fra din mapping ovenfor
-COMPETITION_WYID = (COMPETITIONS[VALGT_LIGA]["wyid"],)
-OPTA_COMP_UUID = COMPETITIONS[VALGT_LIGA]["opta_uuid"]
+# --- 3. AUTOMATISK COMP_MAP GENERERING ---
+COMP_MAP = {info["wyid"]: navn for navn, info in COMPETITIONS.items() if info.get("wyid")}
+# Tilføj Opta UUIDs til map hvis de findes
+for navn, info in COMPETITIONS.items():
+    if info.get("COMPETITION_OPTAUUID"):
+        COMP_MAP[info["COMPETITION_OPTAUUID"]] = navn
 
 # --- 4. HJÆLPEFUNKTIONER & BAGUDKOMPATIBEL COMP_MAP ---
 def get_league_ids(league_name=VALGT_LIGA):
