@@ -107,34 +107,39 @@ with st.sidebar:
 if not sel: 
     sel = "Oversigt"
 
+# Definer de data-kilder vi skal bruge fra dp
+# Dette sikrer, at vi ikke får 'KeyError'
+wyscout_data = dp.get("wyscout", {}).get("team_stats")
+logo_map = dp.get("logo_map", {})
+
 try:
     # --- TRUPPEN SEKTION ---
     if hoved_omraade == "TRUPPEN":
         if sel == "Oversigt":
             import tools.players as pl
-            pl.vis_side(dp["players"])
+            pl.vis_side(wyscout_data) # Bruger team_stats fra wyscout
         elif sel == "Forecast":
             import tools.squad as sq
-            sq.vis_side(dp["players"])
+            sq.vis_side(wyscout_data)
 
     # --- HIF ANALYSE SEKTION ---
     elif hoved_omraade == "HIF ANALYSE":
         if sel == "Afslutninger":
             import tools.player_shots as ps
-            ps.vis_side(dp["players"], dp["logo_map"])
+            ps.vis_side(wyscout_data, logo_map)
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
-            ma.vis_side(dp["opta_matches"], dp["logo_map"])
+            # Vi bruger opta matches her som defineret i din data_load
+            ma.vis_side(dp.get("opta", {}).get("matches"), logo_map)
         elif sel == "Scatterplots":
             import tools.scatter as sc
-            sc.vis_side(dp["team_stats_full"])
+            sc.vis_side(dp.get("team_stats_full"))
 
-# --- BETINIA LIGAEN SEKTION ---
+    # --- BETINIA LIGAEN SEKTION ---
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Kampe":
             import tools.test.test_matches as tm
-            # Vi sender hele dp (data_package) med
-            tm.vis_side(st.session_state["dp"])
+            tm.vis_side(dp) # Sender hele pakken med
 
     # --- SCOUTING SEKTION ---
     elif hoved_omraade == "SCOUTING":
@@ -143,10 +148,10 @@ try:
             si.vis_side(dp)
         elif sel == "Database":
             import tools.scout_db as sdb
-            sdb.vis_side(dp.get("scouting_image"), dp["players"], dp["playerstats"], dp["player_career"])
+            sdb.vis_side(dp.get("scouting_image"), wyscout_data, dp.get("playerstats"), dp.get("player_career"))
         elif sel == "Sammenligning":
             import tools.comparison as comp
-            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp["season_filter"])
+            comp.vis_side(wyscout_data, dp.get("playerstats"), dp.get("scouting_image"), dp.get("player_career"), dp.get("season_filter"))
 
     # --- ADMIN SEKTION ---
     elif hoved_omraade == "ADMIN":
