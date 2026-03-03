@@ -14,7 +14,7 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, T
 
 # --- MODUL-TJEK: Import af mappings ---
 try:
-    from data.utils.mappings import get_event_name
+    from data.utils.mapping import get_event_name
 except ModuleNotFoundError:
     # Fallback hvis stien driller i Streamlit Cloud
     def get_event_name(x): return f"ID {x}"
