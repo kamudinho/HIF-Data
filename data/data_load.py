@@ -92,18 +92,20 @@ def get_data_package():
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
             "player_stats": df_opta_player_stats,
-            "uuid": COMPETITIONS[VALGT_LIGA].get("COMPETITION_OPTAUUID")
         },
+        # Tilføj disse "flade" nøgler så dine gamle værktøjer ikke knækker:
+        "opta_matches": df_matches_opta, 
+        "team_stats_full": df_opta_stats,
         "wyscout": {
             "team_stats": df_team_stats_wy,
             "career": df_career_wy,
             "logos": logo_map,
             "wyid": wy_id_val
         },
-        "players_csv": df_csv_players,
+        "logo_map": logo_map, # Gør den nemt tilgængelig
         "config": {
-            "liga_navn": VALGT_LIGA,
-            "season": season,
+            "liga_navn": COMPETITION_NAME,
+            "season": TOURNAMENTCALENDAR_NAME,
             "colors": TEAM_COLORS
         }
     }
