@@ -127,9 +127,15 @@ def vis_side(dp):
     # --- KAMPLISTE FUNKTION ---
     def tegn_kampe(df, played):
         for _, row in df.iterrows():
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            # Vi bruger MATCH_LOCALDATE til datoen
+            dt_str = str(row.get('MATCH_LOCALDATE', ''))
+            if not dt_str or dt_str == 'None':
+                continue
+                
+            dt = pd.to_datetime(dt_str)
             dag_dk = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned_dk = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
+            
             st.markdown(f"<div class='date-header'>{dag_dk.upper()} D. {dt.day}. {maaned_dk.upper()}</div>", unsafe_allow_html=True)
             
             h_uuid = row['CONTESTANTHOME_OPTAUUID']
@@ -137,13 +143,15 @@ def vis_side(dp):
             h_n = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
             a_n = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
-            # LOGIK FOR TIDSPUNKT
+            # --- NY TIDSLOGIK BASERET PÅ DINE DATA ---
+            # Vi henter direkte fra MATCH_LOCALTIME
             raw_time = str(row.get('MATCH_LOCALTIME', ''))
-            # Formatér tid (f.eks. 19:00:00 -> 19:00)
+            
             if ":" in raw_time:
-                display_time = ":".join(raw_time.split(":")[:2])
+                # Tager de første 5 tegn (f.eks. "19:00:00" -> "19:00")
+                display_time = raw_time[:5]
             else:
-                display_time = dt.strftime('%H:%M')
+                display_time = "TBA"
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -173,5 +181,3 @@ def vis_side(dp):
         tegn_kampe(team_matches[team_matches['MATCH_STATUS'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
     with tab_fix:
         tegn_kampe(team_matches[team_matches['MATCH_STATUS'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
-
-Jeg kan ikke opdatere det?
