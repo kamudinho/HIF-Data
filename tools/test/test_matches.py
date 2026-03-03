@@ -16,7 +16,7 @@ def vis_side():
     if not df_matches.empty:
         df_matches = df_matches[
             (df_matches['TOURNAMENTCALENDAR_NAME'] == valgt_saeson) & 
-            (df_matches['TOURNAMENT_NAME'] == valgt_liga)
+            (df_matches['COMPETITION_NAME'] == valgt_liga)
         ]
 
     # --- 2. CSS & UI ---
