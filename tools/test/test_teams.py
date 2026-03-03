@@ -16,23 +16,17 @@ def vis_side(df_raw=None):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # --- 1. HJÆLPEFUNKTIONER (NU MED LOGO-LOGIK) ---
+    # --- 1. HJÆLPEFUNKTIONER ---
     def get_logo_url(opta_uuid, team_name):
-        """Henter logo URL fra Snowflake eller TEAMS mapping."""
-        # 1. Tjek Snowflake logo_map via Wyscout ID
         logo_map = dp.get("logo_map", {})
         wy_id = next((info.get('wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
-        
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
-        
-        # 2. Fallback til statisk mapping
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
     def get_text_color(hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        # Luminance > 165 tvinger sort tekst på bl.a. Hobros gule
         luminance = (r * 0.299 + g * 0.587 + b * 0.114)
         return "black" if luminance > 165 else "white"
 
@@ -75,75 +69,62 @@ def vis_side(df_raw=None):
     df_liga.index += 1
 
     # --- 3. GRAF FUNKTION ---
-   def draw_h2h_chart(t1, t2, metrics, labels):
-    # 1. Hent data
-    s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
-    s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
-    u1, u2 = s1['UUID'], s2['UUID']
-    
-    c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
-    c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
-    
-    logo1 = get_logo_url(u1, t1)
-    logo2 = get_logo_url(u2, t2)
+    def draw_h2h_chart(t1, t2, metrics, labels):
+        s1 = df_liga[df_liga['HOLD'] == t1].iloc[0]
+        s2 = df_liga[df_liga['HOLD'] == t2].iloc[0]
+        u1, u2 = s1['UUID'], s2['UUID']
+        
+        c1_hex = colors_dict.get(t1, {}).get('primary', '#cc0000')
+        c2_hex = colors_dict.get(t2, {}).get('primary', '#0056a3')
+        
+        logo1 = get_logo_url(u1, t1)
+        logo2 = get_logo_url(u2, t2)
 
-    # 2. LOGO-RÆKKE (Uden for Plotly)
-    # Vi laver en kolonne for hver metrik (f.eks. 3 kolonner hvis Point, Sejre, Kampe)
-    cols = st.columns(len(labels))
-    
-    for idx, col in enumerate(cols):
-        with col:
-            # Vi bruger HTML til at placere to logoer side om side over hver søjlegruppe
-            st.markdown(
-                f"""
-                <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: -40px;">
-                    <img src="{logo1}" width="35" style="object-fit: contain;">
-                    <img src="{logo2}" width="35" style="object-fit: contain;">
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+        # 1. Logoer i kolonner over grafen
+        cols = st.columns(len(labels))
+        for col in cols:
+            with col:
+                st.markdown(
+                    f"""<div style="display: flex; justify-content: center; gap: 15px; margin-bottom: -35px;">
+                        <img src="{logo1}" width="30" style="object-fit: contain;">
+                        <img src="{logo2}" width="30" style="object-fit: contain;">
+                    </div>""", unsafe_allow_html=True
+                )
 
-    # 3. SELVE GRAFEN
-    fig = go.Figure()
-    x_vals = list(range(len(labels)))
+        # 2. Selve grafen
+        fig = go.Figure()
+        x_vals = list(range(len(labels)))
 
-    fig.add_trace(go.Bar(
-        x=x_vals, y=[s1[m] for m in metrics],
-        marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
-        insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-        width=0.38
-    ))
-    
-    fig.add_trace(go.Bar(
-        x=x_vals, y=[s2[m] for m in metrics],
-        marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
-        insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
-        width=0.38
-    ))
+        fig.add_trace(go.Bar(
+            x=x_vals, y=[s1[m] for m in metrics],
+            marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
+            insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
+            width=0.38
+        ))
+        
+        fig.add_trace(go.Bar(
+            x=x_vals, y=[s2[m] for m in metrics],
+            marker_color=c2_hex, text=[s2[m] for m in metrics], textposition='inside',
+            insidetextfont=dict(size=16, color=get_text_color(c2_hex), family="Arial Black"),
+            width=0.38
+        ))
 
-    fig.update_layout(
-        showlegend=False, 
-        height=350, # Lidt lavere højde da logoerne er flyttet ud
-        margin=dict(t=20, b=40, l=10, r=10),
-        xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
-        yaxis=dict(visible=False, fixedrange=True),
-        plot_bgcolor='rgba(0,0,0,0)', 
-        paper_bgcolor='rgba(0,0,0,0)',
-        bargap=0.15
-    )
-    
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        fig.update_layout(
+            showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10),
+            xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
+            yaxis=dict(visible=False, fixedrange=True),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            bargap=0.15
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
         def get_logo_html(uuid):
-            # Vi bruger samme logik her for konsistens
             url = get_logo_url(uuid, "")
             return f'<img src="{url}" width="20">' if url else ""
-            
         def style_form(f):
             res = ""
             for char in f:
