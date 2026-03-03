@@ -80,22 +80,27 @@ def vis_side(df_raw=None):
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
 
-        # 1. Logoer i kolonner
+        # 1. NY LOGO-BEHOLDER MED FAST PADDING
         cols = st.columns(len(labels))
         for col in cols:
             with col:
-                # Gap på 45px passer ofte til bredden på 0.4 barer
+                # Vi bruger 'width: 100%' og 'justify-content: center' 
+                # for at låse logoerne fast over midten af hver kategori
                 st.markdown(
                     f"""
-                    <div style="display: flex; justify-content: center; gap: 45px; margin-bottom: -35px;">
-                        <img src="{logo1}" width="32" style="object-fit: contain;">
-                        <img src="{logo2}" width="32" style="object-fit: contain;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 35px; margin-bottom: -35px; width: 100%;">
+                        <div style="width: 35px; display: flex; justify-content: center;">
+                            <img src="{logo1}" style="max-width: 100%; height: auto; object-fit: contain;">
+                        </div>
+                        <div style="width: 35px; display: flex; justify-content: center;">
+                            <img src="{logo2}" style="max-width: 100%; height: auto; object-fit: contain;">
+                        </div>
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
 
-        # 2. Plotly figur
+        # 2. GRAFEN
         fig = go.Figure()
         x_vals = list(range(len(labels)))
 
@@ -103,7 +108,7 @@ def vis_side(df_raw=None):
             x=x_vals, y=[s1[m] for m in metrics],
             marker_color=c1_hex, text=[s1[m] for m in metrics], textposition='inside',
             insidetextfont=dict(size=16, color=get_text_color(c1_hex), family="Arial Black"),
-            width=0.4 
+            width=0.4
         ))
         
         fig.add_trace(go.Bar(
@@ -116,7 +121,7 @@ def vis_side(df_raw=None):
         fig.update_layout(
             showlegend=False, 
             height=380, 
-            margin=dict(t=10, b=40, l=10, r=10),
+            margin=dict(t=0, b=40, l=40, r=40), # Faste marginer (40px) matcher Streamlit bedre
             xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
             yaxis=dict(visible=False, fixedrange=True),
             plot_bgcolor='rgba(0,0,0,0)', 
