@@ -150,9 +150,9 @@ try:
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
             st.title("🛰️ Rå Data Explorer")
-            st.write("### Opta Matches", dp["opta_matches"].head(50))
-            st.write("### Opta Stats", dp["opta_raw_stats"].head(50))
-            st.write("### Tjek af alle kolonner", load_snowflake_query("opta_player_stats", None, None).head(10))
+            # Ret nøglerne her så de matcher din return-struktur
+            st.write("### Opta Matches", dp["opta"]["matches"].head(50))
+            st.write("### Opta Stats", dp["opta"]["team_stats"].head(50))
         elif sel == "Brugerstyring":
             import tools.admin as adm
             adm.vis_side()
