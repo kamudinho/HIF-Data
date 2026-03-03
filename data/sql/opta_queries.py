@@ -35,11 +35,12 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
         """,
 
-        # 3. SHOT EVENTS - Optimeret med LISTAGG til shotmaps
+        # 3. SHOT EVENTS - Nu med hold-ID så du kan kende forskel på HIF og modstander
         "opta_shotevents": f"""
             SELECT 
                 e.MATCH_OPTAUUID, 
                 e.EVENT_OPTAUUID, 
+                e.EVENT_CONTESTANT_OPTAUUID, -- Tilføjet for hold-filtrering
                 e.PLAYER_NAME, 
                 e.EVENT_X, 
                 e.EVENT_Y, 
@@ -57,6 +58,6 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
         """
     }
