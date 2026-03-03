@@ -80,27 +80,27 @@ def vis_side(df_raw=None):
         logo1 = get_logo_url(u1, t1)
         logo2 = get_logo_url(u2, t2)
 
-        # 1. NY LOGO-BEHOLDER MED FAST PADDING
-        cols = st.columns(len(labels))
-        for col in cols:
-            with col:
-                # Vi bruger 'width: 100%' og 'justify-content: center' 
-                # for at låse logoerne fast over midten af hver kategori
-                st.markdown(
-                    f"""
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 35px; margin-bottom: -35px; width: 100%;">
-                        <div style="width: 35px; display: flex; justify-content: center;">
-                            <img src="{logo1}" style="max-width: 100%; height: auto; object-fit: contain;">
-                        </div>
-                        <div style="width: 35px; display: flex; justify-content: center;">
-                            <img src="{logo2}" style="max-width: 100%; height: auto; object-fit: contain;">
-                        </div>
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
+        # 1. LOGO-RÆKKE (Centreret over barerne)
+        # Vi dropper st.columns og bruger én række med præcis spacing
+        logo_html = ""
+        for label in labels:
+            logo_html += f"""
+                <div style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 30px;">
+                    <img src="{logo1}" width="30" style="object-fit: contain;">
+                    <img src="{logo2}" width="30" style="object-fit: contain;">
+                </div>
+            """
 
-        # 2. GRAFEN
+        st.markdown(
+            f"""
+            <div style="display: flex; width: 100%; padding: 0 40px; margin-bottom: -35px;">
+                {logo_html}
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        # 2. SELVE GRAFEN
         fig = go.Figure()
         x_vals = list(range(len(labels)))
 
@@ -121,12 +121,13 @@ def vis_side(df_raw=None):
         fig.update_layout(
             showlegend=False, 
             height=380, 
-            margin=dict(t=0, b=40, l=40, r=40), # Faste marginer (40px) matcher Streamlit bedre
+            # Marginerne her (40px) skal matche paddingen i logo-beholderen ovenfor
+            margin=dict(t=10, b=40, l=40, r=40), 
             xaxis=dict(tickvals=x_vals, ticktext=labels, fixedrange=True),
             yaxis=dict(visible=False, fixedrange=True),
             plot_bgcolor='rgba(0,0,0,0)', 
             paper_bgcolor='rgba(0,0,0,0)',
-            bargap=0.15,
+            bargap=0.2,
             barmode='group'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
