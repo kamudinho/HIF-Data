@@ -1,25 +1,14 @@
 def get_wy_queries(comp_filter, season_filter):
-    """
-    Returnerer queries til Wyscout.
-    Sikrer at IN-clausulen aldrig er tom, hvilket fjerner 'unexpected )' fejlen.
-    """
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- SIKRING MOD TOMME FILTRE ---
-    # Hvis comp_filter er None, tom streng eller tom liste/tuple, brug (328,)
+    # Sikring mod tomme filtre
     if not comp_filter:
         c_f = "(328)"
     elif isinstance(comp_filter, (list, tuple)):
-        # Hvis det er en tuple med ét element (328,), bliver det til "(328)"
-        # Hvis det er flere (328, 335), bliver det til "(328, 335)"
-        if len(comp_filter) == 1:
-            c_f = f"({comp_filter[0]})"
-        else:
-            c_f = str(tuple(comp_filter))
+        c_f = f"({comp_filter[0]})" if len(comp_filter) == 1 else str(tuple(comp_filter))
     else:
         c_f = f"({comp_filter})"
 
-    # Sæson-filter håndtering
     if isinstance(season_filter, str) and not season_filter.startswith('='):
         s_f = f" = '{season_filter}'"
     else:
@@ -27,8 +16,16 @@ def get_wy_queries(comp_filter, season_filter):
 
     return {
         "players": f"""
-            SELECT p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, 
-                   p.ROLECODE3, p.CURRENTTEAM_WYID, p.IMAGEDATAURL
+            SELECT 
+                p.PLAYER_WYID, 
+                p.FIRSTNAME, 
+                p.LASTNAME, 
+                p.SHORTNAME, 
+                p.ROLECODE3, 
+                p.CURRENTTEAM_WYID, 
+                p.IMAGEDATAURL,
+                p.BIRTHDATE, -- Tilføjet så Trupoversigt kan beregne alder
+                p.PASSPORTAREA_NAME AS NATION -- God at have til oversigten
             FROM {DB}.WYSCOUT_PLAYERS p
             WHERE p.PLAYER_WYID IN (
                 SELECT DISTINCT ap.PLAYER_WYID
