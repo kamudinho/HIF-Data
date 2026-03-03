@@ -70,8 +70,24 @@ def vis_shotmap(df):
     
     return fig
 
-# --- KALD I DIN APP ---
-# dp = get_data_package()
-# fig = vis_shotmap(dp['opta']['player_stats'])
-# if fig:
-#     st.pyplot(fig)
+# Tilføj dette i bunden af tools/shotmap.py
+def vis_side():
+    """Denne funktion kaldes af Streamlit-siden"""
+    st.title("🎯 Hvidovre IF - Skudanalyse")
+    
+    # 1. Hent data
+    dp = get_data_package()
+    df_events = dp.get('opta', {}).get('player_stats', pd.DataFrame())
+    
+    if df_events.empty:
+        st.warning("Henter data fra Snowflake... Vent et øjeblik.")
+        return
+
+    # 2. Generér og vis kortet ved hjælp af din eksisterende logik
+    fig = vis_shotmap(df_events) 
+    
+    if fig:
+        st.pyplot(fig)
+        st.markdown("🔺 = Hovedstød | 🔵 = Afslutning | 🔴 = Mål")
+    else:
+        st.info("Ingen afslutninger at vise for de valgte filtre.")
