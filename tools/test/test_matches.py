@@ -121,7 +121,7 @@ def vis_side(dp):
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
                 
                 if is_played:
-                    st.markdown("<hr style='margin: 6px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    st.markdown("<hr style='margin: 2px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
                     stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Skud", "totalScoringAtt", ""), ("xG", "expectedGoals", ""), ("Afleveringer", "totalPass", ""), ("Hjørne", "wonCorner", "")]
                     for i, (label, s_key, suff) in enumerate(stats_map):
