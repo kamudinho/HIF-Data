@@ -2,7 +2,6 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 
 def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # Fast UUID til Hvidovre
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
@@ -60,9 +59,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
         "opta_qualifiers": f"""
             SELECT 
-                EVENT_OPTAUUID,
-                QUALIFIER_QID,
-                QUALIFIER_VALUE
+                EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
             FROM {DB}.OPTA_QUALIFIERS
             WHERE EVENT_OPTAUUID IN (
                 SELECT EVENT_OPTAUUID FROM {DB}.OPTA_EVENTS
