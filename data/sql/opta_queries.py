@@ -2,13 +2,10 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 
 def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # Prioritér input-parametre, ellers brug globale værdier fra team_mapping
-
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
     return {
-        # 1. MATCHINFO - Her definerer vi universet for de andre queries
         "opta_matches": f"""
             SELECT 
                 MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS, 
@@ -22,7 +19,6 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             AND TOURNAMENTCALENDAR_NAME = '{saeson}'
             ORDER BY MATCH_DATE_FULL DESC
         """,
-        # 2. MATCHSTATS - Henter hold-statistikker (boldbesiddelse osv.)
         "opta_team_stats": f"""
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
@@ -33,8 +29,6 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
         """,
-
-        # 3. SHOT EVENTS - Fejlsikret SQL med korrekt gruppering
         "opta_shotevents": f"""
             SELECT  
                 e.MATCH_OPTAUUID, 
@@ -48,14 +42,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 e.EVENT_TIMEMIN,
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_START_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_START_Y,
-                -- Vi bygger en streng af alle qualifiers til Python
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALS_IDS,
-                -- Vi tilføjer manuelt 210 hvis skuddet var mål (Outcome 1) og assisteret (29)
-                CASE 
-                    WHEN e.EVENT_OUTCOME = 1 AND LISTAGG(q.QUALIFIER_QID, ',') LIKE '%29%' 
-                    THEN '210' 
+                -- Robust assist-markør: 210 hvis direkte qualifier findes, eller 29 ved mål
+                MAX(CASE 
+                    WHEN q.QUALIFIER_QID = 210 THEN '210' 
+                    WHEN q.QUALIFIER_QID = 29 AND e.EVENT_OUTCOME = 1 THEN '210' 
                     ELSE '0' 
-                END as MANUAL_ASSIST_MARKER
+                END) as MANUAL_ASSIST_MARKER
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
@@ -65,5 +58,4 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """
-        }
-    return queries
+    }
