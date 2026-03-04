@@ -96,27 +96,27 @@ def load_snowflake_query(query_key, is_opta=False):
         return pd.DataFrame()
 
 def get_data_package():
-    # 1. HENT ALLE DATA
+    # 1. HENT ALLE DATA (Som i din oprindelige version)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
-    df_all_events = load_snowflake_query("opta_shotevents", is_opta=True)
+    df_events_raw = load_snowflake_query("opta_shotevents", is_opta=True)
     df_quals = load_snowflake_query("opta_qualifiers", is_opta=True)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # Separér skud (til kortet) og alle events (til navne-opslag)
-    df_shots = df_all_events[df_all_events['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
+    # Initialisér df_shots fra de rå events
+    df_shots = df_events_raw[df_events_raw['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy() if not df_events_raw.empty else pd.DataFrame()
 
-    # 2. BEHANDL QUALIFIERS OG MERGE
+    # 2. BEHANDL QUALIFIERS OG MERGE (Med din vask)
     if not df_quals.empty and not df_shots.empty:
         df_quals['EVENT_OPTAUUID'] = df_quals['EVENT_OPTAUUID'].astype(str).str.strip()
         df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str).str.strip()
         
         df_quals = df_quals.drop_duplicates(subset=['EVENT_OPTAUUID', 'QUALIFIER_QID'])
         
-        # Inkludér QID 149 (Release Player) som er assistmagerens UUID
+        # Vi tilføjer 149 (Assistmager ID) til de relevante quals
         relevant_quals = [140, 141, 210, 29, 142, 149] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin([str(x) for x in relevant_quals])].copy()
         
@@ -131,30 +131,33 @@ def get_data_package():
         
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. LOGIK FOR ASSISTS, NAVNE OG xG
+    # 3. LOGIK FOR ASSISTS OG xG (Mapping til vis_side)
     if not df_shots.empty:
-        # Map kolonnerne (149 er nu ASSIST_PLAYER_ID)
+        # Map dine qualifiers til navngivne kolonner
+        # 149 mappes til ASSIST_PLAYER_ID (dette er et UUID)
         col_map = {'140': 'PASS_X', '141': 'PASS_Y', '210': 'ASSIST_Q', '29': 'ASSIST_ALT', '142': 'XG_RAW', '149': 'ASSIST_PLAYER_ID'}
         df_shots = df_shots.rename(columns=col_map)
 
-        # FIND NAVNET PÅ ASSISTMAGEREN
-        # Vi laver en ordbog over alle spillere fra de events vi har hentet (Type 1, 13, 14, 15, 16)
-        # Dette sikrer, at vi kan slå "elheowoq..." op og få "M. Fenger"
-        if 'PLAYER_OPTAUUID' in df_all_events.columns:
-            name_map = dict(zip(df_all_events['PLAYER_OPTAUUID'], df_all_events['PLAYER_NAME']))
-            df_shots['ASSIST_PLAYER_NAME'] = df_shots['ASSIST_PLAYER_ID'].map(name_map)
+        # --- NY LOGIK FOR AT FINDE NAVNET ---
+        # Vi laver en ordbog: UUID -> NAVN fra alle de events vi har hentet
+        name_lookup = dict(zip(df_events_raw['PLAYER_OPTAUUID'], df_events_raw['PLAYER_NAME']))
+        
+        # Nu opretter vi kolonnen ASSIST_PLAYER_NAME ved at slå ID'et op
+        if 'ASSIST_PLAYER_ID' in df_shots.columns:
+            df_shots['ASSIST_PLAYER_NAME'] = df_shots['ASSIST_PLAYER_ID'].map(name_lookup).fillna("Ukendt")
         else:
-            # Hvis UUID mangler, forsøger vi at matche på de rækker vi HAR hentet via PLAYER_NAME
             df_shots['ASSIST_PLAYER_NAME'] = "Ukendt"
 
-        # Sikr kolonner
+        # Sikr at kolonnerne findes
         needed = ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST', 'ASSIST_PLAYER_NAME']
         for c in needed:
-            if c not in df_shots.columns: df_shots[c] = 0 if c != 'ASSIST_PLAYER_NAME' else "Ukendt"
+            if c not in df_shots.columns: 
+                df_shots[c] = 0 if c != 'ASSIST_PLAYER_NAME' else "Ukendt"
 
         def check_assist(row):
             is_shot = row.get('EVENT_TYPEID') in [13, 14, 15, 16]
             ass_q = str(row.get('ASSIST_Q', '')).strip()
+            # Hvis der er en værdi i Q210, er det en assist
             if is_shot and (pd.notna(row.get('ASSIST_Q')) and ass_q not in ['', 'None', '0']):
                 return 1
             return 0
@@ -165,7 +168,7 @@ def get_data_package():
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # 4. LOGO MAPPING
+    # 4. LOGO MAPPING (Beholdes 100%)
     logo_map = {}
     if not df_logos_raw.empty:
         for _, row in df_logos_raw.iterrows():
@@ -173,7 +176,7 @@ def get_data_package():
                 logo_map[int(row['TEAM_WYID'])] = str(row['TEAM_LOGO'])
             except: continue
                 
-    # 5. RETURNÉR
+    # 5. RETURNÉR ALT (Præcis som din oprindelige struktur)
     return {
         "opta": {
             "matches": df_matches_opta,
