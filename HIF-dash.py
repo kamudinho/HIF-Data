@@ -128,13 +128,13 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"],
+        sel = option_menu(None, options=["Afslutninger"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"],
+        sel = option_menu(None, options=[],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["Rå Data Explorer", "Brugerstyring", "System Log"],
