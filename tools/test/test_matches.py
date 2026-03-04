@@ -127,7 +127,7 @@ def vis_side(dp):
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         h_v = row.get(f"{s_key}_HOME", 0)
                         a_v = row.get(f"{s_key}_AWAY", 0)
-                        sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:11px; font-weight:600;'>{h_v}{suff}-{a_v}{suff}</div></div>", unsafe_allow_html=True)
+                        sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:12px; color:#888;'>{label}</div><div style='font-size:11px; font-weight:600;'>{h_v}{suff}-{a_v}{suff}</div></div>", unsafe_allow_html=True)
 
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
