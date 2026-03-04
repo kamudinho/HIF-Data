@@ -31,32 +31,36 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
         "opta_shotevents": f"""
             SELECT  
-                e.MATCH_OPTAUUID, 
-                e.EVENT_OPTAUUID, 
-                e.EVENT_CONTESTANT_OPTAUUID,
-                e.PLAYER_NAME, 
-                e.EVENT_X, 
-                e.EVENT_Y, 
-                e.EVENT_OUTCOME,
-                e.EVENT_TYPEID, 
-                e.EVENT_TIMEMIN,
-                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_START_X,
-                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_START_Y,
-                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALS_IDS,
-                -- Robust assist-markør: 210 hvis direkte qualifier findes, eller 29 ved mål
-                MAX(CASE 
-                    WHEN q.QUALIFIER_QID = 210 THEN '210' 
-                    WHEN q.QUALIFIER_QID = 29 AND e.EVENT_OUTCOME = 1 THEN '210' 
-                    ELSE '0' 
-                END) as MANUAL_ASSIST_MARKER
-            FROM {DB}.OPTA_EVENTS e
-            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
-            AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
+                MATCH_OPTAUUID, 
+                EVENT_OPTAUUID, 
+                EVENT_CONTESTANT_OPTAUUID,
+                PLAYER_NAME, 
+                EVENT_X, 
+                EVENT_Y, 
+                EVENT_OUTCOME,
+                EVENT_TYPEID, 
+                EVENT_TIMEMIN,
+                TOURNAMENTCALENDAR_OPTAUUID
+            FROM {DB}.OPTA_EVENTS
+            WHERE EVENT_TYPEID IN (13, 14, 15, 16)
+            AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
+        """,
+
+        "opta_qualifiers": f"""
+            SELECT 
+                EVENT_OPTAUUID,
+                QUALIFIER_QID,
+                QUALIFIER_VALUE
+            FROM {DB}.OPTA_QUALIFIERS
+            WHERE EVENT_OPTAUUID IN (
+                SELECT EVENT_OPTAUUID FROM {DB}.OPTA_EVENTS
+                WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                )
+            )
         """
     }
-    return queries
