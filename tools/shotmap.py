@@ -9,14 +9,14 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
-    # CSS - Vi holder det simpelt og robust
+    # CSS - Samme stil som før
     st.markdown("""
         <style>
             .stat-box {
                 background-color: #f8f9fa;
                 padding: 10px 15px;
                 border-radius: 8px;
-                border-left: 5px solid #df003b;
+                border-left: 5px solid #cc0000;
                 margin-bottom: 8px;
             }
             .stat-label {
@@ -38,88 +38,98 @@ def vis_side(dp, logo_map=None):
         </style>
     """, unsafe_allow_html=True)
     
-    # Hent data fra pakken
-    df_raw = dp.get('playerstats', pd.DataFrame())
-    if df_raw.empty:
-        df_raw = dp.get('opta_shotevents', pd.DataFrame())
-        
-    if df_raw.empty:
-        st.info("Ingen kampdata fundet.")
+    # Hent data fra din nye struktur
+    # Vi prioriterer 'player_stats' fra 'opta' pakken
+    df_hif = dp.get('opta', {}).get('player_stats', pd.DataFrame())
+    
+    if df_hif.empty:
+        st.info("Ingen kampdata fundet (Hvidovre IF).")
         return
 
-    # Data rens
-    df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
-    df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
-    df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip()
+    # Sørg for at vi kun kigger på Hvidovre
+    df_hif = df_hif[df_hif['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt')
 
-    tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
+    tab1, tab2 = st.tabs(["AFSLUTNINGER", "CHANCESKABELSE"])
 
-    # --- TAB 1: AFSLUTNINGER ---
+    # --- TAB 1: AFSLUTNINGER (Shots & Goals) ---
     with tab1:
         col_viz, col_ctrl = st.columns([3, 1])
+        
+        # Filtrer shots (Type 13, 14, 15, 16)
+        df_skud_alle = df_hif[df_hif['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
+        
         with col_ctrl:
-            spiller_liste = sorted(df_hif['PLAYER_NAME'].unique().tolist())
+            spiller_liste = sorted(df_skud_alle['PLAYER_NAME'].unique().tolist())
             v_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
             
-            df_skud = df_hif[df_hif['TYPE_STR'].isin(['13', '14', '15', '16'])].copy()
+            df_skud_vis = df_skud_alle.copy()
             if v_skud != "Hele Holdet":
-                df_skud = df_skud[df_skud['PLAYER_NAME'] == v_skud]
+                df_skud_vis = df_skud_vis[df_skud_vis['PLAYER_NAME'] == v_skud]
             
-            # Sikker optælling - sum() returnerer en scalar når vi bruger parenteser korrekt
-            n_maal = int((df_skud['TYPE_STR'] == '16').sum())
-            n_skud = len(df_skud)
+            n_maal = int((df_skud_vis['EVENT_TYPEID'] == 16).sum())
+            n_skud = len(df_skud_vis)
+            total_xg = df_skud_vis['XG_VAL'].sum() if 'XG_VAL' in df_skud_vis.columns else 0
 
             st.markdown(f"""
-                <div class="stat-box" style="margin-top: 10px;">
-                    <div class="stat-label"><span class="dot" style="background-color:white; border:2px solid {HIF_RED}"></span> Afslutninger</div>
+                <div class="stat-box">
+                    <div class="stat-label"><span class="dot" style="background-color:white; border:2px solid {HIF_RED}"></span> Skud</div>
                     <div class="stat-value">{n_skud}</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-label"><span class="dot" style="background-color:{HIF_RED}"></span> Mål</div>
                     <div class="stat-value">{n_maal}</div>
                 </div>
+                <div class="stat-box">
+                    <div class="stat-label">Expected Goals (xG)</div>
+                    <div class="stat-value">{total_xg:.2f}</div>
+                </div>
             """, unsafe_allow_html=True)
 
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(7, 9))
-            if not df_skud.empty:
-                c_map = (df_skud['TYPE_STR'] == '16').map({True: HIF_RED, False: 'white'})
-                pitch.scatter(df_skud['EVENT_X'], df_skud['EVENT_Y'], s=100, 
-                             c=c_map, edgecolors=HIF_RED, linewidth=1.2, ax=ax)
+            
+            if not df_skud_vis.empty:
+                # Mål er fyldte, misses er hvide med rød kant
+                c_map = (df_skud_vis['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+                # Størrelse baseret på xG hvis muligt
+                size = df_skud_vis['XG_VAL'] * 1000 + 50 if 'XG_VAL' in df_skud_vis.columns else 100
+                
+                pitch.scatter(df_skud_vis['EVENT_X'], df_skud_vis['EVENT_Y'], 
+                              s=size, c=c_map, edgecolors=HIF_RED, 
+                              linewidth=1.2, ax=ax, zorder=3)
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB 2: ASSISTS ---
+    # --- TAB 2: CHANCESKABELSE (Assists & Key Passes) ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([3, 1])
+        
+        # Nu kigger vi efter alle events, der har en assist-markør ELLER en pass_start position på et skud
+        df_assists_alle = df_hif[
+            (df_hif['IS_ASSIST'] == 1) | 
+            (pd.notna(df_hif['PASS_START_X']) & (df_hif['PASS_START_X'] > 0))
+        ].copy()
+
         with col_ctrl_a:
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
+            spiller_liste_a = sorted(df_assists_alle['PLAYER_NAME'].unique().tolist())
+            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
             
-            # Find chancer baseret på Qualifiers (210=Assist, 29=Key Pass, 211=2nd)
-            is_chancetype = df_hif['QUAL_STR'].str.contains('210|29|211', na=False)
-            df_chance = df_hif[(df_hif['TYPE_STR'] == '1') & is_chancetype].copy()
-            
+            df_a_vis = df_assists_alle.copy()
             if v_a != "Hvidovre IF":
-                df_chance = df_chance[df_chance['PLAYER_NAME'] == v_a]
+                df_a_vis = df_a_vis[df_a_vis['PLAYER_NAME'] == v_a]
             
-            # Beregn værdier sikkert
-            val_assist = int(df_chance['QUAL_STR'].str.contains('210').sum())
-            val_key = int((df_chance['QUAL_STR'].str.contains('29')) & (~df_chance['QUAL_STR'].str.contains('210'))).sum()
-            val_2nd = int(df_chance['QUAL_STR'].str.contains('211').sum())
+            n_assists = int((df_a_vis['IS_ASSIST'] == 1) & (df_a_vis['EVENT_OUTCOME'] == 1)).sum()
+            n_key_passes = len(df_a_vis) - n_assists
 
             st.markdown(f"""
-                <div class="stat-box" style="margin-top: 10px;">
+                <div class="stat-box">
                     <div class="stat-label"><span class="dot" style="background-color:{HIF_GOLD}"></span> Assists</div>
-                    <div class="stat-value">{val_assist}</div>
+                    <div class="stat-value">{n_assists}</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label"><span class="dot" style="background-color:#999999"></span> Key Passes</div>
-                    <div class="stat-value">{val_key}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label"><span class="dot" style="background-color:{HIF_BLUE}"></span> 2nd Assists</div>
-                    <div class="stat-value">{val_2nd}</div>
+                    <div class="stat-label"><span class="dot" style="background-color:#999999"></span> Shot Assists</div>
+                    <div class="stat-value">{n_key_passes}</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -127,20 +137,18 @@ def vis_side(dp, logo_map=None):
             pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig_a, ax_a = pitch_a.draw(figsize=(7, 9))
             
-            if not df_chance.empty:
-                # Arrows - tving til float for at undgå renderingsfejl
-                pitch_a.arrows(df_chance['EVENT_X'].astype(float), df_chance['EVENT_Y'].astype(float),
-                               df_chance['PASS_END_X'].astype(float), df_chance['PASS_END_Y'].astype(float),
+            if not df_a_vis.empty:
+                # Vi tegner linjen fra der hvor afleveringen startede (PASS_START) til skuddet (EVENT_X)
+                # Bemærk: I din nye struktur ligger pass-data PÅ selve skud-eventet
+                pitch_a.arrows(df_a_vis['PASS_START_X'].astype(float), 
+                               df_a_vis['PASS_START_Y'].astype(float),
+                               df_a_vis['EVENT_X'].astype(float), 
+                               df_a_vis['EVENT_Y'].astype(float),
                                color='#dddddd', width=2, headwidth=3, ax=ax_a, zorder=1)
                 
-                # Farvelogik
-                def get_c(q):
-                    if '210' in q: return HIF_GOLD
-                    if '211' in q: return HIF_BLUE
-                    return '#999999'
-                
-                df_chance['DOT_COLOR'] = df_chance['QUAL_STR'].apply(get_c)
-                pitch_a.scatter(df_chance['EVENT_X'], df_chance['EVENT_Y'], 
-                                s=110, color=df_chance['DOT_COLOR'], edgecolors='white', 
+                # Prikken markerer skudpositionen
+                dot_colors = df_a_vis['IS_ASSIST'].map({1: HIF_GOLD, 0: '#999999'})
+                pitch_a.scatter(df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'], 
+                                s=100, color=dot_colors, edgecolors='white', 
                                 linewidth=1.2, ax=ax_a, zorder=2)
             st.pyplot(fig_a, use_container_width=True)
