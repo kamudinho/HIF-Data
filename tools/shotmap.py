@@ -9,25 +9,45 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
-    # Prøv at hente fra den nye query-nøgle først, derefter den gamle
+    # 1. Hent rådata
     df_raw = dp.get('opta_shotevents', pd.DataFrame())
-    
     if df_raw.empty:
         df_raw = dp.get('playerstats', pd.DataFrame())
 
     if df_raw.empty:
-        st.warning("⚠️ Ingen data fundet i 'opta_shotevents' eller 'playerstats'.")
-        # Print nøglerne så vi kan se hvad der faktisk er i pakken:
-        st.write("Tilgængelige data-nøgler:", list(dp.keys()))
+        st.warning("⚠️ Ingen data fundet i systemet.")
+        st.write("Fundne nøgler i DP:", list(dp.keys()))
         return
 
-    # --- DATA RENS ---
-    df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    # 2. Robusthed: Gør alle kolonnenavne store (Snowflake standard)
+    df_raw.columns = [c.upper() for c in df_raw.columns]
+
+    # 3. Filtrér på HIF (Sikr at UUID er en streng og fjern whitespace)
+    hif_uuid = str(HIF_OPTA_UUID).strip()
+    df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.strip() == hif_uuid].copy()
+
+    if df_hif.empty:
+        st.error(f"Ingen rækker fundet for HIF UUID: {hif_uuid}")
+        # Hjælp til fejlfinding: Vis hvad der rent faktisk findes af UUIDs i data
+        unidue_ids = df_raw['EVENT_CONTESTANT_OPTAUUID'].unique()[:5]
+        st.write("UUIDs i data (første 5):", unidue_ids)
+        return
+
+    # 4. Sikr at de nye flag findes, selv hvis de er NULL i databasen
+    for col in ['IS_ASSIST', 'IS_KEY_PASS', 'IS_2ND_ASSIST']:
+        if col not in df_hif.columns:
+            df_hif[col] = 0
+        else:
+            # Konvertér til numerisk (håndterer både bool, int og null)
+            df_hif[col] = pd.to_numeric(df_hif[col], errors='coerce').fillna(0).astype(int)
+
+    # Resten af din logik (Rens typer)
     df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip()
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
 
+    # --- NU starter dine Tabs ---
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
-
+    
     # --- TAB 1: SKUDKORT ---
     with tab1:
         col_viz, col_ctrl = st.columns([3, 1])
