@@ -10,42 +10,59 @@ HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 hif_rod = "#df003b"
 
 def vis_side(dp, logo_map=None):
-    # --- CUSTOM CSS FOR LÆSBARHED ---
+    # --- ULTRA KOMPAKT CSS ---
     st.markdown("""
         <style>
+            /* Fjern luft i toppen af Streamlit */
+            .block-container { padding-top: 0.5rem !important; }
+            
+            /* Løft tabs-indholdet op */
+            .stTabs [data-baseweb="tab-panel"] { 
+                margin-top: -15px !important; 
+                padding-top: 0px !important; 
+            }
+            
             .stat-box {
                 background-color: #f8f9fa;
-                padding: 15px;
-                border-radius: 10px;
+                padding: 10px 15px;
+                border-radius: 8px;
                 border-left: 5px solid #df003b;
-                margin-bottom: 12px;
+                margin-bottom: 8px;
             }
             .stat-label {
-                font-size: 0.85rem;
+                font-size: 0.8rem;
                 text-transform: uppercase;
                 color: #666;
                 font-weight: bold;
                 display: flex;
                 align-items: center;
-                letter-spacing: 0.5px;
             }
             .stat-value {
-                font-size: 1.8rem;
+                font-size: 1.6rem;
                 font-weight: 800;
                 color: #1a1a1a;
-                margin-left: 25px;
-                line-height: 1.2;
+                margin-left: 22px;
+                line-height: 1.1;
             }
-            .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; }
-            /* Fjerner Streamlit padding i toppen af tabs */
-            .stTabs [data-baseweb="tab-panel"] { padding-top: 1rem; }
+            .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+            
+            /* Gør titlen mindre for at spare plads */
+            .branding-title {
+                color: white; 
+                margin: 0; 
+                text-align: center; 
+                text-transform: uppercase; 
+                letter-spacing: 1px; 
+                font-size: 0.9rem;
+                padding: 4px;
+            }
         </style>
     """, unsafe_allow_html=True)
 
     # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:8px; border-radius:4px; margin-bottom:15px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:2px; font-size:1.1rem;">DATA ANALYSE</h3>
+        <div style="background-color:{hif_rod}; border-radius:4px; margin-bottom:10px;">
+            <h3 class="branding-title">DATA ANALYSE</h3>
         </div>
     """, unsafe_allow_html=True)
     
@@ -60,15 +77,13 @@ def vis_side(dp, logo_map=None):
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
 
-    # Rene tabs uden ikoner
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
 
     # --- TAB 1: SKUDKORT ---
     with tab1:
-        col_viz, col_ctrl = st.columns([2.8, 1])
+        col_viz, col_ctrl = st.columns([3, 1])
         
         with col_ctrl:
-            st.markdown("### AFSLUTNINGER")
             spiller_liste = sorted(df_hif['PLAYER_NAME'].unique().tolist())
             v_spiller_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
             
@@ -80,11 +95,8 @@ def vis_side(dp, logo_map=None):
             n_maal = int(df_skud['ER_MAAL'].sum())
             n_skud = len(df_skud)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Afslutninger først, så Mål
             st.markdown(f"""
-                <div class="stat-box">
+                <div class="stat-box" style="margin-top: 10px;">
                     <div class="stat-label"><span class="dot" style="background-color:white; border:2px solid {HIF_RED}"></span> Afslutninger</div>
                     <div class="stat-value">{n_skud}</div>
                 </div>
@@ -99,22 +111,21 @@ def vis_side(dp, logo_map=None):
             """, unsafe_allow_html=True)
 
         with col_viz:
+            # Vi sætter figsize lidt ned (7.5 i stedet for 8) for at undgå vertikal scroll
             pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(8, 10))
+            fig, ax = pitch.draw(figsize=(7.5, 9.5))
             if not df_skud.empty:
-                # Cirkler: Mål er fyldte, brændte er hvide med rød kant
                 pitch.scatter(df_skud['EVENT_X'], df_skud['EVENT_Y'],
-                             s=(df_skud['XG_VAL'] * 1100) + 70,
+                             s=(df_skud['XG_VAL'] * 1000) + 60,
                              c=df_skud['ER_MAAL'].map({True: HIF_RED, False: 'white'}),
-                             edgecolors=HIF_RED, linewidth=1.5, alpha=0.9, ax=ax)
-            st.pyplot(fig)
+                             edgecolors=HIF_RED, linewidth=1.2, alpha=0.9, ax=ax)
+            st.pyplot(fig, use_container_width=True)
 
     # --- TAB 2: ASSISTS ---
     with tab2:
-        col_viz_a, col_ctrl_a = st.columns([2.8, 1])
+        col_viz_a, col_ctrl_a = st.columns([3, 1])
         
         with col_ctrl_a:
-            st.markdown("### CHANCER")
             v_spiller_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
             mask_chance = (df_hif['QUAL_STR'].str.contains('210|29|211', na=False)) & (df_hif['TYPE_STR'] == '1')
@@ -127,10 +138,8 @@ def vis_side(dp, logo_map=None):
             n_key = df_chance['QUAL_STR'].str.contains('29').sum()
             n_2nd = df_chance['QUAL_STR'].str.contains('211').sum()
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
             st.markdown(f"""
-                <div class="stat-box">
+                <div class="stat-box" style="margin-top: 10px;">
                     <div class="stat-label"><span class="dot" style="background-color:{HIF_GOLD}"></span> Assists</div>
                     <div class="stat-value">{n_assist}</div>
                 </div>
@@ -146,7 +155,7 @@ def vis_side(dp, logo_map=None):
 
         with col_viz_a:
             pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
+            fig_a, ax_a = pitch_a.draw(figsize=(7.5, 9.5))
             
             if not df_chance.empty:
                 pitch_a.arrows(df_chance['EVENT_X'], df_chance['EVENT_Y'],
@@ -160,6 +169,6 @@ def vis_side(dp, logo_map=None):
                 
                 df_chance['COLOR'] = df_chance['QUAL_STR'].apply(get_color)
                 pitch_a.scatter(df_chance['EVENT_X'], df_chance['EVENT_Y'], 
-                                s=130, color=df_chance['COLOR'], edgecolors='white', 
-                                linewidth=1.5, ax=ax_a, zorder=2)
-            st.pyplot(fig_a)
+                                s=110, color=df_chance['COLOR'], edgecolors='white', 
+                                linewidth=1.2, ax=ax_a, zorder=2)
+            st.pyplot(fig_a, use_container_width=True)
