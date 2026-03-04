@@ -15,7 +15,7 @@ def vis_side(dp, logo_map=None):
 
 # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+        <div style="background-color:{hif_rod}; padding:1px; border-radius:2px; margin-bottom:1px;">
             <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">AFSLUTNINGER</h3>
         </div>
     """, unsafe_allow_html=True)
@@ -30,8 +30,6 @@ def vis_side(dp, logo_map=None):
     df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip()
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
-
-    st.subheader("Afslutninger & Chancer")
 
     tab1, tab2 = st.tabs(["Skudkort", "Assists & Key Passes"])
 
