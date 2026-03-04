@@ -44,29 +44,35 @@ def vis_side(dp):
                 pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=150, c=c_map, edgecolors=HIF_RED, ax=ax)
                 st.pyplot(fig)
 
-    # --- TAB 2: CHANCESKABELSE (Assistkort) ---
-    with tab2:
-        if df_assists.empty:
-            st.info("Ingen assists registreret endnu.")
-        else:
-            col_viz_a, col_ctrl_a = st.columns([3, 1])
-            with col_ctrl_a:
-                # Nu bruger vi ASSIST_PLAYER kolonnen fra din nye SQL!
-                spiller_liste_a = sorted(df_assists['ASSIST_PLAYER'].unique())
-                v_a = st.selectbox("Vælg assist-mager", options=["Hele Holdet"] + spiller_liste_a)
-                df_a_vis = df_assists if v_a == "Hele Holdet" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
-                
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
+   # --- TAB 2: CHANCESKABELSE ---
+with tab2:
+    # Vi henter den dedikerede assist-tabel fra din data_package (dp)
+    df_a = dp.get('assists', pd.DataFrame())
 
-            with col_viz_a:
-                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-                fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
-                
-                # Tegn de gyldne pile fra aflevering til skud
-                pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                               df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                               color=HIF_GOLD, width=3, headwidth=4, ax=ax_a)
-                
-                # Prik hvor målet blev sat ind
-                pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], s=120, color=HIF_RED, ax=ax_a, zorder=3)
-                st.pyplot(fig_a)
+    if df_a.empty:
+        st.info("Ingen assists (mål) fundet for Hvidovre i denne periode.")
+    else:
+        col_viz_a, col_ctrl_a = st.columns([3, 1])
+        
+        with col_ctrl_a:
+            # RETTELSE: Vi bruger 'ASSIST_PLAYER' i stedet for 'ASSIST_PLAYER_NAME'
+            spiller_liste_a = sorted([s for s in df_a['ASSIST_PLAYER'].unique() if pd.notna(s)])
+            v_a = st.selectbox("Vælg spiller (Assists)", options=["Hele Holdet"] + spiller_liste_a)
+            
+            df_a_vis = df_a if v_a == "Hele Holdet" else df_a[df_a['ASSIST_PLAYER'] == v_a]
+            
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
+
+        with col_viz_a:
+            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+            fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
+            
+            # Vi bruger de præcise navne fra din nye SQL: PASS_START_X og SHOT_X osv.
+            pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                           df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
+                           color=HIF_GOLD, width=3, headwidth=5, ax=ax_a, zorder=3)
+            
+            pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
+                            s=100, color=HIF_RED, edgecolors='black', ax=ax_a, zorder=4)
+            
+            st.pyplot(fig_a, use_container_width=True)
