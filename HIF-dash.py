@@ -194,7 +194,34 @@ try:
 
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
-            st.write("### Opta Matches", dp.get("opta_matches", pd.DataFrame()).head(50))
+            st.write("### Opta Matches", dp.get("opta", {}).get("matches", pd.DataFrame()).head(50))
+        
+        # --- NY SEKTION HER ---
+        elif sel == "Assist Data Explorer":
+            st.markdown("### 🎯 Opta Assist Query Validering")
+            df_a = dp.get("assists", pd.DataFrame())
+            
+            if df_a.empty:
+                st.warning("Ingen assist-data fundet i datapakken.")
+            else:
+                st.write(f"Viser alle {len(df_a)} registrerede assists:")
+                # Vi sorterer efter seneste hændelser øverst
+                st.dataframe(
+                    df_a.sort_values("EVENT_TIMESTAMP", ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "EVENT_TIMESTAMP": st.column_config.DatetimeColumn("Tidspunkt", format="D. MMM, HH:mm"),
+                        "PASS_START_X": "Start X",
+                        "PASS_START_Y": "Start Y",
+                        "SHOT_X": "Slut X",
+                        "SHOT_Y": "Slut Y",
+                        "SCORER": "Målscorer",
+                        "ASSIST_PLAYER": "Assist"
+                    }
+                )
+        # -----------------------
+
         elif sel == "Brugerstyring":
             import tools.admin as adm
             adm.vis_side()
