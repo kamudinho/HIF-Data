@@ -17,7 +17,7 @@ def vis_side(dp, logo_map=None):
 
     # --- 1. DATA RENS ---
     df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
-    df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).strip().upper()
+    df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip().str.upper()
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
 
     # --- 2. DROPDOWN ---
