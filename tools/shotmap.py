@@ -31,7 +31,7 @@ def vis_side(dp, logo_map=None):
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
 
-    tab1, tab2 = st.tabs(["Skudkort", "Assists & Key Passes"])
+    tab1, tab2 = st.tabs(["Afslutninger", "Assists"])
 
     # --- TAB 1: SKUDKORT ---
     with tab1:
@@ -67,13 +67,13 @@ def vis_side(dp, logo_map=None):
         col_viz_a, col_ctrl_a = st.columns([3, 1])
         
         with col_ctrl_a:
-            v_spiller_a = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_assist")
+            v_spiller_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
             # Find alle relevante chancer (Assists=210, KeyPass=29, 2nd=211)
             mask_chance = (df_hif['QUAL_STR'].str.contains('210|29|211', na=False)) & (df_hif['TYPE_STR'] == '1')
             df_chance = df_hif[mask_chance].copy()
             
-            if v_spiller_a != "Hele Holdet":
+            if v_spiller_a != "Hvidovre IF":
                 df_chance = df_chance[df_chance['PLAYER_NAME'] == v_spiller_a]
             
             st.markdown("---")
