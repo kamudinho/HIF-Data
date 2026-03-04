@@ -14,7 +14,7 @@ from data.users import get_users
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 
 st.set_page_config(
-    page_title="HIF Data Hub", 
+    page_title="HIF Data Hub",
     layout="wide", 
     page_icon=HIF_LOGO_URL
 )
