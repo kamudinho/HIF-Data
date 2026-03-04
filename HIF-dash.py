@@ -9,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data.data_load import get_data_package, load_snowflake_query
 from data.users import get_users
-from data.sql.opta_queries import get_opta_queries
 
 # --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
