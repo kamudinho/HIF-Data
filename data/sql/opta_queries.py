@@ -47,6 +47,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                AND EVENT_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy'
             )
         """,
 
