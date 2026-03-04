@@ -143,7 +143,7 @@ with st.sidebar:
         sel = option_menu(None, options=[],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Rå Data Explorer", "Brugerstyring", "System Log"],
+        sel = option_menu(None, options=["Rå Data Explorer", "Assist Data Explorer", "Brugerstyring", "System Log"],
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
 # --- 5. RENDERING AF HEADER & INDHOLD ---
