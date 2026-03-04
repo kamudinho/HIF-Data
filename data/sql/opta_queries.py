@@ -35,35 +35,38 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
 
         "opta_assists": f"""
-            WITH GoalEvents AS (
+            WITH EventsWithQuals AS (
                 SELECT 
-                    MATCH_OPTAUUID, EVENT_ID, PLAYER_NAME AS SCORER, 
-                    EVENT_X AS SHOT_X, EVENT_Y AS SHOT_Y, EVENT_TIMESTAMP
-                FROM {DB}.OPTA_EVENTS
-                WHERE EVENT_TYPEID = 16 
-                  AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
-                  AND TOURNAMENTCALENDAR_OPTAUUID IN (
-                      SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
-                      WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
-                  )
-            ),
-            AssistEvents AS (
-                SELECT 
-                    e.MATCH_OPTAUUID, e.PLAYER_NAME AS ASSIST_PLAYER, 
-                    e.EVENT_X AS PASS_START_X, e.EVENT_Y AS PASS_START_Y,
-                    e.EVENT_TIMESTAMP, e.EVENT_ID
+                    e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.PLAYER_NAME, 
+                    e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.EVENT_OPTAUUID,
+                    -- Tjekker om denne hændelse har en assist-markør (210)
+                    MAX(CASE WHEN q.QUALIFIER_QID IN (210, '210') THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST
                 FROM {DB}.OPTA_EVENTS e
-                JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-                WHERE q.QUALIFIER_QID IN (210, '210') -- Håndterer både tal og tekst
+                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+                WHERE e.TOURNAMENTCALENDAR_OPTAUUID IN (
+                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                )
+                GROUP BY 1, 2, 3, 4, 5, 6, 7
+            ),
+            AssistsMapped AS (
+                SELECT 
+                    PLAYER_NAME AS SCORER,
+                    EVENT_X AS SHOT_X,
+                    EVENT_Y AS SHOT_Y,
+                    EVENT_TIMESTAMP,
+                    EVENT_TYPEID,
+                    -- Henter info fra forrige række (assisten)
+                    LAG(PLAYER_NAME) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER,
+                    LAG(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_X,
+                    LAG(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_Y,
+                    LAG(IS_OFFICIAL_ASSIST) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS WAS_OFFICIAL
+                FROM EventsWithQuals
             )
-            SELECT 
-                g.SCORER, a.ASSIST_PLAYER, g.SHOT_X, g.SHOT_Y,
-                a.PASS_START_X, a.PASS_START_Y, g.EVENT_TIMESTAMP
-            FROM GoalEvents g
-            JOIN AssistEvents a ON g.MATCH_OPTAUUID = a.MATCH_OPTAUUID 
-              AND a.EVENT_TIMESTAMP <= g.EVENT_TIMESTAMP -- Assisten skal ske før eller samtidig
-              AND a.EVENT_TIMESTAMP >= DATEADD(second, -10, g.EVENT_TIMESTAMP) -- Maks 10 sek før
-            ORDER BY g.EVENT_TIMESTAMP DESC
+            SELECT * FROM AssistsMapped
+            WHERE EVENT_TYPEID = 16 -- Kun mål
+              AND WAS_OFFICIAL = 1  -- KUN hvis forrige hændelse var en officiel assist
+            ORDER BY EVENT_TIMESTAMP DESC
         """,
 
         "opta_shotevents": f"""
