@@ -46,24 +46,13 @@ def vis_side(dp, logo_map=None):
             }
             .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
             
-            /* Gør titlen mindre for at spare plads */
-            .branding-title {
-                color: white !important; /* !important sikrer at den ikke bliver sort */
-                margin: 0 !important; 
-                text-align: center; 
-                text-transform: uppercase; 
-                letter-spacing: 2px; 
-                font-size: 1.1rem;
-                padding: 6px;
-                font-family: sans-serif;
-            }
         </style>
     """, unsafe_allow_html=True)
 
     # --- TOP BRANDING ---
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; border-radius:4px; margin-bottom:10px; display: flex; justify-content: center; align-items: center;">
-            <p class="branding-title">DATA ANALYSE</p>
+    st.markdown("""
+        <div class="hif-header-container">
+            <p class="hif-header-text">DATA ANALYSE</p>
         </div>
     """, unsafe_allow_html=True)
     
