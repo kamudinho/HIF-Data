@@ -8,6 +8,13 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp):
+    df_debug = dp.get('playerstats', pd.DataFrame())
+    if not df_debug.empty:
+        st.sidebar.write("✅ Data modtaget fra Snowflake")
+        st.sidebar.write(f"Antal rækker: {len(df_debug)}")
+        st.sidebar.write(f"Kolonner: {df_debug.columns.tolist()}")
+    else:
+        st.sidebar.error("❌ Ingen data modtaget i dp['playerstats']")
     # CSS Styling
     st.markdown("""
         <style>
