@@ -12,7 +12,22 @@ from data.sql.wy_queries import get_wy_queries
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
-# --- 1. SIKKER IMPORT AF MAPPINGS ---
+# --- HJÆLPEFUNKTIONER (Defineres øverst for at undgå fejl) ---
+
+def parse_xg(val_str):
+    """Fisker xG ud af QUAL_VALUES strengen."""
+    try:
+        if not val_str or pd.isna(val_str):
+            return 0.05
+        parts = str(val_str).split(',')
+        for p in parts:
+            # Opta xG værdier starter typisk med 0.
+            if p.startswith('0.') and len(p) > 2:
+                return float(p)
+    except:
+        pass
+    return 0.05
+
 try:
     from data.utils.mapping import get_event_name
 except (ModuleNotFoundError, ImportError):
@@ -41,26 +56,18 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-# --- 3. LOKAL FIL-LOADER (players.csv) ---
+# --- 3. LOKAL FIL-LOADER ---
 @st.cache_data
 def load_local_players():
-    """Indlæser trup-data fra den lokale CSV-fil til TRUPPEN og FORECAST."""
     try:
-        # Sørg for korrekt sti uanset hvor appen kører fra
         path = os.path.join(os.getcwd(), "data", "players.csv")
         if os.path.exists(path):
             df = pd.read_csv(path)
-            # Rens kolonnenavne (gør dem store og fjern mellemrum)
             df.columns = [str(c).upper().strip() for c in df.columns]
-            
-            # Konverter BIRTHDATE til datetime, så Forecast kan regne alder
             if 'BIRTHDATE' in df.columns:
                 df['BIRTHDATE'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
-            
             return df
-        else:
-            st.error(f"⚠️ Filen ikke fundet: {path}")
-            return pd.DataFrame()
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"⚠️ Fejl ved indlæsning af players.csv: {e}")
         return pd.DataFrame()
@@ -77,7 +84,6 @@ def load_snowflake_query(query_key, is_opta=False):
     if is_opta:
         queries = get_opta_queries(comp_f, season_f)
     else:
-        # Vi sender (328,) som default for at undgå 'unexpected )' fejl
         queries = get_wy_queries((328,), season_f)
         
     q = queries.get(query_key)
@@ -87,11 +93,6 @@ def load_snowflake_query(query_key, is_opta=False):
         df = conn.query(q)
         if df is not None and not df.empty:
             df.columns = [str(c).upper().strip() for c in df.columns]
-            for col in df.columns:
-                if 'TIMESTAMP' in col or 'LASTMODIFIED' in col:
-                    try:
-                        df[col] = pd.to_datetime(df[col], utc=True).dt.floor('us')
-                    except: pass
             return df
         return pd.DataFrame()
     except Exception as e:
@@ -100,40 +101,29 @@ def load_snowflake_query(query_key, is_opta=False):
 
 # --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
-    # 1. Hent data fra Snowflake (Opta)
+    # 1. Hent data
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
-    
-    # Her henter vi dine skud via den nye query med LISTAGG
     df_shotevents = load_snowflake_query("opta_shotevents", is_opta=True)
-
-    # 2. Hent øvrig data (Wyscout & Lokal)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # Inde i get_data_package() under behandling af df_shotevents:
+    # 2. Behandl Shot Events (xG og Koordinater)
     if not df_shotevents.empty:
-        # Konverter PASS_END koordinater til tal
+        # Konverter koordinater
         for col in ['PASS_END_X', 'PASS_END_Y']:
             if col in df_shotevents.columns:
                 df_shotevents[col] = pd.to_numeric(df_shotevents[col], errors='coerce')
-    
-    # Eksisterende xG mapping...
-    df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)        
-        # Funktion til at fiske xG ud af din QUAL_VALUES streng
-        def parse_xg(val_str):
-            try:
-                parts = str(val_str).split(',')
-                for p in parts:
-                    if p.startswith('0.') and len(p) > 5: return float(p)
-            except: pass
-            return 0.05
-            
-        df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)
+        
+        # Beregn xG via hjælpefunktionen øverst
+        if 'QUAL_VALUES' in df_shotevents.columns:
+            df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)
+        else:
+            df_shotevents['XG_VAL'] = 0.05
 
-    # 4. Logo Mapping
+    # 3. Logo Mapping
     logo_map = {}
     if not df_logos_raw.empty:
         for _, row in df_logos_raw.iterrows():
@@ -160,7 +150,7 @@ def get_data_package():
         "opta_matches": df_matches_opta,
         "team_stats_full": df_opta_stats,
         "logo_map": logo_map,
-        "playerstats": df_shotevents, # Denne nøgle bruger dine værktøjer
+        "playerstats": df_shotevents, 
         "player_career": df_career_wy,
         "config": {
             "liga_navn": COMPETITION_NAME,
