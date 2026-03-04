@@ -67,13 +67,6 @@ def vis_side(df):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP BRANDING ---
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">TAKTIK & KONTRAKTER</h3>
-        </div>
-    """, unsafe_allow_html=True)
-
     # --- 5. DATA PROCESSERING ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
