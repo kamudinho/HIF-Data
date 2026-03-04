@@ -109,23 +109,22 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS (Rettelse: Type-casting af EVENT_OPTAUUID)
+    # 2. BEHANDL QUALIFIERS
     if not df_quals.empty and not df_shots.empty:
         relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)]
         
-        # Sørg for at indexet ikke skaber problemer ved pivot
         df_q_pivot = df_q_filtered.pivot(index='EVENT_OPTAUUID', columns='QUALIFIER_QID', values='QUALIFIER_VALUE').reset_index()
         
-        # TYPERETTELSE: Tving begge til string før merge for at undgå ValueError
         df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str)
         df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str)
         
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. LOGIK FOR ASSISTS OG xG
+    # 3. LOGIK FOR ASSISTS OG xG (Rettet PASS_X her)
     if not df_shots.empty:
-        col_map = {140: 'PASS_START_X', 141: 'PASS_START_Y', 210: 'ASSIST_Q', 29: 'ASSIST_ALT', 142: 'XG_RAW'}
+        # Vi mapper direkte til PASS_X og PASS_Y som dit shotmap forventer
+        col_map = {140: 'PASS_X', 141: 'PASS_Y', 210: 'ASSIST_Q', 29: 'ASSIST_ALT', 142: 'XG_RAW'}
         df_shots = df_shots.rename(columns={k: v for k, v in col_map.items() if k in df_shots.columns})
 
         def check_assist(row):
@@ -137,7 +136,8 @@ def get_data_package():
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
         
-        for col in ['EVENT_X', 'EVENT_Y', 'PASS_START_X', 'PASS_START_Y']:
+        # Konvertér koordinater til tal så de kan tegnes
+        for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y']:
             if col in df_shots.columns:
                 df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
