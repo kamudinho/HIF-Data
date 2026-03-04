@@ -14,13 +14,8 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, T
 def parse_xg(val_str):
     try:
         if not val_str or pd.isna(val_str): return 0.05
-        if isinstance(val_str, (float, int)): return float(val_str)
-        parts = str(val_str).split(',')
-        for p in parts:
-            p = p.strip()
-            if p.startswith('0.') and len(p) > 2: return float(p)
-    except: pass
-    return 0.05
+        return float(str(val_str).replace(',', '.').split(' ')[0])
+    except: return 0.05
 
 def _get_snowflake_conn():
     try:
@@ -62,30 +57,32 @@ def load_snowflake_query(query_key, is_opta=False):
     except: return pd.DataFrame()
 
 def get_data_package():
-    # 1. Hent data
+    # 1. Hent alt (Både Opta, Wyscout og din lokale CSV)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
-    df_shots = load_snowflake_query("opta_shotevents", is_opta=True) # Nu præ-filtreret fra SQL
+    df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
+    df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
+    df_players_csv = load_local_players() # DENNE SKAL MED!
 
-    # 2. Simpel vask af skuddata
+    # 2. Vask skuddata
     if not df_shots.empty:
-        # Konvertér xG og koordinater til tal
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg)
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
-        
-        # Sæt assist-navn til skytten selv som fallback, eller "Ukendt"
-        df_shots['ASSIST_PLAYER_NAME'] = df_shots['PLAYER_NAME'] # Midlertidig løsning så dropdown virker
+        # Dropdown fix: Vi bruger spillerens eget navn indtil assist-mappet er 100%
+        df_shots['ASSIST_PLAYER_NAME'] = df_shots['PLAYER_NAME']
 
-    # 3. Logo map (Behold dine værdier)
     logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()} if not df_logos_raw.empty else {}
 
+    # 3. Den vigtige retur-pakke (Sørg for at 'players' er her!)
     return {
+        "players": df_players_csv, # VIGTIG FOR DINE ANDRE SIDER!
         "playerstats": df_shots,
         "opta": {
             "matches": df_matches_opta,
+            "team_stats": df_opta_stats,
             "player_stats": df_shots
         },
         "wyscout": {
@@ -94,6 +91,7 @@ def get_data_package():
             "logos": logo_map,
             "wyid": 7490
         },
+        "logo_map": logo_map,
         "config": {
             "colors": TEAM_COLORS,
             "liga_navn": COMPETITION_NAME,
