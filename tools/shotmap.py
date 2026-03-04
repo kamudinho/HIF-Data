@@ -17,14 +17,14 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
     
-    # Hent data fra pakken
+    # Hent data
     df_hif = dp.get('playerstats', pd.DataFrame())
     
     if df_hif.empty:
         st.info("Ingen kampdata fundet for Hvidovre IF.")
         return
 
-    # Filter til HIF (Brug UUID fra dine faste værdier)
+    # Filter til HIF
     df_hif = df_hif[df_hif['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt')
 
@@ -33,7 +33,6 @@ def vis_side(dp):
     # --- TAB 1: AFSLUTNINGER ---
     with tab1:
         col_viz, col_ctrl = st.columns([3, 1])
-        # Skudtyper: 13 (Miss), 14 (Post), 15 (Saved), 16 (Goal)
         df_skud = df_hif[df_hif['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         
         with col_ctrl:
@@ -41,15 +40,17 @@ def vis_side(dp):
             v_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
             df_skud_vis = df_skud if v_skud == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == v_skud]
             
+            # RETTELSE 1: .sum() flyttet ind før int()
+            n_goals = (df_skud_vis["EVENT_TYPEID"] == 16).sum()
+            
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(df_skud_vis)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{int((df_skud_vis["EVENT_TYPEID"]==16).sum())}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{int(n_goals)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">xG</div><div class="stat-value">{df_skud_vis["XG_VAL"].sum():.2f}</div></div>', unsafe_allow_html=True)
 
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(7, 9))
             if not df_skud_vis.empty:
-                # Farv mål røde, resten hvide med rød kant
                 c_map = (df_skud_vis['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
                 pitch.scatter(df_skud_vis['EVENT_X'], df_skud_vis['EVENT_Y'], 
                               s=df_skud_vis['XG_VAL']*1000+50, 
@@ -59,8 +60,6 @@ def vis_side(dp):
     # --- TAB 2: CHANCESKABELSE ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([3, 1])
-        
-        # Vi filtrerer på dem, hvor vi faktisk har et pass-startpunkt (fra vores pivot i data_load)
         df_a = df_hif[df_hif['PASS_X'] > 0].copy()
 
         with col_ctrl_a:
@@ -68,8 +67,9 @@ def vis_side(dp):
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
             df_a_vis = df_a if v_a == "Hvidovre IF" else df_a[df_a['PLAYER_NAME'] == v_a]
             
-            # Tæl assists (Mål hvor IS_ASSIST er 1)
-            n_ass = int((df_a_vis['IS_ASSIST'] == 1) & (df_a_vis['EVENT_OUTCOME'] == 1)).sum()
+            # RETTELSE 2: .sum() flyttet ind i int() parentesen
+            n_ass = int(((df_a_vis['IS_ASSIST'] == 1) & (df_a_vis['EVENT_OUTCOME'] == 1)).sum())
+            
             st.markdown(f'<div class="stat-box"><div class="stat-label">Assists</div><div class="stat-value">{n_ass}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Key Passes</div><div class="stat-value">{len(df_a_vis)-n_ass}</div></div>', unsafe_allow_html=True)
 
@@ -78,12 +78,10 @@ def vis_side(dp):
             fig_a, ax_a = pitch_a.draw(figsize=(7, 9))
             
             if not df_a_vis.empty:
-                # Tegn pile: Fra PASS_X/Y (start) til EVENT_X/Y (skuddet)
                 pitch_a.arrows(df_a_vis['PASS_X'], df_a_vis['PASS_Y'], 
                                df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'], 
                                color='#dddddd', width=2, headwidth=3, ax=ax_a, zorder=1)
                 
-                # Marker slutpunktet: Guld hvis det blev til assist, grå hvis det var en chance/key pass
                 dot_colors = df_a_vis['IS_ASSIST'].map({1: HIF_GOLD, 0: '#999999'})
                 pitch_a.scatter(df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'], s=120, 
                                 color=dot_colors, edgecolors='white', linewidth=1.2, ax=ax_a, zorder=2)
