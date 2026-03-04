@@ -99,9 +99,8 @@ def load_snowflake_query(query_key, is_opta=False):
         st.error(f"⚠️ SQL Fejl i {query_key}: {e}")
         return pd.DataFrame()
 
-# --- 5. DATA PACKAGE BUILDER ---
 def get_data_package():
-    # 1. Hent data
+    # 1. HENT ALLE DATA (Som i din oprindelige kode)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
@@ -111,52 +110,59 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. Behandl Qualifiers til Shot-specifik brug
+    # 2. BEHANDL QUALIFIERS (Ny logik baseret på din mapping)
     if not df_quals.empty and not df_shots.empty:
-        # xG (Q142) er vigtig for shots - lad os tage den med i pivoteringen
-        relevant_quals = [140, 141, 210, 212, 213, 29, 142] 
+        # Vi bruger QID fra din mapping: 140/141 (Pass End), 210 (Assist), 29 (Assisted), 142 (xG)
+        relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)]
         
-        # Pivotér
+        # Pivotér så hver event får sine egne kolonner
         df_q_pivot = df_q_filtered.pivot(index='EVENT_OPTAUUID', columns='QUALIFIER_QID', values='QUALIFIER_VALUE').reset_index()
         
-        # Merge på shots
+        # Merge qualifiers på shots
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. Logik for Assists og xG
+    # 3. LOGIK FOR ASSISTS OG xG (Efter merge)
     if not df_shots.empty:
-        # Omdøb for læsbarhed (142 er xG)
+        # Omdøb kolonnerne til de navne, vis_side forventer
         col_map = {140: 'PASS_START_X', 141: 'PASS_START_Y', 210: 'ASSIST_Q', 29: 'ASSIST_ALT', 142: 'XG_RAW'}
         df_shots = df_shots.rename(columns={k: v for k, v in col_map.items() if k in df_shots.columns})
 
-        # Beregn xG vha. din hjælpefunktion
-        if 'XG_RAW' in df_shots.columns:
-            df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg)
-        else:
-            df_shots['XG_VAL'] = 0.05
-
-        # Assist markør
+        # Beregn assist-markør
         def check_assist(row):
             is_assist = False
+            # Tjekker både Q210 (Assist) og Q29 (Assisted) fra din mapping
             if 'ASSIST_Q' in row and pd.notna(row['ASSIST_Q']): is_assist = True
-            # Hvis det er et mål (outcome=1) og Q29 findes
             if 'ASSIST_ALT' in row and row['EVENT_OUTCOME'] == 1: is_assist = True
             return 1 if is_assist else 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
+        
+        # Beregn xG vha. din parse_xg funktion
+        df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
         
         # Konvertér koordinater til tal
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_START_X', 'PASS_START_Y']:
             if col in df_shots.columns:
                 df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # ... (Logo mapping sektion) ...
-
+    # 4. LOGO MAPPING (Beholdes som i din kode)
+    logo_map = {}
+    if not df_logos_raw.empty:
+        for _, row in df_logos_raw.iterrows():
+            try:
+                w_id = int(row['TEAM_WYID'])
+                url = str(row['TEAM_LOGO'])
+                if url and url != 'None':
+                    logo_map[w_id] = url
+            except: continue
+                
+    # 5. RETURNÉR DEN KOMPLETTE PAKKE
     return {
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
-            "player_stats": df_shots, # Dette er din primære shot-tabel
+            "player_stats": df_shots,
             "all_qualifiers": df_quals,
         },
         "wyscout": {
@@ -166,7 +172,8 @@ def get_data_package():
             "wyid": 7490
         },
         "players": df_players_csv, 
-        "playerstats": df_shots, # Rettet fra df_shotevents til df_shots
+        "playerstats": df_shots, # Vigtig for din vis_side() funktion!
+        "logo_map": logo_map,
         "config": {
             "liga_navn": COMPETITION_NAME,
             "season": TOURNAMENTCALENDAR_NAME,
