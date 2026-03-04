@@ -62,8 +62,8 @@ def vis_side(dp, logo_map=None):
 
     # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; border-radius:4px; margin-bottom:10px;">
-            <h3 class="branding-title">DATA ANALYSE</h3>
+        <div style="background-color:{hif_rod}; border-radius:4px; margin-bottom:10px; display: flex; justify-content: center; align-items: center;">
+            <p class="branding-title">DATA ANALYSE</p>
         </div>
     """, unsafe_allow_html=True)
     
