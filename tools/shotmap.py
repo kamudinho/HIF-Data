@@ -9,6 +9,17 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
+
+    # --- 2. FARVER & KONSTANTER ---
+hif_rod = "#df003b"
+
+# --- TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">AFSLUTNINGER</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
     df_raw = dp.get('playerstats', pd.DataFrame()) if isinstance(dp, dict) else dp
     if df_raw.empty:
         st.info("Ingen kampdata fundet.")
