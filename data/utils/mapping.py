@@ -180,6 +180,23 @@ def get_qualifier_name(qual_id):
     return OPTA_QUALIFIERS.get(str(qual_id), f"Qual {qual_id}")
 
 def is_offensive_event(event_id):
-    """Tjekker om eventet er offensivt (Skud, mål, assist)"""
-    offensive_ids = ["13", "14", "15", "16", "AS", "G", "PG"]
-    return str(event_id) in offensive_ids
+    """Tjekker om eventet er en afslutning (Skud, mål etc.)"""
+    # Vi holder os til de numeriske ID'er, som Opta bruger i event-strømmen
+    shot_ids = ["13", "14", "15", "16"] 
+    return str(event_id) in shot_ids
+
+def get_offensive_map():
+    """Returnerer en mapping til brug i filtre eller overskrifter"""
+    return {
+        "13": "Miss",
+        "14": "Post",
+        "15": "Attempt Saved",
+        "16": "Goal"
+    }
+
+def is_assist(qualifiers_list):
+    """
+    Tjekker om en liste af qualifiers indeholder en assist (ID 210).
+    Bruges typisk på et Pass event (ID 1).
+    """
+    return "210" in [str(q) for q in qualifiers_list]
