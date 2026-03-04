@@ -51,6 +51,9 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 -- Tilføj end-points for at kunne tegne assist-pile
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_END_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_END_Y,
+                MAX(CASE WHEN q.QUALIFIER_QID = 210 THEN 1 ELSE 0 END) as IS_ASSIST,
+                MAX(CASE WHEN q.QUALIFIER_QID = 29 THEN 1 ELSE 0 END) as IS_KEY_PASS,
+                MAX(CASE WHEN q.QUALIFIER_QID = 211 THEN 1 ELSE 0 END) as IS_2ND_ASSIST,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS,
                 LISTAGG(q.QUALIFIER_VALUE, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUAL_VALUES
             FROM {DB}.OPTA_EVENTS e
