@@ -105,9 +105,10 @@ def vis_side(dp, logo_map=None):
             if v_spiller_a != "Hvidovre IF":
                 df_chance = df_chance[df_chance['PLAYER_NAME'] == v_spiller_a]
             
-            n_assist = df_chance['QUAL_STR'].str.contains('210').sum()
-            n_key = df_chance['QUAL_STR'].str.contains('29').sum()
-            n_2nd = df_chance['QUAL_STR'].str.contains('211').sum()
+            # En "ren" Key Pass er en pasning med Qual 29, men UDEN Qual 210
+            n_assist = df_chance['QUAL_STR'].apply(lambda x: '210' in x).sum()
+            n_key = df_chance['QUAL_STR'].apply(lambda x: '29' in x and '210' not in x).sum()
+            n_2nd = df_chance['QUAL_STR'].apply(lambda x: '211' in x).sum()
 
             st.markdown(f"""
                 <div class="stat-box" style="margin-top: 10px;">
