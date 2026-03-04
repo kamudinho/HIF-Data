@@ -80,9 +80,13 @@ def get_data_package():
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
     # 3. Vask assistdata (Konvertér de nye koordinater)
-    if not df_assists.empty and 'XG_RAW' in df_assists.columns:
-        df_assists['XG_VAL'] = df_assists['XG_RAW'].apply(parse_xg)
-
+    # I get_data_package():
+    if not df_assists.empty:
+        for col in ['PASS_START_X', 'PASS_START_Y', 'SHOT_X', 'SHOT_Y']:
+            df_assists[col] = pd.to_numeric(df_assists[col], errors='coerce').fillna(0)
+        if 'XG_RAW' in df_assists.columns:
+            df_assists['XG_VAL'] = df_assists['XG_RAW'].apply(parse_xg)
+            
     logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()} if not df_logos_raw.empty else {}
 
     # 4. Den vigtige retur-pakke
