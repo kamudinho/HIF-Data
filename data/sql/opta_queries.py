@@ -34,7 +34,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
         """,
 
-        # 3. SHOT EVENTS - Nu med hold-ID så du kan kende forskel på HIF og modstander
+        # 3. SHOT EVENTS - Med indbygget logik til at fange assists via skuddet
         "opta_shotevents": f"""
             SELECT  
                 e.MATCH_OPTAUUID, 
@@ -48,11 +48,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 e.EVENT_TIMEMIN,
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_START_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_START_Y,
-                -- LOGIK-FIX: Hvis det er et mål (Outcome 1) og har en Shot Assist (29), 
-                -- så tilføjer vi '210' manuelt til listen, så din Python-kode finder den.
-                LISTAGG(q.QUALIFIER_QID, ',') || 
-                CASE WHEN e.EVENT_OUTCOME = 1 AND LISTAGG(q.QUALIFIER_QID, ',') LIKE '%29%' 
-                     THEN ',210' ELSE '' END as QUALIFIERS
+                -- Vi bygger en streng af alle qualifiers og tilføjer manuelt 210, hvis skuddet gik i mål
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) || 
+                CASE 
+                    WHEN e.EVENT_OUTCOME = 1 AND LISTAGG(q.QUALIFIER_QID, ',') LIKE '%29%' 
+                    THEN ',210' 
+                    ELSE '' 
+                END as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
@@ -62,5 +64,4 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """
-
     }
