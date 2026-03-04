@@ -66,7 +66,7 @@ def get_data_package():
     # 1. Hent alt (Både Opta, Wyscout og din lokale CSV)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
-    df_assists = load_snowflake_query("opta_assists", is_opta=True) # NY QUERY HER!
+    df_assists = load_snowflake_query("opta_assists", is_opta=True) 
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
@@ -79,8 +79,7 @@ def get_data_package():
         for col in ['EVENT_X', 'EVENT_Y']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # 3. Vask assistdata (Konvertér de nye koordinater)
-    # I get_data_package():
+    # 3. Vask assistdata (Koordinater og xG)
     if not df_assists.empty:
         for col in ['PASS_START_X', 'PASS_START_Y', 'SHOT_X', 'SHOT_Y']:
             df_assists[col] = pd.to_numeric(df_assists[col], errors='coerce').fillna(0)
@@ -90,10 +89,13 @@ def get_data_package():
     logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()} if not df_logos_raw.empty else {}
 
     # 4. Den vigtige retur-pakke
+    # Sørg for at 'opta_matches' og 'opta_team_stats' ligger i top-level til kampsiden
     return {
         "players": df_players_csv,
         "playerstats": df_shots,
-        "assists": df_assists, # NU TILGÆNGELIG I DIN APP!
+        "assists": df_assists,
+        "opta_matches": df_matches_opta,
+        "opta_team_stats": df_opta_stats,
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
