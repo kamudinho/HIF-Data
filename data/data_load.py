@@ -29,7 +29,7 @@ def parse_xg(val_str):
         pass
     return 0.05
 
-# --- SNOWFLAKE FORBINDELSE ---
+# --- 2. SNOWFLAKE FORBINDELSE ---
 def _get_snowflake_conn():
     try:
         s = st.secrets["connections"]["snowflake"]
@@ -52,13 +52,30 @@ def _get_snowflake_conn():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
+# --- 3. LOKAL FIL-LOADER ---
+@st.cache_data
+def load_local_players():
+    try:
+        path = os.path.join(os.getcwd(), "data", "players.csv")
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            df.columns = [str(c).upper().strip() for c in df.columns]
+            if 'BIRTHDATE' in df.columns:
+                df['BIRTHDATE'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"⚠️ Fejl ved indlæsning af players.csv: {e}")
+        return pd.DataFrame()
+
+# --- 4. QUERY LOADER ---
 @st.cache_data(ttl=1200)
 def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
     comp_f = "1. Division" if is_opta else str(COMPETITION_NAME)
-    season_f = "2025/2026" # Fastlåst jf. dine instruktioner
+    season_f = "2025/2026"
     
     if is_opta:
         queries = get_opta_queries(comp_f, season_f)
@@ -79,20 +96,23 @@ def load_snowflake_query(query_key, is_opta=False):
         return pd.DataFrame()
 
 def get_data_package():
-    # 1. HENT DATA
+    # 1. HENT ALLE DATA
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
     df_quals = load_snowflake_query("opta_qualifiers", is_opta=True)
+    df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
+    df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
+    df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS (Pivotering)
+    # 2. BEHANDL QUALIFIERS OG MERGE (Fix for dubletter og manglende bane)
     if not df_quals.empty and not df_shots.empty:
-        # 140/141 = Pass End, 210 = Assist, 142 = xG
-        relevant_quals = [140, 141, 210, 29, 142] 
-        df_quals['QUALIFIER_QID'] = df_quals['QUALIFIER_QID'].astype(str)
+        # Sørg for entydige ID'er før pivot
+        df_quals = df_quals.drop_duplicates(subset=['EVENT_OPTAUUID', 'QUALIFIER_QID'])
         
-        df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin([str(x) for x in relevant_quals])].copy()
+        relevant_quals = ['140', '141', '210', '29', '142'] 
+        df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin(relevant_quals)].copy()
         
         df_q_pivot = df_q_filtered.pivot(
             index='EVENT_OPTAUUID', 
@@ -100,51 +120,68 @@ def get_data_package():
             values='QUALIFIER_VALUE'
         ).reset_index()
         
-        # Tving UUIDs til string og små bogstaver for fejlfrit match
-        df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str).str.lower().str.strip()
-        df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str).str.lower().str.strip()
+        df_q_pivot.columns = [str(c) for c in df_q_pivot.columns]
         
-        # Merge de pivoterede qualifiers på skud/events
+        df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str)
+        df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str)
+        
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. MAPPING OG RENSNING AF KOLONNER
+    # 3. LOGIK FOR ASSISTS OG xG (Mapping til vis_side)
     if not df_shots.empty:
-        # Omdøb pivot-kolonner (strenge) til de navne vis_side forventer
         col_map = {'140': 'PASS_X', '141': 'PASS_Y', '210': 'ASSIST_Q', '29': 'ASSIST_ALT', '142': 'XG_RAW'}
         df_shots = df_shots.rename(columns=col_map)
 
-        # Sikr at alle kolonner eksisterer
-        for c in ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST', 'XG_VAL']:
-            if c not in df_shots.columns: df_shots[c] = 0
+        for target_col in ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST']:
+            if target_col not in df_shots.columns:
+                df_shots[target_col] = 0
 
-        # Beregn IS_ASSIST
+        # Skærp assist-tjek for at undgå de 8000+ fejl
         def check_assist(row):
-            val_q = str(row.get('ASSIST_Q', '')).strip()
-            val_alt = str(row.get('ASSIST_ALT', '')).strip()
-            if (pd.notna(row.get('ASSIST_Q')) and val_q not in ['', 'None', '0']) or \
-               (pd.notna(row.get('ASSIST_ALT')) and val_alt not in ['', 'None', '0']):
+            # En assist kræver QID 210 eller 29 OG at det er et skud-event
+            is_shot = row.get('EVENT_TYPEID') in [13, 14, 15, 16]
+            ass_q = str(row.get('ASSIST_Q', '')).strip()
+            if is_shot and (pd.notna(row.get('ASSIST_Q')) and ass_q not in ['', 'None', '0']):
                 return 1
             return 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
         
-        # Tving numeriske typer (Kritisk for filteret PASS_X > 0)
-        num_cols = ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL', 'IS_ASSIST', 'EVENT_TYPEID']
+        # Tving numeriske typer så Pitch kan tegne
+        num_cols = ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL', 'EVENT_TYPEID', 'IS_ASSIST']
         for col in num_cols:
-            df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
+            if col in df_shots.columns:
+                df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # 4. LOGO MAP
+    # 4. LOGO MAPPING
     logo_map = {}
     if not df_logos_raw.empty:
         for _, row in df_logos_raw.iterrows():
             try:
                 logo_map[int(row['TEAM_WYID'])] = str(row['TEAM_LOGO'])
             except: continue
-
+                
+    # 5. RETURNÉR ALLE OBJEKTER (Præcis som dine sider forventer)
     return {
+        "opta": {
+            "matches": df_matches_opta,
+            "team_stats": df_opta_stats,
+            "player_stats": df_shots,
+            "all_qualifiers": df_quals,
+        },
+        "wyscout": {
+            "team_stats": df_team_stats_wy,
+            "career": df_career_wy,
+            "logos": logo_map,
+            "wyid": 7490
+        },
+        "players": df_players_csv, 
         "playerstats": df_shots,
         "logo_map": logo_map,
-        "opta": {"matches": df_matches_opta, "team_stats": df_opta_stats},
-        "wyscout": {"wyid": 7490}
+        "config": {
+            "liga_navn": COMPETITION_NAME,
+            "season": TOURNAMENTCALENDAR_NAME,
+            "colors": TEAM_COLORS
+        }
     }
