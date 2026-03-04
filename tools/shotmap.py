@@ -62,16 +62,20 @@ def vis_side(dp):
                 pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
                 
+                # Tilføj i tab2 under kortet
                 if not df_a_vis.empty:
-                    # 1. Tegn pilene først (zorder 1)
-                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
-                                   color='#888888', alpha=0.4, width=2, headwidth=4, 
-                                   headlength=5, ax=ax_a, zorder=1)
-            
-                    # 2. Tegn prikkerne ovenpå (zorder 3 + sort kant)
-                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                    s=150, color=HIF_GOLD, edgecolors='black', 
-                                    linewidth=1, alpha=1.0, ax=ax_a, zorder=3)
+                    st.write("---")
+                    st.subheader("📋 Detaljeret oversigt")
+                    
+                    # Klargør data til visning
+                    df_table = df_a_vis[['ASSIST_PLAYER', 'SCORER', 'EVENT_TIMESTAMP']].copy()
+                    df_table.columns = ['Assisteret af', 'Målscorer', 'Tidspunkt']
+                    
+                    # Vis tabel
+                    st.dataframe(
+                        df_table.sort_values('Tidspunkt', ascending=False),
+                        use_container_width=True,
+                        hide_index=True
+                    )
                 
                 st.pyplot(fig_a, use_container_width=True)
