@@ -34,23 +34,38 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
         "opta_shotevents": f"""
             SELECT  
-                MATCH_OPTAUUID, 
-                EVENT_OPTAUUID, 
-                EVENT_CONTESTANT_OPTAUUID,
-                PLAYER_NAME, 
-                EVENT_X, 
-                EVENT_Y, 
-                EVENT_OUTCOME,
-                EVENT_TYPEID, 
-                EVENT_TIMEMIN,
-                TOURNAMENTCALENDAR_OPTAUUID
-            FROM {DB}.OPTA_EVENTS
-            WHERE EVENT_TYPEID IN (1, 13, 14, 15, 16)
-            AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
-            AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                e.MATCH_OPTAUUID, 
+                e.EVENT_OPTAUUID, 
+                e.EVENT_CONTESTANT_OPTAUUID,
+                e.PLAYER_NAME, 
+                e.EVENT_X, 
+                e.EVENT_Y, 
+                e.EVENT_OUTCOME,
+                e.EVENT_TYPEID, 
+                e.EVENT_PERIODID, 
+                e.EVENT_TIMEMIN,
+                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_END_X,
+                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_END_Y,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            FROM {DB}.OPTA_EVENTS e
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_TYPEID IN (1, 13, 14, 15, 16)
+            AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+            AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
+            GROUP BY 
+                e.MATCH_OPTAUUID, 
+                e.EVENT_OPTAUUID, 
+                e.EVENT_CONTESTANT_OPTAUUID,
+                e.PLAYER_NAME, 
+                e.EVENT_X, 
+                e.EVENT_Y, 
+                e.EVENT_OUTCOME,
+                e.EVENT_TYPEID, 
+                e.EVENT_PERIODID, 
+                e.EVENT_TIMEMIN
         """,
         "opta_qualifiers": f"""
             SELECT 
