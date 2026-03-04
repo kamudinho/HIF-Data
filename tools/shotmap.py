@@ -7,21 +7,11 @@ HIF_RED = '#cc0000'
 HIF_BLUE = '#0056a3'
 HIF_GOLD = '#b8860b' 
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
-hif_rod = "#df003b"
 
 def vis_side(dp, logo_map=None):
-    # --- ULTRA KOMPAKT CSS ---
+    # CSS er nu begrænset til de lokale stat-boxes
     st.markdown("""
         <style>
-            /* Fjern luft i toppen af Streamlit */
-            .block-container { padding-top: 0.5rem !important; }
-            
-            /* Løft tabs-indholdet op */
-            .stTabs [data-baseweb="tab-panel"] { 
-                margin-top: -15px !important; 
-                padding-top: 0px !important; 
-            }
-            
             .stat-box {
                 background-color: #f8f9fa;
                 padding: 10px 15px;
@@ -45,15 +35,7 @@ def vis_side(dp, logo_map=None):
                 line-height: 1.1;
             }
             .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-            
         </style>
-    """, unsafe_allow_html=True)
-
-    # --- TOP BRANDING ---
-    st.markdown("""
-        <div class="hif-header-container">
-            <p class="hif-header-text">DATA ANALYSE</p>
-        </div>
     """, unsafe_allow_html=True)
     
     df_raw = dp.get('playerstats', pd.DataFrame()) if isinstance(dp, dict) else dp
@@ -101,7 +83,6 @@ def vis_side(dp, logo_map=None):
             """, unsafe_allow_html=True)
 
         with col_viz:
-            # Vi sætter figsize lidt ned (7.5 i stedet for 8) for at undgå vertikal scroll
             pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(7.5, 9.5))
             if not df_skud.empty:
