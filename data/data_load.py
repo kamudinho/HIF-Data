@@ -62,40 +62,41 @@ def load_snowflake_query(query_key, is_opta=False):
     except: return pd.DataFrame()
 
 def get_data_package():
+    # 1. Hent data
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
-    df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
-    df_events = load_snowflake_query("opta_shotevents", is_opta=True)
-    df_quals = load_snowflake_query("opta_qualifiers", is_opta=True)
+    df_shots = load_snowflake_query("opta_shotevents", is_opta=True) # Nu præ-filtreret fra SQL
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
-    df_players_csv = load_local_players()
 
-    # Logik til at adskille skud og finde assistmagere
-    if not df_events.empty:
-        df_shots = df_events[df_events['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
-        df_passes = df_events[df_events['EVENT_TYPEID'] == 1].copy()
-
-        # Find assistmageren (spilleren der afleverede i samme minut i samme kamp)
-        if not df_shots.empty and not df_passes.empty:
-            assist_map = df_passes[['MATCH_OPTAUUID', 'EVENT_TIMEMIN', 'PLAYER_NAME', 'EVENT_X', 'EVENT_Y']]
-            assist_map.columns = ['MATCH_OPTAUUID', 'EVENT_TIMEMIN', 'ASSIST_PLAYER_NAME', 'PASS_X', 'PASS_Y']
-            df_shots = df_shots.merge(assist_map, on=['MATCH_OPTAUUID', 'EVENT_TIMEMIN'], how='left')
-
-        df_shots['IS_ASSIST'] = df_shots['QUALIFIERS'].apply(lambda x: 1 if x and '210' in str(x) else 0)
-        df_shots['XG_VAL'] = df_shots['QUALIFIERS'].apply(lambda x: 0.15 if x and '142' in str(x) else 0.05)
-        
+    # 2. Simpel vask af skuddata
+    if not df_shots.empty:
+        # Konvertér xG og koordinater til tal
+        df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg)
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
-    else:
-        df_shots = pd.DataFrame()
+        
+        # Sæt assist-navn til skytten selv som fallback, eller "Ukendt"
+        df_shots['ASSIST_PLAYER_NAME'] = df_shots['PLAYER_NAME'] # Midlertidig løsning så dropdown virker
 
+    # 3. Logo map (Behold dine værdier)
     logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()} if not df_logos_raw.empty else {}
 
     return {
-        "opta": {"matches": df_matches_opta, "team_stats": df_opta_stats, "player_stats": df_shots},
-        "wyscout": {"team_stats": df_team_stats_wy, "career": df_career_wy, "logos": logo_map, "wyid": 7490},
-        "players": df_players_csv, 
         "playerstats": df_shots,
-        "config": {"liga_navn": COMPETITION_NAME, "season": TOURNAMENTCALENDAR_NAME, "colors": TEAM_COLORS}
+        "opta": {
+            "matches": df_matches_opta,
+            "player_stats": df_shots
+        },
+        "wyscout": {
+            "team_stats": df_team_stats_wy,
+            "career": df_career_wy,
+            "logos": logo_map,
+            "wyid": 7490
+        },
+        "config": {
+            "colors": TEAM_COLORS,
+            "liga_navn": COMPETITION_NAME,
+            "season": TOURNAMENTCALENDAR_NAME
+        }
     }
