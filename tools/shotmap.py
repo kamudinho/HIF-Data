@@ -9,38 +9,16 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
-    st.markdown("""
-        <style>
-            .stat-box {
-                background-color: #f8f9fa;
-                padding: 10px 15px;
-                border-radius: 8px;
-                border-left: 5px solid #df003b;
-                margin-bottom: 8px;
-            }
-            .stat-label {
-                font-size: 0.8rem;
-                text-transform: uppercase;
-                color: #666;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-            }
-            .stat-value {
-                font-size: 1.6rem;
-                font-weight: 800;
-                color: #1a1a1a;
-                margin-left: 22px;
-                line-height: 1.1;
-            }
-            .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    # Hent data fra 'opta_shotevents' som defineret i din nye query
+    # Prøv at hente fra den nye query-nøgle først, derefter den gamle
     df_raw = dp.get('opta_shotevents', pd.DataFrame())
+    
     if df_raw.empty:
-        st.info("Ingen kampdata fundet.")
+        df_raw = dp.get('playerstats', pd.DataFrame())
+
+    if df_raw.empty:
+        st.warning("⚠️ Ingen data fundet i 'opta_shotevents' eller 'playerstats'.")
+        # Print nøglerne så vi kan se hvad der faktisk er i pakken:
+        st.write("Tilgængelige data-nøgler:", list(dp.keys()))
         return
 
     # --- DATA RENS ---
