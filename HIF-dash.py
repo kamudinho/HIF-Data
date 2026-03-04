@@ -90,7 +90,7 @@ with st.sidebar:
     
     sel = ""
     if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"],
+        sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "HIF ANALYSE":
         sel = option_menu(None, options=["Afslutninger"],
