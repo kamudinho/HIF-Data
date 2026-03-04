@@ -42,7 +42,8 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 EVENT_TIMEMIN,
                 TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_EVENTS
-            WHERE EVENT_TYPEID IN (13, 14, 15, 16)
+            -- Vi henter både skud (13-16) OG afleveringer (1)
+            WHERE EVENT_TYPEID IN (1, 13, 14, 15, 16)
             AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
