@@ -10,8 +10,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from data.data_load import get_data_package, load_snowflake_query
 from data.users import get_users
 
-# --- 1. KONFIGURATION ---
+# --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+HIF_ROD = "#df003b"
+HIF_GULD = "#b8860b"
 
 st.set_page_config(
     page_title="HIF Data Hub",
@@ -19,24 +21,56 @@ st.set_page_config(
     page_icon=HIF_LOGO_URL
 )
 
+# Centraliseret CSS for hele appen
 st.markdown(f"""
     <style>
-        .block-container {{ padding-top: 1rem !important; padding-bottom: 0rem !important; }}
+        /* Fjern standard Streamlit padding og header */
+        .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
         header {{ visibility: hidden; height: 0px; }}
-        .custom-header {{
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            height: 60px;
-            background-color: #cc0000;
-            color: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        
+        /* FAST CENTRAL BRANDING CONTAINER */
+        .hif-header-container {{
+            background-color: {HIF_ROD};
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            width: 100%;
+            border-bottom: 3px solid {HIF_GULD};
         }}
-        button[data-baseweb="tab"] {{ font-size: 14px; }}
-        button[data-baseweb="tab"][aria-selected="true"] {{ color: #cc0000 !important; border-bottom-color: #cc0000 !important; }}
+
+        .hif-header-text {{
+            color: white !important;
+            margin: 0 !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: sans-serif;
+            line-height: 50px;
+        }}
+
+        /* Styling af Tabs */
+        button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
+        button[data-baseweb="tab"][aria-selected="true"] {{ 
+            color: {HIF_ROD} !important; 
+            border-bottom-color: {HIF_ROD} !important; 
+        }}
+        
+        /* Sidebar justeringer */
+        section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
     </style>
 """, unsafe_allow_html=True)
+
+def render_hif_header(titel):
+    """Genererer den ensartede røde top-bar"""
+    st.markdown(f"""
+        <div class="hif-header-container">
+            <p class="hif-header-text">{titel}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
@@ -46,11 +80,12 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        st.markdown(f"<div style='text-align: center;'><img src='{HIF_LOGO_URL}' width='120'></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; padding-top: 50px;'><img src='{HIF_LOGO_URL}' width='150'></div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>HIF DATA HUB</h3>", unsafe_allow_html=True)
         with st.form("login"):
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
-            if st.form_submit_button("LOG IND"):
+            if st.form_submit_button("LOG IND", use_container_width=True):
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
@@ -69,7 +104,7 @@ dp = st.session_state["dp"]
 
 # --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='60'></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='80'></div>", unsafe_allow_html=True)
     
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
@@ -91,23 +126,26 @@ with st.sidebar:
     sel = ""
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast"],
-                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger"],
-                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"],
+                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
-                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"],
-                         styles={"nav-link-selected": {"background-color": "#cc0000"}})
+                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["Rå Data Explorer", "Brugerstyring", "System Log"],
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
-# --- 5. ROUTING LOGIK ---
+# --- 5. RENDERING AF HEADER & INDHOLD ---
 if not sel:
     sel = "Oversigt"
+
+# Her tegnes den centrale header automatisk
+render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
     if hoved_omraade == "TRUPPEN":
@@ -117,12 +155,6 @@ try:
         elif sel == "Forecast":
             import tools.squad as sq
             sq.vis_side(dp["players"])
-        elif sel == "Spillerstats":
-            import tools.stats as st_tool
-            st_tool.vis_side(dp["players"], dp["playerstats"])
-        elif sel == "Top 5":
-            import tools.top5 as t5
-            t5.vis_side(dp["players"], dp["playerstats"])
 
     elif hoved_omraade == "HIF ANALYSE":
         if sel == "Afslutninger":
@@ -156,9 +188,7 @@ try:
 
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
-            st.title("🛰️ Rå Data Explorer")
             st.write("### Opta Matches", dp.get("opta_matches", pd.DataFrame()).head(50))
-            st.write("### Opta Stats", dp.get("opta_raw_stats", pd.DataFrame()).head(50))
         elif sel == "Brugerstyring":
             import tools.admin as adm
             adm.vis_side()
@@ -167,4 +197,4 @@ try:
             adm.vis_log()
 
 except Exception as e:
-    st.error(f"Kunne ikke indlæse siden '{sel}': {e}")
+    st.error(f"Fejl ved indlæsning af {sel}: {e}")
