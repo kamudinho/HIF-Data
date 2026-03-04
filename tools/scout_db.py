@@ -166,13 +166,6 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
     
-     # --- TOP BRANDING ---
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">SCOUTING: DATABASE</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    
     if "player_career_data" not in st.session_state or st.session_state["player_career_data"] is None:
         with st.spinner("Henter historik..."):
             df_career = load_snowflake_query("player_career", "('dummy')", "LIKE '%%'")
