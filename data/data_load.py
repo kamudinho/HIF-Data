@@ -44,9 +44,15 @@ def load_local_players():
 def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
-    comp_f, season_f = "1. Division" if is_opta else str(COMPETITION_NAME), "2025/2026"
+    
+    # FEJL HER: comp_f var sat til "1. Division" manuelt
+    # RETTELSE: Brug de importerede navne fra din team_mapping
+    comp_f = str(COMPETITION_NAME) 
+    season_f = str(TOURNAMENTCALENDAR_NAME)
+    
     queries = get_opta_queries(comp_f, season_f) if is_opta else get_wy_queries((328,), season_f)
     q = queries.get(query_key)
+    
     if not q: return pd.DataFrame() 
     try:
         df = conn.query(q)
