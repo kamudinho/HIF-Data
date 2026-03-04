@@ -9,7 +9,6 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
-    # CSS er nu begrænset til de lokale stat-boxes
     st.markdown("""
         <style>
             .stat-box {
@@ -38,7 +37,8 @@ def vis_side(dp, logo_map=None):
         </style>
     """, unsafe_allow_html=True)
     
-    df_raw = dp.get('playerstats', pd.DataFrame()) if isinstance(dp, dict) else dp
+    # Hent data fra 'opta_shotevents' som defineret i din nye query
+    df_raw = dp.get('opta_shotevents', pd.DataFrame())
     if df_raw.empty:
         st.info("Ingen kampdata fundet.")
         return
@@ -46,7 +46,6 @@ def vis_side(dp, logo_map=None):
     # --- DATA RENS ---
     df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
     df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip()
-    df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
 
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
@@ -54,7 +53,6 @@ def vis_side(dp, logo_map=None):
     # --- TAB 1: SKUDKORT ---
     with tab1:
         col_viz, col_ctrl = st.columns([3, 1])
-        
         with col_ctrl:
             spiller_liste = sorted(df_hif['PLAYER_NAME'].unique().tolist())
             v_spiller_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
@@ -63,8 +61,7 @@ def vis_side(dp, logo_map=None):
             if v_spiller_skud != "Hele Holdet":
                 df_skud = df_skud[df_skud['PLAYER_NAME'] == v_spiller_skud]
             
-            df_skud['ER_MAAL'] = df_skud['TYPE_STR'] == '16'
-            n_maal = int(df_skud['ER_MAAL'].sum())
+            n_maal = int((df_skud['TYPE_STR'] == '16').sum())
             n_skud = len(df_skud)
 
             st.markdown(f"""
@@ -76,10 +73,6 @@ def vis_side(dp, logo_map=None):
                     <div class="stat-label"><span class="dot" style="background-color:{HIF_RED}"></span> Mål</div>
                     <div class="stat-value">{n_maal}</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-label">xG Kvalitet</div>
-                    <div class="stat-value">{df_skud['XG_VAL'].sum():.2f}</div>
-                </div>
             """, unsafe_allow_html=True)
 
         with col_viz:
@@ -87,28 +80,27 @@ def vis_side(dp, logo_map=None):
             fig, ax = pitch.draw(figsize=(7.5, 9.5))
             if not df_skud.empty:
                 pitch.scatter(df_skud['EVENT_X'], df_skud['EVENT_Y'],
-                             s=(df_skud['XG_VAL'] * 1000) + 60,
-                             c=df_skud['ER_MAAL'].map({True: HIF_RED, False: 'white'}),
-                             edgecolors=HIF_RED, linewidth=1.2, alpha=0.9, ax=ax)
+                             s=100, c=(df_skud['TYPE_STR'] == '16').map({True: HIF_RED, False: 'white'}),
+                             edgecolors=HIF_RED, linewidth=1.2, ax=ax)
             st.pyplot(fig, use_container_width=True)
 
     # --- TAB 2: ASSISTS ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([3, 1])
-        
         with col_ctrl_a:
             v_spiller_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
-            mask_chance = (df_hif['QUAL_STR'].str.contains('210|29|211', na=False)) & (df_hif['TYPE_STR'] == '1')
+            # Vi filtrerer på TYPE 1 (Pasninger) som har en af de tre flag sat i SQL
+            mask_chance = (df_hif['EVENT_TYPEID'] == 1) & ((df_hif['IS_ASSIST'] == 1) | (df_hif['IS_KEY_PASS'] == 1) | (df_hif['IS_2ND_ASSIST'] == 1))
             df_chance = df_hif[mask_chance].copy()
             
             if v_spiller_a != "Hvidovre IF":
                 df_chance = df_chance[df_chance['PLAYER_NAME'] == v_spiller_a]
             
-            # En "ren" Key Pass er en pasning med Qual 29, men UDEN Qual 210
-            n_assist = df_chance['QUAL_STR'].apply(lambda x: '210' in x).sum()
-            n_key = df_chance['QUAL_STR'].apply(lambda x: '29' in x and '210' not in x).sum()
-            n_2nd = df_chance['QUAL_STR'].apply(lambda x: '211' in x).sum()
+            # PRÆCIS LOGIK: En Key Pass tælles kun, hvis det IKKE førte til mål (ellers er det en assist)
+            n_assist = int(df_chance['IS_ASSIST'].sum())
+            n_key = int((df_chance['IS_KEY_PASS'] == 1) & (df_chance['IS_ASSIST'] == 0)).sum()
+            n_2nd = int(df_chance['IS_2ND_ASSIST'].sum())
 
             st.markdown(f"""
                 <div class="stat-box" style="margin-top: 10px;">
@@ -131,15 +123,16 @@ def vis_side(dp, logo_map=None):
             
             if not df_chance.empty:
                 pitch_a.arrows(df_chance['EVENT_X'], df_chance['EVENT_Y'],
-                               df_chance['PASS_END_X'].fillna(95), df_chance['PASS_END_Y'].fillna(50),
+                               df_chance['PASS_END_X'].astype(float), df_chance['PASS_END_Y'].astype(float),
                                color='#eeeeee', width=2, headwidth=3, headlength=3, ax=ax_a, zorder=1)
                 
-                def get_color(q):
-                    if '210' in q: return HIF_GOLD
-                    if '211' in q: return HIF_BLUE
+                # Farvekode baseret på SQL-flaggene
+                def assign_color(row):
+                    if row['IS_ASSIST'] == 1: return HIF_GOLD
+                    if row['IS_2ND_ASSIST'] == 1: return HIF_BLUE
                     return '#999999'
                 
-                df_chance['COLOR'] = df_chance['QUAL_STR'].apply(get_color)
+                df_chance['COLOR'] = df_chance.apply(assign_color, axis=1)
                 pitch_a.scatter(df_chance['EVENT_X'], df_chance['EVENT_Y'], 
                                 s=110, color=df_chance['COLOR'], edgecolors='white', 
                                 linewidth=1.2, ax=ax_a, zorder=2)
