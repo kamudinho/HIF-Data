@@ -98,7 +98,13 @@ if not st.session_state["logged_in"]:
 # --- 3. DATA LOADING ---
 if "dp" not in st.session_state:
     with st.spinner("Henter systemdata..."):
-        st.session_state["dp"] = get_data_package()
+        try:
+            # Hent den rensede pakke
+            data_pkg = get_data_package()
+            st.session_state["dp"] = data_pkg
+        except Exception as e:
+            st.error(f"❌ Kritisk fejl ved indlæsning af datapakke: {e}")
+            st.stop()
 
 dp = st.session_state["dp"]
 
