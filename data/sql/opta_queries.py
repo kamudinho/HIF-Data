@@ -35,25 +35,23 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
 
         "opta_assists": f"""
-            WITH EventsWithQuals AS (
+            WITH AllMatchEvents AS (
                 SELECT 
                     e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.PLAYER_NAME, 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.EVENT_OPTAUUID,
-                    -- Henter xG (QID 142)
+                    e.EVENT_CONTESTANT_OPTAUUID,
+                    -- Henter xG
                     MAX(CASE WHEN q.QUALIFIER_QID IN (142, '142') THEN q.QUALIFIER_VALUE END) as XG_RAW,
-                    -- Markerer officielle assists (QID 210)
-                    MAX(CASE WHEN q.QUALIFIER_QID IN (210, '210') THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST
+                    -- Tjekker for BÅDE assist (210) og anden-assist (213)
+                    MAX(CASE WHEN q.QUALIFIER_QID IN (210, '210', 213, '213') THEN 1 ELSE 0 END) as IS_CHANCE_CREATED
                 FROM {DB}.OPTA_EVENTS e
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.TOURNAMENTCALENDAR_OPTAUUID IN (
-                    -- FILTRERING PÅ LIGA OG SÆSON
                     SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                     WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
                     AND COMPETITION_NAME = '{liga}'
                 )
-                -- SIKRER VI KUN KIGGER PÅ HVIDOVRE HÆNDELSER
-                AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
-                GROUP BY 1, 2, 3, 4, 5, 6, 7
+                GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
             ),
             AssistsMapped AS (
                 SELECT 
@@ -63,22 +61,25 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                     EVENT_TIMESTAMP,
                     EVENT_TYPEID,
                     XG_RAW,
+                    EVENT_CONTESTANT_OPTAUUID as SCORER_TEAM,
+                    -- LAG: Find den forrige spiller uanset hvad
                     LAG(PLAYER_NAME) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER,
                     LAG(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_X,
                     LAG(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_Y,
-                    LAG(IS_OFFICIAL_ASSIST) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS WAS_OFFICIAL
-                FROM EventsWithQuals
+                    LAG(EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_TEAM,
+                    LAG(IS_CHANCE_CREATED) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS WAS_ASSIST_ACTION
+                FROM AllMatchEvents
             )
             SELECT 
                 SCORER, ASSIST_PLAYER, SHOT_X, SHOT_Y, 
                 PASS_START_X, PASS_START_Y, EVENT_TIMESTAMP, XG_RAW
             FROM AssistsMapped
-            WHERE EVENT_TYPEID = 16 
-              AND WAS_OFFICIAL = 1
-              AND ASSIST_PLAYER IS NOT NULL
+            WHERE EVENT_TYPEID = 16 -- Mål
+              AND ASSIST_TEAM = '{HIF_UUID}' -- Assisten SKAL komme fra en HIF spiller
+              -- Vi fjerner selvmål af HIF spillere, så vi kun ser mål mod modstanderen
+              AND SCORER_TEAM != '{HIF_UUID}' 
             ORDER BY EVENT_TIMESTAMP DESC
         """,
-
         "opta_shotevents": f"""
             SELECT  
                 e.MATCH_OPTAUUID, 
