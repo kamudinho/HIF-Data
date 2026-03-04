@@ -3,12 +3,10 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     
-    # Prioritér input-parametre, ellers brug globale værdier fra team_mapping
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
     
     return {
-        # 1. MATCHINFO - Her definerer vi universet for de andre queries
         "opta_matches": f"""
             SELECT 
                 MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS, 
@@ -23,10 +21,8 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             ORDER BY MATCH_DATE_FULL DESC
         """,
         
-        # 2. MATCHSTATS - Henter hold-statistikker (boldbesiddelse osv.)
         "opta_team_stats": f"""
-            SELECT 
-                MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
+            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
             WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID 
@@ -34,7 +30,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
         """,
-        
+
         "opta_shotevents": f"""
             SELECT 
                 e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID,
