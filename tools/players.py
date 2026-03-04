@@ -33,12 +33,7 @@ def vis_side(df_spillere):
             div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stVerticalBlock"] { align-items: flex-end !important; }
         </style>
     """, unsafe_allow_html=True)
-
-    # 2. BRANDING
-    st.markdown(f"""<div style="background-color:#cc0000; padding:10px; border-radius:4px; margin-bottom:20px;">
-        <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; font-size:1.1rem; text-transform:uppercase;">TRUPOVERSIGT - {COMPETITION_NAME}</h3>
-    </div>""", unsafe_allow_html=True)
-
+    
     # 3. DATA PROCESSING
     df_working = df_spillere.copy()
     df_working.columns = [str(c).upper().strip() for c in df_working.columns]
