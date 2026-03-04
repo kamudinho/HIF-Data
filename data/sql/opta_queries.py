@@ -35,26 +35,35 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
 
         "opta_assists": f"""
+            WITH GoalEvents AS (
+                SELECT 
+                    MATCH_OPTAUUID, EVENT_ID, PLAYER_NAME AS SCORER, 
+                    EVENT_X AS SHOT_X, EVENT_Y AS SHOT_Y, EVENT_TIMESTAMP
+                FROM {DB}.OPTA_EVENTS
+                WHERE EVENT_TYPEID = 16 
+                  AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+                  AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                      SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                      WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                  )
+            ),
+            AssistEvents AS (
+                SELECT 
+                    e.MATCH_OPTAUUID, e.PLAYER_NAME AS ASSIST_PLAYER, 
+                    e.EVENT_X AS PASS_START_X, e.EVENT_Y AS PASS_START_Y,
+                    e.EVENT_TIMESTAMP, e.EVENT_ID
+                FROM {DB}.OPTA_EVENTS e
+                JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+                WHERE q.QUALIFIER_QID IN (210, '210') -- Håndterer både tal og tekst
+            )
             SELECT 
-                e.PLAYER_NAME AS SCORER,
-                -- Her joiner vi på den faktiske assist-hændelse i stedet for bare rækken før
-                a.PLAYER_NAME AS ASSIST_PLAYER,
-                e.EVENT_X AS SHOT_X,
-                e.EVENT_Y AS SHOT_Y,
-                a.EVENT_X AS PASS_START_X,
-                a.EVENT_Y AS PASS_START_Y,
-                e.EVENT_TIMESTAMP
-            FROM {DB}.OPTA_EVENTS e
-            JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            JOIN {DB}.OPTA_EVENTS a ON e.MATCH_OPTAUUID = a.MATCH_OPTAUUID 
-                AND a.EVENT_EVENTID = e.EVENT_EVENTID - 1 -- Vi kigger stadig på forrige ID
-            WHERE e.EVENT_TYPEID = 16 
-              AND q.QUALIFIER_QID = 210 -- KUN officielle assists
-              AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
-              AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
-                  SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
-                  WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
-              )
+                g.SCORER, a.ASSIST_PLAYER, g.SHOT_X, g.SHOT_Y,
+                a.PASS_START_X, a.PASS_START_Y, g.EVENT_TIMESTAMP
+            FROM GoalEvents g
+            JOIN AssistEvents a ON g.MATCH_OPTAUUID = a.MATCH_OPTAUUID 
+              AND a.EVENT_TIMESTAMP <= g.EVENT_TIMESTAMP -- Assisten skal ske før eller samtidig
+              AND a.EVENT_TIMESTAMP >= DATEADD(second, -10, g.EVENT_TIMESTAMP) -- Maks 10 sek før
+            ORDER BY g.EVENT_TIMESTAMP DESC
         """,
 
         "opta_shotevents": f"""
