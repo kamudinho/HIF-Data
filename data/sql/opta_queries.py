@@ -35,37 +35,26 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
         """,
 
         "opta_assists": f"""
-            WITH SortedEvents AS (
-                SELECT 
-                    e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                    e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_OPTAUUID,
-                    -- Finder assist-spilleren og deres startposition via LAG
-                    LAG(e.PLAYER_NAME) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER,
-                    LAG(e.EVENT_X) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PASS_START_X,
-                    LAG(e.EVENT_Y) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PASS_START_Y
-                FROM {DB}.OPTA_EVENTS e
-                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
-                AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
-                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
-                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
-                )
-            )
             SELECT 
-                se.PLAYER_NAME AS SCORER,
-                se.ASSIST_PLAYER,
-                se.EVENT_X AS SHOT_X,
-                se.EVENT_Y AS SHOT_Y,
-                se.PASS_START_X,
-                se.PASS_START_Y,
-                se.EVENT_TIMESTAMP,
-                MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
-            FROM SortedEvents se
-            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON se.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE se.EVENT_TYPEID = 16 -- Kun mål
-              AND se.ASSIST_PLAYER IS NOT NULL 
-              AND se.ASSIST_PLAYER != se.PLAYER_NAME -- Filtrér solo-mål fra
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
-            ORDER BY se.EVENT_TIMESTAMP DESC
+                e.PLAYER_NAME AS SCORER,
+                -- Her joiner vi på den faktiske assist-hændelse i stedet for bare rækken før
+                a.PLAYER_NAME AS ASSIST_PLAYER,
+                e.EVENT_X AS SHOT_X,
+                e.EVENT_Y AS SHOT_Y,
+                a.EVENT_X AS PASS_START_X,
+                a.EVENT_Y AS PASS_START_Y,
+                e.EVENT_TIMESTAMP
+            FROM {DB}.OPTA_EVENTS e
+            JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            JOIN {DB}.OPTA_EVENTS a ON e.MATCH_OPTAUUID = a.MATCH_OPTAUUID 
+                AND a.EVENT_EVENTID = e.EVENT_EVENTID - 1 -- Vi kigger stadig på forrige ID
+            WHERE e.EVENT_TYPEID = 16 
+              AND q.QUALIFIER_QID = 210 -- KUN officielle assists
+              AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+              AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
+                  SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                  WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+              )
         """,
 
         "opta_shotevents": f"""
