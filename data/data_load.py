@@ -60,30 +60,37 @@ def get_data_package():
     # 1. Hent alt (Både Opta, Wyscout og din lokale CSV)
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
+    df_assists = load_snowflake_query("opta_assists", is_opta=True) # NY QUERY HER!
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
-    df_players_csv = load_local_players() # DENNE SKAL MED!
+    df_players_csv = load_local_players() 
 
     # 2. Vask skuddata
     if not df_shots.empty:
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg)
-        for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y']:
+        for col in ['EVENT_X', 'EVENT_Y']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
-        # Dropdown fix: Vi bruger spillerens eget navn indtil assist-mappet er 100%
-        df_shots['ASSIST_PLAYER_NAME'] = df_shots['PLAYER_NAME']
+
+    # 3. Vask assistdata (Konvertér de nye koordinater)
+    if not df_assists.empty:
+        for col in ['SHOT_X', 'SHOT_Y', 'PASS_START_X', 'PASS_START_Y']:
+            df_assists[col] = pd.to_numeric(df_assists[col], errors='coerce').fillna(0)
+        df_assists['XG_VAL'] = df_assists['XG_RAW'].apply(parse_xg)
 
     logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()} if not df_logos_raw.empty else {}
 
-    # 3. Den vigtige retur-pakke (Sørg for at 'players' er her!)
+    # 4. Den vigtige retur-pakke
     return {
-        "players": df_players_csv, # VIGTIG FOR DINE ANDRE SIDER!
+        "players": df_players_csv,
         "playerstats": df_shots,
+        "assists": df_assists, # NU TILGÆNGELIG I DIN APP!
         "opta": {
             "matches": df_matches_opta,
             "team_stats": df_opta_stats,
-            "player_stats": df_shots
+            "player_stats": df_shots,
+            "assists": df_assists
         },
         "wyscout": {
             "team_stats": df_team_stats_wy,
