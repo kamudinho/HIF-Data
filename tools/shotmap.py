@@ -62,11 +62,18 @@ def vis_side(dp):
                 pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
                 
-                pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                               df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
-                               color=HIF_GOLD, width=3, headwidth=5, ax=ax_a, zorder=3)
-                
-                pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                                s=100, color=HIF_RED, edgecolors='black', ax=ax_a, zorder=4)
+                if not df_a_vis.empty:
+                    # 1. Tegn start-prikken (hvor assisten starter)
+                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                    s=80, color=HIF_GOLD, edgecolors='black', alpha=0.8, ax=ax_a, zorder=3)
+
+                    # 2. Tegn pilen (grå med lav opacity/alpha)
+                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
+                                   color='#888888', alpha=0.4, width=2, headwidth=4, ax=ax_a, zorder=2)
+                    
+                    # 3. Prik hvor målet blev sat ind (HIF Rød)
+                    pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
+                                    s=120, color=HIF_RED, edgecolors='black', ax=ax_a, zorder=4)
                 
                 st.pyplot(fig_a, use_container_width=True)
