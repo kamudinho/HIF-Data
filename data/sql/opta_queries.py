@@ -2,11 +2,11 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 
 def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
+    # Fast UUID til Hvidovre
+    HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
+    
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
-
-     # Tilføj HIF_UUID øverst i funktionen
-    HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     return {
         "opta_matches": f"""
@@ -32,28 +32,39 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
         """,
-       
-
-        # Opdater "opta_shotevents" og "opta_qualifiers"
         "opta_shotevents": f"""
             SELECT  
-                MATCH_OPTAUUID, EVENT_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
-                PLAYER_NAME, EVENT_X, EVENT_Y, EVENT_OUTCOME,
-                EVENT_TYPEID, EVENT_TIMEMIN, TOURNAMENTCALENDAR_OPTAUUID
+                MATCH_OPTAUUID, 
+                EVENT_OPTAUUID, 
+                EVENT_CONTESTANT_OPTAUUID,
+                PLAYER_NAME, 
+                EVENT_X, 
+                EVENT_Y, 
+                EVENT_OUTCOME,
+                EVENT_TYPEID, 
+                EVENT_TIMEMIN,
+                TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_EVENTS
             WHERE EVENT_TYPEID IN (1, 13, 14, 15, 16)
-            AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}' -- FILTER HER
+            AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
             AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
         """,
         "opta_qualifiers": f"""
-            SELECT EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
+            SELECT 
+                EVENT_OPTAUUID,
+                QUALIFIER_QID,
+                QUALIFIER_VALUE
             FROM {DB}.OPTA_QUALIFIERS
             WHERE EVENT_OPTAUUID IN (
                 SELECT EVENT_OPTAUUID FROM {DB}.OPTA_EVENTS
-                WHERE EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}' -- OG HER
+                WHERE EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+                AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                )
             )
         """
     }
