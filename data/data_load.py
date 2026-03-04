@@ -116,7 +116,13 @@ def get_data_package():
         for col in ['PASS_END_X', 'PASS_END_Y']:
             if col in df_shotevents.columns:
                 df_shotevents[col] = pd.to_numeric(df_shotevents[col], errors='coerce')
-        
+
+    # Tilføj dette inde i get_data_package() efter df_shotevents er hentet:
+    if not df_shotevents.empty:
+        for col in ['EVENT_X', 'EVENT_Y', 'PASS_END_X', 'PASS_END_Y']:
+            if col in df_shotevents.columns:
+                df_shotevents[col] = pd.to_numeric(df_shotevents[col], errors='coerce').fillna(0)
+            
         # Beregn xG via hjælpefunktionen øverst
         if 'QUAL_VALUES' in df_shotevents.columns:
             df_shotevents['XG_VAL'] = df_shotevents['QUAL_VALUES'].apply(parse_xg)
