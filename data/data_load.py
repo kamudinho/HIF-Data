@@ -15,7 +15,6 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, T
 # --- HJÆLPEFUNKTIONER ---
 
 def parse_xg(val_str):
-    """Fisker xG ud af QUAL_VALUES strengen eller QID 142."""
     try:
         if not val_str or pd.isna(val_str):
             return 0.05
@@ -76,7 +75,7 @@ def load_snowflake_query(query_key, is_opta=False):
     if not conn: return pd.DataFrame()
     
     comp_f = "1. Division" if is_opta else str(COMPETITION_NAME)
-    season_f = str(TOURNAMENTCALENDAR_NAME) if TOURNAMENTCALENDAR_NAME else "2025/2026"
+    season_f = "2025/2026"
     
     if is_opta:
         queries = get_opta_queries(comp_f, season_f)
@@ -107,51 +106,55 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS OG MERGE (Kritisk fiks for 8000+ fejlen)
+    # 2. BEHANDL QUALIFIERS OG MERGE (HER SKETE FEJLEN)
     if not df_quals.empty and not df_shots.empty:
-        # Fjerner dubletter før pivot for at undgå række-eksplosion
+        # Rens ID-kolonner med hård hånd
+        df_quals['EVENT_OPTAUUID'] = df_quals['EVENT_OPTAUUID'].astype(str).str.strip()
+        df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str).str.strip()
+        
+        # Fjern dubletter så vi ikke får 8000+ rækker
         df_quals = df_quals.drop_duplicates(subset=['EVENT_OPTAUUID', 'QUALIFIER_QID'])
         
         relevant_quals = [140, 141, 210, 29, 142] 
-        df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)].copy()
+        df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin([str(x) for x in relevant_quals])].copy()
         
+        # Pivot
         df_q_pivot = df_q_filtered.pivot(
             index='EVENT_OPTAUUID', 
             columns='QUALIFIER_QID', 
             values='QUALIFIER_VALUE'
         ).reset_index()
         
+        # Tving kolonner til strenge ("140") og rens merge-nøglen igen for en sikkerheds skyld
         df_q_pivot.columns = [str(c) for c in df_q_pivot.columns]
+        df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str).str.strip()
         
-        # Merge på skud-events
+        # NU KAN DE MERGES UDEN ValueError
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. LOGIK FOR ASSISTS OG xG
+    # 3. LOGIK FOR ASSISTS OG xG (Mapping til vis_side)
     if not df_shots.empty:
         col_map = {'140': 'PASS_X', '141': 'PASS_Y', '210': 'ASSIST_Q', '29': 'ASSIST_ALT', '142': 'XG_RAW'}
         df_shots = df_shots.rename(columns=col_map)
 
-        for target_col in ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST']:
-            if target_col not in df_shots.columns:
-                df_shots[target_col] = 0
+        # Sikr at kolonnerne findes (fyld med 0 hvis de mangler efter merge)
+        needed = ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST']
+        for c in needed:
+            if c not in df_shots.columns: df_shots[c] = 0
 
-        # Assist-tjek: Skal være et skud (13-16) OG have assist-markering (210/29)
+        # Skærp assist-logik (kun skud med assist-qualifier)
         def check_assist(row):
             is_shot = row.get('EVENT_TYPEID') in [13, 14, 15, 16]
             ass_q = str(row.get('ASSIST_Q', '')).strip()
-            ass_alt = str(row.get('ASSIST_ALT', '')).strip()
-            
-            if is_shot and ( (pd.notna(row.get('ASSIST_Q')) and ass_q not in ['', 'None', '0']) or 
-                             (pd.notna(row.get('ASSIST_ALT')) and ass_alt not in ['', 'None', '0']) ):
+            if is_shot and (pd.notna(row.get('ASSIST_Q')) and ass_q not in ['', 'None', '0']):
                 return 1
             return 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
         
-        # Konverter til tal for at visualiseringen (VerticalPitch) kan læse det
-        num_cols = ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL', 'EVENT_TYPEID', 'IS_ASSIST']
-        for col in num_cols:
+        # Tving numeriske typer så Pitch kan tegne banen korrekt
+        for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
     # 4. LOGO MAPPING
@@ -162,7 +165,7 @@ def get_data_package():
                 logo_map[int(row['TEAM_WYID'])] = str(row['TEAM_LOGO'])
             except: continue
                 
-    # 5. RETURNÉR DEN KOMPLETTE PAKKE (Alle returns bevaret til siderne)
+    # 5. RETURNÉR ALLE OBJEKTER
     return {
         "opta": {
             "matches": df_matches_opta,
