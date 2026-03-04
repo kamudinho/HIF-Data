@@ -39,9 +39,9 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 SELECT 
                     e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.PLAYER_NAME, 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.EVENT_OPTAUUID,
-                    -- Henter xG (QID 142) for selve hændelsen
+                    -- Finder xG for målet
                     MAX(CASE WHEN q.QUALIFIER_QID IN (142, '142') THEN q.QUALIFIER_VALUE END) as XG_RAW,
-                    -- Tjekker om denne hændelse har en assist-markør (210)
+                    -- Finder ud af om denne specifikke hændelse er en officiel assist
                     MAX(CASE WHEN q.QUALIFIER_QID IN (210, '210') THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST
                 FROM {DB}.OPTA_EVENTS e
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -58,11 +58,12 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                     EVENT_Y AS SHOT_Y,
                     EVENT_TIMESTAMP,
                     EVENT_TYPEID,
-                    XG_RAW, -- Nu er den her til din parse_xg funktion!
-                    -- Henter info fra forrige række (assisten)
+                    XG_RAW,
+                    -- Her henter vi spilleren og positionen fra hændelsen lige før målet
                     LAG(PLAYER_NAME) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER,
                     LAG(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_X,
                     LAG(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PASS_START_Y,
+                    -- Her tjekker vi om den forrige hændelse rent faktisk havde Qualifier 210
                     LAG(IS_OFFICIAL_ASSIST) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS WAS_OFFICIAL
                 FROM EventsWithQuals
             )
@@ -70,8 +71,8 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 SCORER, ASSIST_PLAYER, SHOT_X, SHOT_Y, 
                 PASS_START_X, PASS_START_Y, EVENT_TIMESTAMP, XG_RAW
             FROM AssistsMapped
-            WHERE EVENT_TYPEID = 16 -- Kun mål
-              AND WAS_OFFICIAL = 1  -- KUN officielle assists (de 5 fra Smed)
+            WHERE EVENT_TYPEID = 16    -- Det skal være et mål
+              AND WAS_OFFICIAL = 1     -- Og det SKAL have en 210-assist lige før
             ORDER BY EVENT_TIMESTAMP DESC
         """,
 
