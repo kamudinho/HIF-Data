@@ -4,6 +4,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
+    # Håndtering af liga og sæson fra dine mapping-filer
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
@@ -21,6 +22,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             AND TOURNAMENTCALENDAR_NAME = '{saeson}'
             ORDER BY MATCH_DATE_FULL DESC
         """,
+        
         "opta_team_stats": f"""
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
@@ -31,6 +33,41 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
         """,
+
+        "opta_assists": f"""
+            WITH SortedEvents AS (
+                SELECT 
+                    e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                    e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_OPTAUUID,
+                    -- Finder assist-spilleren og deres startposition via LAG
+                    LAG(e.PLAYER_NAME) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER,
+                    LAG(e.EVENT_X) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PASS_START_X,
+                    LAG(e.EVENT_Y) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PASS_START_Y
+                FROM {DB}.OPTA_EVENTS e
+                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+                AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
+                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
+                )
+            )
+            SELECT 
+                se.PLAYER_NAME AS SCORER,
+                se.ASSIST_PLAYER,
+                se.EVENT_X AS SHOT_X,
+                se.EVENT_Y AS SHOT_Y,
+                se.PASS_START_X,
+                se.PASS_START_Y,
+                se.EVENT_TIMESTAMP,
+                MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
+            FROM SortedEvents se
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON se.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE se.EVENT_TYPEID = 16 -- Kun mål
+              AND se.ASSIST_PLAYER IS NOT NULL 
+              AND se.ASSIST_PLAYER != se.PLAYER_NAME -- Filtrér solo-mål fra
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
+            ORDER BY se.EVENT_TIMESTAMP DESC
+        """,
+
         "opta_shotevents": f"""
             SELECT  
                 e.MATCH_OPTAUUID, 
@@ -41,13 +78,10 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 e.EVENT_OUTCOME,
                 e.EVENT_TYPEID, 
                 e.EVENT_TIMEMIN,
-                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_X,
-                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_Y,
-                MAX(CASE WHEN q.QUALIFIER_QID = 210 THEN 1 ELSE 0 END) as IS_ASSIST,
                 MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
+            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16) -- Alle skudtyper
             AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
             AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
@@ -55,6 +89,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             )
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
         """,
+
         "opta_qualifiers": f"""
             SELECT 
                 EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
