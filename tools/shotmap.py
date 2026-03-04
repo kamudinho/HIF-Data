@@ -8,10 +8,10 @@ HIF_BLUE = '#0056a3'
 HIF_GOLD = '#b8860b' 
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
-def vis_side(dp, logo_map=None):
-
-    # --- 2. FARVER & KONSTANTER ---
+   # --- 2. FARVER & KONSTANTER ---
 hif_rod = "#df003b"
+
+def vis_side(dp, logo_map=None):
 
 # --- TOP BRANDING ---
     st.markdown(f"""
