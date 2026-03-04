@@ -9,7 +9,7 @@ HIF_GOLD = '#b8860b'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 def vis_side(dp, logo_map=None):
-    # --- DIT LAYOUT OG CSS ---
+    # CSS - Vi holder det simpelt og robust
     st.markdown("""
         <style>
             .stat-box {
@@ -38,7 +38,7 @@ def vis_side(dp, logo_map=None):
         </style>
     """, unsafe_allow_html=True)
     
-    # Hent data sikkert
+    # Hent data fra pakken
     df_raw = dp.get('playerstats', pd.DataFrame())
     if df_raw.empty:
         df_raw = dp.get('opta_shotevents', pd.DataFrame())
@@ -47,10 +47,8 @@ def vis_side(dp, logo_map=None):
         st.info("Ingen kampdata fundet.")
         return
 
-    # Data rens og forberedelse
+    # Data rens
     df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
-    
-    # Sikr at typerne er korrekte for at undgå Series-fejl
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['TYPE_STR'] = df_hif['EVENT_TYPEID'].astype(str).str.replace('.0', '', regex=False).str.strip()
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt')
@@ -68,7 +66,7 @@ def vis_side(dp, logo_map=None):
             if v_skud != "Hele Holdet":
                 df_skud = df_skud[df_skud['PLAYER_NAME'] == v_skud]
             
-            # RETTELSE: Brug .item() eller int() på selve sum-resultatet
+            # Sikker optælling - sum() returnerer en scalar når vi bruger parenteser korrekt
             n_maal = int((df_skud['TYPE_STR'] == '16').sum())
             n_skud = len(df_skud)
 
@@ -98,16 +96,15 @@ def vis_side(dp, logo_map=None):
         with col_ctrl_a:
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
-            # Find chancer (210=Assist, 29=Key Pass, 211=2nd Assist)
-            is_chance = df_hif['QUAL_STR'].str.contains('210|29|211', na=False)
-            df_chance = df_hif[(df_hif['TYPE_STR'] == '1') & is_chance].copy()
+            # Find chancer baseret på Qualifiers (210=Assist, 29=Key Pass, 211=2nd)
+            is_chancetype = df_hif['QUAL_STR'].str.contains('210|29|211', na=False)
+            df_chance = df_hif[(df_hif['TYPE_STR'] == '1') & is_chancetype].copy()
             
             if v_a != "Hvidovre IF":
                 df_chance = df_chance[df_chance['PLAYER_NAME'] == v_a]
             
-            # RETTELSE: Vi konverterer resultatet af summen direkte til int
+            # Beregn værdier sikkert
             val_assist = int(df_chance['QUAL_STR'].str.contains('210').sum())
-            # Key Pass er ID 29, men ikke hvis det også er en Assist (210)
             val_key = int((df_chance['QUAL_STR'].str.contains('29')) & (~df_chance['QUAL_STR'].str.contains('210'))).sum()
             val_2nd = int(df_chance['QUAL_STR'].str.contains('211').sum())
 
@@ -131,18 +128,18 @@ def vis_side(dp, logo_map=None):
             fig_a, ax_a = pitch_a.draw(figsize=(7, 9))
             
             if not df_chance.empty:
-                # Arrows
+                # Arrows - tving til float for at undgå renderingsfejl
                 pitch_a.arrows(df_chance['EVENT_X'].astype(float), df_chance['EVENT_Y'].astype(float),
                                df_chance['PASS_END_X'].astype(float), df_chance['PASS_END_Y'].astype(float),
-                               color='#dddddd', width=2, ax=ax_a, zorder=1)
+                               color='#dddddd', width=2, headwidth=3, ax=ax_a, zorder=1)
                 
-                # Farvelogik til prikker
-                def color_map(q):
+                # Farvelogik
+                def get_c(q):
                     if '210' in q: return HIF_GOLD
                     if '211' in q: return HIF_BLUE
                     return '#999999'
                 
-                df_chance['DOT_COLOR'] = df_chance['QUAL_STR'].apply(color_map)
+                df_chance['DOT_COLOR'] = df_chance['QUAL_STR'].apply(get_c)
                 pitch_a.scatter(df_chance['EVENT_X'], df_chance['EVENT_Y'], 
                                 s=110, color=df_chance['DOT_COLOR'], edgecolors='white', 
                                 linewidth=1.2, ax=ax_a, zorder=2)
