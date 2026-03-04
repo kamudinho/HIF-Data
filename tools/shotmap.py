@@ -18,30 +18,34 @@ def vis_side(dp, logo_map=None):
                 padding: 15px;
                 border-radius: 10px;
                 border-left: 5px solid #df003b;
-                margin-bottom: 15px;
+                margin-bottom: 12px;
             }
             .stat-label {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 text-transform: uppercase;
                 color: #666;
                 font-weight: bold;
                 display: flex;
                 align-items: center;
+                letter-spacing: 0.5px;
             }
             .stat-value {
                 font-size: 1.8rem;
                 font-weight: 800;
                 color: #1a1a1a;
-                margin-left: 30px;
+                margin-left: 25px;
+                line-height: 1.2;
             }
-            .dot { height: 15px; width: 15px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+            .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+            /* Fjerner Streamlit padding i toppen af tabs */
+            .stTabs [data-baseweb="tab-panel"] { padding-top: 1rem; }
         </style>
     """, unsafe_allow_html=True)
 
     # --- TOP BRANDING ---
     st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:8px; border-radius:4px; margin-bottom:20px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:2px; font-size:1.2rem;">HIF Performance Analyse</h3>
+        <div style="background-color:{hif_rod}; padding:8px; border-radius:4px; margin-bottom:15px;">
+            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:2px; font-size:1.1rem;">DATA ANALYSE</h3>
         </div>
     """, unsafe_allow_html=True)
     
@@ -56,13 +60,15 @@ def vis_side(dp, logo_map=None):
     df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt').astype(str)
 
-    tab1, tab2 = st.tabs(["🎯 AFSLUTNINGER", "🅰️ CHANCER & ASSISTS"])
+    # Rene tabs uden ikoner
+    tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
 
     # --- TAB 1: SKUDKORT ---
     with tab1:
-        col_viz, col_ctrl = st.columns([2.5, 1])
+        col_viz, col_ctrl = st.columns([2.8, 1])
         
         with col_ctrl:
+            st.markdown("### AFSLUTNINGER")
             spiller_liste = sorted(df_hif['PLAYER_NAME'].unique().tolist())
             v_spiller_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
             
@@ -76,15 +82,15 @@ def vis_side(dp, logo_map=None):
 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Professionelle stat-boxes
+            # Afslutninger først, så Mål
             st.markdown(f"""
+                <div class="stat-box">
+                    <div class="stat-label"><span class="dot" style="background-color:white; border:2px solid {HIF_RED}"></span> Afslutninger</div>
+                    <div class="stat-value">{n_skud}</div>
+                </div>
                 <div class="stat-box">
                     <div class="stat-label"><span class="dot" style="background-color:{HIF_RED}"></span> Mål</div>
                     <div class="stat-value">{n_maal}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label"><span class="dot" style="background-color:white; border:2px solid {HIF_RED}"></span> Skud i alt</div>
-                    <div class="stat-value">{n_skud}</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-label">xG Kvalitet</div>
@@ -96,6 +102,7 @@ def vis_side(dp, logo_map=None):
             pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(8, 10))
             if not df_skud.empty:
+                # Cirkler: Mål er fyldte, brændte er hvide med rød kant
                 pitch.scatter(df_skud['EVENT_X'], df_skud['EVENT_Y'],
                              s=(df_skud['XG_VAL'] * 1100) + 70,
                              c=df_skud['ER_MAAL'].map({True: HIF_RED, False: 'white'}),
@@ -104,9 +111,10 @@ def vis_side(dp, logo_map=None):
 
     # --- TAB 2: ASSISTS ---
     with tab2:
-        col_viz_a, col_ctrl_a = st.columns([2.5, 1])
+        col_viz_a, col_ctrl_a = st.columns([2.8, 1])
         
         with col_ctrl_a:
+            st.markdown("### CHANCER")
             v_spiller_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
             mask_chance = (df_hif['QUAL_STR'].str.contains('210|29|211', na=False)) & (df_hif['TYPE_STR'] == '1')
