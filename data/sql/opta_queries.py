@@ -36,8 +36,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
 
         "opta_assists": f"""
             WITH Goals AS (
-                SELECT MATCH_OPTAUUID, EVENT_ID, EVENT_TIMESTAMP, PLAYER_NAME as SCORER, 
-                       EVENT_X as SHOT_X, EVENT_Y as SHOT_Y
+                SELECT 
+                    MATCH_OPTAUUID, 
+                    EVENT_ID, 
+                    TRY_CAST(EVENT_TIMESTAMP AS TIMESTAMP_NTZ) as G_TIME, 
+                    PLAYER_NAME as SCORER, 
+                    EVENT_X as SHOT_X, 
+                    EVENT_Y as SHOT_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE EVENT_TYPEID = 16 
                   AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
@@ -47,19 +52,32 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                   )
             ),
             PotentialAssists AS (
-                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, PLAYER_NAME as ASSIST_PLAYER, 
-                       EVENT_X as PASS_START_X, EVENT_Y as PASS_START_Y, EVENT_CONTESTANT_OPTAUUID
+                SELECT 
+                    MATCH_OPTAUUID, 
+                    TRY_CAST(EVENT_TIMESTAMP AS TIMESTAMP_NTZ) as A_TIME, 
+                    PLAYER_NAME as ASSIST_PLAYER, 
+                    EVENT_X as PASS_START_X, 
+                    EVENT_Y as PASS_START_Y
                 FROM {DB}.OPTA_EVENTS
-                WHERE EVENT_TYPEID IN (1, 2, 6, 7, 30) -- Afleveringer, indlæg, frispark, hjørne
+                WHERE EVENT_TYPEID IN (1, 2, 6, 7, 30)
                   AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+                  AND PLAYER_NAME IS NOT NULL
             )
-            SELECT g.SCORER, a.ASSIST_PLAYER, g.SHOT_X, g.SHOT_Y, a.PASS_START_X, a.PASS_START_Y, g.EVENT_TIMESTAMP, '0' as XG_RAW
+            SELECT 
+                g.SCORER, 
+                a.ASSIST_PLAYER, 
+                g.SHOT_X, 
+                g.SHOT_Y, 
+                a.PASS_START_X, 
+                a.PASS_START_Y, 
+                g.G_TIME as EVENT_TIMESTAMP, 
+                '0' as XG_RAW
             FROM Goals g
             JOIN PotentialAssists a ON g.MATCH_OPTAUUID = a.MATCH_OPTAUUID
-              AND a.EVENT_TIMESTAMP < g.EVENT_TIMESTAMP 
-              AND a.EVENT_TIMESTAMP >= DATEADD(second, -8, g.EVENT_TIMESTAMP) 
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY g.MATCH_OPTAUUID, g.EVENT_TIMESTAMP ORDER BY a.EVENT_TIMESTAMP DESC) = 1
-            ORDER BY g.EVENT_TIMESTAMP DESC
+              AND a.A_TIME < g.G_TIME 
+              AND a.A_TIME >= DATEADD(second, -12, g.G_TIME) -- Øget til 12 sekunder for en sikkerheds skyld
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY g.MATCH_OPTAUUID, g.EVENT_ID ORDER BY a.A_TIME DESC) = 1
+            ORDER BY g.G_TIME DESC
         """,
         
         "opta_shotevents": f"""
