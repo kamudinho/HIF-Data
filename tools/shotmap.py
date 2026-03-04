@@ -78,34 +78,32 @@ def vis_side(dp):
     # --- TAB 2: CHANCESKABELSE ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([3, 1])
-        df_a = df_hif[df_hif['IS_ASSIST'] == 1].copy()
+        
+        # FILTRERING: KUN Qualifier 210 (IS_ASSIST) og KUN mål (Type 16)
+        df_a = df_hif[(df_hif['IS_ASSIST'] == 1) & (df_hif['EVENT_TYPEID'] == 16)].copy()
 
         with col_ctrl_a:
-            # Vi bruger PLAYER_NAME som assistmager, da det er ham der er på rækken i shotevents
-            spiller_liste_a = sorted([s for s in df_a['PLAYER_NAME'].unique() if pd.notna(s)])
-            v_a = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste_a, key="sb_assist")
+            spiller_liste_a = sorted([s for s in df_a['ASSIST_PLAYER_NAME'].unique() if pd.notna(s)])
+            v_a = st.selectbox("Vælg spiller (Assists)", options=["Hele Holdet"] + spiller_liste_a)
             
-            df_a_vis = df_a if v_a == "Hele Holdet" else df_a[df_a['PLAYER_NAME'] == v_a]
+            df_a_vis = df_a if v_a == "Hele Holdet" else df_a[df_a['ASSIST_PLAYER_NAME'] == v_a]
             
-            n_assists = int((df_a_vis['EVENT_TYPEID'] == 16).sum())
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Goal Assists</div><div class="stat-value">{n_assists}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:#aaaaaa"><div class="stat-label">Shot Assists</div><div class="stat-value">{len(df_a_vis) - n_assists}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
 
         with col_viz_a:
             pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
             
             if not df_a_vis.empty:
-                # Filtrer dem fra der mangler start-koordinater for passet
-                df_plot_a = df_a_vis[df_a_vis['PASS_X'] > 0]
+                # Tegn de gyldne pile for assists til mål
+                pitch_a.arrows(df_a_vis['PASS_X'], df_a_vis['PASS_Y'], 
+                               df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'],
+                               color='#b8860b', width=3, headwidth=5, ax=ax_a, zorder=3)
                 
-                for _, row in df_plot_a.iterrows():
-                    color = HIF_GOLD if row['EVENT_TYPEID'] == 16 else '#aaaaaa'
-                    pitch_a.arrows(row['PASS_X'], row['PASS_Y'], row['EVENT_X'], row['EVENT_Y'],
-                                   color=color, width=2, headwidth=4, ax=ax_a, zorder=3)
-                
-                pitch_a.scatter(df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'], s=80, color='white', edgecolors='#333333', ax=ax_a, zorder=4)
+                # Marker selve scoringen
+                pitch_a.scatter(df_a_vis['EVENT_X'], df_a_vis['EVENT_Y'], 
+                                s=100, color='#cc0000', edgecolors='black', ax=ax_a, zorder=4)
             else:
-                st.info("Ingen assist-data fundet for denne spiller.")
+                st.info("Ingen rene assists (mål) fundet for det valgte filter.")
             
             st.pyplot(fig_a, use_container_width=True)
