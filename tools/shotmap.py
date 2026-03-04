@@ -43,7 +43,7 @@ def vis_side(dp):
                 pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=150, c=c_map, edgecolors=HIF_RED, ax=ax)
                 st.pyplot(fig)
 
-    # --- TAB 2: CHANCESKABELSE (Denne var før rykket for langt ud) ---
+    # --- TAB 2: CHANCESKABELSE ---
     with tab2:
         if df_assists.empty:
             st.info("Ingen assists (mål) fundet for Hvidovre.")
@@ -59,19 +59,19 @@ def vis_side(dp):
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
 
             with col_viz_a:
-            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
-            
-            if not df_a_vis.empty:
-                # 1. Startprik (Hvor assist-mageren slipper bolden)
-                pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                s=80, color=HIF_GOLD, edgecolors='black', alpha=0.9, ax=ax_a, zorder=3)
+                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+                fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
+                
+                if not df_a_vis.empty:
+                    # 1. Startprik (Hvor assist-mageren slipper bolden) - Guld
+                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                    s=100, color=HIF_GOLD, edgecolors='black', alpha=0.9, ax=ax_a, zorder=3)
 
-                # 2. Pilen (Grå og semitransparent - peger mod målet)
-                # Vi fjerner 'scatter' for skuddet, så pilen står rent
-                pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                               df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
-                               color='#888888', alpha=0.4, width=2, headwidth=4, 
-                               headlength=5, ax=ax_a, zorder=2)
-            
-            st.pyplot(fig_a, use_container_width=True)
+                    # 2. Pilen (Mørkegrå og gennemsigtig)
+                    # Viser retningen mod afslutningen uden en slutprik
+                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
+                                   color='#888888', alpha=0.4, width=2, headwidth=4, 
+                                   headlength=5, ax=ax_a, zorder=2)
+                
+                st.pyplot(fig_a, use_container_width=True)
