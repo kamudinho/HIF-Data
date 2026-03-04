@@ -35,13 +35,11 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
             SELECT  
                 e.MATCH_OPTAUUID, 
                 e.EVENT_OPTAUUID, 
-                e.EVENT_CONTESTANT_OPTAUUID,
                 e.PLAYER_NAME, 
                 e.EVENT_X, 
                 e.EVENT_Y, 
                 e.EVENT_OUTCOME,
                 e.EVENT_TYPEID, 
-                e.EVENT_PERIODID, 
                 e.EVENT_TIMEMIN,
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_Y,
@@ -55,7 +53,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
         """,
         "opta_qualifiers": f"""
             SELECT 
