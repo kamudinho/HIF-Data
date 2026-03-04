@@ -50,15 +50,14 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16) -- KUN skudtyper her
-            AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}' -- FILTRERING PÅ HVIDOVRE
+            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
+            AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
             AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
         """,
-    }
         "opta_qualifiers": f"""
             SELECT 
                 EVENT_OPTAUUID,
