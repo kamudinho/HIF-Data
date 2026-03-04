@@ -93,7 +93,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"],
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"],
+        sel = option_menu(None, options=["Afslutninger"],
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
@@ -126,8 +126,8 @@ try:
 
     elif hoved_omraade == "HIF ANALYSE":
         if sel == "Afslutninger":
-            import tools.player_shots as ps
-            ps.vis_side(dp)
+            import tools.shotmap as sm
+            sm.vis_side(dp)
         elif sel == "Modstanderanalyse":
             import tools.modstanderanalyse as ma
             ma.vis_side(dp["opta_matches"], dp["logo_map"])
