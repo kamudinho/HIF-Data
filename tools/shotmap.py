@@ -31,8 +31,18 @@ def vis_side(dp):
         st.info("Ingen kampdata fundet for Hvidovre IF.")
         return
 
-    # Filter til HIF
-    df_hif = df_hif[df_hif['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    # --- ROBUST FILTER LOGIK ---
+    # Vi finder dynamisk det UUID der optræder oftest i datasættet 
+    # (Dette sikrer at appen virker uanset om UUID'et ændrer sig i Snowflake)
+    try:
+        if not df_hif['EVENT_CONTESTANT_OPTAUUID'].empty:
+            auto_hif_uuid = df_hif['EVENT_CONTESTANT_OPTAUUID'].value_counts().idxmax()
+            df_hif = df_hif[df_hif['EVENT_CONTESTANT_OPTAUUID'] == auto_hif_uuid].copy()
+            st.sidebar.success(f"Viser data for ID: {auto_hif_uuid}")
+    except Exception:
+        # Fallback til din hardcodede værdi hvis ovenstående fejler
+        df_hif = df_hif[df_hif['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+
     df_hif['PLAYER_NAME'] = df_hif['PLAYER_NAME'].fillna('Ukendt')
 
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "CHANCESKABELSE"])
