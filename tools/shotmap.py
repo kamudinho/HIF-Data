@@ -48,13 +48,14 @@ def vis_side(dp, logo_map=None):
             
             /* Gør titlen mindre for at spare plads */
             .branding-title {
-                color: white; 
-                margin: 0; 
+                color: white !important; /* !important sikrer at den ikke bliver sort */
+                margin: 0 !important; 
                 text-align: center; 
                 text-transform: uppercase; 
-                letter-spacing: 1px; 
-                font-size: 0.9rem;
-                padding: 4px;
+                letter-spacing: 2px; 
+                font-size: 1.1rem;
+                padding: 6px;
+                font-family: sans-serif;
             }
         </style>
     """, unsafe_allow_html=True)
