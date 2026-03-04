@@ -78,7 +78,8 @@ def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    comp_f = str(COMPETITION_NAME) if COMPETITION_NAME else "NordicBet Liga"
+    # Her bruger vi 'Betinia Ligaen' (eller '1. Division' hvis det er det du foretrækker i din mapping)
+    comp_f = "1. Division" if is_opta else str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME) if TOURNAMENTCALENDAR_NAME else "2025/2026"
     
     if is_opta:
@@ -100,7 +101,7 @@ def load_snowflake_query(query_key, is_opta=False):
         return pd.DataFrame()
 
 def get_data_package():
-    # 1. HENT ALLE DATA (Som i din oprindelige kode)
+    # 1. HENT ALLE DATA
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
@@ -110,43 +111,32 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS (Ny logik baseret på din mapping)
+    # 2. BEHANDL QUALIFIERS
     if not df_quals.empty and not df_shots.empty:
-        # Vi bruger QID fra din mapping: 140/141 (Pass End), 210 (Assist), 29 (Assisted), 142 (xG)
         relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)]
-        
-        # Pivotér så hver event får sine egne kolonner
         df_q_pivot = df_q_filtered.pivot(index='EVENT_OPTAUUID', columns='QUALIFIER_QID', values='QUALIFIER_VALUE').reset_index()
-        
-        # Merge qualifiers på shots
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. LOGIK FOR ASSISTS OG xG (Efter merge)
+    # 3. LOGIK FOR ASSISTS OG xG
     if not df_shots.empty:
-        # Omdøb kolonnerne til de navne, vis_side forventer
         col_map = {140: 'PASS_START_X', 141: 'PASS_START_Y', 210: 'ASSIST_Q', 29: 'ASSIST_ALT', 142: 'XG_RAW'}
         df_shots = df_shots.rename(columns={k: v for k, v in col_map.items() if k in df_shots.columns})
 
-        # Beregn assist-markør
         def check_assist(row):
             is_assist = False
-            # Tjekker både Q210 (Assist) og Q29 (Assisted) fra din mapping
             if 'ASSIST_Q' in row and pd.notna(row['ASSIST_Q']): is_assist = True
             if 'ASSIST_ALT' in row and row['EVENT_OUTCOME'] == 1: is_assist = True
             return 1 if is_assist else 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
-        
-        # Beregn xG vha. din parse_xg funktion
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
         
-        # Konvertér koordinater til tal
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_START_X', 'PASS_START_Y']:
             if col in df_shots.columns:
                 df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # 4. LOGO MAPPING (Beholdes som i din kode)
+    # 4. LOGO MAPPING
     logo_map = {}
     if not df_logos_raw.empty:
         for _, row in df_logos_raw.iterrows():
@@ -172,7 +162,7 @@ def get_data_package():
             "wyid": 7490
         },
         "players": df_players_csv, 
-        "playerstats": df_shots, # Vigtig for din vis_side() funktion!
+        "playerstats": df_shots,
         "logo_map": logo_map,
         "config": {
             "liga_navn": COMPETITION_NAME,
