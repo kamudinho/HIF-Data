@@ -2,104 +2,84 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import VerticalPitch
 
-# HIF Identitet
 HIF_RED = '#cc0000'
-HIF_GOLD = '#b8860b' 
+HIF_GOLD = '#b8860b'
+HIF_BLUE = '#0056a3'
 HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
-def vis_side(dp, logo_map=None):
-    # 1. Hent data - Vi tjekker alle mulige nøgler
-    if isinstance(dp, dict):
-        df_raw = dp.get('opta_shotevents', dp.get('playerstats', pd.DataFrame()))
-    else:
-        df_raw = dp
+def vis_side(dp):
+    # Styling af bokse
+    st.markdown("""
+        <style>
+        .stat-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        .stat-box { 
+            padding: 15px; border-radius: 8px; background: #f0f2f6; 
+            border-left: 5px solid #cc0000; flex: 1; text-align: center;
+        }
+        .stat-label { font-size: 12px; text-transform: uppercase; color: #555; font-weight: bold; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #111; }
+        </style>
+    """, unsafe_allow_html=True)
 
+    df_raw = dp.get('opta_shotevents', pd.DataFrame())
+    
     if df_raw.empty:
-        st.info("Ingen kampdata fundet i 'opta_shotevents'.")
+        st.warning("Data hentet, men tabellen er tom. Tjek database-forbindelsen.")
         return
 
-    # --- DATA RENS ---
+    # Filter til HIF og konvertering af koordinater
     df_hif = df_raw[df_raw['EVENT_CONTESTANT_OPTAUUID'] == HIF_OPTA_UUID].copy()
+    for col in ['EVENT_X', 'EVENT_Y', 'PASS_END_X', 'PASS_END_Y']:
+        df_hif[col] = pd.to_numeric(df_hif[col], errors='coerce').fillna(0)
     
-    # Sørg for at kolonnenavne er UPPERCASE (Snowflake standard)
-    df_hif.columns = [c.upper() for c in df_hif.columns]
-    
-    # Tving koordinater til tal
-    for col in ['EVENT_X', 'EVENT_Y', 'PASS_START_X', 'PASS_START_Y']:
-        if col in df_hif.columns:
-            df_hif[col] = pd.to_numeric(df_hif[col], errors='coerce').fillna(0)
-
-    # Robust identifikation af assists (vi tjekker både QUALS_IDS og MANUAL_ASSIST_MARKER)
-    def check_assist(row):
-        q_str = str(row.get('QUALS_IDS', ''))
-        manual = str(row.get('MANUAL_ASSIST_MARKER', '0'))
-        # Returner 2 hvis det er en rigtig assist (mål), 1 hvis det er shot assist, 0 ellers
-        if '210' in q_str or manual == '210':
-            return 2
-        if '29' in q_str:
-            return 1
-        return 0
-
-    df_hif['ASSIST_TYPE'] = df_hif.apply(check_assist, axis=1)
+    df_hif['QUAL_STR'] = df_hif['QUALIFIERS'].astype(str)
 
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
 
-    # --- TAB 1: SKUD (Uændret, men med de rensede kolonner) ---
     with tab1:
-        spiller_liste = sorted(df_hif['PLAYER_NAME'].dropna().unique().tolist())
-        v_spiller = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
+        # Skud (13,14,15,16)
+        df_skud = df_hif[df_hif['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         
-        df_skud = df_hif.copy()
-        if v_spiller != "Hele Holdet":
-            df_skud = df_skud[df_skud['PLAYER_NAME'] == v_spiller]
-            
+        st.markdown(f"""
+            <div class="stat-container">
+                <div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(df_skud)}</div></div>
+                <div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(df_skud[df_skud.EVENT_TYPEID == 16])}</div></div>
+            </div>
+        """, unsafe_allow_html=True)
+
         pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(7, 9))
+        fig, ax = pitch.draw(figsize=(8, 10))
         
-        # Mål vs Miss
-        df_mål = df_skud[df_skud['EVENT_OUTCOME'].astype(str) == '1']
-        df_miss = df_skud[df_skud['EVENT_OUTCOME'].astype(str) != '1']
-        
-        pitch.scatter(df_miss.EVENT_X, df_miss.EVENT_Y, s=150, color='white', edgecolors=HIF_RED, ax=ax)
-        pitch.scatter(df_mål.EVENT_X, df_mål.EVENT_Y, s=200, color=HIF_RED, edgecolors='black', ax=ax)
+        if not df_skud.empty:
+            # Mål
+            pitch.scatter(df_skud[df_skud.EVENT_TYPEID == 16].EVENT_X, df_skud[df_skud.EVENT_TYPEID == 16].EVENT_Y, 
+                         s=200, c=HIF_RED, edgecolors='black', label='Mål', ax=ax, zorder=3)
+            # Missede
+            pitch.scatter(df_skud[df_skud.EVENT_TYPEID != 16].EVENT_X, df_skud[df_skud.EVENT_TYPEID != 16].EVENT_Y, 
+                         s=150, c='white', edgecolors=HIF_RED, label='Andet skud', ax=ax, zorder=2)
+            ax.legend(loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=2)
         st.pyplot(fig)
 
-    # --- TAB 2: ASSISTS (Den kritiske del) ---
     with tab2:
-        col_viz, col_ctrl = st.columns([3, 1])
+        # Chancer (Type 1 + Qual 210/29)
+        df_chance = df_hif[(df_hif['EVENT_TYPEID'] == 1) & (df_hif['QUAL_STR'].str.contains('210|29'))].copy()
         
-        # Filtrer kun hændelser der er assists eller shot assists
-        df_chance = df_hif[df_hif['ASSIST_TYPE'] > 0].copy()
-        
-        with col_ctrl:
-            v_spiller_a = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_assist")
-            if v_spiller_a != "Hele Holdet":
-                df_chance = df_chance[df_chance['PLAYER_NAME'] == v_spiller_a]
-            
-            n_assist = (df_chance['ASSIST_TYPE'] == 2).sum()
-            n_key = (df_chance['ASSIST_TYPE'] == 1).sum()
-            
-            st.metric("Assists (Mål)", n_assist)
-            st.metric("Shot Assists", n_key)
+        st.markdown(f"""
+            <div class="stat-container">
+                <div class="stat-box" style="border-left-color: {HIF_GOLD}"><div class="stat-label">Assists</div><div class="stat-value">{df_chance.QUAL_STR.str.contains('210').sum()}</div></div>
+                <div class="stat-box" style="border-left-color: {HIF_BLUE}"><div class="stat-label">Key Passes</div><div class="stat-value">{df_chance.QUAL_STR.str.contains('29').sum()}</div></div>
+            </div>
+        """, unsafe_allow_html=True)
 
-        with col_viz:
-            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig_a, ax_a = pitch_a.draw(figsize=(7, 9))
-            
-            if not df_chance.empty:
-                # 1. Tegn pile for dem med start-koordinater
-                df_arrows = df_chance[df_chance['PASS_START_X'] > 0]
-                pitch_a.arrows(df_arrows.PASS_START_X, df_arrows.PASS_START_Y,
-                               df_arrows.EVENT_X, df_arrows.EVENT_Y,
-                               color='#cccccc', width=2, headwidth=3, ax=ax_a, zorder=1)
-                
-                # 2. Scatter points
-                # Guld for rigtige assists, grå for shot assists
-                for _, row in df_chance.iterrows():
-                    color = HIF_GOLD if row['ASSIST_TYPE'] == 2 else '#999999'
-                    pitch_a.scatter(row.EVENT_X, row.EVENT_Y, s=150, color=color, 
-                                   edgecolors='white', ax=ax_a, zorder=2)
-            else:
-                st.warning("Ingen assist-data fundet for denne spiller.")
-            
-            st.pyplot(fig_a)
+        pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+        fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
+        
+        if not df_chance.empty:
+            pitch_a.arrows(df_chance.EVENT_X, df_chance.EVENT_Y, df_chance.PASS_END_X, df_chance.PASS_END_Y, 
+                         color='#dddddd', width=2, ax=ax_a)
+            pitch_a.scatter(df_chance[df_chance.QUAL_STR.str.contains('210')].EVENT_X, df_chance[df_chance.QUAL_STR.str.contains('210')].EVENT_Y, 
+                           s=150, c=HIF_GOLD, label='Assist', ax=ax_a)
+            pitch_a.scatter(df_chance[~df_chance.QUAL_STR.str.contains('210')].EVENT_X, df_chance[~df_chance.QUAL_STR.str.contains('210')].EVENT_Y, 
+                           s=120, c=HIF_BLUE, label='Key Pass', ax=ax_a)
+            ax_a.legend(loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=2)
+        st.pyplot(fig_a)
