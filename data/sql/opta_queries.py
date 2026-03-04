@@ -45,24 +45,22 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None):
                 e.EVENT_Y, 
                 e.EVENT_OUTCOME,
                 e.EVENT_TYPEID, 
-                e.EVENT_PERIODID, 
                 e.EVENT_TIMEMIN,
-                -- HER ER ÆNDRINGEN: Vi henter start-koordinaterne for assisten 
-                -- direkte fra skud-begivenheden (140 = start_x, 141 = start_y)
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) as PASS_START_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) as PASS_START_Y,
-                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+                -- LOGIK-FIX: Hvis det er et mål (Outcome 1) og har en Shot Assist (29), 
+                -- så tilføjer vi '210' manuelt til listen, så din Python-kode finder den.
+                LISTAGG(q.QUALIFIER_QID, ',') || 
+                CASE WHEN e.EVENT_OUTCOME = 1 AND LISTAGG(q.QUALIFIER_QID, ',') LIKE '%29%' 
+                     THEN ',210' ELSE '' END as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16) -- VI FJERNER TYPE 1 (Passes)
+            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16)
             AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}'
             )
-            GROUP BY 
-                e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID,
-                e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, e.EVENT_OUTCOME,
-                e.EVENT_TYPEID, e.EVENT_PERIODID, e.EVENT_TIMEMIN
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """
 
     }
