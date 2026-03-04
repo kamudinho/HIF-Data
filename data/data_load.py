@@ -99,50 +99,57 @@ def get_data_package():
     # 1. HENT ALLE DATA
     df_matches_opta = load_snowflake_query("opta_matches", is_opta=True)
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True) 
-    df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
+    df_shots_raw = load_snowflake_query("opta_shotevents", is_opta=True) # Omdøbt til raw
     df_quals = load_snowflake_query("opta_qualifiers", is_opta=True)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS OG MERGE (HER SKETE FEJLEN)
+    # --- NY FILTRERING: FASTSÆT TIL HVIDOVRE ---
+    HIF_OPTA_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
+    
+    if not df_shots_raw.empty:
+        # Vi tvinger filteret til kun at være Hvidovre med det samme
+        df_shots = df_shots_raw[
+            df_shots_raw['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.lower() == HIF_OPTA_UUID.lower()
+        ].copy()
+    else:
+        df_shots = df_shots_raw.copy()
+    # ------------------------------------------
+
+    # 2. BEHANDL QUALIFIERS OG MERGE (Med type-vask)
     if not df_quals.empty and not df_shots.empty:
-        # Rens ID-kolonner med hård hånd
         df_quals['EVENT_OPTAUUID'] = df_quals['EVENT_OPTAUUID'].astype(str).str.strip()
         df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str).str.strip()
         
-        # Fjern dubletter så vi ikke får 8000+ rækker
         df_quals = df_quals.drop_duplicates(subset=['EVENT_OPTAUUID', 'QUALIFIER_QID'])
         
         relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin([str(x) for x in relevant_quals])].copy()
         
-        # Pivot
         df_q_pivot = df_q_filtered.pivot(
             index='EVENT_OPTAUUID', 
             columns='QUALIFIER_QID', 
             values='QUALIFIER_VALUE'
         ).reset_index()
         
-        # Tving kolonner til strenge ("140") og rens merge-nøglen igen for en sikkerheds skyld
         df_q_pivot.columns = [str(c) for c in df_q_pivot.columns]
         df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str).str.strip()
         
-        # NU KAN DE MERGES UDEN ValueError
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
-    # 3. LOGIK FOR ASSISTS OG xG (Mapping til vis_side)
+    # 3. LOGIK FOR ASSISTS OG xG
     if not df_shots.empty:
         col_map = {'140': 'PASS_X', '141': 'PASS_Y', '210': 'ASSIST_Q', '29': 'ASSIST_ALT', '142': 'XG_RAW'}
         df_shots = df_shots.rename(columns=col_map)
 
-        # Sikr at kolonnerne findes (fyld med 0 hvis de mangler efter merge)
-        needed = ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST']
-        for c in needed:
-            if c not in df_shots.columns: df_shots[c] = 0
+        # Sikr numeriske værdier til banen
+        for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y']:
+            if col in df_shots.columns:
+                df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-        # Skærp assist-logik (kun skud med assist-qualifier)
+        # Assist-tjek (Nu kun for Hvidovre-spillere)
         def check_assist(row):
             is_shot = row.get('EVENT_TYPEID') in [13, 14, 15, 16]
             ass_q = str(row.get('ASSIST_Q', '')).strip()
@@ -152,7 +159,7 @@ def get_data_package():
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg) if 'XG_RAW' in df_shots.columns else 0.05
-        
+
         # Tving numeriske typer så Pitch kan tegne banen korrekt
         for col in ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL']:
             df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
