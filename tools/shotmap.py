@@ -63,15 +63,15 @@ def vis_side(dp):
                 fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
                 
                 if not df_a_vis.empty:
-                    # 1. Startprik (Hvor assist-mageren slipper bolden) - Guld
-                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                    s=100, color=HIF_GOLD, edgecolors='black', alpha=0.9, ax=ax_a, zorder=3)
-
-                    # 2. Pilen (Mørkegrå og gennemsigtig)
-                    # Viser retningen mod afslutningen uden en slutprik
+                    # 1. Tegn pilene først (zorder 1)
                     pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
                                    df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
                                    color='#888888', alpha=0.4, width=2, headwidth=4, 
-                                   headlength=5, ax=ax_a, zorder=2)
+                                   headlength=5, ax=ax_a, zorder=1)
+            
+                    # 2. Tegn prikkerne ovenpå (zorder 3 + sort kant)
+                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                    s=150, color=HIF_GOLD, edgecolors='black', 
+                                    linewidth=1, alpha=1.0, ax=ax_a, zorder=3)
                 
                 st.pyplot(fig_a, use_container_width=True)
