@@ -16,13 +16,13 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
     
-    # 1. Hent data fra din nye retur-pakke
+    # 1. Hent data fra din retur-pakke
     df_skud = dp.get('playerstats', pd.DataFrame())
-    df_assists = dp.get('assists', pd.DataFrame()) # Den dedikerede assist-query!
+    df_assists = dp.get('assists', pd.DataFrame()) 
     
     tab1, tab2 = st.tabs(["AFSLUTNINGER", "CHANCESKABELSE"])
 
-    # --- TAB 1: AFSLUTNINGER (Skudkort) ---
+    # --- TAB 1: AFSLUTNINGER ---
     with tab1:
         if df_skud.empty:
             st.info("Ingen skuddata fundet.")
@@ -30,7 +30,7 @@ def vis_side(dp):
             col_viz, col_ctrl = st.columns([3, 1])
             with col_ctrl:
                 spiller_liste = sorted(df_skud['PLAYER_NAME'].unique())
-                v_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste)
+                v_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
                 df_vis = df_skud if v_skud == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == v_skud]
                 
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(df_vis)}</div></div>', unsafe_allow_html=True)
@@ -39,40 +39,34 @@ def vis_side(dp):
             with col_viz:
                 pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig, ax = pitch.draw(figsize=(8, 10))
-                # Farv mål røde og missere hvide med rød kant
                 c_map = (df_vis['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
                 pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=150, c=c_map, edgecolors=HIF_RED, ax=ax)
                 st.pyplot(fig)
 
-   # --- TAB 2: CHANCESKABELSE ---
-with tab2:
-    # Vi henter den dedikerede assist-tabel fra din data_package (dp)
-    df_a = dp.get('assists', pd.DataFrame())
+    # --- TAB 2: CHANCESKABELSE (Denne var før rykket for langt ud) ---
+    with tab2:
+        if df_assists.empty:
+            st.info("Ingen assists (mål) fundet for Hvidovre.")
+        else:
+            col_viz_a, col_ctrl_a = st.columns([3, 1])
+            
+            with col_ctrl_a:
+                spiller_liste_a = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
+                v_a = st.selectbox("Vælg spiller (Assists)", options=["Hele Holdet"] + spiller_liste_a, key="sb_assist")
+                
+                df_a_vis = df_assists if v_a == "Hele Holdet" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
+                
+                st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
 
-    if df_a.empty:
-        st.info("Ingen assists (mål) fundet for Hvidovre i denne periode.")
-    else:
-        col_viz_a, col_ctrl_a = st.columns([3, 1])
-        
-        with col_ctrl_a:
-            # RETTELSE: Vi bruger 'ASSIST_PLAYER' i stedet for 'ASSIST_PLAYER_NAME'
-            spiller_liste_a = sorted([s for s in df_a['ASSIST_PLAYER'].unique() if pd.notna(s)])
-            v_a = st.selectbox("Vælg spiller (Assists)", options=["Hele Holdet"] + spiller_liste_a)
-            
-            df_a_vis = df_a if v_a == "Hele Holdet" else df_a[df_a['ASSIST_PLAYER'] == v_a]
-            
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
-
-        with col_viz_a:
-            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
-            
-            # Vi bruger de præcise navne fra din nye SQL: PASS_START_X og SHOT_X osv.
-            pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                           df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
-                           color=HIF_GOLD, width=3, headwidth=5, ax=ax_a, zorder=3)
-            
-            pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                            s=100, color=HIF_RED, edgecolors='black', ax=ax_a, zorder=4)
-            
-            st.pyplot(fig_a, use_container_width=True)
+            with col_viz_a:
+                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+                fig_a, ax_a = pitch_a.draw(figsize=(8, 10))
+                
+                pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                               df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'],
+                               color=HIF_GOLD, width=3, headwidth=5, ax=ax_a, zorder=3)
+                
+                pitch_a.scatter(df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
+                                s=100, color=HIF_RED, edgecolors='black', ax=ax_a, zorder=4)
+                
+                st.pyplot(fig_a, use_container_width=True)
