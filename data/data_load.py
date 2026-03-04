@@ -21,7 +21,6 @@ def parse_xg(val_str):
             return 0.05
         parts = str(val_str).split(',')
         for p in parts:
-            # Opta xG værdier starter typisk med 0.
             if p.startswith('0.') and len(p) > 2:
                 return float(p)
     except:
@@ -78,7 +77,6 @@ def load_snowflake_query(query_key, is_opta=False):
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Her bruger vi 'Betinia Ligaen' (eller '1. Division' hvis det er det du foretrækker i din mapping)
     comp_f = "1. Division" if is_opta else str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME) if TOURNAMENTCALENDAR_NAME else "2025/2026"
     
@@ -111,11 +109,18 @@ def get_data_package():
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
     df_players_csv = load_local_players()
 
-    # 2. BEHANDL QUALIFIERS
+    # 2. BEHANDL QUALIFIERS (Rettelse: Type-casting af EVENT_OPTAUUID)
     if not df_quals.empty and not df_shots.empty:
         relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)]
+        
+        # Sørg for at indexet ikke skaber problemer ved pivot
         df_q_pivot = df_q_filtered.pivot(index='EVENT_OPTAUUID', columns='QUALIFIER_QID', values='QUALIFIER_VALUE').reset_index()
+        
+        # TYPERETTELSE: Tving begge til string før merge for at undgå ValueError
+        df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str)
+        df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str)
+        
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
     # 3. LOGIK FOR ASSISTS OG xG
@@ -126,7 +131,7 @@ def get_data_package():
         def check_assist(row):
             is_assist = False
             if 'ASSIST_Q' in row and pd.notna(row['ASSIST_Q']): is_assist = True
-            if 'ASSIST_ALT' in row and row['EVENT_OUTCOME'] == 1: is_assist = True
+            if 'ASSIST_ALT' in row and row.get('EVENT_OUTCOME') == 1: is_assist = True
             return 1 if is_assist else 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
