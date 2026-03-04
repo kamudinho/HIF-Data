@@ -1,5 +1,5 @@
 import os
-import sys 
+import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
@@ -90,13 +90,13 @@ with st.sidebar:
     
     sel = ""
     if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast"], 
+        sel = option_menu(None, options=["Oversigt", "Forecast", "Spillerstats", "Top 5"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger"], 
+        sel = option_menu(None, options=["Afslutninger", "Modstanderanalyse", "Scatterplots"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Holdoversigt", "Kampe"], 
+        sel = option_menu(None, options=["Holdoversigt", "Spillerstats", "Kampe"], 
                          styles={"nav-link-selected": {"background-color": "#cc0000"}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=["Scoutrapport", "Database", "Sammenligning"], 
@@ -142,6 +142,9 @@ try:
         if sel == "Holdoversigt":
             import tools.test.test_teams as tt
             tt.vis_side(dp)
+        elif sel == "Spillerstats":
+            import tools.test.test_players as tp
+            tp.vis_side(dp["players"], dp["playerstats"])
         elif sel == "Kampe":
             import tools.test.test_matches as tm
             tm.vis_side(dp)
@@ -156,15 +159,14 @@ try:
             sdb.vis_side(dp.get("scouting_image"), dp["players"], dp["playerstats"], dp["player_career"])
         elif sel == "Sammenligning":
             import tools.comparison as comp
-            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp["season_filter"])
+            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp.get("season_filter"))
 
     # --- ADMIN SEKTION ---
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
             st.title("🛰️ Rå Data Explorer")
             st.write("### Opta Matches", dp["opta_matches"].head(50))
-            st.write("### Opta Stats", dp["opta_raw_stats"].head(50))
-            st.write("### Tjek af alle kolonner", load_snowflake_query("opta_player_stats", None, None).head(10))
+            st.write("### Opta Stats", dp.get("opta_raw_stats", pd.DataFrame()).head(50))
         elif sel == "Brugerstyring":
             import tools.admin as adm
             adm.vis_side()
@@ -174,4 +176,3 @@ try:
 
 except Exception as e:
     st.error(f"Kunne ikke indlæse siden '{sel}': {e}")
-    st.info("Dette skyldes ofte en manglende fil i 'tools/' mappen eller en kolonne-fejl.")
