@@ -115,37 +115,48 @@ def get_data_package():
 
     # 2. BEHANDL QUALIFIERS OG MERGE PÅ SHOTS
     if not df_quals.empty and not df_shots.empty:
-        # Vi filtrerer de relevante Qualifiers fra din mapping (210=Assist, 140/141=Koordinater)
         relevant_quals = [140, 141, 210, 29, 142] 
         df_q_filtered = df_quals[df_quals['QUALIFIER_QID'].isin(relevant_quals)].copy()
         
-        # Pivotér så hvert QID bliver sin egen kolonne
+        # Pivotér - vi tvinger index og kolonner til at være strenge for at undgå mismatch
         df_q_pivot = df_q_filtered.pivot(
             index='EVENT_OPTAUUID', 
             columns='QUALIFIER_QID', 
             values='QUALIFIER_VALUE'
         ).reset_index()
         
+        # Tving alle kolonnenavne i pivot'en til at være strenge ("140" i stedet for 140)
+        df_q_pivot.columns = [str(c) for c in df_q_pivot.columns]
+        
         # Sørg for string-match på UUID
         df_shots['EVENT_OPTAUUID'] = df_shots['EVENT_OPTAUUID'].astype(str)
         df_q_pivot['EVENT_OPTAUUID'] = df_q_pivot['EVENT_OPTAUUID'].astype(str)
         
-        # Merge de pivoterede qualifiers på dine skud
+        # Merge
         df_shots = df_shots.merge(df_q_pivot, on='EVENT_OPTAUUID', how='left')
 
     # 3. LOGIK FOR ASSISTS OG xG (Mapping til vis_side)
     if not df_shots.empty:
-        # Map QID-kolonner til de navne, som din visualisering forventer
-        col_map = {140: 'PASS_X', 141: 'PASS_Y', 210: 'ASSIST_Q', 29: 'ASSIST_ALT', 142: 'XG_RAW'}
-        df_shots = df_shots.rename(columns={k: v for k, v in col_map.items() if k in df_shots.columns})
+        # Map ved at bruge STRENGE som keys, da vi lige har tvunget kolonnerne til strenge
+        col_map = {'140': 'PASS_X', '141': 'PASS_Y', '210': 'ASSIST_Q', '29': 'ASSIST_ALT', '142': 'XG_RAW'}
+        df_shots = df_shots.rename(columns=col_map)
 
-        # Definer om det er en assist (tjekker både direkte assist og alternativ assist)
+        # Sørg for at de nødvendige kolonner findes (ellers dør vis_side filteret)
+        for target_col in ['PASS_X', 'PASS_Y', 'ASSIST_Q', 'ASSIST_ALT', 'IS_ASSIST']:
+            if target_col not in df_shots.columns:
+                df_shots[target_col] = 0
+
+        # Definer om det er en assist
         def check_assist(row):
-            is_ass = False
-            # Tjekker om kolonnen findes OG har en værdi (typisk '1')
-            if 'ASSIST_Q' in row and pd.notna(row['ASSIST_Q']): is_ass = True
-            if 'ASSIST_ALT' in row and pd.notna(row['ASSIST_ALT']): is_ass = True
-            return 1 if is_ass else 0
+            # Vi tjekker om værdien findes og ikke er tom/0
+            ass_q = str(row.get('ASSIST_Q', '')).strip()
+            ass_alt = str(row.get('ASSIST_ALT', '')).strip()
+            
+            # I Opta betyder tilstedeværelsen af disse QIDs (uanset værdi), at det er en assist
+            if (pd.notna(row.get('ASSIST_Q')) and ass_q != '' and ass_q != 'None') or \
+               (pd.notna(row.get('ASSIST_ALT')) and ass_alt != '' and ass_alt != 'None'):
+                return 1
+            return 0
 
         df_shots['IS_ASSIST'] = df_shots.apply(check_assist, axis=1)
         
@@ -155,12 +166,13 @@ def get_data_package():
         else:
             df_shots['XG_VAL'] = 0.05
             
-        # Konvertér alle numeriske værdier og koordinater til float for at undgå fejl i mplsoccer
-        num_cols = ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL', 'EVENT_TYPEID', 'EVENT_OUTCOME']
+        # EKSTREM RENSNING: Konvertér alt til numerisk før return
+        # Dette sikrer at df_hif[df_hif['PASS_X'] > 0] rent faktisk virker!
+        num_cols = ['EVENT_X', 'EVENT_Y', 'PASS_X', 'PASS_Y', 'XG_VAL', 'EVENT_TYPEID', 'IS_ASSIST']
         for col in num_cols:
             if col in df_shots.columns:
                 df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
-
+                
     # 4. LOGO MAPPING (Beholdt som den var)
     logo_map = {}
     if not df_logos_raw.empty:
