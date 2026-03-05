@@ -108,56 +108,57 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     df = scout_df.copy()
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # 1. RENS ID'ER
-    df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
-    if players_local is not None: players_local['PLAYER_WYID'] = players_local['PLAYER_WYID'].apply(rens_id)
-    
-    # 2. FLET STAMDATA (Henter IMAGEDATAURL hvis den findes)
-    lookup = pd.DataFrame()
-    if players_local is not None and not players_local.empty:
-        lookup = players_local.copy()
-        lookup.columns = [c.upper() for c in lookup.columns]
-        # Hvis du har SQL-data med rigtige fotos, fletter vi dem her
-        if sql_players is not None and not sql_players.empty:
-            sql_img = sql_players[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
-            lookup = lookup.merge(sql_img, on='PLAYER_WYID', how='left')
-    
-    if not lookup.empty:
-        df = df.merge(lookup.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
-
-    # --- 3. FALLBACK LOGIK FOR BILLEDER ---
-    # Vi definerer standard-silhuetten fra Wyscout
+    # Standard placeholder fra Wyscout
     std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     
+    # 1. RENS ID'ER (VIGTIGT: Vi fjerner .0 her, så URL'en bliver valid)
+    df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
+    
+    # 2. Håndter stamdata og billeder fra SQL/Lokal
+    if players_local is not None and not players_local.empty:
+        p_local = players_local.copy()
+        p_local.columns = [c.upper() for c in p_local.columns]
+        p_local['PLAYER_WYID'] = p_local['PLAYER_WYID'].apply(rens_id)
+        
+        # Flet SQL billeder på hvis de findes
+        if sql_players is not None and not sql_players.empty:
+            sql_p = sql_players.copy()
+            sql_p['PLAYER_WYID'] = sql_p['PLAYER_WYID'].apply(rens_id)
+            sql_img = sql_p[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
+            p_local = p_local.merge(sql_img, on='PLAYER_WYID', how='left')
+            
+        df = df.merge(p_local.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
+
+    # 3. DEN DEFINITIVE BILLEDE-LOGIK
     def get_final_img(row):
-        # 1. Prioritet: Eksisterende URL fra SQL/Data
-        url = row.get('IMAGEDATAURL')
+        # Tjek alle tænkelige kolonnenavne for en eksisterende URL
+        url = row.get('IMAGEDATAURL', row.get('PLAYER_IMAGEDATAURL', row.get('IMAGE_URL')))
+        
         if pd.notna(url) and str(url).startswith('http'):
             return url
         
-        # 2. Prioritet: Generer Wyscout-link ud fra ID
-        pid = row.get('PLAYER_WYID')
-        if pid and pid != "":
+        # Hvis ingen URL er gemt, byg den direkte fra Wyscouts CDN ved hjælp af ID
+        pid = rens_id(row.get('PLAYER_WYID'))
+        if pid and pid != "" and pid != "nan":
+            # Dette er standard-formatet for Wyscouts offentlige billeder
             return f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
         
-        # 3. Prioritet: Standard placeholder
         return std_img
 
-    # Påfør logikken på alle rækker
     df['BILLED_URL'] = df.apply(get_final_img, axis=1)
 
-    # 4. POSITION OG SORTING
+    # 4. DATA-PROCESSERING (Position, Dato, Nyeste rapport)
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
     # 5. SØGNING
-    search = st.text_input("Søg...", placeholder="Navn eller klub...")
+    search = st.text_input("Søg i databasen...", placeholder="Søg på navn, klub eller status...")
     if search:
-        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
+        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | 
+                    f_df['KLUB'].str.contains(search, case=False, na=False)]
 
-    # 6. VISNING I TABEL
-    # Bemærk: Vi bruger 'BILLED_URL' i stedet for 'IMAGEDATAURL'
+    # 6. TABEL-VISNING
     vis_cols = ['BILLED_URL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
     disp = f_df[vis_cols].copy()
     
