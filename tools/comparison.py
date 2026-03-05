@@ -15,10 +15,20 @@ def map_position(pos_code):
     s_code = str(pos_code).split('.')[0].upper()
     return pos_map.get(s_code, "Ukendt")
 
-def vis_spiller_billede(img_url, w=150):
+def vis_spiller_billede(img_url, pid, w=150):
+    """Henter billede fra URL eller genererer det ud fra PLAYER_WYID"""
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    # Forsøg at bruge WYID-baseret billede hvis URL mangler
-    url = img_url if not pd.isna(img_url) and str(img_url).strip() not in ["", "nan", "None"] else std
+    
+    # 1. Tjek om vi har en valid URL
+    if img_url and str(img_url).strip() not in ["", "nan", "None"]:
+        url = img_url
+    # 2. Ellers byg den ud fra Wyscouts faste format
+    elif pid:
+        clean_id = str(pid).split('.')[0]
+        url = f"https://cdn5.wyscout.com/photos/players/public/{clean_id}.png"
+    else:
+        url = std
+        
     st.image(url, width=w)
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
@@ -43,7 +53,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
 
     def hent_alle_data(navn):
         pid = None
-        # Find PID
         if not df_p.empty and 'NAVN' in df_p.columns and navn in df_p['NAVN'].values:
             pid = df_p[df_p['NAVN'] == navn].iloc[0]['PID_CLEAN']
         elif not df_s.empty and 'Navn' in df_s.columns and navn in df_s['Navn'].values:
@@ -51,23 +60,26 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         
         if not pid: return None
 
-        # Grunddata
-        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt"}
+        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt", "scout": {}}
         
-        # HER HENTER VI BILLEDET FRA DIN SPECIELLE QUERY
-        if d3 is not None and not d3.empty: # d3 er det 5. argument i din vis_side
-            foto_match = d3[d3['PLAYER_WYID'].astype(str).str.contains(str(pid))]
+        # Billede fra d3 (scout_images_only query)
+        if d3 is not None and not d3.empty:
+            d3_copy = d3.copy()
+            d3_copy.columns = [c.upper() for c in d3_copy.columns]
+            foto_match = d3_copy[d3_copy['PLAYER_WYID'].astype(str).str.contains(str(pid))]
             if not foto_match.empty:
-                res["img"] = foto_match.iloc[0]['IMAGEDATAURL']
-                
-            if not df_p.empty:
+                res["img"] = foto_match.iloc[0].get('IMAGEDATAURL')
+
+        # Stamdata fra spillertrup
+        if not df_p.empty:
             m = df_p[df_p['PID_CLEAN'] == pid]
             if not m.empty:
-                res["img"] = m.iloc[0].get('IMAGEDATAURL')
+                if not res["img"]: # Kun hvis d3 ikke fandt noget
+                    res["img"] = m.iloc[0].get('IMAGEDATAURL')
                 res["klub"] = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
                 res["pos"] = map_position(m.iloc[0].get('ROLECODE3', ''))
 
-        # Udvidet Statistik (Fra Snowflake/Career)
+        # Statistik
         stats = {"Kampe": 0, "Mål": 0, "Assist": 0, "Min": 0, "Gule": 0}
         if career_df is not None and not career_df.empty:
             cdf = career_df.copy()
@@ -76,25 +88,20 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
             c_m = cdf[(cdf['PID_CLEAN'] == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
             if not c_m.empty:
                 stats = {
-                    "Kampe": int(c_m.iloc[0].get('APPEARANCES', 0)),
-                    "Mål": int(c_m.iloc[0].get('GOAL', 0)),
+                    "Kampe": int(c_m.iloc[0].get('MATCHES', c_m.iloc[0].get('APPEARANCES', 0))),
+                    "Mål": int(c_m.iloc[0].get('GOALS', c_m.iloc[0].get('GOAL', 0))),
                     "Assist": int(c_m.iloc[0].get('ASSIST', 0)),
-                    "Min": int(c_m.iloc[0].get('MINUTESPLAYED', 0)),
-                    "Gule": int(c_m.iloc[0].get('YELLOWCARDS', 0))
+                    "Min": int(c_m.iloc[0].get('MINUTES', c_m.iloc[0].get('MINUTESPLAYED', 0))),
+                    "Gule": int(c_m.iloc[0].get('YELLOWCARD', c_m.iloc[0].get('YELLOWCARDS', 0)))
                 }
         res["stats"] = stats
 
-        # Scouting Noter & Ratings
+        # Scouting data
         if not df_s.empty:
             s_match = df_s[df_s['PID_CLEAN'] == pid].sort_values('Dato').iloc[-1:]
             if not s_match.empty:
                 n = s_match.iloc[0]
-                res["scout"] = {
-                    "Styrker": n.get('Styrker', '-'),
-                    "Vurdering": n.get('Vurdering', '-'),
-                    "Potentiale": n.get('Potentiale', '-'),
-                    "Status": n.get('Status', '-')
-                }
+                res["scout"] = {k: n.get(k, '-') for k in ['Styrker', 'Vurdering', 'Potentiale', 'Status']}
                 res["r"] = {
                     'Fart': n.get('Fart', 0.1), 'Teknik': n.get('Teknik', 0.1),
                     'Beslut': n.get('Beslutsomhed', 0.1), 'Intel': n.get('Spilintelligens', 0.1),
@@ -105,27 +112,25 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
 
     p1, p2 = hent_alle_data(s1_navn), hent_alle_data(s2_navn)
 
-    # --- 3. VISNING ---
+    # --- VISNING ---
     st.divider()
+    c_img1, c_radar, c_img2 = st.columns([2, 4, 2])
     
-    # Header sektion med billeder
-    col_img1, col_radar, col_img2 = st.columns([2, 4, 2])
-    
-    with col_img1:
-        if p1:
-            vis_spiller_billede(p1["img"])
+    if p1:
+        with c_img1:
+            vis_spiller_billede(p1["img"], p1["pid"])
             st.subheader(p1["navn"])
             st.caption(f"{p1['pos']} | {p1['klub']}")
-
-    with col_img2:
-        if p2:
-            st.markdown(f"<div style='text-align:right;'>", unsafe_allow_html=True)
-            vis_spiller_billede(p2["img"])
+    
+    if p2:
+        with c_img2:
+            st.markdown("<div style='text-align:right;'>", unsafe_allow_html=True)
+            vis_spiller_billede(p2["img"], p2["pid"])
             st.subheader(p2["navn"])
             st.caption(f"{p2['pos']} | {p2['klub']}")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    with col_radar:
+    with c_radar:
         if p1 and p2 and "r" in p1 and "r" in p2:
             labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
             keys = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
@@ -135,17 +140,12 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40,r=40,t=20,b=20), showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
 
-    # Statistik & Noter sektion
     st.divider()
-    c1, c2 = st.columns(2)
-    
+    sc1, sc2 = st.columns(2)
     for i, p in enumerate([p1, p2]):
-        with (c1 if i==0 else c2):
+        with (sc1 if i==0 else sc2):
             if p:
-                st.markdown(f"### 📊 Sæson Statistik")
-                # Lav en pæn tabel til stats
+                st.markdown("### 📊 Sæson Statistik")
                 st.table(pd.DataFrame([p["stats"]], index=["Værdi"]).T)
-                
                 st.markdown("### 📝 Scoutens Noter")
                 st.info(f"**Styrker:** {p['scout'].get('Styrker')}\n\n**Vurdering:** {p['scout'].get('Vurdering')}")
-                st.warning(f"**Potentiale:** {p['scout'].get('Potentiale')} | **Status:** {p['scout'].get('Status')}")
