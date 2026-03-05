@@ -4,64 +4,76 @@ import uuid
 import os
 from datetime import datetime
 
-def vis_side(dp):    
-    # 1. HENT DATA
+def vis_side(dp):
+    st.title("Ny Scouting Rapport")
+    
+    # 1. HENT DATA FRA DATAPROVIDER
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
     
+    # Ordbog til at holde styr på unikke spillere (ID som nøgle)
     unique_players = {}
 
-    # DEFINÉR FUNKTIONEN ÉN GANG
-    def add_to_options(df, source_label): # Vi beholder source_label som argument, så vi ikke skal ændre kaldene
+    # DEFINÉR INDLÆSNINGS-FUNKTION
+    def add_to_options(df, source_label):
         if df is None or df.empty:
             return
         
+        # Standardiser kolonnenavne til store bogstaver
         df.columns = [str(c).upper().strip() for c in df.columns]
         
+        # Sorter efter dato hvis muligt, så vi får nyeste info
         if "DATO" in df.columns:
             df = df.sort_values("DATO", ascending=False)
         
         for _, r in df.iterrows():
+            # Hent PLAYER_WYID og rens den
             p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
-            if not p_id or p_id in ['nan', 'None']: continue
+            if not p_id or p_id in ['nan', 'None', '']: 
+                continue
             
+            # --- NAVNE LOGIK: Fornavn + Efternavn ---
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
             
             if f_name and l_name:
                 fuldt_navn = f"{f_name} {l_name}"
             else:
+                # Fallback hvis fornavn/efternavn mangler
                 fuldt_navn = r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt Spiller"
             
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
             
-            # --- HER ER RETTELSEN: source_label er fjernet fra label ---
+            # Lav den pæne label (UDEN source_label som ønsket)
             label = f"{fuldt_navn} ({klub}) [{pos}]"
             
+            # Tilføj kun hvis spilleren ikke allerede er i ordbogen (sikrer unikke navne)
             if p_id not in unique_players:
                 unique_players[p_id] = {
                     "label": label,
                     "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
-    # Kør indlæsning (Rækkefølgen bestemmer stadig prioritering af data, men ses ikke i dropdown)
+    # 2. KØR INDLÆSNING
+    # Arkiv først, så jeres egne data prioriteres over Wyscout hvis ID findes begge steder
     add_to_options(df_local, "Arkiv")
     add_to_options(df_wyscout, "Wyscout")
 
-    # Forbered dropdown og sortér alfabetisk
+    # 3. FORBERED LISTER TIL STREAMLIT
     label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
-    options_list = sorted(list(label_to_data.keys())) # Tilføjet sortering, så det er lettere at finde spillere
+    options_list = sorted(list(label_to_data.keys()))
 
+    # Initialiser 'data' variablen så den altid findes
+    data = {"n": "", "id": "", "pos": "", "klub": ""}
+    
     # --- VISNING AF SØGNING ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     
     if metode == "Søg system":
-        # Nu bruger vi den sorterede options_list i stedet for en tom liste
         sel = st.selectbox("Vælg spiller", [""] + options_list)
         if sel:
             data = label_to_data.get(sel)
-    
     else:
         c1, c2 = st.columns(2)
         n_input = c1.text_input("Navn")
@@ -75,20 +87,24 @@ def vis_side(dp):
             }
 
     # --- SELVE FORMULAREN ---
+    # Vises kun hvis en spiller er valgt eller skrevet ind
     if data["n"]:
+        st.markdown("---")
         with st.form("rapport_form"):
             st.subheader(f"Vurdering: {data['n']} ({data['klub']})")
             
-            # Form-indhold (sliders osv.)
+            # Række 1: Basics
             c1, c2, c3 = st.columns(3)
             rating = c1.slider("Samlet Rating (Rating_Avg)", 1.0, 5.0, 3.0, 0.1)
             status = c2.selectbox("Status", ["Hold øje", "Kig nærmere", "Køb", "Prioritet"])
             pot = c3.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
             
+            # Række 2: Tekstfelter
             styrker = st.text_area("Styrker")
             udv = st.text_area("Udviklingspunkter (Udvikling)")
             vurder = st.text_area("Samlet vurdering (Vurdering)")
             
+            # Række 3: Egenskaber (1-6)
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
             beslut = m1.slider("Beslutsomhed", 1, 6, 3)
@@ -102,22 +118,39 @@ def vis_side(dp):
             tek = m7.slider("Teknik", 1, 6, 3)
             intel = m8.slider("Spilintelligens", 1, 6, 3)
             
+            # Række 4: Info
+            st.markdown("---")
             s1, s2 = st.columns(2)
             scout_navn = s1.text_input("Scout", value="HIF Scout")
             kontrakt_info = s2.text_input("Kontrakt Info")
 
+            # GEM KNAP
             if st.form_submit_button("Gem Rapport"):
                 ny_linje = {
                     "PLAYER_WYID": data["id"],
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], "Klub": data["klub"], "Position": data["pos"],
-                    "Rating_Avg": rating, "Status": status, "Potentiale": pot,
-                    "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
-                    "Beslutsomhed": beslut, "Fart": fart, "Aggresivitet": agg, "Attitude": att,
-                    "Udholdenhed": udh, "Lederegenskaber": led, "Teknik": tek,
-                    "Spilintelligens": intel, "Scout": scout_navn, "Kontrakt": kontrakt_info
+                    "Navn": data["n"],
+                    "Klub": data["klub"],
+                    "Position": data["pos"],
+                    "Rating_Avg": rating,
+                    "Status": status,
+                    "Potentiale": pot,
+                    "Styrker": styrker,
+                    "Udvikling": udv,
+                    "Vurdering": vurder,
+                    "Beslutsomhed": beslut,
+                    "Fart": fart,
+                    "Aggresivitet": agg,
+                    "Attitude": att,
+                    "Udholdenhed": udh,
+                    "Lederegenskaber": led,
+                    "Teknik": tek,
+                    "Spilintelligens": intel,
+                    "Scout": scout_navn,
+                    "Kontrakt": kontrakt_info
                 }
                 
+                # Gem til CSV
                 path = 'data/scouting_db.csv'
                 df_to_save = pd.DataFrame([ny_linje])
                 header = not os.path.exists(path)
