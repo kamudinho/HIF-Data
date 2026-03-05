@@ -140,13 +140,17 @@ try:
         dp = hif_load.get_scouting_package()
         
         if hoved_omraade == "TRUPPEN":
+            # Sørg for at vi sender dp["players"] (din players.csv) ind
             if sel == "Oversigt":
                 import tools.players as pl
-                pl.vis_side(dp["players"])
+                # Her skal vi sikre os, at vi sender DataFrame'en
+                pl.vis_side(dp["players"]) 
+                
             elif sel == "Forecast":
                 import tools.squad as sq
+                # Her skal vi også sende DataFrame'en
                 sq.vis_side(dp["players"])
-                
+                    
         elif hoved_omraade == "SCOUTING":
             if sel == "Scoutrapport":
                 import tools.scout_input as si
