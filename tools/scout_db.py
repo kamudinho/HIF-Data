@@ -3,8 +3,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 
+# ==========================================
+# HJÆLPEFUNKTIONER
+# ==========================================
+
 def rens_id(val):
-    """Sikrer at ID altid er en ren streng uden .0"""
+    """Sikrer at ID altid er en ren streng uden .0 og uden whitespace"""
     if pd.isna(val): return ""
     return str(val).split('.')[0].strip()
 
@@ -15,7 +19,7 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def map_position(row):
-    pos_val = rens_id(row.get('POS', ''))
+    pos_val = rens_id(row.get('POS', row.get('POSITION', '')))
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back", "4": "Midtstopper", 
         "5": "Midtstopper", "6": "Defensiv Midt", "7": "Højre Kant", "8": "Central Midt", 
@@ -24,14 +28,9 @@ def map_position(row):
     if pos_val in pos_dict: return pos_dict[pos_val]
     return str(row.get('POSITION', 'Ukendt'))
 
-def vis_spiller_billede(pid, w=110):
-    pid_clean = rens_id(pid)
-    url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
-    std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    try:
-        resp = requests.head(url, timeout=0.8)
-        st.image(url if resp.status_code == 200 else std, width=w)
-    except: st.image(std, width=w)
+# ==========================================
+# DIALOG / PROFIL VISNING
+# ==========================================
 
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, career_df):
@@ -46,18 +45,14 @@ def vis_profil(p_data, full_df, career_df):
     
     h1, h2 = st.columns([1, 4])
     with h1:
-        # VI BRUGER DEN URL VI FANDT I OVERSIGTEN (som vi ved virker)
+        # Brug den URL vi fandt i oversigten
         img_url = p_data.get('VIS_BILLEDE')
+        std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         
-        # Hvis den mod forventning er tom, tjekker vi om der er en direkte URL i data
-        if not img_url:
-            img_url = p_data.get('IMAGEDATAURL')
-
         if pd.notna(img_url) and str(img_url).startswith("http"):
             st.image(img_url, width=115)
         else:
-            # Den grå silhuet hvis ALT fejler
-            st.image("https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png", width=115)
+            st.image(std_img, width=115)
             
     with h2:
         st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
@@ -99,6 +94,8 @@ def vis_profil(p_data, full_df, career_df):
             if not df_p.empty:
                 mapping = {'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering', 'APPEARANCES': 'Kampe', 'GOAL': 'Mål'}
                 st.dataframe(df_p[[c for c in mapping.keys() if c in df_p.columns]].rename(columns=mapping), use_container_width=True, hide_index=True)
+            else:
+                st.info("Ingen karriere-data fundet i den valgte liga/sæson.")
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
@@ -108,55 +105,61 @@ def vis_profil(p_data, full_df, career_df):
         fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
         st.plotly_chart(fig_radar, use_container_width=True)
 
+# ==========================================
+# HOVEDSIDE FUNKTION
+# ==========================================
+
 def vis_side(scout_df, players_local, sql_players, career_df):
     if scout_df is None or scout_df.empty:
         st.info("Ingen spejder-rapporter fundet.")
         return
     
-    # 1. KLARGØR SCOUTING DATA (DIN CSV)
+    # 1. KLARGØR SCOUTING DATA
     df = scout_df.copy()
     df.columns = [c.strip().upper() for c in df.columns]
-    # VIGTIGT: Vi renser PLAYER_WYID så 562633.0 bliver til "562633"
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
-    # 2. HENT DE UNIKKE BILLEDER FRA SQL (SNOWFLAKE)
+    # 2. HENT BILLEDER FRA SQL
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         sql_df = sql_players.copy()
         sql_df.columns = [c.upper() for c in sql_df.columns]
-        # Rens også SQL ID'erne for en sikkerheds skyld
         sql_df['PLAYER_WYID'] = sql_df['PLAYER_WYID'].apply(rens_id)
         
-        # Vi filtrerer dubletter fra (Vallys optræder 9 gange i dit udtræk)
-        # og laver en ordbog: { "562633": "https://cdn...g-77207..." }
+        # Drop duplicates så vi har ét unikt billede pr. ID
         valid_pics = sql_df[sql_df['IMAGEDATAURL'].notna()].drop_duplicates('PLAYER_WYID')
         billed_map = dict(zip(valid_pics['PLAYER_WYID'], valid_pics['IMAGEDATAURL']))
 
-    # 3. FUNKTION DER HENTER DEN RIGTIGE URL
+    # 3. FUNKTION TIL AT MATCH BILLEDE
     def hent_korrekt_billede(row):
         pid = row.get('PLAYER_WYID')
-        # Dette er din "erstatning" (Public-billedet)
         std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         
-        # Tjek om vi har det unikke link fra SQL (f.eks. Vallys' g-77207 link)
+        # Hvis ID findes i Snowflake-udtrækket, brug den specifikke URL (f.eks. Vallys' g-77207)
         if pid in billed_map:
             url = billed_map[pid]
-            # Tjek om URL'en faktisk er et rigtigt billede og ikke bare silhuetten igen
             if pd.notna(url) and "ndplayer" not in str(url):
                 return url
         
         return std_img
 
-    # Påfør den unikke URL til hver række i scouting-listen
+    # Påfør billede
     df['VIS_BILLEDE'] = df.apply(hent_korrekt_billede, axis=1)
 
     # 4. DATA-PROCESSERING
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
-    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
+    if 'DATO' in df.columns:
+        df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     
-    # Gruppér for at få den nyeste rapport pr. spiller
+    # Gruppér så vi kun ser nyeste rapport i tabellen
     f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
+    # Søgefelt
+    search = st.text_input("Søg i spejder-databasen...", placeholder="Søg på navn eller klub...")
+    if search:
+        mask = f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)
+        f_df = f_df[mask]
+
     # 5. TABEL-VISNING
     vis_cols = ['VIS_BILLEDE', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
     disp = f_df[vis_cols].copy()
@@ -184,6 +187,7 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         }
     )
     
+    # 6. KØR PROFIL HVIS VALGT
     if len(event.selection.rows) > 0:
         valgt_index = event.selection.rows[0]
         spiller_data = f_df.iloc[valgt_index]
