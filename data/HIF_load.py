@@ -4,58 +4,55 @@ from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
 
 def get_scouting_package():
-    """Henter data specifikt til Wyscout-modulet."""
+    """Henter data uden fletning - adskiller lokale spillere og SQL data."""
     conn = _get_snowflake_conn()
     
-    # VI BRUGER DINE FASTE VÆRDIER HER:
-    wy_season = "2025/2026"  # SEASONNAME
-    wy_comp = (328,)         # COMPETITION_WYID (NordicBet Liga)
-    
-    # Hent SQL-skabelonerne
+    # Konstanter for 2025/2026 NordicBet Liga
+    wy_season = "2025/2026"
+    wy_comp = (328,)
     wy_queries = get_wy_queries(wy_comp, wy_season)
     
-    df_sql_players = pd.DataFrame()
+    df_sql_p = pd.DataFrame()
     df_career = pd.DataFrame()
 
-    # 1. SQL DATA (Fra Snowflake)
+    # 1. HENT FRA SNOWFLAKE (sql_players)
     if conn:
         try:
-            df_sql_players = conn.query(wy_queries.get("players"))
+            df_sql_p = conn.query(wy_queries.get("players"))
             df_career = conn.query(wy_queries.get("player_career"))
             
-            # Rens og standardiser Snowflake-output
-            for df in [df_sql_players, df_career]:
+            for df in [df_sql_p, df_career]:
                 if df is not None and not df.empty:
                     df.columns = [str(c).upper().strip() for c in df.columns]
-                    # Sikr at ID er en ren streng uden .0
                     if 'PLAYER_WYID' in df.columns:
-                        df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+                        df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
         except Exception as e:
-            st.sidebar.error(f"SQL Fejl (Wyscout): {str(e)[:40]}...")
+            st.sidebar.error(f"Snowflake fejl: {str(e)[:40]}")
 
-    # 2. SCOUTING DATA (Din CSV med Victor Vestby m.fl.)
+    # 2. HENT FRA LOKAL players.csv (players)
+    # Her ligger Victor Vestby, CONTRACT, POS, PRIOR osv.
+    df_local_p = load_local_players()
+    if not df_local_p.empty:
+        df_local_p.columns = [c.upper().strip() for c in df_local_p.columns]
+        if 'PLAYER_WYID' in df_local_p.columns:
+            df_local_p['PLAYER_WYID'] = df_local_p['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
+
+    # 3. HENT FRA scouting_db.csv (scout_reports)
     try:
         scout_df = pd.read_csv('data/scouting_db.csv')
-        # Tving alle kolonner til UPPERCASE så din 'vis_side' (Radar/Metrics) virker
         scout_df.columns = [c.strip().upper() for c in scout_df.columns]
-        
         if 'PLAYER_WYID' in scout_df.columns:
-            scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
-            
+            scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
         if 'DATO' in scout_df.columns:
             scout_df['DATO_DT'] = pd.to_datetime(scout_df['DATO'], errors='coerce')
     except:
         scout_df = pd.DataFrame()
 
-    # 3. BACKUP (Lokal players.csv hvis Snowflake fejler)
-    df_local_ps = load_local_players()
-    if not df_local_ps.empty:
-        df_local_ps.columns = [c.upper() for c in df_local_ps.columns]
-        df_local_ps['PLAYER_WYID'] = df_local_ps['PLAYER_WYID'].astype(str).str.split('.').str[0]
-
+    # Vi returnerer dem som to forskellige objekter
     return {
         "scout_reports": scout_df, 
-        "players": df_sql_players if not df_sql_players.empty else df_local_ps,
+        "players": df_local_p,      # DIN LOKALE TRUP (Kilde til CONTRACT/POS)
+        "sql_players": df_sql_p,    # WY SCOUT DATA (Kilde til billeder/stats)
         "career": df_career,
         "stats": pd.DataFrame()
     }
