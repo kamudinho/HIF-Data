@@ -101,29 +101,23 @@ def vis_profil(p_data, full_df, career_df):
         st.plotly_chart(fig_radar, use_container_width=True)
 
 def vis_side(scout_df, players_local, sql_players, career_df):
-    
     if scout_df is None or scout_df.empty:
         st.info("Ingen spejder-rapporter fundet.")
         return
     
     df = scout_df.copy()
-    
-    # 1. TVING KOLONNER TIL STORE BOGSTAVER
     df.columns = [c.strip().upper() for c in df.columns]
     
-    # 2. RENS ID'ER I ALLE DATAFRAMES
+    # 1. RENS ID'ER
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     if players_local is not None: players_local['PLAYER_WYID'] = players_local['PLAYER_WYID'].apply(rens_id)
-    if sql_players is not None: sql_players['PLAYER_WYID'] = sql_players['PLAYER_WYID'].apply(rens_id)
     
-    # 3. DATO HÅNDTERING
-    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
-
-    # 4. FLET STAMDATA
+    # 2. FLET STAMDATA (Henter IMAGEDATAURL hvis den findes)
     lookup = pd.DataFrame()
     if players_local is not None and not players_local.empty:
         lookup = players_local.copy()
         lookup.columns = [c.upper() for c in lookup.columns]
+        # Hvis du har SQL-data med rigtige fotos, fletter vi dem her
         if sql_players is not None and not sql_players.empty:
             sql_img = sql_players[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
             lookup = lookup.merge(sql_img, on='PLAYER_WYID', how='left')
@@ -131,20 +125,51 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     if not lookup.empty:
         df = df.merge(lookup.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
 
-    # 5. POSITION OG SORTING
+    # --- 3. FALLBACK LOGIK FOR BILLEDER ---
+    # Vi definerer standard-silhuetten fra Wyscout
+    std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
+    
+    def get_final_img(row):
+        # 1. Prioritet: Eksisterende URL fra SQL/Data
+        url = row.get('IMAGEDATAURL')
+        if pd.notna(url) and str(url).startswith('http'):
+            return url
+        
+        # 2. Prioritet: Generer Wyscout-link ud fra ID
+        pid = row.get('PLAYER_WYID')
+        if pid and pid != "":
+            return f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
+        
+        # 3. Prioritet: Standard placeholder
+        return std_img
+
+    # Påfør logikken på alle rækker
+    df['BILLED_URL'] = df.apply(get_final_img, axis=1)
+
+    # 4. POSITION OG SORTING
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
+    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
-    # 6. VISNING
+    # 5. SØGNING
     search = st.text_input("Søg...", placeholder="Navn eller klub...")
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
 
-    vis_cols = ['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
-    if 'IMAGEDATAURL' in f_df.columns: vis_cols.insert(0, 'IMAGEDATAURL')
+    # 6. VISNING I TABEL
+    # Bemærk: Vi bruger 'BILLED_URL' i stedet for 'IMAGEDATAURL'
+    vis_cols = ['BILLED_URL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
+    disp = f_df[vis_cols].copy()
     
-    disp = f_df[[c for c in vis_cols if c in f_df.columns]].copy()
-    col_map = {'IMAGEDATAURL': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status', 'SCOUT': 'Scout'}
+    col_map = {
+        'BILLED_URL': ' ', 
+        'NAVN': 'Navn', 
+        'POSITION_VISNING': 'Pos', 
+        'KLUB': 'Klub', 
+        'RATING_AVG': 'Rating', 
+        'STATUS': 'Status', 
+        'SCOUT': 'Scout'
+    }
     
     event = st.dataframe(
         disp.rename(columns=col_map), 
@@ -152,9 +177,9 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height="content",  # <--- RETTET HER (fra None til "content")
+        height="content",
         column_config={
-            " ": st.column_config.ImageColumn(" "), 
+            " ": st.column_config.ImageColumn(" ", width="small"),
             "Rating": st.column_config.NumberColumn(format="%.1f")
         }
     )
