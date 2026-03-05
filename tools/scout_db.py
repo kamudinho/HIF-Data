@@ -123,11 +123,12 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     col_map = {'VIS_BILLEDE': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status', 'SCOUT': 'Scout'}
     
     event = st.dataframe(
-        f_df[list(col_map.keys())].rename(columns=col_map), 
+        disp.rename(columns=col_map), 
         use_container_width=True, 
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
+        height="content",
         column_config={
             " ": st.column_config.ImageColumn(" ", width="small"),
             "Rating": st.column_config.NumberColumn(format="%.1f")
