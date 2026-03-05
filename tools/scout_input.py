@@ -4,9 +4,7 @@ import uuid
 import os
 from datetime import datetime
 
-def vis_side(dp):
-    st.title("Ny Scouting Rapport")
-    
+def vis_side(dp):    
     # 1. HENT DATA
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
@@ -40,75 +38,99 @@ def vis_side(dp):
     label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
     options_list = sorted(list(label_to_data.keys()))
 
-    # INITIALISÉR DATA
+    # INITIALISÉR DATA (Tomme værdier som default)
     data = {"n": "", "id": "", "pos": "", "klub": ""}
     
+    # --- SPILVERVALG ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     if metode == "Søg system":
-        sel = st.selectbox("Vælg spiller", [""] + options_list)
-        if sel: data = label_to_data.get(sel)
+        sel = st.selectbox("Vælg spiller fra databasen", [""] + options_list)
+        if sel: 
+            data = label_to_data.get(sel)
     else:
         c1, c2 = st.columns(2)
-        n_input = c1.text_input("Navn")
-        k_input = c2.text_input("Klub")
+        n_input = c1.text_input("Indtast Navn")
+        k_input = c2.text_input("Indtast Klub")
         if n_input:
             data = {"n": n_input, "id": f"M-{str(uuid.uuid4().int)[:6]}", "pos": "Manuel", "klub": k_input}
 
-    # --- SELVE FORMULAREN ---
-    if data["n"]:
-        # Vis top-info som i dit screenshot
-        st.markdown(f"**ID:** {data['id']}")
-        t1, t2, t3 = st.columns([2, 1, 1])
-        t1.text_input("Valgt Spiller", value=data['n'], disabled=True)
-        t2.text_input("Position", value=data['pos'], disabled=True)
-        t3.text_input("Klub", value=data['klub'], disabled=True)
+    st.markdown("---")
 
-        with st.form("rapport_form", clear_on_submit=True):
-            st.write("### Parametre (1-6)")
-            # Række 1: Egenskaber
-            m1, m2, m3, m4 = st.columns(4)
-            beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
-            fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
-            agg = m3.select_slider("Aggresivitet", options=list(range(1, 7)), value=3)
-            att = m4.select_slider("Attitude", options=list(range(1, 7)), value=3)
-            
-            # Række 2: Egenskaber
-            m5, m6, m7, m8 = st.columns(4)
-            udh = m5.select_slider("Udholdenhed", options=list(range(1, 7)), value=3)
-            led = m6.select_slider("Lederegenskaber", options=list(range(1, 7)), value=3)
-            tek = m7.select_slider("Tekniske færdigheder", options=list(range(1, 7)), value=3)
-            intel = m8.select_slider("Spilintelligens", options=list(range(1, 7)), value=3)
+    # --- FORMULAREN (ALTID SYNLIG) ---
+    # Top-info (Deaktiverede felter der opdateres ved valg)
+    st.write(f"**Spiller ID:** {data['id'] if data['id'] else 'Ingen valgt'}")
+    t1, t2, t3 = st.columns([2, 1, 1])
+    t1.text_input("Valgt Spiller", value=data['n'], disabled=True, key="disp_navn")
+    t2.text_input("Position", value=data['pos'], disabled=True, key="disp_pos")
+    t3.text_input("Klub", value=data['klub'], disabled=True, key="disp_klub")
 
-            st.markdown("---")
-            
-            # Status, Potentiale og Rating
-            c1, c2, c3 = st.columns(3)
-            status = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
-            pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-            rating = c3.slider("Samlet Rating (1-5)", 1.0, 5.0, 3.0, 0.1)
+    with st.form("rapport_form", clear_on_submit=True):
+        st.write("### Parametre (1-6)")
+        
+        # Række 1: Egenskaber
+        m1, m2, m3, m4 = st.columns(4)
+        beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
+        fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
+        agg = m3.select_slider("Aggresivitet", options=list(range(1, 7)), value=3)
+        att = m4.select_slider("Attitude", options=list(range(1, 7)), value=3)
+        
+        # Række 2: Egenskaber
+        m5, m6, m7, m8 = st.columns(4)
+        udh = m5.select_slider("Udholdenhed", options=list(range(1, 7)), value=3)
+        led = m6.select_slider("Lederegenskaber", options=list(range(1, 7)), value=3)
+        tek = m7.select_slider("Tekniske færdigheder", options=list(range(1, 7)), value=3)
+        intel = m8.select_slider("Spilintelligens", options=list(range(1, 7)), value=3)
 
-            # Vurdering tekstfelter
-            v1, v2, v3 = st.columns(3)
-            styrker = v1.text_area("Styrker")
-            udv = v2.text_area("Udviklingsområder")
-            vurder = v3.text_area("Samlet vurdering")
+        st.markdown("---")
+        
+        # Status, Potentiale og Rating
+        c1, c2, c3 = st.columns(3)
+        status = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
+        pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+        rating = c3.slider("Samlet Rating (1-5)", 1.0, 5.0, 3.0, 0.1)
 
-            st.markdown("---")
-            
-            # Scout og Kontrakt
-            s1, s2 = st.columns(2)
-            scout_navn = s1.text_input("Scout", value="HIF Scout") # Forudsat navn
-            kontrakt_info = s2.text_input("Kontrakt Info (Udløb, Agent etc.)")
+        # Vurdering tekstfelter
+        v1, v2, v3 = st.columns(3)
+        styrker = v1.text_area("Styrker", height=150)
+        udv = v2.text_area("Udviklingsområder", height=150)
+        vurder = v3.text_area("Samlet vurdering", height=150)
 
-            if st.form_submit_button("Gem rapport", use_container_width=True):
+        st.markdown("---")
+        
+        # Scout og Kontrakt
+        s1, s2 = st.columns(2)
+        scout_navn = s1.text_input("Scout", value="HIF Scout") 
+        kontrakt_info = s2.text_input("Kontrakt Info (Udløb, Agent etc.)")
+
+        # GEM KNAP
+        submitted = st.form_submit_button("Gem rapport", use_container_width=True)
+        
+        if submitted:
+            if not data["n"]:
+                st.error("⚠️ Du skal vælge en spiller før du kan gemme!")
+            else:
                 ny_linje = {
-                    "PLAYER_WYID": data["id"], "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], "Klub": data["klub"], "Position": data["pos"],
-                    "Rating_Avg": rating, "Status": status, "Potentiale": pot,
-                    "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
-                    "Beslutsomhed": beslut, "Fart": fart, "Aggresivitet": agg, "Attitude": att,
-                    "Udholdenhed": udh, "Lederegenskaber": led, "Teknik": tek,
-                    "Spilintelligens": intel, "Scout": scout_navn, "Kontrakt": kontrakt_info
+                    "PLAYER_WYID": data["id"], 
+                    "Dato": datetime.now().strftime("%Y-%m-%d"),
+                    "Navn": data["n"], 
+                    "Klub": data["klub"], 
+                    "Position": data["pos"],
+                    "Rating_Avg": rating, 
+                    "Status": status, 
+                    "Potentiale": pot,
+                    "Styrker": styrker, 
+                    "Udvikling": udv, 
+                    "Vurdering": vurder,
+                    "Beslutsomhed": beslut, 
+                    "Fart": fart, 
+                    "Aggresivitet": agg, 
+                    "Attitude": att,
+                    "Udholdenhed": udh, 
+                    "Lederegenskaber": led, 
+                    "Teknik": tek,
+                    "Spilintelligens": intel, 
+                    "Scout": scout_navn, 
+                    "Kontrakt": kontrakt_info
                 }
                 
                 path = 'data/scouting_db.csv'
