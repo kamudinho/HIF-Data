@@ -30,7 +30,8 @@ def get_wy_queries(comp_filter, season_filter):
                 tm.TEAMNAME AS CURRENT_TEAM_NAME
             FROM {DB}.WYSCOUT_PLAYERS p
             JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap ON p.PLAYER_WYID = ap.PLAYER_WYID
-            JOIN {DB}.WYSCOUT_TEAMS tm ON ap.TEAM_WYID = tm.TEAM_WYID
+            -- RETTET: Vi bruger CURRENTTEAM_WYID i stedet for TEAM_WYID
+            JOIN {DB}.WYSCOUT_TEAMS tm ON ap.CURRENTTEAM_WYID = tm.TEAM_WYID
             JOIN {DB}.WYSCOUT_SEASONS s ON ap.SEASON_WYID = s.SEASON_WYID
             WHERE ap.COMPETITION_WYID IN {c_f} 
             AND s.SEASONNAME {s_f}
