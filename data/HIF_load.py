@@ -1,51 +1,62 @@
-# data/HIF_load.py
 import pandas as pd
 import streamlit as st
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
-from data.utils.team_mapping import TOURNAMENTCALENDAR_NAME, TEAM_COLORS
+from data.utils.team_mapping import TOURNAMENTCALENDAR_NAME, COMPETITION_WYID
+
+def load_scouting_reports():
+    """Indlæser dine lokale scout-rapporter fra CSV."""
+    try:
+        # Vi indlæser din scouting_db.csv som du sendte tidligere
+        df = pd.read_csv('data/scouting_db.csv')
+        # Rens kolonnenavne for mellemrum og gør dem til store bogstaver for match
+        df.columns = [c.strip().upper() for c in df.columns]
+        
+        # Omdan dato til datetime med det samme for tidslinjer
+        if 'DATO' in df.columns:
+            df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
+        
+        return df
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af scouting_db.csv: {e}")
+        return pd.DataFrame()
 
 def get_scouting_package():
-    """Henter data til Truppen og Scouting (Wyscout + Lokal CSV)."""
+    """Hovedfunktionen der samler alt data til din Database-visning."""
     conn = _get_snowflake_conn()
+    
+    # Hent filtre fra din team_mapping
     season_f = str(TOURNAMENTCALENDAR_NAME)
+    comp_f = COMPETITION_WYID # f.eks. (328,)
     
-    # Wyscout Queries (Hvidovre ID og sæson)
-    wy_queries = get_wy_queries((328,), season_f)
+    wy_queries = get_wy_queries(comp_f, season_f)
     
-    # Forbered tomme beholdere
-    df_wy_players = pd.DataFrame()
+    df_sql_players = pd.DataFrame()
     df_career = pd.DataFrame()
-    df_logos_raw = pd.DataFrame()
     
+    # 1. Hent data fra Snowflake
     if conn:
         try:
-            # Hent data fra Snowflake
-            df_wy_players = conn.query(wy_queries.get("players"))
+            # Hent aktive spillere i ligaen (til billeder og mapping)
+            df_sql_players = conn.query(wy_queries.get("players"))
+            # Hent karriere-statistik (til Tab 4 i din profil-dialog)
             df_career = conn.query(wy_queries.get("player_career"))
-            df_logos_raw = conn.query(wy_queries.get("team_logos"))
             
-            # Standardiser alle SQL-kolonner til UPPERCASE med det samme
-            for df in [df_wy_players, df_career, df_logos_raw]:
+            # Standardiser kolonner til UPPERCASE
+            for df in [df_sql_players, df_career]:
                 if df is not None and not df.empty:
                     df.columns = [str(c).upper().strip() for c in df.columns]
         except Exception as e:
-            st.error(f"❌ Fejl ved hentning af Wyscout SQL: {e}")
+            st.sidebar.warning(f"Kunne ikke hente SQL data: {str(e)[:50]}")
 
-    # Byg logo_map (TEAM_WYID -> URL)
-    logo_map = {}
-    if not df_logos_raw.empty:
-        try:
-            logo_map = {int(row['TEAM_WYID']): str(row['TEAM_LOGO']) for _, row in df_logos_raw.iterrows()}
-        except:
-            pass
+    # 2. Hent lokale data
+    df_local_reports = load_scouting_reports()
+    df_csv_players = load_local_players() # Din players.csv som backup
 
-    # Returner den samlede pakke
+    # 3. Returner pakken i det format din vis_side forventer
     return {
-        "sql_players": df_wy_players,
-        "players": load_local_players(), # Denne henter players.csv
-        "career": df_career,
-        "logo_map": logo_map,
-        "wyid": 7490,
-        "colors": TEAM_COLORS
+        "scout_reports": df_local_reports,  # Sendes som scout_df
+        "players": df_sql_players if not df_sql_players.empty else df_csv_players, # Sendes som spillere_df
+        "stats": pd.DataFrame(),           # Pladsholder til stats_df
+        "career": df_career                # Sendes som career_df
     }
