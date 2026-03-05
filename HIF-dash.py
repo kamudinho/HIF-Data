@@ -164,7 +164,7 @@ try:
                     dp["sql_players"], 
                     dp["career"]
                 )
-           elif sel == "Sammenligning":
+            elif sel == "Sammenligning":
                 import tools.comparison as comp
                 # Nu sender vi de rigtige data-pakker med:
                 comp.vis_side(
