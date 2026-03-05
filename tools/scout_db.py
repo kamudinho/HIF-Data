@@ -101,7 +101,6 @@ def vis_profil(p_data, full_df, career_df):
         st.plotly_chart(fig_radar, use_container_width=True)
 
 def vis_side(scout_df, players_local, sql_players, career_df):
-    st.title("Scouting Database")
     
     if scout_df is None or scout_df.empty:
         st.info("Ingen spejder-rapporter fundet.")
@@ -148,8 +147,16 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     col_map = {'IMAGEDATAURL': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status', 'SCOUT': 'Scout'}
     
     event = st.dataframe(
-        disp.rename(columns=col_map), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-        column_config={" ": st.column_config.ImageColumn(" "), "Rating": st.column_config.NumberColumn(format="%.1f")}
+        disp.rename(columns=col_map), 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row",
+        height=None,  # <--- Dette fjerner den interne scroll og lader siden styre det
+        column_config={
+            " ": st.column_config.ImageColumn(" "), 
+            "Rating": st.column_config.NumberColumn(format="%.1f")
+        }
     )
     
     if len(event.selection.rows) > 0:
