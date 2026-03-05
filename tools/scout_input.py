@@ -12,7 +12,7 @@ def vis_side(dp):
     unique_players = {}
 
     # DEFINÉR FUNKTIONEN ÉN GANG
-    def add_to_options(df, source_label):
+    def add_to_options(df, source_label): # Vi beholder source_label som argument, så vi ikke skal ændre kaldene
         if df is None or df.empty:
             return
         
@@ -25,7 +25,6 @@ def vis_side(dp):
             p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
             if not p_id or p_id in ['nan', 'None']: continue
             
-            # --- FULDT NAVN LOGIK ---
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
             
@@ -37,27 +36,32 @@ def vis_side(dp):
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
             
+            # --- HER ER RETTELSEN: source_label er fjernet fra label ---
+            label = f"{fuldt_navn} ({klub}) [{pos}]"
+            
             if p_id not in unique_players:
-                label = f"{fuldt_navn} ({klub}) [{pos}] - {source_label}"
                 unique_players[p_id] = {
                     "label": label,
                     "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
+    # Kør indlæsning (Rækkefølgen bestemmer stadig prioritering af data, men ses ikke i dropdown)
+    add_to_options(df_local, "Arkiv")
+    add_to_options(df_wyscout, "Wyscout")
 
-    # 3. INITIALISÉR 'data' (Dette fjerner fejlen!)
-    data = {"n": "", "id": "", "pos": "", "klub": ""}
-    
-    # Forbered dropdown
+    # Forbered dropdown og sortér alfabetisk
     label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
+    options_list = sorted(list(label_to_data.keys())) # Tilføjet sortering, så det er lettere at finde spillere
 
     # --- VISNING AF SØGNING ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     
     if metode == "Søg system":
-        sel = st.selectbox("Vælg spiller", [""])
+        # Nu bruger vi den sorterede options_list i stedet for en tom liste
+        sel = st.selectbox("Vælg spiller", [""] + options_list)
         if sel:
             data = label_to_data.get(sel)
+    
     else:
         c1, c2 = st.columns(2)
         n_input = c1.text_input("Navn")
