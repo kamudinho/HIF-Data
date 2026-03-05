@@ -63,40 +63,27 @@ def vis_profil(p_data, full_df, career_df):
     with t4:
         st.subheader("Karriere Stats")
         if career_df is not None and not career_df.empty:
-            # TVING MATCH: Vi fjerner alt andet end tal fra ID'et for at være sikre
-            target_id = "".join(filter(str.isdigit, clean_p_id))
-            df_p = career_df.copy()
-            df_p['MATCH_ID'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            # Match på ID
+            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
-            final_stats = df_p[df_p['MATCH_ID'] == target_id].copy()
-            
-            if not final_stats.empty:
-                # Omfattende mapping for at ramme alle muligheder i Snowflake
-                mapping = {
-                    'SEASONNAME': 'Sæson',
-                    'TEAMNAME': 'Hold',
-                    'APPEARANCES': 'Kampe',
-                    'MATCHES': 'Kampe',
-                    'MINUTESPLAYED': 'Min',
-                    'GOALS': 'Mål',
-                    'GOAL': 'Mål',
-                    'ASSISTS': 'Assists',
-                    'ASSIST': 'Assists',
-                    'YELLOWCARDS': 'Gule',
-                    'REDCARDS': 'Røde'
-                }
-                # Find kun de kolonner der findes i dataen
-                eksisterende = [k for k in mapping.keys() if k in final_stats.columns]
-                # Fjern dubletter i overskrifter (fx hvis både GOAL og GOALS findes)
-                disp_df = final_stats[eksisterende].rename(columns=mapping)
-                # Hvis vi har både 'Mål' og 'Mål' pga. mapping, tager vi kun den første
-                disp_df = disp_df.loc[:, ~disp_df.columns.duplicated()]
+            if not df_p.empty:
+                # Kun de kolonner du bad om
+                kolonner = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'ASSISTS', 'YELLOWCARD', 'REDCARDS']
                 
+                # Dansk mapping til overskrifter i Streamlit
+                pretty_map = {
+                    'SEASONNAME': 'Sæson', 'TEAMNAME': 'Hold', 'MATCHES': 'Kampe', 
+                    'MINUTES': 'Min', 'GOALS': 'Mål', 'ASSISTS': 'Ass', 
+                    'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde'
+                }
+                
+                # Filtrer til eksisterende kolonner og omdøb
+                disp_df = df_p[[c for c in kolonner if c in df_p.columns]].rename(columns=pretty_map)
                 st.dataframe(disp_df, use_container_width=True, hide_index=True)
             else:
-                st.warning(f"Ingen stats i Snowflake for ID: {target_id}")
+                st.warning(f"Ingen historik fundet for ID: {clean_p_id}")
         else:
-            st.error("Snowflake karriere-data er ikke indlæst.")
+            st.error("Kunne ikke hente karriere-data fra Snowflake.")
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
