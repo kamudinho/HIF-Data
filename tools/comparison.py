@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from data.season_show import SEASONNAME
 
-# --- 1. HJÆLPEFUNKTIONER ---
 def map_position(pos_code):
     pos_map = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -22,18 +21,15 @@ def vis_spiller_billede(img_url, w=110):
     else:
         st.image(img_url, width=w)
 
-# --- 2. HOVEDFUNKTION (Matcher din main.py: comp.vis_side(dp["players"], None, None, dp["career"], None)) ---
 def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
-    # Vi ignorerer de 'None' værdier du sender fra main.py (dummy1, 2, 3)
-    
-    # 1. Standardiser trup-data (Fra din players.csv)
+    # 1. Standardiser trup-data
     df_p = df_spillere.copy() if df_spillere is not None else pd.DataFrame()
     if not df_p.empty:
         df_p.columns = [c.upper() for c in df_p.columns]
         if 'NAVN' not in df_p.columns:
             df_p['NAVN'] = (df_p.get('FIRSTNAME', '').fillna('') + " " + df_p.get('LASTNAME', '').fillna('')).str.strip()
     
-    # 2. Hent scouting data (Vi læser den direkte her for at få de nyeste noter/ratings)
+    # 2. Hent scouting data (CSV)
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s.columns = [c.upper().strip() for c in df_s.columns]
@@ -41,23 +37,21 @@ def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
     except:
         df_s = pd.DataFrame()
 
-    # 3. Byg navne-liste til selectbox
+    # 3. Navneliste
     all_names = []
     if not df_p.empty: all_names.extend(df_p['NAVN'].tolist())
     if not df_s.empty: all_names.extend(df_s['NAVN'].tolist())
     navne_liste = sorted(list(set([n for n in all_names if n and str(n) != 'nan'])))
 
     if not navne_liste:
-        st.warning("Ingen spillere fundet i hverken truppen eller scouting databasen.")
+        st.warning("Ingen spillere fundet.")
         return
 
-    # --- UI ---
     c_sel1, c_sel2 = st.columns(2)
     s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
     s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1))
 
     def hent_data(navn):
-        # Find ID
         pid = None
         if not df_p.empty and navn in df_p['NAVN'].values:
             pid = str(df_p[df_p['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0]
@@ -66,7 +60,6 @@ def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
         
         if not pid: return None
 
-        # Stamdata
         img, klub, pos = None, "Ukendt", "Ukendt"
         p_match = df_p[df_p['PLAYER_WYID'].astype(str).str.contains(pid)] if not df_p.empty else pd.DataFrame()
         if not p_match.empty:
@@ -74,20 +67,18 @@ def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
             klub = p_match.iloc[0].get('TEAMNAME', 'Hvidovre IF')
             pos = map_position(p_match.iloc[0].get('ROLECODE3', ''))
         
-        # Stats fra Snowflake (career_df)
-        stats = {'M': 0, 'K': 0, 'MIN': 0}
+        stats = {'M': 0, 'K': 0}
         if career_df is not None and not career_df.empty:
             career_df.columns = [c.upper() for c in career_df.columns]
-            # Match på ID og Sæson
             c_match = career_df[
                 (career_df['PLAYER_WYID'].astype(str).str.contains(pid)) & 
                 (career_df['SEASONNAME'].astype(str).str.contains(SEASONNAME))
             ]
             if not c_match.empty:
                 row = c_match.iloc[0]
-                stats = {'M': row.get('GOAL', 0), 'K': row.get('APPEARANCES', 0), 'MIN': row.get('MINUTESPLAYED', 0)}
+                stats = {'M': row.get('GOAL', 0), 'K': row.get('APPEARANCES', 0)}
 
-        # Ratings fra Scouting CSV
+        # Ratings til radar
         r = {k: 0.0 for k in ['FART', 'TEKNIK', 'BESLUT', 'INTEL', 'AGGR', 'LEDER', 'ATT', 'UDH']}
         if not df_s.empty:
             s_match = df_s[df_s['PLAYER_WYID'].astype(str).str.contains(pid)]
@@ -99,13 +90,12 @@ def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
                     'AGGR': n.get('AGGRESIVITET', 0), 'LEDER': n.get('LEDEREGENSKABER', 0),
                     'ATT': n.get('ATTITUDE', 0), 'UDH': n.get('UDHOLDENHED', 0)
                 }
-        
-        return {"navn": navn, "pid": pid, "img": img, "klub": klub, "pos": pos, "stats": stats, "r": r}
+        return {"navn": navn, "img": img, "klub": klub, "pos": pos, "stats": stats, "r": r}
 
     d1 = hent_data(s1_navn)
     d2 = hent_data(s2_navn)
 
-    # --- VISNING ---
+    # --- Grafik ---
     col1, col2, col3 = st.columns([3, 4, 3])
     
     def render_col(d, side, color):
