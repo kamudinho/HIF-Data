@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 
 def rens_id(val):
-    if pd.isna(val): return ""
+    if pd.isna(val) or str(val).strip() == "": return ""
+    # Fjerner .0 og tvinger det til en ren tekst-streng
     return str(val).split('.')[0].strip()
 
 def rens_metrik_vaerdi(val):
@@ -20,13 +21,12 @@ def map_position(row):
 
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, career_df):
-    clean_p_id = rens_id(p_data['PLAYER_WYID'])
+    clean_p_id = rens_id(p_data.get('PLAYER_WYID', ''))
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].copy()
     if 'DATO_DT' in historik.columns:
         historik = historik.sort_values('DATO_DT', ascending=True)
-    nyeste = historik.iloc[-1]
+    nyeste = historik.iloc[-1] if not historik.empty else p_data
     
-    # Header
     h1, h2 = st.columns([1, 4])
     with h1:
         st.image(p_data.get('VIS_BILLEDE', ""), width=115)
@@ -37,9 +37,9 @@ def vis_profil(p_data, full_df, career_df):
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
     with t1:
-        m_cols = st.columns(4)
         metrics = [("Teknik", "TEKNIK"), ("Fart", "FART"), ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
                    ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")]
+        m_cols = st.columns(4)
         for i, (label, col) in enumerate(metrics):
             m_cols[i % 4].metric(label, f"{rens_metrik_vaerdi(nyeste.get(col, 0))}")
         st.divider()
@@ -49,72 +49,61 @@ def vis_profil(p_data, full_df, career_df):
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
     with t2:
-        for _, row in historik.iloc[::-1].iterrows():
-            with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')}"):
-                st.write(row.get('VURDERING', 'Ingen kommentar'))
+        if not historik.empty:
+            for _, row in historik.iloc[::-1].iterrows():
+                with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')}"):
+                    st.write(row.get('VURDERING', 'Ingen kommentar'))
 
     with t3:
         if len(historik) > 1:
             fig_line = go.Figure(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='lines+markers', line=dict(color='#df003b')))
             fig_line.update_layout(yaxis=dict(range=[0, 6.5]), height=250, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_line, use_container_width=True)
-        else:
-            st.info("Kræver flere rapporter.")
 
     with t4:
         st.subheader("Karriere Stats")
         if career_df is not None and not career_df.empty:
-            # Sørg for at vi matcher på rensede ID'er
-            df_p = career_df[career_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id, na=False)].copy()
+            # TVING MATCH: Vi fjerner alt andet end tal fra ID'et for at være sikre
+            target_id = "".join(filter(str.isdigit, clean_p_id))
+            df_p = career_df.copy()
+            df_p['MATCH_ID'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             
-            if not df_p.empty:
-                # Kolonne-mapping (Sørger for de navne du bad om)
+            final_stats = df_p[df_p['MATCH_ID'] == target_id].copy()
+            
+            if not final_stats.empty:
+                # Omfattende mapping for at ramme alle muligheder i Snowflake
                 mapping = {
                     'SEASONNAME': 'Sæson',
                     'TEAMNAME': 'Hold',
-                    'APPEARANCES': 'Kampe', # MATCHES hedder ofte APPEARANCES i WyScout Snowflake
-                    'MINUTESPLAYED': 'Min', 
+                    'APPEARANCES': 'Kampe',
+                    'MATCHES': 'Kampe',
+                    'MINUTESPLAYED': 'Min',
+                    'GOALS': 'Mål',
                     'GOAL': 'Mål',
+                    'ASSISTS': 'Assists',
                     'ASSIST': 'Assists',
                     'YELLOWCARDS': 'Gule',
                     'REDCARDS': 'Røde'
                 }
+                # Find kun de kolonner der findes i dataen
+                eksisterende = [k for k in mapping.keys() if k in final_stats.columns]
+                # Fjern dubletter i overskrifter (fx hvis både GOAL og GOALS findes)
+                disp_df = final_stats[eksisterende].rename(columns=mapping)
+                # Hvis vi har både 'Mål' og 'Mål' pga. mapping, tager vi kun den første
+                disp_df = disp_df.loc[:, ~disp_df.columns.duplicated()]
                 
-                # Find de kolonner der faktisk findes i dit datasæt (Snowflake bruger tit store bogstaver)
-                eksisterende_kolonner = {k: v for k, v in mapping.items() if k in df_p.columns}
-                
-                if eksisterende_kolonner:
-                    disp_stats = df_p[list(eksisterende_kolonner.keys())].rename(columns=eksisterende_kolonner)
-                    st.dataframe(disp_stats, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("De ønskede stat-kolonner blev ikke fundet i Snowflake-data.")
+                st.dataframe(disp_df, use_container_width=True, hide_index=True)
             else:
-                st.info("Ingen stats fundet for denne spiller.")
+                st.warning(f"Ingen stats i Snowflake for ID: {target_id}")
         else:
-            st.error("Kunne ikke hente karriere-data fra Snowflake.")
+            st.error("Snowflake karriere-data er ikke indlæst.")
 
     with t5:
-        # RADAR CHART FIX
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
         keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-        
         v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in keys]
-        
-        # Lukker cirklen
-        v_radar = v + [v[0]]
-        c_radar = categories + [categories[0]]
-        
-        fig_radar = go.Figure(go.Scatterpolar(
-            r=v_radar, 
-            theta=c_radar, 
-            fill='toself', 
-            fillcolor='rgba(223, 0, 59, 0.3)',
-            line=dict(color='#df003b', width=2)
-        ))
-        fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 6], tickvals=[1,2,3,4,5,6])),
-            showlegend=False, height=400, margin=dict(l=60, r=60, t=40, b=40)
-        )
+        fig_radar = go.Figure(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', fillcolor='rgba(223, 0, 59, 0.3)', line=dict(color='#df003b')))
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=400, margin=dict(l=60, r=60, t=40, b=40))
         st.plotly_chart(fig_radar, use_container_width=True)
 
 def vis_side(scout_df, players_local, sql_players, career_df):
@@ -123,12 +112,11 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         return
     
     df = scout_df.copy()
-    df.columns = [c.strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
-        billed_map = dict(zip(sql_players['PLAYER_WYID'], sql_players['IMAGEDATAURL']))
+        billed_map = dict(zip(sql_players['PLAYER_WYID'].astype(str), sql_players['IMAGEDATAURL']))
 
     df['VIS_BILLEDE'] = df['PLAYER_WYID'].apply(lambda x: billed_map.get(x, "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"))
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
