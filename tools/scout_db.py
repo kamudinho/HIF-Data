@@ -139,7 +139,7 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=min(calc_height, 500),
+        height=min(calc_height, 5000),
         column_config={
             " ": st.column_config.ImageColumn(" ", width="small"),
             "Rating": st.column_config.NumberColumn(format="%.1f")
