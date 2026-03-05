@@ -1,3 +1,5 @@
+# data/sql/wy_queries.py
+
 def get_wy_queries(comp_filter, season_filter):
     DB = "KLUB_HVIDOVREIF.AXIS"
 
@@ -20,11 +22,11 @@ def get_wy_queries(comp_filter, season_filter):
                 p.PLAYER_WYID, 
                 p.FIRSTNAME, 
                 p.LASTNAME, 
-                p.SHORTNAME, 
+                p.SHORTNAME AS PLAYER_NAME, -- Omdøbt så det matcher dine tools
                 p.ROLECODE3, 
                 p.CURRENTTEAM_WYID, 
                 p.IMAGEDATAURL,
-                p.BIRTHDATE, -- Tilføjet så Trupoversigt kan beregne alder
+                p.BIRTHDATE
             FROM {DB}.WYSCOUT_PLAYERS p
             WHERE p.PLAYER_WYID IN (
                 SELECT DISTINCT ap.PLAYER_WYID
@@ -32,15 +34,15 @@ def get_wy_queries(comp_filter, season_filter):
                 WHERE ap.COMPETITION_WYID IN {c_f}
             )
         """,
-        "playerstats": f"""
-            SELECT ap.PLAYER_WYID, s.SEASONNAME,
-                SUM(ap.MINUTESONFIELD) AS MINUTESONFIELD, SUM(ap.GOALS) AS GOALS, 
-                SUM(ap.ASSISTS) AS ASSISTS, COUNT(DISTINCT ap.MATCH_WYID) AS MATCHES
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
-            JOIN {DB}.WYSCOUT_MATCHES tm ON tm.MATCH_WYID = ap.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON tm.SEASON_WYID = s.SEASON_WYID
-            WHERE ap.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
-            GROUP BY ap.PLAYER_WYID, s.SEASONNAME
+        "player_career": f"""
+            SELECT 
+                t.PLAYER_WYID,
+                t.TEAMNAME AS CURRENT_TEAM_NAME,
+                s.SEASONNAME,
+                t.ROLE_NAME
+            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL t
+            JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
+            WHERE t.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
         """,
         "team_stats_full": f"""
             SELECT DISTINCT tm.TEAMNAME, s.SEASONNAME, tm.IMAGEDATAURL, t.TEAM_WYID
