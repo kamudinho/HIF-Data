@@ -157,8 +157,13 @@ try:
                 si.vis_side(dp)
             elif sel == "Database":
                 import tools.scout_db as sdb
-                # Sender de præcise keys fra HIF_load
-                sdb.vis_side(None, dp["players"], None, dp["career"])
+                # Vi sender dp["scout_reports"] som det første argument
+                sdb.vis_side(
+                    dp["scout_reports"], 
+                    dp["players"], 
+                    dp["sql_players"], 
+                    dp["career"]
+                )
             elif sel == "Sammenligning":
                 import tools.comparison as comp
                 comp.vis_side(dp["players"], None, None, dp["career"], None)
