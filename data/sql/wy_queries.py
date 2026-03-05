@@ -69,5 +69,17 @@ def get_wy_queries(comp_filter, season_filter):
             SELECT PLAYER_WYID, IMAGEDATAURL 
             FROM {DB}.WYSCOUT_PLAYERS 
             WHERE PLAYER_WYID IN {{id_list}}
+        """,
+        "wyscout_players": f"""
+            SELECT DISTINCT
+                p.PLAYER_WYID, 
+                p.SHORTNAME AS PLAYER_NAME,
+                p.ROLECODE3,
+                t.TEAMNAME
+            FROM {DB}.WYSCOUT_PLAYERS p
+            JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON p.COMPETITION_WYID = s.COMPETITION_WYID
+            WHERE p.COMPETITION_WYID IN {liga_ids} 
+            AND s.SEASONNAME = '2025/2026'
         """
     }
