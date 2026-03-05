@@ -17,23 +17,20 @@ def get_wy_queries(comp_filter, season_filter):
         s_f = season_filter if season_filter else " = '2025/2026'"
 
     return {
-        "players": f"""
-            SELECT 
-                p.PLAYER_WYID, 
-                p.FIRSTNAME, 
-                p.LASTNAME, 
-                p.SHORTNAME AS PLAYER_NAME, -- Omdøbt så det matcher dine tools
-                p.ROLECODE3, 
-                p.CURRENTTEAM_WYID, 
-                p.IMAGEDATAURL,
-                p.BIRTHDATE
-            FROM {DB}.WYSCOUT_PLAYERS p
-            WHERE p.PLAYER_WYID IN (
-                SELECT DISTINCT ap.PLAYER_WYID
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
-                WHERE ap.COMPETITION_WYID IN {c_f}
-            )
+        "player_career": f"""
+            SELECT DISTINCT
+                ap.PLAYER_WYID,
+                tm.TEAMNAME AS CURRENT_TEAM_NAME,
+                s.SEASONNAME,
+                p.ROLECODE3 AS ROLE_NAME
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
+            JOIN {DB}.WYSCOUT_MATCHES m ON ap.MATCH_WYID = m.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_TEAMS tm ON ap.TEAM_WYID = tm.TEAM_WYID
+            JOIN {DB}.WYSCOUT_PLAYERS p ON ap.PLAYER_WYID = p.PLAYER_WYID
+            WHERE ap.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
         """,
+        
         "player_career": f"""
             SELECT 
                 t.PLAYER_WYID,
