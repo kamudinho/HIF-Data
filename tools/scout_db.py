@@ -36,8 +36,9 @@ def vis_spiller_billede(pid, w=110):
 @st.dialog("Spillerprofil", width="large")
 def vis_profil(p_data, full_df, career_df):
     clean_p_id = rens_id(p_data['PLAYER_WYID'])
-    historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].copy()
     
+    # Hent historikken for spilleren
+    historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].copy()
     if 'DATO_DT' in historik.columns:
         historik = historik.sort_values('DATO_DT', ascending=True)
     
@@ -45,15 +46,18 @@ def vis_profil(p_data, full_df, career_df):
     
     h1, h2 = st.columns([1, 4])
     with h1:
-        # HER ER RETTELSEN: Brug den URL vi allerede har fundet frem til i oversigten
-        # Vi tjekker p_data (den valgte række) først
-        img_url = p_data.get('VIS_BILLEDE', p_data.get('BILLED_URL'))
+        # VI BRUGER DEN URL VI FANDT I OVERSIGTEN (som vi ved virker)
+        img_url = p_data.get('VIS_BILLEDE')
         
+        # Hvis den mod forventning er tom, tjekker vi om der er en direkte URL i data
+        if not img_url:
+            img_url = p_data.get('IMAGEDATAURL')
+
         if pd.notna(img_url) and str(img_url).startswith("http"):
             st.image(img_url, width=115)
         else:
-            # Fallback hvis alt andet fejler
-            vis_spiller_billede(clean_p_id, w=115)
+            # Den grå silhuet hvis ALT fejler
+            st.image("https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png", width=115)
             
     with h2:
         st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
