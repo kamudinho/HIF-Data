@@ -103,8 +103,8 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     # Vi rydder op i ID'er med det samme
     for d in [scout_df, players_local, sql_players, career_df]:
         if d is not None and not d.empty and 'PLAYER_WYID' in d.columns:
-            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
-
+            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
     # 2. MATCH SCOUTING MED STAMDATA
     df = scout_df.copy()
     
