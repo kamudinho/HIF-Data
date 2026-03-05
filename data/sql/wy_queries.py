@@ -70,5 +70,10 @@ def get_wy_queries(comp_filter, season_filter):
         "team_logos": f"""
             SELECT TEAM_WYID, TEAMNAME, IMAGEDATAURL AS TEAM_LOGO 
             FROM {DB}.WYSCOUT_TEAMS
+        """,
+        "scout_images_only": f"""
+            SELECT PLAYER_WYID, IMAGEDATAURL 
+            FROM {DB}.WYSCOUT_PLAYERS 
+            WHERE PLAYER_WYID IN {{id_list}}
         """
     }
