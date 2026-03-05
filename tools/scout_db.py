@@ -152,7 +152,7 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=None,  # <--- Dette fjerner den interne scroll og lader siden styre det
+        height="content",  # <--- RETTET HER (fra None til "content")
         column_config={
             " ": st.column_config.ImageColumn(" "), 
             "Rating": st.column_config.NumberColumn(format="%.1f")
