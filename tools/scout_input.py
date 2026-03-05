@@ -32,9 +32,7 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-def vis_side(dp):
-    st.title("Ny Scouting Rapport")
-    
+def vis_side(dp):    
     # 1. HENT DATA TIL DROPDOWN
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
