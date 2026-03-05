@@ -105,20 +105,21 @@ def vis_profil(p_data, full_df, career_df):
 def vis_side(scout_df, players_local, sql_players, career_df):
     st.title("Scouting Database")
     
+    # 1. FORBERED DATA - Rens ID'er kun hvis de findes
     for d in [scout_df, players_local, sql_players, career_df]:
         if d is not None and not d.empty and 'PLAYER_WYID' in d.columns:
-            # Vi tvinger det til streng, splitter ved punktum og fjerner mellemrum
-            # ALTID .str før .split og .str før .strip
-            d['PLAYER_WYID'] = (
-                d['PLAYER_WYID']
-                .astype(str)
-                .str.split('.')
-                .str[0]
-                .str.strip() # HER SKAL STÅ .str.strip()
-            )
+            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             
-    # 2. MATCH SCOUTING MED STAMDATA
-    df = scout_df.copy()
+    # 2. HÅNDTER TOM SCOUT_DF (Fixer 'NoneType' fejlen)
+    if scout_df is None or scout_df.empty:
+        # Hvis vi ingen rapporter har, bruger vi de lokale spillere som base
+        if players_local is not None and not players_local.empty:
+            df = players_local.copy()
+        else:
+            st.warning("Ingen data fundet i hverken scouting_db eller players.csv")
+            return
+    else:
+        df = scout_df.copy()
     
     # Byg lookup tabel: Start med lokale data (Contract/POS) og flet Wyscout billeder på
     if players_local is not None and not players_local.empty:
