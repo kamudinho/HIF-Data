@@ -63,27 +63,25 @@ def vis_profil(p_data, full_df, career_df):
     with t4:
         st.subheader("Karriere Stats")
         if career_df is not None and not career_df.empty:
-            # Match på ID
+            # Match på ID (vi bruger clean_p_id som vi allerede har rensget)
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             
             if not df_p.empty:
-                # Kun de kolonner du bad om
+                # Præcis de kolonner du vil have
                 kolonner = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'ASSISTS', 'YELLOWCARD', 'REDCARDS']
                 
-                # Dansk mapping til overskrifter i Streamlit
+                # Oversættelse til visning
                 pretty_map = {
                     'SEASONNAME': 'Sæson', 'TEAMNAME': 'Hold', 'MATCHES': 'Kampe', 
                     'MINUTES': 'Min', 'GOALS': 'Mål', 'ASSISTS': 'Ass', 
                     'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde'
                 }
                 
-                # Filtrer til eksisterende kolonner og omdøb
+                # Filtrer og vis
                 disp_df = df_p[[c for c in kolonner if c in df_p.columns]].rename(columns=pretty_map)
                 st.dataframe(disp_df, use_container_width=True, hide_index=True)
             else:
-                st.warning(f"Ingen historik fundet for ID: {clean_p_id}")
-        else:
-            st.error("Kunne ikke hente karriere-data fra Snowflake.")
+                st.warning(f"Ingen historik fundet i Snowflake for ID: {clean_p_id}")
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
