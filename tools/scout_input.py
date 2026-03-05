@@ -7,20 +7,20 @@ from datetime import datetime
 def vis_side(dp):
     st.title("Ny Scouting Rapport")
     
-    # 1. HENT DATA - Vi bruger præcis de navne du har defineret i din pakke
-    df_local = dp.get("scout_reports", pd.DataFrame()) # Din historik fra CSV
-    df_wyscout = dp.get("wyscout_players", pd.DataFrame()) # Din nye store SQL liste
+    # 1. HENT DATA
+    df_local = dp.get("scout_reports", pd.DataFrame()) 
+    df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
     
-    spiller_options = {}
+    # Vi bruger en ordbog til at holde styr på unikke spillere (ID som nøgle)
+    unique_players = {}
 
     def add_to_options(df, source_label):
         if df is None or df.empty:
             return
         
-        # Sørg for store bogstaver fra SQL/CSV
         df.columns = [str(c).upper().strip() for c in df.columns]
         
-        # Hvis det er lokale rapporter, sorter efter nyeste dato
+        # Sorter lokalt arkiv efter dato, så vi får nyeste klub/info først
         if "DATO" in df.columns:
             df = df.sort_values("DATO", ascending=False)
         
@@ -28,37 +28,42 @@ def vis_side(dp):
             p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
             if not p_id or p_id in ['nan', 'None']: continue
             
-            # Navn: Prioriter PLAYER_NAME (SQL) eller NAVN (CSV)
-            navn = r.get('PLAYER_NAME') or r.get('NAVN') or f"{r.get('FIRSTNAME', '')} {r.get('LASTNAME', '')}".strip()
+            # --- NAVNE LOGIK: Fornavn + Efternavn ---
+            f_name = str(r.get('FIRSTNAME', '')).strip()
+            l_name = str(r.get('LASTNAME', '')).strip()
+            # Hvis de findes, sæt dem sammen. Ellers brug SHORTNAME/NAVN
+            if f_name and l_name:
+                fuldt_navn = f"{f_name} {l_name}"
+            else:
+                fuldt_navn = r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt Spiller"
             
-            # Klub: BRUG TEAMNAME DIREKTE FRA DIN SQL (Ingen grund til manuel mapping nu!)
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
-            
-            # Position: ROLECODE3 (SQL) eller POSITION (CSV)
             pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
             
-            label = f"{navn} ({klub}) [{pos}] - {source_label}"
-            
-            # Sørg for at spilleren kun vises én gang i dropdown
-            if label not in spiller_options:
-                spiller_options[label] = {
-                    "n": navn, 
-                    "id": p_id, 
-                    "pos": pos, 
-                    "klub": klub
+            # --- DEDUPLIKERING ---
+            # Hvis spilleren allerede er tilføjet (f.eks. fra Arkiv), springes han over i Wyscout-listen
+            if p_id not in unique_players:
+                label = f"{fuldt_navn} ({klub}) [{pos}] - {source_label}"
+                unique_players[p_id] = {
+                    "label": label,
+                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
-    # Kør indlæsningen - Wyscout prioriteres som kilde
+    # Kør indlæsning - Arkivet først, så vi prioriterer jeres egne rettelser
     add_to_options(df_local, "Arkiv")
     add_to_options(df_wyscout, "Wyscout")
+
+    # Lav dropdown-listen baseret på de unikke navne og sortér dem alfabetisk
+    # Vi mapper label tilbage til data-objektet
+    label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
+    options_list = sorted(list(label_to_data.keys()))
 
     # --- VISNING AF SØGNING ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     
     if metode == "Søg system":
-        options_list = sorted(list(spiller_options.keys()))
         sel = st.selectbox("Vælg spiller", [""] + options_list)
-        data = spiller_options.get(sel, {"n": "", "id": "", "pos": "", "klub": ""})
+        data = label_to_data.get(sel, {"n": "", "id": "", "pos": "", "klub": ""})
     else:
         c1, c2 = st.columns(2)
         n = c1.text_input("Navn")
@@ -101,7 +106,6 @@ def vis_side(dp):
             kontrakt_info = s2.text_input("Kontrakt Info")
 
             if st.form_submit_button("Gem Rapport"):
-                # MATCH PRÆCIST TIL DIN scouting_db.csv STRUKTUR
                 ny_linje = {
                     "PLAYER_WYID": data["id"],
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
@@ -126,7 +130,6 @@ def vis_side(dp):
                     "Kontrakt": kontrakt_info
                 }
                 
-                # Gem til CSV
                 path = 'data/scouting_db.csv'
                 df_to_save = pd.DataFrame([ny_linje])
                 header = not os.path.exists(path)
