@@ -116,34 +116,38 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     # 1. KLARGØR SCOUTING DATA (DIN CSV)
     df = scout_df.copy()
     df.columns = [c.strip().upper() for c in df.columns]
+    # VIGTIGT: Vi renser PLAYER_WYID så 562633.0 bliver til "562633"
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
     # 2. HENT DE UNIKKE BILLEDER FRA SQL (SNOWFLAKE)
-    # Vi laver en ordbog baseret på PLAYER_WYID som nøgle
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         sql_df = sql_players.copy()
         sql_df.columns = [c.upper() for c in sql_df.columns]
+        # Rens også SQL ID'erne for en sikkerheds skyld
         sql_df['PLAYER_WYID'] = sql_df['PLAYER_WYID'].apply(rens_id)
         
-        # Vi tager kun rækker der har en valid URL
-        valid_pics = sql_df[sql_df['IMAGEDATAURL'].notna()]
+        # Vi filtrerer dubletter fra (Vallys optræder 9 gange i dit udtræk)
+        # og laver en ordbog: { "562633": "https://cdn...g-77207..." }
+        valid_pics = sql_df[sql_df['IMAGEDATAURL'].notna()].drop_duplicates('PLAYER_WYID')
         billed_map = dict(zip(valid_pics['PLAYER_WYID'], valid_pics['IMAGEDATAURL']))
 
     # 3. FUNKTION DER HENTER DEN RIGTIGE URL
     def hent_korrekt_billede(row):
         pid = row.get('PLAYER_WYID')
+        # Dette er din "erstatning" (Public-billedet)
         std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         
-        # Tjek om vi har det unikke link fra SQL til netop dette PLAYER_WYID
+        # Tjek om vi har det unikke link fra SQL (f.eks. Vallys' g-77207 link)
         if pid in billed_map:
-            return billed_map[pid]
+            url = billed_map[pid]
+            # Tjek om URL'en faktisk er et rigtigt billede og ikke bare silhuetten igen
+            if pd.notna(url) and "ndplayer" not in str(url):
+                return url
         
-        # Hvis ID ikke findes i SQL-udtrækket (f.eks. spiller i en anden liga), 
-        # så bruger vi standard-silhuetten i stedet for at gætte på en URL
         return std_img
 
-    # Påfør den unikke URL til hver række
+    # Påfør den unikke URL til hver række i scouting-listen
     df['VIS_BILLEDE'] = df.apply(hent_korrekt_billede, axis=1)
 
     # 4. DATA-PROCESSERING
@@ -182,6 +186,5 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     
     if len(event.selection.rows) > 0:
         valgt_index = event.selection.rows[0]
-        # f_df indeholder 'VIS_BILLEDE', så det bliver sendt med ind i profilen
         spiller_data = f_df.iloc[valgt_index]
         vis_profil(spiller_data, df, career_df)
