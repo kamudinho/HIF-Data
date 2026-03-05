@@ -17,7 +17,7 @@ def get_wy_queries(comp_filter, season_filter):
         s_f = season_filter if season_filter else " = '2025/2026'"
 
     return {
-        # RETTET: Omdøbt fra 'player' til 'players' og tilføjet p.FIRSTNAME osv.
+        # 1. SPILLER INFO (Stamdata filtreret på den valgte liga/sæson)
         "players": f"""
             SELECT DISTINCT
                 p.PLAYER_WYID,
@@ -26,17 +26,18 @@ def get_wy_queries(comp_filter, season_filter):
                 p.SHORTNAME AS PLAYER_NAME,
                 p.BIRTHDATE,
                 p.IMAGEDATAURL,
-                p.ROLECODE3,
-                tm.TEAMNAME AS CURRENT_TEAM_NAME
+                p.ROLECODE3
             FROM {DB}.WYSCOUT_PLAYERS p
-            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap ON p.PLAYER_WYID = ap.PLAYER_WYID
-            -- RETTET: Vi bruger CURRENTTEAM_WYID i stedet for TEAM_WYID
-            JOIN {DB}.WYSCOUT_TEAMS tm ON ap.CURRENTTEAM_WYID = tm.TEAM_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON ap.SEASON_WYID = s.SEASON_WYID
-            WHERE ap.COMPETITION_WYID IN {c_f} 
-            AND s.SEASONNAME {s_f}
+            WHERE p.PLAYER_WYID IN (
+                SELECT pc.PLAYER_WYID 
+                FROM {DB}.WYSCOUT_PLAYERCAREER pc
+                JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+                WHERE pc.COMPETITION_WYID IN {c_f} 
+                AND s.SEASONNAME {s_f}
+            )
         """,
         
+        # 2. PLAYER CAREER (Den detaljerede statistik du viste)
         "player_career": f"""
             SELECT DISTINCT
                 pc.PLAYER_WYID, 
