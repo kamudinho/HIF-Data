@@ -25,7 +25,6 @@ def get_wy_queries(comp_filter, season_filter):
                 p.CURRENTTEAM_WYID, 
                 p.IMAGEDATAURL,
                 p.BIRTHDATE, -- Tilføjet så Trupoversigt kan beregne alder
-                p.PASSPORTAREA_NAME AS NATION -- God at have til oversigten
             FROM {DB}.WYSCOUT_PLAYERS p
             WHERE p.PLAYER_WYID IN (
                 SELECT DISTINCT ap.PLAYER_WYID
