@@ -164,9 +164,16 @@ try:
                     dp["sql_players"], 
                     dp["career"]
                 )
-            elif sel == "Sammenligning":
+           elif sel == "Sammenligning":
                 import tools.comparison as comp
-                comp.vis_side(dp["players"], None, None, dp["career"], None)
+                # Nu sender vi de rigtige data-pakker med:
+                comp.vis_side(
+                    dp["players"],      # df_spillere
+                    None,               # d1 (ikke brugt pt)
+                    None,               # d2 (ikke brugt pt)
+                    dp["career"],       # career_df
+                    dp["sql_players"]   # HER ER BILLEDERNE! (d3)
+                )
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
