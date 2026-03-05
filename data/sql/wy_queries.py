@@ -17,7 +17,7 @@ def get_wy_queries(comp_filter, season_filter):
         s_f = season_filter if season_filter else " = '2025/2026'"
 
     return {
-        "player_career": f"""
+        "player": f"""
             SELECT DISTINCT
                 ap.PLAYER_WYID,
                 tm.TEAMNAME AS CURRENT_TEAM_NAME,
@@ -32,15 +32,26 @@ def get_wy_queries(comp_filter, season_filter):
         """,
         
         "player_career": f"""
-            SELECT 
-                t.PLAYER_WYID,
-                t.TEAMNAME AS CURRENT_TEAM_NAME,
-                s.SEASONNAME,
-                t.ROLE_NAME
-            FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL t
-            JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
-            WHERE t.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
+            SELECT DISTINCT
+                pc.PLAYER_WYID, 
+                s.SEASONNAME, 
+                c.COMPETITIONNAME, 
+                t.TEAMNAME AS CURRENT_TEAM_NAME, -- Vi kalder den CURRENT_TEAM_NAME så HIF_load kan kende den
+                pc.APPEARANCES, 
+                pc.MINUTESPLAYED, 
+                pc.GOAL, 
+                pc.YELLOWCARD, 
+                pc.REDCARDS,
+                pc.SUBSTITUTEIN,
+                pc.SUBSTITUTEOUT
+            FROM {DB}.WYSCOUT_PLAYERCAREER pc
+            INNER JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+            INNER JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
+            INNER JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
+            WHERE pc.COMPETITION_WYID IN {c_f} 
+            AND s.SEASONNAME {s_f}
         """,
+        
         "team_stats_full": f"""
             SELECT DISTINCT tm.TEAMNAME, s.SEASONNAME, tm.IMAGEDATAURL, t.TEAM_WYID
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
