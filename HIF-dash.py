@@ -140,7 +140,8 @@ with st.sidebar:
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=[],
+        sel = option_menu(None, 
+                         options=["Scoutrapport", "Database", "Sammenligning"], # TILFØJ DISSE
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["Rå Data Explorer", "Assist Data Explorer", "Brugerstyring", "System Log"],
