@@ -178,5 +178,6 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     
     if len(event.selection.rows) > 0:
         valgt_index = event.selection.rows[0]
+        # f_df indeholder 'VIS_BILLEDE', så det bliver sendt med ind i profilen
         spiller_data = f_df.iloc[valgt_index]
         vis_profil(spiller_data, df, career_df)
