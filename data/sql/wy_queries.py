@@ -30,8 +30,6 @@ def get_wy_queries(comp_filter, season_filter):
                 SELECT pc.PLAYER_WYID 
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
                 JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
-                WHERE pc.COMPETITION_WYID IN {c_f} 
-                AND s.SEASONNAME {s_f}
             )
         """,
         
