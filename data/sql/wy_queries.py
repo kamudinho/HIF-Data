@@ -1,6 +1,7 @@
 def get_wy_queries(comp_filter, season_filter):
     DB = "KLUB_HVIDOVREIF.AXIS"
 
+    liga_ids = "(1570, 329, 43149, 1305, 335, 3134, 328, 3135, 43319)"
     # Sikring mod tomme filtre (bruges til spillerlisten/oversigten)
     if not comp_filter:
         c_f = "(328)"
