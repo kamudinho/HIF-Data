@@ -4,7 +4,9 @@ import uuid
 import os
 from datetime import datetime
 
-def vis_side(dp):    
+def vis_side(dp):
+    st.title("Ny Scouting Rapport")
+    
     # 1. HENT DATA
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
@@ -20,17 +22,12 @@ def vis_side(dp):
             
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
-            
-            # Dropdown viser nu kun det fulde navn
             fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
             
-            # Vi bruger Navn + Klub som label i dropdown for at adskille ens navne, 
-            # men i formularen splittes de op.
             label = f"{fuldt_navn} ({klub})"
-            
             if p_id not in unique_players:
                 unique_players[p_id] = {
                     "label": label,
@@ -46,27 +43,22 @@ def vis_side(dp):
     # INITIALISÉR DATA
     data = {"n": "", "id": "", "pos": "", "klub": ""}
     
-    # --- SPILVERVALG ---
-    metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
-    if metode == "Søg system":
+    # --- TOP LINJE: DROPDOWN, POSITION, KLUB OG SCOUT ---
+    t1, t2, t3, t4 = st.columns([2, 1, 1, 1])
+    
+    with t1:
         sel = st.selectbox("Vælg spiller", [""] + options_list)
         if sel: 
             data = label_to_data.get(sel)
-    else:
-        c1, c2 = st.columns(2)
-        n_input = c1.text_input("Indtast Navn")
-        k_input = c2.text_input("Indtast Klub")
-        if n_input:
-            data = {"n": n_input, "id": f"M-{str(uuid.uuid4().int)[:6]}", "pos": "Manuel", "klub": k_input}
+    
+    t2.text_input("Position", value=data['pos'], disabled=True)
+    t3.text_input("Klub", value=data['klub'], disabled=True)
+    scout_navn = t4.text_input("Scout", value="HIF Scout")
+
+    # Spiller ID vises lige under dropdown
+    st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
 
     st.markdown("---")
-
-    # --- TOP LINJE: POSITION, KLUB OG SCOUT ---
-    st.write(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
-    header_col1, header_col2, header_col3 = st.columns(3)
-    header_col1.text_input("Position", value=data['pos'], disabled=True)
-    header_col2.text_input("Klub", value=data['klub'], disabled=True)
-    scout_navn = header_col3.text_input("Scout", value="HIF Scout")
 
     with st.form("rapport_form", clear_on_submit=True):
         st.write("### Parametre (1-6)")
@@ -88,12 +80,10 @@ def vis_side(dp):
         st.markdown("---")
         
         # --- KONTRAKT, STATUS OG POTENTIALE ---
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         status = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
         pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-        # Kontrakt med kalender-vælger
-        kontrakt_dato = c3.date_input("Kontraktudløb", value=None, help="Vælg dato for kontraktudløb")
-        rating = c4.slider("Rating (1-5)", 1.0, 5.0, 3.0, 0.1)
+        kontrakt_dato = c3.date_input("Kontraktudløb", value=None)
 
         # Vurdering tekstfelter
         v1, v2, v3 = st.columns(3)
@@ -108,11 +98,16 @@ def vis_side(dp):
             if not data["n"]:
                 st.error("⚠️ Vælg venligst en spiller først.")
             else:
+                # BEREGNING AF GENNEMSNITSRATING
+                kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
+                beregnet_rating = sum(kategorier) / len(kategorier)
+                
                 ny_linje = {
                     "PLAYER_WYID": data["id"], 
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
                     "Navn": data["n"], "Klub": data["klub"], "Position": data["pos"],
-                    "Rating_Avg": rating, "Status": status, "Potentiale": pot,
+                    "Rating_Avg": round(beregnet_rating, 2), # Gemmes med 2 decimaler
+                    "Status": status, "Potentiale": pot,
                     "Kontrakt_Udløb": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
                     "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
                     "Beslutsomhed": beslut, "Fart": fart, "Aggresivitet": agg, "Attitude": att,
@@ -124,5 +119,5 @@ def vis_side(dp):
                 df_to_save = pd.DataFrame([ny_linje])
                 df_to_save.to_csv(path, mode='a', header=not os.path.exists(path), index=False)
                 
-                st.success(f"✅ Rapport gemt for {data['n']}!")
+                st.success(f"✅ Rapport gemt for {data['n']}! Beregnet Rating: {round(beregnet_rating, 2)}")
                 st.balloons()
