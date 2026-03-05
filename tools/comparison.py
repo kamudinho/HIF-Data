@@ -51,9 +51,16 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         
         if not pid: return None
 
-        # Grunddata & Billede
-        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt", "scout": {}}
-        if not df_p.empty:
+        # Grunddata
+        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt"}
+        
+        # HER HENTER VI BILLEDET FRA DIN SPECIELLE QUERY
+        if d3 is not None and not d3.empty: # d3 er det 5. argument i din vis_side
+            foto_match = d3[d3['PLAYER_WYID'].astype(str).str.contains(str(pid))]
+            if not foto_match.empty:
+                res["img"] = foto_match.iloc[0]['IMAGEDATAURL']
+                
+            if not df_p.empty:
             m = df_p[df_p['PID_CLEAN'] == pid]
             if not m.empty:
                 res["img"] = m.iloc[0].get('IMAGEDATAURL')
