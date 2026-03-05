@@ -25,7 +25,7 @@ def get_scouting_package():
                 if df is not None and not df.empty:
                     df.columns = [str(c).upper().strip() for c in df.columns]
                     if 'PLAYER_WYID' in df.columns:
-                        df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
+                        df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip() 
         except Exception as e:
             st.sidebar.error(f"Snowflake fejl: {str(e)[:40]}")
 
@@ -35,14 +35,14 @@ def get_scouting_package():
     if not df_local_p.empty:
         df_local_p.columns = [c.upper().strip() for c in df_local_p.columns]
         if 'PLAYER_WYID' in df_local_p.columns:
-            df_local_p['PLAYER_WYID'] = df_local_p['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
+            df_local_p['PLAYER_WYID'] = df_local_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
 
     # 3. HENT FRA scouting_db.csv (scout_reports)
     try:
         scout_df = pd.read_csv('data/scouting_db.csv')
         scout_df.columns = [c.strip().upper() for c in scout_df.columns]
         if 'PLAYER_WYID' in scout_df.columns:
-            scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
+            scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
         if 'DATO' in scout_df.columns:
             scout_df['DATO_DT'] = pd.to_datetime(scout_df['DATO'], errors='coerce')
     except:
