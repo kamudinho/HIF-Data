@@ -19,11 +19,14 @@ def vis_spiller_billede(img_url, pid, w=150):
     """Henter billede fra URL eller genererer det ud fra PLAYER_WYID"""
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     
-    # 1. Tjek om vi har en valid URL
-    if img_url and str(img_url).strip() not in ["", "nan", "None"]:
+    # Konverter img_url til streng for at tjekke den sikkert
+    img_str = str(img_url).strip()
+    
+    # 1. Tjek om vi har en valid URL (Vi tilføjer "0" og "0.0" til tjekket)
+    if img_url and img_str not in ["", "nan", "None", "0", "0.0"]:
         url = img_url
-    # 2. Ellers byg den ud fra Wyscouts faste format
-    elif pid:
+    # 2. Ellers byg den ud fra Wyscouts faste format via PID
+    elif pid and str(pid).strip() not in ["", "nan", "None", "0", "0.0"]:
         clean_id = str(pid).split('.')[0]
         url = f"https://cdn5.wyscout.com/photos/players/public/{clean_id}.png"
     else:
