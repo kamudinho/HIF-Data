@@ -2,61 +2,60 @@ import pandas as pd
 import streamlit as st
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
-from data.utils.team_mapping import TOURNAMENTCALENDAR_NAME, COMPETITION_WYID
-
-def load_scouting_reports():
-    """Indlæser dine lokale scout-rapporter fra CSV."""
-    try:
-        # Vi indlæser din scouting_db.csv som du sendte tidligere
-        df = pd.read_csv('data/scouting_db.csv')
-        # Rens kolonnenavne for mellemrum og gør dem til store bogstaver for match
-        df.columns = [c.strip().upper() for c in df.columns]
-        
-        # Omdan dato til datetime med det samme for tidslinjer
-        if 'DATO' in df.columns:
-            df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
-        
-        return df
-    except Exception as e:
-        st.error(f"Fejl ved indlæsning af scouting_db.csv: {e}")
-        return pd.DataFrame()
 
 def get_scouting_package():
-    """Hovedfunktionen der samler alt data til din Database-visning."""
+    """Henter data specifikt til Wyscout-modulet."""
     conn = _get_snowflake_conn()
     
-    # Hent filtre fra din team_mapping
-    season_f = str(TOURNAMENTCALENDAR_NAME)
-    comp_f = COMPETITION_WYID # f.eks. (328,)
+    # VI BRUGER DINE FASTE VÆRDIER HER:
+    wy_season = "2025/2026"  # SEASONNAME
+    wy_comp = (328,)         # COMPETITION_WYID (NordicBet Liga)
     
-    wy_queries = get_wy_queries(comp_f, season_f)
+    # Hent SQL-skabelonerne
+    wy_queries = get_wy_queries(wy_comp, wy_season)
     
     df_sql_players = pd.DataFrame()
     df_career = pd.DataFrame()
-    
-    # 1. Hent data fra Snowflake
+
+    # 1. SQL DATA (Fra Snowflake)
     if conn:
         try:
-            # Hent aktive spillere i ligaen (til billeder og mapping)
             df_sql_players = conn.query(wy_queries.get("players"))
-            # Hent karriere-statistik (til Tab 4 i din profil-dialog)
             df_career = conn.query(wy_queries.get("player_career"))
             
-            # Standardiser kolonner til UPPERCASE
+            # Rens og standardiser Snowflake-output
             for df in [df_sql_players, df_career]:
                 if df is not None and not df.empty:
                     df.columns = [str(c).upper().strip() for c in df.columns]
+                    # Sikr at ID er en ren streng uden .0
+                    if 'PLAYER_WYID' in df.columns:
+                        df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0]
         except Exception as e:
-            st.sidebar.warning(f"Kunne ikke hente SQL data: {str(e)[:50]}")
+            st.sidebar.error(f"SQL Fejl (Wyscout): {str(e)[:40]}...")
 
-    # 2. Hent lokale data
-    df_local_reports = load_scouting_reports()
-    df_csv_players = load_local_players() # Din players.csv som backup
+    # 2. SCOUTING DATA (Din CSV med Victor Vestby m.fl.)
+    try:
+        scout_df = pd.read_csv('data/scouting_db.csv')
+        # Tving alle kolonner til UPPERCASE så din 'vis_side' (Radar/Metrics) virker
+        scout_df.columns = [c.strip().upper() for c in scout_df.columns]
+        
+        if 'PLAYER_WYID' in scout_df.columns:
+            scout_df['PLAYER_WYID'] = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0]
+            
+        if 'DATO' in scout_df.columns:
+            scout_df['DATO_DT'] = pd.to_datetime(scout_df['DATO'], errors='coerce')
+    except:
+        scout_df = pd.DataFrame()
 
-    # 3. Returner pakken i det format din vis_side forventer
+    # 3. BACKUP (Lokal players.csv hvis Snowflake fejler)
+    df_local_ps = load_local_players()
+    if not df_local_ps.empty:
+        df_local_ps.columns = [c.upper() for c in df_local_ps.columns]
+        df_local_ps['PLAYER_WYID'] = df_local_ps['PLAYER_WYID'].astype(str).str.split('.').str[0]
+
     return {
-        "scout_reports": df_local_reports,  # Sendes som scout_df
-        "players": df_sql_players if not df_sql_players.empty else df_csv_players, # Sendes som spillere_df
-        "stats": pd.DataFrame(),           # Pladsholder til stats_df
-        "career": df_career                # Sendes som career_df
+        "scout_reports": scout_df, 
+        "players": df_sql_players if not df_sql_players.empty else df_local_ps,
+        "career": df_career,
+        "stats": pd.DataFrame()
     }
