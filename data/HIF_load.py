@@ -30,15 +30,16 @@ def get_scouting_package():
             
             # B: Hent Karriere stats (Uden liga-filter!)
             career_query = f"""
-                SELECT DISTINCT
+                SELECT 
                     pc.PLAYER_WYID, 
                     s.SEASONNAME, 
                     t.TEAMNAME, 
-                    pc.APPEARANCES AS MATCHES, 
-                    pc.MINUTESPLAYED AS MINUTES, 
-                    pc.GOAL AS GOALS,
-                    pc.substitutein AS Indskiftet,
-                    pc.substituteout AS Udskifter
+                    pc.APPEARANCES, 
+                    pc.MINUTESPLAYED, 
+                    pc.GOAL, 
+                    pc.ASSIST, 
+                    pc.YELLOWCARD, 
+                    pc.REDCARDS
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
                 JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
                 JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
