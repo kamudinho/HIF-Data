@@ -4,9 +4,7 @@ import uuid
 import os
 from datetime import datetime
 
-def vis_side(dp):
-    st.title("Ny Scouting Rapport")
-    
+def vis_side(dp):    
     # 1. HENT DATA
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
@@ -25,7 +23,10 @@ def vis_side(dp):
             fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
-            pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
+            
+            # Vi tjekker om position findes, ellers efterlader vi den tom (i stedet for ??)
+            pos = r.get('ROLECODE3') or r.get('POSITION') or ""
+            if str(pos).strip() in ["??", "nan", "None"]: pos = ""
             
             label = f"{fuldt_navn} ({klub})"
             if p_id not in unique_players:
@@ -51,9 +52,14 @@ def vis_side(dp):
         if sel: 
             data = label_to_data.get(sel)
     
-    t2.text_input("Position", value=data['pos'], disabled=True)
+    # Position: Disabled hvis data findes, ellers kan man skrive i den
+    pos_input = t2.text_input("Position", value=data['pos'], disabled=(data['pos'] != ""))
+    
     t3.text_input("Klub", value=data['klub'], disabled=True)
-    scout_navn = t4.text_input("Scout", value="HIF Scout")
+    
+    # Scout: Henter automatisk den loggede bruger og låser feltet
+    nuværende_bruger = st.session_state.get("user", "HIF Scout")
+    scout_navn = t4.text_input("Scout", value=nuværende_bruger, disabled=True)
 
     # Spiller ID vises lige under dropdown
     st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
@@ -102,11 +108,14 @@ def vis_side(dp):
                 kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
                 beregnet_rating = sum(kategorier) / len(kategorier)
                 
+                # Hvis positionen blev udfyldt manuelt, bruger vi den nye værdi
+                endelig_pos = pos_input if data['pos'] == "" else data['pos']
+                
                 ny_linje = {
                     "PLAYER_WYID": data["id"], 
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], "Klub": data["klub"], "Position": data["pos"],
-                    "Rating_Avg": round(beregnet_rating, 2), # Gemmes med 2 decimaler
+                    "Navn": data["n"], "Klub": data["klub"], "Position": endelig_pos,
+                    "Rating_Avg": round(beregnet_rating, 2),
                     "Status": status, "Potentiale": pot,
                     "Kontrakt_Udløb": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
                     "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
@@ -119,5 +128,5 @@ def vis_side(dp):
                 df_to_save = pd.DataFrame([ny_linje])
                 df_to_save.to_csv(path, mode='a', header=not os.path.exists(path), index=False)
                 
-                st.success(f"✅ Rapport gemt for {data['n']}! Beregnet Rating: {round(beregnet_rating, 2)}")
+                st.success(f"✅ Rapport gemt! Rating: {round(beregnet_rating, 2)}")
                 st.balloons()
