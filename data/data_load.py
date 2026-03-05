@@ -68,6 +68,7 @@ def get_data_package():
     df_shots = load_snowflake_query("opta_shotevents", is_opta=True)
     df_assists = load_snowflake_query("opta_assists", is_opta=True) 
     df_opta_stats = load_snowflake_query("opta_team_stats", is_opta=True)
+    df_wy_players = load_snowflake_query("players", is_opta=False)
     df_team_stats_wy = load_snowflake_query("team_stats_full", is_opta=False)
     df_career_wy = load_snowflake_query("player_career", is_opta=False)
     df_logos_raw = load_snowflake_query("team_logos", is_opta=False)
@@ -106,6 +107,8 @@ def get_data_package():
             "team_stats": df_team_stats_wy,
             "career": df_career_wy,
             "logos": logo_map,
+            "sql_players": df_wy_players,  # <--- DETTE ER NØGLEN TIL SCOUT-SIDEN
+            "players": df_players_csv,
             "wyid": 7490
         },
         "logo_map": logo_map,
