@@ -1,177 +1,136 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-import requests
+from data.utils.team_mapping import TEAMS
 
-# --- HJÆLPEFUNKTIONER ---
-def rens_metrik_vaerdi(val):
-    try:
-        if pd.isna(val) or str(val).strip() == "": return 0
-        return int(float(str(val).replace(',', '.')))
-    except: return 0
-
-def map_position(row):
-    # Tjek først dit eget 1-11 system (POS) fra players.csv
-    pos_val = str(row.get('POS', '')).split('.')[0].strip()
-    pos_dict = {
-        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back", "4": "Midtstopper", 
-        "5": "Midtstopper", "6": "Defensiv Midt", "7": "Højre Kant", "8": "Central Midt", 
-        "9": "Angriber", "10": "Offensiv Midt", "11": "Venstre Kant"
-    }
-    if pos_val in pos_dict: return pos_dict[pos_val]
+def vis_side(dp):
+    # 1. HENT DATA - Vi tjekker begge mulige nøgler for at være sikre
+    df_matches = dp.get("opta_matches", pd.DataFrame()).copy()
+    df_raw_stats = dp.get("opta_team_stats", dp.get("team_stats_full", pd.DataFrame())).copy()
     
-    # Fallback til ROLECODE3 fra Wyscout hvis POS mangler
-    role = str(row.get('ROLECODE3', '')).strip().upper()
-    role_dict = {"GKP": "Målmand", "DEF": "Forsvar", "MID": "Midtbane", "FWD": "Angriber"}
-    return role_dict.get(role, "Ukendt")
-
-def vis_spiller_billede(pid, w=110):
-    pid_clean = str(pid).split('.')[0].strip()
-    url = f"https://cdn5.wyscout.com/photos/players/public/g-{pid_clean}_100x130.png"
-    std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    try:
-        resp = requests.head(url, timeout=0.8)
-        st.image(url if resp.status_code == 200 else std, width=w)
-    except: st.image(std, width=w)
-
-@st.dialog("Spillerprofil", width="large")
-def vis_profil(p_data, full_df, career_df):
-    clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
-    # Find historik for den specifikke spiller i scouting_db
-    historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
-    
-    if historik.empty:
-        st.error("Ingen rapporter fundet.")
+    if df_matches.empty:
+        st.warning("Ingen kampdata fundet. Husk at rydde cache (Tryk 'C').")
         return
-    
-    nyeste = historik.iloc[-1]
-    
-    # Header sektion med billede og stamdata
-    h1, h2 = st.columns([1, 4])
-    with h1:
-        img_url = p_data.get('IMAGEDATAURL')
-        if pd.notna(img_url) and str(img_url).startswith("http"):
-            st.image(img_url, width=115)
-        else:
-            vis_spiller_billede(clean_p_id, w=115)
+
+    # Sørg for at MATCH_STATUS er ensartet (Played / played / Fixture)
+    df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
+
+    # --- DATA MERGE (Opta Stats) ---
+    if not df_raw_stats.empty:
+        try:
+            # Opta bruger ofte små bogstaver i STAT_TYPE (f.eks. totalPass)
+            df_pivot = df_raw_stats.pivot_table(
+                index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
+                columns='STAT_TYPE', values='STAT_TOTAL', aggfunc='first'
+            ).reset_index()
             
-    with h2:
-        st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
-        st.markdown(f"**{nyeste.get('KLUB', 'Ingen klub')}** | {nyeste.get('POSITION_VISNING', 'Ukendt')} | Snit: `{nyeste.get('RATING_AVG', 0)}`")
-        if pd.notna(p_data.get('CONTRACT')) and str(p_data.get('CONTRACT')).strip() != "":
-            st.caption(f"Kontraktudløb: {p_data.get('CONTRACT')}")
+            # Lav Home og Away versioner
+            df_h = df_pivot.add_suffix('_HOME')
+            df_a = df_pivot.add_suffix('_AWAY')
 
-    t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
+            df_matches = pd.merge(df_matches, df_h, 
+                                 left_on=['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID'], 
+                                 right_on=['MATCH_OPTAUUID_HOME', 'CONTESTANT_OPTAUUID_HOME'], how='left')
+            df_matches = pd.merge(df_matches, df_a, 
+                                 left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
+                                 right_on=['MATCH_OPTAUUID_AWAY', 'CONTESTANT_OPTAUUID_AWAY'], how='left')
+        except Exception as e:
+            st.error(f"Statistik-fejl: {e}")
+
+    # --- CSS STYLING ---
+    st.markdown("""
+        <style>
+        .stat-box { text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; }
+        .stat-label { font-size: 10px; color: gray; text-transform: uppercase; }
+        .stat-val { font-weight: bold; font-size: 14px; }
+        .date-header { background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; color: #444; border-left: 4px solid #cc0000; }
+        .score-pill { background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- FILTRE ---
+    config = dp.get("config", {})
+    valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     
-    with t1:
-        m_cols = st.columns(4)
-        metrics = [("Teknik", "TEKNIK"), ("Fart", "FART"), ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
-                   ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")]
-        for i, (label, col) in enumerate(metrics):
-            m_cols[i % 4].metric(label, f"{rens_metrik_vaerdi(nyeste.get(col, 0))}")
-        st.divider()
-        c1, c2, c3 = st.columns(3)
-        with c1: st.success(f"**Styrker**\n\n{nyeste.get('STYRKER', '-')}")
-        with c2: st.warning(f"**Udvikling**\n\n{nyeste.get('UDVIKLING', '-')}")
-        with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
 
-    with t2:
-        for _, row in historik.iloc[::-1].iterrows():
-            with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')}"):
-                st.write(row.get('VURDERING'))
+    top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    with top_cols[0]:
+        hif_idx = list(sorted(liga_hold_options.keys())).index("Hvidovre") if "Hvidovre" in liga_hold_options else 0
+        valgt_navn = st.selectbox("Vælg hold", sorted(liga_hold_options.keys()), index=hif_idx, label_visibility="collapsed")
+        valgt_uuid = liga_hold_options[valgt_navn]
 
-    with t3:
-        fig_line = go.Figure(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='lines+markers', line=dict(color='#df003b')))
-        fig_line.update_layout(yaxis=dict(range=[0, 6]), height=300, margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig_line, use_container_width=True)
+    mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
+    team_matches = df_matches[mask].copy()
 
-    with t4:
-        if career_df is not None and not career_df.empty:
-            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
-            if not df_p.empty:
-                mapping = {'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering', 'APPEARANCES': 'Kampe', 'GOAL': 'Mål'}
-                st.dataframe(df_p[list(mapping.keys())].rename(columns=mapping), use_container_width=True, hide_index=True)
-            else:
-                st.info("Ingen karrieredata fundet i Snowflake.")
+    # --- BEREGN STATS BAR ---
+    played_matches = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
+    s = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played_matches.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0), int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
+        s["K"] += 1
+        s["M+"] += h_s if is_h else a_s
+        s["M-"] += a_s if is_h else h_s
+        diff = h_s - a_s if is_h else a_s - h_s
+        if diff > 0: s["S"] += 1
+        elif diff == 0: s["U"] += 1
+        else: s["N"] += 1
 
-    with t5:
-        categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
-        cols = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in cols]
-        fig_radar = go.Figure(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', line=dict(color='#df003b')))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
-        st.plotly_chart(fig_radar, use_container_width=True)
+    stats_disp = [("K", s["K"]), ("S", s["S"]), ("U", s["U"]), ("N", s["N"]), ("M+", s["M+"]), ("M-", s["M-"]), ("+/-", s["M+"]-s["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
+        with top_cols[i+1]:
+            st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-def vis_side(scout_df, players_local, sql_players, career_df):
-    st.title("Scouting Database")
-    
-    # 1. FORBERED DATA - Rens ID'er kun hvis de findes
-    for d in [scout_df, players_local, sql_players, career_df]:
-        if d is not None and not d.empty and 'PLAYER_WYID' in d.columns:
-            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
-    # 2. HÅNDTER TOM SCOUT_DF (Fixer 'NoneType' fejlen)
-    if scout_df is None or scout_df.empty:
-        # Hvis vi ingen rapporter har, bruger vi de lokale spillere som base
-        if players_local is not None and not players_local.empty:
-            df = players_local.copy()
-        else:
-            st.warning("Ingen data fundet i hverken scouting_db eller players.csv")
+    # --- HJÆLPEFUNKTION TIL LOGO ---
+    def hent_hold_logo(uuid):
+        logo_map = dp.get("logo_map", {})
+        for name, info in TEAMS.items():
+            if str(info.get("opta_uuid")) == str(uuid):
+                wy_id = info.get("team_wyid")
+                if wy_id and int(wy_id) in logo_map: return logo_map[int(wy_id)]
+        return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+
+    # --- TEGN KAMPE ---
+    def tegn_kampe(df, is_played):
+        if df.empty:
+            st.info("Ingen kampe fundet.")
             return
-    else:
-        df = scout_df.copy()
-    
-    # Byg lookup tabel: Start med lokale data (Contract/POS) og flet Wyscout billeder på
-    if players_local is not None and not players_local.empty:
-        lookup = players_local.copy()
-        if sql_players is not None and not sql_players.empty:
-            # Vi tager kun billederne fra SQL for at undgå kolonne-clash
-            sql_img = sql_players[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
-            lookup = lookup.merge(sql_img, on='PLAYER_WYID', how='left')
-    else:
-        lookup = sql_players if sql_players is not None else pd.DataFrame()
-
-    # Flet stamdata ind på scouting rapporterne
-    if not lookup.empty:
-        # suffixes sikrer at vi ikke får dubletter hvis NAVN findes begge steder
-        df = df.merge(lookup.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
-
-    df['POSITION_VISNING'] = df.apply(map_position, axis=1)
-    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
-    
-    # Tag kun den seneste rapport pr. spiller til oversigten
-    f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
-    
-    search = st.text_input("Søg i databasen...", placeholder="Navn eller klub...")
-    if search:
-        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
-
-    # 3. TABELVISNING
-    vis_cols = ['NAVN', 'POSITION_VISNING', 'POS', 'KLUB', 'RATING_AVG', 'CONTRACT', 'STATUS']
-    if 'IMAGEDATAURL' in f_df.columns:
-        vis_cols.insert(0, 'IMAGEDATAURL')
         
-    disp = f_df[vis_cols].copy()
-    col_map = {
-        'IMAGEDATAURL': ' ', 
-        'NAVN': 'Navn', 
-        'POSITION_VISNING': 'Type', 
-        'POS': 'Nr', 
-        'KLUB': 'Klub', 
-        'RATING_AVG': 'Rating', 
-        'CONTRACT': 'Kontrakt', 
-        'STATUS': 'Status'
-    }
-    disp = disp.rename(columns=col_map)
-    
-    event = st.dataframe(
-        disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-        column_config={
-            " ": st.column_config.ImageColumn(" ", width="small"),
-            "Rating": st.column_config.NumberColumn(format="%.1f")
-        }
-    )
-    
-    if len(event.selection.rows) > 0:
-        # Vis dialog med fuld profil for den valgte spiller
-        vis_profil(f_df.iloc[event.selection.rows[0]], df, career_df)
+        danske_dage = {"Monday": "Mandag", "Tuesday": "Tirsdag", "Wednesday": "Onsdag", "Thursday": "Torsdag", "Friday": "Fredag", "Saturday": "Lørdag", "Sunday": "Søndag"}
+        danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
+
+        for _, row in df.iterrows():
+            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
+            maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
+            
+            st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
+            
+            with st.container(border=True):
+                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
+                c2.image(hent_hold_logo(row['CONTESTANTHOME_OPTAUUID']), width=28)
+                
+                if is_played:
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
+                else:
+                    c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {dt.strftime('%H:%M')}</div>", unsafe_allow_html=True)
+                
+                c4.image(hent_hold_logo(row['CONTESTANTAWAY_OPTAUUID']), width=28)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
+                
+                if is_played:
+                    st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    sc = st.columns(5)
+                    stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Skud", "totalScoringAtt", ""), ("xG", "expectedGoals", ""), ("Afleveringer", "totalPass", ""), ("Hjørne", "wonCorner", "")]
+                    for i, (label, s_key, suff) in enumerate(stats_map):
+                        h_v = row.get(f"{s_key}_HOME", 0)
+                        a_v = row.get(f"{s_key}_AWAY", 0)
+                        sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:9px; color:#888;'>{label}</div><div style='font-size:11px; font-weight:600;'>{h_v}{suff}-{a_v}{suff}</div></div>", unsafe_allow_html=True)
+
+    tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
+    with tab_res:
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
+    with tab_fix:
+        tegn_kampe(team_matches[team_matches['MATCH_STATUS_CLEAN'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
