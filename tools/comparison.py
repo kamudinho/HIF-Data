@@ -24,22 +24,16 @@ def vis_spiller_billede(img_url, pid, w=150):
     pid_clean = str(pid).split('.')[0].strip() if pd.notna(pid) else ""
     
     # Liste over værdier vi betragter som "tomme/ugyldige"
-    ugyldige = ["", "0", "0.0", "nan", "none", "nan", "undefined"]
+    ugyldige = ["", "0", "0.0", "nan", "none", "undefined"]
     
     # LOGIK-KÆDE:
-    # A: Har vi en rigtig URL?
     if img_clean and img_clean.lower() not in ugyldige:
         url = img_clean
-        
-    # B: Hvis ikke, har vi et PID vi kan bygge en Wyscout URL med?
     elif pid_clean and pid_clean.lower() not in ugyldige:
         url = f"https://cdn5.wyscout.com/photos/players/public/{pid_clean}.png"
-        
-    # C: Hvis alt fejler, brug standard silhuetten
     else:
         url = std
         
-    # Vis billedet - use_container_width=False sikrer vi styrer størrelsen med 'w'
     st.image(url, width=w)
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
@@ -49,13 +43,26 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         df_p.columns = [c.upper() for c in df_p.columns]
         df_p['PID_CLEAN'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     
+    # Byg billed_map fra d3 (SQL)
+    billed_map = {}
+    if d3 is not None and not d3.empty:
+        for _, row in d3.iterrows():
+            pid_tmp = str(row.get('PLAYER_WYID', '')).split('.')[0].strip()
+            url_tmp = row.get('IMAGEDATAURL')
+            # SIKRING: Vi gemmer kun URL'en hvis den ikke er "0" eller tom
+            if pid_tmp and pd.notna(url_tmp) and str(url_tmp).strip() not in ["0", "0.0", "nan", ""]:
+                billed_map[pid_tmp] = str(url_tmp).strip()
+
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     except:
         df_s = pd.DataFrame()
 
-    navne_liste = sorted(list(set((df_p['NAVN'].tolist() if 'NAVN' in df_p.columns else []) + (df_s['Navn'].tolist() if 'Navn' in df_s.columns else []))))
+    # Samlet navneliste
+    navne_p = df_p['NAVN'].tolist() if 'NAVN' in df_p.columns else []
+    navne_s = df_s['Navn'].tolist() if 'Navn' in df_s.columns else []
+    navne_liste = sorted(list(set(navne_p + navne_s)))
 
     # --- 2. SELECTORS ---
     c_sel1, c_sel2 = st.columns(2)
@@ -71,26 +78,23 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         
         if not pid: return None
 
-        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt", "scout": {}}
+        res = {"navn": navn, "pid": pid, "img": None, "klub": "Ukendt", "pos": "Ukendt", "scout": {}, "stats": {}}
         
-        # Billede fra d3 (scout_images_only query)
-        if d3 is not None and not d3.empty:
-            d3_copy = d3.copy()
-            d3_copy.columns = [c.upper() for c in d3_copy.columns]
-            foto_match = d3_copy[d3_copy['PLAYER_WYID'].astype(str).str.contains(str(pid))]
-            if not foto_match.empty:
-                res["img"] = foto_match.iloc[0].get('IMAGEDATAURL')
+        # Billede-opslag i vores rensede map
+        res["img"] = billed_map.get(str(pid))
 
-        # Stamdata fra spillertrup
+        # Stamdata fra trup
         if not df_p.empty:
             m = df_p[df_p['PID_CLEAN'] == pid]
             if not m.empty:
-                if not res["img"]: # Kun hvis d3 ikke fandt noget
-                    res["img"] = m.iloc[0].get('IMAGEDATAURL')
+                if not res["img"]:
+                    img_trup = m.iloc[0].get('IMAGEDATAURL')
+                    if pd.notna(img_trup) and str(img_trup).strip() not in ["0", "0.0", "nan", ""]:
+                        res["img"] = str(img_trup).strip()
                 res["klub"] = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
                 res["pos"] = map_position(m.iloc[0].get('ROLECODE3', ''))
 
-        # Statistik
+        # Karriere Statistik
         stats = {"Kampe": 0, "Mål": 0, "Assist": 0, "Min": 0, "Gule": 0}
         if career_df is not None and not career_df.empty:
             cdf = career_df.copy()
@@ -123,7 +127,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
 
     p1, p2 = hent_alle_data(s1_navn), hent_alle_data(s2_navn)
 
-    # --- VISNING ---
+    # --- 3. VISNING ---
     st.divider()
     c_img1, c_radar, c_img2 = st.columns([2, 4, 2])
     
