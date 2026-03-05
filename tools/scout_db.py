@@ -105,78 +105,62 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         st.info("Ingen spejder-rapporter fundet.")
         return
     
+    # 1. KLARGØR SCOUTING DATA (DIN CSV)
     df = scout_df.copy()
     df.columns = [c.strip().upper() for c in df.columns]
-    
-    # Standard placeholder fra Wyscout
-    std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-    
-    # 1. RENS ID'ER (VIGTIGT: Vi fjerner .0 her, så URL'en bliver valid)
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
-    # 2. Håndter stamdata og billeder fra SQL/Lokal
-    if players_local is not None and not players_local.empty:
-        p_local = players_local.copy()
-        p_local.columns = [c.upper() for c in p_local.columns]
-        p_local['PLAYER_WYID'] = p_local['PLAYER_WYID'].apply(rens_id)
+    # 2. HENT UNIKKE BILLEDER FRA SQL (SNOWFLAKE)
+    # Vi laver en simpel "nøgle -> billede" ordbog (lookup)
+    billed_lookup = {}
+    if sql_players is not None and not sql_players.empty:
+        # Sørg for at SQL-data også er renset
+        sql_df = sql_players.copy()
+        sql_df.columns = [c.upper() for c in sql_df.columns]
+        sql_df['PLAYER_WYID'] = sql_df['PLAYER_WYID'].apply(rens_id)
         
-        # Flet SQL billeder på hvis de findes
-        if sql_players is not None and not sql_players.empty:
-            sql_p = sql_players.copy()
-            sql_p['PLAYER_WYID'] = sql_p['PLAYER_WYID'].apply(rens_id)
-            sql_img = sql_p[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
-            p_local = p_local.merge(sql_img, on='PLAYER_WYID', how='left')
-            
-        df = df.merge(p_local.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
+        # Lav et map: { '626639': 'https://cdn...', 'ID': 'URL' }
+        billed_lookup = pd.Series(
+            sql_df.IMAGEDATAURL.values, 
+            index=sql_df.PLAYER_WYID
+        ).to_dict()
 
-    # 3. DEN DEFINITIVE BILLEDE-LOGIK
-    def get_final_img(row):
-        # Tjek alle tænkelige kolonnenavne for en eksisterende URL
-        url = row.get('IMAGEDATAURL', row.get('PLAYER_IMAGEDATAURL', row.get('IMAGE_URL')))
+    # 3. FUNKTION TIL AT FINDE DET UNIKKE BILLEDE
+    def find_spiller_billede(row):
+        pid = row.get('PLAYER_WYID')
         
-        if pd.notna(url) and str(url).startswith('http'):
-            return url
+        # Tjek først om ordbogen har den unikke URL fra Snowflake for dette ID
+        if pid in billed_lookup and pd.notna(billed_lookup[pid]):
+            return billed_lookup[pid]
         
-        # Hvis ingen URL er gemt, byg den direkte fra Wyscouts CDN ved hjælp af ID
-        pid = rens_id(row.get('PLAYER_WYID'))
+        # Hvis ikke fundet i SQL, byg den manuelt (Wyscout standard format)
         if pid and pid != "" and pid != "nan":
-            # Dette er standard-formatet for Wyscouts offentlige billeder
             return f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
         
-        return std_img
+        # Fallback til silhuet
+        return "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
 
-    df['BILLED_URL'] = df.apply(get_final_img, axis=1)
+    # Påfør det unikke billede til hver række i din scouting-oversigt
+    df['BILLED_URL'] = df.apply(find_spiller_billede, axis=1)
 
-    # 4. DATA-PROCESSERING (Position, Dato, Nyeste rapport)
+    # 4. RESTEN AF DIN LOGIK (Sorting, Position osv.)
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
-    f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
-    # 5. SØGNING
-    search = st.text_input("Søg i databasen...", placeholder="Søg på navn, klub eller status...")
-    if search:
-        f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | 
-                    f_df['KLUB'].str.contains(search, case=False, na=False)]
+    # Tag kun den nyeste rapport pr. spiller
+    f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
 
-    # 6. TABEL-VISNING
-    vis_cols = ['BILLED_URL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
+    # 5. VISNING I TABELLEN
+    vis_cols = ['BILLED_URL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']
     disp = f_df[vis_cols].copy()
     
-    col_map = {
-        'BILLED_URL': ' ', 
-        'NAVN': 'Navn', 
-        'POSITION_VISNING': 'Pos', 
-        'KLUB': 'Klub', 
-        'RATING_AVG': 'Rating', 
-        'STATUS': 'Status', 
-        'SCOUT': 'Scout'
-    }
+    col_map = {'BILLED_URL': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status'}
     
-    event = st.dataframe(
-        disp.rename(columns=col_map), 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
+    st.dataframe(
+        disp.rename(columns=col_map),
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
         selection_mode="single-row",
         height="content",
         column_config={
