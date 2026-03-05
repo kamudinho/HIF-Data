@@ -16,22 +16,30 @@ def map_position(pos_code):
     return pos_map.get(s_code, "Ukendt")
 
 def vis_spiller_billede(img_url, pid, w=150):
-    """Henter billede fra URL eller genererer det ud fra PLAYER_WYID"""
+    """Henter billede fra URL, genererer det fra PID eller bruger standard silhuet"""
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     
-    # Konverter img_url til streng for at tjekke den sikkert
-    img_str = str(img_url).strip()
+    # 1. Rens inputs så vi kan tjekke dem ordentligt
+    img_clean = str(img_url).strip() if pd.notna(img_url) else ""
+    pid_clean = str(pid).split('.')[0].strip() if pd.notna(pid) else ""
     
-    # 1. Tjek om vi har en valid URL (Vi tilføjer "0" og "0.0" til tjekket)
-    if img_url and img_str not in ["", "nan", "None", "0", "0.0"]:
-        url = img_url
-    # 2. Ellers byg den ud fra Wyscouts faste format via PID
-    elif pid and str(pid).strip() not in ["", "nan", "None", "0", "0.0"]:
-        clean_id = str(pid).split('.')[0]
-        url = f"https://cdn5.wyscout.com/photos/players/public/{clean_id}.png"
+    # Liste over værdier vi betragter som "tomme/ugyldige"
+    ugyldige = ["", "0", "0.0", "nan", "none", "nan", "undefined"]
+    
+    # LOGIK-KÆDE:
+    # A: Har vi en rigtig URL?
+    if img_clean and img_clean.lower() not in ugyldige:
+        url = img_clean
+        
+    # B: Hvis ikke, har vi et PID vi kan bygge en Wyscout URL med?
+    elif pid_clean and pid_clean.lower() not in ugyldige:
+        url = f"https://cdn5.wyscout.com/photos/players/public/{pid_clean}.png"
+        
+    # C: Hvis alt fejler, brug standard silhuetten
     else:
         url = std
         
+    # Vis billedet - use_container_width=False sikrer vi styrer størrelsen med 'w'
     st.image(url, width=w)
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
