@@ -75,8 +75,6 @@ def vis_side(dp):
     scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"), disabled=True)
     st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
 
-    st.markdown("---")
-
     # --- FORMULAREN MED ALLE FUNKTIONER ---
     with st.form("rapport_form", clear_on_submit=True):
         st.write("### Parametre (1-6)")
