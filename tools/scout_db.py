@@ -63,25 +63,42 @@ def vis_profil(p_data, full_df, career_df):
     with t4:
         st.subheader("Karriere Stats")
         if career_df is not None and not career_df.empty:
-            # Match på ID (vi bruger clean_p_id som vi allerede har rensget)
-            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
+            # 1. Rens ID'erne for at sikre match (hvis de kommer som float fra Snowflake)
+            temp_career = career_df.copy()
+            temp_career['PLAYER_WYID'] = temp_career['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            
+            # 2. Filtrer på den valgte spiller
+            df_p = temp_career[temp_career['PLAYER_WYID'] == str(clean_p_id)].copy()
             
             if not df_p.empty:
-                # Præcis de kolonner du vil have
-                kolonner = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'SUBSTITUTEIN', 'SUBSTITUTEOUT', 'ASSISTS', 'YELLOWCARD', 'REDCARDS']
+                # 3. Definér de præcise kolonner fra SQL'en
+                kolonner = [
+                    'SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 
+                    'GOALS', 'ASSISTS', 'YELLOWCARD', 'REDCARDS'
+                ]
                 
-                # Oversættelse til visning
+                # 4. Danske overskrifter til tabellen
                 pretty_map = {
-                    'SEASONNAME': 'Sæson', 'TEAMNAME': 'Hold', 'MATCHES': 'Kampe', 
-                    'MINUTES': 'Min', 'GOALS': 'Mål', 'ASSISTS': 'Ass', 
-                    'YELLOWCARD': 'Gule', 'REDCARDS': 'Røde'
+                    'SEASONNAME': 'Sæson', 
+                    'TEAMNAME': 'Klub', 
+                    'MATCHES': 'Kampe', 
+                    'MINUTES': 'Min', 
+                    'GOALS': 'Mål', 
+                    'ASSISTS': 'Ass', 
+                    'YELLOWCARD': 'Gule', 
+                    'REDCARDS': 'Røde'
                 }
                 
-                # Filtrer og vis
-                disp_df = df_p[[c for c in kolonner if c in df_p.columns]].rename(columns=pretty_map)
-                st.dataframe(disp_df, use_container_width=True, hide_index=True)
+                # 5. Vis tabellen (vi fjerner index, så den ser professionel ud)
+                st.dataframe(
+                    df_p[kolonner].rename(columns=pretty_map), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
-                st.warning(f"Ingen historik fundet i Snowflake for ID: {clean_p_id}")
+                st.warning(f"Ingen historik fundet for ID: {clean_p_id}")
+        else:
+            st.error("Kunne ikke forbinde til karriere-databasen.")
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
