@@ -113,34 +113,64 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
 
     # Række 2: Stats - Radar - Stats
     st.markdown("<br>", unsafe_allow_html=True)
-    s1, rad, s2 = st.columns([2, 5, 2])
+    
+    # Vi bruger 'gap' for at få luft, og sikrer at kolonnerne starter helt fra toppen
+    s1, rad, s2 = st.columns([2, 5, 2], gap="small")
     
     with s1:
+        # Flyt stats helt op ved at fjerne top-margin
+        st.markdown('<div style="margin-top:-20px;">', unsafe_allow_html=True)
         render_stat_col("Mål", p1["stats"]["Mål"])
         render_stat_col("Passes", p1["stats"]["Passes"])
         render_stat_col("Skud", p1["stats"]["Skud"])
         render_stat_col("Kampe", p1["stats"]["Kampe"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with s2:
+        st.markdown('<div style="margin-top:-20px;">', unsafe_allow_html=True)
         render_stat_col("Mål", p2["stats"]["Mål"], "right")
         render_stat_col("Passes", p2["stats"]["Passes"], "right")
         render_stat_col("Skud", p2["stats"]["Skud"], "right")
         render_stat_col("Kampe", p2["stats"]["Kampe"], "right")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with rad:
         labels = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
         fig = go.Figure()
+        
+        # Tilføj spillere
         for p, color in [(p1, '#df003b'), (p2, '#0056a3')]:
-            r_vals = [p['r'].get(k, p['r'].get(list(p['r'].keys())[i])) for i, k in enumerate(p['r'])]
-            fig.add_trace(go.Scatterpolar(r=r_vals + [r_vals[0]], theta=labels + [labels[0]], fill='toself', name=p['navn'], line_color=color))
-        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=400, margin=dict(l=40,r=40,t=0,b=0), showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+            r_vals = [p['r'].get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']]
+            fig.add_trace(go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=labels + [labels[0]], 
+                fill='toself', 
+                name=p['navn'], 
+                line_color=color,
+                opacity=0.6
+            ))
 
-    # Række 3: Scout Vurdering (Bokse som i dit screenshot)
-    v1, v2 = st.columns(2)
-    with v1:
-        st.markdown(f"""<div style="background-color: #fff0f3; padding: 15px; border-left: 5px solid #df003b; border-radius: 5px; min-height: 100px;">
-            <b style="color:#df003b;">Scout vurdering:</b><br><small>{p1['vurdering']}</small></div>""", unsafe_allow_html=True)
-    with v2:
-        st.markdown(f"""<div style="background-color: #f0f7ff; padding: 15px; border-right: 5px solid #0056a3; border-radius: 5px; min-height: 100px; text-align:right;">
-            <b style="color:#0056a3;">Scout vurdering:</b><br><small>{p2['vurdering']}</small></div>""", unsafe_allow_html=True)
+        # LAYOUT MED KANTER OG STYRING
+        fig.update_layout(
+            polar=dict(
+                bgcolor="white",
+                radialaxis=dict(
+                    visible=True, 
+                    range=[0, 6], 
+                    gridcolor="#eeeeee", # Grå cirkel-kanter
+                    linecolor="#444444",  # Midter-aksen
+                    tickfont=dict(size=8)
+                ),
+                angularaxis=dict(
+                    gridcolor="#eeeeee", # Kanter mellem "lagkagestykkerne"
+                    linecolor="#444444", # Den yderste kant-ramme
+                    direction="clockwise"
+                )
+            ),
+            height=420, # Justeret højde
+            margin=dict(l=40, r=40, t=0, b=0), # Fjern top-margin så den rykker op
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)", # Gennemsigtig baggrund
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
