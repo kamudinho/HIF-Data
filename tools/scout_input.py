@@ -44,10 +44,7 @@ def vis_side(dp):
                     "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
-    # 2. KØR INDLÆSNING
-    add_to_options(df_local, "Arkiv")
-    add_to_options(df_wyscout, "Wyscout")
-
+   
     # 3. INITIALISÉR 'data' (Dette fjerner fejlen!)
     data = {"n": "", "id": "", "pos": "", "klub": ""}
     
