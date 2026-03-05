@@ -110,54 +110,47 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     df.columns = [c.strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
-    # 2. HENT UNIKKE BILLEDER FRA SQL (SNOWFLAKE)
-    billed_lookup = {}
+    # 2. HENT DE UNIKKE BILLEDER FRA SQL (SNOWFLAKE)
+    # Vi laver en ordbog baseret på PLAYER_WYID som nøgle
+    billed_map = {}
     if sql_players is not None and not sql_players.empty:
         sql_df = sql_players.copy()
         sql_df.columns = [c.upper() for c in sql_df.columns]
         sql_df['PLAYER_WYID'] = sql_df['PLAYER_WYID'].apply(rens_id)
         
-        # Lav et opslag: { '626639': 'https://cdn...', ... }
-        # Vi sikrer os at vi kun tager de rækker der rent faktisk har en URL
-        billed_lookup = sql_df[sql_df['IMAGEDATAURL'].notna()].set_index('PLAYER_WYID')['IMAGEDATAURL'].to_dict()
+        # Vi tager kun rækker der har en valid URL
+        valid_pics = sql_df[sql_df['IMAGEDATAURL'].notna()]
+        billed_map = dict(zip(valid_pics['PLAYER_WYID'], valid_pics['IMAGEDATAURL']))
 
-    # 3. FUNKTION TIL AT FINDE DET UNIKKE BILLEDE BASERET PÅ ID
-    def find_spiller_billede(row):
+    # 3. FUNKTION DER HENTER DEN RIGTIGE URL
+    def hent_korrekt_billede(row):
         pid = row.get('PLAYER_WYID')
+        std_img = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
         
-        # A) Tjek Snowflake-opslaget først (Præcis URL fra SQL)
-        if pid in billed_lookup:
-            return billed_lookup[pid]
+        # Tjek om vi har det unikke link fra SQL til netop dette PLAYER_WYID
+        if pid in billed_map:
+            return billed_map[pid]
         
-        # B) Hvis ikke i SQL, byg det unikke Wyscout-link manuelt
-        if pid and pid != "" and pid != "nan":
-            return f"https://cdn5.wyscout.com/photos/players/public/g-{pid}_100x130.png"
-        
-        # C) Fallback til standard-silhuet
-        return "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
+        # Hvis ID ikke findes i SQL-udtrækket (f.eks. spiller i en anden liga), 
+        # så bruger vi standard-silhuetten i stedet for at gætte på en URL
+        return std_img
 
-    # Påfør det unikke billede til hver række i din oversigt
-    df['BILLED_URL'] = df.apply(find_spiller_billede, axis=1)
+    # Påfør den unikke URL til hver række
+    df['VIS_BILLEDE'] = df.apply(hent_korrekt_billede, axis=1)
 
-    # 4. DATA-PROCESSERING (Position, Dato, Nyeste rapport)
+    # 4. DATA-PROCESSERING
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     
-    # Gruppér så vi kun ser den nyeste rapport pr. unik spiller
+    # Gruppér for at få den nyeste rapport pr. spiller
     f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
-    # Søgefelt
-    search = st.text_input("Søg i databasen...", placeholder="Søg på navn eller klub...")
-    if search:
-        mask = f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)
-        f_df = f_df[mask]
-
-    # 5. TABEL-VISNING (Her definerer vi 'event')
-    vis_cols = ['BILLED_URL', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
+    # 5. TABEL-VISNING
+    vis_cols = ['VIS_BILLEDE', 'NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
     disp = f_df[vis_cols].copy()
     
     col_map = {
-        'BILLED_URL': ' ', 
+        'VIS_BILLEDE': ' ', 
         'NAVN': 'Navn', 
         'POSITION_VISNING': 'Pos', 
         'KLUB': 'Klub', 
@@ -166,7 +159,6 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         'SCOUT': 'Scout'
     }
     
-    # HER DEFINERES 'event' VARIABLEN
     event = st.dataframe(
         disp.rename(columns=col_map), 
         use_container_width=True, 
@@ -180,8 +172,6 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         }
     )
     
-    # 6. ÅBN PROFIL VED KLIK
-    # Vi tjekker om brugeren har valgt en række
     if len(event.selection.rows) > 0:
         valgt_index = event.selection.rows[0]
         spiller_data = f_df.iloc[valgt_index]
