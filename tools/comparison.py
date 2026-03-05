@@ -7,28 +7,42 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def vis_spiller_billede(img_url, pid, w=150):
+def map_position(pos_code):
+    pos_map = {
+        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
+        "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
+        "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
+        "10": "Offensiv Midt", "11": "Venstre Kant"
+    }
+    return pos_map.get(rens_id(pos_code), "Ukendt")
+
+def vis_spiller_billede(img_url, pid, w=100):
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     img_clean = str(img_url).strip() if pd.notna(img_url) else ""
     pid_clean = rens_id(pid)
-    ugyldige = ["", "0", "0.0", "nan", "none", "undefined"]
-    
-    if img_clean and img_clean.lower() not in ugyldige:
+    if img_clean and img_clean not in ["0", "0.0", "nan"]:
         url = img_clean
-    elif pid_clean and pid_clean not in ugyldige:
+    elif pid_clean:
         url = f"https://cdn5.wyscout.com/photos/players/public/{pid_clean}.png"
     else:
         url = std
     st.image(url, width=w)
+
+def render_stat_col(label, value, align="left"):
+    # Hjælper med at lave det rene tal-look fra dit screenshot
+    st.markdown(f"""
+        <div style="text-align: {align}; margin-bottom: 10px;">
+            <p style="margin:0; font-size: 0.8rem; color: gray; text-transform: uppercase;">{label}</p>
+            <p style="margin:0; font-size: 1.8rem; font-weight: 700;">{value}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
     # 1. DATA PREP
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].apply(rens_id)
-    except:
-        st.error("Kunne ikke læse scouting_db.csv")
-        return
+    except: return
 
     billed_map = {}
     if d3 is not None and not d3.empty:
@@ -36,7 +50,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
 
     navne_liste = sorted(df_s['Navn'].unique().tolist())
 
-    # 2. SELECTORS (Flottere placeret)
+    # 2. SELECTORS
     c_sel1, c_sel2 = st.columns(2)
     s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
     s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1))
@@ -47,94 +61,86 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         n = s_match.iloc[0]
         pid = n['PID_CLEAN']
         
-        # Karrierestats
-        stats = {"Kampe": 0, "Mål": 0, "Assist": 0, "Min": 0}
+        # Hent ROLECODE3 og TEAMNAME fra df_spillere hvis muligt
+        pos_str, klub_str = "Ukendt", "Ukendt"
+        if df_spillere is not None and not df_spillere.empty:
+            df_p = df_spillere.copy()
+            df_p.columns = [c.upper() for c in df_p.columns]
+            m = df_p[df_p['PLAYER_WYID'].apply(rens_id) == pid]
+            if not m.empty:
+                pos_str = map_position(m.iloc[0].get('ROLECODE3', ''))
+                klub_str = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
+
+        # Stats
+        stats = {"Mål": 0, "Passes": 0, "Skud": 0, "Kampe": 0}
         if career_df is not None and not career_df.empty:
             cdf = career_df.copy()
             cdf.columns = [c.upper() for c in cdf.columns]
-            # Bruger SEASON_FILTER fra din main eller definer her
             c_m = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].str.contains("2025/2026", na=False))]
             if not c_m.empty:
                 stats = {
-                    "Kampe": int(c_m.iloc[0].get('APPEARANCES', 0)),
                     "Mål": int(c_m.iloc[0].get('GOAL', 0)),
-                    "Assist": int(c_m.iloc[0].get('ASSIST', 0)),
-                    "Min": int(c_m.iloc[0].get('MINUTESPLAYED', 0))
+                    "Passes": int(c_m.iloc[0].get('PASSES', 0)),
+                    "Skud": int(c_m.iloc[0].get('SHOTS', 0)),
+                    "Kampe": int(c_m.iloc[0].get('APPEARANCES', 0))
                 }
 
         return {
             "navn": navn, "pid": pid, "img": billed_map.get(pid),
-            "klub": n.get('Klub', 'Ukendt'), "pos": n.get('Pos', 'Ukendt'),
-            "vurdering": n.get('Vurdering', '-'), "styrker": n.get('Styrker', '-'),
-            "stats": stats,
-            "r": {
-                'Fart': n.get('Fart', 0), 'Teknik': n.get('Teknik', 0),
-                'Beslut': n.get('Beslutsomhed', 0), 'Intel': n.get('Spilintelligens', 0),
-                'Aggr': n.get('Aggresivitet', 0), 'Leder': n.get('Lederegenskaber', 0),
-                'Att': n.get('Attitude', 0), 'Udh': n.get('Udholdenhed', 0)
-            }
+            "pos": pos_str, "klub": klub_str, "stats": stats,
+            "vurdering": n.get('Vurdering', 'Ingen noter fundet.'),
+            "r": {k: n.get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']}
         }
 
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
 
-    if not p1 or not p2:
-        st.warning("Vælg to spillere for at sammenligne")
-        return
-
-    # 3. HOVEDLAYOUT (Visuals)
-    st.markdown("---")
+    # 3. DASHBOARD RENDER
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    # Øverste sektion med billeder og Radar
-    c1, c_radar, c2 = st.columns([1.5, 3.5, 1.5])
+    # Række 1: Navne og Billeder
+    h1, h_space, h2 = st.columns([4, 1, 4])
+    with h1:
+        st.markdown(f"<h2 style='color:#df003b; margin-bottom:0;'>{p1['navn']}</h2>", unsafe_allow_html=True)
+        c_img, c_txt = st.columns([1, 3])
+        with c_img: vis_spiller_billede(p1["img"], p1["pid"], w=80)
+        with c_txt: st.caption(f"{p1['pos']} | {p1['klub']}")
+    
+    with h2:
+        st.markdown(f"<h2 style='color:#0056a3; margin-bottom:0; text-align:right;'>{p2['navn']}</h2>", unsafe_allow_html=True)
+        c_txt, c_img = st.columns([3, 1])
+        with c_img: vis_spiller_billede(p2["img"], p2["pid"], w=80)
+        with c_txt: st.markdown(f"<div style='text-align:right; color:gray; font-size:0.9rem;'>{p2['pos']} | {p2['klub']}</div>", unsafe_allow_html=True)
 
-    with c1:
-        st.markdown("<br>", unsafe_allow_html=True)
-        vis_spiller_billede(p1["img"], p1["pid"])
-        st.subheader(p1["navn"])
-        st.markdown(f"**{p1['pos']}** \n*{p1['klub']}*")
+    # Række 2: Stats - Radar - Stats
+    st.markdown("<br>", unsafe_allow_html=True)
+    s1, rad, s2 = st.columns([2, 5, 2])
+    
+    with s1:
+        render_stat_col("Mål", p1["stats"]["Mål"])
+        render_stat_col("Passes", p1["stats"]["Passes"])
+        render_stat_col("Skud", p1["stats"]["Skud"])
+        render_stat_col("Kampe", p1["stats"]["Kampe"])
 
-    with c2:
-        st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        vis_spiller_billede(p2["img"], p2["pid"])
-        st.subheader(p2["navn"])
-        st.markdown(f"**{p2['pos']}** \n*{p2['klub']}*")
-        st.markdown("</div>", unsafe_allow_html=True)
+    with s2:
+        render_stat_col("Mål", p2["stats"]["Mål"], "right")
+        render_stat_col("Passes", p2["stats"]["Passes"], "right")
+        render_stat_col("Skud", p2["stats"]["Skud"], "right")
+        render_stat_col("Kampe", p2["stats"]["Kampe"], "right")
 
-    with c_radar:
-        labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-        keys = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
-        
+    with rad:
+        labels = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
         fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=[p1['r'][k] for k in keys]+[p1['r'][keys[0]]], theta=labels+[labels[0]], fill='toself', name=p1['navn'], line_color='#df003b'))
-        fig.add_trace(go.Scatterpolar(r=[p2['r'][k] for k in keys]+[p2['r'][keys[0]]], theta=labels+[labels[0]], fill='toself', name=p2['navn'], line_color='#0056a3'))
-        
-        fig.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 6], gridcolor="lightgrey")),
-            height=450, margin=dict(l=60, r=60, t=20, b=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5)
-        )
+        for p, color in [(p1, '#df003b'), (p2, '#0056a3')]:
+            r_vals = [p['r'].get(k, p['r'].get(list(p['r'].keys())[i])) for i, k in enumerate(p['r'])]
+            fig.add_trace(go.Scatterpolar(r=r_vals + [r_vals[0]], theta=labels + [labels[0]], fill='toself', name=p['navn'], line_color=color))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=400, margin=dict(l=40,r=40,t=0,b=0), showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
-    # 4. STATS SAMMENLIGNING (Side om side tabel)
-    st.markdown("### 📊 Statistisk Sammenligning")
-    
-    # Vi bygger en DataFrame til sammenligning
-    comparison_data = {
-        "Kategori": ["Kampe", "Minutter", "Mål", "Assists"],
-        p1["navn"]: [p1["stats"]["Kampe"], p1["stats"]["Min"], p1["stats"]["Mål"], p1["stats"]["Assist"]],
-        p2["navn"]: [p2["stats"]["Kampe"], p2["stats"]["Min"], p2["stats"]["Mål"], p2["stats"]["Assist"]]
-    }
-    st.table(pd.DataFrame(comparison_data).set_index("Kategori"))
-
-    # 5. SCOUT NOTER
-    st.markdown("---")
-    n1, n2 = st.columns(2)
-    with n1:
-        st.markdown(f"#### 📝 {p1['navn']}")
-        st.success(f"**Styrker:** {p1['styrker']}")
-        st.info(f"**Vurdering:** {p1['vurdering']}")
-    with n2:
-        st.markdown(f"#### 📝 {p2['navn']}")
-        st.success(f"**Styrker:** {p2['styrker']}")
-        st.info(f"**Vurdering:** {p2['vurdering']}")
+    # Række 3: Scout Vurdering (Bokse som i dit screenshot)
+    v1, v2 = st.columns(2)
+    with v1:
+        st.markdown(f"""<div style="background-color: #fff0f3; padding: 15px; border-left: 5px solid #df003b; border-radius: 5px; min-height: 100px;">
+            <b style="color:#df003b;">Scout vurdering:</b><br><small>{p1['vurdering']}</small></div>""", unsafe_allow_html=True)
+    with v2:
+        st.markdown(f"""<div style="background-color: #f0f7ff; padding: 15px; border-right: 5px solid #0056a3; border-radius: 5px; min-height: 100px; text-align:right;">
+            <b style="color:#0056a3;">Scout vurdering:</b><br><small>{p2['vurdering']}</small></div>""", unsafe_allow_html=True)
