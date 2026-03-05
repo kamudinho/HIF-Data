@@ -7,11 +7,12 @@ import requests
 def rens_metrik_vaerdi(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
+        # Håndterer både komma og punktum
         return int(float(str(val).replace(',', '.')))
     except: return 0
 
 def map_position(row):
-    # POS fra players.csv
+    # Tjekker først POS (fra players.csv)
     pos_val = str(row.get('POS', '')).split('.')[0].strip()
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back", "4": "Midtstopper", 
@@ -20,7 +21,7 @@ def map_position(row):
     }
     if pos_val in pos_dict: return pos_dict[pos_val]
     
-    # Fallback til POSITION kolonnen fra din scouting_db.csv
+    # Fallback til 'POSITION' kolonnen fra din scouting_db.csv
     return str(row.get('POSITION', 'Ukendt'))
 
 def vis_spiller_billede(pid, w=110):
@@ -37,12 +38,9 @@ def vis_profil(p_data, full_df, career_df):
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].copy()
     
+    # Sorter historik så den nyeste er sidst
     if 'DATO_DT' in historik.columns:
         historik = historik.sort_values('DATO_DT', ascending=True)
-    
-    if historik.empty:
-        st.error("Ingen rapporter fundet.")
-        return
     
     nyeste = historik.iloc[-1]
     
@@ -57,14 +55,17 @@ def vis_profil(p_data, full_df, career_df):
     with h2:
         st.markdown(f"## {nyeste.get('NAVN', 'Ukendt')}")
         st.markdown(f"**{nyeste.get('KLUB', 'Ingen klub')}** | {nyeste.get('POSITION_VISNING', 'Ukendt')} | Snit: `{nyeste.get('RATING_AVG', 0)}`")
-        contract_val = nyeste.get('KONTRAKT', nyeste.get('CONTRACT', ''))
-        if pd.notna(contract_val) and str(contract_val).strip() != "":
-            st.caption(f"Kontraktudløb: {contract_val}")
+        
+        # Kontrakt info
+        con = nyeste.get('KONTRAKT', nyeste.get('CONTRACT', ''))
+        if pd.notna(con) and str(con).strip() != "":
+            st.caption(f"Kontraktudløb: {con}")
 
     t1, t2, t3, t4, t5 = st.tabs(["Seneste", "Historik", "Udvikling", "Stats", "Radar"])
     
     with t1:
         m_cols = st.columns(4)
+        # Matcher dine præcise kolonnenavne fra din CSV
         metrics = [("Teknik", "TEKNIK"), ("Fart", "FART"), ("Aggresivitet", "AGGRESIVITET"), ("Attitude", "ATTITUDE"),
                    ("Udholdenhed", "UDHOLDENHED"), ("Leder", "LEDEREGENSKABER"), ("Beslutning", "BESLUTSOMHED"), ("Intelligens", "SPILINTELLIGENS")]
         for i, (label, col) in enumerate(metrics):
@@ -76,26 +77,25 @@ def vis_profil(p_data, full_df, career_df):
         with c3: st.info(f"**Vurdering**\n\n{nyeste.get('VURDERING', '-')}")
 
     with t2:
+        # Vis rapporterne i omvendt rækkefølge (nyeste øverst)
         for _, row in historik.iloc[::-1].iterrows():
-            dato_vis = row.get('DATO', 'Ukendt dato')
-            with st.expander(f"Dato: {dato_vis} | Rating: {row.get('RATING_AVG')}"):
+            with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')} | Scout: {row.get('SCOUT', 'Ukendt')}"):
                 st.write(row.get('VURDERING'))
 
     with t3:
-        if 'DATO_DT' in historik.columns and len(historik) > 1:
+        if len(historik) > 1:
             fig_line = go.Figure(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='lines+markers', line=dict(color='#df003b')))
             fig_line.update_layout(yaxis=dict(range=[0, 6]), height=300, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_line, use_container_width=True)
         else:
-            st.info("Kræver mindst to rapporter for at vise udvikling.")
+            st.info("Kræver flere rapporter for at vise udvikling.")
 
     with t4:
         if career_df is not None and not career_df.empty:
             df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
             if not df_p.empty:
                 mapping = {'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering', 'APPEARANCES': 'Kampe', 'GOAL': 'Mål'}
-                cols_to_show = [c for c in mapping.keys() if c in df_p.columns]
-                st.dataframe(df_p[cols_to_show].rename(columns=mapping), use_container_width=True, hide_index=True)
+                st.dataframe(df_p[[c for c in mapping.keys() if c in df_p.columns]].rename(columns=mapping), use_container_width=True, hide_index=True)
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
@@ -108,63 +108,58 @@ def vis_profil(p_data, full_df, career_df):
 def vis_side(scout_df, players_local, sql_players, career_df):
     st.title("Scouting Database")
     
-    # 1. FORBERED DATA - Tving alle kolonnenavne til store bogstaver for at matche koden
-    if scout_df is not None and not scout_df.empty:
-        scout_df.columns = [c.upper() for c in scout_df.columns]
-    
-    for d in [scout_df, players_local, sql_players, career_df]:
-        if d is not None and not d.empty and 'PLAYER_WYID' in d.columns:
-            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            
-    # 2. BASE: Brug KUN scouting_db.csv
+    # 1. BASE: Brug KUN scouting_db.csv
     if scout_df is None or scout_df.empty:
-        st.info("Ingen spejder-rapporter fundet i databasen endnu.")
+        st.info("Ingen spejder-rapporter fundet i databasen.")
         return
     
     df = scout_df.copy()
 
-    # SIKRING AF DATO_DT
-    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce').fillna(pd.Timestamp('2024-01-01'))
+    # VIGTIGT: Tving alle kolonnenavne til STORE bogstaver (håndterer 'Navn' vs 'NAVN')
+    df.columns = [c.strip().upper() for c in df.columns]
 
-    # 3. LOOKUP: Flet stamdata på (Billeder fra SQL og Kontrakt fra players.csv)
+    # 2. SIKRING AF DATO
+    if 'DATO' in df.columns:
+        df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
+    else:
+        df['DATO_DT'] = pd.Timestamp('2024-01-01')
+
+    # 3. LOOKUP: Flet stamdata på (Billeder og Kontrakt)
     lookup = pd.DataFrame()
     if players_local is not None and not players_local.empty:
         lookup = players_local.copy()
+        lookup.columns = [c.upper() for c in lookup.columns]
         if sql_players is not None and not sql_players.empty:
             sql_img = sql_players[['PLAYER_WYID', 'IMAGEDATAURL']].drop_duplicates('PLAYER_WYID')
             lookup = lookup.merge(sql_img, on='PLAYER_WYID', how='left')
-    elif sql_players is not None:
-        lookup = sql_players.copy()
-
+    
     if not lookup.empty:
         df = df.merge(lookup.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_extra'))
 
     # 4. KLARGØR VISNING
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     
-    # Sorter efter dato og tag nyeste pr. spiller
+    # Sorter og grupper (Tag nyeste rapport)
     f_df = df.sort_values('DATO_DT', ascending=True).groupby('PLAYER_WYID').tail(1).copy()
     
     # Søgning
     search = st.text_input("Søg i databasen...", placeholder="Navn eller klub...")
     if search:
-        mask = pd.Series(False, index=f_df.index)
-        if 'NAVN' in f_df.columns: mask |= f_df['NAVN'].str.contains(search, case=False, na=False)
-        if 'KLUB' in f_df.columns: mask |= f_df['KLUB'].str.contains(search, case=False, na=False)
+        mask = f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)
         f_df = f_df[mask]
 
     # 5. TABELVISNING
-    # Vi mapper dine specifikke kolonnenavne
-    vis_cols = ['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS']
+    vis_cols = ['NAVN', 'POSITION_VISNING', 'KLUB', 'RATING_AVG', 'STATUS', 'SCOUT']
     if 'IMAGEDATAURL' in f_df.columns:
         vis_cols.insert(0, 'IMAGEDATAURL')
     
+    # Filtrer kolonner der faktisk findes
     available_cols = [c for c in vis_cols if c in f_df.columns]
     disp = f_df[available_cols].copy()
     
     col_map = {
         'IMAGEDATAURL': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 
-        'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status'
+        'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status', 'SCOUT': 'Scout'
     }
     disp = disp.rename(columns=col_map)
     
