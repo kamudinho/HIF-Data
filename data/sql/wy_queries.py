@@ -17,18 +17,23 @@ def get_wy_queries(comp_filter, season_filter):
         s_f = season_filter if season_filter else " = '2025/2026'"
 
     return {
-        "player": f"""
+        # RETTET: Omdøbt fra 'player' til 'players' og tilføjet p.FIRSTNAME osv.
+        "players": f"""
             SELECT DISTINCT
-                ap.PLAYER_WYID,
-                tm.TEAMNAME AS CURRENT_TEAM_NAME,
-                s.SEASONNAME,
-                p.ROLECODE3 AS ROLE_NAME
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap
-            JOIN {DB}.WYSCOUT_MATCHES m ON ap.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+                p.PLAYER_WYID,
+                p.FIRSTNAME,
+                p.LASTNAME,
+                p.SHORTNAME AS PLAYER_NAME,
+                p.BIRTHDATE,
+                p.IMAGEDATAURL,
+                p.ROLECODE3,
+                tm.TEAMNAME AS CURRENT_TEAM_NAME
+            FROM {DB}.WYSCOUT_PLAYERS p
+            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL ap ON p.PLAYER_WYID = ap.PLAYER_WYID
             JOIN {DB}.WYSCOUT_TEAMS tm ON ap.TEAM_WYID = tm.TEAM_WYID
-            JOIN {DB}.WYSCOUT_PLAYERS p ON ap.PLAYER_WYID = p.PLAYER_WYID
-            WHERE ap.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
+            JOIN {DB}.WYSCOUT_SEASONS s ON ap.SEASON_WYID = s.SEASON_WYID
+            WHERE ap.COMPETITION_WYID IN {c_f} 
+            AND s.SEASONNAME {s_f}
         """,
         
         "player_career": f"""
@@ -36,7 +41,7 @@ def get_wy_queries(comp_filter, season_filter):
                 pc.PLAYER_WYID, 
                 s.SEASONNAME, 
                 c.COMPETITIONNAME, 
-                t.TEAMNAME AS CURRENT_TEAM_NAME, -- Vi kalder den CURRENT_TEAM_NAME så HIF_load kan kende den
+                t.TEAMNAME AS CURRENT_TEAM_NAME,
                 pc.APPEARANCES, 
                 pc.MINUTESPLAYED, 
                 pc.GOAL, 
@@ -59,8 +64,9 @@ def get_wy_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
             WHERE t.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
         """,
+        
         "team_logos": f"""
             SELECT TEAM_WYID, TEAMNAME, IMAGEDATAURL AS TEAM_LOGO 
             FROM {DB}.WYSCOUT_TEAMS
-        """,
+        """
     }
