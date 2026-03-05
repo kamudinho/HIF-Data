@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 
-# --- HJÆLPEFUNKTIONER ---
+# --- HJÆLPEFUNKTIONER (Beholdes som de er) ---
 def rens_metrik_vaerdi(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
@@ -11,7 +11,6 @@ def rens_metrik_vaerdi(val):
     except: return 0
 
 def map_position(row):
-    # Tjek først dit eget 1-11 system (POS)
     pos_val = str(row.get('POS', '')).split('.')[0].strip()
     pos_dict = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back", "4": "Midtstopper", 
@@ -19,8 +18,6 @@ def map_position(row):
         "9": "Angriber", "10": "Offensiv Midt", "11": "Venstre Kant"
     }
     if pos_val in pos_dict: return pos_dict[pos_val]
-    
-    # Fallback til ROLECODE3 fra Wyscout
     role = str(row.get('ROLECODE3', '')).strip().upper()
     role_dict = {"GKP": "Målmand", "DEF": "Forsvar", "MID": "Midtbane", "FWD": "Angriber"}
     return role_dict.get(role, "Ukendt")
@@ -35,7 +32,7 @@ def vis_spiller_billede(pid, w=110):
     except: st.image(std, width=w)
 
 @st.dialog("Spillerprofil", width="large")
-def vis_profil(p_data, full_df, s_df, career_df):
+def vis_profil(p_data, full_df, career_df):
     clean_p_id = str(p_data['PLAYER_WYID']).split('.')[0].strip()
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].sort_values('DATO_DT', ascending=True)
     
@@ -45,9 +42,9 @@ def vis_profil(p_data, full_df, s_df, career_df):
     
     nyeste = historik.iloc[-1]
     
-    # Header
     h1, h2 = st.columns([1, 4])
     with h1:
+        # Tjekker IMAGEDATAURL som nu er flettet ind i p_data nedenfor
         img_url = p_data.get('IMAGEDATAURL')
         if pd.notna(img_url) and str(img_url).startswith("http"):
             st.image(img_url, width=115)
@@ -90,8 +87,6 @@ def vis_profil(p_data, full_df, s_df, career_df):
             if not df_p.empty:
                 mapping = {'SEASONNAME': 'Sæson', 'TEAMNAME': 'Klub', 'COMPETITIONNAME': 'Turnering', 'APPEARANCES': 'Kampe', 'GOAL': 'Mål'}
                 st.dataframe(df_p[list(mapping.keys())].rename(columns=mapping), use_container_width=True, hide_index=True)
-            else:
-                st.info("Ingen karrieredata fundet.")
 
     with t5:
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
@@ -101,34 +96,52 @@ def vis_profil(p_data, full_df, s_df, career_df):
         fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False)
         st.plotly_chart(fig_radar, use_container_width=True)
 
-def vis_side(scout_df, spillere_df, stats_df, career_df):
+def vis_side(scout_df, players_local, sql_players, career_df):
     st.title("Scouting Database")
     
-    # Rens ID'er
-    for d in [scout_df, spillere_df, career_df]:
+    # 1. FORBERED DATA
+    # Vi rydder op i ID'er med det samme
+    for d in [scout_df, players_local, sql_players, career_df]:
         if d is not None and not d.empty and 'PLAYER_WYID' in d.columns:
-            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            d['PLAYER_WYID'] = d['PLAYER_WYID'].astype(str).str.split('.').str[0].strip()
 
-    # Merge data
+    # 2. MATCH SCOUTING MED STAMDATA
     df = scout_df.copy()
-    if spillere_df is not None and not spillere_df.empty:
-        # VIGTIGT: Vi tager CONTRACT og POS med her!
-        cols = [c for c in ['PLAYER_WYID', 'POS', 'CONTRACT', 'ROLECODE3', 'IMAGEDATAURL'] if c in spillere_df.columns]
-        df = df.merge(spillere_df[cols].drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left')
+    
+    # Vi laver en midlertidig master-liste til opslag på denne side
+    # Her fletter vi local og sql, så vi har BÅDE kontrakter OG billeder til visningen
+    if players_local is not None and not players_local.empty:
+        lookup = players_local.copy()
+        if sql_players is not None and not sql_players.empty:
+            # Tilføj billed-URL fra SQL hvis den mangler
+            lookup = lookup.merge(sql_players[['PLAYER_WYID', 'IMAGEDATAURL']], on='PLAYER_WYID', how='left')
+    else:
+        lookup = sql_players if sql_players is not None else pd.DataFrame()
+
+    # Flet stamdata ind på rapporterne
+    if not lookup.empty:
+        df = df.merge(lookup.drop_duplicates('PLAYER_WYID'), on='PLAYER_WYID', how='left', suffixes=('', '_drop'))
 
     df['POSITION_VISNING'] = df.apply(map_position, axis=1)
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     
-    # Nyeste rapport pr. spiller
     f_df = df.sort_values('DATO_DT').groupby('PLAYER_WYID').tail(1).copy()
     
     search = st.text_input("Søg i databasen...", placeholder="Navn eller klub...")
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
 
-    # Tabelvisning
-    disp = f_df[['IMAGEDATAURL', 'NAVN', 'POSITION_VISNING', 'POS', 'KLUB', 'RATING_AVG', 'CONTRACT', 'STATUS']].copy()
-    disp.columns = [' ', 'Navn', 'Type', 'Nr', 'Klub', 'Rating', 'Kontrakt', 'Status']
+    # 3. TABELVISNING
+    # Vi tjekker om kolonnerne findes før vi viser dem (vigtigt hvis en kilde mangler)
+    vis_cols = ['NAVN', 'POSITION_VISNING', 'POS', 'KLUB', 'RATING_AVG', 'CONTRACT', 'STATUS']
+    if 'IMAGEDATAURL' in f_df.columns:
+        vis_cols.insert(0, 'IMAGEDATAURL')
+        
+    disp = f_df[vis_cols].copy()
+    
+    # Omdøb til pæne navne
+    col_map = {'IMAGEDATAURL': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Type', 'POS': 'Nr', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'CONTRACT': 'Kontrakt', 'STATUS': 'Status'}
+    disp = disp.rename(columns=col_map)
     
     event = st.dataframe(
         disp, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
@@ -139,4 +152,4 @@ def vis_side(scout_df, spillere_df, stats_df, career_df):
     )
     
     if len(event.selection.rows) > 0:
-        vis_profil(f_df.iloc[event.selection.rows[0]], df, stats_df, career_df)
+        vis_profil(f_df.iloc[event.selection.rows[0]], df, career_df)
