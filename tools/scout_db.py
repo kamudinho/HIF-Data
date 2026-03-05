@@ -155,4 +155,5 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     if len(event.selection.rows) > 0:
         valgt_index = event.selection.rows[0]
         spiller_data = f_df.iloc[valgt_index]
+        # HER SKAL career_df TILFØJES SOM DET TREDJE ARGUMENT:
         vis_profil(spiller_data, df, career_df)
