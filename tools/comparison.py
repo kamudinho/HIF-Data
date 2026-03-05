@@ -62,48 +62,50 @@ def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
 
     def hent_data(navn):
         pid = None
-        # Find PLAYER_WYID baseret på navn
+        # 1. Find PLAYER_WYID og rens det (fjern .0)
         if not df_p.empty and navn in df_p['NAVN'].values:
-            pid = str(df_p[df_p['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0]
+            pid = str(df_p[df_p['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0].strip()
         elif not df_s.empty and navn in df_s['NAVN'].values:
-            pid = str(df_s[df_s['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0]
+            pid = str(df_s[df_s['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0].strip()
         
         if not pid: return None
 
-        # Hent stamdata
+        # 2. Hent stamdata
         img, klub, pos = None, "Ukendt", "Ukendt"
-        p_match = df_p[df_p['PLAYER_WYID'].astype(str).str.contains(pid)] if not df_p.empty else pd.DataFrame()
-        if not p_match.empty:
-            img = p_match.iloc[0].get('IMAGEDATAURL')
-            klub = p_match.iloc[0].get('TEAMNAME', 'Hvidovre IF')
-            pos = map_position(p_match.iloc[0].get('ROLECODE3', ''))
+        # Brug .str.contains eller konverter hele kolonnen for at matche PID
+        if not df_p.empty:
+            df_p['PLAYER_WYID_STR'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            p_match = df_p[df_p['PLAYER_WYID_STR'] == pid]
+            if not p_match.empty:
+                img = p_match.iloc[0].get('IMAGEDATAURL')
+                klub = p_match.iloc[0].get('TEAMNAME', 'Hvidovre IF')
+                pos = map_position(p_match.iloc[0].get('ROLECODE3', ''))
         
-        # Hent Stats (Snowflake)
-        stats = {'M': 0, 'K': 0}
-        if career_df is not None and not career_df.empty:
-            career_df.columns = [c.upper() for c in career_df.columns]
-            c_match = career_df[
-                (career_df['PLAYER_WYID'].astype(str).str.contains(pid)) & 
-                (career_df['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))
-            ]
-            if not c_match.empty:
-                row = c_match.iloc[0]
-                stats = {'M': row.get('GOAL', 0), 'K': row.get('APPEARANCES', 0)}
-
-        # Hent Ratings (CSV)
+        # 3. Hent Ratings fra scouting_db.csv (Radar-data)
         r = {k: 0.0 for k in ['FART', 'TEKNIK', 'BESLUT', 'INTEL', 'AGGR', 'LEDER', 'ATT', 'UDH']}
         if not df_s.empty:
-            s_match = df_s[df_s['PLAYER_WYID'].astype(str).str.contains(pid)]
+            # Rens ID'er i scouting_db for sammenligning
+            df_s['PLAYER_WYID_STR'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            s_match = df_s[df_s['PLAYER_WYID_STR'] == pid]
+            
             if not s_match.empty:
+                # Vi tager den NYESTE indtastning for denne spiller
                 n = s_match.iloc[-1]
+                
+                # Her mapper vi dine specifikke kolonnenavne fra din CSV til radaren
+                # Tjek om dine overskrifter i CSV er præcis disse:
                 r = {
-                    'FART': n.get('FART', 0), 'TEKNIK': n.get('TEKNIK', 0),
-                    'BESLUT': n.get('BESLUTSOMHED', 0), 'INTEL': n.get('SPILINTELLIGENS', 0),
-                    'AGGR': n.get('AGGRESIVITET', 0), 'LEDER': n.get('LEDEREGENSKABER', 0),
-                    'ATT': n.get('ATTITUDE', 0), 'UDH': n.get('UDHOLDENHED', 0)
+                    'FART': float(n.get('FART', 0)),
+                    'TEKNIK': float(n.get('TEKNIK', 0)),
+                    'BESLUT': float(n.get('BESLUTSOMHED', 0)),
+                    'INTEL': float(n.get('SPILINTELLIGENS', 0)),
+                    'AGGR': float(n.get('AGGRESIVITET', 0)),
+                    'LEDER': float(n.get('LEDEREGENSKABER', 0)),
+                    'ATT': float(n.get('ATTITUDE', 0)),
+                    'UDH': float(n.get('UDHOLDENHED', 0))
                 }
         
-        return {"navn": navn, "img": img, "klub": klub, "pos": pos, "stats": stats, "r": r}
+        return {"navn": navn, "pid": pid, "img": img, "klub": klub, "pos": pos, "r": r}
 
     d1 = hent_data(s1_navn)
     d2 = hent_data(s2_navn)
