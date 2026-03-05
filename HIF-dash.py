@@ -184,14 +184,26 @@ try:
     elif hoved_omraade == "SCOUTING":
         if sel == "Scoutrapport":
             import tools.scout_input as si
-            si.vis_side(dp)
+            si.vis_side(dp) # Denne er OK, da den tager hele pakken
         elif sel == "Database":
             import tools.scout_db as sdb
-            sdb.vis_side(dp.get("scouting_image"), dp["players"], dp["playerstats"], dp["player_career"])
+            # RETTET HER: Vi henter data fra de rigtige under-nøgler
+            sdb.vis_side(
+                dp.get("scouting_image"), 
+                dp["players"], 
+                dp["opta"]["player_stats"], # I stedet for dp["playerstats"]
+                dp["wyscout"]["career"]     # I stedet for dp["player_career"]
+            )
         elif sel == "Sammenligning":
             import tools.comparison as comp
-            comp.vis_side(dp["players"], dp["playerstats"], dp.get("scouting_image"), dp["player_career"], dp.get("season_filter"))
-
+            # RETTET HER:
+            comp.vis_side(
+                dp["players"], 
+                dp["opta"]["player_stats"], 
+                dp.get("scouting_image"), 
+                dp["wyscout"]["career"], 
+                dp.get("season_filter"))
+            
     elif hoved_omraade == "ADMIN":
         if sel == "Rå Data Explorer":
             st.write("### Opta Matches", dp.get("opta", {}).get("matches", pd.DataFrame()).head(50))
