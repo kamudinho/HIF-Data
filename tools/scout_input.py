@@ -20,12 +20,17 @@ def vis_side(dp):
             
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
+            
+            # Dropdown viser nu kun det fulde navn
             fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos = r.get('ROLECODE3') or r.get('POSITION') or "??"
             
-            label = f"{fuldt_navn} ({klub}) [{pos}]"
+            # Vi bruger Navn + Klub som label i dropdown for at adskille ens navne, 
+            # men i formularen splittes de op.
+            label = f"{fuldt_navn} ({klub})"
+            
             if p_id not in unique_players:
                 unique_players[p_id] = {
                     "label": label,
@@ -38,13 +43,13 @@ def vis_side(dp):
     label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
     options_list = sorted(list(label_to_data.keys()))
 
-    # INITIALISÉR DATA (Tomme værdier som default)
+    # INITIALISÉR DATA
     data = {"n": "", "id": "", "pos": "", "klub": ""}
     
     # --- SPILVERVALG ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     if metode == "Søg system":
-        sel = st.selectbox("Vælg spiller fra databasen", [""] + options_list)
+        sel = st.selectbox("Vælg spiller", [""] + options_list)
         if sel: 
             data = label_to_data.get(sel)
     else:
@@ -56,13 +61,12 @@ def vis_side(dp):
 
     st.markdown("---")
 
-    # --- FORMULAREN (ALTID SYNLIG) ---
-    # Top-info (Deaktiverede felter der opdateres ved valg)
-    st.write(f"**Spiller ID:** {data['id'] if data['id'] else 'Ingen valgt'}")
-    t1, t2, t3 = st.columns([2, 1, 1])
-    t1.text_input("Valgt Spiller", value=data['n'], disabled=True, key="disp_navn")
-    t2.text_input("Position", value=data['pos'], disabled=True, key="disp_pos")
-    t3.text_input("Klub", value=data['klub'], disabled=True, key="disp_klub")
+    # --- TOP LINJE: POSITION, KLUB OG SCOUT ---
+    st.write(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
+    header_col1, header_col2, header_col3 = st.columns(3)
+    header_col1.text_input("Position", value=data['pos'], disabled=True)
+    header_col2.text_input("Klub", value=data['klub'], disabled=True)
+    scout_navn = header_col3.text_input("Scout", value="HIF Scout")
 
     with st.form("rapport_form", clear_on_submit=True):
         st.write("### Parametre (1-6)")
@@ -83,11 +87,13 @@ def vis_side(dp):
 
         st.markdown("---")
         
-        # Status, Potentiale og Rating
-        c1, c2, c3 = st.columns(3)
+        # --- KONTRAKT, STATUS OG POTENTIALE ---
+        c1, c2, c3, c4 = st.columns(4)
         status = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
         pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-        rating = c3.slider("Samlet Rating (1-5)", 1.0, 5.0, 3.0, 0.1)
+        # Kontrakt med kalender-vælger
+        kontrakt_dato = c3.date_input("Kontraktudløb", value=None, help="Vælg dato for kontraktudløb")
+        rating = c4.slider("Rating (1-5)", 1.0, 5.0, 3.0, 0.1)
 
         # Vurdering tekstfelter
         v1, v2, v3 = st.columns(3)
@@ -95,42 +101,23 @@ def vis_side(dp):
         udv = v2.text_area("Udviklingsområder", height=150)
         vurder = v3.text_area("Samlet vurdering", height=150)
 
-        st.markdown("---")
-        
-        # Scout og Kontrakt
-        s1, s2 = st.columns(2)
-        scout_navn = s1.text_input("Scout", value="HIF Scout") 
-        kontrakt_info = s2.text_input("Kontrakt Info (Udløb, Agent etc.)")
-
         # GEM KNAP
         submitted = st.form_submit_button("Gem rapport", use_container_width=True)
         
         if submitted:
             if not data["n"]:
-                st.error("⚠️ Du skal vælge en spiller før du kan gemme!")
+                st.error("⚠️ Vælg venligst en spiller først.")
             else:
                 ny_linje = {
                     "PLAYER_WYID": data["id"], 
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], 
-                    "Klub": data["klub"], 
-                    "Position": data["pos"],
-                    "Rating_Avg": rating, 
-                    "Status": status, 
-                    "Potentiale": pot,
-                    "Styrker": styrker, 
-                    "Udvikling": udv, 
-                    "Vurdering": vurder,
-                    "Beslutsomhed": beslut, 
-                    "Fart": fart, 
-                    "Aggresivitet": agg, 
-                    "Attitude": att,
-                    "Udholdenhed": udh, 
-                    "Lederegenskaber": led, 
-                    "Teknik": tek,
-                    "Spilintelligens": intel, 
-                    "Scout": scout_navn, 
-                    "Kontrakt": kontrakt_info
+                    "Navn": data["n"], "Klub": data["klub"], "Position": data["pos"],
+                    "Rating_Avg": rating, "Status": status, "Potentiale": pot,
+                    "Kontrakt_Udløb": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
+                    "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
+                    "Beslutsomhed": beslut, "Fart": fart, "Aggresivitet": agg, "Attitude": att,
+                    "Udholdenhed": udh, "Lederegenskaber": led, "Teknik": tek,
+                    "Spilintelligens": intel, "Scout": scout_navn
                 }
                 
                 path = 'data/scouting_db.csv'
