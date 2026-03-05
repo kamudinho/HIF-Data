@@ -20,7 +20,7 @@ def map_position(row):
     return pos_dict.get(pos_val, "Ukendt")
 
 @st.dialog("Spillerprofil", width="large")
-def vis_profil(p_data, full_df, career_df):
+def vis_profil(p_data, full_df, career_df):    
     clean_p_id = rens_id(p_data.get('PLAYER_WYID', ''))
     historik = full_df[full_df['PLAYER_WYID'] == clean_p_id].copy()
     if 'DATO_DT' in historik.columns:
