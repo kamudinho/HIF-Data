@@ -30,7 +30,7 @@ def get_scouting_package():
             
             # B: Hent Karriere stats (Uden liga-filter!)
             career_query = f"""
-                SELECT 
+                SELECT DISTINCT
                     pc.PLAYER_WYID, 
                     s.SEASONNAME, 
                     t.TEAMNAME, 
