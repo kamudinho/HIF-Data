@@ -7,7 +7,9 @@ import pandas as pd
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from data.data_load import get_data_package, load_snowflake_query
+# NYE IMPORTS (Splitte data-loads)
+import data.HIF_load as hif_load
+import data.Analyse_load as analyse_load
 from data.users import get_users
 
 # --- 1. KONFIGURATION & BRANDING ---
@@ -16,19 +18,16 @@ HIF_ROD = "#df003b"
 HIF_GULD = "#b8860b"
 
 st.set_page_config(
-    page_title="HIF Data Hub",
+    page_title="HIF Dataanalyse",
     layout="wide",
     page_icon=HIF_LOGO_URL
 )
 
-# Centraliseret CSS for hele appen
+# Centraliseret CSS
 st.markdown(f"""
     <style>
-        /* Fjern standard Streamlit padding og header */
         .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
         header {{ visibility: hidden; height: 0px; }}
-        
-        /* FAST CENTRAL BRANDING CONTAINER */
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
@@ -40,7 +39,6 @@ st.markdown(f"""
             width: 100%;
             border-bottom: 3px solid {HIF_GULD};
         }}
-
         .hif-header-text {{
             color: white !important;
             margin: 0 !important;
@@ -51,15 +49,11 @@ st.markdown(f"""
             font-family: sans-serif;
             line-height: 50px;
         }}
-
-        /* Styling af Tabs */
         button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
         button[data-baseweb="tab"][aria-selected="true"] {{ 
             color: {HIF_ROD} !important; 
             border-bottom-color: {HIF_ROD} !important; 
         }}
-        
-        /* Sidebar justeringer */
         section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
     </style>
 """, unsafe_allow_html=True)
@@ -95,20 +89,7 @@ if not st.session_state["logged_in"]:
                     st.error("Ugyldig bruger eller kode")
     st.stop()
 
-# --- 3. DATA LOADING ---
-if "dp" not in st.session_state:
-    with st.spinner("Henter systemdata..."):
-        try:
-            # Hent den rensede pakke
-            data_pkg = get_data_package()
-            st.session_state["dp"] = data_pkg
-        except Exception as e:
-            st.error(f"❌ Kritisk fejl ved indlæsning af datapakke: {e}")
-            st.stop()
-
-dp = st.session_state["dp"]
-
-# --- 4. SIDEBAR NAVIGATION ---
+# --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='80'></div>", unsafe_allow_html=True)
     
@@ -141,106 +122,62 @@ with st.sidebar:
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
-                         options=["Scoutrapport", "Database", "Sammenligning"], # TILFØJ DISSE
+                         options=["Scoutrapport", "Database", "Sammenligning"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["Rå Data Explorer", "Assist Data Explorer", "Brugerstyring", "System Log"],
+        sel = option_menu(None, options=["System Log"],
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
-# --- 5. RENDERING AF HEADER & INDHOLD ---
 if not sel:
     sel = "Oversigt"
 
-# Her tegnes den centrale header automatisk
+# --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
-    if hoved_omraade == "TRUPPEN":
-        if sel == "Oversigt":
-            import tools.players as pl
-            pl.vis_side(dp["players"])
-        elif sel == "Forecast":
-            import tools.squad as sq
-            sq.vis_side(dp["players"])
-
-    elif hoved_omraade == "HIF ANALYSE":
-        if sel == "Afslutninger":
-            import tools.shotmap as sm
-            sm.vis_side(dp)
-        elif sel == "Modstanderanalyse":
-            import tools.modstanderanalyse as ma
-            ma.vis_side(dp["opta_matches"], dp["logo_map"])
-        elif sel == "Scatterplots":
-            import tools.scatter as sc
-            sc.vis_side(dp["team_stats_full"])
-
-    elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Holdoversigt":
-            import tools.test.test_teams as tt
-            tt.vis_side(dp)
-        elif sel == "Kampe":
-            import tools.test.test_matches as tm
-            tm.vis_side(dp)
-
-    elif hoved_omraade == "SCOUTING":
-        if sel == "Scoutrapport":
-            import tools.scout_input as si
-            si.vis_side(dp) # Denne er OK, da den tager hele pakken
-        elif sel == "Database":
-            import tools.scout_db as sdb
-            # RETTET HER: Vi henter data fra de rigtige under-nøgler
-            sdb.vis_side(
-                dp.get("scouting_image"), 
-                dp["players"], 
-                dp["opta"]["player_stats"], # I stedet for dp["playerstats"]
-                dp["wyscout"]["career"]     # I stedet for dp["player_career"]
-            )
-        elif sel == "Sammenligning":
-            import tools.comparison as comp
-            # RETTET HER:
-            comp.vis_side(
-                dp["players"], 
-                dp["opta"]["player_stats"], 
-                dp.get("scouting_image"), 
-                dp["wyscout"]["career"], 
-                dp.get("season_filter"))
-            
-    elif hoved_omraade == "ADMIN":
-        if sel == "Rå Data Explorer":
-            st.write("### Opta Matches", dp.get("opta", {}).get("matches", pd.DataFrame()).head(50))
+    # SEKTION A: TRUPPEN & SCOUTING (HIF_load - Primært CSV/Wyscout)
+    if hoved_omraade in ["TRUPPEN", "SCOUTING"]:
+        dp = hif_load.get_scouting_package()
         
-        # --- NY SEKTION HER ---
-        elif sel == "Assist Data Explorer":
-            st.markdown("### 🎯 Opta Assist Query Validering")
-            df_a = dp.get("assists", pd.DataFrame())
-            
-            if df_a.empty:
-                st.warning("Ingen assist-data fundet i datapakken.")
-            else:
-                st.write(f"Viser alle {len(df_a)} registrerede assists:")
-                # Vi sorterer efter seneste hændelser øverst
-                st.dataframe(
-                    df_a.sort_values("EVENT_TIMESTAMP", ascending=False),
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "EVENT_TIMESTAMP": st.column_config.DatetimeColumn("Tidspunkt", format="D. MMM, HH:mm"),
-                        "PASS_START_X": "Start X",
-                        "PASS_START_Y": "Start Y",
-                        "SHOT_X": "Slut X",
-                        "SHOT_Y": "Slut Y",
-                        "SCORER": "Målscorer",
-                        "ASSIST_PLAYER": "Assist"
-                    }
-                )
-        # -----------------------
+        if hoved_omraade == "TRUPPEN":
+            if sel == "Oversigt":
+                import tools.players as pl
+                pl.vis_side(dp["players"])
+            elif sel == "Forecast":
+                import tools.squad as sq
+                sq.vis_side(dp["players"])
+                
+        elif hoved_omraade == "SCOUTING":
+            if sel == "Scoutrapport":
+                import tools.scout_input as si
+                si.vis_side(dp)
+            elif sel == "Database":
+                import tools.scout_db as sdb
+                # Sender de præcise keys fra HIF_load
+                sdb.vis_side(None, dp["players"], None, dp["career"])
+            elif sel == "Sammenligning":
+                import tools.comparison as comp
+                comp.vis_side(dp["players"], None, None, dp["career"], None)
 
-        elif sel == "Brugerstyring":
-            import tools.admin as adm
-            adm.vis_side()
-        elif sel == "System Log":
-            import tools.admin as adm
-            adm.vis_log()
+    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
+    elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
+        dp = analyse_load.get_analysis_package()
+        
+        if hoved_omraade == "HIF ANALYSE":
+            if sel == "Afslutninger":
+                import tools.shotmap as sm
+                sm.vis_side(dp)
+        
+        elif hoved_omraade == "BETINIA LIGAEN":
+            if sel == "Holdoversigt":
+                import tools.test.test_teams as tt
+                tt.vis_side(dp)
+            elif sel == "Kampe":
+                import tools.test.test_matches as tm
+                tm.vis_side(dp)
+
+    elif hoved_omraade == "ADMIN":
+        st.info("Systemet kører i modulariseret tilstand.")
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
