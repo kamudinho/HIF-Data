@@ -52,20 +52,22 @@ def vis_side(dp):
         if sel: 
             data = label_to_data.get(sel)
     
-    # Position: Disabled hvis data findes, ellers kan man skrive i den
-    pos_input = t2.text_input("Position", value=data['pos'], disabled=(data['pos'] != ""))
+    # Position Logik:
+    # Hvis vi har en position fra systemet, viser vi den låst.
+    # Hvis ikke, viser vi en dropdown med de 4 kategorier.
+    if data['pos'] != "":
+        pos_final = t2.text_input("Position", value=data['pos'], disabled=True)
+    else:
+        pos_final = t2.selectbox("Udfyld position", ["", "GKP", "DEF", "MID", "FWD"], help="Vælg overordnet position da data mangler")
     
     t3.text_input("Klub", value=data['klub'], disabled=True)
     
-    # Scout: Henter automatisk den loggede bruger og låser feltet
+    # Scout: Låst til den loggede bruger
     nuværende_bruger = st.session_state.get("user", "HIF Scout")
     scout_navn = t4.text_input("Scout", value=nuværende_bruger, disabled=True)
 
-    # Spiller ID vises lige under dropdown
     st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
-
-    st.markdown("---")
-
+    
     with st.form("rapport_form", clear_on_submit=True):
         st.write("### Parametre (1-6)")
         
