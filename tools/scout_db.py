@@ -75,7 +75,7 @@ def vis_profil(p_data, full_df, career_df):
                 # DISSE NAVNE MATCHER DIT DATA-DUMP:
                 kolonner = [
                     'SEASONNAME', 'TEAMNAME', 'APPEARANCES', 
-                    'MINUTESPLAYED', 'GOAL', 'ASSIST', 
+                    'MINUTESPLAYED', 'GOAL', 
                     'YELLOWCARD', 'REDCARDS'
                 ]
                 
@@ -86,7 +86,6 @@ def vis_profil(p_data, full_df, career_df):
                     'APPEARANCES': 'Kampe', 
                     'MINUTESPLAYED': 'Minutter', 
                     'GOAL': 'Mål', 
-                    'ASSIST': 'Assists', 
                     'YELLOWCARD': 'Gule kort', 
                     'REDCARDS': 'Røde kort'
                 }
