@@ -36,10 +36,9 @@ def get_scouting_package():
                     t.TEAMNAME, 
                     pc.APPEARANCES AS MATCHES, 
                     pc.MINUTESPLAYED AS MINUTES, 
-                    pc.GOAL AS GOALS, 
-                    pc.ASSIST AS ASSISTS, 
-                    pc.YELLOWCARD, 
-                    pc.REDCARDS
+                    pc.GOAL AS GOALS,
+                    pc.substitutein AS Indskiftet,
+                    pc.substituteout AS Udskifter
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
                 JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
                 JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
