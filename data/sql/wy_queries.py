@@ -74,6 +74,8 @@ def get_wy_queries(comp_filter, season_filter):
         "wyscout_players": f"""
             SELECT DISTINCT
                 p.PLAYER_WYID, 
+                p.FIRSTNAME,
+                p.LASTNAME,
                 p.SHORTNAME AS PLAYER_NAME,
                 p.ROLECODE3,
                 t.TEAMNAME
