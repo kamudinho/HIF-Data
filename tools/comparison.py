@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-# Da du ikke bruger season_show mere, definerer vi den her
-# eller henter den fra dine faste værdier.
+# Fast konfiguration
 SEASON_FILTER = "2025/2026"
 
-# --- 1. HJÆLPEFUNKTIONER ---
 def map_position(pos_code):
     pos_map = {
         "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
@@ -25,117 +23,118 @@ def vis_spiller_billede(img_url, w=110):
     else:
         st.image(img_url, width=w)
 
-# --- 2. HOVEDFUNKTION ---
-def vis_side(df_spillere, dummy1, dummy2, career_df, dummy3):
-    # 1. Standardiser trup-data (Fra din players.csv)
+def vis_side(df_spillere, d1, d2, career_df, d3):
+    # 1. Forbered Truppen (df_p)
     df_p = df_spillere.copy() if df_spillere is not None else pd.DataFrame()
     if not df_p.empty:
         df_p.columns = [c.upper() for c in df_p.columns]
         if 'NAVN' not in df_p.columns:
-            # Vi bygger et navn hvis det mangler
             df_p['NAVN'] = (df_p.get('FIRSTNAME', '').fillna('') + " " + df_p.get('LASTNAME', '').fillna('')).str.strip()
-            # Hvis det stadig er tomt, brug SHORTNAME
             df_p['NAVN'] = df_p['NAVN'].replace('', df_p.get('PLAYER_NAME', 'Ukendt'))
-    
-    # 2. Hent scouting data (CSV)
+        # Rens ID til sammenligning
+        df_p['PID_CLEAN'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+
+    # 2. Forbered Scouting CSV (df_s)
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s.columns = [c.upper().strip() for c in df_s.columns]
-        df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0]
+        df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
     except:
         df_s = pd.DataFrame()
 
-    # 3. Byg navne-liste
-    all_names = []
-    if not df_p.empty: all_names.extend(df_p['NAVN'].tolist())
-    if not df_s.empty: all_names.extend(df_s['NAVN'].tolist())
-    navne_liste = sorted(list(set([n for n in all_names if n and str(n) != 'nan'])))
+    # 3. Samlet navneliste til Dropdowns
+    navne_fra_trup = df_p['NAVN'].dropna().unique().tolist() if not df_p.empty else []
+    navne_fra_scout = df_s['NAVN'].dropna().unique().tolist() if not df_s.empty else []
+    navne_liste = sorted(list(set(navne_fra_trup + navne_fra_scout)))
 
     if not navne_liste:
-        st.warning("Ingen spillere fundet i systemet.")
+        st.warning("⚠️ Ingen spillere fundet. Tjek om din players.csv og scouting_db.csv er korrekte.")
         return
 
-    # --- UI ---
+    # --- UI SELECTORS ---
     c_sel1, c_sel2 = st.columns(2)
-    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
-    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1))
+    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0, key="comp_s1")
+    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1), key="comp_s2")
 
     def hent_data(navn):
+        # Find ID (PID)
         pid = None
-        # 1. Find PLAYER_WYID og rens det (fjern .0)
         if not df_p.empty and navn in df_p['NAVN'].values:
-            pid = str(df_p[df_p['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0].strip()
+            pid = df_p[df_p['NAVN'] == navn].iloc[0]['PID_CLEAN']
         elif not df_s.empty and navn in df_s['NAVN'].values:
-            pid = str(df_s[df_s['NAVN'] == navn].iloc[0]['PLAYER_WYID']).split('.')[0].strip()
+            pid = df_s[df_s['NAVN'] == navn].iloc[0]['PID_CLEAN']
         
         if not pid: return None
 
-        # 2. Hent stamdata
+        # Grunddata
         img, klub, pos = None, "Ukendt", "Ukendt"
-        # Brug .str.contains eller konverter hele kolonnen for at matche PID
         if not df_p.empty:
-            df_p['PLAYER_WYID_STR'] = df_p['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            p_match = df_p[df_p['PLAYER_WYID_STR'] == pid]
-            if not p_match.empty:
-                img = p_match.iloc[0].get('IMAGEDATAURL')
-                klub = p_match.iloc[0].get('TEAMNAME', 'Hvidovre IF')
-                pos = map_position(p_match.iloc[0].get('ROLECODE3', ''))
+            match = df_p[df_p['PID_CLEAN'] == pid]
+            if not match.empty:
+                img = match.iloc[0].get('IMAGEDATAURL')
+                klub = match.iloc[0].get('TEAMNAME', 'Hvidovre IF')
+                pos = map_position(match.iloc[0].get('ROLECODE3', ''))
         
-        # 3. Hent Ratings fra scouting_db.csv (Radar-data)
-        r = {k: 0.0 for k in ['FART', 'TEKNIK', 'BESLUT', 'INTEL', 'AGGR', 'LEDER', 'ATT', 'UDH']}
+        # Stats (Mål/Kampe)
+        stats = {'M': 0, 'K': 0}
+        if career_df is not None and not career_df.empty:
+            career_df.columns = [c.upper() for c in career_df.columns]
+            career_df['PID_CLEAN'] = career_df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            c_match = career_df[(career_df['PID_CLEAN'] == pid) & (career_df['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
+            if not c_match.empty:
+                stats = {'M': c_match.iloc[0].get('GOAL', 0), 'K': c_match.iloc[0].get('APPEARANCES', 0)}
+
+        # Radar Ratings (CSV)
+        r = {k: 0.1 for k in ['FART', 'TEKNIK', 'BESLUT', 'INTEL', 'AGGR', 'LEDER', 'ATT', 'UDH']}
         if not df_s.empty:
-            # Rens ID'er i scouting_db for sammenligning
-            df_s['PLAYER_WYID_STR'] = df_s['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            s_match = df_s[df_s['PLAYER_WYID_STR'] == pid]
-            
+            s_match = df_s[df_s['PID_CLEAN'] == pid]
             if not s_match.empty:
-                # Vi tager den NYESTE indtastning for denne spiller
-                n = s_match.iloc[-1]
-                
-                # Her mapper vi dine specifikke kolonnenavne fra din CSV til radaren
-                # Tjek om dine overskrifter i CSV er præcis disse:
+                n = s_match.iloc[-1] # Tag nyeste rapport
                 r = {
-                    'FART': float(n.get('FART', 0)),
-                    'TEKNIK': float(n.get('TEKNIK', 0)),
-                    'BESLUT': float(n.get('BESLUTSOMHED', 0)),
-                    'INTEL': float(n.get('SPILINTELLIGENS', 0)),
-                    'AGGR': float(n.get('AGGRESIVITET', 0)),
-                    'LEDER': float(n.get('LEDEREGENSKABER', 0)),
-                    'ATT': float(n.get('ATTITUDE', 0)),
-                    'UDH': float(n.get('UDHOLDENHED', 0))
+                    'FART': n.get('FART', 0.1), 'TEKNIK': n.get('TEKNIK', 0.1),
+                    'BESLUT': n.get('BESLUTSOMHED', 0.1), 'INTEL': n.get('SPILINTELLIGENS', 0.1),
+                    'AGGR': n.get('AGGRESIVITET', 0.1), 'LEDER': n.get('LEDEREGENSKABER', 0.1),
+                    'ATT': n.get('ATTITUDE', 0.1), 'UDH': n.get('UDHOLDENHED', 0.1)
                 }
         
-        return {"navn": navn, "pid": pid, "img": img, "klub": klub, "pos": pos, "r": r}
+        return {"navn": navn, "img": img, "klub": klub, "pos": pos, "stats": stats, "r": r}
 
-    d1 = hent_data(s1_navn)
-    d2 = hent_data(s2_navn)
+    data1 = hent_data(s1_navn)
+    data2 = hent_data(s2_navn)
 
-    # --- VISNING ---
+    # --- VISUALISERING ---
+    st.divider()
     col1, col2, col3 = st.columns([3, 4, 3])
     
-    def render_col(d, side, color):
+    def render_player(d, align, color):
         if not d: return
-        align = "left" if side=="L" else "right"
-        st.markdown(f"<div style='text-align:{align};'><h3 style='color:{color}; margin-bottom:0;'>{d['navn']}</h3><p style='color:gray;'>{d['pos']} | {d['klub']}</p></div>", unsafe_allow_html=True)
+        txt_align = "left" if align == "L" else "right"
+        st.markdown(f"<div style='text-align:{txt_align};'><h3 style='color:{color}; margin:0;'>{d['navn']}</h3><p>{d['pos']} | {d['klub']}</p></div>", unsafe_allow_html=True)
+        
+        # Billede og små stats
         c_i, c_m = st.columns(2)
-        with (c_i if side=="L" else c_m): vis_spiller_billede(d['img'])
-        with (c_m if side=="L" else c_i):
-            st.metric("Mål", d['stats']['M'])
+        with (c_i if align=="L" else c_m): vis_spiller_billede(d['img'])
+        with (c_m if align=="L" else c_i):
             st.metric("Kampe", d['stats']['K'])
+            st.metric("Mål", d['stats']['M'])
 
-    with col1: render_col(d1, "L", "#df003b")
-    with col3: render_col(d2, "R", "#0056a3")
+    with col1: render_player(data1, "L", "#df003b")
+    with col3: render_player(data2, "R", "#0056a3")
 
     with col2:
-        if d1 and d2:
-            
+        if data1 and data2:
             labels = ['Fart', 'Teknik', 'Beslut.', 'Intell.', 'Aggres.', 'Leder', 'Attit.', 'Udhold.']
-            def get_v(d): 
+            def get_v(d):
                 v = [d['r']['FART'], d['r']['TEKNIK'], d['r']['BESLUT'], d['r']['INTEL'], d['r']['AGGR'], d['r']['LEDER'], d['r']['ATT'], d['r']['UDH']]
-                return v + [v[0]]
+                return [float(x) for x in v] + [float(v[0])]
             
             fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(r=get_v(d1), theta=labels+[labels[0]], fill='toself', name=d1['navn'], line_color='#df003b'))
-            fig.add_trace(go.Scatterpolar(r=get_v(d2), theta=labels+[labels[0]], fill='toself', name=d2['navn'], line_color='#0056a3'))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40,r=40,t=20,b=20), showlegend=False)
+            fig.add_trace(go.Scatterpolar(r=get_v(data1), theta=labels+[labels[0]], fill='toself', name=data1['navn'], line_color='#df003b'))
+            fig.add_trace(go.Scatterpolar(r=get_v(data2), theta=labels+[labels[0]], fill='toself', name=data2['navn'], line_color='#0056a3'))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=380, margin=dict(l=50,r=50,t=30,b=30), showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
+
+    # DEBUG SEKTION (Fjern når det virker)
+    if st.checkbox("Vis Debug Data"):
+        st.write("Match fundet i CSV for Spiller 1:", data1['r'] if data1 else "Ingen")
+        st.write("Match fundet i CSV for Spiller 2:", data2['r'] if data2 else "Ingen")
