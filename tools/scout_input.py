@@ -4,7 +4,9 @@ import uuid
 import os
 from datetime import datetime
 
-def vis_side(dp):    
+def vis_side(dp):
+    st.title("Ny Scouting Rapport")
+    
     # 1. HENT DATA
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
@@ -90,26 +92,48 @@ def vis_side(dp):
             if not data["n"]:
                 st.error("⚠️ Vælg en spiller først.")
             elif pos_final == "":
-                st.error("⚠️ Du skal vælge en position (GKP, DEF, MID eller FWD) før du kan gemme.")
+                st.error("⚠️ Du skal vælge en position før du kan gemme.")
             else:
+                # Beregn rating
                 kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
                 beregnet_rating = sum(kategorier) / len(kategorier)
                 
+                # Opret række der matcher din CSV struktur
                 ny_linje = {
                     "PLAYER_WYID": data["id"], 
                     "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], "Klub": data["klub"], "Position": pos_final,
+                    "Navn": data["n"], 
+                    "Klub": data["klub"], 
+                    "Position": pos_final,
                     "Rating_Avg": round(beregnet_rating, 2),
-                    "Status": status, "Potentiale": pot,
-                    "Kontrakt_Udløb": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
-                    "Styrker": styrker, "Udvikling": udv, "Vurdering": vurder,
-                    "Beslutsomhed": beslut, "Fart": fart, "Aggresivitet": agg, "Attitude": att,
-                    "Udholdenhed": udh, "Lederegenskaber": led, "Teknik": tek,
-                    "Spilintelligens": intel, "Scout": scout_navn
+                    "Status": status, 
+                    "Potentiale": pot,
+                    "Kontrakt": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
+                    "Styrker": styrker, 
+                    "Udvikling": udv, 
+                    "Vurdering": vurder,
+                    "Beslutsomhed": beslut, 
+                    "Fart": fart, 
+                    "Aggresivitet": agg, 
+                    "Attitude": att,
+                    "Udholdenhed": udh, 
+                    "Lederegenskaber": led, 
+                    "Teknik": tek,
+                    "Spilintelligens": intel, 
+                    "Scout": scout_navn
                 }
                 
+                # --- GEMME LOGIK ---
                 path = 'data/scouting_db.csv'
+                
+                # Tjek om mappen findes, ellers opret den (vigtigt for lokal kørsel)
+                if not os.path.exists('data'):
+                    os.makedirs('data')
+                
                 df_to_save = pd.DataFrame([ny_linje])
+                
+                # Gem (append mode)
                 df_to_save.to_csv(path, mode='a', header=not os.path.exists(path), index=False)
-                st.success(f"Rapport gemt! Rating: {round(beregnet_rating, 2)}")
+                
+                st.success(f"✅ Rapport gemt lokalt i {path}!")
                 st.balloons()
