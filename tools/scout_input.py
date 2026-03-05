@@ -1,139 +1,129 @@
 import streamlit as st
 import pandas as pd
-import uuid
-import os
+import requests
+import base64
 from datetime import datetime
+from io import StringIO
 
+# --- KONFIGURATION ---
+REPO = "Kamudinho/HIF-data"
+FILE_PATH = "data/scouting_db.csv"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+
+# --- GITHUB MOTORER ---
+def get_github_file(path):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        data = r.json()
+        content = base64.b64decode(data['content']).decode('utf-8')
+        return content, data['sha']
+    return None, None
+
+def push_to_github(path, message, content, sha=None):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    }
+    if sha:
+        payload["sha"] = sha
+    r = requests.put(url, headers=headers, json=payload)
+    return r.status_code
+
+# --- SELVE SIDEN ---
 def vis_side(dp):
     st.title("Ny Scouting Rapport")
-    
-    # 1. HENT DATA
-    df_local = dp.get("scout_reports", pd.DataFrame()) 
-    df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
+
+    # 1. HENT DATA TIL DROPDOWN (Fra din Dataprovider)
+    df_wyscout = dp.get("wyscout_players", pd.DataFrame())
     
     unique_players = {}
-
-    def add_to_options(df, source_label):
-        if df is None or df.empty: return
-        df.columns = [str(c).upper().strip() for c in df.columns]
-        for _, r in df.iterrows():
-            p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
-            if not p_id or p_id in ['nan', 'None', '']: continue
-            
+    if not df_wyscout.empty:
+        df_wyscout.columns = [str(c).upper().strip() for c in df_wyscout.columns]
+        for _, r in df_wyscout.iterrows():
+            p_id = str(r.get('PLAYER_WYID', '')).split('.')[0]
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
-            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
+            navn = f"{f_name} {l_name}"
+            klub = r.get('TEAMNAME', 'Ukendt')
+            pos = r.get('ROLECODE3', '')
             
-            klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
-            pos = r.get('ROLECODE3') or r.get('POSITION') or ""
-            if str(pos).strip() in ["??", "nan", "None"]: pos = ""
-            
-            label = f"{fuldt_navn} ({klub})"
-            if p_id not in unique_players:
-                unique_players[p_id] = {
-                    "label": label,
-                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
-                }
+            if p_id:
+                unique_players[p_id] = {"label": f"{navn} ({klub})", "n": navn, "k": klub, "p": pos}
 
-    add_to_options(df_local, "Arkiv")
-    add_to_options(df_wyscout, "Wyscout")
-
-    label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
-    options_list = sorted(list(label_to_data.keys()))
-
-    data = {"n": "", "id": "", "pos": "", "klub": ""}
-    
-    # --- TOP LINJE ---
+    # --- TOP LAYOUT ---
     t1, t2, t3, t4 = st.columns([2, 1, 1, 1])
     
     with t1:
-        sel = st.selectbox("Vælg spiller", [""] + options_list)
-        if sel: data = label_to_data.get(sel)
+        sel_id = st.selectbox("Vælg spiller", [""] + list(unique_players.keys()), 
+                              format_func=lambda x: unique_players[x]["label"] if x else "Vælg...")
     
-    # DYNAMISK POSITION
-    if data['n'] != "" and data['pos'] == "":
+    player_data = unique_players.get(sel_id, {"n": "", "k": "", "p": ""})
+    
+    # Position: Dropdown hvis mangler, ellers låst
+    if sel_id and not player_data["p"]:
         pos_final = t2.selectbox("Udfyld position", ["", "GKP", "DEF", "MID", "FWD"])
     else:
-        pos_final = t2.text_input("Position", value=data['pos'], disabled=True)
-    
-    t3.text_input("Klub", value=data['klub'], disabled=True)
-    nuværende_bruger = st.session_state.get("user", "HIF Scout")
-    scout_navn = t4.text_input("Scout", value=nuværende_bruger, disabled=True)
-
-    st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
-    st.markdown("---")
-
-    with st.form("rapport_form", clear_on_submit=True):
-        st.write("### Parametre (1-6)")
-        m1, m2, m3, m4 = st.columns(4)
-        beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
-        fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
-        agg = m3.select_slider("Aggresivitet", options=list(range(1, 7)), value=3)
-        att = m4.select_slider("Attitude", options=list(range(1, 7)), value=3)
+        pos_final = t2.text_input("Position", value=player_data["p"], disabled=True)
         
-        m5, m6, m7, m8 = st.columns(4)
-        udh = m5.select_slider("Udholdenhed", options=list(range(1, 7)), value=3)
-        led = m6.select_slider("Lederegenskaber", options=list(range(1, 7)), value=3)
-        tek = m7.select_slider("Tekniske færdigheder", options=list(range(1, 7)), value=3)
-        intel = m8.select_slider("Spilintelligens", options=list(range(1, 7)), value=3)
+    t3.text_input("Klub", value=player_data["k"], disabled=True)
+    scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
+    # --- FORMULAR ---
+    with st.form("scout_form", clear_on_submit=True):
+        st.write("### Parametre (1-6)")
+        c1, c2, c3, c4 = st.columns(4)
+        fart = c1.select_slider("Fart", options=range(1,7), value=3)
+        tek = c2.select_slider("Teknik", options=range(1,7), value=3)
+        beslut = c3.select_slider("Beslutning", options=range(1,7), value=3)
+        intel = c4.select_slider("Intelligens", options=range(1,7), value=3)
+        
         st.markdown("---")
-        c1, c2, c3 = st.columns(3)
-        status = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
-        pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-        kontrakt_dato = c3.date_input("Kontraktudløb", value=None)
+        # Status og Kontrakt
+        k1, k2, k3 = st.columns(3)
+        status = k1.selectbox("Status", ["Hold øje", "Kig nærmere", "Prioritet"])
+        pot = k2.selectbox("Potentiale", ["Middel", "Højt", "Top"])
+        kontrakt = k3.date_input("Kontraktudløb", value=None)
+        
+        # Tekstfelter
+        v1, v2 = st.columns(2)
+        styrker = v1.text_area("Styrker")
+        udv = v2.text_area("Udvikling")
 
-        v1, v2, v3 = st.columns(3)
-        styrker = v1.text_area("Styrker", height=150)
-        udv = v2.text_area("Udviklingsområder", height=150)
-        vurder = v3.text_area("Samlet vurdering", height=150)
-
-        if st.form_submit_button("Gem rapport", use_container_width=True):
-            if not data["n"]:
-                st.error("⚠️ Vælg en spiller først.")
-            elif pos_final == "":
-                st.error("⚠️ Du skal vælge en position før du kan gemme.")
+        if st.form_submit_button("Gem rapport på GitHub"):
+            if not sel_id:
+                st.error("Vælg en spiller!")
             else:
                 # Beregn rating
-                kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
-                beregnet_rating = sum(kategorier) / len(kategorier)
+                rating = round((fart + tek + beslut + intel) / 4, 2)
                 
-                # Opret række der matcher din CSV struktur
-                ny_linje = {
-                    "PLAYER_WYID": data["id"], 
-                    "Dato": datetime.now().strftime("%Y-%m-%d"),
-                    "Navn": data["n"], 
-                    "Klub": data["klub"], 
-                    "Position": pos_final,
-                    "Rating_Avg": round(beregnet_rating, 2),
-                    "Status": status, 
-                    "Potentiale": pot,
-                    "Kontrakt": kontrakt_dato.strftime("%Y-%m-%d") if kontrakt_dato else "",
-                    "Styrker": styrker, 
-                    "Udvikling": udv, 
-                    "Vurdering": vurder,
-                    "Beslutsomhed": beslut, 
-                    "Fart": fart, 
-                    "Aggresivitet": agg, 
-                    "Attitude": att,
-                    "Udholdenhed": udh, 
-                    "Lederegenskaber": led, 
-                    "Teknik": tek,
-                    "Spilintelligens": intel, 
-                    "Scout": scout_navn
+                # Lav rækken
+                ny_data = {
+                    "PLAYER_WYID": sel_id, "Dato": datetime.now().strftime("%Y-%m-%d"),
+                    "Navn": player_data["n"], "Klub": player_data["k"], "Position": pos_final,
+                    "Rating_Avg": rating, "Status": status, "Potentiale": pot,
+                    "Kontrakt": kontrakt.strftime("%Y-%m-%d") if kontrakt else "",
+                    "Styrker": styrker, "Udvikling": udv, "Scout": scout_navn
                 }
-                
-                # --- GEMME LOGIK ---
-                path = 'data/scouting_db.csv'
-                
-                # Tjek om mappen findes, ellers opret den (vigtigt for lokal kørsel)
-                if not os.path.exists('data'):
-                    os.makedirs('data')
-                
-                df_to_save = pd.DataFrame([ny_linje])
-                
-                # Gem (append mode)
-                df_to_save.to_csv(path, mode='a', header=not os.path.exists(path), index=False)
-                
-                st.success(f"✅ Rapport gemt lokalt i {path}!")
-                st.balloons()
+
+                # --- GITHUB FLOW ---
+                with st.spinner("Gemmer på GitHub..."):
+                    content, sha = get_github_file(FILE_PATH)
+                    
+                    if content:
+                        df = pd.read_csv(StringIO(content))
+                        df = pd.concat([df, pd.DataFrame([ny_data])], ignore_index=True)
+                    else:
+                        df = pd.DataFrame([ny_data])
+                    
+                    new_csv = df.to_csv(index=False)
+                    res = push_to_github(FILE_PATH, f"Scout rapport: {player_data['n']}", new_csv, sha)
+                    
+                    if res in [200, 201]:
+                        st.success(f"Gemt! Se her: https://github.com/{REPO}/blob/main/{FILE_PATH}")
+                        st.balloons()
+                    else:
+                        st.error(f"Fejl ved gem (Status {res})")
