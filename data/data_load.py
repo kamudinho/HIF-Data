@@ -1,3 +1,4 @@
+# data/data_load.py
 import streamlit as st
 import pandas as pd
 import os
@@ -28,10 +29,16 @@ def parse_xg(val_str):
 def load_local_players():
     """Indlæser spillere fra den lokale CSV fil."""
     try:
+        # Vi sikrer os stien relativt til hvor appen kører
         path = os.path.join(os.getcwd(), "data", "players.csv")
         if os.path.exists(path):
             df = pd.read_csv(path)
+            # Rens kolonnenavne med det samme for at undgå KeyError i tools
             df.columns = [str(c).upper().strip() for c in df.columns]
             return df
+        else:
+            st.warning(f"⚠️ Filen ikke fundet: {path}")
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"❌ Fejl ved CSV indlæsning: {e}")
         return pd.DataFrame()
-    except: return pd.DataFrame()
