@@ -2,27 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-SEASON_FILTER = "2025/2026"
-
-# --- HJÆLPEFUNKTIONER (Identiske med din profil-fil) ---
+# --- HJÆLPEFUNKTIONER ---
 def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def map_position(pos_code):
-    pos_map = {
-        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
-        "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
-        "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
-        "10": "Offensiv Midt", "11": "Venstre Kant"
-    }
-    return pos_map.get(rens_id(pos_code), "Ukendt")
-
-def vis_spiller_billede(img_url, pid, w=150):
+def vis_spiller_billede(img_url, pid, w=130):
     std = "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
     img_clean = str(img_url).strip() if pd.notna(img_url) else ""
     pid_clean = rens_id(pid)
-    
     ugyldige = ["", "0", "0.0", "nan", "none", "undefined"]
     
     if img_clean and img_clean.lower() not in ugyldige:
@@ -33,9 +21,8 @@ def vis_spiller_billede(img_url, pid, w=150):
         url = std
     st.image(url, width=w)
 
-# --- HOVEDFUNKTION ---
 def vis_side(df_spillere, d1, d2, career_df, d3):
-    # 1. Hent Scouting DB (Kilden til alle spillere der skal vises)
+    # --- 1. DATA PREP ---
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].apply(rens_id)
@@ -43,91 +30,95 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         st.error("Kunne ikke læse scouting_db.csv")
         return
 
-    # 2. Byg billed-opslag fra Snowflake (d3), præcis som i din profil-fil
     billed_map = {}
     if d3 is not None and not d3.empty:
         billed_map = dict(zip(d3['PLAYER_WYID'].apply(rens_id), d3['IMAGEDATAURL']))
 
-    # 3. Find alle unikke navne fra scouting-db
     navne_liste = sorted(df_s['Navn'].unique().tolist())
 
-    # 4. Vælg spillere
-    c_sel1, c_sel2 = st.columns(2)
-    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0, key="c1")
-    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1), key="c2")
+    # --- 2. SELECTORS (Pænt placeret i toppen) ---
+    c_sel1, c_space, c_sel2 = st.columns([4, 1, 4])
+    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
+    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1))
 
-    def hent_alle_data(navn):
-        # Find nyeste rapport for denne spiller i scouting_db
+    def hent_data(navn):
         s_match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
         if s_match.empty: return None
-        
         n = s_match.iloc[0]
         pid = n['PID_CLEAN']
         
-        # Billede: Prioritér Snowflake (d3), ellers byg selv
-        img_fra_sql = billed_map.get(pid)
+        # Scouting værdier (Radar)
+        r_data = {
+            'Fart': n.get('Fart', 0), 'Teknik': n.get('Teknik', 0),
+            'Beslut': n.get('Beslutsomhed', 0), 'Intel': n.get('Spilintelligens', 0),
+            'Aggr': n.get('Aggresivitet', 0), 'Leder': n.get('Lederegenskaber', 0),
+            'Att': n.get('Attitude', 0), 'Udh': n.get('Udholdenhed', 0)
+        }
         
-        res = {
-            "navn": navn,
-            "pid": pid,
-            "img": img_fra_sql,
-            "klub": n.get('Klub', 'Ukendt'),
-            "pos": map_position(n.get('Pos', '')),
-            "stats": {"Kampe": 0, "Mål": 0, "Assist": 0, "Min": 0},
-            "scout": {k: n.get(k, '-') for k in ['Styrker', 'Vurdering', 'Status']},
-            "r": {
-                'Fart': n.get('Fart', 0.1), 'Teknik': n.get('Teknik', 0.1),
-                'Beslut': n.get('Beslutsomhed', 0.1), 'Intel': n.get('Spilintelligens', 0.1),
-                'Aggr': n.get('Aggresivitet', 0.1), 'Leder': n.get('Lederegenskaber', 0.1),
-                'Att': n.get('Attitude', 0.1), 'Udh': n.get('Udholdenhed', 0.1)
-            }
+        return {
+            "navn": navn, "pid": pid, "img": billed_map.get(pid),
+            "klub": n.get('Klub', 'Hvidovre IF'), "pos": n.get('Pos', 'Ukendt'),
+            "vurdering": n.get('Vurdering', '-'), "styrker": n.get('Styrker', '-'),
+            "r": r_data
         }
 
-        # Tilføj karriere-stats hvis pid findes i career_df
-        if career_df is not None and not career_df.empty:
-            cdf = career_df.copy()
-            cdf.columns = [c.upper() for c in cdf.columns]
-            # Sørg for at vi filtrerer på din aktuelle sæson
-            c_m = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
-            if not c_m.empty:
-                res["stats"] = {
-                    "Kampe": int(c_m.iloc[0].get('APPEARANCES', 0)),
-                    "Mål": int(c_m.iloc[0].get('GOAL', 0)),
-                    "Assist": int(c_m.iloc[0].get('ASSIST', 0)),
-                    "Min": int(c_m.iloc[0].get('MINUTESPLAYED', 0))
-                }
-        return res
+    p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
 
-    p1, p2 = hent_alle_data(s1_navn), hent_alle_data(s2_navn)
-
-    # --- VISNING ---
-    st.divider()
-    c_img1, c_radar, c_img2 = st.columns([2, 4, 2])
+    # --- 3. VISUEL SAMMENLIGNING ---
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    for i, p in enumerate([p1, p2]):
-        if p:
-            with (c_img1 if i == 0 else c_img2):
-                if i == 1: st.markdown("<div style='text-align:right;'>", unsafe_allow_html=True)
-                vis_spiller_billede(p["img"], p["pid"])
-                st.subheader(p["navn"])
-                st.caption(f"{p['pos']} | {p['klub']}")
-                if i == 1: st.markdown("</div>", unsafe_allow_html=True)
+    # Hovedsektion: Billede - Radar - Billede
+    c1, c_radar, c2 = st.columns([1.5, 3, 1.5])
+
+    if p1:
+        with c1:
+            vis_spiller_billede(p1["img"], p1["pid"])
+            st.subheader(p1["navn"])
+            st.caption(f"📍 {p1['pos']} \n\n 🏠 {p1['klub']}")
+    
+    if p2:
+        with c2:
+            # Højrestillet profil for spiller 2
+            st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
+            vis_spiller_billede(p2["img"], p2["pid"])
+            st.subheader(p2["navn"])
+            st.caption(f"{p2['pos']} 📍 \n\n {p2['klub']} 🏠")
+            st.markdown("</div>", unsafe_allow_html=True)
 
     with c_radar:
         if p1 and p2:
             labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
             keys = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
+            
             fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(r=[p1['r'][k] for k in keys]+[p1['r'][keys[0]]], theta=labels+[labels[0]], fill='toself', name=p1['navn'], line_color='#df003b'))
-            fig.add_trace(go.Scatterpolar(r=[p2['r'][k] for k in keys]+[p2['r'][keys[0]]], theta=labels+[labels[0]], fill='toself', name=p2['navn'], line_color='#0056a3'))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40,r=40,t=20,b=20), showlegend=False)
+            # Spiller 1 (Rød)
+            fig.add_trace(go.Scatterpolar(
+                r=[p1['r'][k] for k in keys] + [p1['r'][keys[0]]],
+                theta=labels + [labels[0]],
+                fill='toself', name=p1['navn'], line_color='#df003b', opacity=0.7
+            ))
+            # Spiller 2 (Blå)
+            fig.add_trace(go.Scatterpolar(
+                r=[p2['r'][k] for k in keys] + [p2['r'][keys[0]]],
+                theta=labels + [labels[0]],
+                fill='toself', name=p2['navn'], line_color='#0056a3', opacity=0.7
+            ))
+            
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[0, 6], gridcolor="#eee")),
+                height=400, margin=dict(l=50, r=50, t=30, b=30),
+                legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5)
+            )
             st.plotly_chart(fig, use_container_width=True)
 
+    # --- 4. SCOUT NOTER (Split view) ---
     st.divider()
-    sc1, sc2 = st.columns(2)
+    n1, n2 = st.columns(2)
+    
     for i, p in enumerate([p1, p2]):
-        with (sc1 if i==0 else sc2):
+        with (n1 if i == 0 else n2):
             if p:
-                st.markdown("### 📊 Sæson Statistik")
-                st.table(pd.DataFrame([p["stats"]], index=["Værdi"]).T)
-                st.info(f"**Vurdering:**\n\n{p['scout'].get('Vurdering')}")
+                st.markdown(f"#### 📝 Scout Noter: {p['navn']}")
+                st.info(f"**Styrker:**\n{p['styrker']}")
+                with st.expander("Se fuld vurdering"):
+                    st.write(p['vurdering'])
