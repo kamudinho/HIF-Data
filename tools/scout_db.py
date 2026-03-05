@@ -68,7 +68,7 @@ def vis_profil(p_data, full_df, career_df):
             
             if not df_p.empty:
                 # Præcis de kolonner du vil have
-                kolonner = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'ASSISTS', 'YELLOWCARD', 'REDCARDS']
+                kolonner = ['SEASONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'SUBSTITUTEIN', 'SUBSTITUTEOUT', 'ASSISTS', 'YELLOWCARD', 'REDCARDS']
                 
                 # Oversættelse til visning
                 pretty_map = {
