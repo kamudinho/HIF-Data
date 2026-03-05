@@ -45,10 +45,14 @@ def vis_profil(p_data, full_df, career_df):
     
     h1, h2 = st.columns([1, 4])
     with h1:
-        img_url = p_data.get('IMAGEDATAURL')
+        # HER ER RETTELSEN: Brug den URL vi allerede har fundet frem til i oversigten
+        # Vi tjekker p_data (den valgte række) først
+        img_url = p_data.get('VIS_BILLEDE', p_data.get('BILLED_URL'))
+        
         if pd.notna(img_url) and str(img_url).startswith("http"):
             st.image(img_url, width=115)
         else:
+            # Fallback hvis alt andet fejler
             vis_spiller_billede(clean_p_id, w=115)
             
     with h2:
