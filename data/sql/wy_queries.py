@@ -1,9 +1,7 @@
-# data/sql/wy_queries.py
-
 def get_wy_queries(comp_filter, season_filter):
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # Sikring mod tomme filtre
+    # Sikring mod tomme filtre (bruges til spillerlisten/oversigten)
     if not comp_filter:
         c_f = "(328)"
     elif isinstance(comp_filter, (list, tuple)):
@@ -17,7 +15,7 @@ def get_wy_queries(comp_filter, season_filter):
         s_f = season_filter if season_filter else " = '2025/2026'"
 
     return {
-        # 1. SPILLER INFO (Stamdata filtreret på den valgte liga/sæson)
+        # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
         "players": f"""
             SELECT DISTINCT
                 p.PLAYER_WYID,
@@ -37,26 +35,25 @@ def get_wy_queries(comp_filter, season_filter):
             )
         """,
         
-        # 2. PLAYER CAREER (Den detaljerede statistik du viste)
+        # 2. PLAYER CAREER (HER VAR FEJLEN!)
+        # Vi fjerner WHERE pc.COMPETITION_WYID, så vi får hele historikken på tværs af ligaer
         "player_career": f"""
-            SELECT DISTINCT
+            SELECT 
                 pc.PLAYER_WYID, 
                 s.SEASONNAME, 
                 c.COMPETITIONNAME, 
-                t.TEAMNAME AS CURRENT_TEAM_NAME,
-                pc.APPEARANCES, 
-                pc.MINUTESPLAYED, 
-                pc.GOAL, 
+                t.TEAMNAME,
+                pc.APPEARANCES AS MATCHES, 
+                pc.MINUTESPLAYED AS MINUTES, 
+                pc.GOAL AS GOALS, 
+                pc.ASSIST AS ASSISTS, 
                 pc.YELLOWCARD, 
-                pc.REDCARDS,
-                pc.SUBSTITUTEIN,
-                pc.SUBSTITUTEOUT
+                pc.REDCARDS
             FROM {DB}.WYSCOUT_PLAYERCAREER pc
             INNER JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
             INNER JOIN {DB}.WYSCOUT_COMPETITIONS c ON pc.COMPETITION_WYID = c.COMPETITION_WYID
             INNER JOIN {DB}.WYSCOUT_TEAMS t ON pc.TEAM_WYID = t.TEAM_WYID
-            WHERE pc.COMPETITION_WYID IN {c_f} 
-            AND s.SEASONNAME {s_f}
+            ORDER BY s.SEASONNAME DESC
         """,
         
         "team_stats_full": f"""
