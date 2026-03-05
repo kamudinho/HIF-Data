@@ -9,7 +9,8 @@ def rens_id(val):
 def rens_metrik_vaerdi(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
-        return int(float(str(val).replace(',', '.')))
+        v = float(str(val).replace(',', '.'))
+        return int(v) if v <= 6 else 6
     except: return 0
 
 def map_position(row):
@@ -25,6 +26,7 @@ def vis_profil(p_data, full_df, career_df):
         historik = historik.sort_values('DATO_DT', ascending=True)
     nyeste = historik.iloc[-1]
     
+    # Header
     h1, h2 = st.columns([1, 4])
     with h1:
         st.image(p_data.get('VIS_BILLEDE', ""), width=115)
@@ -49,24 +51,70 @@ def vis_profil(p_data, full_df, career_df):
     with t2:
         for _, row in historik.iloc[::-1].iterrows():
             with st.expander(f"Dato: {row.get('DATO')} | Rating: {row.get('RATING_AVG')}"):
-                st.write(row.get('VURDERING'))
+                st.write(row.get('VURDERING', 'Ingen kommentar'))
 
     with t3:
         if len(historik) > 1:
             fig_line = go.Figure(go.Scatter(x=historik['DATO_DT'], y=historik['RATING_AVG'], mode='lines+markers', line=dict(color='#df003b')))
-            fig_line.update_layout(yaxis=dict(range=[0, 6]), height=250, margin=dict(l=0, r=0, t=0, b=0))
+            fig_line.update_layout(yaxis=dict(range=[0, 6.5]), height=250, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_line, use_container_width=True)
+        else:
+            st.info("Kræver flere rapporter.")
 
     with t4:
+        st.subheader("Karriere Stats")
         if career_df is not None and not career_df.empty:
-            df_p = career_df[career_df['PLAYER_WYID'] == clean_p_id].copy()
-            st.dataframe(df_p, use_container_width=True, hide_index=True)
+            # Sørg for at vi matcher på rensede ID'er
+            df_p = career_df[career_df['PLAYER_WYID'].astype(str).str.contains(clean_p_id, na=False)].copy()
+            
+            if not df_p.empty:
+                # Kolonne-mapping (Sørger for de navne du bad om)
+                mapping = {
+                    'SEASONNAME': 'Sæson',
+                    'TEAMNAME': 'Hold',
+                    'APPEARANCES': 'Kampe', # MATCHES hedder ofte APPEARANCES i WyScout Snowflake
+                    'MINUTESPLAYED': 'Min', 
+                    'GOAL': 'Mål',
+                    'ASSIST': 'Assists',
+                    'YELLOWCARDS': 'Gule',
+                    'REDCARDS': 'Røde'
+                }
+                
+                # Find de kolonner der faktisk findes i dit datasæt (Snowflake bruger tit store bogstaver)
+                eksisterende_kolonner = {k: v for k, v in mapping.items() if k in df_p.columns}
+                
+                if eksisterende_kolonner:
+                    disp_stats = df_p[list(eksisterende_kolonner.keys())].rename(columns=eksisterende_kolonner)
+                    st.dataframe(disp_stats, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("De ønskede stat-kolonner blev ikke fundet i Snowflake-data.")
+            else:
+                st.info("Ingen stats fundet for denne spiller.")
+        else:
+            st.error("Kunne ikke hente karriere-data fra Snowflake.")
 
     with t5:
+        # RADAR CHART FIX
         categories = ['Beslutning', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Leder', 'Teknik', 'Intelligens']
-        v = [rens_metrik_vaerdi(nyeste.get(c.upper(), 0)) for c in ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']]
-        fig_radar = go.Figure(go.Scatterpolar(r=v + [v[0]], theta=categories + [categories[0]], fill='toself', line=dict(color='#df003b')))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=300)
+        keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+        
+        v = [rens_metrik_vaerdi(nyeste.get(k, 0)) for k in keys]
+        
+        # Lukker cirklen
+        v_radar = v + [v[0]]
+        c_radar = categories + [categories[0]]
+        
+        fig_radar = go.Figure(go.Scatterpolar(
+            r=v_radar, 
+            theta=c_radar, 
+            fill='toself', 
+            fillcolor='rgba(223, 0, 59, 0.3)',
+            line=dict(color='#df003b', width=2)
+        ))
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 6], tickvals=[1,2,3,4,5,6])),
+            showlegend=False, height=400, margin=dict(l=60, r=60, t=40, b=40)
+        )
         st.plotly_chart(fig_radar, use_container_width=True)
 
 def vis_side(scout_df, players_local, sql_players, career_df):
@@ -78,7 +126,6 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     df.columns = [c.strip().upper() for c in df.columns]
     df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id)
     
-    # Image Map
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         billed_map = dict(zip(sql_players['PLAYER_WYID'], sql_players['IMAGEDATAURL']))
@@ -93,11 +140,9 @@ def vis_side(scout_df, players_local, sql_players, career_df):
     if search:
         f_df = f_df[f_df['NAVN'].str.contains(search, case=False, na=False) | f_df['KLUB'].str.contains(search, case=False, na=False)]
 
-    # Tabel opsætning
     col_map = {'VIS_BILLEDE': ' ', 'NAVN': 'Navn', 'POSITION_VISNING': 'Pos', 'KLUB': 'Klub', 'RATING_AVG': 'Rating', 'STATUS': 'Status', 'SCOUT': 'Scout'}
     disp = f_df[list(col_map.keys())].rename(columns=col_map)
     
-    # BEREGN DYNAMISK HØJDE (Sørger for at fjerne scrollbaren)
     calc_height = (len(disp) + 1) * 35 + 3
     
     event = st.dataframe(
@@ -106,7 +151,7 @@ def vis_side(scout_df, players_local, sql_players, career_df):
         hide_index=True, 
         on_select="rerun", 
         selection_mode="single-row",
-        height=calc_height, # Her fjernes scrollbaren
+        height=min(calc_height, 500),
         column_config={
             " ": st.column_config.ImageColumn(" ", width="small"),
             "Rating": st.column_config.NumberColumn(format="%.1f")
