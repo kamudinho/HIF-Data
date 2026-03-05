@@ -44,19 +44,18 @@ def vis_side(dp):
                     "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
-   
+
     # 3. INITIALISÉR 'data' (Dette fjerner fejlen!)
     data = {"n": "", "id": "", "pos": "", "klub": ""}
     
     # Forbered dropdown
     label_to_data = {v["label"]: v["data"] for v in unique_players.values()}
-    options_list = sorted(list(label_to_data.keys()))
 
     # --- VISNING AF SØGNING ---
     metode = st.radio("Metode", ["Søg system", "Manuel"], horizontal=True)
     
     if metode == "Søg system":
-        sel = st.selectbox("Vælg spiller", [""] + options_list)
+        sel = st.selectbox("Vælg spiller", [""])
         if sel:
             data = label_to_data.get(sel)
     else:
