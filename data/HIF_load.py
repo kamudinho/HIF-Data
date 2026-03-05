@@ -37,7 +37,6 @@ def get_scouting_package():
                     pc.APPEARANCES, 
                     pc.MINUTESPLAYED, 
                     pc.GOAL, 
-                    pc.ASSIST, 
                     pc.YELLOWCARD, 
                     pc.REDCARDS
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
