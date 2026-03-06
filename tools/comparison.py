@@ -143,7 +143,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
                 radialaxis=dict(visible=True, range=[0, 6], gridcolor="#eee", linecolor="#444", tickfont=dict(size=8)),
                 angularaxis=dict(gridcolor="#eee", linecolor="#000", linewidth=1.5)
             ),
-            height=250, margin=dict(l=40, r=40, t=10, b=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)'
+            height=350, margin=dict(l=40, r=40, t=10, b=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     st.markdown("</div>", unsafe_allow_html=True)
