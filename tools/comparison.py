@@ -42,15 +42,16 @@ def beregn_p90_stats(pid, adv_df):
     }
 
 def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
-    # --- CSS: EKSTREMT BREDT LAYOUT + FEDE SCOUTING BOKSE ---
+    # --- CSS: RADAR I MIDTEN + SYMMETRI I YDERKANTER + FEDE SCOUTING RÆKKER ---
     st.markdown(f"""
         <style>
+            /* Sørger for at stats-rækkerne flugter 1:1 */
             .header-box {{ height: 55px; display: flex; flex-direction: column; justify-content: center; }}
-            .player-title {{ margin: 0 !important; font-size: 1.5rem; font-weight: 800; line-height: 1.1; }}
+            .player-title {{ margin: 0 !important; font-size: 1.4rem; font-weight: 800; line-height: 1.1; }}
             .player-sub {{ margin: 3px 0 0 0 !important; font-size: 0.9rem; color: gray; text-transform: uppercase; }}
             
             .metrics-box {{ height: 65px; margin-top: 10px; }}
-            [data-testid="stMetricValue"] {{ font-size: 1.3rem !important; font-weight: 900 !important; }}
+            [data-testid="stMetricValue"] {{ font-size: 1.25rem !important; font-weight: 900 !important; }}
             
             .stat-row {{ 
                 display: flex; justify-content: space-between; padding: 0 10px;
@@ -90,8 +91,8 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
 
     navne_liste = sorted(df_s['Navn'].unique().tolist())
     c1, c2 = st.columns(2)
-    s1_navn = c1.selectbox("Vælg Spiller 1 (HIF)", navne_liste, index=0, label_visibility="collapsed")
-    s2_navn = c2.selectbox("Vælg Spiller 2 (Modstander)", navne_liste, index=min(1, len(navne_liste)-1), label_visibility="collapsed")
+    s1_navn = c1.selectbox("P1 (HIF)", navne_liste, index=0, label_visibility="collapsed")
+    s2_navn = c2.selectbox("P2 (Modstander)", navne_liste, index=min(1, len(navne_liste)-1), label_visibility="collapsed")
 
     def hent_data(navn):
         match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
@@ -130,10 +131,14 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # --- TOP SEKTION LAYOUT: [DATA][BILLEDE][RADAR][BILLEDE][DATA] ---
-    col_data1, col_img1, col_center, col_img2, col_data2 = st.columns([3.5, 1.2, 3.8, 1.2, 3.5], vertical_alignment="top")
+    # --- TOP SEKTION LAYOUT: [BILLEDE][DATA][RADAR][DATA][BILLEDE] ---
+    # Billederne er nu placeret i yderkanterne (col_img1 og col_img2)
+    col_img1, col_data1, col_center, col_data2, col_img2 = st.columns([1.2, 3.2, 3.8, 3.2, 1.2], vertical_alignment="top")
 
-    # SPILLER 1 DATA (VENSTRE YDERKANT)
+    # SPILLER 1 (VENSTRE YDERKANT)
+    with col_img1:
+        st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
+
     with col_data1:
         st.markdown(f"<div class='header-box'><p class='player-title' style='color:{HIF_RED};'>{p1['navn']}</p><p class='player-sub'>{p1['pos']} | {p1['klub']}</p></div>", unsafe_allow_html=True)
         st.markdown("<div class='metrics-box'>", unsafe_allow_html=True)
@@ -142,9 +147,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         if p1['adv']:
             for k, v in p1['adv'].items():
                 st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
-
-    with col_img1:
-        st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
 
     # RADAR & DATATJEK (MIDTEN)
     with col_center:
@@ -159,18 +161,19 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         max_p1 = max(diffs, key=diffs.get); max_p2 = min(diffs, key=diffs.get)
         st.markdown(f"<div class='center-analysis'>DATATJEK: {p1['navn']} (+{max_p1.lower()}) vs {p2['navn']} (+{max_p2.lower()})</div>", unsafe_allow_html=True)
 
-    with col_img2:
-        st.image(vis_spiller_billede(p2["img"], p2["pid"]), use_container_width=True)
-
-    # SPILLER 2 DATA (HØJRE YDERKANT)
+    # SPILLER 2 (HØJRE SIDE AF RADAREN)
     with col_data2:
         st.markdown(f"<div class='header-box' style='text-align:right;'><p class='player-title' style='color:{HIF_BLUE};'>{p2['navn']}</p><p class='player-sub'>{p2['pos']} | {p2['klub']}</p></div>", unsafe_allow_html=True)
-        st.markdown("<div class='metrics-box'>", unsafe_allow_html=True)
+        st.markdown("<div class='metrics-box blue-metric'>", unsafe_allow_html=True)
         m_cols = st.columns(4); [m_cols[i].metric(k, v) for i, (k, v) in enumerate(p2['stats'].items())]
         st.markdown("</div>", unsafe_allow_html=True)
         if p2['adv']:
             for k, v in p2['adv'].items():
                 st.markdown(f"<div class='stat-row'><span class='stat-val' style='color:{HIF_BLUE}'>{v}</span><span class='stat-label'>{k}</span></div>", unsafe_allow_html=True)
+
+    # SPILLER 2 BILLEDE (HØJRE YDERKANT)
+    with col_img2:
+        st.image(vis_spiller_billede(p2["img"], p2["pid"]), use_container_width=True)
 
     # --- SCOUTING SEKTION: SIDESTILLEDE RÆKKER ---
     st.markdown("<hr style='margin: 30px 0 10px 0; border: 0; border-top: 2px solid #eee;'>", unsafe_allow_html=True)
