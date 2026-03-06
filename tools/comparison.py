@@ -162,7 +162,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
     with col_img2: st.image(vis_spiller_billede(p2["img"], p2["pid"]), use_container_width=True)
 
     # --- NY SEKTION: SIDESTILLEDE SCOUTING-RÆKKER ---
-    st.markdown("<hr style='margin: 15px 0 5px 0; border: 0; border-top: 2px solid #eee;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 15px 0 1px 0; border: 0; border-top: 2px solid #eee;'>", unsafe_allow_html=True)
 
     def scouting_row(label, text1, text2, color_left, color_right):
         st.markdown(f"<div class='scouting-header'>{label}</div>", unsafe_allow_html=True)
