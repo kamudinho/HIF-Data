@@ -42,12 +42,12 @@ def beregn_p90_stats(pid, adv_df):
     }
 
 def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
-    # --- CSS: SIDESTILLEDE BOKSE & DYNAMISK HØJDE ---
+    # --- CSS: HORISONTAL SYMMETRI FOR TEKST-RÆKKER ---
     st.markdown(f"""
         <style>
             .header-box {{ height: 55px; display: flex; flex-direction: column; justify-content: center; }}
-            .player-title {{ margin: 0 !important; font-size: 1.4rem; font-weight: 800; line-height: 1; }}
-            .player-sub {{ margin: 3px 0 0 0 !important; font-size: 0.9rem; color: gray; text-transform: uppercase; }}
+            .player-title {{ margin: 0 !important; font-size: 1.4rem; font-weight: 800; }}
+            .player-sub {{ margin: 3px 0 0 0 !important; font-size: 0.9rem; color: gray; }}
             
             .metrics-box {{ height: 65px; margin-top: 10px; }}
             [data-testid="stMetricValue"] {{ font-size: 1.25rem !important; font-weight: 900 !important; }}
@@ -59,32 +59,22 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             .stat-label {{ font-size: 0.8rem; color: #666; font-weight: bold; text-transform: uppercase; }}
             .stat-val {{ font-size: 1.1rem; font-weight: 800; }}
 
-            /* Sidestillede bokse container */
-            .notes-wrapper {{
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-                margin-top: 15px;
+            /* Note-bokse layout */
+            .row-label {{ 
+                text-align: center; font-weight: 900; font-size: 0.8rem; color: #bbb; 
+                text-transform: uppercase; letter-spacing: 2px; margin-top: 25px; margin-bottom: 5px;
             }}
             .note-box {{
-                padding: 14px;
-                border-radius: 10px;
-                border: 1px solid #eee;
-                font-size: 1rem;
-                line-height: 1.5;
-                background: #ffffff;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+                padding: 16px; border-radius: 12px; border: 1px solid #eee;
+                font-size: 1.05rem; line-height: 1.5; background: #ffffff;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.02); height: 100%;
             }}
-            .note-title {{ 
-                font-size: 0.75rem; 
-                font-weight: 900; 
-                text-transform: uppercase; 
-                color: #bbb; 
-                margin-bottom: 6px; 
-                letter-spacing: 1.2px; 
-            }}
-            .vurdering-hif {{ border-left: 5px solid {HIF_RED}; background: #fff8f8; }}
-            .vurdering-mod {{ border-right: 5px solid {HIF_BLUE}; background: #f8fbff; }}
+            .note-hif {{ border-left: 6px solid {HIF_RED}; }}
+            .note-mod {{ border-right: 6px solid {HIF_BLUE}; text-align: right; }}
+            
+            /* Særlig styling for Vurdering */
+            .vurdering-hif {{ background: #fff8f8; }}
+            .vurdering-mod {{ background: #f8fbff; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -123,45 +113,29 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 stats = {"K": int(c_m.iloc[0].get('APPEARANCES', 0)), "M": int(c_m.iloc[0].get('GOAL', 0)),
                          "A": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESONFIELD', 0))}
         
-        labels = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
             "adv": beregn_p90_stats(pid, advanced_stats_df),
-            "r": [n.get(k, 0.1) for k in labels],
+            "r": [n.get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']],
             "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
-            "scout_scores": {k: n.get(k, 0) for k in labels}
+            "scout_scores": {k: n.get(k, 0) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']}
         }
 
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # --- HOVEDLAYOUT ---
+    # --- TOP SEKTION (DATA & RADAR) ---
     col_img1, col_data1, col_center, col_data2, col_img2 = st.columns([1, 3.2, 3.6, 3.2, 1], vertical_alignment="top")
 
-    # SPILLER 1
-    with col_img1:
-        st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
-
+    with col_img1: st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
     with col_data1:
         st.markdown(f"<div class='header-box'><p class='player-title' style='color:{HIF_RED};'>{p1['navn']}</p><p class='player-sub'>{p1['pos']} | {p1['klub']}</p></div>", unsafe_allow_html=True)
         st.markdown("<div class='metrics-box'>", unsafe_allow_html=True)
-        m_cols = st.columns(4)
-        for i, (k, v) in enumerate(p1['stats'].items()): m_cols[i].metric(k, v)
+        m_cols = st.columns(4); [m_cols[i].metric(k, v) for i, (k, v) in enumerate(p1['stats'].items())]
         st.markdown("</div>", unsafe_allow_html=True)
-        
         if p1['adv']:
-            for k, v in p1['adv'].items():
-                st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
-        
-        st.markdown(f"""
-            <div class='notes-wrapper'>
-                <div class='note-box'><div class='note-title'>Styrker</div>{p1['styrker']}</div>
-                <div class='note-box'><div class='note-title'>Udvikling</div>{p1['udvikling']}</div>
-                <div class='note-box vurdering-hif'><div class='note-title' style='color:{HIF_RED};'>Scout Vurdering</div><b>{p1['vurdering']}</b></div>
-            </div>
-        """, unsafe_allow_html=True)
+            for k, v in p1['adv'].items(): st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
 
-    # CENTER (RADAR)
     with col_center:
         labels = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
         fig = go.Figure()
@@ -169,27 +143,30 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_BLUE, opacity=0.35))
         fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 6])), height=320, margin=dict(l=40, r=40, t=10, b=0), showlegend=False)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown("<div style='text-align:center; color:#999; font-weight:900; letter-spacing:2px; font-size:0.7rem;'>PROFIL SAMMENLIGNING</div>", unsafe_allow_html=True)
 
-    # SPILLER 2
     with col_data2:
         st.markdown(f"<div class='header-box' style='text-align:right;'><p class='player-title' style='color:{HIF_BLUE};'>{p2['navn']}</p><p class='player-sub'>{p2['pos']} | {p2['klub']}</p></div>", unsafe_allow_html=True)
         st.markdown("<div class='metrics-box blue-metric'>", unsafe_allow_html=True)
-        m_cols = st.columns(4)
-        for i, (k, v) in enumerate(p2['stats'].items()): m_cols[i].metric(k, v)
+        m_cols = st.columns(4); [m_cols[i].metric(k, v) for i, (k, v) in enumerate(p2['stats'].items())]
         st.markdown("</div>", unsafe_allow_html=True)
-        
         if p2['adv']:
-            for k, v in p2['adv'].items():
-                st.markdown(f"<div class='stat-row'><span class='stat-val' style='color:{HIF_BLUE}'>{v}</span><span class='stat-label'>{k}</span></div>", unsafe_allow_html=True)
+            for k, v in p2['adv'].items(): st.markdown(f"<div class='stat-row'><span class='stat-val' style='color:{HIF_BLUE}'>{v}</span><span class='stat-label'>{k}</span></div>", unsafe_allow_html=True)
+    with col_img2: st.image(vis_spiller_billede(p2["img"], p2["pid"]), use_container_width=True)
 
-        st.markdown(f"""
-            <div class='notes-wrapper' style='text-align:right;'>
-                <div class='note-box'><div class='note-title'>Styrker</div>{p2['styrker']}</div>
-                <div class='note-box'><div class='note-title'>Udvikling</div>{p2['udvikling']}</div>
-                <div class='note-box vurdering-mod'><div class='note-title' style='color:{HIF_BLUE};'>Scout Vurdering</div><b>{p2['vurdering']}</b></div>
-            </div>
-        """, unsafe_allow_html=True)
+    # --- NY SEKTION: SIDESTILLEDE SCOUTING-BOKSE ---
+    st.markdown("<hr style='margin: 40px 0 20px 0; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
-    with col_img2:
-        st.image(vis_spiller_billede(p2["img"], p2["pid"]), use_container_width=True)
+    # Funktion til at bygge rækkerne
+    def note_row(title, val1, val2, is_vurdering=False):
+        st.markdown(f"<div class='row-label'>{title}</div>", unsafe_allow_html=True)
+        c_left, c_right = st.columns(2)
+        style1 = "note-hif" + (" vurdering-hif" if is_vurdering else "")
+        style2 = "note-mod" + (" vurdering-mod" if is_vurdering else "")
+        
+        c_left.markdown(f"<div class='note-box {style1}'>{val1}</div>", unsafe_allow_html=True)
+        c_right.markdown(f"<div class='note-box {style2}'>{val2}</div>", unsafe_allow_html=True)
+
+    # Byg de 3 rækker
+    note_row("Styrker", p1["styrker"], p2["styrker"])
+    note_row("Udviklingspotentiale", p1["udvikling"], p2["udvikling"])
+    note_row("Endelig Vurdering", f"<b>{p1['vurdering']}</b>", f"<b>{p2['vurdering']}</b>", is_vurdering=True)
