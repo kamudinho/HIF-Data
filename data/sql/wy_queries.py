@@ -89,7 +89,7 @@ def get_wy_queries(comp_filter, season_filter):
             SELECT 
                 pt.PLAYER_WYID,
                 s.SEASONNAME,
-                pt.MINUTESPLAYED, -- Vigtig for omregning!
+                pt.MINUTESONFIELD, -- Vigtig for omregning!
                 pt.GOALS,
                 pt.ASSISTS,
                 pt.XG,
