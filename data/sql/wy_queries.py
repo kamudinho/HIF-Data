@@ -92,7 +92,7 @@ def get_wy_queries(comp_filter, season_filter):
                 pt.MINUTESONFIELD, -- Vigtig for omregning!
                 pt.GOALS,
                 pt.ASSISTS,
-                pt.XG,
+                pt.XGSHOT,
                 pt.SHOTS,
                 pt.PASSES,
                 pt.ACCURATEPASSESPERCENT,
