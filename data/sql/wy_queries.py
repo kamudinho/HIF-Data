@@ -85,22 +85,28 @@ def get_wy_queries(comp_filter, season_filter):
             WHERE p.COMPETITION_WYID IN {liga_ids} 
             AND s.SEASONNAME = '2025/2026'
         """,
+
         "player_stats_total": f"""
             SELECT 
                 pt.PLAYER_WYID,
                 s.SEASONNAME,
-                pt.MINUTESONFIELD, -- Vigtig for omregning!
-                pt.GOALS,
-                pt.ASSISTS,
+                pt.MINUTESONFIELD,
                 pt.XGSHOT,
-                pt.SHOTS,
-                pt.PASSES,
-                pt.ACCURATEPASSESPERCENT,
+                pt.XGASSIST,
                 pt.DRIBBLES,
-                pt.SUCCESSFULDRIBBLESPERCENT,
-                pt.INTERCEPTIONS
+                pt.SUCCESSFULDRIBBLES,
+                pt.PROGRESSIVERUN,
+                pt.PROGRESSIVEPASSES,
+                pt.PASSES,
+                pt.SUCCESSFULPASSES,
+                pt.KEYPASSES,
+                pt.RECOVERIES,
+                pt.INTERCEPTIONS,
+                pt.DUELS,
+                pt.DUELSWON,
+                pt.TOUCHINBOX
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
             JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
             WHERE s.SEASONNAME {s_f}
-        """
+        """,
     }
