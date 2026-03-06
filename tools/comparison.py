@@ -26,24 +26,41 @@ def vis_spiller_billede(img_url, pid):
     return url
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
-    # CSS Optimering
-    st.markdown("""
+    # Optimeret CSS til centrering af Metrics
+    st.markdown(f"""
         <style>
-            .block-container { padding-top: 1.5rem !important; }
-            [data-testid="stMetric"] {
+            .block-container {{ padding-top: 1rem !important; }}
+            
+            /* Centrerer alt indhold i metric-boksen */
+            [data-testid="stMetric"] {{
                 background-color: #f8f9fa;
-                border-bottom: 3px solid #cc0000;
+                border-bottom: 3px solid {HIF_RED};
                 border-radius: 4px;
                 padding: 5px !important;
-                text-align: center;
-            }
-            .blue-metric [data-testid="stMetric"] {
-                border-bottom: 3px solid #0056a3 !important;
-            }
-            [data-testid="stMetricLabel"] { font-size: 0.55rem !important; font-weight: bold !important; color: #666 !important; }
-            [data-testid="stMetricValue"] { font-size: 1rem !important; font-weight: 800 !important; }
-            /* Justering af kolonne-gap */
-            [data-testid="column"] { display: flex; flex-direction: column; justify-content: center; }
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center !important;
+            }}
+            
+            /* Sørger for at labels og værdier er centrerede */
+            [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                text-align: center !important;
+            }}
+
+            .blue-metric [data-testid="stMetric"] {{
+                border-bottom: 3px solid {HIF_BLUE} !important;
+            }}
+            
+            [data-testid="stMetricLabel"] {{ font-size: 0.55rem !important; font-weight: bold !important; color: #666 !important; }}
+            [data-testid="stMetricValue"] {{ font-size: 1rem !important; font-weight: 800 !important; }}
+            
+            /* Fjerner standard gap for at holde boksene tætte */
+            [data-testid="column"] > div {{ gap: 0.1rem !important; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -76,8 +93,8 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         if career_df is not None:
             c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & (career_df['SEASONNAME'].str.contains("2025/2026", na=False))]
             if not c_m.empty:
-                stats = {"KMP": int(c_m.iloc[0].get('APPEARANCES', 0)), "MÅL": int(c_m.iloc[0].get('GOAL', 0)),
-                         "AST": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESPLAYED', 0))}
+                stats = {"KAMPE": int(c_m.iloc[0].get('APPEARANCES', 0)), "MÅL": int(c_m.iloc[0].get('GOAL', 0)),
+                         "ASS": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESPLAYED', 0))}
         
         return {"navn": navn, "pid": pid, "img": billed_map.get(pid), "pos": pos, "klub": klub, "stats": stats,
                 "r": [n.get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']]}
@@ -85,23 +102,24 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # Kolonner - øget midterkolonne lidt for at give plads til labels
-    col_img1, col_data1, col_radar, col_data2, col_img2 = st.columns([1, 2.5, 5, 2.5, 1])
+    # Layout: Billede - Data - Radar - Data - Billede
+    col_img1, col_data1, col_radar, col_data2, col_img2 = st.columns([1, 2.8, 4.4, 2.8, 1])
 
     with col_img1:
         st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
 
     with col_data1:
-        st.markdown(f"<h5 style='margin:0; color:{HIF_RED};'>{p1['navn']}</h5>", unsafe_allow_html=True)
-        st.caption(f"{p1['pos']} | {p1['klub']}")
+        st.markdown(f"<h5 style='margin:0; color:{HIF_RED}; line-height:1.1;'>{p1['navn']}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<p style='margin:0; font-size:0.75rem; color:gray;'>{p1['pos']} | {p1['klub']}</p>", unsafe_allow_html=True)
+        st.write("") # Lille afstand
+        # Her sikrer vi centrering ved at bruge st.columns inde i data-kolonnen
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("KAMPE", p1['stats']['KMP'])
+        m1.metric("KAMPE", p1['stats']['KAMPE'])
         m2.metric("MÅL", p1['stats']['MÅL'])
-        m3.metric("ASS", p1['stats']['AST'])
+        m3.metric("ASS", p1['stats']['ASS'])
         m4.metric("MIN", p1['stats']['MIN'])
 
     with col_radar:
-        # Forkortede labels for bedre visning
         labels = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Attitude', 'Udh']
         fig = go.Figure()
         fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_RED, opacity=0.3))
@@ -111,29 +129,22 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
             polar=dict(
                 gridshape='linear', 
                 radialaxis=dict(visible=False, range=[0, 6]), 
-                angularaxis=dict(
-                    linecolor="black", 
-                    gridcolor="#eee", 
-                    tickfont=dict(size=9, color="#444"),
-                    rotation=90, # Starter i toppen
-                    direction="clockwise"
-                )
+                angularaxis=dict(linecolor="black", gridcolor="#eee", tickfont=dict(size=8), rotation=90, direction="clockwise")
             ),
-            height=320, # Lidt højere for at give vertikal plads
-            margin=dict(l=60, r=60, t=50, b=30), # Øget top-margin for at sænke diagrammet
-            showlegend=False, 
-            paper_bgcolor='rgba(0,0,0,0)'
+            height=280, margin=dict(l=40, r=40, t=20, b=20), 
+            showlegend=False, paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with col_data2:
-        st.markdown(f"<h5 style='margin:0; color:{HIF_BLUE}; text-align:right;'>{p2['navn']}</h5>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align:right; margin:0; font-size:0.8rem; color:gray;'>{p2['pos']} | {p2['klub']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='margin:0; color:{HIF_BLUE}; text-align:right; line-height:1.1;'>{p2['navn']}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:right; margin:0; font-size:0.75rem; color:gray;'>{p2['pos']} | {p2['klub']}</p>", unsafe_allow_html=True)
+        st.write("")
         st.markdown('<div class="blue-metric">', unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("KAMPE", p2['stats']['KMP'])
+        m1.metric("KAMPE", p2['stats']['KAMPE'])
         m2.metric("MÅL", p2['stats']['MÅL'])
-        m3.metric("ASS", p2['stats']['AST'])
+        m3.metric("ASS", p2['stats']['ASS'])
         m4.metric("MIN", p2['stats']['MIN'])
         st.markdown('</div>', unsafe_allow_html=True)
 
