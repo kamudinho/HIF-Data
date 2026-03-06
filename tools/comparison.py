@@ -26,24 +26,22 @@ def vis_spiller_billede(img_url, pid):
     return url
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
-    # CSS der styler Streamlits standard-komponenter til at ligne dine bokse
-    st.markdown(f"""
+    # CSS uden ordbogs-fejl
+    st.markdown("""
         <style>
-            .block-container {{ padding-top: 1rem !important; }}
-            /* Styling af de små bokse */
-            [data-testid="stMetric"] {{
+            .block-container { padding-top: 1rem !important; }
+            [data-testid="stMetric"] {
                 background-color: #f8f9fa;
-                border-bottom: 3px solid {HIF_RED};
+                border-bottom: 3px solid #cc0000;
                 border-radius: 4px;
                 padding: 5px !important;
                 text-align: center;
-            }}
-            /* Blå variant til spiller 2 */
-            .blue-metric [data-testid="stMetric"] {{
-                border-bottom: 3px solid {HIF_BLUE};
-            }}
-            [data-testid="stMetricLabel"] {{ font-size: 0.6rem !important; font-weight: bold !important; color: #666 !important; }}
-            [data-testid="stMetricValue"] {{ font-size: 1.1rem !important; font-weight: 800 !important; }}
+            }
+            .blue-metric [data-testid="stMetric"] {
+                border-bottom: 3px solid #0056a3 !important;
+            }
+            [data-testid="stMetricLabel"] { font-size: 0.6rem !important; font-weight: bold !important; color: #666 !important; }
+            [data-testid="stMetricValue"] { font-size: 1.1rem !important; font-weight: 800 !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -52,7 +50,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].apply(rens_id)
     except: return
 
-    billed_map = {{rens_id(row['PLAYER_WYID']): row['IMAGEDATAURL'] for _, row in d3.iterrows()}} if d3 is not None else {{}}
+    billed_map = {rens_id(row['PLAYER_WYID']): row['IMAGEDATAURL'] for _, row in d3.iterrows()} if d3 is not None else {}
     navne_liste = sorted(df_s['Navn'].unique().tolist())
 
     c1, c2 = st.columns(2)
@@ -64,25 +62,28 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         if match.empty: return None
         n = match.iloc[0]
         pid = n['PID_CLEAN']
+        
         pos, klub = "Ukendt", "Ukendt"
         if df_spillere is not None:
             m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
             if not m.empty:
                 pos = map_position(m.iloc[0].get('ROLECODE3', ''))
                 klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
-        stats = {{"KMP": 0, "MÅL": 0, "AST": 0, "MIN": 0}}
+
+        stats = {"KMP": 0, "MÅL": 0, "AST": 0, "MIN": 0}
         if career_df is not None:
             c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & (career_df['SEASONNAME'].str.contains("2025/2026", na=False))]
             if not c_m.empty:
-                stats = {{"KMP": int(c_m.iloc[0].get('APPEARANCES', 0)), "MÅL": int(c_m.iloc[0].get('GOAL', 0)),
-                         "AST": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESPLAYED', 0))}}
-        return {{"navn": navn, "pid": pid, "img": billed_map.get(pid), "pos": pos, "klub": klub, "stats": stats,
-                "r": [n.get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']]}}
+                stats = {"KMP": int(c_m.iloc[0].get('APPEARANCES', 0)), "MÅL": int(c_m.iloc[0].get('GOAL', 0)),
+                         "AST": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESPLAYED', 0))}
+        
+        return {"navn": navn, "pid": pid, "img": billed_map.get(pid), "pos": pos, "klub": klub, "stats": stats,
+                "r": [n.get(k, 0.1) for k in ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']]}
 
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # --- LAYOUT MED 5 KOLONNER ---
+    # Kolonner
     col_img1, col_data1, col_radar, col_data2, col_img2 = st.columns([1, 2.5, 4, 2.5, 1])
 
     with col_img1:
@@ -91,7 +92,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
     with col_data1:
         st.markdown(f"<h4 style='margin:0; color:{HIF_RED};'>{p1['navn']}</h4>", unsafe_allow_html=True)
         st.caption(f"{p1['pos']} | {p1['klub']}")
-        # Her bruger vi Streamlits indbyggede metrics for at undgå HTML-fejl
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("KMP", p1['stats']['KMP'])
         m2.metric("MÅL", p1['stats']['MÅL'])
@@ -108,12 +108,11 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
                        angularaxis=dict(linecolor="black", gridcolor="#eee", tickfont=dict(size=8))),
             height=280, margin=dict(l=40, r=40, t=10, b=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)'
         )
-        st.plotly_chart(fig, use_container_width=True, config={{'displayModeBar': False}})
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with col_data2:
         st.markdown(f"<h4 style='margin:0; color:{HIF_BLUE}; text-align:right;'>{p2['navn']}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:right; margin:0; font-size:0.8rem; color:gray;'>{p2['pos']} | {p2['klub']}</p>", unsafe_allow_html=True)
-        # Blå sektion
         st.markdown('<div class="blue-metric">', unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("KMP", p2['stats']['KMP'])
