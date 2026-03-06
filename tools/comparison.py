@@ -90,7 +90,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
 
     with col_data1:
-        st.markdown(f"<h4 style='margin:0; color:{HIF_RED};'>{p1['navn']}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='margin:0; color:{HIF_RED};'>{p1['navn']}</h5>", unsafe_allow_html=True)
         st.caption(f"{p1['pos']} | {p1['klub']}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("KAMPE", p1['stats']['KMP'])
@@ -111,13 +111,13 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with col_data2:
-        st.markdown(f"<h4 style='margin:0; color:{HIF_BLUE}; text-align:right;'>{p2['navn']}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='margin:0; color:{HIF_BLUE}; text-align:right;'>{p2['navn']}</h5>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:right; margin:0; font-size:0.8rem; color:gray;'>{p2['pos']} | {p2['klub']}</p>", unsafe_allow_html=True)
         st.markdown('<div class="blue-metric">', unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("KMP", p2['stats']['KMP'])
+        m1.metric("KAMPE", p2['stats']['KMP'])
         m2.metric("MÅL", p2['stats']['MÅL'])
-        m3.metric("AST", p2['stats']['AST'])
+        m3.metric("ASS", p2['stats']['AST'])
         m4.metric("MIN", p2['stats']['MIN'])
         st.markdown('</div>', unsafe_allow_html=True)
 
