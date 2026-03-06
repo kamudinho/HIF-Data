@@ -26,10 +26,10 @@ def vis_spiller_billede(img_url, pid):
     return url
 
 def vis_side(df_spillere, d1, d2, career_df, d3):
-    # CSS uden ordbogs-fejl
+    # CSS Optimering
     st.markdown("""
         <style>
-            .block-container { padding-top: 1rem !important; }
+            .block-container { padding-top: 1.5rem !important; }
             [data-testid="stMetric"] {
                 background-color: #f8f9fa;
                 border-bottom: 3px solid #cc0000;
@@ -40,8 +40,10 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
             .blue-metric [data-testid="stMetric"] {
                 border-bottom: 3px solid #0056a3 !important;
             }
-            [data-testid="stMetricLabel"] { font-size: 0.6rem !important; font-weight: bold !important; color: #666 !important; }
-            [data-testid="stMetricValue"] { font-size: 1.1rem !important; font-weight: 800 !important; }
+            [data-testid="stMetricLabel"] { font-size: 0.55rem !important; font-weight: bold !important; color: #666 !important; }
+            [data-testid="stMetricValue"] { font-size: 1rem !important; font-weight: 800 !important; }
+            /* Justering af kolonne-gap */
+            [data-testid="column"] { display: flex; flex-direction: column; justify-content: center; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -83,8 +85,8 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # Kolonner
-    col_img1, col_data1, col_radar, col_data2, col_img2 = st.columns([1, 2.5, 4, 2.5, 1])
+    # Kolonner - øget midterkolonne lidt for at give plads til labels
+    col_img1, col_data1, col_radar, col_data2, col_img2 = st.columns([1, 2.5, 5, 2.5, 1])
 
     with col_img1:
         st.image(vis_spiller_billede(p1["img"], p1["pid"]), use_container_width=True)
@@ -99,14 +101,28 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         m4.metric("MIN", p1['stats']['MIN'])
 
     with col_radar:
-        labels = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+        # Forkortede labels for bedre visning
+        labels = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Attitude', 'Udh']
         fig = go.Figure()
         fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_RED, opacity=0.3))
         fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_BLUE, opacity=0.3))
+        
         fig.update_layout(
-            polar=dict(gridshape='linear', radialaxis=dict(visible=False, range=[0, 6]), 
-                       angularaxis=dict(linecolor="black", gridcolor="#eee", tickfont=dict(size=8))),
-            height=280, margin=dict(l=40, r=40, t=10, b=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)'
+            polar=dict(
+                gridshape='linear', 
+                radialaxis=dict(visible=False, range=[0, 6]), 
+                angularaxis=dict(
+                    linecolor="black", 
+                    gridcolor="#eee", 
+                    tickfont=dict(size=9, color="#444"),
+                    rotation=90, # Starter i toppen
+                    direction="clockwise"
+                )
+            ),
+            height=320, # Lidt højere for at give vertikal plads
+            margin=dict(l=60, r=60, t=50, b=30), # Øget top-margin for at sænke diagrammet
+            showlegend=False, 
+            paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
