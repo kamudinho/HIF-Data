@@ -88,7 +88,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         n = match.iloc[0]
         pid = n['PID_CLEAN']
         
-        pos, klub = "Ukendt", "Ukendt"
+        pos, klub = "-", "-"
         if df_spillere is not None and not df_spillere.empty:
             m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
             if not m.empty:
@@ -106,7 +106,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & (career_df['SEASONNAME'].str.contains("2025/2026", na=False))]
             if not c_m.empty:
                 stats = {"KAMPE": int(c_m.iloc[0].get('APPEARANCES', 0)), "MÅL": int(c_m.iloc[0].get('GOAL', 0)),
-                         "ASS": int(c_m.iloc[0].get('ASSIST', 0) if 'ASSIST' in c_m.columns else 0), "MIN": int(c_m.iloc[0].get('MINUTESPLAYED', 0))}
+                         "ASS": int(c_m.iloc[0].get('ASSIST', 0) if 'ASSIST' in c_m.columns else 0), "MIN": int(c_m.iloc[0].get('MINUTESONFIELD', 0))}
         
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats,
