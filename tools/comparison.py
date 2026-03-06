@@ -93,7 +93,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3):
         st.markdown(f"<h4 style='margin:0; color:{HIF_RED};'>{p1['navn']}</h5>", unsafe_allow_html=True)
         st.caption(f"{p1['pos']} | {p1['klub']}")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("KAMP", p1['stats']['KMP'])
+        m1.metric("KAMPE", p1['stats']['KMP'])
         m2.metric("MÅL", p1['stats']['MÅL'])
         m3.metric("ASS", p1['stats']['AST'])
         m4.metric("MIN", p1['stats']['MIN'])
