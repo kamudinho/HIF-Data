@@ -172,7 +172,8 @@ try:
                     None,               # d1 (ikke brugt pt)
                     None,               # d2 (ikke brugt pt)
                     dp["career"],       # career_df
-                    dp["sql_players"]   # HER ER BILLEDERNE! (d3)
+                    dp["sql_players"],   # HER ER BILLEDERNE! (d3)
+                    dp["advanced_stats"]
                 )
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
