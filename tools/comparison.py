@@ -25,14 +25,13 @@ def vis_spiller_billede(img_url, pid):
     return url
 
 def beregn_p90_stats(pid, adv_df):
-    """Internt hjælpeværktøj til at trække de 10 vigtigste stats pr 90"""
-    stats_out = {}
+    """Beregner P90 stats baseret på de rå tal fra SQL queryen"""
     clean_pid = rens_id(pid)
     
     if adv_df is None or adv_df.empty:
         return None
         
-    # Find rækken for spilleren
+    # Find spilleren
     p_row = adv_df[adv_df['PLAYER_WYID'].apply(rens_id) == clean_pid]
     
     if p_row.empty:
@@ -41,21 +40,26 @@ def beregn_p90_stats(pid, adv_df):
     r = p_row.iloc[0]
     mins = float(r.get('MINUTESONFIELD', 0))
     
-    # Beregnings-lambda (Sikrer mod division med 0 og for få minutter)
-    p90 = lambda val: round((float(val) / mins) * 90, 2) if mins > 45 else 0.0
-    pct = lambda suc, tot: round((float(suc) / float(tot)) * 100, 1) if float(tot) > 0 else 0.0
+    # Krav: Spilleren skal have spillet mindst 45 minutter for at undgå skæve tal
+    if mins < 45:
+        return {k: "-" for k in ["xG", "Driblinger", "Driblinger %", "Prog. Løb", "Prog. Pass", "Pass %", "Key Passes", "Interceptions", "Dueller %", "Touch i felt"]}
+        
+    # Hjælpe-funktioner
+    p90 = lambda val: round((float(r.get(val, 0)) / mins) * 90, 2)
+    pct = lambda suc, tot: round((float(r.get(suc, 0)) / float(r.get(tot, 1))) * 100, 1) if float(r.get(tot, 0)) > 0 else 0.0
 
     return {
-        "xG": p90(r.get('XGSHOT', 0)),
-        "Driblinger": p90(r.get('DRIBBLES', 0)),
-        "Driblinger %": pct(r.get('SUCCESSFULDRIBBLES', 0), r.get('DRIBBLES', 0)),
-        "Prog. Løb": p90(r.get('PROGRESSIVERUN', 0)),
-        "Prog. Pass": p90(r.get('PROGRESSIVEPASSES', 0)),
-        "Pass %": pct(r.get('SUCCESSFULPASSES', 0), r.get('PASSES', 0)),
-        "Key Passes": p90(r.get('KEYPASSES', 0)),
-        "Erhvervninger": p90(r.get('RECOVERIES', 0)),
-        "Interceptions": p90(r.get('INTERCEPTIONS', 0)),
-        "Vundne Dueller %": pct(r.get('DUELSWON', 0), r.get('DUELS', 0))
+        "xG P90": p90('XGSHOT'),
+        "xA P90": p90('XGASSIST'),
+        "Driblinger": p90('DRIBBLES'),
+        "Driblinger %": pct('SUCCESSFULDRIBBLES', 'DRIBBLES'),
+        "Prog. Løb": p90('PROGRESSIVERUN'),
+        "Prog. Pass": p90('PROGRESSIVEPASSES'),
+        "Pass %": pct('SUCCESSFULPASSES', 'PASSES'),
+        "Key Passes": p90('KEYPASSES'),
+        "Interceptions": p90('INTERCEPTIONS'),
+        "Dueller %": pct('DUELSWON', 'DUELS'),
+        "Touch i felt": p90('TOUCHINBOX')
     }
 
 def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
