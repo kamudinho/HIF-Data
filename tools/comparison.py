@@ -49,7 +49,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             .player-title {{ margin: 0 !important; font-size: 1.4rem; font-weight: 800; }}
             .player-sub {{ margin: 3px 0 0 0 !important; font-size: 0.9rem; color: gray; }}
             
-            .metrics-box {{ height: 55px; margin-top: 10px; }}
+            .metrics-box {{ height: 45px; margin-top: 10px; }}
             [data-testid="stMetricValue"] {{ font-size: 1.25rem !important; font-weight: 900 !important; }}
             
             .stat-row {{ 
