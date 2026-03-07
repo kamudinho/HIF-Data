@@ -15,13 +15,13 @@ def get_analysis_package():
     if not conn:
         return {}
 
-    # Hent Opta data
+    # 1. Hent Opta data
     df_matches = conn.query(queries.get("opta_matches"))
     df_shots = conn.query(queries.get("opta_shotevents"))
     df_assists = conn.query(queries.get("opta_assists"))
     df_opta_stats = conn.query(queries.get("opta_team_stats"))
 
-    # Vask skuddata
+    # 2. Vask skuddata
     if not df_shots.empty:
         df_shots.columns = [str(c).upper().strip() for c in df_shots.columns]
         df_shots['XG_VAL'] = df_shots['XG_RAW'].apply(parse_xg)
@@ -29,7 +29,7 @@ def get_analysis_package():
             if col in df_shots.columns:
                 df_shots[col] = pd.to_numeric(df_shots[col], errors='coerce').fillna(0)
 
-    # Vask assistdata
+    # 3. Vask assistdata
     if not df_assists.empty:
         df_assists.columns = [str(c).upper().strip() for c in df_assists.columns]
         for col in ['PASS_START_X', 'PASS_START_Y', 'SHOT_X', 'SHOT_Y']:
@@ -38,9 +38,17 @@ def get_analysis_package():
         if 'XG_RAW' in df_assists.columns:
             df_assists['XG_VAL'] = df_assists['XG_RAW'].apply(parse_xg)
 
+    # 4. Returnér den "fulde" pakke som værktøjerne forventer
     return {
-        "opta_matches": df_matches,
+        "matches": df_matches,          # Bruges af test_matches.py
+        "opta_matches": df_matches,     # Backup
         "opta_team_stats": df_opta_stats,
-        "playerstats": df_shots,
-        "assists": df_assists
+        "playerstats": df_shots,        # Bruges af shotmap.py
+        "assists": df_assists,          # Bruges af shotmap.py
+        "opta": {"matches": df_matches}, # Bruges af test_teams.py (Head-to-head)
+        "config": {
+            "liga_navn": "NordicBet Liga",
+            "colors": {} # Her kan du tilføje TEAM_COLORS hvis de skal med
+        },
+        "logo_map": {} # Hvis du har en funktion til logos, så smid den her
     }
