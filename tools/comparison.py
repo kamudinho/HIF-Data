@@ -203,7 +203,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         st.markdown(f"""
             <div class='center-analysis'>
                 <div style='border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;'>
-                    <l>SCOUT:</l> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
+                    <b>SCOUT:</b> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
                 </div>
                 <div>
                     <b>WYSCOUT:</b> {duel_tekst}
