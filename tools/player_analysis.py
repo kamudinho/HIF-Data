@@ -7,9 +7,9 @@ def vis_side(dp):
     df_xg = dp.get("xg_agg")
     df_lb = dp.get("linebreaks")
     
-    # Hent name_map og tving alle nøgler til string for at sikre match
+    # Hent name_map og tving nøgler til små bogstaver og rens dem
     raw_name_map = dp.get("name_map", {})
-    name_map = {str(k).strip(): str(v) for k, v in raw_name_map.items()}
+    name_map = {str(k).strip().lower(): str(v).strip() for k, v in raw_name_map.items()}
 
     if df_xg is None or df_xg.empty:
         st.warning("Ingen xG-data fundet i Snowflake for den valgte periode.")
@@ -19,10 +19,10 @@ def vis_side(dp):
     df_working = df_xg.copy()
     df_working['STAT_VALUE'] = pd.to_numeric(df_working['STAT_VALUE'], errors='coerce').fillna(0)
     
-    # Tving PLAYER_OPTAUUID til string og rens den
-    df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip()
+    # Tving PLAYER_OPTAUUID til string, små bogstaver og rens den
+    df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
     
-    # 3. Pivotering (Transformation fra rækker til kolonner pr. spiller)
+    # 3. Pivotering
     pivot_stats = df_working.pivot_table(
         index='PLAYER_OPTAUUID', 
         columns='STAT_TYPE', 
@@ -30,11 +30,13 @@ def vis_side(dp):
         aggfunc='sum'
     ).fillna(0).reset_index()
 
-    # Påfør navne fra name_map
-    pivot_stats['PLAYER_OPTAUUID'] = pivot_stats['PLAYER_OPTAUUID'].astype(str).str.strip()
+    # Tving ID igen efter pivot for en sikkerheds skyld
+    pivot_stats['PLAYER_OPTAUUID'] = pivot_stats['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
+    
+    # Map navne
     pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].map(name_map)
     
-    # Fallback hvis navnet ikke findes i CSV
+    # Fallback hvis navnet mangler
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
     # Beregn xG pr. 90 min
@@ -51,6 +53,7 @@ def vis_side(dp):
     ])
 
     with tab_squad:
+        st.subheader("Leaderboard: Sæsonstatistik")
         
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'expectedAssists', 'expectedGoalsNonpenalty', 'xG_90']
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
@@ -105,7 +108,7 @@ def vis_side(dp):
 
     with tab_lb:
         if df_lb is not None and not df_lb.empty:
-            df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip()
+            df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
             
             if not p_lb.empty:
