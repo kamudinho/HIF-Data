@@ -127,21 +127,82 @@ def vis_side(dp):
                             color_discrete_sequence=['#df003b'])
             st.plotly_chart(fig_xg, use_container_width=True)
 
+    # --- NY OPTIMERET LINEBREAK SEKTION ---
     with tab_lb:
         if df_lb is not None and not df_lb.empty:
             df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
             
             if not p_lb.empty:
-                for col in ['STAT_FH', 'STAT_SH']:
+                # Konverter stats til tal
+                for col in ['STAT_VALUE', 'STAT_FH', 'STAT_SH']:
                     p_lb[col] = pd.to_numeric(p_lb[col], errors='coerce').fillna(0)
-                
-                lb_types = ['defenceLineBroken', 'midfieldLineBroken', 'attackingLineBroken']
-                lb_data = p_lb[p_lb['STAT_TYPE'].isin(lb_types)]
 
-                fig_lb = px.bar(lb_data, y='STAT_TYPE', x=['STAT_FH', 'STAT_SH'],
-                                orientation='h', title=f"Linjebrud pr. Halvleg: {selected_name}",
-                                color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'})
-                st.plotly_chart(fig_lb, use_container_width=True)
+                # Hjælpefunktion til at hente specifikke LB stats
+                def get_lb(stat_type):
+                    return p_lb[p_lb['STAT_TYPE'] == stat_type]['STAT_VALUE'].sum()
+
+                # A. Top Metrics: Intensitet og Slutprodukt
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Linebreaks", int(get_lb('total')))
+                m2.metric("Under Pres", int(get_lb('underPressure')))
+                m3.metric("Farlige (Danger)", int(get_lb('leadingToDanger')))
+                m4.metric("Til Skud", int(get_lb('leadingToShots')))
+
+                st.markdown("---")
+
+                # B. Visualisering 1: Hvilke kæder brydes (Zone-fordeling)
+                # Vi bruger dine data: attackingLineBroken, midfieldLineBroken, defenceLineBroken
+                col_left, col_right = st.columns(2)
+
+                with col_left:
+                    lb_zones = pd.DataFrame({
+                        'Kæde': ['Modstander Forsvar', 'Midtbane', 'Angreb/Pres'],
+                        'Antal': [
+                            get_lb('attackingLineBroken'), 
+                            get_lb('midfieldLineBroken'), 
+                            get_lb('defenceLineBroken')
+                        ]
+                    })
+                    fig_zones = px.bar(
+                        lb_zones, x='Antal', y='Kæde', orientation='h',
+                        title="Gennembrud pr. kæde",
+                        color='Kæde',
+                        color_discrete_map={
+                            'Modstander Forsvar': '#df003b', 
+                            'Midtbane': '#b8860b', 
+                            'Angreb/Pres': '#333333'
+                        }
+                    )
+                    fig_zones.update_layout(showlegend=False)
+                    st.plotly_chart(fig_zones, use_container_width=True)
+
+                with col_right:
+                    # C. Visualisering 2: Gennembrudsstyrke (oneLine vs twoLines vs threeLines)
+                    lb_strength = pd.DataFrame({
+                        'Type': ['1 Kæde', '2 Kæder', '3 Kæder'],
+                        'Antal': [get_lb('oneLine'), get_lb('twoLines'), get_lb('threeLines')]
+                    })
+                    fig_strength = px.pie(
+                        lb_strength, values='Antal', names='Type',
+                        title="Linjer brudt pr. aflevering",
+                        hole=0.5,
+                        color_discrete_sequence=['#333333', '#888888', '#df003b']
+                    )
+                    st.plotly_chart(fig_strength, use_container_width=True)
+
+                # D. Halvlegs-sammenligning (Din originale bar, men med alle typer)
+                st.markdown("---")
+                lb_types = ['defenceLineBroken', 'midfieldLineBroken', 'attackingLineBroken']
+                lb_halves = p_lb[p_lb['STAT_TYPE'].isin(lb_types)]
+                
+                fig_halves = px.bar(
+                    lb_halves, y='STAT_TYPE', x=['STAT_FH', 'STAT_SH'],
+                    orientation='h', title="Præstation over tid (1. vs 2. halvleg)",
+                    color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'},
+                    labels={'value': 'Antal linjebrud', 'STAT_TYPE': 'Type'}
+                )
+                st.plotly_chart(fig_halves, use_container_width=True)
+                
             else:
-                st.info("Ingen linebreak-data fundet for denne spiller.")
+                st.info(f"Ingen linebreak-data fundet for {selected_name}.")
