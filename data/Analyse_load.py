@@ -5,23 +5,24 @@ from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 def get_analysis_package(hif_only=False):
-    """Henter data. hif_only=True bruges til HIF Analyse, False til Betinia Ligaen."""
     conn = _get_snowflake_conn()
-    if not conn:
-        return {}
+    if not conn: return {}
 
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
-    
-    # Hent queries med det valgte filter
     queries = get_opta_queries(comp_f, season_f, hif_only=hif_only)
     
+    # Eksisterende queries
     df_matches = conn.query(queries.get("opta_matches"))
     df_shots = conn.query(queries.get("opta_shotevents"))
     df_assists = conn.query(queries.get("opta_assists"))
     df_opta_stats = conn.query(queries.get("opta_team_stats"))
     df_quals = conn.query(queries.get("opta_qualifiers"))
-
+    
+    # NYE QUERIES
+    df_linebreaks = conn.query(queries.get("opta_linebreaks"))
+    df_xg_agg = conn.query(queries.get("opta_expected_goals"))
+    
     # Vask skuddata
     if not df_shots.empty:
         df_shots.columns = [str(c).upper().strip() for c in df_shots.columns]
@@ -45,7 +46,9 @@ def get_analysis_package(hif_only=False):
         "opta_team_stats": df_opta_stats,
         "playerstats": df_shots,
         "assists": df_assists,
-        "qualifiers": df_quals, # <--- Husk at returnere den
+        "qualifiers": df_quals,
+        "linebreaks": df_linebreaks, # <--- Tilføjet
+        "xg_agg": df_xg_agg,         # <--- Tilføjet
         "opta": {"matches": df_matches},
         "config": {
             "liga_navn": comp_f,
