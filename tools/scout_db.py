@@ -128,6 +128,10 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
+    # BEREGN HØJDE: Overskrift (ca 35px) + (antal rækker * 35px) + lidt buffer
+    # Dette sikrer at alle spillere vises på én gang uden intern scroll i tabellen
+    dynamic_height = (len(df_display) + 1) * 35 + 3
+
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -137,6 +141,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
+        height=dynamic_height, # Her tvinger vi den til fuld højde
         key=f"editor_v{st.session_state.editor_key}"
     )
 
