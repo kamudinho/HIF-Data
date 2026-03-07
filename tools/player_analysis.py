@@ -130,19 +130,24 @@ def vis_side(dp):
     # --- NY OPTIMERET LINEBREAK SEKTION ---
     with tab_lb:
         if df_lb is not None and not df_lb.empty:
+            # Rens ID'er
             df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
+            
+            # Filtrér på den valgte spiller fra dropdown i tab_single
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
             
             if not p_lb.empty:
-                # Konverter stats til tal
+                # Sørg for at numeriske kolonner er tal (vigtigt for summering)
                 for col in ['STAT_VALUE', 'STAT_FH', 'STAT_SH']:
-                    p_lb[col] = pd.to_numeric(p_lb[col], errors='coerce').fillna(0)
+                    if col in p_lb.columns:
+                        p_lb[col] = pd.to_numeric(p_lb[col], errors='coerce').fillna(0)
 
-                # Hjælpefunktion til at hente specifikke LB stats
+                # Robust hjælpefunktion: Summerer værdien for en specifik stat_type
                 def get_lb(stat_type):
-                    return p_lb[p_lb['STAT_TYPE'] == stat_type]['STAT_VALUE'].sum()
+                    val = p_lb[p_lb['STAT_TYPE'] == stat_type]['STAT_VALUE'].sum()
+                    return val
 
-                # A. Top Metrics: Intensitet og Slutprodukt
+                # A. Top Metrics
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Total Linebreaks", int(get_lb('total')))
                 m2.metric("Under Pres", int(get_lb('underPressure')))
@@ -151,11 +156,11 @@ def vis_side(dp):
 
                 st.markdown("---")
 
-                # B. Visualisering 1: Hvilke kæder brydes (Zone-fordeling)
-                # Vi bruger dine data: attackingLineBroken, midfieldLineBroken, defenceLineBroken
+                # B. Graferne
                 col_left, col_right = st.columns(2)
 
                 with col_left:
+                    # Fordeling pr. kæde
                     lb_zones = pd.DataFrame({
                         'Kæde': ['Modstander Forsvar', 'Midtbane', 'Angreb/Pres'],
                         'Antal': [
@@ -166,7 +171,7 @@ def vis_side(dp):
                     })
                     fig_zones = px.bar(
                         lb_zones, x='Antal', y='Kæde', orientation='h',
-                        title="Gennembrud pr. kæde",
+                        title="Hvilke kæder brydes?",
                         color='Kæde',
                         color_discrete_map={
                             'Modstander Forsvar': '#df003b', 
@@ -174,35 +179,50 @@ def vis_side(dp):
                             'Angreb/Pres': '#333333'
                         }
                     )
-                    fig_zones.update_layout(showlegend=False)
+                    fig_zones.update_layout(showlegend=False, yaxis={'categoryorder':'total ascending'})
                     st.plotly_chart(fig_zones, use_container_width=True)
 
                 with col_right:
-                    # C. Visualisering 2: Gennembrudsstyrke (oneLine vs twoLines vs threeLines)
+                    # Styrke (Antal linjer brudt af gangen)
                     lb_strength = pd.DataFrame({
                         'Type': ['1 Kæde', '2 Kæder', '3 Kæder'],
                         'Antal': [get_lb('oneLine'), get_lb('twoLines'), get_lb('threeLines')]
                     })
-                    fig_strength = px.pie(
-                        lb_strength, values='Antal', names='Type',
-                        title="Linjer brudt pr. aflevering",
-                        hole=0.5,
-                        color_discrete_sequence=['#333333', '#888888', '#df003b']
-                    )
-                    st.plotly_chart(fig_strength, use_container_width=True)
+                    # Vi viser kun pie-chart hvis der faktisk er data
+                    if lb_strength['Antal'].sum() > 0:
+                        fig_strength = px.pie(
+                            lb_strength, values='Antal', names='Type',
+                            title="Linjer brudt pr. pass",
+                            hole=0.5,
+                            color_discrete_sequence=['#333333', '#888888', '#df003b']
+                        )
+                        st.plotly_chart(fig_strength, use_container_width=True)
+                    else:
+                        st.write("Ingen data for linje-styrke.")
 
-                # D. Halvlegs-sammenligning (Din originale bar, men med alle typer)
+                # D. Halvlegs-sammenligning
                 st.markdown("---")
                 lb_types = ['defenceLineBroken', 'midfieldLineBroken', 'attackingLineBroken']
-                lb_halves = p_lb[p_lb['STAT_TYPE'].isin(lb_types)]
+                lb_halves = p_lb[p_lb['STAT_TYPE'].isin(lb_types)].copy()
                 
-                fig_halves = px.bar(
-                    lb_halves, y='STAT_TYPE', x=['STAT_FH', 'STAT_SH'],
-                    orientation='h', title="Præstation over tid (1. vs 2. halvleg)",
-                    color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'},
-                    labels={'value': 'Antal linjebrud', 'STAT_TYPE': 'Type'}
-                )
-                st.plotly_chart(fig_halves, use_container_width=True)
+                if not lb_halves.empty:
+                    # Smelt dataen så Plotly kan læse FH og SH som separate kategorier
+                    lb_melted = lb_halves.melt(
+                        id_vars=['STAT_TYPE'], 
+                        value_vars=['STAT_FH', 'STAT_SH'],
+                        var_name='Halvleg', 
+                        value_name='Antal'
+                    )
+                    
+                    fig_halves = px.bar(
+                        lb_melted, y='STAT_TYPE', x='Antal', color='Halvleg',
+                        orientation='h', title="Præstation: 1. vs 2. halvleg",
+                        color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'},
+                        barmode='stack'
+                    )
+                    st.plotly_chart(fig_halves, use_container_width=True)
                 
             else:
-                st.info(f"Ingen linebreak-data fundet for {selected_name}.")
+                st.info(f"Ingen linebreak-data fundet for spiller-ID: {selected_uuid}")
+        else:
+            st.error("Dataframe 'df_lb' er tom eller mangler.")
