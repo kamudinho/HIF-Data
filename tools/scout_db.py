@@ -9,26 +9,34 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def map_position(pos_code):
-    # Vi mapper de mest gængse talkoder direkte til HIF-termer
-    # Hvis 'Pos' i din CSV er en tekst (f.eks. 'ANG'), returneres den bare.
-    pos_dict = {
-        "1": "MM", "2": "HB", "3": "VB", "4": "VCB", "5": "HCB", 
-        "6": "DMC", "7": "HK", "8": "MC", "9": "ANG", "10": "OMC", "11": "VK"
+def map_wyscout_position(role_code):
+    # Oversætter ROLECODE3 fra Wyscout til HIF-standard
+    wyscout_map = {
+        "GK": "MM",
+        "RB": "HB", "RB7": "HB",
+        "LB": "VB", "LB7": "VB",
+        "CB": "VCB", "RCB": "HCB", "LCB": "VCB",
+        "DMF": "DMC", "RDMF": "DMC", "LDMF": "DMC",
+        "MC": "MC", "RCMF": "MC", "LCMF": "MC",
+        "AMF": "OMC", "RAMF": "OMC", "LAMF": "OMC",
+        "RW": "HK", "RWF": "HK",
+        "LW": "VK", "LWF": "VK",
+        "CF": "ANG", "SS": "ANG"
     }
-    clean_pos = rens_id(pos_code)
-    return pos_dict.get(clean_pos, clean_pos) # Fallback til den oprindelige tekst hvis koden ikke findes
+    code = str(role_code).strip().upper()
+    return wyscout_map.get(code, code) # Fallback til koden selv, hvis den ikke er i mappen
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # 1. DATA LOAD
     try:
+        # Vi læser scouting_db (hvor du gemmer dine rapporter)
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].apply(rens_id)
     except:
         st.error("Kunne ikke indlæse scouting_db.csv")
         return
 
-    # Billed-map fra SQL
+    # Billed-map fra SQL (sql_players indeholder ofte de nyeste meta-data fra Wyscout)
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
@@ -40,14 +48,17 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if 'Dato' in df_vis.columns:
         df_vis = df_vis.sort_values('Dato', ascending=False)
     
-    # Vi mapper positionen i tabellen med det samme
-    df_vis['Pos'] = df_vis['Pos'].apply(map_position)
+    # Her bruger vi ROLECODE3 til visningen i tabellen
+    # Vi tjekker om kolonnen hedder ROLECODE3 eller Pos i din CSV
+    pos_col = 'ROLECODE3' if 'ROLECODE3' in df_vis.columns else 'Pos'
+    df_vis['Vis_Pos'] = df_vis[pos_col].apply(map_wyscout_position)
     
     st.dataframe(
-        df_vis[['Dato', 'Navn', 'Klub', 'Pos', 'Status', 'Vurdering']],
+        df_vis[['Dato', 'Navn', 'Klub', 'Vis_Pos', 'Status', 'Vurdering']],
         use_container_width=True,
         hide_index=True,
         column_config={
+            "Vis_Pos": "Pos",
             "Status": st.column_config.SelectboxColumn("Status", options=["A-Emne", "B-Emne", "Hold øje", "Afskrevet"]),
             "Vurdering": st.column_config.TextColumn("Kort info", width="medium")
         }
@@ -60,7 +71,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     
     col_pick, _ = st.columns([1, 2])
     with col_pick:
-        valgt_navn = st.selectbox("Vælg spiller for at åbne detaljeret profil", ["--- Vælg spiller ---"] + navne_liste)
+        valgt_navn = st.selectbox("Vælg spiller for at se profil", ["--- Vælg spiller ---"] + navne_liste)
 
     # 4. SPILLERPROFIL (Tabs)
     if valgt_navn != "--- Vælg spiller ---":
@@ -81,7 +92,8 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                 </div>
             """, unsafe_allow_html=True)
             st.write(f"**Klub:** {s_match.get('Klub', 'Ukendt')}")
-            st.write(f"**Position:** {map_position(s_match.get('Pos', ''))}")
+            # Vi bruger map_wyscout_position her til at vise den rigtige tekst
+            st.write(f"**Position:** {map_wyscout_position(s_match.get(pos_col, ''))}")
 
         with c2:
             tab1, tab2, tab3 = st.tabs(["📝 Rapport", "📊 Radar", "📈 Karriere"])
@@ -92,7 +104,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                 st.write(f"**Svagheder:** {s_match.get('Svagheder', '-')}")
             
             with tab2:
-                # Radar logik (8-kantet / Polygon)
+                # Radar (8-kantet / Polygon)
                 labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
                 k = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
                 
