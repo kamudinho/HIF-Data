@@ -7,7 +7,7 @@ import pandas as pd
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# NYE IMPORTS (Splitte data-loads)
+# Sørg for at disse linjer IKKE har mellemrum foran sig
 import data.HIF_load as hif_load
 import data.Analyse_load as analyse_load
 from data.users import get_users
