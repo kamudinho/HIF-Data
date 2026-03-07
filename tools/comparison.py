@@ -179,10 +179,10 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             polar=dict(
                 gridshape='linear', # DENNE LINJE gør det til en 8-kant/polygon i stedet for en cirkel
                 radialaxis=dict(visible=False, range=[0, 6]),
-                angularaxis=dict(gridcolor="#eee", linecolor="#eee", tickfont=dict(size=10))
+                angularaxis=dict(gridcolor="#eee", linecolor="#eee", tickfont=dict(size=11))
             ),
             height=350, 
-            margin=dict(l=50, r=50, t=20, b=20), 
+            margin=dict(l=40, r=50, t=20, b=20), 
             showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
@@ -207,10 +207,10 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         st.markdown(f"""
             <div class='center-analysis' style='text-align: left; padding: 15px;'>
                 <div style='font-weight: 800; text-transform: uppercase; font-size: 0.75rem; color: #999; margin-bottom: 8px;'>
-                    Datatjek & Scouting
+                    DATA- & SCOUTINGANALYSE
                 </div>
                 <div style='font-weight: 400; color: #444; line-height: 1.5;'>
-                    Scoutingen peger på {p1['navn']} (+{max_p1_attr.lower()}) overfor {p2['navn']} (+{max_p2_attr.lower()}), 
+                    Analysen peger på {p1['navn']} (+{max_p1_attr.lower()}) overfor {p2['navn']} (+{max_p2_attr.lower()}), 
                     {wyscout_del}
                 </div>
             </div>
