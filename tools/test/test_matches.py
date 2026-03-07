@@ -4,15 +4,13 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side(dp):
     # 1. HENT DATA
-    # Vi bruger 'opta' -> 'matches' strukturen som i din fungerende tabel-kode
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_raw_stats = dp.get("opta_team_stats", pd.DataFrame()).copy()
     
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet i 'opta.matches'.")
+        st.warning("Ingen kampdata fundet.")
         return
 
-    # Sørg for at MATCH_STATUS er ensartet
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
 
     # --- DATA MERGE (Opta Stats) ---
@@ -33,7 +31,7 @@ def vis_side(dp):
                                  left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
                                  right_on=['MATCH_OPTAUUID_AWAY', 'CONTESTANT_OPTAUUID_AWAY'], how='left')
         except Exception as e:
-            st.error(f"Statistik-fejl: {e}")
+            st.error(f"Statistik-fejl ved merge: {e}")
 
     # --- CSS STYLING ---
     st.markdown("""
@@ -43,26 +41,24 @@ def vis_side(dp):
         .stat-val { font-weight: bold; font-size: 14px; }
         .date-header { background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; color: #444; border-left: 4px solid #cc0000; }
         .score-pill { background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }
+        .match-stat-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: -2px; }
+        .match-stat-val { font-size: 13px; font-weight: 600; color: #333; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- HJÆLPEFUNKTION TIL LOGO (SYNKRONISERET) ---
+    # --- HJÆLPEFUNKTION TIL LOGO ---
     def hent_hold_logo(opta_uuid):
-        # Vi leder efter logoet direkte i TEAMS mappingen
         for name, info in TEAMS.items():
             if str(info.get("opta_uuid")) == str(opta_uuid):
-                # Prioritér 'logo' nøglen hvis den findes, ellers brug wyid URL
-                if info.get('logo'):
-                    return info['logo']
-                elif info.get('wyid'):
-                    return f"https://cdn5.wyscout.com/photos/team/public/{info['wyid']}_120x120.png"
+                if info.get('logo'): return info['logo']
+                if info.get('wyid'): return f"https://cdn5.wyscout.com/photos/team/public/{info['wyid']}_120x120.png"
         return ""
 
     # --- FILTRE ---
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
@@ -95,11 +91,10 @@ def vis_side(dp):
                 
                 # Hjemmehold
                 h_uuid = row['CONTESTANTHOME_OPTAUUID']
-                h_navn = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
-                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_navn}</div>", unsafe_allow_html=True)
+                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
-                # Center (Score/Tid)
+                # Center
                 if is_played:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 else:
@@ -107,9 +102,38 @@ def vis_side(dp):
                 
                 # Udehold
                 a_uuid = row['CONTESTANTAWAY_OPTAUUID']
-                a_navn = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
                 c4.image(hent_hold_logo(a_uuid), width=28)
-                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_navn}</div>", unsafe_allow_html=True)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
+                
+                # --- STATS SEKTION (GENINDFØRT) ---
+                if is_played:
+                    st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    sc = st.columns(5)
+                    stats_map = [
+                        ("Besiddelse", "possessionPercentage", "%"), 
+                        ("Skud", "totalScoringAtt", ""), 
+                        ("xG", "expectedGoals", ""), 
+                        ("Afleveringer", "totalPass", ""), 
+                        ("Hjørne", "wonCorner", "")
+                    ]
+                    for i, (label, s_key, suff) in enumerate(stats_map):
+                        h_val = row.get(f"{s_key}_HOME", 0)
+                        a_val = row.get(f"{s_key}_AWAY", 0)
+                        
+                        # Formatering af xG decimaler
+                        if s_key == "expectedGoals":
+                            try:
+                                h_val = f"{float(h_val):.2f}"
+                                a_val = f"{float(a_val):.2f}"
+                            except: h_val, a_val = "0.00", "0.00"
+
+                        sc[i].markdown(
+                            f"<div style='text-align:center;'>"
+                            f"<div class='match-stat-label'>{label}</div>"
+                            f"<div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div>"
+                            f"</div>", 
+                            unsafe_allow_html=True
+                        )
 
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
