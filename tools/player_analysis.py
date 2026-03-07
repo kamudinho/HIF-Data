@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # 1. Hent data og name_map fra pakken
+    # 1. Hent data fra pakken
     df_xg = dp.get("xg_agg")
     df_lb = dp.get("linebreaks")
     name_map = dp.get("name_map", {})
@@ -12,11 +12,14 @@ def vis_side(dp):
         st.warning("⚠️ Ingen xG-data fundet i Snowflake for den valgte periode.")
         return
 
-    # 2. Forberedelse af data til Trupoversigt (Pivotering)
-    # Vi transformerer data fra "Long" format til "Wide" format
+    # 2. Forberedelse af data og sikring af navne
     df_working = df_xg.copy()
     df_working['STAT_VALUE'] = pd.to_numeric(df_working['STAT_VALUE'], errors='coerce').fillna(0)
     
+    # Tving ID til string for fejlfrit match med name_map
+    df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip()
+    
+    # Pivotering: Hver spiller får én række
     pivot_stats = df_working.pivot_table(
         index='PLAYER_OPTAUUID', 
         columns='STAT_TYPE', 
@@ -24,27 +27,31 @@ def vis_side(dp):
         aggfunc='sum'
     ).fillna(0).reset_index()
 
-    # Tilføj navne fra din players.csv (name_map)
-    pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].astype(str).map(name_map)
+    # Påfør navne fra name_map efter pivotering
+    pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].map(name_map)
     
-    # Beregn xG+xA pr. 90 min (hvis minutter findes)
+    # Håndter spillere der ikke findes i CSV (modstandere/nye spillere)
+    pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
+
+    # Beregn xG pr. 90 min (hvis data er til stede)
     if 'minsPlayed' in pivot_stats.columns and 'expectedGoals' in pivot_stats.columns:
-        pivot_stats['xG_90'] = (pivot_stats['expectedGoals'] / pivot_stats['minsPlayed'] * 90).replace([float('inf'), -float('inf')], 0).fillna(0)
+        # Undgå division med nul
+        pivot_stats['xG_90'] = (pivot_stats['expectedGoals'] / pivot_stats.apply(lambda r: max(r['minsPlayed'], 1), axis=1) * 90)
+    else:
+        pivot_stats['xG_90'] = 0
 
     # --- 3. VISNING I TABS ---
-    tab_squad, tab_single, tab_lb, tab_raw = st.tabs([
+    tab_squad, tab_single, tab_lb = st.tabs([
         "📊 TRUP OVERSIGT", 
         "🎯 INDIVIDUEL ANALYSE", 
-        "🚀 LINEBREAKS",
-        "📋 RÅ DATA"
+        "🚀 LINEBREAKS"
     ])
 
     with tab_squad:
-        st.subheader("Leaderboard: Offensiv Impact")
+        st.subheader("Leaderboard: Sæsonstatistik")
         
-        # Definer hvilke kolonner vi vil vise i tabellen
+        # Kolonner vi vil vise
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'expectedAssists', 'expectedGoalsNonpenalty', 'xG_90']
-        # Tjekker hvilke af dem der rent faktisk findes i Opta-dataene
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
         
         df_table = pivot_stats[final_cols].sort_values('expectedGoals', ascending=False)
@@ -54,8 +61,8 @@ def vis_side(dp):
             column_config={
                 "NAVN": st.column_config.TextColumn("Spiller"),
                 "minsPlayed": st.column_config.NumberColumn("Minutter", format="%d"),
-                "expectedGoals": st.column_config.NumberColumn("Total xG", format="%.2f", help="Expected Goals"),
-                "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f", help="Expected Assists"),
+                "expectedGoals": st.column_config.NumberColumn("Total xG", format="%.2f"),
+                "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
                 "expectedGoalsNonpenalty": st.column_config.NumberColumn("npxG", format="%.2f"),
                 "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f")
             },
@@ -64,21 +71,20 @@ def vis_side(dp):
         )
 
     with tab_single:
-        # Spiller-valg (Dropdown)
-        available_uuids = df_xg['PLAYER_OPTAUUID'].unique()
-        dropdown_options = {uuid: name_map.get(str(uuid), f"Ukendt ({str(uuid)[:5]})") for uuid in available_uuids}
-        sorted_uuids = sorted(dropdown_options.keys(), key=lambda x: dropdown_options[x])
-
+        # Dropdown til enkeltspiller
+        available_uuids = sorted(pivot_stats['PLAYER_OPTAUUID'].unique(), 
+                                key=lambda x: pivot_stats[pivot_stats['PLAYER_OPTAUUID'] == x]['NAVN'].values[0])
+        
         col_sel, _ = st.columns([1, 2])
         with col_sel:
             selected_uuid = st.selectbox(
-                "Vælg Spiller til detaljer", 
-                options=sorted_uuids, 
-                format_func=lambda x: dropdown_options[x]
+                "Vælg Spiller", 
+                options=available_uuids, 
+                format_func=lambda x: pivot_stats[pivot_stats['PLAYER_OPTAUUID'] == x]['NAVN'].values[0]
             )
 
-        # Filtrering og Metrics
-        p_xg = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid].copy()
+        # Metrics for valgte spiller
+        p_xg = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid]
         
         m1, m2, m3, m4 = st.columns(4)
         def get_v(stat): return p_xg[p_xg['STAT_TYPE'] == stat]['STAT_VALUE'].sum()
@@ -94,16 +100,17 @@ def vis_side(dp):
         
         if not xg_plot.empty and xg_plot['STAT_VALUE'].sum() > 0:
             fig_xg = px.bar(xg_plot, x='STAT_TYPE', y='STAT_VALUE', 
-                            title=f"xG Fordeling: {dropdown_options[selected_uuid]}", 
-                            color_discrete_sequence=['#df003b'],
-                            labels={'STAT_TYPE': 'Kategori', 'STAT_VALUE': 'xG Værdi'})
+                            title="xG Fordeling", 
+                            color_discrete_sequence=['#df003b'])
             st.plotly_chart(fig_xg, use_container_width=True)
 
     with tab_lb:
         if df_lb is not None and not df_lb.empty:
+            # Tving ID til string her også for match
+            df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip()
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
+            
             if not p_lb.empty:
-                # Sikrer numeriske værdier til grafen
                 for col in ['STAT_FH', 'STAT_SH']:
                     p_lb[col] = pd.to_numeric(p_lb[col], errors='coerce').fillna(0)
                 
@@ -111,16 +118,8 @@ def vis_side(dp):
                 lb_data = p_lb[p_lb['STAT_TYPE'].isin(lb_types)]
 
                 fig_lb = px.bar(lb_data, y='STAT_TYPE', x=['STAT_FH', 'STAT_SH'],
-                                orientation='h', title=f"Linjebrud pr. Halvleg: {dropdown_options[selected_uuid]}",
-                                color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'},
-                                labels={'value': 'Antal brud', 'STAT_TYPE': 'Linje'})
+                                orientation='h', title="Linjebrud pr. Halvleg",
+                                color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'})
                 st.plotly_chart(fig_lb, use_container_width=True)
             else:
                 st.info("Ingen linebreak-data fundet for denne spiller.")
-
-    with tab_raw:
-        st.dataframe(
-            p_xg[['MATCH_DATE', 'STAT_TYPE', 'STAT_VALUE']].sort_values('MATCH_DATE', ascending=False), 
-            use_container_width=True, 
-            hide_index=True
-        )
