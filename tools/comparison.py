@@ -109,12 +109,12 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             if target is not None:
                 stats = {
                     "K": int(target.get('MATCHES', 0)),
-                    "M": int(target.get('GOAL', 0)),
-                    "A": int(target.get('ASSIST', 0)),
+                    "M": int(target.get('GOALS', 0)),
+                    "A": int(target.get('ASSISTS', 0)),
                     "MIN": int(target.get('MINUTES', 0))
                 }
         
-        lbls = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+        lbls = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
             "adv": beregn_p90_stats(pid, advanced_stats_df),
