@@ -5,14 +5,10 @@ from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries  # Vigtigt: Hent dine queries her
 
 def get_scouting_package():
-"""Henter data og sikrer billeder og stats til alle scoutede spillere"""
-conn = _get_snowflake_conn()
-DB = "KLUB_HVIDOVREIF.AXIS"
-
-    # 1. Hent dine definerede queries (inkl. den nye wyscout_players)
-    # Vi sender None, None med her, da dine liga-ids er hardcoded i wy_queries.py
-    # 1. Hent dine definerede queries
-queries = get_wy_queries(None, None) 
+    """Henter data og sikrer billeder og stats til alle scoutede spillere"""
+    conn = _get_snowflake_conn()
+    DB = "KLUB_HVIDOVREIF.AXIS"
+    queries = get_wy_queries(None, None)
 
 # 2. Hent scouting CSV (din historik)
 @@ -22,40 +21,36 @@
