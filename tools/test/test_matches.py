@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS
 
 def vis_side(dp):
@@ -13,11 +11,13 @@ def vis_side(dp):
         st.warning("Ingen kampdata fundet.")
         return
 
+    # Rens status
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
 
-    # --- DATA MERGE (Opta Stats & Udvidede KPI'er) ---
+    # --- AVANCERET DATA MERGE ---
     if not df_raw_stats.empty:
         try:
+            # Pivotering af alle stat-typer (inkl. de nye du bad om)
             df_pivot = df_raw_stats.pivot_table(
                 index=['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID'], 
                 columns='STAT_TYPE', values='STAT_TOTAL', aggfunc='first'
@@ -33,141 +33,99 @@ def vis_side(dp):
         except Exception as e:
             st.error(f"Statistik-fejl ved merge: {e}")
 
-    # --- CSS STYLING ---
+    # --- STYLING ---
     st.markdown("""
         <style>
-        .stat-box { text-align: center; background: #f0f2f6; border-radius: 4px; padding: 5px; min-width: 35px; border-bottom: 2px solid #cc0000; }
-        .stat-label { font-size: 10px; color: gray; text-transform: uppercase; }
-        .stat-val { font-weight: bold; font-size: 14px; }
-        .date-header { background: #eee; padding: 5px 15px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 20px; color: #444; border-left: 4px solid #cc0000; }
-        .score-pill { background: #333; color: white; border-radius: 4px; padding: 2px 10px; font-weight: bold; min-width: 70px; display: inline-block; text-align: center; }
-        .metric-card { background: white; padding: 10px; border-radius: 8px; border: 1px solid #eee; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .metric-title { font-size: 11px; color: #666; font-weight: 600; text-transform: uppercase; }
-        .metric-value { font-size: 18px; font-weight: 800; color: #cc0000; }
+        .metric-card { background: #f8f9fb; padding: 15px; border-radius: 10px; border: 1px solid #e0e4e8; text-align: center; }
+        .metric-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .metric-value { font-size: 1.4rem; font-weight: 800; color: #111; }
+        .date-header { background: #f0f2f6; padding: 5px 15px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; margin-top: 15px; color: #333; }
+        .score-pill { background: #262730; color: white; border-radius: 4px; padding: 2px 12px; font-weight: bold; }
         </style>
     """, unsafe_allow_html=True)
 
-    def hent_hold_logo(opta_uuid):
-        for name, info in TEAMS.items():
-            if str(info.get("opta_uuid")) == str(opta_uuid):
-                if info.get('logo'): return info['logo']
-                if info.get('wyid'): return f"https://cdn5.wyscout.com/photos/team/public/{info['wyid']}_120x120.png"
-        return ""
-
-    # --- FILTRE & LOGIK ---
+    # --- FILTRE & LOGO LOGIK ---
     config = dp.get("config", {})
     valgt_hold_navn = config.get("hold_navn", "Hvidovre")
     valgt_uuid = next((i.get("opta_uuid") for n, i in TEAMS.items() if n == valgt_hold_navn), None)
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
 
-    # --- TOP DASHBOARD (HOLD DATA) ---
-    st.subheader(f"Tactical Dashboard: {valgt_hold_navn}")
+    def hent_logo(uuid):
+        for n, i in TEAMS.items():
+            if str(i.get("opta_uuid")) == str(uuid):
+                return i.get('logo') or f"https://cdn5.wyscout.com/photos/team/public/{i.get('wyid')}_120x120.png"
+        return ""
+
+    # --- DYNAMISK BEREGNING AF KPI (Hold-gennemsnit) ---
+    played = df_matches[df_matches['MATCH_STATUS_CLEAN'] == 'Played'].copy()
     
-    col_a, col_b, col_c, col_d = st.columns(4)
-    with col_a:
-        st.markdown("<div class='metric-card'><div class='metric-title'>PPDA</div><div class='metric-value'>8.4</div></div>", unsafe_allow_html=True)
-    with col_b:
-        st.markdown("<div class='metric-card'><div class='metric-title'>Deep Completions</div><div class='metric-value'>12.4</div></div>", unsafe_allow_html=True)
-    with col_c:
-        st.markdown("<div class='metric-card'><div class='metric-title'>Touches in Box</div><div class='metric-value'>21.8</div></div>", unsafe_allow_html=True)
-    with col_d:
-        st.markdown("<div class='metric-card'><div class='metric-title'>Final 1/3 Passes</div><div class='metric-value'>48.2</div></div>", unsafe_allow_html=True)
+    def get_avg(stat_key):
+        h_vals = played[played['CONTESTANTHOME_OPTAUUID'] == valgt_uuid][f"{stat_key}_HOME"]
+        a_vals = played[played['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid][f"{stat_key}_AWAY"]
+        combined = pd.concat([h_vals, a_vals]).dropna()
+        return combined.mean() if not combined.empty else 0
 
-    # --- HOVEDTABS ---
-    tab_matches, tab_offensive, tab_defensive = st.tabs(["Kampe & Resultater", "Offensiv KPI", "Defensiv KPI"])
+    # Beregn værdier dynamisk fra payload
+    avg_xg = get_avg('expectedGoals')
+    avg_ppda = get_avg('ppda')
+    avg_touches_box = get_avg('touchesInBox')
+    avg_passes_final = get_avg('passesToFinalThird')
 
-    def tegn_kampe(df, is_played):
-        if df.empty:
-            st.info("Ingen kampe fundet.")
-            return
-        
-        danske_dage = {"Monday": "Mandag", "Tuesday": "Tirsdag", "Wednesday": "Onsdag", "Thursday": "Torsdag", "Friday": "Fredag", "Saturday": "Lørdag", "Sunday": "Søndag"}
-        danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
+    # --- DASHBOARD TOP ---
+    st.title(f"📊 {valgt_hold_navn} Analytics")
+    
+    m1, m2, m3, m4 = st.columns(4)
+    m1.markdown(f"<div class='metric-card'><div class='metric-label'>xG pr. kamp</div><div class='metric-value'>{avg_xg:.2f}</div></div>", unsafe_allow_html=True)
+    m2.markdown(f"<div class='metric-card'><div class='metric-label'>PPDA (Pres)</div><div class='metric-value'>{avg_ppda:.1f}</div></div>", unsafe_allow_html=True)
+    m3.markdown(f"<div class='metric-card'><div class='metric-label'>Felt-berøringer</div><div class='metric-value'>{avg_touches_box:.1f}</div></div>", unsafe_allow_html=True)
+    m4.markdown(f"<div class='metric-card'><div class='metric-label'>Final 1/3 Ent.</div><div class='metric-value'>{avg_passes_final:.1f}</div></div>", unsafe_allow_html=True)
 
-        id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+    # --- TABS ---
+    t_matches, t_style = st.tabs(["Kampprogram", "Spillestil & KPI"])
 
-        for _, row in df.iterrows():
+    with t_matches:
+        mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
+        team_df = df_matches[mask].copy().sort_values('MATCH_DATE_FULL', ascending=False)
+
+        for _, row in team_df.iterrows():
+            is_played = row['MATCH_STATUS_CLEAN'] == 'Played'
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
-            dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
-            maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
             
-            tid_raw = str(row.get('MATCH_LOCALTIME', ''))
-            tidspunkt = tid_raw[:5] if len(tid_raw) >= 5 else "TBA"
-            
-            st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>{dt.strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
-                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                c1, c2, c3, c4, c5 = st.columns([2, 0.5, 1, 0.5, 2])
                 
-                h_uuid = row['CONTESTANTHOME_OPTAUUID']
-                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
-                c2.image(hent_hold_logo(h_uuid), width=28)
+                # Home
+                c1.markdown(f"<div style='text-align:right;'><b>{id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])}</b></div>", unsafe_allow_html=True)
+                c2.image(hent_logo(row['CONTESTANTHOME_OPTAUUID']), width=30)
                 
+                # Score/Time
                 if is_played:
-                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
+                    score = f"{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}"
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{score}</span></div>", unsafe_allow_html=True)
                 else:
-                    c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px; color:#cc0000;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
+                    tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
+                    c3.markdown(f"<div style='text-align:center; font-weight:bold; color:#cc0000;'>Kl. {tid}</div>", unsafe_allow_html=True)
                 
-                a_uuid = row['CONTESTANTAWAY_OPTAUUID']
-                c4.image(hent_hold_logo(a_uuid), width=28)
-                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
-                
-                if is_played:
-                    st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
-                    # Udvidet kamp-statistik (KPI'er)
-                    sc = st.columns(6)
-                    stats_map = [
-                        ("xG", "expectedGoals", ""),
-                        ("Poss%", "possessionPercentage", "%"),
-                        ("Passes", "totalPass", ""),
-                        ("Shots Box", "touchesInBox", ""), # Mapped til Opta data
-                        ("LineBreak", "lineBreakPass", ""),
-                        ("PPDA", "ppda", "")
-                    ]
-                    for i, (label, s_key, suff) in enumerate(stats_map):
-                        h_val = row.get(f"{s_key}_HOME", 0)
-                        a_val = row.get(f"{s_key}_AWAY", 0)
-                        if s_key == "expectedGoals":
-                            try: h_val, a_val = f"{float(h_val):.2f}", f"{float(a_val):.2f}"
-                            except: h_val, a_val = "0.00", "0.00"
-                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div></div>", unsafe_allow_html=True)
+                # Away
+                c4.image(hent_logo(row['CONTESTANTAWAY_OPTAUUID']), width=30)
+                c5.markdown(f"<div><b>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])}</b></div>", unsafe_allow_html=True)
 
-    with tab_matches:
-        mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
-        team_df = df_matches[mask].copy()
+    with t_style:
+        col_off, col_def = st.columns(2)
         
-        sub_res, sub_fix = st.tabs(["Resultater", "Program"])
-        with sub_res:
-            tegn_kampe(team_df[team_df['MATCH_STATUS_CLEAN'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
-        with sub_fix:
-            tegn_kampe(team_df[team_df['MATCH_STATUS_CLEAN'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
+        with col_off:
+            st.subheader("🚀 Offensiv Profil")
+            st.write(f"**Deep Completions:** {get_avg('deepCompletions'):.1f}")
+            st.write(f"**Through Passes:** {get_avg('throughPasses'):.1f}")
+            st.write(f"**Indlæg (Accuracy):** {get_avg('crossesAcc'):.1f}%")
+            
+        with col_def:
+            st.subheader("🛡️ Defensiv Profil")
+            st.write(f"**Skud imod fra DZ:** {get_avg('shotsAgainstDZ'):.1f}")
+            st.write(f"**Touches in Box imod:** {get_avg('touchesInBoxAgainst'):.1f}")
+            st.write(f"**PPDA:** {avg_ppda:.1f}")
 
-    with tab_offensive:
-        st.subheader("Offensive Spillestils KPI")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.info("Shots from DZ & Shot Map")
-            # Her ville ShotMap komponenten ligge (Plottet via x,y)
-            st.markdown("**Danger Zone Shots:** 4.2 pr. kamp")
-            st.progress(0.65)
-        with c2:
-            st.info("Passing & Crosses")
-            st.write("- Throughpasses: 8.2 (Acc: 34%)")
-            st.write("- Final 1/3 entries: 42")
-            st.write("- Crosses from Left/Right: 12/8")
-
-    with tab_defensive:
-        st.subheader("Defensive Spillestils KPI")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.error("Shots Against (Danger Zone)")
-            st.write("Holdet tillader 2.1 skud fra DZ i snit.")
-        with c2:
-            st.error("Pres & Organisation")
-            st.write(f"**PPDA:** 9.1 (Liga gns: 11.2)")
-            st.write("Touches in box imod: 14.5")
-
-    # --- FOOTER / DATA STATUS ---
-    st.caption(f"Sæson: 2025/2026 | Data: Opta/Wyscout Hybrid | Team ID: {valgt_uuid}")
-
-# Eksempel på kald
-# vis_side(data_payload)
+    st.divider()
+    st.caption("Data leveret af Opta/Wyscout Hybrid Engine")
