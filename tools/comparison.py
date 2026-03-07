@@ -181,7 +181,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 radialaxis=dict(visible=False, range=[0, 6]),
                 angularaxis=dict(gridcolor="#eee", linecolor="#eee", tickfont=dict(size=10))
             ),
-            height=330, 
+            height=350, 
             margin=dict(l=50, r=50, t=20, b=20), 
             showlegend=False
         )
@@ -203,7 +203,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         st.markdown(f"""
             <div class='center-analysis'>
                 <div style='border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;'>
-                    <b>SCOUT:</b> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
+                    <l>SCOUT:</l> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
                 </div>
                 <div>
                     <b>WYSCOUT:</b> {duel_tekst}
