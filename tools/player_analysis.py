@@ -43,7 +43,7 @@ def vis_side(dp):
         pivot_stats['xG_90'] = 0
 
     # --- 4. VISNING I TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["📊 TRUP OVERSIGT", "🎯 INDIVIDUEL ANALYSE", "🚀 LINEBREAKS"])
+    tab_squad, tab_single, tab_lb = st.tabs(["TRUP OVERSIGT", "INDIVIDUEL ANALYSE", "LINEBREAKS"])
 
     with tab_squad:
         st.subheader("Leaderboard")
