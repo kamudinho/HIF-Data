@@ -10,13 +10,11 @@ def rens_id(val):
 
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
-    # Find historik
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
     nyeste = spiller_historik.iloc[0]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
-    # Header
     c1, c2 = st.columns([1, 3])
     with c1:
         st.image(img_url, width=150)
@@ -53,11 +51,14 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         if career_df is not None:
             cdf = career_df.copy()
             cdf.columns = [str(c).upper() for c in cdf.columns]
-            p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
-            st.dataframe(p_stats[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']], use_container_width=True, hide_index=True)
+            # Sikrer at vi ikke crasher hvis de forventede kolonner mangler i en session
+            req = ['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']
+            if all(col in cdf.columns for col in req):
+                p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
+                st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    # Ingen overskrift her, da main.py håndterer det
+    # Overskrift og ikoner er droppet jf. ønske
     
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
@@ -66,18 +67,19 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
         df_unique['Dato'] = df_unique['Dato'].dt.date
     except:
-        st.error("Kunne ikke indlæse databasen.")
         return
 
     billed_map = {}
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Tabel-setup
-    df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
+    # SINGLE-SELECT VIA SESSION STATE LOGIK
+    if 'db_editor_state' not in st.session_state:
+        st.session_state.db_editor_state = pd.DataFrame({'Se': [False] * len(df_unique)})
+
+    df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].reset_index(drop=True)
     df_display.insert(0, "Se", False)
 
-    # Vi bruger st.data_editor og tjekker for ændringer
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -87,20 +89,18 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
-        key="db_editor"
+        key="main_db_editor"
     )
 
-    # Find ud af om der er valgt noget nyt
+    # Tjek om der er valgt noget
     nye_valg = ed_result[ed_result["Se"] == True]
     
     if not nye_valg.empty:
+        # Hvis der er flere checkboxe, tager vi kun den nyeste markering
         valgt_navn = nye_valg.iloc[-1]['Navn']
         
-        # Åbn profil
         vis_spiller_modal(valgt_navn, billed_map, career_df, df_raw)
         
-        # NULSTILLING AF CHECKBOX:
-        # Ved at køre en rerun uden at gemme 'Se' i session_state, 
-        # vil tabellen vende tilbage til sin standard-tilstand (False) når dialogen lukkes.
-        if st.button("Luk og nulstil tabel", use_container_width=True):
+        # Nulstil alt og ryd checkboxe
+        if st.button("Ryd valg og nulstil tabel", use_container_width=True):
             st.rerun()
