@@ -54,7 +54,7 @@ def vis_side(dp):
                 if info.get('wyid'): return f"https://cdn5.wyscout.com/photos/team/public/{info['wyid']}_120x120.png"
         return ""
 
-    # --- FILTRE ---
+    # --- FILTRE & LOGIK ---
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
     id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
@@ -69,6 +69,27 @@ def vis_side(dp):
 
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
+
+    # --- BEREGN STATS BOKSE (GENINDFØRT) ---
+    played_matches = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
+    s = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played_matches.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0)
+        a_s = int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
+        
+        s["K"] += 1
+        s["M+"] += h_s if is_h else a_s
+        s["M-"] += a_s if is_h else h_s
+        diff = h_s - a_s if is_h else a_s - h_s
+        if diff > 0: s["S"] += 1
+        elif diff == 0: s["U"] += 1
+        else: s["N"] += 1
+
+    stats_disp = [("K", s["K"]), ("S", s["S"]), ("U", s["U"]), ("N", s["N"]), ("M+", s["M+"]), ("M-", s["M-"]), ("+/-", s["M+"]-s["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
+        with top_cols[i+1]:
+            st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     # --- TEGN KAMPE ---
     def tegn_kampe(df, is_played):
@@ -89,23 +110,19 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
-                # Hjemmehold
                 h_uuid = row['CONTESTANTHOME_OPTAUUID']
                 c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
-                # Center
                 if is_played:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 else:
                     c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {dt.strftime('%H:%M')}</div>", unsafe_allow_html=True)
                 
-                # Udehold
                 a_uuid = row['CONTESTANTAWAY_OPTAUUID']
                 c4.image(hent_hold_logo(a_uuid), width=28)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
                 
-                # --- STATS SEKTION (GENINDFØRT) ---
                 if is_played:
                     st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
@@ -119,21 +136,11 @@ def vis_side(dp):
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         h_val = row.get(f"{s_key}_HOME", 0)
                         a_val = row.get(f"{s_key}_AWAY", 0)
-                        
-                        # Formatering af xG decimaler
                         if s_key == "expectedGoals":
-                            try:
-                                h_val = f"{float(h_val):.2f}"
-                                a_val = f"{float(a_val):.2f}"
+                            try: h_val, a_val = f"{float(h_val):.2f}", f"{float(a_val):.2f}"
                             except: h_val, a_val = "0.00", "0.00"
 
-                        sc[i].markdown(
-                            f"<div style='text-align:center;'>"
-                            f"<div class='match-stat-label'>{label}</div>"
-                            f"<div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div>"
-                            f"</div>", 
-                            unsafe_allow_html=True
-                        )
+                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div></div>", unsafe_allow_html=True)
 
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
