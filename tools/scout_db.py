@@ -9,72 +9,51 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def map_wyscout_position(role_code):
-    # Oversætter ROLECODE3 fra Wyscout til HIF-standard
-    wyscout_map = {
-        "GK": "MM",
-        "RB": "HB", "RB7": "HB",
-        "LB": "VB", "LB7": "VB",
-        "CB": "VCB", "RCB": "HCB", "LCB": "VCB",
-        "DMF": "DMC", "RDMF": "DMC", "LDMF": "DMC",
-        "MC": "MC", "RCMF": "MC", "LCMF": "MC",
-        "AMF": "OMC", "RAMF": "OMC", "LAMF": "OMC",
-        "RW": "HK", "RWF": "HK",
-        "LW": "VK", "LWF": "VK",
-        "CF": "ANG", "SS": "ANG"
-    }
-    code = str(role_code).strip().upper()
-    return wyscout_map.get(code, code) # Fallback til koden selv, hvis den ikke er i mappen
-
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # 1. DATA LOAD
     try:
-        # Vi læser scouting_db (hvor du gemmer dine rapporter)
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].apply(rens_id)
-    except:
-        st.error("Kunne ikke indlæse scouting_db.csv")
+        # Sørg for datoen er rigtig format til sortering
+        df_s['Dato'] = pd.to_datetime(df_s['Dato']).dt.date
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af scouting_db.csv: {e}")
         return
 
-    # Billed-map fra SQL (sql_players indeholder ofte de nyeste meta-data fra Wyscout)
+    # Billed-map fra SQL
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # 2. OVERBLIKSTABEL
+    # 2. OVERBLIKSTABEL (Alle rapporter)
     st.markdown("### 📋 Scouting Database")
     
-    df_vis = df_s.copy()
-    if 'Dato' in df_vis.columns:
-        df_vis = df_vis.sort_values('Dato', ascending=False)
-    
-    # Her bruger vi ROLECODE3 til visningen i tabellen
-    # Vi tjekker om kolonnen hedder ROLECODE3 eller Pos i din CSV
-    pos_col = 'ROLECODE3' if 'ROLECODE3' in df_vis.columns else 'Pos'
-    df_vis['Vis_Pos'] = df_vis[pos_col].apply(map_wyscout_position)
+    # Sorter så nyeste rapporter ligger øverst
+    df_vis = df_s.sort_values(by=['Dato', 'Navn'], ascending=[False, True])
     
     st.dataframe(
-        df_vis[['Dato', 'Navn', 'Klub', 'Vis_Pos', 'Status', 'Vurdering']],
+        df_vis[['Dato', 'Navn', 'Klub', 'Position', 'Status', 'Rating_Avg', 'Scout']],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Vis_Pos": "Pos",
-            "Status": st.column_config.SelectboxColumn("Status", options=["A-Emne", "B-Emne", "Hold øje", "Afskrevet"]),
-            "Vurdering": st.column_config.TextColumn("Kort info", width="medium")
+            "Dato": st.column_config.DateColumn("Dato", format="DD/MM/YYYY"),
+            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f ⭐"),
+            "Status": st.column_config.TextColumn("Status")
         }
     )
 
     st.divider()
 
-    # 3. VALG AF SPILLERPROFIL
+    # 3. VALG AF SPILLERPROFIL (Unikke navne)
     navne_liste = sorted(df_s['Navn'].unique().tolist())
     
     col_pick, _ = st.columns([1, 2])
     with col_pick:
-        valgt_navn = st.selectbox("Vælg spiller for at se profil", ["--- Vælg spiller ---"] + navne_liste)
+        valgt_navn = st.selectbox("Vælg spiller for detaljeret profil", ["--- Vælg spiller ---"] + navne_liste)
 
     # 4. SPILLERPROFIL (Tabs)
     if valgt_navn != "--- Vælg spiller ---":
+        # Hent den nyeste rapport for den valgte spiller til profilen
         s_match = df_s[df_s['Navn'] == valgt_navn].sort_values('Dato').iloc[-1]
         pid = rens_id(s_match.get('PLAYER_WYID'))
         img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
@@ -85,34 +64,41 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         
         with c1:
             st.image(img_url, width=180)
-            status = s_match.get('Status', 'Ukendt')
+            status = str(s_match.get('Status', 'Ukendt'))
+            # Farve-logik baseret på status
+            bg_color = "#df003b" if "Køb" in status or "Prioritet" in status else "#333"
+            
             st.markdown(f"""
-                <div style='background:#df003b; color:white; padding:10px; border-radius:5px; text-align:center; margin-top:10px;'>
-                    <small>STATUS</small><br><b>{status}</b>
+                <div style='background:{bg_color}; color:white; padding:10px; border-radius:5px; text-align:center; margin-top:10px;'>
+                    <small>STATUS</small><br><b>{status.upper()}</b>
                 </div>
             """, unsafe_allow_html=True)
+            
             st.write(f"**Klub:** {s_match.get('Klub', 'Ukendt')}")
-            # Vi bruger map_wyscout_position her til at vise den rigtige tekst
-            st.write(f"**Position:** {map_wyscout_position(s_match.get(pos_col, ''))}")
+            st.write(f"**Position:** {s_match.get('Position', 'Ukendt')}")
+            st.write(f"**Potentiale:** {s_match.get('Potentiale', '-')}")
 
         with c2:
-            tab1, tab2, tab3 = st.tabs(["📝 Rapport", "📊 Radar", "📈 Karriere"])
+            tab1, tab2, tab3 = st.tabs(["📝 Nyeste Rapport", "📊 Radar", "📈 Karriere"])
             
             with tab1:
-                st.info(f"**Vurdering:**\n\n{s_match.get('Vurdering', '-')}")
-                st.write(f"**Styrker:** {s_match.get('Styrker', '-')}")
-                st.write(f"**Svagheder:** {s_match.get('Svagheder', '-')}")
+                st.info(f"**Vurdering ({s_match['Dato']}):**\n\n{s_match.get('Vurdering', '-')}")
+                col_s, col_u = st.columns(2)
+                col_s.write(f"**Styrker:**\n{s_match.get('Styrker', '-')}")
+                col_u.write(f"**Udvikling:**\n{s_match.get('Udvikling', '-')}")
+                st.caption(f"Scoutet af: {s_match.get('Scout', 'Ukendt')}")
             
             with tab2:
-                # Radar (8-kantet / Polygon)
+                # Radar (Mapper direkte til dine kolonnenavne fra CSV)
                 labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-                k = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+                # Dette skal matche dine kolonneoverskrifter præcis:
+                keys = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
                 
                 r_values = []
-                for val in k:
+                for k in keys:
+                    val = s_match.get(k, 0)
                     try:
-                        raw = s_match.get(val, 0)
-                        v = float(str(raw).replace(',', '.'))
+                        v = float(str(val).replace(',', '.'))
                         r_values.append(v if v > 0 else 0.1)
                     except:
                         r_values.append(0.1)
@@ -126,16 +112,18 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                 ))
                 fig.update_layout(
                     polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
-                    height=350, margin=dict(l=50, r=50, t=30, b=30),
-                    showlegend=False
+                    height=350, margin=dict(l=50, r=50, t=30, b=30), showlegend=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
             with tab3:
-                if career_df is not None:
+                # Karriere-logik fra main.py argument
+                if career_df is not None and not career_df.empty:
                     c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & 
                                     (career_df['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
                     if not c_m.empty:
                         st.dataframe(c_m[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']], hide_index=True)
                     else:
-                        st.write("Ingen karriere-data fundet for denne spiller.")
+                        st.write("Ingen karrere-data fundet i denne sæson.")
+                else:
+                    st.write("Karriere-database ikke tilgængelig.")
