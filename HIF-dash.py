@@ -115,8 +115,8 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger"],
-                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
+    sel = option_menu(None, options=["Afslutninger", "Spillerperformance"], # Tilføj denne
+                     styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
@@ -185,10 +185,14 @@ try:
         # Gem i session state så tools kan tilgå det
         st.session_state["dp"] = dp
         
+        # I din rendering-sektion i main.py:
         if hoved_omraade == "HIF ANALYSE":
             if sel == "Afslutninger":
                 import tools.shotmap as sm
                 sm.vis_side(dp)
+            elif sel == "Spillerperformance": # Tilføj denne blok
+                import tools.player_analysis as pa
+                pa.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
