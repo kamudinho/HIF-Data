@@ -20,7 +20,7 @@ def vis_side(dp):
     df_skud = dp.get('playerstats', pd.DataFrame())
     df_assists = dp.get('assists', pd.DataFrame()) 
     
-    tab1, tab2 = st.tabs(["AFSLUTNINGER", "CHANCESKABELSE"])
+    tab1, tab2 = st.tabs(["AFSLUTNINGER", "ASSISTS"])
 
     # --- TAB 1: AFSLUTNINGER ---
     with tab1:
@@ -31,7 +31,7 @@ def vis_side(dp):
             with col_ctrl:
                 spiller_liste = sorted(df_skud['PLAYER_NAME'].unique())
                 v_skud = st.selectbox("Vælg spiller", options=["Hele Holdet"] + spiller_liste, key="sb_skud")
-                df_vis = df_skud if v_skud == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == v_skud]
+                df_vis = df_skud if v_skud == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_skud]
                 
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(df_vis)}</div></div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(df_vis[df_vis["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
@@ -53,7 +53,7 @@ def vis_side(dp):
             with col_ctrl_a:
                 spiller_liste_a = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
                 v_a = st.selectbox("Vælg spiller (Assists)", options=["Hele Holdet"] + spiller_liste_a, key="sb_assist")
-                df_a_vis = df_assists if v_a == "Hele Holdet" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
+                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Goal Assists</div><div class="stat-value">{len(df_a_vis)}</div></div>', unsafe_allow_html=True)
 
             with col_viz_a:
@@ -76,7 +76,7 @@ def vis_side(dp):
             # 3. Tabeloversigt lægges i bunden (uden for kolonnerne for bedre plads)
             if not df_a_vis.empty:
                 st.write("---")
-                st.subheader("📋 Detaljeret oversigt")
+                st.subheader("Detaljeret oversigt")
                 df_table = df_a_vis[['ASSIST_PLAYER', 'SCORER', 'EVENT_TIMESTAMP']].copy()
                 df_table.columns = ['Assisteret af', 'Målscorer', 'Tidspunkt']
                 st.dataframe(df_table.sort_values('Tidspunkt', ascending=False), use_container_width=True, hide_index=True)
