@@ -31,9 +31,11 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
 
     # --- TAB 1: SENESTE RAPPORT ---
     with t1:
-        col_stats, col_radar = st.columns([1, 1.2])
+        # Tre hovedkolonner: Tal, Radar, og Tekstbokse
+        col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
+        
         with col_stats:
-            # Viser talværdierne fra den seneste rapport
+            st.markdown("**Vurderinger**")
             for k in keys:
                 st.write(f"**{k}:** {nyeste.get(k, 1)}")
         
@@ -46,27 +48,24 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 line_color='#df003b'
             ))
             fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[1, 6])), # Start ved 1 jf. ønske
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6])),
                 showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20)
             )
             st.plotly_chart(fig, use_container_width=True)
-        
-        # Boksene horisontalt nedenunder
-        b1, b2, b3 = st.columns(3)
-        b1.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
-        b2.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
-        b3.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
+
+        with col_text:
+            # Tekstbokse vertikalt til højre for radarchart
+            st.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
+            st.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
+            st.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
 
     # --- TAB 2: HISTORIK ---
     with t2:
         for idx, rapport in spiller_historik.iterrows():
             with st.expander(f"Rapport fra {rapport['Dato']}", expanded=(idx == spiller_historik.index[0])):
-                # Talværdier horisontalt
                 cols = st.columns(len(keys))
                 for i, k in enumerate(keys):
                     cols[i].metric(labels[i], rapport.get(k, 1))
-                
-                # Tekstbokse horisontalt nedenfor tallene
                 st.write("---")
                 h1, h2, h3 = st.columns(3)
                 h1.markdown(f"**Styrker:**\n{rapport.get('Styrker', '-')}")
@@ -77,35 +76,34 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     with t3:
         hist_evo = spiller_historik.sort_values('Dato')
         fig_evo = go.Figure()
-        fig_evo.add_trace(go.Scatter(
-            x=hist_evo['Dato'], 
-            y=hist_evo['Rating_Avg'], 
-            mode='lines+markers', 
-            line_color='#df003b'
-        ))
-        fig_evo.update_layout(
-            yaxis=dict(range=[1, 6]), # 0-1 slettet, starter ved 1
-            height=350,
-            margin=dict(l=20, r=20, t=20, b=20)
-        )
+        fig_evo.add_trace(go.Scatter(x=hist_evo['Dato'], y=hist_evo['Rating_Avg'], mode='lines+markers', line_color='#df003b'))
+        fig_evo.update_layout(yaxis=dict(range=[1, 6]), height=350, margin=dict(l=20, r=20, t=20, b=20))
         st.plotly_chart(fig_evo, use_container_width=True)
 
-    # --- TAB 4: SÆSONSTATS (PLAYER_CAREER) ---
+    # --- TAB 4: SÆSONSTATS ---
     with t4:
         if career_df is not None:
             cdf = career_df.copy()
-            # Standardiser kolonnenavne til store bogstaver for at undgå index-fejl
             cdf.columns = [str(c).upper() for c in cdf.columns]
-            
-            # Filtrér på PLAYER_WYID og Sæson
             p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & 
                           (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
             
             if not p_stats.empty:
-                req_cols = ['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'ASSIST', 'MINUTESPLAYED']
-                # Tjek hvilke kolonner der faktisk findes i din data
-                vis_cols = [c for c in req_cols if c in p_stats.columns]
-                st.dataframe(p_stats[vis_cols], use_container_width=True, hide_index=True)
+                # Kolonner inkluderet: Kampe, Minutter, Mål, Assists, Gule kort, Røde kort
+                mapping = {
+                    'SEASONNAME': 'Sæson',
+                    'TEAMNAME': 'Hold',
+                    'APPEARANCES': 'Kampe',
+                    'MINUTESPLAYED': 'Minutter',
+                    'GOAL': 'Mål',
+                    'ASSIST': 'Assist',
+                    'YELLOWCARDS': 'Gule',
+                    'REDCARDS': 'Røde'
+                }
+                # Filtrér kun de kolonner der findes i datasættet
+                available_cols = [c for c in mapping.keys() if c in p_stats.columns]
+                df_stats = p_stats[available_cols].rename(columns=mapping)
+                st.dataframe(df_stats, use_container_width=True, hide_index=True)
             else:
                 st.write("Ingen sæsonstatistik fundet for 2025/2026.")
 
