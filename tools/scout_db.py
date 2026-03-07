@@ -4,13 +4,20 @@ import plotly.graph_objects as go
 
 SEASON_FILTER = "2025/2026"
 
+# --- HJÆLPEFUNKTIONER ---
 def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
 def map_position(pos_code):
-    pos_dict = {"1": "MM", "2": "HB", "3": "VB", "4": "VCB", "5": "HCB", "6": "DMC", "7": "HK", "8": "MC", "9": "ANG", "10": "OMC", "11": "VK"}
-    return pos_dict.get(rens_id(pos_code), "Ukendt")
+    # Vi mapper de mest gængse talkoder direkte til HIF-termer
+    # Hvis 'Pos' i din CSV er en tekst (f.eks. 'ANG'), returneres den bare.
+    pos_dict = {
+        "1": "MM", "2": "HB", "3": "VB", "4": "VCB", "5": "HCB", 
+        "6": "DMC", "7": "HK", "8": "MC", "9": "ANG", "10": "OMC", "11": "VK"
+    }
+    clean_pos = rens_id(pos_code)
+    return pos_dict.get(clean_pos, clean_pos) # Fallback til den oprindelige tekst hvis koden ikke findes
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # 1. DATA LOAD
@@ -29,12 +36,13 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # 2. OVERBLIKSTABEL
     st.markdown("### 📋 Scouting Database")
     
-    # Vi rydder op i tabellen til visning
     df_vis = df_s.copy()
     if 'Dato' in df_vis.columns:
         df_vis = df_vis.sort_values('Dato', ascending=False)
     
-    # Vis tabellen
+    # Vi mapper positionen i tabellen med det samme
+    df_vis['Pos'] = df_vis['Pos'].apply(map_position)
+    
     st.dataframe(
         df_vis[['Dato', 'Navn', 'Klub', 'Pos', 'Status', 'Vurdering']],
         use_container_width=True,
@@ -47,7 +55,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     st.divider()
 
-    # 3. VALG AF SPILLERPROFIL (Checkbox-logik)
+    # 3. VALG AF SPILLERPROFIL
     navne_liste = sorted(df_s['Navn'].unique().tolist())
     
     col_pick, _ = st.columns([1, 2])
@@ -56,7 +64,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     # 4. SPILLERPROFIL (Tabs)
     if valgt_navn != "--- Vælg spiller ---":
-        # Find data for den valgte spiller
         s_match = df_s[df_s['Navn'] == valgt_navn].sort_values('Dato').iloc[-1]
         pid = rens_id(s_match.get('PLAYER_WYID'))
         img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
@@ -85,11 +92,10 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                 st.write(f"**Svagheder:** {s_match.get('Svagheder', '-')}")
             
             with tab2:
-                # Radar logik (8-kantet)
+                # Radar logik (8-kantet / Polygon)
                 labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
                 k = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
                 
-                # Konverter værdier og tjek for NaN
                 r_values = []
                 for val in k:
                     try:
@@ -104,8 +110,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                     r=r_values + [r_values[0]],
                     theta=labels + [labels[0]],
                     fill='toself',
-                    line_color='#df003b',
-                    name=valgt_navn
+                    line_color='#df003b'
                 ))
                 fig.update_layout(
                     polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
@@ -115,7 +120,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
                 st.plotly_chart(fig, use_container_width=True)
 
             with tab3:
-                # Karriere stats
                 if career_df is not None:
                     c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & 
                                     (career_df['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
