@@ -51,47 +51,30 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             }}
             .card-hif {{ border-left: 10px solid {HIF_RED}; }}
             .card-mod {{ border-right: 10px solid {HIF_BLUE}; text-align: right; }}
-            
             .player-title {{ margin: 0 !important; font-size: 1.6rem; font-weight: 900; line-height: 1.1; }}
             .player-sub {{ margin: 2px 0 12px 0 !important; font-size: 0.95rem; color: gray; text-transform: uppercase; font-weight: 600; }}
-            
-            /* Kompakt visning af K, M, A, MIN */
             .quick-stats {{ display: flex; gap: 15px; margin-bottom: 15px; border-top: 1px solid #f0f0f0; padding-top: 10px; }}
             .card-mod .quick-stats {{ justify-content: flex-end; }}
             .q-item {{ text-align: center; min-width: 40px; }}
             .q-label {{ font-size: 0.7rem; color: #999; font-weight: bold; text-transform: uppercase; display: block; }}
             .q-val {{ font-size: 1.1rem; font-weight: 800; color: #333; }}
-
-            .stat-row {{ 
-                display: flex; justify-content: space-between; padding: 0 5px;
-                border-bottom: 1px solid #f8f8f8; align-items: center; height: 38px;
-            }}
+            .stat-row {{ display: flex; justify-content: space-between; padding: 0 5px; border-bottom: 1px solid #f8f8f8; align-items: center; height: 38px; }}
             .stat-label {{ font-size: 0.8rem; color: #777; font-weight: bold; text-transform: uppercase; }}
             .stat-val {{ font-size: 1.1rem; font-weight: 800; }}
-
-            .scouting-header {{ 
-                text-align: center; font-weight: 900; font-size: 0.9rem; color: #bbb; 
-                text-transform: uppercase; letter-spacing: 3px; margin-top: 35px; margin-bottom: 12px;
-            }}
-            .note-box {{
-                padding: 18px; border-radius: 12px; border: 1px solid #eee;
-                font-size: 1.05rem; line-height: 1.6; background: #ffffff;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-bottom: 15px;
-            }}
+            .scouting-header {{ text-align: center; font-weight: 900; font-size: 0.9rem; color: #bbb; text-transform: uppercase; letter-spacing: 3px; margin-top: 35px; margin-bottom: 12px; }}
+            .note-box {{ padding: 18px; border-radius: 12px; border: 1px solid #eee; font-size: 1.05rem; line-height: 1.6; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-bottom: 15px; }}
             .note-hif {{ border-left: 8px solid {HIF_RED}; }}
             .note-mod {{ border-right: 8px solid {HIF_BLUE}; text-align: right; }}
-
-            .center-analysis {{
-                margin-top: 15px; padding: 10px; background: #fcfcfc; border: 1px solid #eee; 
-                border-radius: 10px; text-align: center; font-size: 0.9rem; font-weight: 700;
-            }}
+            .center-analysis {{ margin-top: 15px; padding: 10px; background: #fcfcfc; border: 1px solid #eee; border-radius: 10px; text-align: center; font-size: 0.9rem; font-weight: 700; }}
         </style>
     """, unsafe_allow_html=True)
 
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].apply(rens_id)
-    except: return
+    except:
+        st.error("Kunne ikke indlæse scouting_db.csv")
+        return
 
     navne_liste = sorted(df_s['Navn'].unique().tolist())
     c1, c2 = st.columns(2)
@@ -99,67 +82,55 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
     s2_navn = c2.selectbox("P2", navne_liste, index=min(1, len(navne_liste)-1), label_visibility="collapsed")
 
     def hent_data(navn):
-    match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
-    if match.empty: return None
-    n = match.iloc[0]
-    pid = rens_id(n['PID_CLEAN'])
-    
-    pos, klub = "-", "Hvidovre IF"
-    if df_spillere is not None and not df_spillere.empty:
-        # Sikr os at vi sammenligner strenge
-        m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
-        if not m.empty:
-            pos = map_position(m.iloc[0].get('ROLECODE3', ''))
-            klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
-    
-    img_url = ""
-    if d3 is not None and not d3.empty:
-        img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
-        if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
-    
-    # --- OPDATERET CAREER LOGIK ---
-    stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
-    if career_df is not None and not career_df.empty:
-        # Vi renser ID'er og fjerner sæson-filteret midlertidigt for at se om der overhovedet er data
-        c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
+        match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
+        if match.empty: return None
+        n = match.iloc[0]
+        pid = rens_id(n['PID_CLEAN'])
         
-        # Forsøg at finde 2025/2026 rækken
-        current_season = c_m[c_m['SEASONNAME'].str.contains("2025/2026", na=False, case=False)]
+        pos, klub = "-", "Hvidovre IF"
+        if df_spillere is not None and not df_spillere.empty:
+            m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
+            if not m.empty:
+                pos = map_position(m.iloc[0].get('ROLECODE3', ''))
+                klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
         
-        if not current_season.empty:
-            target = current_season.iloc[0]
-        elif not c_m.empty:
-            # Hvis 25/26 ikke findes, tag den nyeste række de har
-            target = c_m.iloc[0]
-        else:
-            target = None
+        img_url = ""
+        if d3 is not None and not d3.empty:
+            img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
+            if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
+        
+        stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
+        if career_df is not None and not career_df.empty:
+            c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
+            current_season = c_m[c_m['SEASONNAME'].str.contains("2025/2026", na=False, case=False)]
+            
+            target = current_season.iloc[0] if not current_season.empty else (c_m.iloc[0] if not c_m.empty else None)
+            
+            if target is not None:
+                stats = {
+                    "K": int(target.get('MATCHES', 0)),
+                    "M": int(target.get('GOAL', 0)),
+                    "A": int(target.get('ASSIST', 0)),
+                    "MIN": int(target.get('MINUTES', 0))
+                }
+        
+        lbls = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+        return {
+            "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
+            "adv": beregn_p90_stats(pid, advanced_stats_df),
+            "r": [n.get(k, 0.1) for k in lbls],
+            "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
+            "scout_scores": {k: n.get(k, 0) for k in lbls}
+        }
 
-        if target is not None:
-            stats = {
-                "K": int(target.get('APPEARANCES', 0)),
-                "M": int(target.get('GOAL', 0)),
-                "A": int(target.get('ASSIST', 0)),
-                "MIN": int(target.get('MINUTESONFIELD', 0))
-            }
-    
-    lbls = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
-    return {
-        "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
-        "adv": beregn_p90_stats(pid, advanced_stats_df),
-        "r": [n.get(k, 0.1) for k in lbls],
-        "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
-        "scout_scores": {k: n.get(k, 0) for k in lbls}
-    }
-
-    p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
+    p1 = hent_data(s1_navn)
+    p2 = hent_data(s2_navn)
     if not p1 or not p2: return
 
     # --- TOP LAYOUT: [SPILLER VENSTRE] [RADAR] [SPILLER HØJRE] ---
     col_left, col_center, col_right = st.columns([4.2, 3.6, 4.2])
 
-    # VENSTRE SPILLER (HIF)
     with col_left:
-        # Navn og Billede boks
         st.markdown(f"""<div class='player-card card-hif'>
             <div style='display: flex; gap: 15px; align-items: start;'>
                 <img src='{vis_spiller_billede(p1["img"], p1["pid"])}' style='width: 90px; border-radius: 8px;'>
@@ -173,17 +144,12 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                         <div class='q-item'><span class='q-label'>MIN</span><span class='q-val'>{p1['stats']['MIN']}</span></div>
                     </div>
                 </div>
-            </div>
-            <div style='margin-top: 10px;'>
-        """, unsafe_allow_html=True)
-        
-        # Avancerede stats indsat i samme boks
+            </div>""", unsafe_allow_html=True)
         if p1['adv']:
             for k, v in p1['adv'].items():
                 st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # RADAR (CENTER)
     with col_center:
         labels = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
         fig = go.Figure()
@@ -196,7 +162,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         max_p1 = max(diffs, key=diffs.get); max_p2 = min(diffs, key=diffs.get)
         st.markdown(f"<div class='center-analysis'>DATATJEK: {p1['navn']} (+{max_p1.lower()}) vs {p2['navn']} (+{max_p2.lower()})</div>", unsafe_allow_html=True)
 
-    # HØJRE SPILLER (MODSTANDER)
     with col_right:
         st.markdown(f"""<div class='player-card card-mod'>
             <div style='display: flex; gap: 15px; align-items: start; flex-direction: row-reverse;'>
@@ -211,16 +176,12 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                         <div class='q-item'><span class='q-label'>K</span><span class='q-val'>{p2['stats']['K']}</span></div>
                     </div>
                 </div>
-            </div>
-            <div style='margin-top: 10px;'>
-        """, unsafe_allow_html=True)
-
+            </div>""", unsafe_allow_html=True)
         if p2['adv']:
             for k, v in p2['adv'].items():
                 st.markdown(f"<div class='stat-row'><span class='stat-val' style='color:{HIF_BLUE}'>{v}</span><span class='stat-label'>{k}</span></div>", unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- BUND: SCOUTING RÆKKER ---
     st.markdown("<hr style='margin: 20px 0 10px 0; border: 0; border-top: 2px solid #eee;'>", unsafe_allow_html=True)
     def scouting_row(label, text1, text2):
         st.markdown(f"<div class='scouting-header'>{label}</div>", unsafe_allow_html=True)
