@@ -150,46 +150,64 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- RADAR (CENTER) ---
+    # RADAR (CENTER)
     with col_center:
         labels = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         fig = go.Figure()
         
-        # Tilføj spillere
-        fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', name=p1['navn'], line_color=HIF_RED, opacity=0.4))
-        fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', name=p2['navn'], line_color=HIF_BLUE, opacity=0.4))
+        # P1 Data
+        fig.add_trace(go.Scatterpolar(
+            r=p1['r']+[p1['r'][0]], 
+            theta=labels+[labels[0]], 
+            fill='toself', 
+            line_color=HIF_RED, 
+            opacity=0.4,
+            name=p1['navn']
+        ))
+        
+        # P2 Data
+        fig.add_trace(go.Scatterpolar(
+            r=p2['r']+[p2['r'][0]], 
+            theta=labels+[labels[0]], 
+            fill='toself', 
+            line_color=HIF_BLUE, 
+            opacity=0.4,
+            name=p2['navn']
+        ))
         
         fig.update_layout(
             polar=dict(
+                gridshape='linear', # DENNE LINJE gør det til en 8-kant/polygon i stedet for en cirkel
                 radialaxis=dict(visible=False, range=[0, 6]),
-                # Denne linje gør det til en 8-kant (fjerner de runde linjer)
-                angularaxis=dict(direction="clockwise", period=8, gridcolor="#eee", linecolor="#eee")
+                angularaxis=dict(gridcolor="#eee", linecolor="#eee", tickfont=dict(size=10))
             ),
             height=330, 
-            margin=dict(l=40, r=40, t=10, b=0), 
+            margin=dict(l=50, r=50, t=20, b=20), 
             showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        # --- AVANCERET DATATJEK ANALYSE ---
-        # 1. Scouting sammenligning
-        diffs_scout = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
-        max_s1 = max(diffs_scout, key=diffs_scout.get)
-        max_s2 = min(diffs_scout, key=diffs_scout.get)
-
-        # 2. Wyscout sammenligning (P90 stats)
-        # Vi tjekker kun hvis begge har tal (ikke '-')
-        p1_xg = p1['adv'].get('XG P90', 0) if p1['adv'] and p1['adv']['XG P90'] != '-' else 0
-        p2_xg = p2['adv'].get('XG P90', 0) if p2['adv'] and p2['adv']['XG P90'] != '-' else 0
+        # --- OPDATERET DATATJEK (TO LINJER) ---
+        # 1. Scouting-sammenligning
+        diffs = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
+        max_p1_attr = max(diffs, key=diffs.get)
+        max_p2_attr = min(diffs, key=diffs.get)
         
-        xg_tekst = f"{p1['navn']} er farligst (XG)" if p1_xg > p2_xg else f"{p2['navn']} er farligst (XG)"
-        if p1_xg == p2_xg: xg_tekst = "Lige på XG"
+        # 2. Wyscout-sammenligning (Duelle % og xG som eksempel)
+        p1_duel = p1['adv'].get('DUELLER %', 0) if p1['adv'] and p1['adv']['DUELLER %'] != '-' else 0
+        p2_duel = p2['adv'].get('DUELLER %', 0) if p2['adv'] and p2['adv']['DUELLER %'] != '-' else 0
+        
+        duel_vinder = p1['navn'] if float(p1_duel) > float(p2_duel) else p2['navn']
+        duel_tekst = f"{duel_vinder} stærkest i dueller ({max(p1_duel, p2_duel)}%)" if max(p1_duel, p2_duel) != 0 else "Ingen duel-data"
 
         st.markdown(f"""
             <div class='center-analysis'>
-                <span style='color:#999; font-size:0.7rem; text-transform:uppercase;'>Scouting & Data Analyse</span><br>
-                SCOUT: {p1['navn']} (+{max_s1.lower()}) vs {p2['navn']} (+{max_s2.lower()})<br>
-                WYSCOUT: {xg_tekst}
+                <div style='border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;'>
+                    <b>SCOUT:</b> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
+                </div>
+                <div>
+                    <b>WYSCOUT:</b> {duel_tekst}
+                </div>
             </div>
         """, unsafe_allow_html=True)
         
