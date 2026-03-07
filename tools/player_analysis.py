@@ -60,16 +60,16 @@ def vis_side(dp):
 
     # --- 5. TAB: TRUP OVERSIGT ---
     with tab_squad:
-        # Vi definerer rækkefølgen skarpt
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'xG_90', 'expectedAssists', 'xA_90']
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
         
         df_table = pivot_stats[final_cols].sort_values('expectedGoals', ascending=False)
         
+        # 'height="content"' er den korrekte parameter i den nye version
         st.dataframe(
             df_table,
             column_config={
-                "NAVN": st.column_config.TextColumn("Spiller", width="medium"),
+                "NAVN": st.column_config.TextColumn("Spiller"),
                 "minsPlayed": st.column_config.NumberColumn("Min.", format="%d"),
                 "expectedGoals": st.column_config.NumberColumn("Total xG", format="%.2f"),
                 "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f"),
@@ -78,9 +78,9 @@ def vis_side(dp):
             },
             use_container_width=True, 
             hide_index=True,
-            height=None,  # Fjerner den interne scrollbar helt
-            column_order=final_cols # Sikrer at rækkefølgen altid er den samme
+            height="content"  # <--- RETTET HER: Bruger "content" i stedet for None
         )
+        
     # --- 6. TAB: INDIVIDUEL ANALYSE ---
     with tab_single:
         sorted_pivot = pivot_stats.sort_values('NAVN')
