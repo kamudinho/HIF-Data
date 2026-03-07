@@ -25,37 +25,37 @@ st.set_page_config(
 
 # Centraliseret CSS
 st.markdown(f"""
-    <style>
-        .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
-        header {{ visibility: hidden; height: 0px; }}
-        .hif-header-container {{
-            background-color: {HIF_ROD};
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            width: 100%;
-            border-bottom: 3px solid {HIF_GULD};
-        }}
-        .hif-header-text {{
-            color: white !important;
-            margin: 0 !important;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            font-family: sans-serif;
-            line-height: 50px;
-        }}
-        button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
-        button[data-baseweb="tab"][aria-selected="true"] {{ 
-            color: {HIF_ROD} !important; 
-            border-bottom-color: {HIF_ROD} !important; 
-        }}
-        section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
-    </style>
+   <style>
+       .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
+       header {{ visibility: hidden; height: 0px; }}
+       .hif-header-container {{
+           background-color: {HIF_ROD};
+           height: 50px;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           border-radius: 4px;
+           margin-bottom: 15px;
+           width: 100%;
+           border-bottom: 3px solid {HIF_GULD};
+       }}
+       .hif-header-text {{
+           color: white !important;
+           margin: 0 !important;
+           text-transform: uppercase;
+           letter-spacing: 2px;
+           font-size: 1.1rem;
+           font-weight: 600;
+           font-family: sans-serif;
+           line-height: 50px;
+       }}
+       button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
+       button[data-baseweb="tab"][aria-selected="true"] {{ 
+           color: {HIF_ROD} !important; 
+           border-bottom-color: {HIF_ROD} !important; 
+       }}
+       section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
+   </style>
 """, unsafe_allow_html=True)
 
 def render_hif_header(titel):
@@ -135,7 +135,7 @@ if not sel:
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
-    # SEKTION A: TRUPPEN & SCOUTING
+    # SEKTION A: TRUPPEN & SCOUTING (HIF_load - Primært CSV/Wyscout)
     if hoved_omraade in ["TRUPPEN", "SCOUTING"]:
         dp = hif_load.get_scouting_package()
 
@@ -159,10 +159,17 @@ try:
                 import tools.comparison as comp
                 comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
 
-    # SEKTION B: ANALYSE & LIGA
+    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA + Navne-mapping)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
         is_hif_mode = (hoved_omraade == "HIF ANALYSE")
+        
+        # 1. Hent SQL data (xG, Linebreaks osv.)
         dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
+
+        # 2. Hent spillernavne fra CSV og læg dem ind i pakken
+        scouting_data = hif_load.get_scouting_package()
+        dp["players"] = scouting_data.get("players") 
+        
         st.session_state["dp"] = dp
 
         if hoved_omraade == "HIF ANALYSE":
