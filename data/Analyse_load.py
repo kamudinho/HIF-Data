@@ -1,6 +1,5 @@
 import pandas as pd
 from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
-from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 def get_analysis_package(hif_only=False):
