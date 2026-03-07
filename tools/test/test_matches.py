@@ -91,7 +91,6 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- HJÆLPEFUNKTION TIL AT TEGNE KAMPE ---
     def tegn_kampe(df, is_played):
         if df.empty:
             st.info("Ingen kampe fundet.")
@@ -105,29 +104,32 @@ def vis_side(dp):
             dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
             
-            # Vi tager de første 5 karakterer af MATCH_LOCALTIME (f.eks. "19:00" fra "19:00:00")
+            # Håndtering af MATCH_LOCALTIME (HH:MM:SS -> HH:MM)
             tid_raw = str(row.get('MATCH_LOCALTIME', ''))
-            tidspunkt = tid_raw[:5] if tid_raw else "TBA"
+            tidspunkt = tid_raw[:5] if len(tid_raw) >= 5 else "TBA"
             
             st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
+                # Hjemmehold
                 h_uuid = row['CONTESTANTHOME_OPTAUUID']
                 c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
                 c2.image(hent_hold_logo(h_uuid), width=28)
                 
+                # Center (Score eller Tidspunkt)
                 if is_played:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 else:
-                    # BRUGER NU MATCH_LOCALTIME HER
-                    c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
+                    c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px; color:#cc0000;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
                 
+                # Udehold
                 a_uuid = row['CONTESTANTAWAY_OPTAUUID']
                 c4.image(hent_hold_logo(a_uuid), width=28)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
                 
+                # Statistik (kun for spillede kampe)
                 if is_played:
                     st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
@@ -146,7 +148,7 @@ def vis_side(dp):
                             except: h_val, a_val = "0.00", "0.00"
 
                         sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div></div>", unsafe_allow_html=True)
-
+                        
     # --- SELVE TABS LAYOUTET ---
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
