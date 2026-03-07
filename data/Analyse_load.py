@@ -20,6 +20,7 @@ def get_analysis_package(hif_only=False):
     df_shots = conn.query(queries.get("opta_shotevents"))
     df_assists = conn.query(queries.get("opta_assists"))
     df_opta_stats = conn.query(queries.get("opta_team_stats"))
+    df_quals = conn.query(queries.get("opta_qualifiers"))
 
     # Vask skuddata
     if not df_shots.empty:
@@ -44,6 +45,7 @@ def get_analysis_package(hif_only=False):
         "opta_team_stats": df_opta_stats,
         "playerstats": df_shots,
         "assists": df_assists,
+        "qualifiers": df_quals, # <--- Husk at returnere den
         "opta": {"matches": df_matches},
         "config": {
             "liga_navn": comp_f,
