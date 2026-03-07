@@ -1,12 +1,19 @@
 def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
+    """
+    Returnerer alle SQL queries til OPTA data i Snowflake.
+    Sikrer korrekt mapping af liga og sæson fra team_mapping.
+    """
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
+    # 1. Importér konstanter til fallback
     from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
+    
+    # 2. Definér variabler (LØSER 'saeson' is not defined fejlen)
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
-    # Dynamiske filtre
+    # 3. Dynamiske filtre baseret på hif_only flaget
     event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
