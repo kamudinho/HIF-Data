@@ -4,13 +4,15 @@ from data.utils.team_mapping import TEAMS
 
 def vis_side(dp):
     # 1. HENT DATA
-    df_matches = dp.get("opta_matches", pd.DataFrame()).copy()
+    # Vi bruger 'opta' -> 'matches' strukturen som i din fungerende tabel-kode
+    df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_raw_stats = dp.get("opta_team_stats", pd.DataFrame()).copy()
     
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet.")
+        st.warning("Ingen kampdata fundet i 'opta.matches'.")
         return
 
+    # Sørg for at MATCH_STATUS er ensartet
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
 
     # --- DATA MERGE (Opta Stats) ---
@@ -44,6 +46,18 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
+    # --- HJÆLPEFUNKTION TIL LOGO (SYNKRONISERET) ---
+    def hent_hold_logo(opta_uuid):
+        # Vi leder efter logoet direkte i TEAMS mappingen
+        for name, info in TEAMS.items():
+            if str(info.get("opta_uuid")) == str(opta_uuid):
+                # Prioritér 'logo' nøglen hvis den findes, ellers brug wyid URL
+                if info.get('logo'):
+                    return info['logo']
+                elif info.get('wyid'):
+                    return f"https://cdn5.wyscout.com/photos/team/public/{info['wyid']}_120x120.png"
+        return ""
+
     # --- FILTRE ---
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
@@ -52,43 +66,13 @@ def vis_side(dp):
 
     top_cols = st.columns([2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
-        hold_liste = sorted(liga_hold_options.keys())
-        hif_idx = hold_liste.index("Hvidovre") if "Hvidovre" in hold_liste else 0
-        valgt_navn = st.selectbox("Vælg hold", hold_liste, index=hif_idx, label_visibility="collapsed")
+        h_list = sorted(liga_hold_options.keys())
+        hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
+        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
-
-    # --- BEREGN STATS BAR ---
-    played_matches = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
-    s = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-    for _, m in played_matches.iterrows():
-        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0), int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
-        s["K"] += 1
-        s["M+"] += h_s if is_h else a_s
-        s["M-"] += a_s if is_h else h_s
-        diff = h_s - a_s if is_h else a_s - h_s
-        if diff > 0: s["S"] += 1
-        elif diff == 0: s["U"] += 1
-        else: s["N"] += 1
-
-    stats_disp = [("K", s["K"]), ("S", s["S"]), ("U", s["U"]), ("N", s["N"]), ("M+", s["M+"]), ("M-", s["M-"]), ("+/-", s["M+"]-s["M-"])]
-    for i, (l, v) in enumerate(stats_disp):
-        with top_cols[i+1]:
-            st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
-
-    # --- HJÆLPEFUNKTION TIL LOGO (RETTET) ---
-    def hent_hold_logo(uuid):
-        # Vi leder i TEAMS efter det rigtige wy_id baseret på opta_uuid
-        for name, info in TEAMS.items():
-            if str(info.get("opta_uuid")) == str(uuid):
-                wy_id = info.get("team_wyid")
-                if wy_id:
-                    return f"https://cdn5.wyscout.com/photos/team/public/{wy_id}_120x120.png"
-        # Fallback hvis intet findes
-        return "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 
     # --- TEGN KAMPE ---
     def tegn_kampe(df, is_played):
@@ -108,33 +92,24 @@ def vis_side(dp):
             
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
-                c2.image(hent_hold_logo(row['CONTESTANTHOME_OPTAUUID']), width=28)
                 
+                # Hjemmehold
+                h_uuid = row['CONTESTANTHOME_OPTAUUID']
+                h_navn = id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
+                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_navn}</div>", unsafe_allow_html=True)
+                c2.image(hent_hold_logo(h_uuid), width=28)
+                
+                # Center (Score/Tid)
                 if is_played:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 else:
                     c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {dt.strftime('%H:%M')}</div>", unsafe_allow_html=True)
                 
-                c4.image(hent_hold_logo(row['CONTESTANTAWAY_OPTAUUID']), width=28)
-                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
-                
-                if is_played:
-                    st.markdown("<hr style='margin: 4px 0; opacity: 0.1;'>", unsafe_allow_html=True)
-                    sc = st.columns(5)
-                    stats_map = [("Besiddelse", "possessionPercentage", "%"), ("Skud", "totalScoringAtt", ""), ("xG", "expectedGoals", ""), ("Afleveringer", "totalPass", ""), ("Hjørne", "wonCorner", "")]
-                    for i, (label, s_key, suff) in enumerate(stats_map):
-                        h_v = row.get(f"{s_key}_HOME", 0)
-                        a_v = row.get(f"{s_key}_AWAY", 0)
-                        
-                        # Formatering af xG decimaler
-                        if s_key == "expectedGoals":
-                            try:
-                                h_v = f"{float(h_v):.2f}"
-                                a_v = f"{float(a_v):.2f}"
-                            except: pass
-
-                        sc[i].markdown(f"<div style='text-align:center;'><div style='font-size:10px; color:#888;'>{label}</div><div style='font-size:13px; font-weight:600;'>{h_v}{suff}-{a_v}{suff}</div></div>", unsafe_allow_html=True)
+                # Udehold
+                a_uuid = row['CONTESTANTAWAY_OPTAUUID']
+                a_navn = id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
+                c4.image(hent_hold_logo(a_uuid), width=28)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_navn}</div>", unsafe_allow_html=True)
 
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
