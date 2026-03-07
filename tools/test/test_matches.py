@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import TEAMS
 
+st.write("Debug - Antal rækker i matches:", len(dp.get("matches", [])))
+st.write("Debug - Kolonner i team_stats:", dp.get("opta_team_stats").columns.tolist() if "opta_team_stats" in dp else "Mangler")
+
 def vis_side(dp):
     # 1. HENT DATA - Vi tjekker begge mulige nøgler for at være sikre
     df_matches = dp.get("opta_matches", pd.DataFrame()).copy()
