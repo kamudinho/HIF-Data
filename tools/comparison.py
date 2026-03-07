@@ -114,7 +114,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                     "MIN": int(target.get('MINUTES', 0))
                 }
         
-        lbls = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        lbls = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
             "adv": beregn_p90_stats(pid, advanced_stats_df),
@@ -151,7 +151,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_center:
-        labels = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        labels = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         fig = go.Figure()
         fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_RED, opacity=0.4))
         fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_BLUE, opacity=0.4))
