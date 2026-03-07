@@ -1,98 +1,65 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
-def vis_side(dp):
-    # 1. Hent data
-    df_shots = dp.get("playerstats", pd.DataFrame())
-    df_lb = dp.get("linebreaks", pd.DataFrame())
-    df_xg_agg = dp.get("xg_agg", pd.DataFrame())
+def vis_side(dp):    
+    # 1. Datatjek
+    df_xg = dp.get("xg_agg")        # Fra OPTA_MATCHEXPECTEDGOALS
+    df_lb = dp.get("linebreaks")    # Fra OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
+    
+    if df_xg is None or df_xg.empty:
+        st.warning("Ingen xG-data fundet for spillerne.")
+        return
 
-    # Standardiser kolonner
-    for df in [df_shots, df_lb, df_xg_agg]:
-        if not df.empty:
-            df.columns = [str(c).upper().strip() for c in df.columns]
+    # 2. Vælg Spiller (Filtrering)
+    all_players = sorted(df_xg['PLAYER_OPTAUUID'].unique())
+    selected_player = st.selectbox("Vælg Spiller", all_players)
 
-    # 2. Opret Navne-Mapping (UUID -> NAVN)
-    # Vi henter unikke par fra skud-dataen, da den har begge dele
-    name_map = {}
-    if not df_shots.empty and 'PLAYER_OPTAUUID' in df_shots.columns and 'PLAYER_NAME' in df_shots.columns:
-        name_map = dict(zip(df_shots['PLAYER_OPTAUUID'], df_shots['PLAYER_NAME']))
+    # Filtrer data for den valgte spiller
+    p_xg = df_xg[df_xg['PLAYER_OPTAUUID'] == selected_player]
+    p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_player] if df_lb is not None else pd.DataFrame()
 
-    t1, t2, t3, t4 = st.tabs([
-        "GENERELT", 
-        "OFFENSIVT", 
-        "DEFENSIVT", 
-        "LINEBREAKING PASSES"
-    ])
+    # --- 3. TABS OVERSIGT ---
+    tab1, tab2, tab3 = st.tabs(["🎯 Afslutning & xG", "🚀 Progression (Linebreaks)", "📊 Rå Statistik"])
 
-    # --- TAB 1: GENERELT (Nu med navne) ---
-    with t1:
-        if not df_xg_agg.empty:
-            st.write("OFFICIELLE OPTA XG STATS (SAESON TOTAL)")
+    with tab1:
+        st.markdown("### Forventede Mål (xG) & Assists (xA)")
+        col1, col2, col3 = st.columns(3)
+        
+        # Beregn totaler (Sørg for at STAT_VALUE er numerisk i din load-fil)
+        total_xg = p_xg[p_xg['STAT_TYPE'] == 'expectedGoals']['STAT_VALUE'].sum()
+        total_xa = p_xg[p_xg['STAT_TYPE'] == 'expectedAssists']['STAT_VALUE'].sum()
+        mins = p_xg[p_xg['STAT_TYPE'] == 'minsPlayed']['STAT_VALUE'].sum()
+
+        col1.metric("Total xG", f"{total_xg:.2f}")
+        col2.metric("Total xA", f"{total_xa:.2f}")
+        col3.metric("Minutter", f"{int(mins)}")
+
+        # Visualisering af xG kilder (Open Play vs Set Play)
+        xg_types = p_xg[p_xg['STAT_TYPE'].str.contains('expectedGoals', na=False)]
+        if not xg_types.empty:
+            fig_xg = px.bar(xg_types, x='STAT_TYPE', y='STAT_VALUE', 
+                            title="xG Fordeling", color_discrete_sequence=['#df003b'])
+            st.plotly_chart(fig_xg, use_container_width=True)
+
+    with tab2:
+        st.markdown("### Linebreaking Passes")
+        if not p_lb.empty:
+            # Fokus på de vigtigste gennembrud
+            vigtige_stats = ['defenceLineBroken', 'midfieldLineBroken', 'finalThirdEntries', 'underPressure']
+            lb_summary = p_lb[p_lb['STAT_TYPE'].isin(vigtige_stats)]
             
-            # Gruppér data
-            xg_summary = df_xg_agg.groupby(['PLAYER_OPTAUUID', 'POSITION']).agg({
-                'STAT_VALUE': 'sum'
-            }).reset_index()
-
-            # Oversæt UUID til Navn
-            xg_summary['SPILLER'] = xg_summary['PLAYER_OPTAUUID'].map(name_map).fillna(xg_summary['PLAYER_OPTAUUID'])
+            # Sammenlign 1. vs 2. halvleg
+            fig_lb = px.bar(lb_summary, x='STAT_TYPE', y=['STAT_FH', 'STAT_SH'], 
+                            barmode='group', title="Linjebrud: 1. vs 2. Halvleg",
+                            labels={'value': 'Antal', 'variable': 'Halvleg'},
+                            color_discrete_map={'STAT_FH': '#b8860b', 'STAT_SH': '#df003b'})
+            st.plotly_chart(fig_lb, use_container_width=True)
             
-            # Rydd op i visning
-            xg_summary = xg_summary[['SPILLER', 'POSITION', 'STAT_VALUE']]
-            xg_summary.columns = ['SPILLER', 'POSITION', 'TOTAL XG']
-            xg_summary = xg_summary.sort_values('TOTAL XG', ascending=False)
-            
-            st.dataframe(xg_summary, use_container_width=True, hide_index=True)
+            st.info("💡 'defenceLineBroken' under pres er en nøgleindikator for gennembrudskraft.")
         else:
-            st.write("Ingen aggregeret xG data fundet.")
+            st.info("Ingen linebreak-data for denne spiller.")
 
-    # --- TAB 2: OFFENSIVT (xG pr. skud) ---
-    with t2:
-        if not df_shots.empty:
-            st.write("AFSLUTNINGSSTATISTIK OG KVALITET")
-            
-            off_stats = df_shots.groupby('PLAYER_NAME').agg({
-                'EVENT_OPTAUUID': 'count',
-                'XG_VAL': 'sum',
-                'EVENT_TYPEID': lambda x: (x == 16).sum() 
-            }).rename(columns={
-                'EVENT_OPTAUUID': 'SKUD',
-                'XG_VAL': 'TOTAL XG',
-                'EVENT_TYPEID': 'MAAL'
-            })
-
-            off_stats['XG PR. SKUD'] = (off_stats['TOTAL XG'] / off_stats['SKUD']).round(3)
-            off_stats = off_stats[['MAAL', 'SKUD', 'TOTAL XG', 'XG PR. SKUD']].sort_values('TOTAL XG', ascending=False)
-
-            st.dataframe(
-                off_stats.style.format({'TOTAL XG': '{:.2f}', 'XG PR. SKUD': '{:.3f}'}),
-                use_container_width=True
-            )
-        else:
-            st.write("Ingen skuddata fundet.")
-
-    # --- TAB 3: DEFENSIVT ---
-    with t3:
-        st.write("Defensive metrics er under udarbejdelse.")
-
-    # --- TAB 4: LINEBREAKING PASSES (Nu med navne) ---
-    with t4:
-        if not df_lb.empty:
-            st.write("LINEBREAKING PASSES AGGREGATES")
-            
-            lb_pivot = df_lb.pivot_table(
-                index='PLAYER_OPTAUUID', 
-                columns='STAT_TYPE', 
-                values='STAT_VALUE', 
-                aggfunc='sum'
-            ).fillna(0).reset_index()
-
-            # Oversæt UUID til Navn
-            lb_pivot.insert(0, 'SPILLER', lb_pivot['PLAYER_OPTAUUID'].map(name_map).fillna(lb_pivot['PLAYER_OPTAUUID']))
-            lb_pivot = lb_pivot.drop(columns=['PLAYER_OPTAUUID'])
-            
-            lb_pivot = lb_pivot.sort_values(by=lb_pivot.columns[1], ascending=False)
-            st.dataframe(lb_pivot, use_container_width=True, hide_index=True)
-        else:
-            st.write("Ingen Linebreak data fundet.")
+    with tab3:
+        st.markdown("### Komplet Datavisning")
+        st.dataframe(p_xg[['MATCH_DATE', 'STAT_TYPE', 'STAT_VALUE']].sort_values('MATCH_DATE', ascending=False), use_container_width=True)
