@@ -10,7 +10,7 @@ def rens_id(val):
 
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
-    # Find historik for den specifikke spiller
+    # Find historik
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
     nyeste = spiller_historik.iloc[0]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
@@ -22,30 +22,25 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"**Klub:** {nyeste.get('Klub', 'Ukendt')} | **Pos:** {nyeste.get('Position', 'Ukendt')}")
-        st.write(f"**Rating:** {nyeste.get('Rating_Avg', 0)} ⭐ | **Potentiale:** {nyeste.get('Potentiale', '-')}")
+        st.write(f"Klub: {nyeste.get('Klub', 'Ukendt')} | Pos: {nyeste.get('Position', 'Ukendt')}")
+        st.write(f"Rating: {nyeste.get('Rating_Avg', 0)} | Potentiale: {nyeste.get('Potentiale', '-')}")
 
-    t1, t2, t3, t4 = st.tabs(["📊 Seneste & Radar", "📜 Historik", "📈 Udvikling", "⚽ Stats"])
+    t1, t2, t3, t4 = st.tabs(["Seneste & Radar", "Historik", "Udvikling", "Stats"])
     
     with t1:
         col_t, col_r = st.columns([1, 1.2])
         with col_t:
-            st.markdown(f"**Dato for rapport:** {nyeste.get('Dato')}")
+            st.markdown(f"**Dato:** {nyeste.get('Dato')}")
             st.success(f"**Styrker:**\n\n{nyeste.get('Styrker', '-')}")
             st.info(f"**Vurdering:**\n\n{nyeste.get('Vurdering', '-')}")
             st.warning(f"**Fokus:**\n\n{nyeste.get('Udvikling', '-')}")
         with col_r:
             keys = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
             labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-            r_vals = []
-            for k in keys:
-                try:
-                    v = float(str(nyeste.get(k, 0)).replace(',', '.'))
-                    r_values.append(v if v > 0 else 0.1)
-                except: r_vals.append(0.1)
-            
-            # (Radar plot logik her...)
-            # For overskuelighedens skyld udeladt i dette snippet, men bibeholdt i din fil
+            r_vals = [float(str(nyeste.get(k, 0)).replace(',', '.')) for k in keys]
+            fig = go.Figure(data=go.Scatterpolar(r=r_vals+[r_vals[0]], theta=labels+[labels[0]], fill='toself', line_color='#df003b'))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20))
+            st.plotly_chart(fig, use_container_width=True)
 
     with t2:
         st.dataframe(spiller_historik[['Dato', 'Rating_Avg', 'Status', 'Vurdering', 'Scout']], use_container_width=True, hide_index=True)
@@ -62,9 +57,8 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
             st.dataframe(p_stats[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']], use_container_width=True, hide_index=True)
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    st.markdown("### 📋 Scouting Database")
-
-    # 1. Hent og forbered data
+    # Ingen overskrift her, da main.py håndterer det
+    
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
         df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].apply(rens_id)
@@ -75,44 +69,38 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         st.error("Kunne ikke indlæse databasen.")
         return
 
-    # 2. Billeder
     billed_map = {}
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # 3. SINGLE-SELECT LOGIK via Session State
-    if "sidste_valgte_navn" not in st.session_state:
-        st.session_state.sidste_valgte_navn = None
-
-    # Tilføj 'Se' kolonne (default False)
+    # Tabel-setup
     df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # Vis editor
+    # Vi bruger st.data_editor og tjekker for ændringer
     ed_result = st.data_editor(
         df_display,
         column_config={
             "Se": st.column_config.CheckboxColumn("Profil", default=False),
-            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f ⭐")
+            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f")
         },
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
-        key="db_single_select"
+        key="db_editor"
     )
 
-    # 4. Tjek for nye valg og håndter "Single Select"
-    aktuelle_valg = ed_result[ed_result["Se"] == True]
+    # Find ud af om der er valgt noget nyt
+    nye_valg = ed_result[ed_result["Se"] == True]
     
-    if not aktuelle_valg.empty:
-        nyeste_valg = aktuelle_valg.iloc[-1]['Navn'] # Tag den sidste i listen hvis flere er valgt
+    if not nye_valg.empty:
+        valgt_navn = nye_valg.iloc[-1]['Navn']
         
-        # Hvis det er en ny spiller, eller vi ikke har åbnet den endnu
-        if nyeste_valg != st.session_state.sidste_valgte_navn:
-            st.session_state.sidste_valgte_navn = nyeste_valg
-            vis_spiller_modal(nyeste_valg, billed_map, career_df, df_raw)
-            
-            # Knap til at rydde alt, så tabellen nulstilles helt
-            if st.button("Luk profil og ryd alle markeringer", use_container_width=True):
-                st.session_state.sidste_valgte_navn = None
-                st.rerun()
+        # Åbn profil
+        vis_spiller_modal(valgt_navn, billed_map, career_df, df_raw)
+        
+        # NULSTILLING AF CHECKBOX:
+        # Ved at køre en rerun uden at gemme 'Se' i session_state, 
+        # vil tabellen vende tilbage til sin standard-tilstand (False) når dialogen lukkes.
+        if st.button("Luk og nulstil tabel", use_container_width=True):
+            st.rerun()
