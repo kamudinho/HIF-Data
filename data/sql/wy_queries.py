@@ -109,4 +109,27 @@ def get_wy_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
             WHERE s.SEASONNAME {s_f}
         """,
+        "opta_linebreaks": f"""
+            SELECT 
+                MATCH_OPTAUUID, LINEUP_CONTESTANTUUID, PLAYER_OPTAUUID, 
+                STAT_TYPE, STAT_VALUE, STAT_FH, STAT_SH
+            FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            )
+            {stats_filter.replace('CONTESTANT_OPTAUUID', 'LINEUP_CONTESTANTUUID')}
+        """,
+
+        "opta_expected_goals": f"""
+            SELECT 
+                MATCH_ID, CONTESTANT_OPTAUUID, PLAYER_OPTAUUID, 
+                STAT_TYPE, STAT_VALUE, POSITION, MATCH_DATE
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            )
+            {stats_filter}
+        """
     }
