@@ -62,6 +62,8 @@ def get_analysis_package(hif_only=False):
         "assists": df_assists,           # Bruges af avancerede analyser
         "qualifiers": df_quals,          # Bruges til event-filtrering
         "opta": {"matches": df_matches}, # Struktur for visse legacy tools
+        "players": load_local_players(),
+
         "config": {
             "liga_navn": comp_f,
             "season": season_f,
