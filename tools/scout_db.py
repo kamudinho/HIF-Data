@@ -68,30 +68,28 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.plotly_chart(fig_evo, use_container_width=True)
 
     # --- TAB 4: SÆSONSTATS (PLAYER_CAREER) ---
+    # --- TAB 4: SÆSONSTATS (PLAYER_CAREER) ---
     with t4:
         if career_df is not None:
-            # 1. Forbered data
             cdf = career_df.copy()
             cdf.columns = [str(c).upper() for c in cdf.columns]
             
-            # 2. Filtrér på PLAYER_WYID
             p_stats = cdf[cdf['PLAYER_WYID'].apply(rens_id) == pid].copy()
             
             if not p_stats.empty:
-                # 3. Aggregér data så hver sæson/hold/turnering kun optræder én gang
-                # Vi bruger sum() på de numeriske værdier
+                # TRICKET: Vi bruger .max() i stedet for .sum() 
+                # Dette henter den nyeste total pr. sæson/klub i stedet for at lægge dubletter sammen
                 agg_stats = p_stats.groupby(['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).agg({
-                    'MATCHES': 'sum',
-                    'MINUTES': 'sum',
-                    'GOALS': 'sum',
-                    'YELLOWCARD': 'sum',
-                    'REDCARDS': 'sum'
+                    'MATCHES': 'max',
+                    'MINUTES': 'max',
+                    'GOALS': 'max',
+                    'YELLOWCARD': 'max',
+                    'REDCARDS': 'max'
                 }).reset_index()
 
                 # Sortér så nyeste sæson er øverst
                 agg_stats = agg_stats.sort_values('SEASONNAME', ascending=False)
 
-                # Omdøb til dansk visning
                 mapping = {
                     'SEASONNAME': 'Sæson',
                     'TEAMNAME': 'Hold',
