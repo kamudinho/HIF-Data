@@ -18,8 +18,6 @@ def vis_side(dp):
     if not df_shots.empty and 'PLAYER_OPTAUUID' in df_shots.columns and 'PLAYER_NAME' in df_shots.columns:
         name_map = dict(zip(df_shots['PLAYER_OPTAUUID'], df_shots['PLAYER_NAME']))
 
-    st.markdown("### SPILLER PERFORMANCE ANALYSE")
-
     t1, t2, t3, t4 = st.tabs([
         "GENERELT", 
         "OFFENSIVT", 
