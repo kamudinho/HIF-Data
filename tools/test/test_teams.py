@@ -99,7 +99,7 @@ def vis_side(df_raw=None):
             logo = get_logo_url(opp_uuid, opp_name)
             
             # Alt på én linje uden mellemrum i koden
-            html_content = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_name}</span></div><span style="color:#888;font-size:11px;">{dato}</span>'
+            html_content = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_name}</span><span style="color:#888;font-size:11px;">{dato}</span></div>'
             next_opponents[uuid] = html_content
         else:
             next_opponents[uuid] = "-"
