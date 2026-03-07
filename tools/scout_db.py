@@ -31,30 +31,17 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
 
     # --- TAB 1: SENESTE RAPPORT ---
     with t1:
-        # Tre hovedkolonner: Tal, Radar, og Tekstbokse
         col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
-        
         with col_stats:
             st.markdown("**Vurderinger**")
             for k in keys:
                 st.write(f"**{k}:** {nyeste.get(k, 1)}")
-        
         with col_radar:
             r_vals = [float(str(nyeste.get(k, 1)).replace(',', '.')) for k in keys]
-            fig = go.Figure(data=go.Scatterpolar(
-                r=r_vals + [r_vals[0]], 
-                theta=labels + [labels[0]], 
-                fill='toself', 
-                line_color='#df003b'
-            ))
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[1, 6])),
-                showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20)
-            )
+            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=labels + [labels[0]], fill='toself', line_color='#df003b'))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20))
             st.plotly_chart(fig, use_container_width=True)
-
         with col_text:
-            # Tekstbokse vertikalt til højre for radarchart
             st.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
             st.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
@@ -80,32 +67,44 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         fig_evo.update_layout(yaxis=dict(range=[1, 6]), height=350, margin=dict(l=20, r=20, t=20, b=20))
         st.plotly_chart(fig_evo, use_container_width=True)
 
-    # --- TAB 4: SÆSONSTATS ---
+    # --- TAB 4: SÆSONSTATS (PLAYER_CAREER) ---
     with t4:
         if career_df is not None:
+            # 1. Forbered data
             cdf = career_df.copy()
             cdf.columns = [str(c).upper() for c in cdf.columns]
-            p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & 
-                          (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
+            
+            # 2. Filtrér på PLAYER_WYID
+            p_stats = cdf[cdf['PLAYER_WYID'].apply(rens_id) == pid].copy()
             
             if not p_stats.empty:
-                # Kolonner inkluderet: Kampe, Minutter, Mål, Assists, Gule kort, Røde kort
+                # 3. Aggregér data så hver sæson/hold/turnering kun optræder én gang
+                # Vi bruger sum() på de numeriske værdier
+                agg_stats = p_stats.groupby(['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).agg({
+                    'MATCHES': 'sum',
+                    'MINUTES': 'sum',
+                    'GOALS': 'sum',
+                    'YELLOWCARD': 'sum',
+                    'REDCARDS': 'sum'
+                }).reset_index()
+
+                # Sortér så nyeste sæson er øverst
+                agg_stats = agg_stats.sort_values('SEASONNAME', ascending=False)
+
+                # Omdøb til dansk visning
                 mapping = {
                     'SEASONNAME': 'Sæson',
                     'TEAMNAME': 'Hold',
-                    'APPEARANCES': 'Kampe',
-                    'MINUTESPLAYED': 'Minutter',
-                    'GOAL': 'Mål',
-                    'ASSIST': 'Assist',
-                    'YELLOWCARDS': 'Gule',
+                    'COMPETITIONNAME': 'Turnering',
+                    'MATCHES': 'Kampe',
+                    'MINUTES': 'Min.',
+                    'GOALS': 'Mål',
+                    'YELLOWCARD': 'Gule',
                     'REDCARDS': 'Røde'
                 }
-                # Filtrér kun de kolonner der findes i datasættet
-                available_cols = [c for c in mapping.keys() if c in p_stats.columns]
-                df_stats = p_stats[available_cols].rename(columns=mapping)
-                st.dataframe(df_stats, use_container_width=True, hide_index=True)
+                st.dataframe(agg_stats.rename(columns=mapping), use_container_width=True, hide_index=True)
             else:
-                st.write("Ingen sæsonstatistik fundet for 2025/2026.")
+                st.info("Ingen historisk karrierestatistik fundet.")
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "active_player" not in st.session_state:
