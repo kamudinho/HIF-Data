@@ -8,7 +8,6 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# Vi fjerner @st.dialog herfra og kalder den kun når vi er sikre på state
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
@@ -16,6 +15,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
+    # Header
     c1, c2 = st.columns([1, 3])
     with c1:
         st.image(img_url, width=150)
@@ -24,41 +24,92 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.write(f"Klub: {nyeste.get('Klub', 'Ukendt')} | Pos: {nyeste.get('Position', 'Ukendt')}")
         st.write(f"Rating: {nyeste.get('Rating_Avg', 0)} | Potentiale: {nyeste.get('Potentiale', '-')}")
 
-    t1, t2, t3, t4 = st.tabs(["Seneste & Radar", "Historik", "Udvikling", "Stats"])
+    t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
     
+    keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+    labels = ['Beslut.', 'Fart', 'Aggres.', 'Attitude', 'Udhold.', 'Leder', 'Teknik', 'Intell.']
+
+    # --- TAB 1: SENESTE RAPPORT ---
     with t1:
-        col_t, col_r = st.columns([1, 1.2])
-        with col_t:
-            st.markdown(f"**Dato:** {nyeste.get('Dato')}")
-            st.success(f"**Styrker:**\n\n{nyeste.get('Styrker', '-')}")
-            st.info(f"**Vurdering:**\n\n{nyeste.get('Vurdering', '-')}")
-            st.warning(f"**Fokus:**\n\n{nyeste.get('Udvikling', '-')}")
-        with col_r:
-            keys = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
-            labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-            r_vals = [float(str(nyeste.get(k, 0)).replace(',', '.')) for k in keys]
-            fig = go.Figure(data=go.Scatterpolar(r=r_vals+[r_vals[0]], theta=labels+[labels[0]], fill='toself', line_color='#df003b'))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20))
+        col_stats, col_radar = st.columns([1, 1.2])
+        with col_stats:
+            # Viser talværdierne fra den seneste rapport
+            for k in keys:
+                st.write(f"**{k}:** {nyeste.get(k, 1)}")
+        
+        with col_radar:
+            r_vals = [float(str(nyeste.get(k, 1)).replace(',', '.')) for k in keys]
+            fig = go.Figure(data=go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=labels + [labels[0]], 
+                fill='toself', 
+                line_color='#df003b'
+            ))
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6])), # Start ved 1 jf. ønske
+                showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20)
+            )
             st.plotly_chart(fig, use_container_width=True)
+        
+        # Boksene horisontalt nedenunder
+        b1, b2, b3 = st.columns(3)
+        b1.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
+        b2.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
+        b3.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
 
+    # --- TAB 2: HISTORIK ---
     with t2:
-        st.dataframe(spiller_historik[['Dato', 'Rating_Avg', 'Status', 'Vurdering', 'Scout']], use_container_width=True, hide_index=True)
+        for idx, rapport in spiller_historik.iterrows():
+            with st.expander(f"Rapport fra {rapport['Dato']}", expanded=(idx == spiller_historik.index[0])):
+                # Talværdier horisontalt
+                cols = st.columns(len(keys))
+                for i, k in enumerate(keys):
+                    cols[i].metric(labels[i], rapport.get(k, 1))
+                
+                # Tekstbokse horisontalt nedenfor tallene
+                st.write("---")
+                h1, h2, h3 = st.columns(3)
+                h1.markdown(f"**Styrker:**\n{rapport.get('Styrker', '-')}")
+                h2.markdown(f"**Udvikling:**\n{rapport.get('Udvikling', '-')}")
+                h3.markdown(f"**Vurdering:**\n{rapport.get('Vurdering', '-')}")
 
+    # --- TAB 3: UDVIKLING ---
     with t3:
         hist_evo = spiller_historik.sort_values('Dato')
-        st.line_chart(hist_evo.set_index('Dato')['Rating_Avg'])
+        fig_evo = go.Figure()
+        fig_evo.add_trace(go.Scatter(
+            x=hist_evo['Dato'], 
+            y=hist_evo['Rating_Avg'], 
+            mode='lines+markers', 
+            line_color='#df003b'
+        ))
+        fig_evo.update_layout(
+            yaxis=dict(range=[1, 6]), # 0-1 slettet, starter ved 1
+            height=350,
+            margin=dict(l=20, r=20, t=20, b=20)
+        )
+        st.plotly_chart(fig_evo, use_container_width=True)
 
+    # --- TAB 4: SÆSONSTATS (PLAYER_CAREER) ---
     with t4:
         if career_df is not None:
             cdf = career_df.copy()
+            # Standardiser kolonnenavne til store bogstaver for at undgå index-fejl
             cdf.columns = [str(c).upper() for c in cdf.columns]
-            req = ['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']
-            if all(col in cdf.columns for col in req):
-                p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
-                st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
+            
+            # Filtrér på PLAYER_WYID og Sæson
+            p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & 
+                          (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
+            
+            if not p_stats.empty:
+                req_cols = ['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'ASSIST', 'MINUTESPLAYED']
+                # Tjek hvilke kolonner der faktisk findes i din data
+                vis_cols = [c for c in req_cols if c in p_stats.columns]
+                st.dataframe(p_stats[vis_cols], use_container_width=True, hide_index=True)
+            else:
+                st.write("Ingen sæsonstatistik fundet for 2025/2026.")
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    # 1. Initialisering af State
     if "active_player" not in st.session_state:
         st.session_state.active_player = None
     if "editor_key" not in st.session_state:
@@ -77,11 +128,9 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Forbered visning
     df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # 2. Tabellen med dynamisk key
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -94,17 +143,12 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         key=f"editor_v{st.session_state.editor_key}"
     )
 
-    # 3. Handling ved klik
     valgte = ed_result[ed_result["Se"] == True]
-    
     if not valgte.empty:
-        # Gem navnet, tæl key op (nulstiller tabel) og genstart
         st.session_state.active_player = valgte.iloc[-1]['Navn']
         st.session_state.editor_key += 1
         st.rerun()
 
-    # 4. MODAL TRIGGER (Vigtigt: Denne kører EFTER rerun-tjekket)
     if st.session_state.active_player:
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
-        # Nulstil navnet med det samme, så dialogen kun trigger én gang pr. klik
         st.session_state.active_player = None
