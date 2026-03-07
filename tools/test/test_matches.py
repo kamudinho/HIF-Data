@@ -70,7 +70,7 @@ def vis_side(dp):
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
 
-    # --- BEREGN STATS BOKSE (GENINDFØRT) ---
+    # --- BEREGN STATS BOKSE ---
     played_matches = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
     s = {"K": 0, "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played_matches.iterrows():
@@ -91,47 +91,41 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- TEGN KAMPE ---
-def tegn_kampe(df, is_played):
-    if df.empty:
-        st.info("Ingen kampe fundet.")
-        return
-    
-    danske_dage = {"Monday": "Mandag", "Tuesday": "Tirsdag", "Wednesday": "Onsdag", "Thursday": "Torsdag", "Friday": "Fredag", "Saturday": "Lørdag", "Sunday": "Søndag"}
-    danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
+    # --- HJÆLPEFUNKTION TIL AT TEGNE KAMPE (SKAL VÆRE INDRYKKET) ---
+    def tegn_kampe(df, is_played):
+        if df.empty:
+            st.info("Ingen kampe fundet.")
+            return
+        
+        danske_dage = {"Monday": "Mandag", "Tuesday": "Tirsdag", "Wednesday": "Onsdag", "Thursday": "Torsdag", "Friday": "Fredag", "Saturday": "Lørdag", "Sunday": "Søndag"}
+        danske_maaneder = {"January": "januar", "February": "februar", "March": "marts", "April": "april", "May": "maj", "June": "juni", "July": "juli", "August": "august", "September": "september", "October": "oktober", "November": "november", "December": "december"}
 
-    for _, row in df.iterrows():
-        # Konvertér til datetime og formatér tidspunkt
-        dt = pd.to_datetime(row['MATCH_DATE_FULL'])
-        dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
-        maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
-        tidspunkt = dt.strftime('%H:%M') # Her henter vi selve tiden
-        
-        st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
-        
-        with st.container(border=True):
-            c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+        for _, row in df.iterrows():
+            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
+            maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
+            tidspunkt = dt.strftime('%H:%M')
             
-            # Hjemmehold
-            h_uuid = row['CONTESTANTHOME_OPTAUUID']
-            c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
-            c2.image(hent_hold_logo(h_uuid), width=28)
+            st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
             
-            # Center (Score eller Tidspunkt)
-            if is_played:
-                c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
-            else:
-                # VISER TIDSPUNKTET HER FOR KOMMENDE KAMPE
-                c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
-            
-            # Udehold
-            a_uuid = row['CONTESTANTAWAY_OPTAUUID']
-            c4.image(hent_hold_logo(a_uuid), width=28)
-            c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
-            
-            # Statistik (kun hvis kampen er spillet)
-            if is_played:
-                st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+            with st.container(border=True):
+                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                
+                h_uuid = row['CONTESTANTHOME_OPTAUUID']
+                c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{id_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])}</div>", unsafe_allow_html=True)
+                c2.image(hent_hold_logo(h_uuid), width=28)
+                
+                if is_played:
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
+                else:
+                    c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
+                
+                a_uuid = row['CONTESTANTAWAY_OPTAUUID']
+                c4.image(hent_hold_logo(a_uuid), width=28)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
+                
+                if is_played:
+                    st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
                     stats_map = [
                         ("Besiddelse", "possessionPercentage", "%"), 
@@ -149,6 +143,7 @@ def tegn_kampe(df, is_played):
 
                         sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{h_val}{suff}-{a_val}{suff}</div></div>", unsafe_allow_html=True)
 
+    # --- SELVE TABS LAYOUTET ---
     tab_res, tab_fix = st.tabs(["Resultater", "Kommende kampe"])
     with tab_res:
         tegn_kampe(team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played'].sort_values('MATCH_DATE_FULL', ascending=False), True)
