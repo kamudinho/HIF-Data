@@ -39,22 +39,35 @@ def vis_side(dp):
     # Fallback hvis navnet mangler
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
-    # Beregn xG pr. 90 min
-    if 'minsPlayed' in pivot_stats.columns and 'expectedGoals' in pivot_stats.columns:
-        pivot_stats['xG_90'] = (pivot_stats['expectedGoals'] / pivot_stats['minsPlayed'].replace(0, 1) * 90)
+    # Beregn stats pr. 90 min (hvis data er til stede)
+    if 'minsPlayed' in pivot_stats.columns:
+        # Vi sikrer os mod division med 0 ved at bruge .clip(lower=1)
+        mins = pivot_stats['minsPlayed'].clip(lower=1)
+        
+        if 'expectedGoals' in pivot_stats.columns:
+            pivot_stats['xG_90'] = (pivot_stats['expectedGoals'] / mins * 90)
+        
+        if 'expectedAssists' in pivot_stats.columns:
+            pivot_stats['xA_90'] = (pivot_stats['expectedAssists'] / mins * 90)
+            
+        if 'expectedGoalsNonpenalty' in pivot_stats.columns:
+            pivot_stats['npxG_90'] = (pivot_stats['expectedGoalsNonpenalty'] / mins * 90)
     else:
         pivot_stats['xG_90'] = 0
+        pivot_stats['xA_90'] = 0
+        pivot_stats['npxG_90'] = 0
 
-    # --- 4. VISNING I TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs([
-        "TRUP OVERSIGT", 
-        "INDIVIDUEL ANALYSE", 
-        "LINEBREAKS"
-    ])
-
+    # --- VISNING I TABELLEN ---
     with tab_squad:
+        st.subheader("Leaderboard: Sæsonstatistik")
         
-        display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'expectedAssists', 'expectedGoalsNonpenalty', 'xG_90']
+        # Tilføj de nye kolonner til listen over hvad der skal vises
+        display_cols = [
+            'NAVN', 'minsPlayed', 
+            'expectedGoals', 'xG_90', 
+            'expectedAssists', 'xA_90', 
+            'expectedGoalsNonpenalty', 'npxG_90'
+        ]
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
         
         df_table = pivot_stats[final_cols].sort_values('expectedGoals', ascending=False)
@@ -65,12 +78,14 @@ def vis_side(dp):
                 "NAVN": st.column_config.TextColumn("Spiller"),
                 "minsPlayed": st.column_config.NumberColumn("Minutter", format="%d"),
                 "expectedGoals": st.column_config.NumberColumn("Total xG", format="%.2f"),
-                "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
+                "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f"),
                 "expectedGoalsNonpenalty": st.column_config.NumberColumn("npxG", format="%.2f"),
-                "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f")
+                "npxG_90": st.column_config.NumberColumn("npxG/90", format="%.2f"),
+                "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
+                "xA_90": st.column_config.NumberColumn("xA/90", format="%.2f")
+
             },
             use_container_width=True,
-            height=1000,
             hide_index=True
         )
 
