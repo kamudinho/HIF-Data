@@ -39,7 +39,7 @@ def vis_side(dp):
     # Fallback hvis navnet mangler
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
-    # Beregn stats pr. 90 min (hvis data er til stede)
+    # 4. Beregn stats pr. 90 min
     if 'minsPlayed' in pivot_stats.columns:
         # Vi sikrer os mod division med 0 ved at bruge .clip(lower=1)
         mins = pivot_stats['minsPlayed'].clip(lower=1)
@@ -57,11 +57,18 @@ def vis_side(dp):
         pivot_stats['xA_90'] = 0
         pivot_stats['npxG_90'] = 0
 
-    # --- VISNING I TABELLEN ---
+    # --- DEFINITION AF TABS (Skal ske før de bruges med 'with') ---
+    tab_squad, tab_single, tab_lb = st.tabs([
+        "TRUP OVERSIGT", 
+        "INDIVIDUEL ANALYSE", 
+        "LINEBREAKS"
+    ])
+
+    # --- 5. VISNING I TABELLEN ---
     with tab_squad:
         st.subheader("Leaderboard: Sæsonstatistik")
         
-        # Tilføj de nye kolonner til listen over hvad der skal vises
+        # Kolonner der skal vises
         display_cols = [
             'NAVN', 'minsPlayed', 
             'expectedGoals', 'xG_90', 
@@ -83,7 +90,6 @@ def vis_side(dp):
                 "npxG_90": st.column_config.NumberColumn("npxG/90", format="%.2f"),
                 "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
                 "xA_90": st.column_config.NumberColumn("xA/90", format="%.2f")
-
             },
             use_container_width=True,
             hide_index=True
