@@ -19,7 +19,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     return {
         "opta_matches": f"""
             SELECT 
-                MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_LOCALTIME, MATCH_STATUS, 
+                MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS, 
                 TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, WINNER,
                 MATCH_LOCALTIME, CONTESTANTHOME_OPTAUUID, 
                 CONTESTANTAWAY_OPTAUUID, CONTESTANTHOME_NAME, 
