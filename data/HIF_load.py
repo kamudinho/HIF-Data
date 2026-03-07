@@ -5,11 +5,15 @@ from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
 
 def get_scouting_package():
-    """Henter data og sikrer billeder og stats til alle scoutede spillere"""
+    # Nu kan vi kalde den, og den vil bygge ALLE queries uden fejl
+    queries = get_wy_queries(None, None)
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
     queries = get_wy_queries(None, None)
 
+    saeson = "2025/2026" 
+    liga = "1. Division"
+    
     # 1. Hent scouting CSV (din historik)
     try:
         path = os.path.join(os.getcwd(), 'data', 'scouting_db.csv')
