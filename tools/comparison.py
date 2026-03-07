@@ -152,7 +152,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
 
     # RADAR (CENTER)
     with col_center:
-        labels = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        labels = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         fig = go.Figure()
         
         # P1 Data
