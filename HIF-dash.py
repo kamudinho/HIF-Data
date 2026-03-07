@@ -178,7 +178,12 @@ try:
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
-        dp = analyse_load.get_analysis_package()
+        # Vi definerer hif_only her: True hvis vi er i analyse, False hvis vi er i ligaen
+        is_hif_mode = (hoved_omraade == "HIF ANALYSE")
+        dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
+        
+        # Gem i session state så tools kan tilgå det
+        st.session_state["dp"] = dp
         
         if hoved_omraade == "HIF ANALYSE":
             if sel == "Afslutninger":
