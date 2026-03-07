@@ -53,7 +53,6 @@ def vis_side(dp):
     ])
 
     with tab_squad:
-        st.subheader("Leaderboard: Sæsonstatistik")
         
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'expectedAssists', 'expectedGoalsNonpenalty', 'xG_90']
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
