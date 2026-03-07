@@ -7,7 +7,7 @@ import pandas as pd
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Sørg for at disse linjer IKKE har mellemrum foran sig
+# NYE IMPORTS (Splitte data-loads)
 import data.HIF_load as hif_load
 import data.Analyse_load as analyse_load
 from data.users import get_users
@@ -25,37 +25,37 @@ st.set_page_config(
 
 # Centraliseret CSS
 st.markdown(f"""
-   <style>
-       .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
-       header {{ visibility: hidden; height: 0px; }}
-       .hif-header-container {{
-           background-color: {HIF_ROD};
-           height: 50px;
-           display: flex;
-           align-items: center;
-           justify-content: center;
-           border-radius: 4px;
-           margin-bottom: 15px;
-           width: 100%;
-           border-bottom: 3px solid {HIF_GULD};
-       }}
-       .hif-header-text {{
-           color: white !important;
-           margin: 0 !important;
-           text-transform: uppercase;
-           letter-spacing: 2px;
-           font-size: 1.1rem;
-           font-weight: 600;
-           font-family: sans-serif;
-           line-height: 50px;
-       }}
-       button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
-       button[data-baseweb="tab"][aria-selected="true"] {{ 
-           color: {HIF_ROD} !important; 
-           border-bottom-color: {HIF_ROD} !important; 
-       }}
-       section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
-   </style>
+    <style>
+        .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
+        header {{ visibility: hidden; height: 0px; }}
+        .hif-header-container {{
+            background-color: {HIF_ROD};
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            width: 100%;
+            border-bottom: 3px solid {HIF_GULD};
+        }}
+        .hif-header-text {{
+            color: white !important;
+            margin: 0 !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: sans-serif;
+            line-height: 50px;
+        }}
+        button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
+        button[data-baseweb="tab"][aria-selected="true"] {{ 
+            color: {HIF_ROD} !important; 
+            border-bottom-color: {HIF_ROD} !important; 
+        }}
+        section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
+    </style>
 """, unsafe_allow_html=True)
 
 def render_hif_header(titel):
@@ -87,17 +87,17 @@ if not st.session_state["logged_in"]:
                     st.rerun()
                 else:
                     st.error("Ugyldig bruger eller kode")
-        st.stop()
+    st.stop()
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='80'></div>", unsafe_allow_html=True)
-
+    
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = user_info.get("restricted", [])
     synlige_options = [o for o in alle_omraader if o not in restriktioner]
-
+    
     hoved_omraade = option_menu(
         None,
         options=synlige_options,
@@ -107,16 +107,16 @@ with st.sidebar:
             "nav-link": {"font-weight": "400"}
         }
     )
-
+    
     st.markdown("---")
-
+    
     sel = ""
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Afslutninger", "Spillerperformance"],
-                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
+    sel = option_menu(None, options=["Afslutninger", "Spillerperformance"], # Tilføj denne
+                     styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
@@ -138,48 +138,62 @@ try:
     # SEKTION A: TRUPPEN & SCOUTING (HIF_load - Primært CSV/Wyscout)
     if hoved_omraade in ["TRUPPEN", "SCOUTING"]:
         dp = hif_load.get_scouting_package()
-
+        
         if hoved_omraade == "TRUPPEN":
+            # Sørg for at vi sender dp["players"] (din players.csv) ind
             if sel == "Oversigt":
                 import tools.players as pl
+                # Her skal vi sikre os, at vi sender DataFrame'en
                 pl.vis_side(dp["players"]) 
-
+                
             elif sel == "Forecast":
                 import tools.squad as sq
+                # Her skal vi også sende DataFrame'en
                 sq.vis_side(dp["players"])
-
+                    
         elif hoved_omraade == "SCOUTING":
             if sel == "Scoutrapport":
                 import tools.scout_input as si
                 si.vis_side(dp)
             elif sel == "Database":
                 import tools.scout_db as sdb
-                sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
+                # Vi sender dp["scout_reports"] som det første argument
+                sdb.vis_side(
+                    dp["scout_reports"], 
+                    dp["players"], 
+                    dp["sql_players"], 
+                    dp["career"]
+                )
             elif sel == "Sammenligning":
                 import tools.comparison as comp
-                comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
+                # Nu sender vi de rigtige data-pakker med:
+                comp.vis_side(
+                    dp["players"],      # df_spillere
+                    None,               # d1 (ikke brugt pt)
+                    None,               # d2 (ikke brugt pt)
+                    dp["career"],       # career_df
+                    dp["sql_players"],   # HER ER BILLEDERNE! (d3)
+                    dp["advanced_stats"]
+                )
 
-    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA + Navne-mapping)
+    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
+        # Vi definerer hif_only her: True hvis vi er i analyse, False hvis vi er i ligaen
         is_hif_mode = (hoved_omraade == "HIF ANALYSE")
-        
-        # 1. Hent SQL data (xG, Linebreaks osv.)
         dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
-
-        # 2. Hent spillernavne fra CSV og læg dem ind i pakken
-        scouting_data = hif_load.get_scouting_package()
-        dp["players"] = scouting_data.get("players") 
         
+        # Gem i session state så tools kan tilgå det
         st.session_state["dp"] = dp
-
+        
+        # I din rendering-sektion i main.py:
         if hoved_omraade == "HIF ANALYSE":
             if sel == "Afslutninger":
                 import tools.shotmap as sm
                 sm.vis_side(dp)
-            elif sel == "Spillerperformance":
+            elif sel == "Spillerperformance": # Tilføj denne blok
                 import tools.player_analysis as pa
                 pa.vis_side(dp)
-
+        
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
                 import tools.test.test_teams as tt
