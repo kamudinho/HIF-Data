@@ -8,21 +8,7 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# CALLBACK: Håndterer klik og nulstiller de andre
-def handle_click():
-    state = st.session_state.db_editor_key
-    if state and state.get("edited_rows"):
-        edited = state["edited_rows"]
-        # Find det seneste index
-        latest_idx = list(edited.keys())[-1]
-        
-        # Hvis rækken er markeret som True
-        if edited[latest_idx].get("Se") == True:
-            # Hent navnet fra det dataframe vi gemte i session_state
-            df = st.session_state.temp_df
-            st.session_state.valgt_spiller_navn = df.iloc[int(latest_idx)]["Navn"]
-            st.session_state.show_modal = True
-
+# --- MODAL VINDU ---
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
@@ -71,14 +57,11 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
                 st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
 
+# --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    # --- INITIALISERING AF SESSION STATE ---
+    # Initialisering
     if "valgt_spiller_navn" not in st.session_state:
         st.session_state.valgt_spiller_navn = None
-    if "show_modal" not in st.session_state:
-        st.session_state.show_modal = False
-    if "temp_df" not in st.session_state:
-        st.session_state.temp_df = pd.DataFrame()
 
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
@@ -86,23 +69,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_raw['Dato'] = pd.to_datetime(df_raw['Dato'])
         df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
         df_unique['Dato'] = df_unique['Dato'].dt.date
-        
-        # Gem i session state til callback
-        st.session_state.temp_df = df_unique.reset_index(drop=True)
     except Exception as e:
-        st.error(f"Fejl ved indlæsning af Database: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
         return
 
     billed_map = {}
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Forbered tabel-visning
-    df_display = st.session_state.temp_df[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
+    # Forbered tabel uden at gemme 'Se' i selve dataen permanent
+    df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # Tabel editor
-    st.data_editor(
+    # Vi bruger 'key' til at nulstille editoren manuelt hvis nødvendigt
+    ed_result = st.data_editor(
         df_display,
         column_config={
             "Se": st.column_config.CheckboxColumn("Profil", default=False),
@@ -111,15 +91,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
-        key="db_editor_key",
-        on_change=handle_click
+        key="db_editor"
     )
 
-    # Kontrol af modal-visning
-    if st.session_state.show_modal and st.session_state.valgt_spiller_navn:
-        vis_spiller_modal(st.session_state.valgt_spiller_navn, billed_map, career_df, df_raw)
+    # Tjek om en ny boks er markeret
+    nye_valg = ed_result[ed_result["Se"] == True]
+    
+    if not nye_valg.empty:
+        # Hent den valgte spiller
+        valgt = nye_valg.iloc[-1]['Navn']
         
-        # Nulstil så den ikke popper op igen automatisk
-        st.session_state.show_modal = False
-        # Vi kører rerun for at rydde checkboxen i UI'en med det samme
-        st.rerun()
+        # Hvis vi har et nyt valg, åbner vi modalen
+        vis_spiller_modal(valgt, billed_map, career_df, df_raw)
+        
+        # I stedet for automatisk rerun, lader vi brugeren rydde valget manuelt
+        # eller vi kan rydde det ved at genindlæse siden via en knap
+        if st.button("Ryd valg i tabellen"):
+            st.rerun()
