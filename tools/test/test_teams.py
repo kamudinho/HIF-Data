@@ -76,19 +76,37 @@ def vis_side(df_raw=None):
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    # Find næste modstander
+    # Find næste modstander - Sorteret kronologisk så vi fanger den AKTUELE næste kamp
     next_opponents = {}
+    
+    # Vi tager kun de kommende kampe og sorterer dem efter dato (vigtigt!)
     df_upcoming = df[df['MATCH_STATUS'] != 'Played'].copy()
+    df_upcoming['MATCH_DATE_FULL'] = pd.to_datetime(df_upcoming['MATCH_DATE_FULL'])
+    df_upcoming = df_upcoming.sort_values('MATCH_DATE_FULL', ascending=True)
+
     for uuid in stats.keys():
-        next_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | 
-                             (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)].head(1)
-        if not next_m.empty:
-            row = next_m.iloc[0]
+        # Find alle kommende kampe for dette specifikke hold
+        future_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | 
+                               (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+        
+        if not future_m.empty:
+            # Nu tager vi den absolut første (nærmeste) kamp efter sortering
+            row = future_m.iloc[0]
             is_home = row['CONTESTANTHOME_OPTAUUID'] == uuid
             opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
             opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
+            
+            # Formatér datoen så brugeren kan se HVORNÅR kampen er (godt til fejlfinding)
+            kamp_dato = row['MATCH_DATE_FULL'].strftime('%d/%m')
             opp_logo = get_logo_url(opp_uuid, opp_name)
-            next_opponents[uuid] = f'<div style="display: flex; align-items: left; justify-content: left;"><img src="{opp_logo}" width="18" style="margin-right:5px;"> {opp_name}</div>'
+            
+            next_opponents[uuid] = f"""
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 5px;">
+                    <span style="color: #888; font-size: 11px;">{kamp_dato}</span>
+                    <img src="{opp_logo}" width="18">
+                    <span>{opp_name}</span>
+                </div>
+            """
         else:
             next_opponents[uuid] = "-"
 
