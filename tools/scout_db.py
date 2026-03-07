@@ -14,31 +14,35 @@ def vis_spiller_modal(spiller_data, billed_map, career_df, alle_rapporter):
     navn = spiller_data.get('Navn', 'Ukendt')
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
-    # Header
+    # 1. Header
     c1, c2 = st.columns([1, 3])
     with c1:
         st.image(img_url, width=150)
     with c2:
         st.subheader(navn)
-        st.write(f"**Klub:** {spiller_data.get('Klub', 'Ukendt')} | **Pos:** {spiller_data.get('Position', 'Ukendt')}")
+        st.write(f"**Klub:** {spiller_data.get('Klub', 'Hvidovre IF')} | **Pos:** {spiller_data.get('Position', 'Ukendt')}")
         st.write(f"**Rating:** {spiller_data.get('Rating_Avg', 0)} ⭐ | **Potentiale:** {spiller_data.get('Potentiale', '-')}")
 
-    # Nye faner baseret på dine ønsker
-    t1, t2, t3, t4 = st.tabs(["📊 Seneste Rapport & Radar", "📜 Historik", "📈 Udvikling", "⚽ Stats"])
+    # 2. Tabs
+    t1, t2, t3, t4 = st.tabs(["📝 Rapport & Radar", "📜 Historik", "📈 Udvikling", "⚽ Stats"])
     
     with t1:
-        # Rapport og Radar i én tab
         col_text, col_radar = st.columns([1, 1.2])
         with col_text:
-            st.markdown(f"**Dato:** {spiller_data.get('Dato')}")
+            st.markdown(f"**Seneste Dato:** {spiller_data.get('Dato')}")
             st.success(f"**Styrker:**\n\n{spiller_data.get('Styrker', '-')}")
             st.info(f"**Vurdering:**\n\n{spiller_data.get('Vurdering', '-')}")
             st.warning(f"**Fokus:**\n\n{spiller_data.get('Udvikling', '-')}")
-            
+        
         with col_radar:
             labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
             keys = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
-            r_values = [float(str(spiller_data.get(k, 0)).replace(',', '.')) for k in keys]
+            r_values = []
+            for k in keys:
+                try:
+                    v = float(str(spiller_data.get(k, 0)).replace(',', '.'))
+                    r_values.append(v if v > 0 else 0.1)
+                except: r_values.append(0.1)
             
             fig = go.Figure()
             fig.add_trace(go.Scatterpolar(r=r_values + [r_values[0]], theta=labels + [labels[0]], fill='toself', line_color='#df003b'))
@@ -46,62 +50,60 @@ def vis_spiller_modal(spiller_data, billed_map, career_df, alle_rapporter):
             st.plotly_chart(fig, use_container_width=True)
 
     with t2:
-        # Historik - Viser alle rapporter for denne spiller
-        st.markdown(f"**Alle rapporter for {navn}**")
         hist = alle_rapporter[alle_rapporter['Navn'] == navn].sort_values('Dato', ascending=False)
         st.dataframe(hist[['Dato', 'Rating_Avg', 'Status', 'Vurdering', 'Scout']], use_container_width=True, hide_index=True)
 
     with t3:
-        # Udvikling - Gennemsnitsrating over tid
-        st.markdown("**Rating-udvikling**")
         hist_plot = alle_rapporter[alle_rapporter['Navn'] == navn].sort_values('Dato')
-        if len(hist_plot) > 1:
-            fig_line = go.Figure()
-            fig_line.add_trace(go.Scatter(x=hist_plot['Dato'], y=hist_plot['Rating_Avg'], mode='lines+markers', line_color='#df003b'))
-            fig_line.update_layout(height=300, yaxis=dict(range=[0, 6]), margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig_line, use_container_width=True)
-        else:
-            st.write(f"Nuværende gennemsnit: {hist_plot['Rating_Avg'].mean():.2f} ⭐")
-            st.caption("Kræver mere end én rapport for at tegne en graf.")
+        st.write(f"Gennemsnitsrating over tid for {navn}")
+        st.line_chart(hist_plot.set_index('Dato')['Rating_Avg'])
 
     with t4:
-        # Stats - Player Career
         if career_df is not None and not career_df.empty:
             cdf = career_df.copy()
             cdf.columns = [str(c).upper() for c in cdf.columns]
             p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
-            if not p_stats.empty:
-                st.dataframe(p_stats[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']], use_container_width=True, hide_index=True)
-            else:
-                st.write("Ingen karriere-data fundet.")
+            st.dataframe(p_stats[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']], use_container_width=True, hide_index=True)
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
+    st.markdown("### 📋 Scouting Database")
+
+    # Load data
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].apply(rens_id)
-        df_s = df_s.sort_values('Dato', ascending=False)
-    except:
-        st.error("Kunne ikke læse databasen.")
+        # Tilføj en midlertidig kolonne til checkboxen
+        df_s.insert(0, "Åbn", False)
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning: {e}")
         return
 
+    # Billed-map
     billed_map = {}
-    if sql_players is not None:
+    if sql_players is not None and not sql_players.empty:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Databaseoversigt
-    st.markdown("### 📋 Scouting Database")
-    h_cols = st.columns([0.8, 2, 1.5, 1, 1, 1])
-    headers = ["Profil", "Navn", "Klub", "Pos", "Rating", "Pot."]
-    for i, h in enumerate(headers): h_cols[i].markdown(f"**{h}**")
-    st.divider()
+    # Konfigurer kolonne-visning i Dataframe
+    # Vi bruger data_editor så checkboxen kan klikkes
+    ed_df = st.data_editor(
+        df_s,
+        column_config={
+            "Åbn": st.column_config.CheckboxColumn("Profil", help="Klik for at åbne spillerprofilen", default=False),
+            "PLAYER_WYID": None, # Skjul ID-kolonnen
+            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f ⭐"),
+        },
+        disabled=[c for c in df_s.columns if c != "Åbn"], # Kun checkboxen må klikkes
+        hide_index=True,
+        use_container_width=True,
+        key="db_editor"
+    )
 
-    for i, row in df_s.iterrows():
-        r_cols = st.columns([0.8, 2, 1.5, 1, 1, 1])
-        if r_cols[0].button("Se", key=f"v_{i}", use_container_width=True):
-            vis_spiller_modal(row, billed_map, career_df, df_s)
-        
-        r_cols[1].write(row.get('Navn', '-'))
-        r_cols[2].write(row.get('Klub', '-'))
-        r_cols[3].write(row.get('Position', '-'))
-        r_cols[4].write(f"{row.get('Rating_Avg', 0)} ⭐")
-        r_cols[5].write(row.get('Potentiale', '-'))
+    # Tjek om en checkbox er blevet markeret
+    # Vi finder rækken hvor 'Åbn' er True
+    valgt_raekke = ed_df[ed_df['Åbn'] == True]
+    
+    if not valgt_raekke.empty:
+        # Åbn modal for den første valgte række
+        vis_spiller_modal(valgt_raekke.iloc[0], billed_map, career_df, df_s)
+        # Reset checkboxen (valgfrit, men rart så man kan klikke igen)
+        # st.rerun() # Kan tilføjes hvis nødvendigt
