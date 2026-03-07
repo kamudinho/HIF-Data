@@ -8,7 +8,6 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- MODAL VINDU ---
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
@@ -57,11 +56,10 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 p_stats = cdf[(cdf['PLAYER_WYID'].apply(rens_id) == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
                 st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
 
-# --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    # Initialisering
-    if "valgt_spiller_navn" not in st.session_state:
-        st.session_state.valgt_spiller_navn = None
+    # 1. Initialiser state-counter hvis den ikke findes
+    if "db_key_counter" not in st.session_state:
+        st.session_state.db_key_counter = 0
 
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
@@ -70,18 +68,18 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
         df_unique['Dato'] = df_unique['Dato'].dt.date
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
         return
 
     billed_map = {}
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Forbered tabel uden at gemme 'Se' i selve dataen permanent
+    # Forbered visning
     df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # Vi bruger 'key' til at nulstille editoren manuelt hvis nødvendigt
+    # 2. Vis tabellen med en dynamisk KEY
+    # Når key ændrer sig, nulstilles tabellen (og alle checkboxes)
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -91,20 +89,21 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
-        key="db_editor"
+        key=f"editor_{st.session_state.db_key_counter}"
     )
 
-    # Tjek om en ny boks er markeret
+    # 3. Logik for valg
     nye_valg = ed_result[ed_result["Se"] == True]
     
     if not nye_valg.empty:
-        # Hent den valgte spiller
-        valgt = nye_valg.iloc[-1]['Navn']
+        # Gem valget
+        valgt_navn = nye_valg.iloc[-1]['Navn']
         
-        # Hvis vi har et nyt valg, åbner vi modalen
-        vis_spiller_modal(valgt, billed_map, career_df, df_raw)
+        # Åbn modalen
+        vis_spiller_modal(valgt_navn, billed_map, career_df, df_raw)
         
-        # I stedet for automatisk rerun, lader vi brugeren rydde valget manuelt
-        # eller vi kan rydde det ved at genindlæse siden via en knap
-        if st.button("Ryd valg i tabellen"):
-            st.rerun()
+        # 4. TRICKET: Tæl counteren op og kør rerun. 
+        # Da dialogen (modal) allerede er åbnet, bliver den liggende, 
+        # men baggrunden (tabellen) tegnes forfra og rydder alle flueben.
+        st.session_state.db_key_counter += 1
+        st.rerun()
