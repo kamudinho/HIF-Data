@@ -24,14 +24,12 @@ def get_analysis_package(hif_only=False):
     # 2. Hent din oversættelses-nøgle (players.csv)
     df_local = load_local_players()
     name_map = {}
-    
     if df_local is not None and not df_local.empty:
-        # Standardiser kolonner på CSV'en
-        df_local.columns = [str(c).upper().strip() for c in df_local.columns]
-        # Byg mapping { 'uuid': 'Navn' }
-        if 'PLAYER_OPTAUUID' in df_local.columns and 'NAVN' in df_local.columns:
-            name_map = dict(zip(df_local['PLAYER_OPTAUUID'].astype(str), df_local['NAVN']))
-
+        name_map = dict(zip(
+            df_local['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower(), 
+            df_local['NAVN'].astype(str).str.strip()
+        ))
+        
     # 3. Standardisering af Snowflake DataFrames
     dfs_to_clean = {
         "matches": df_matches, "shots": df_shots, "linebreaks": df_linebreaks,
@@ -76,5 +74,6 @@ def get_analysis_package(hif_only=False):
             "season": season_f,
             "colors": TEAM_COLORS
         },
-        "logo_map": {}                   # Kan populeres senere hvis nødvendigt
+        "logo_map": {}, 
+        "name_map": name_map # Kan populeres senere hvis nødvendigt
     }
