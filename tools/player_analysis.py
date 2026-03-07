@@ -71,7 +71,7 @@ def vis_side(dp):
                 "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f")
             },
             use_container_width=True,
-            height=5000,
+            height=30,
             hide_index=True
         )
 
