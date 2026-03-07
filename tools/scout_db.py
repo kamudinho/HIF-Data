@@ -21,9 +21,8 @@ def map_position(pos_code):
     clean_pos = rens_id(pos_code)
     return pos_dict.get(clean_pos, "Ukendt")
 
-def vis_side(df_spillere, d1, d2, career_df, sql_players):
+def vis_side(df_spillere, d1, d2, career_df, sql_players, advanced_stats_df=None):
     # --- 1. DATA PREP ---
-    # Vi bruger sql_players (d3) til billed-opslag, præcis som i din profil-fil
     billed_map = {}
     if sql_players is not None and not sql_players.empty:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
@@ -34,7 +33,7 @@ def vis_side(df_spillere, d1, d2, career_df, sql_players):
         df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].apply(rens_id)
     except:
         df_s = pd.DataFrame()
-
+        
     # Spillerliste til selectbox
     navne_liste = sorted(list(set(df_s['Navn'].tolist() if not df_s.empty else [])))
     
@@ -49,18 +48,25 @@ def vis_side(df_spillere, d1, d2, career_df, sql_players):
 
     def hent_alle_data(navn):
         if df_s.empty: return None
-        
-        # Find nyeste scouting rapport for navnet
         s_match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
         if s_match.empty: return None
         
         n = s_match.iloc[0]
         pid = rens_id(n.get('PLAYER_WYID'))
         
-        # Hent billede fra map (SQL) eller fallback til CDN
+        # Hent billede
         img_url = billed_map.get(pid)
         if not img_url:
             img_url = f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
+
+        # --- NYT: Hent Advanced Stats (Wyscout P90) ---
+        adv_data = None
+        if advanced_stats_df is not None:
+            # Her genbruger vi din logik fra tidligere eller laver en simpel version:
+            p_row = advanced_stats_df[advanced_stats_df['PLAYER_WYID'].apply(rens_id) == pid]
+            if not p_row.empty:
+                r_adv = p_row.iloc[0]
+                adv_data = {"DUELLER %": round(float(r_adv.get('DUELSWON', 0)) / float(r_adv.get('DUELS', 1)) * 100, 1) if float(r_adv.get('DUELS', 0)) > 0 else 0}
 
         res = {
             "navn": navn,
@@ -68,6 +74,7 @@ def vis_side(df_spillere, d1, d2, career_df, sql_players):
             "img": img_url,
             "klub": n.get('Klub', 'Ukendt'),
             "pos": map_position(n.get('Pos', '')),
+            "adv": adv_data, # Gemmer de avancerede stats her
             "scout": {
                 "Styrker": n.get('Styrker', '-'),
                 "Vurdering": n.get('Vurdering', '-'),
