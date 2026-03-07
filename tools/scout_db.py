@@ -8,6 +8,7 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
+# Vi fjerner @st.dialog herfra og kalder den kun når vi er sikre på state
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('Dato', ascending=False)
@@ -57,9 +58,11 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    # 1. Initialiser state-counter hvis den ikke findes
-    if "db_key_counter" not in st.session_state:
-        st.session_state.db_key_counter = 0
+    # 1. Initialisering af State
+    if "active_player" not in st.session_state:
+        st.session_state.active_player = None
+    if "editor_key" not in st.session_state:
+        st.session_state.editor_key = 0
 
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
@@ -67,7 +70,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_raw['Dato'] = pd.to_datetime(df_raw['Dato'])
         df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
         df_unique['Dato'] = df_unique['Dato'].dt.date
-    except Exception as e:
+    except:
         return
 
     billed_map = {}
@@ -78,8 +81,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # 2. Vis tabellen med en dynamisk KEY
-    # Når key ændrer sig, nulstilles tabellen (og alle checkboxes)
+    # 2. Tabellen med dynamisk key
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -89,21 +91,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato'],
         hide_index=True,
         use_container_width=True,
-        key=f"editor_{st.session_state.db_key_counter}"
+        key=f"editor_v{st.session_state.editor_key}"
     )
 
-    # 3. Logik for valg
-    nye_valg = ed_result[ed_result["Se"] == True]
+    # 3. Handling ved klik
+    valgte = ed_result[ed_result["Se"] == True]
     
-    if not nye_valg.empty:
-        # Gem valget
-        valgt_navn = nye_valg.iloc[-1]['Navn']
-        
-        # Åbn modalen
-        vis_spiller_modal(valgt_navn, billed_map, career_df, df_raw)
-        
-        # 4. TRICKET: Tæl counteren op og kør rerun. 
-        # Da dialogen (modal) allerede er åbnet, bliver den liggende, 
-        # men baggrunden (tabellen) tegnes forfra og rydder alle flueben.
-        st.session_state.db_key_counter += 1
+    if not valgte.empty:
+        # Gem navnet, tæl key op (nulstiller tabel) og genstart
+        st.session_state.active_player = valgte.iloc[-1]['Navn']
+        st.session_state.editor_key += 1
         st.rerun()
+
+    # 4. MODAL TRIGGER (Vigtigt: Denne kører EFTER rerun-tjekket)
+    if st.session_state.active_player:
+        vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
+        # Nulstil navnet med det samme, så dialogen kun trigger én gang pr. klik
+        st.session_state.active_player = None
