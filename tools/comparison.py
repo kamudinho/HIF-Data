@@ -187,26 +187,31 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        # --- OPDATERET DATATJEK (TO LINJER) ---
-        # 1. Scouting-sammenligning
+        # --- ANALYSE-TEKST (VENSTRESTILLET & SAMLET) ---
+        # 1. Scouting-beregning
         diffs = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
         max_p1_attr = max(diffs, key=diffs.get)
         max_p2_attr = min(diffs, key=diffs.get)
         
-        # 2. Wyscout-sammenligning (Duelle % og xG som eksempel)
+        # 2. Wyscout-beregning (Duel-eksempel)
         p1_duel = p1['adv'].get('DUELLER %', 0) if p1['adv'] and p1['adv']['DUELLER %'] != '-' else 0
         p2_duel = p2['adv'].get('DUELLER %', 0) if p2['adv'] and p2['adv']['DUELLER %'] != '-' else 0
         
-        duel_vinder = p1['navn'] if float(p1_duel) > float(p2_duel) else p2['navn']
-        duel_tekst = f"{duel_vinder} stærkest i dueller ({max(p1_duel, p2_duel)}%)" if max(p1_duel, p2_duel) != 0 else "Ingen duel-data"
+        if max(p1_duel, p2_duel) != 0:
+            duel_vinder = p1['navn'] if float(p1_duel) > float(p2_duel) else p2['navn']
+            wyscout_del = f"hvor {duel_vinder} statistisk set er stærkest i duellerne ({max(p1_duel, p2_duel)}%)."
+        else:
+            wyscout_del = "der er pt. ingen sammenlignelig duel-data fra Wyscout."
 
+        # Samlet visning
         st.markdown(f"""
-            <div class='center-analysis'>
-                <div style='border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;'>
-                    <b>SCOUT:</b> {p1['navn']} (+{max_p1_attr.lower()}) vs {p2['navn']} (+{max_p2_attr.lower()})
+            <div class='center-analysis' style='text-align: left; padding: 15px;'>
+                <div style='font-weight: 800; text-transform: uppercase; font-size: 0.75rem; color: #999; margin-bottom: 8px;'>
+                    Datatjek & Scouting
                 </div>
-                <div>
-                    <b>WYSCOUT:</b> {duel_tekst}
+                <div style='font-weight: 400; color: #444; line-height: 1.5;'>
+                    Scoutingen peger på {p1['navn']} (+{max_p1_attr.lower()}) overfor {p2['navn']} (+{max_p2_attr.lower()}), 
+                    {wyscout_del}
                 </div>
             </div>
         """, unsafe_allow_html=True)
