@@ -14,7 +14,7 @@ def vis_side(dp):
     # Rens status
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
 
-    # --- DATA MERGE (Kun standard stats) ---
+    # --- DATA MERGE (Kun standard stats - ingen xG) ---
     if not df_raw_stats.empty:
         try:
             df_pivot = df_raw_stats.pivot_table(
@@ -45,27 +45,24 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- FILTRE & LOGIK ---
+    # --- KONFIGURATION AF HOLD-LISTE ---
     config = dp.get("config", {})
-    valgt_hold_navn = config.get("hold_navn", "Hvidovre")
+    valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
     
-    # Dynamisk find UUID for det valgte hold
-    valgt_uuid = None
-    for n, i in TEAMS.items():
-        if n == valgt_hold_navn:
-            valgt_uuid = i.get("opta_uuid")
-            break
-            
-    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+    # Lav listen over hold baseret på ligaen
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    h_list = sorted(liga_hold_options.keys())
+    
+    # --- TOPBAR: DROPDOWN + STAT-BOKSE ---
+    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    
+    with top_cols[0]:
+        # DROPDOWN ER TILBAGE HER
+        hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
+        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
+        valgt_uuid = liga_hold_options[valgt_navn]
 
-    def hent_logo(uuid):
-        for n, i in TEAMS.items():
-            if str(i.get("opta_uuid")) == str(uuid):
-                if i.get('logo'): return i['logo']
-                return f"https://cdn5.wyscout.com/photos/team/public/{i.get('wyid')}_120x120.png"
-        return ""
-
-    # --- BEREGN TOP-STATISTIK (K, S, U, N osv.) ---
+    # --- BEREGN STATISTIK FOR DET VALGTE HOLD ---
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     played_matches = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
@@ -84,17 +81,22 @@ def vis_side(dp):
         elif diff == 0: s["U"] += 1
         else: s["N"] += 1
 
-    # Vis top-rækken
-    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
-    with top_cols[0]:
-        st.subheader(valgt_hold_navn)
-        
+    # Tegn de fede stat-bokse i de resterende kolonner
     stats_disp = [("K", s["K"]), ("S", s["S"]), ("U", s["U"]), ("N", s["N"]), ("M+", s["M+"]), ("M-", s["M-"]), ("+/-", s["M+"]-s["M-"])]
     for i, (l, v) in enumerate(stats_disp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- TEGN KAMPE FUNKTION ---
+    # --- HJÆLPEFUNKTIONER ---
+    id_to_name = {i.get("opta_uuid"): n for n, i in TEAMS.items() if i.get("opta_uuid")}
+
+    def hent_logo(uuid):
+        for n, i in TEAMS.items():
+            if str(i.get("opta_uuid")) == str(uuid):
+                if i.get('logo'): return i['logo']
+                return f"https://cdn5.wyscout.com/photos/team/public/{i.get('wyid')}_120x120.png"
+        return ""
+
     def tegn_kampe(df, is_played):
         if df.empty:
             st.info("Ingen kampe fundet.")
@@ -129,7 +131,6 @@ def vis_side(dp):
                 c4.image(hent_logo(a_uuid), width=28)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{id_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])}</div>", unsafe_allow_html=True)
                 
-                # Standard statistik (fjernet xG)
                 if is_played:
                     st.markdown("<hr style='margin: 8px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(4)
