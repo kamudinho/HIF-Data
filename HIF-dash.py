@@ -176,23 +176,27 @@ try:
                     dp["advanced_stats"]
                 )
 
-    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
+    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA + Navne-mapping)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
-        # Vi definerer hif_only her: True hvis vi er i analyse, False hvis vi er i ligaen
         is_hif_mode = (hoved_omraade == "HIF ANALYSE")
+        
+        # 1. Hent SQL data (xG, Linebreaks osv.)
         dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
         
-        # Gem i session state så tools kan tilgå det
+        # 2. VIGTIGT: Hent spillernavne fra CSV og læg dem ind i pakken
+        # Så pa.vis_side(dp) rent faktisk kan se hvem der er hvem!
+        scouting_data = hif_load.get_scouting_package()
+        dp["players"] = scouting_data.get("players") 
+        
         st.session_state["dp"] = dp
         
-        # I din rendering-sektion i main.py:
         if hoved_omraade == "HIF ANALYSE":
             if sel == "Afslutninger":
                 import tools.shotmap as sm
                 sm.vis_side(dp)
-            elif sel == "Spillerperformance": # Tilføj denne blok
+            elif sel == "Spillerperformance":
                 import tools.player_analysis as pa
-                pa.vis_side(dp)
+                pa.vis_side(dp) # Nu har denne dp["players"] med navne!
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
