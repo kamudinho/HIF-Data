@@ -8,20 +8,19 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# Callback funktion der sikrer, at kun én boks er markeret
+# CALLBACK: Håndterer klik og nulstiller de andre
 def handle_click():
-    # Hent ændringerne fra editoren
     state = st.session_state.db_editor_key
     if state and state.get("edited_rows"):
         edited = state["edited_rows"]
-        # Find det seneste index der blev ændret til True
+        # Find det seneste index
         latest_idx = list(edited.keys())[-1]
         
+        # Hvis rækken er markeret som True
         if edited[latest_idx].get("Se") == True:
-            # Gem navnet på den valgte spiller i session_state
-            # Vi bruger det gemte dataframe til at finde navnet
-            st.session_state.valgt_spiller_navn = st.session_state.temp_df.iloc[int(latest_idx)]["Navn"]
-            # Trigger modalen via en flag
+            # Hent navnet fra det dataframe vi gemte i session_state
+            df = st.session_state.temp_df
+            st.session_state.valgt_spiller_navn = df.iloc[int(latest_idx)]["Navn"]
             st.session_state.show_modal = True
 
 @st.dialog("Spillerprofil", width="large")
@@ -51,13 +50,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         with col_r:
             keys = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
             labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-            r_vals = []
-            for k in keys:
-                try:
-                    v = float(str(nyeste.get(k, 0)).replace(',', '.'))
-                    r_vals.append(v if v > 0 else 0.1)
-                except: r_vals.append(0.1)
-            
+            r_vals = [float(str(nyeste.get(k, 0)).replace(',', '.')) for k in keys]
             fig = go.Figure(data=go.Scatterpolar(r=r_vals+[r_vals[0]], theta=labels+[labels[0]], fill='toself', line_color='#df003b'))
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), showlegend=False, height=300, margin=dict(l=40,r=40,t=20,b=20))
             st.plotly_chart(fig, use_container_width=True)
@@ -79,27 +72,36 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 st.dataframe(p_stats[req], use_container_width=True, hide_index=True)
 
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
+    # --- INITIALISERING AF SESSION STATE ---
+    if "valgt_spiller_navn" not in st.session_state:
+        st.session_state.valgt_spiller_navn = None
+    if "show_modal" not in st.session_state:
+        st.session_state.show_modal = False
+    if "temp_df" not in st.session_state:
+        st.session_state.temp_df = pd.DataFrame()
+
     try:
         df_raw = pd.read_csv('data/scouting_db.csv')
         df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].apply(rens_id)
         df_raw['Dato'] = pd.to_datetime(df_raw['Dato'])
         df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
         df_unique['Dato'] = df_unique['Dato'].dt.date
-    except:
+        
+        # Gem i session state til callback
+        st.session_state.temp_df = df_unique.reset_index(drop=True)
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af Database: {e}")
         return
 
     billed_map = {}
     if sql_players is not None:
         billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    # Gem df_unique i session state så callback kan læse det
-    st.session_state.temp_df = df_unique.reset_index(drop=True)
-
-    # Forbered tabel
+    # Forbered tabel-visning
     df_display = st.session_state.temp_df[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato']].copy()
     df_display.insert(0, "Se", False)
 
-    # Vis editor med callback
+    # Tabel editor
     st.data_editor(
         df_display,
         column_config={
@@ -113,10 +115,11 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         on_change=handle_click
     )
 
-    # Åbn modal hvis flaget er sat
-    if st.session_state.get("show_modal"):
-        vis_spiller_modal(st.session_state.valgt_navn, billed_map, career_df, df_raw)
-        # Nulstil flag så den ikke genåbner ved hver interaktion
+    # Kontrol af modal-visning
+    if st.session_state.show_modal and st.session_state.valgt_spiller_navn:
+        vis_spiller_modal(st.session_state.valgt_spiller_navn, billed_map, career_df, df_raw)
+        
+        # Nulstil så den ikke popper op igen automatisk
         st.session_state.show_modal = False
-        # Vi kører en rerun her for at rydde checkboxen i UI'en med det samme efter klik
+        # Vi kører rerun for at rydde checkboxen i UI'en med det samme
         st.rerun()
