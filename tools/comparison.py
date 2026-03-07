@@ -150,18 +150,49 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # --- RADAR (CENTER) ---
     with col_center:
-        labels = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        labels = ['Aggresivitet', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
         fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_RED, opacity=0.4))
-        fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_BLUE, opacity=0.4))
-        fig.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 6])), height=330, margin=dict(l=40, r=40, t=10, b=0), showlegend=False)
+        
+        # Tilføj spillere
+        fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', name=p1['navn'], line_color=HIF_RED, opacity=0.4))
+        fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', name=p2['navn'], line_color=HIF_BLUE, opacity=0.4))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(visible=False, range=[0, 6]),
+                # Denne linje gør det til en 8-kant (fjerner de runde linjer)
+                angularaxis=dict(direction="clockwise", period=8, gridcolor="#eee", linecolor="#eee")
+            ),
+            height=330, 
+            margin=dict(l=40, r=40, t=10, b=0), 
+            showlegend=False
+        )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        diffs = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
-        max_p1 = max(diffs, key=diffs.get); max_p2 = min(diffs, key=diffs.get)
-        st.markdown(f"<div class='center-analysis'>DATATJEK: {p1['navn']} (+{max_p1.lower()}) vs {p2['navn']} (+{max_p2.lower()})</div>", unsafe_allow_html=True)
+        # --- AVANCERET DATATJEK ANALYSE ---
+        # 1. Scouting sammenligning
+        diffs_scout = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
+        max_s1 = max(diffs_scout, key=diffs_scout.get)
+        max_s2 = min(diffs_scout, key=diffs_scout.get)
 
+        # 2. Wyscout sammenligning (P90 stats)
+        # Vi tjekker kun hvis begge har tal (ikke '-')
+        p1_xg = p1['adv'].get('XG P90', 0) if p1['adv'] and p1['adv']['XG P90'] != '-' else 0
+        p2_xg = p2['adv'].get('XG P90', 0) if p2['adv'] and p2['adv']['XG P90'] != '-' else 0
+        
+        xg_tekst = f"{p1['navn']} er farligst (XG)" if p1_xg > p2_xg else f"{p2['navn']} er farligst (XG)"
+        if p1_xg == p2_xg: xg_tekst = "Lige på XG"
+
+        st.markdown(f"""
+            <div class='center-analysis'>
+                <span style='color:#999; font-size:0.7rem; text-transform:uppercase;'>Scouting & Data Analyse</span><br>
+                SCOUT: {p1['navn']} (+{max_s1.lower()}) vs {p2['navn']} (+{max_s2.lower()})<br>
+                WYSCOUT: {xg_tekst}
+            </div>
+        """, unsafe_allow_html=True)
+        
     with col_right:
         st.markdown(f"""<div class='player-card card-mod'>
             <div style='display: flex; gap: 15px; align-items: start; flex-direction: row-reverse;'>
