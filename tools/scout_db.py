@@ -4,150 +4,94 @@ import plotly.graph_objects as go
 
 SEASON_FILTER = "2025/2026"
 
-# --- HJÆLPEFUNKTIONER (Fra din profil-fil) ---
+# --- HJÆLPEFUNKTIONER ---
 def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def rens_metrik_vaerdi(val):
-    try:
-        if pd.isna(val) or str(val).strip() == "": return 0.1
-        v = float(str(val).replace(',', '.'))
-        return v if v > 0 else 0.1
-    except: return 0.1
-
 def map_position(pos_code):
     pos_dict = {"1": "MM", "2": "HB", "3": "VB", "4": "VCB", "5": "HCB", "6": "DMC", "7": "HK", "8": "MC", "9": "ANG", "10": "OMC", "11": "VK"}
-    clean_pos = rens_id(pos_code)
-    return pos_dict.get(clean_pos, "Ukendt")
+    return pos_dict.get(rens_id(pos_code), "Ukendt")
 
-def vis_side(df_spillere, d1, d2, career_df, sql_players, advanced_stats_df=None):
-    # --- 1. DATA PREP ---
-    billed_map = {}
-    if sql_players is not None and not sql_players.empty:
-        billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
-
-    # Scouting data (fra CSV)
+# --- HOVEDFUNKTION (Rettet til at modtage de 4 argumenter fra din main.py) ---
+def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
+    
+    # 1. Hent den rå database
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s['PLAYER_WYID'] = df_s['PLAYER_WYID'].apply(rens_id)
     except:
-        df_s = pd.DataFrame()
-        
-    # Spillerliste til selectbox
-    navne_liste = sorted(list(set(df_s['Navn'].tolist() if not df_s.empty else [])))
-    
-    if not navne_liste:
-        st.warning("Ingen spillere fundet i scouting_db.csv")
+        st.error("Kunne ikke indlæse scouting_db.csv")
         return
 
-    # --- 2. SELECTORS ---
-    c_sel1, c_sel2 = st.columns(2)
-    s1_navn = c_sel1.selectbox("Vælg Spiller 1", navne_liste, index=0)
-    s2_navn = c_sel2.selectbox("Vælg Spiller 2", navne_liste, index=min(1, len(navne_liste)-1))
+    # Billed-map fra SQL
+    billed_map = {}
+    if sql_players is not None and not sql_players.empty:
+        billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
 
-    def hent_alle_data(navn):
-        if df_s.empty: return None
-        s_match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
-        if s_match.empty: return None
-        
-        n = s_match.iloc[0]
-        pid = rens_id(n.get('PLAYER_WYID'))
-        
-        # Hent billede
-        img_url = billed_map.get(pid)
-        if not img_url:
-            img_url = f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
+    # 2. Søge- og valgsektion
+    st.markdown("### 📋 Scouting Database")
+    
+    navne_liste = sorted(df_s['Navn'].unique().tolist())
+    valgt_navn = st.selectbox("Søg og vælg spiller for at se detaljer", ["Vælg spiller..."] + navne_liste)
 
-        # --- NYT: Hent Advanced Stats (Wyscout P90) ---
-        adv_data = None
-        if advanced_stats_df is not None:
-            # Her genbruger vi din logik fra tidligere eller laver en simpel version:
-            p_row = advanced_stats_df[advanced_stats_df['PLAYER_WYID'].apply(rens_id) == pid]
-            if not p_row.empty:
-                r_adv = p_row.iloc[0]
-                adv_data = {"DUELLER %": round(float(r_adv.get('DUELSWON', 0)) / float(r_adv.get('DUELS', 1)) * 100, 1) if float(r_adv.get('DUELS', 0)) > 0 else 0}
+    if valgt_navn == "Vælg spiller...":
+        st.info("Vælg en spiller ovenfor for at åbne deres profil.")
+        # Her kan du evt. vise en oversigtstabel over alle rapporter som fallback
+        return
 
-        res = {
-            "navn": navn,
-            "pid": pid,
-            "img": img_url,
-            "klub": n.get('Klub', 'Ukendt'),
-            "pos": map_position(n.get('Pos', '')),
-            "adv": adv_data, # Gemmer de avancerede stats her
-            "scout": {
-                "Styrker": n.get('Styrker', '-'),
-                "Vurdering": n.get('Vurdering', '-'),
-                "Status": n.get('Status', '-')
-            },
-            "r": {
-                'Fart': rens_metrik_vaerdi(n.get('Fart')),
-                'Teknik': rens_metrik_vaerdi(n.get('Teknik')),
-                'Beslut': rens_metrik_vaerdi(n.get('Beslutsomhed')),
-                'Intel': rens_metrik_vaerdi(n.get('Spilintelligens')),
-                'Aggr': rens_metrik_vaerdi(n.get('Aggresivitet')),
-                'Leder': rens_metrik_vaerdi(n.get('Lederegenskaber')),
-                'Att': rens_metrik_vaerdi(n.get('Attitude')),
-                'Udh': rens_metrik_vaerdi(n.get('Udholdenhed'))
-            }
-        }
+    # 3. Data-hentning for valgt spiller
+    s_match = df_s[df_s['Navn'] == valgt_navn].sort_values('Dato').iloc[-1]
+    pid = rens_id(s_match.get('PLAYER_WYID'))
+    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
 
-        # Karriere Stats
-        stats = {"Kampe": 0, "Mål": 0, "Min": 0}
-        if career_df is not None and not career_df.empty:
-            cdf = career_df.copy()
-            cdf.columns = [str(c).upper() for c in cdf.columns]
-            cdf['PLAYER_WYID'] = cdf['PLAYER_WYID'].apply(rens_id)
-            
-            c_m = cdf[(cdf['PLAYER_WYID'] == pid) & (cdf['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
-            if not c_m.empty:
-                stats = {
-                    "Kampe": int(c_m.iloc[0].get('APPEARANCES', 0)),
-                    "Mål": int(c_m.iloc[0].get('GOAL', 0)),
-                    "Min": int(c_m.iloc[0].get('MINUTESPLAYED', 0))
-                }
-        res["stats"] = stats
-        return res
-
-    p1, p2 = hent_alle_data(s1_navn), hent_alle_data(s2_navn)
-
-    # --- 3. VISNING ---
+    # 4. Detalje-sektion (Åbner når spiller er valgt)
     st.divider()
-    h1, h_radar, h2 = st.columns([2, 4, 2])
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.image(img_url, width=200)
+        st.header(valgt_navn)
+        st.subheader(f"{map_position(s_match.get('Pos', ''))} | {s_match.get('Klub', 'Ukendt')}")
+        
+        # Status Badge
+        status = s_match.get('Status', 'Ukendt')
+        color = "#df003b" if "A" in status else "#b8860b"
+        st.markdown(f"<div style='background:{color}; color:white; padding:5px 10px; border-radius:5px; text-align:center; font-weight:bold;'>{status}</div>", unsafe_allow_html=True)
 
-    with h1:
-        if p1:
-            st.image(p1["img"], width=130)
-            st.subheader(p1["navn"])
-            st.caption(f"{p1['pos']} | {p1['klub']}")
-
-    with h2:
-        if p2:
-            # Højrestillet billede og tekst
-            st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
-            st.image(p2["img"], width=130)
-            st.subheader(p2["navn"])
-            st.caption(f"{p2['pos']} | {p2['klub']}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    with h_radar:
-        if p1 and p2:
-            categories = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
-            k = ['Fart', 'Teknik', 'Beslut', 'Intel', 'Aggr', 'Leder', 'Att', 'Udh']
+    with col2:
+        tab1, tab2, tab3 = st.tabs(["Scout Rapport", "Radar", "Karriere"])
+        
+        with tab1:
+            st.markdown(f"**Styrker:**\n{s_match.get('Styrker', '-')}")
+            st.markdown(f"**Svagheder:**\n{s_match.get('Svagheder', '-')}")
+            st.info(f"**Vurdering:**\n\n{s_match.get('Vurdering', '-')}")
+            
+        with tab2:
+            # Radar Logik
+            labels = ['Fart', 'Teknik', 'Beslutning', 'Intelligens', 'Aggres.', 'Leder', 'Attitude', 'Udhold.']
+            k = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+            r_values = [float(str(s_match.get(val, 0)).replace(',', '.')) for val in k]
             
             fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(r=[p1['r'][x] for x in k]+[p1['r'][k[0]]], theta=categories+[categories[0]], fill='toself', name=p1['navn'], line_color='#df003b'))
-            fig.add_trace(go.Scatterpolar(r=[p2['r'][x] for x in k]+[p2['r'][k[0]]], theta=categories+[categories[0]], fill='toself', name=p2['navn'], line_color='#0056a3'))
-            
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 6])), height=350, margin=dict(l=40,r=40,t=20,b=20), showlegend=False)
+            fig.add_trace(go.Scatterpolar(
+                r=r_values + [r_values[0]],
+                theta=labels + [labels[0]],
+                fill='toself',
+                line_color='#df003b'
+            ))
+            fig.update_layout(
+                polar=dict(gridshape='linear', radialaxis=dict(visible=True, range=[0, 6])),
+                height=350, margin=dict(l=40, r=40, t=20, b=20)
+            )
             st.plotly_chart(fig, use_container_width=True)
 
-    # Stats tabeller
-    st.divider()
-    col_a, col_b = st.columns(2)
-    for i, p in enumerate([p1, p2]):
-        with (col_a if i == 0 else col_b):
-            if p:
-                st.write(f"### 📊 Stats ({SEASON_FILTER})")
-                st.table(pd.DataFrame([p["stats"]], index=["Antal"]).T)
-                st.info(f"**Vurdering:**\n\n{p['scout']['Vurdering']}")
+        with tab3:
+            if career_df is not None:
+                c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & 
+                                (career_df['SEASONNAME'].astype(str).str.contains(SEASON_FILTER))]
+                if not c_m.empty:
+                    st.table(c_m[['SEASONNAME', 'TEAMNAME', 'APPEARANCES', 'GOAL', 'MINUTESPLAYED']])
+                else:
+                    st.write("Ingen karriere-data fundet for denne sæson.")
