@@ -53,18 +53,19 @@ def vis_side(dp):
 
     # --- DEFINITION AF TABS ---
     tab_squad, tab_single, tab_lb = st.tabs([
-        "TRUP OVERSIGT", 
+        "OVERSIGT", 
         "INDIVIDUEL ANALYSE", 
         "LINEBREAKS"
     ])
 
     # --- 5. TAB: TRUP OVERSIGT ---
     with tab_squad:
-        st.subheader("Leaderboard: Sæsonstatistik")
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'xG_90', 'expectedAssists', 'xA_90', 'expectedGoalsNonpenalty', 'npxG_90']
         final_cols = [c for c in display_cols if c in pivot_stats.columns]
         
         df_table = pivot_stats[final_cols].sort_values('expectedGoals', ascending=False)
+        
+        # Vi tilføjer 'height=None' for at fjerne scroll
         st.dataframe(
             df_table,
             column_config={
@@ -75,9 +76,10 @@ def vis_side(dp):
                 "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
                 "xA_90": st.column_config.NumberColumn("xA/90", format="%.2f")
             },
-            use_container_width=True, hide_index=True
+            use_container_width=True, 
+            hide_index=True,
+            height=None  # <--- DETTE fjerner scroll og viser alle rækker
         )
-
     # --- 6. TAB: INDIVIDUEL ANALYSE ---
     with tab_single:
         sorted_pivot = pivot_stats.sort_values('NAVN')
