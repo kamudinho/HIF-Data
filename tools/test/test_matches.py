@@ -91,7 +91,7 @@ def vis_side(dp):
         with top_cols[i+1]:
             st.markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- HJÆLPEFUNKTION TIL AT TEGNE KAMPE (SKAL VÆRE INDRYKKET) ---
+    # --- HJÆLPEFUNKTION TIL AT TEGNE KAMPE ---
     def tegn_kampe(df, is_played):
         if df.empty:
             st.info("Ingen kampe fundet.")
@@ -104,7 +104,10 @@ def vis_side(dp):
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
             dag = danske_dage.get(dt.strftime('%A'), dt.strftime('%A'))
             maaned = danske_maaneder.get(dt.strftime('%B'), dt.strftime('%B'))
-            tidspunkt = dt.strftime('%H:%M')
+            
+            # Vi tager de første 5 karakterer af MATCH_LOCALTIME (f.eks. "19:00" fra "19:00:00")
+            tid_raw = str(row.get('MATCH_LOCALTIME', ''))
+            tidspunkt = tid_raw[:5] if tid_raw else "TBA"
             
             st.markdown(f"<div class='date-header'>{dag.upper()} D. {dt.day}. {maaned.upper()}</div>", unsafe_allow_html=True)
             
@@ -118,6 +121,7 @@ def vis_side(dp):
                 if is_played:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 else:
+                    # BRUGER NU MATCH_LOCALTIME HER
                     c3.markdown(f"<div style='text-align:center; font-weight:bold; margin-top:5px;'>Kl. {tidspunkt}</div>", unsafe_allow_html=True)
                 
                 a_uuid = row['CONTESTANTAWAY_OPTAUUID']
