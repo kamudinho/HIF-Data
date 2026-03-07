@@ -1,5 +1,5 @@
 import pandas as pd
-from data.data_load import _get_snowflake_conn, parse_xg
+from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
 from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
@@ -12,7 +12,7 @@ def get_analysis_package(hif_only=False):
     season_f = str(TOURNAMENTCALENDAR_NAME)
     queries = get_opta_queries(comp_f, season_f, hif_only=hif_only)
     
-    # 1. Hent alle rå dataframes fra Snowflake
+    # 1. Hent Snowflake data
     df_matches = conn.query(queries.get("opta_matches"))
     df_shots = conn.query(queries.get("opta_shotevents"))
     df_linebreaks = conn.query(queries.get("opta_linebreaks"))
@@ -21,14 +21,21 @@ def get_analysis_package(hif_only=False):
     df_assists = conn.query(queries.get("opta_assists"))
     df_quals = conn.query(queries.get("opta_qualifiers"))
 
-    # 2. Standardisering af kolonner (Upper case) for alle dataframes
+    # 2. Hent din oversættelses-nøgle (players.csv)
+    df_local = load_local_players()
+    name_map = {}
+    
+    if df_local is not None and not df_local.empty:
+        # Standardiser kolonner på CSV'en
+        df_local.columns = [str(c).upper().strip() for c in df_local.columns]
+        # Byg mapping { 'uuid': 'Navn' }
+        if 'PLAYER_OPTAUUID' in df_local.columns and 'NAVN' in df_local.columns:
+            name_map = dict(zip(df_local['PLAYER_OPTAUUID'].astype(str), df_local['NAVN']))
+
+    # 3. Standardisering af Snowflake DataFrames
     dfs_to_clean = {
-        "matches": df_matches,
-        "shots": df_shots,
-        "linebreaks": df_linebreaks,
-        "xg_agg": df_xg_agg,
-        "team_stats": df_opta_stats,
-        "assists": df_assists,
+        "matches": df_matches, "shots": df_shots, "linebreaks": df_linebreaks,
+        "xg_agg": df_xg_agg, "team_stats": df_opta_stats, "assists": df_assists,
         "qualifiers": df_quals
     }
 
@@ -62,7 +69,7 @@ def get_analysis_package(hif_only=False):
         "assists": df_assists,           # Bruges af avancerede analyser
         "qualifiers": df_quals,          # Bruges til event-filtrering
         "opta": {"matches": df_matches}, # Struktur for visse legacy tools
-        "players": load_local_players(),
+        "players": df_local,              # Hele rå-filen til filters m.m.
 
         "config": {
             "liga_navn": comp_f,
