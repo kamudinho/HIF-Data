@@ -99,37 +99,57 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
     s2_navn = c2.selectbox("P2", navne_liste, index=min(1, len(navne_liste)-1), label_visibility="collapsed")
 
     def hent_data(navn):
-        match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
-        if match.empty: return None
-        n = match.iloc[0]
-        pid = n['PID_CLEAN']
-        pos, klub = "-", "Hvidovre IF"
-        if df_spillere is not None and not df_spillere.empty:
-            m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
-            if not m.empty:
-                pos = map_position(m.iloc[0].get('ROLECODE3', ''))
-                klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
-        img_url = ""
-        if d3 is not None and not d3.empty:
-            img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
-            if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
+    match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
+    if match.empty: return None
+    n = match.iloc[0]
+    pid = rens_id(n['PID_CLEAN'])
+    
+    pos, klub = "-", "Hvidovre IF"
+    if df_spillere is not None and not df_spillere.empty:
+        # Sikr os at vi sammenligner strenge
+        m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
+        if not m.empty:
+            pos = map_position(m.iloc[0].get('ROLECODE3', ''))
+            klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
+    
+    img_url = ""
+    if d3 is not None and not d3.empty:
+        img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
+        if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
+    
+    # --- OPDATERET CAREER LOGIK ---
+    stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
+    if career_df is not None and not career_df.empty:
+        # Vi renser ID'er og fjerner sæson-filteret midlertidigt for at se om der overhovedet er data
+        c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
         
-        # Hent Karrierestats for 2025/2026
-        stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
-        if career_df is not None and not career_df.empty:
-            c_m = career_df[(career_df['PLAYER_WYID'].apply(rens_id) == pid) & (career_df['SEASONNAME'].str.contains("2025/2026", na=False))]
-            if not c_m.empty:
-                stats = {"K": int(c_m.iloc[0].get('APPEARANCES', 0)), "M": int(c_m.iloc[0].get('GOAL', 0)),
-                         "A": int(c_m.iloc[0].get('ASSIST', 0)), "MIN": int(c_m.iloc[0].get('MINUTESONFIELD', 0))}
+        # Forsøg at finde 2025/2026 rækken
+        current_season = c_m[c_m['SEASONNAME'].str.contains("2025/2026", na=False, case=False)]
         
-        lbls = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
-        return {
-            "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
-            "adv": beregn_p90_stats(pid, advanced_stats_df),
-            "r": [n.get(k, 0.1) for k in lbls],
-            "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
-            "scout_scores": {k: n.get(k, 0) for k in lbls}
-        }
+        if not current_season.empty:
+            target = current_season.iloc[0]
+        elif not c_m.empty:
+            # Hvis 25/26 ikke findes, tag den nyeste række de har
+            target = c_m.iloc[0]
+        else:
+            target = None
+
+        if target is not None:
+            stats = {
+                "K": int(target.get('APPEARANCES', 0)),
+                "M": int(target.get('GOAL', 0)),
+                "A": int(target.get('ASSIST', 0)),
+                "MIN": int(target.get('MINUTESONFIELD', 0))
+            }
+    
+    lbls = ['Fart', 'Teknik', 'Beslutsomhed', 'Spilintelligens', 'Aggresivitet', 'Lederegenskaber', 'Attitude', 'Udholdenhed']
+    return {
+        "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
+        "adv": beregn_p90_stats(pid, advanced_stats_df),
+        "r": [n.get(k, 0.1) for k in lbls],
+        "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
+        "scout_scores": {k: n.get(k, 0) for k in lbls}
+    }
 
     p1, p2 = hent_data(s1_navn), hent_data(s2_navn)
     if not p1 or not p2: return
