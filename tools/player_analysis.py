@@ -3,17 +3,21 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # --- 1. HENT DATA ---
-    df_xg = dp.get("opta_expected_goals")
-    df_lb = dp.get("opta_linebreaks")
-    df_shots = dp.get("opta_shotevents")
-    df_quals = dp.get("opta_qualifiers")
+    # --- 1. HENT DATA (Navne SKAL matche get_opta_queries nøgler) ---
+    # Vi bruger .get() med en tom DataFrame som fallback for at undgå None-fejl
+    df_xg = dp.get("opta_expected_goals", pd.DataFrame())
+    df_lb = dp.get("opta_linebreaks", pd.DataFrame())
+    df_shots = dp.get("opta_shotevents", pd.DataFrame())
+    df_quals = dp.get("opta_qualifiers", pd.DataFrame())
     
+    # Hent name_map og rens
     raw_name_map = dp.get("name_map", {})
     name_map = {str(k).strip().lower(): str(v).strip() for k, v in raw_name_map.items()}
 
-    if df_xg is None or df_xg.empty:
-        st.warning("Ingen xG-data fundet.")
+    # Tjek om xG-data er tomme (brug .empty i stedet for None tjek)
+    if df_xg.empty:
+        st.warning("Ingen xG-data fundet i 'opta_expected_goals'.")
+        # Tip: Prøv st.write(dp.keys()) her for at se hvad der rent faktisk er tilgængeligt
         return
 
     # --- 2. FORBEREDELSE AF DATA ---
