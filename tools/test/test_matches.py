@@ -71,17 +71,18 @@ def vis_side(dp):
             st.info("Ingen kampe fundet.")
             return
 
-        # SIKRER INDRYKNING HERFRA
+        # Tving kolonnenavne til store bogstaver for at undgå KeyError
         df_list.columns = [c.upper() for c in df_list.columns]
 
         for _, row in df_list.iterrows():
-            # Week konvertering
+            # 1. Sikker konvertering af rundenummer (håndterer '39.8')
             try:
-                aktuel_week = int(round(float(str(row.get('WEEK', 0)))))
+                raw_week = row.get('WEEK', 0)
+                aktuel_week = int(round(float(str(raw_week))))
             except:
                 aktuel_week = 0
 
-            # Dato konvertering
+            # 2. Dato formatering
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
@@ -89,17 +90,19 @@ def vis_side(dp):
             except:
                 dato_str = "Ukendt dato"
 
-            # Stats fra Wyscout
+            # 3. Hent Wyscout data
             xg_val, recov_val = "", "-"
             if not df_wy.empty and aktuel_week > 0:
                 try:
-                    wy_match = df_wy[pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').round() == aktuel_week]
+                    mask = pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').round() == aktuel_week
+                    wy_match = df_wy[mask]
                     if not wy_match.empty:
                         v_xg = wy_match.iloc[0].get('XG', 0)
                         xg_val = f"xG {v_xg:.2f}" if v_xg else "xG -"
                         recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
                 except: pass
 
+            # 4. Rendering af UI
             st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
