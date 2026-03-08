@@ -130,7 +130,6 @@ def vis_side(dp):
 
             # --- TABEL NEDENFOR: SPILLERE I KOLONNER (ROTERET) ---
             st.write("---")
-            st.subheader("Danger Zone Sammenligning")
             
             # 1. Saml data
             stats_list = []
