@@ -85,27 +85,29 @@ def vis_side(dp):
     def tegn_kampe(df_list, spillet):
         for _, row in df_list.iterrows():
             m_uuid = str(row.get('MATCH_OPTAUUID', '')).strip().upper()
-            runde = safe_val(row.get('WEEK'))
             
+            # --- Dato Header ---
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
-                m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
-                dato_str = f"{dt.day}. {m_navn} {dt.year}"
+                dato_str = f"{dt.day}. {maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())} {dt.year}"
             except: dato_str = "Ukendt dato"
 
-            st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {runde}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {safe_val(row.get('WEEK'))}</div>", unsafe_allow_html=True)
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                h_name = opta_to_name.get(row.get('CONTESTANTHOME_OPTAUUID'), row.get('CONTESTANTHOME_NAME'))
-                a_name = opta_to_name.get(row.get('CONTESTANTAWAY_OPTAUUID'), row.get('CONTESTANTAWAY_NAME'))
+                
+                h_uuid = str(row.get('CONTESTANTHOME_OPTAUUID', '')).upper()
+                a_uuid = str(row.get('CONTESTANTAWAY_OPTAUUID', '')).upper()
+                
+                h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
+                a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:10px;'>{h_name}</div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
                 if spillet:
-                    h_s, a_s = safe_val(row.get('TOTAL_HOME_SCORE')), safe_val(row.get('TOTAL_AWAY_SCORE'))
-                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span></div>", unsafe_allow_html=True)
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row.get('TOTAL_HOME_SCORE'))} - {safe_val(row.get('TOTAL_AWAY_SCORE'))}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
@@ -113,13 +115,12 @@ def vis_side(dp):
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:10px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                # --- STATISTIK-LOGIK ---
+                # --- STATISTIK FOR BEGGE HOLD ---
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
                     
-                    # Definer de stats vi leder efter i STAT_TYPE kolonnen
-                    opta_stats = {
+                    opta_stats_map = {
                         "possessionPercentage": "Poss.%",
                         "totalScoringAtt": "Skud",
                         "touchesInOppBox": "Felt",
@@ -127,29 +128,37 @@ def vis_side(dp):
                         "totalPass": "Aflev."
                     }
                     
-                    # Filtrer m_stats for denne specifikke kamp og det valgte hold
-                    m_stats = pd.DataFrame()
-                    if not df_stats.empty:
-                        m_stats = df_stats[
-                            (df_stats['MATCH_OPTAUUID'] == m_uuid) & 
-                            (df_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)
-                        ]
+                    # Hent alle stats for denne specifikke kamp
+                    match_stats = df_stats[df_stats['MATCH_OPTAUUID'] == m_uuid]
                     
-                    for i, (stat_key, label) in enumerate(opta_stats.items()):
-                        display = "-"
-                        if not m_stats.empty:
-                            # Her kigger vi i STAT_TYPE kolonnen efter den rigtige række
-                            val_row = m_stats[m_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower()]
-                            if not val_row.empty:
-                                val = val_row['STAT_TOTAL'].iloc[0]
-                                # Formatering: Procent for possession, heltal for resten
-                                if "possession" in stat_key.lower():
-                                    display = f"{int(float(val))}%"
-                                else:
-                                    display = str(int(float(val)))
-                        
-                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{display}</div></div>", unsafe_allow_html=True)
+                    for i, (stat_key, label) in enumerate(opta_stats_map.items()):
+                        # Find værdi for hjemmeholdet
+                        h_val = "-"
+                        h_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == h_uuid) & 
+                                            (match_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower())]
+                        if not h_row.empty:
+                            raw_h = h_row['STAT_TOTAL'].iloc[0]
+                            h_val = f"{int(float(raw_h))}%" if "possession" in stat_key.lower() else str(int(float(raw_h)))
 
+                        # Find værdi for udeholdet
+                        a_val = "-"
+                        a_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == a_uuid) & 
+                                            (match_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower())]
+                        if not a_row.empty:
+                            raw_a = a_row['STAT_TOTAL'].iloc[0]
+                            a_val = f"{int(float(raw_a))}%" if "possession" in stat_key.lower() else str(int(float(raw_a)))
+                        
+                        # Tegn stat-kolonnen med begge værdier
+                        sc[i].markdown(f"""
+                            <div style='text-align:center;'>
+                                <div class='match-stat-label' style='font-size:10px;'>{label}</div>
+                                <div style='display:flex; justify-content:center; gap:8px; align-items:center;'>
+                                    <span style='font-size:12px; color:#666;'>{h_val}</span>
+                                    <span style='font-size:10px; color:#ccc;'>|</span>
+                                    <span style='font-size:12px; color:#666;'>{a_val}</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
     # --- 6. TABS ---
     t1, t2 = st.tabs(["RESULTATER", "KOMMENDE"])
     with t1:
