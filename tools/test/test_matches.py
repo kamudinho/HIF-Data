@@ -78,34 +78,35 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, is_played):
         if df_list.empty:
             st.info("Ingen kampe fundet.")
             return
 
         for _, row in df_list.iterrows():
-            # 1. Konverter WEEK (håndterer '39.8')
+            # SIKKER KONVERTERING AF WEEK
             try:
+                # float() håndterer strengen '39.8', round() runder op, int() fjerner decimalen
                 aktuel_week = int(round(float(row.get('WEEK', 0))))
             except:
                 aktuel_week = 0
 
-            # 2. Dato formatering
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
-            m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
-            
-            # 3. Find Wyscout match via GAMEWEEK
+            # Find Wyscout match via GAMEWEEK (også sikret mod typer)
             wy_match = pd.DataFrame()
             xg_val, recov_val = "", "-"
+            
             if not df_wy.empty and aktuel_week > 0:
                 try:
-                    wy_match = df_wy[df_wy['GAMEWEEK'].astype(float).round().astype(int) == aktuel_week]
+                    # Vi sikrer os at vi sammenligner 'int' med 'int' på tværs af kilder
+                    mask = pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').round() == aktuel_week
+                    wy_match = df_wy[mask]
+                    
                     if not wy_match.empty:
                         val_xg = wy_match.iloc[0].get('XG', 0)
                         xg_val = f"xG {val_xg:.2f}" if val_xg else "xG -"
                         recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
-                except: pass
+                except: 
+                    pass
 
             # --- UI OUTPUT ---
             st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
