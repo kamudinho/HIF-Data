@@ -11,10 +11,10 @@ def get_analysis_package(hif_only=False):
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
     
-    # Henter queries - importen er nu fixet i toppen
+    # Henter queries fra opta_queries.py
     queries = get_opta_queries(comp_f, season_f, hif_only=hif_only)
     
-    # 1. Hent data RÅT (Bevarer de navne dine liga-tools forventer)
+    # --- 1. Hent data ---
     df_matches = conn.query(queries.get("opta_matches"))
     df_shots = conn.query(queries.get("opta_shotevents"))
     df_linebreaks = conn.query(queries.get("opta_linebreaks"))
@@ -22,12 +22,14 @@ def get_analysis_package(hif_only=False):
     df_opta_stats = conn.query(queries.get("opta_team_stats"))
     df_assists = conn.query(queries.get("opta_assists"))
     df_quals = conn.query(queries.get("opta_qualifiers"))
+    
+    # NY: Hent Wyscout Kampoversigten
+    df_wy_history = conn.query(queries.get("wyscout_match_history"))
 
-    # 2. Hent name_map (players.csv)
+    # --- 2. Hent name_map ---
     df_local = load_local_players()
     name_map = {}
     if df_local is not None and not df_local.empty:
-        # Robust check for kolonnenavne i CSV'en
         cols = {c.upper(): c for c in df_local.columns}
         u_col = cols.get('PLAYER_OPTAUUID')
         n_col = cols.get('NAVN')
@@ -37,10 +39,11 @@ def get_analysis_package(hif_only=False):
                 df_local[n_col].astype(str).str.strip()
             ))
 
-    # 3. Pak det hele sammen
+    # --- 3. Pak det hele sammen ---
     return {
         "matches": df_matches,
-        "opta": {"matches": df_matches}, # Til din Liga-side
+        "match_history": df_wy_history, # Dette er nøglen til din Kampoversigt-tab!
+        "opta": {"matches": df_matches},
         "playerstats": df_shots,
         "linebreaks": df_linebreaks,
         "xg_agg": df_xg_agg,
