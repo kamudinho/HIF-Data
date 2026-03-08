@@ -77,14 +77,22 @@ def vis_side(dp):
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     h_list = sorted(liga_hold_options.keys())
     
-    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
-    with top_cols[0]:
-        hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
-        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
-        valgt_uuid = liga_hold_options[valgt_navn]
-
-    team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
-    played = team_matches[team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
+    # ... din selectbox ...
+    valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx)
+    valgt_uuid = liga_hold_options[valgt_navn]
+    
+    # NY FILTRERING HER:
+    # Vi henter 'team_wyid' i stedet for 'wyid'
+    valgt_hold_info = TEAMS.get(valgt_navn, {})
+    valgt_wyid = valgt_hold_info.get('team_wyid') 
+    
+    if not df_wy.empty and valgt_wyid:
+        # Vi tvinger både kolonne og ID til tal for at sikre match
+        df_wy['TEAM_WYID'] = pd.to_numeric(df_wy['TEAM_WYID'], errors='coerce')
+        df_wy = df_wy[df_wy['TEAM_WYID'] == int(valgt_wyid)].copy()
+    
+    # DEBUG: Se om vi har ramt rigtigt
+    st.write(f"Søger efter WYID: {valgt_wyid} for {valgt_navn}. Fundet: {len(df_wy)} rækker.")
 
     # --- 5. TOPBAR STATS ---
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
