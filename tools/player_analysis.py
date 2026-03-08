@@ -3,22 +3,30 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # --- DEBUG SEKTION ---
-    st.write("### 🔍 Debugging Data")
-    df_xg_debug = dp.get("opta_expected_goals")
-    if df_xg_debug is not None:
-        st.write(f"Antal rækker fundet i xG: {len(df_xg_debug)}")
-        if not df_xg_debug.empty:
-            st.write("Kolonner i data:", df_xg_debug.columns.tolist())
-    else:
-        st.error("Nøglen 'opta_expected_goals' findes slet ikke i datapakken!")
-    # ---------------------
-
-    # --- 2. ROBUST KOLONNE-RENSNING ---
-    # Vi tvinger alle kolonnenavne til UPPERCASE for at matche din logik herunder
-    df_xg.columns = [c.upper() for c in df_xg.columns]
+    """
+    HIF Spillerperformance Analyse
+    Mapper data fra Analyse_load (get_analysis_package) til visuelle metrics og grafer.
+    """
     
+    # --- 1. DATA MAPPING (Kobling til dine SQL resultater) ---
+    # Vi bruger de præcise nøgler fra din get_analysis_package()
+    df_xg = dp.get("xg_agg")        
+    df_lb = dp.get("linebreaks")    
+    df_shots = dp.get("playerstats")
+    df_quals = dp.get("qualifiers") 
+    name_map = dp.get("name_map", {})
+
+    # Tjek om xG-data er landet korrekt
+    if df_xg is None or df_xg.empty:
+        st.warning("⚠️ Ingen xG-data fundet i 'xg_agg'. Tjek liga/sæson-valg eller hif_only filteret.")
+        return
+
+    # --- 2. DATA RENSNING & ENSRETNING ---
+    # Tving kolonnenavne til UPPERCASE for at matche SQL output fra Snowflake
+    df_xg.columns = [c.upper() for c in df_xg.columns]
     df_working = df_xg.copy()
+    
+    # Konvertér værdier til tal og UUIDs til små bogstaver for fejlfrit map
     df_working['STAT_VALUE'] = pd.to_numeric(df_working['STAT_VALUE'], errors='coerce').fillna(0)
     df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
     
@@ -29,13 +37,12 @@ def vis_side(dp):
     if df_quals is not None and not df_quals.empty:
         df_quals.columns = [c.upper() for c in df_quals.columns]
 
-    # --- 3. PIVOTERING ---
-    # Vi sikrer os at de nødvendige kolonner findes før pivot
-    needed = {'PLAYER_OPTAUUID', 'STAT_TYPE', 'STAT_VALUE'}
-    if not needed.issubset(df_working.columns):
-        st.error(f"Manglende kolonner i xG data. Fundet: {df_working.columns.tolist()}")
-        return
+    if df_lb is not None and not df_lb.empty:
+        df_lb.columns = [c.upper() for c in df_lb.columns]
+        df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
 
+    # --- 3. PIVOTERING AF STATS ---
+    # Laver STAT_TYPE (expectedGoals, minsPlayed osv.) om til egne kolonner
     pivot_stats = df_working.pivot_table(
         index='PLAYER_OPTAUUID', 
         columns='STAT_TYPE', 
@@ -43,98 +50,101 @@ def vis_side(dp):
         aggfunc='sum'
     ).fillna(0).reset_index()
     
+    # Tilføj spillernavne fra players.csv mappet
     pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].map(name_map)
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
-    # --- 4. DANGER ZONE LOGIK (Kobling af Shots + Quals) ---
+    # --- 4. DANGER ZONE LOGIK (Q16 & Q17) ---
     if df_shots is not None and not df_shots.empty and df_quals is not None:
-        danger_ids = [16, 17, '16', '17']
-        # Finder alle unikke skud-ID'er der har de rigtige qualifiers
+        # Finder alle Event UUIDs der har Qualifiers for 'The Danger Zone'
         dz_events = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin(['16', '17'])]['EVENT_OPTAUUID'].unique()
         df_shots['IS_DZ'] = df_shots['EVENT_OPTAUUID'].isin(dz_events)
 
-    # --- 5. TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL ANALYSE", "LINEBREAKS"])
+    # --- 5. RENDER TABS ---
+    tab_squad, tab_single, tab_lb = st.tabs(["📊 OVERSIGT", "👤 INDIVIDUEL", "📈 LINEBREAKS"])
 
     with tab_squad:
-        # Sørg for at vi kun prøver at vise kolonner der findes
-        cols_to_show = ['NAVN', 'expectedGoals', 'expectedAssists', 'minsPlayed']
+        st.subheader("Holdets xG Performance")
+        # Dynamisk kolonne-tjek (viser kun det der findes i data)
+        cols_to_show = ['NAVN', 'expectedGoals', 'expectedAssists', 'expectedGoalsConceded', 'minsPlayed']
         existing_cols = [c for c in cols_to_show if c in pivot_stats.columns]
-        st.dataframe(pivot_stats[existing_cols].sort_values('expectedGoals', ascending=False), 
-                     use_container_width=True, hide_index=True)
+        
+        st.dataframe(
+            pivot_stats[existing_cols].sort_values('expectedGoals', ascending=False), 
+            use_container_width=True, 
+            hide_index=True
+        )
         
     with tab_single:
-        sorted_pivot = pivot_stats.sort_values('NAVN')
-        selected_name = st.selectbox("Vælg Spiller", options=sorted_pivot['NAVN'].tolist())
-        selected_uuid = sorted_pivot[sorted_pivot['NAVN'] == selected_name]['PLAYER_OPTAUUID'].values[0]
+        sorted_names = sorted(pivot_stats['NAVN'].unique())
+        selected_name = st.selectbox("Vælg Spiller til detaljeret analyse", options=sorted_names)
+        
+        # Hent UUID for den valgte spiller
+        selected_uuid = pivot_stats[pivot_stats['NAVN'] == selected_name]['PLAYER_OPTAUUID'].values[0]
+        p_data = pivot_stats[pivot_stats['PLAYER_OPTAUUID'] == selected_uuid]
 
-        # DZ Tæller
+        # Danger Zone Stats (Skud tæller)
         dz_total = 0
         if df_shots is not None and 'IS_DZ' in df_shots.columns:
-            p_dz = df_shots[(df_shots['PLAYER_OPTAUUID'] == selected_uuid) & (df_shots['IS_DZ'] == True)]
-            dz_total = len(p_dz)
+            dz_total = len(df_shots[(df_shots['PLAYER_OPTAUUID'] == selected_uuid) & (df_shots['IS_DZ'] == True)])
 
-        # Metrics
-        p_xg_indiv = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid]
-        def get_v(stat): 
-            return p_xg_indiv[p_xg_indiv['STAT_TYPE'] == stat]['STAT_VALUE'].sum() if not p_xg_indiv.empty else 0
-
+        # Top Metrics
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total xG", f"{get_v('expectedGoals'):.2f}")
-        m2.metric("Total xA", f"{get_v('expectedAssists'):.2f}")
-        m3.metric("Skud i DZ", dz_total, help="Skud fra Q16 (Box-C) eller Q17 (Small Box-C)")
-        
-        # Skud i alt
+        xg_val = p_data['expectedGoals'].values[0] if 'expectedGoals' in p_data.columns else 0
+        xa_val = p_data['expectedAssists'].values[0] if 'expectedAssists' in p_data.columns else 0
         total_shots = len(df_shots[df_shots['PLAYER_OPTAUUID'] == selected_uuid]) if df_shots is not None else 0
+
+        m1.metric("Total xG", f"{xg_val:.2f}")
+        m2.metric("Total xA", f"{xa_val:.2f}")
+        m3.metric("Danger Zone Skud", dz_total, help="Skud fra det centrale felt i feltet (Q16/Q17)")
         m4.metric("Skud i alt", total_shots)
 
         st.markdown("---")
-        # Grafer her...
-
-    # (Linebreaks fanen fortsætter herfra med samme indrykning som tab_single)
-        # Her kan du indsætte xG-graferne igen
+        
+        # Grafik: xG vs xA Fordeling (Hvis data findes)
+        if not pivot_stats.empty:
+            fig_scatter = px.scatter(
+                pivot_stats, x='expectedAssists', y='expectedGoals', 
+                text='NAVN', title="xG vs xA (Hele Truppen)",
+                color='expectedGoals', color_continuous_scale='Reds'
+            )
+            fig_scatter.update_traces(textposition='top center')
+            st.plotly_chart(fig_scatter, use_container_width=True)
 
     with tab_lb:
         if df_lb is not None and not df_lb.empty:
-            df_lb['PLAYER_OPTAUUID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
+            # Filtrér på den valgte spiller fra tab_single
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
             
             if not p_lb.empty:
-                for col in ['STAT_VALUE', 'STAT_FH', 'STAT_SH']:
-                    if col in p_lb.columns:
-                        p_lb[col] = pd.to_numeric(p_lb[col], errors='coerce').fillna(0)
+                # Helper til at summere specifikke linebreak stats
+                def get_lb_sum(stat_name):
+                    return p_lb[p_lb['STAT_TYPE'] == stat_name]['STAT_VALUE'].sum()
 
-                def get_lb(stat_type):
-                    return p_lb[p_lb['STAT_TYPE'] == stat_type]['STAT_VALUE'].sum()
-
-                # Metrics for Linebreaks
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Total Linebreaks", int(get_lb('total')))
-                m2.metric("Under Pres", int(get_lb('underPressure')))
-                m3.metric("Farlige", int(get_lb('leadingToDanger')))
-                m4.metric("Til Skud", int(get_lb('leadingToShots')))
+                l1, l2, l3, l4 = st.columns(4)
+                l1.metric("Linebreaks", int(get_lb_sum('total')))
+                l2.metric("Under Pres", int(get_lb_sum('underPressure')))
+                l3.metric("Farlige", int(get_lb_sum('leadingToDanger')))
+                l4.metric("Gennem 3 kæder", int(get_lb_sum('threeLines')))
 
                 st.markdown("---")
                 
-                col_left, col_right = st.columns(2)
-                with col_left:
-                    lb_zones = pd.DataFrame({
-                        'Kæde': ['Forsvar', 'Midtbane', 'Angreb'],
-                        'Antal': [get_lb('attackingLineBroken'), get_lb('midfieldLineBroken'), get_lb('defenceLineBroken')]
-                    })
-                    fig_zones = px.bar(lb_zones, x='Antal', y='Kæde', orientation='h', title="Hvilke kæder brydes?",
-                                       color='Kæde', color_discrete_map={'Forsvar': '#df003b', 'Midtbane': '#b8860b', 'Angreb': '#333333'})
-                    st.plotly_chart(fig_zones, use_container_width=True)
-
-                with col_right:
-                    lb_strength = pd.DataFrame({
-                        'Type': ['1 Kæde', '2 Kæder', '3 Kæder'],
-                        'Antal': [get_lb('oneLine'), get_lb('twoLines'), get_lb('threeLines')]
-                    })
-                    fig_strength = px.pie(lb_strength, values='Antal', names='Type', title="Linjer brudt pr. pass",
-                                         hole=0.5, color_discrete_sequence=['#333333', '#888888', '#df003b'])
-                    st.plotly_chart(fig_strength, use_container_width=True)
+                # Visualisering af kæder der brydes
+                lb_data = pd.DataFrame({
+                    'Type': ['Modstander Angreb', 'Modstander Midtbane', 'Modstander Forsvar'],
+                    'Antal': [
+                        get_lb_sum('attackingLineBroken'), 
+                        get_lb_sum('midfieldLineBroken'), 
+                        get_lb_sum('defenceLineBroken')
+                    ]
+                })
+                fig_lb = px.bar(lb_data, x='Antal', y='Type', orientation='h', 
+                               title=f"Hvilke kæder bryder {selected_name}?",
+                               color='Antal', color_continuous_scale='Greys')
+                st.plotly_chart(fig_lb, use_container_width=True)
             else:
-                st.info(f"Ingen linebreak-data fundet for {selected_name}.")
+                st.info(f"Ingen linebreak-data registreret for {selected_name}.")
         else:
-            st.error("Linebreak-data mangler.")
+            st.error("Linebreak-data er ikke tilgængeligt i den nuværende datapakke.")
+
+# Færdig
