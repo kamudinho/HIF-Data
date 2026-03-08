@@ -6,80 +6,55 @@ def vis_side(dp):
     # --- 1. HENT DATA ---
     df_xg = dp.get("xg_agg")
     df_lb = dp.get("linebreaks")
+    df_shots = dp.get("playerstats")  # Bruges til DZ beregning
+    df_quals = dp.get("qualifiers")   # Bruges til DZ beregning
     
-    # Hent name_map og tving nøgler til små bogstaver og rens dem
+    # Hent name_map og rens
     raw_name_map = dp.get("name_map", {})
     name_map = {str(k).strip().lower(): str(v).strip() for k, v in raw_name_map.items()}
 
     if df_xg is None or df_xg.empty:
-        st.warning("Ingen xG-data fundet i Snowflake for den valgte periode.")
+        st.warning("Ingen xG-data fundet.")
         return
 
     # --- 2. FORBEREDELSE AF DATA (xG) ---
     df_working = df_xg.copy()
     df_working['STAT_VALUE'] = pd.to_numeric(df_working['STAT_VALUE'], errors='coerce').fillna(0)
-    
-    # Tving PLAYER_OPTAUUID til string, små bogstaver og rens den
     df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
     
-    # --- 3. PIVOTERING (xG) ---
+    # --- 3. PIVOTERING ---
     pivot_stats = df_working.pivot_table(
         index='PLAYER_OPTAUUID', 
         columns='STAT_TYPE', 
         values='STAT_VALUE', 
         aggfunc='sum'
     ).fillna(0).reset_index()
-
-    # Tving ID igen efter pivot for en sikkerheds skyld
-    pivot_stats['PLAYER_OPTAUUID'] = pivot_stats['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
-    
-    # Map navne
     pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].map(name_map)
-    
-    # Fallback hvis navnet mangler
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
     # --- 4. BEREGN STATS PR. 90 MIN ---
     if 'minsPlayed' in pivot_stats.columns:
         mins = pivot_stats['minsPlayed'].clip(lower=1)
-        if 'expectedGoals' in pivot_stats.columns:
-            pivot_stats['xG_90'] = (pivot_stats['expectedGoals'] / mins * 90)
-        if 'expectedAssists' in pivot_stats.columns:
-            pivot_stats['xA_90'] = (pivot_stats['expectedAssists'] / mins * 90)
-        if 'expectedGoalsNonpenalty' in pivot_stats.columns:
-            pivot_stats['npxG_90'] = (pivot_stats['expectedGoalsNonpenalty'] / mins * 90)
-    else:
-        pivot_stats['xG_90'] = pivot_stats['xA_90'] = pivot_stats['npxG_90'] = 0
+        for col, new_col in [('expectedGoals', 'xG_90'), ('expectedAssists', 'xA_90')]:
+            if col in pivot_stats.columns:
+                pivot_stats[new_col] = (pivot_stats[col] / mins * 90)
+
+    # --- NY: DANGER ZONE LOGIK (Baseret på dine rå queries) ---
+    dz_count = 0
+    if df_shots is not None and df_quals is not None:
+        # Danger Qualifiers: 16 (Small box-C), 17 (Box-C)
+        danger_ids = [16, 17, '16', '17']
+        dz_events = df_quals[df_quals['QUALIFIER_QID'].isin(danger_ids)]['EVENT_OPTAUUID'].unique()
+        # Marker skud der findes i DZ event listen
+        df_shots['IS_DZ'] = df_shots['EVENT_OPTAUUID'].isin(dz_events)
 
     # --- DEFINITION AF TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs([
-        "OVERSIGT", 
-        "INDIVIDUEL ANALYSE", 
-        "LINEBREAKS"
-    ])
+    tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL ANALYSE", "LINEBREAKS"])
 
-    # --- 5. TAB: TRUP OVERSIGT ---
     with tab_squad:
         display_cols = ['NAVN', 'minsPlayed', 'expectedGoals', 'xG_90', 'expectedAssists', 'xA_90']
-        final_cols = [c for c in display_cols if c in pivot_stats.columns]
-        
-        df_table = pivot_stats[final_cols].sort_values('expectedGoals', ascending=False)
-        
-        # 'height="content"' er den korrekte parameter i den nye version
-        st.dataframe(
-            df_table,
-            column_config={
-                "NAVN": st.column_config.TextColumn("Spiller"),
-                "minsPlayed": st.column_config.NumberColumn("Min.", format="%d"),
-                "expectedGoals": st.column_config.NumberColumn("Total xG", format="%.2f"),
-                "xG_90": st.column_config.NumberColumn("xG/90", format="%.2f"),
-                "expectedAssists": st.column_config.NumberColumn("Total xA", format="%.2f"),
-                "xA_90": st.column_config.NumberColumn("xA/90", format="%.2f")
-            },
-            use_container_width=True, 
-            hide_index=True,
-            height="content"  # <--- RETTET HER: Bruger "content" i stedet for None
-        )
+        st.dataframe(pivot_stats[[c for c in display_cols if c in pivot_stats.columns]].sort_values('expectedGoals', ascending=False), 
+                     use_container_width=True, hide_index=True, height="content")
         
     # --- 6. TAB: INDIVIDUEL ANALYSE ---
     with tab_single:
@@ -89,19 +64,35 @@ def vis_side(dp):
 
         p_xg = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid]
         
-        m1, m2, m3, m4 = st.columns(4)
+        # Beregn DZ for specifik spiller
+        if df_shots is not None:
+            # Vi bruger PLAYER_NAME match her, da df_shots ofte bruger navne fra event-strømmen
+            p_dz = df_shots[(df_shots['PLAYER_NAME'] == selected_name) & (df_shots['IS_DZ'] == True)]
+            dz_total = len(p_dz)
+        else:
+            dz_total = 0
+
+        # --- METRICS ---
+        m1, m2, m3, m4, m5 = st.columns(5)
         def get_v(stat): return p_xg[p_xg['STAT_TYPE'] == stat]['STAT_VALUE'].sum()
 
         m1.metric("Total xG", f"{get_v('expectedGoals'):.2f}")
         m2.metric("Non-Penalty xG", f"{get_v('expectedGoalsNonpenalty'):.2f}")
         m3.metric("Total xA", f"{get_v('expectedAssists'):.2f}")
-        m4.metric("Minutter", int(get_v('minsPlayed')))
+        m4.metric("Skud i DZ", dz_total, help="Afslutninger fra Box-centre eller Small box-centre")
+        m5.metric("Minutter", int(get_v('minsPlayed')))
 
+        st.markdown("---")
+
+        # --- GRAF MED DZ ---
         xg_cats = ['expectedGoalsHd', 'expectedGoalsOpenplay', 'expectedGoalsSetplay']
         xg_plot = p_xg[p_xg['STAT_TYPE'].isin(xg_cats)].groupby('STAT_TYPE')['STAT_VALUE'].sum().reset_index()
         
         if not xg_plot.empty and xg_plot['STAT_VALUE'].sum() > 0:
-            fig_xg = px.bar(xg_plot, x='STAT_TYPE', y='STAT_VALUE', title=f"xG Fordeling: {selected_name}", color_discrete_sequence=['#df003b'])
+            # Vi tilføjer en række til plottet for at visualisere DZ volumen
+            fig_xg = px.bar(xg_plot, x='STAT_TYPE', y='STAT_VALUE', 
+                            title=f"xG Fordeling: {selected_name}", 
+                            color_discrete_sequence=['#df003b'])
             st.plotly_chart(fig_xg, use_container_width=True)
 
     # --- 7. TAB: LINEBREAKS (OPTIMERET) ---
