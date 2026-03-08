@@ -128,7 +128,7 @@ def vis_side(dp):
                 pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=200, c=c_dz, edgecolors=HIF_RED, linewidth=2, ax=ax_dz)
                 st.pyplot(fig_dz)
 
-            # --- TABEL NEDENFOR: SPILLERE I KOLONNER (ROTERET) ---
+            # --- TABEL NEDENFOR: SPILLERE I KOLONNER (EFTERNAVN + ROTATION) ---
             st.write("---")
             
             # 1. Saml data
@@ -137,21 +137,23 @@ def vis_side(dp):
                 s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
                 s_dz = s_data[s_data['IS_DZ_GEO']]
                 
+                # Tag kun efternavnet (det sidste ord i PLAYER_NAME)
+                efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
+                
                 stats_list.append({
-                    "Spiller": spiller,
+                    "Spiller": efternavn,
                     "Skud i DZ": len(s_dz),
                     "Mål i DZ": len(s_dz[s_dz['EVENT_TYPEID'] == 16]),
                     "DZ %": (len(s_dz)/len(s_data)*100) if len(s_data) > 0 else 0
                 })
             
-            # 2. Sorter så dem med flest DZ skud er først
+            # 2. Sorter så de mest aktive i DZ er først
             df_table_data = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
             
-            # 3. Tegn tabel med Matplotlib for at få vinklede navne
-            fig_tab, ax_tab = plt.subplots(figsize=(12, 3))
+            # 3. Tegn tabel
+            fig_tab, ax_tab = plt.subplots(figsize=(12, 4)) # Lidt højere figur for at give plads til navne
             ax_tab.axis('off')
             
-            # Forbered data til tabel (rækker = metrikker, kolonner = spillere)
             col_labels = df_table_data['Spiller'].values
             cell_text = [
                 [int(v) for v in df_table_data['Skud i DZ'].values],
@@ -168,16 +170,24 @@ def vis_side(dp):
                 cellLoc='center'
             )
             
-            # --- MAGIEN: Roter overskrifterne ---
-            the_table.auto_set_font_size(True)
+            # --- FORMATERING OG ROTATION ---
+            the_table.auto_set_font_size(False)
             the_table.set_fontsize(10)
-            the_table.scale(1.2, 1.8) # Gør rækkerne lidt højere
+            the_table.scale(1.0, 2.2) # Juster cellehøjden
             
-            # Roter kolonne-overskrifter (spillernavne)
             for (row, col), cell in the_table.get_celld().items():
-                if row == 0: # Dette er header-rækken
+                # Header-rækken (spillernavne)
+                if row == 0 and col >= 0:
                     cell.get_text().set_rotation(45)
-                    cell.get_text().set_ha('left')
-                    cell.set_height(0.3) # Giv plads til rotationen
-            
+                    cell.get_text().set_ha('center') # Centreret i forhold til boksen
+                    cell.get_text().set_va('bottom')
+                    cell.set_height(0.4) # Gør header-boksen højere til efternavnet
+                
+                # Række-labels (Skud i DZ, etc.)
+                elif col == -1:
+                    cell.set_facecolor('#f2f2f2') # Lys grå baggrund til labels
+                    cell.get_text().set_weight('bold')
+
+            # Stram layoutet op så intet bliver skåret af
+            fig_tab.tight_layout()
             st.pyplot(fig_tab)
