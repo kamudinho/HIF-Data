@@ -140,7 +140,7 @@ def vis_side(dp):
                 # Styling af header og navne
                 for (row, col), cell in the_table.get_celld().items():
                     if row == 0: # Spillernavne
-                        cell.set_text_props(rotation=270, ha='center', va='center')
+                        cell.set_text_props(rotation=90, ha='center', va='center')
                         cell.set_height(0.4)
                     if col == -1: # Række-labels
                         cell.set_facecolor('#f2f2f2')
