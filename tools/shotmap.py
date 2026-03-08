@@ -128,11 +128,11 @@ def vis_side(dp):
                 pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=200, c=c_dz, edgecolors=HIF_RED, linewidth=2, ax=ax_dz)
                 st.pyplot(fig_dz)
 
-            # --- TABEL NEDENFOR: SPILLERE I KOLONNER ---
+            # --- TABEL NEDENFOR: SPILLERE I KOLONNER (ROTERET) ---
             st.write("---")
             st.subheader("Danger Zone Sammenligning")
             
-            # Gruppér data per spiller
+            # 1. Saml data
             stats_list = []
             for spiller in spiller_liste_dz:
                 s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
@@ -142,9 +142,43 @@ def vis_side(dp):
                     "Spiller": spiller,
                     "Skud i DZ": len(s_dz),
                     "Mål i DZ": len(s_dz[s_dz['EVENT_TYPEID'] == 16]),
-                    "DZ % af egne skud": f"{(len(s_dz)/len(s_data)*100):.1f}%" if len(s_data) > 0 else "0.0%"
+                    "DZ %": (len(s_dz)/len(s_data)*100) if len(s_data) > 0 else 0
                 })
             
-            # Lav DF og vend det (transpose)
-            df_stats = pd.DataFrame(stats_list).set_index("Spiller").T
-            st.dataframe(df_stats, use_container_width=True)
+            # 2. Sorter så dem med flest DZ skud er først
+            df_table_data = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
+            
+            # 3. Tegn tabel med Matplotlib for at få vinklede navne
+            fig_tab, ax_tab = plt.subplots(figsize=(12, 3))
+            ax_tab.axis('off')
+            
+            # Forbered data til tabel (rækker = metrikker, kolonner = spillere)
+            col_labels = df_table_data['Spiller'].values
+            cell_text = [
+                [int(v) for v in df_table_data['Skud i DZ'].values],
+                [int(v) for v in df_table_data['Mål i DZ'].values],
+                [f"{v:.1f}%" for v in df_table_data['DZ %'].values]
+            ]
+            row_labels = ["Skud i DZ", "Mål i DZ", "DZ %"]
+            
+            the_table = ax_tab.table(
+                cellText=cell_text,
+                rowLabels=row_labels,
+                colLabels=col_labels,
+                loc='center',
+                cellLoc='center'
+            )
+            
+            # --- MAGIEN: Roter overskrifterne ---
+            the_table.auto_set_font_size(False)
+            the_table.set_fontsize(10)
+            the_table.scale(1.2, 1.8) # Gør rækkerne lidt højere
+            
+            # Roter kolonne-overskrifter (spillernavne)
+            for (row, col), cell in the_table.get_celld().items():
+                if row == 0: # Dette er header-rækken
+                    cell.get_text().set_rotation(45)
+                    cell.get_text().set_ha('left')
+                    cell.set_height(0.3) # Giv plads til rotationen
+            
+            st.pyplot(fig_tab)
