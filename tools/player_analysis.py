@@ -3,19 +3,16 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # --- 1. HENT DATA (Vi bruger de nøgler, din opta_queries.py leverer) ---
-    df_xg = dp.get("opta_expected_goals")
-    df_lb = dp.get("opta_linebreaks")
-    df_shots = dp.get("opta_shotevents")
-    df_quals = dp.get("opta_qualifiers")
-    
-    raw_name_map = dp.get("name_map", {})
-    name_map = {str(k).strip().lower(): str(v).strip() for k, v in raw_name_map.items()}
-
-    # Tjek om xG-data overhovedet er landet i funktionen
-    if df_xg is None or df_xg.empty:
-        st.warning("⚠️ Data modtaget, men 'opta_expected_goals' er tom. Tjek liga/sæson-valg.")
-        return
+    # --- DEBUG SEKTION ---
+    st.write("### 🔍 Debugging Data")
+    df_xg_debug = dp.get("opta_expected_goals")
+    if df_xg_debug is not None:
+        st.write(f"Antal rækker fundet i xG: {len(df_xg_debug)}")
+        if not df_xg_debug.empty:
+            st.write("Kolonner i data:", df_xg_debug.columns.tolist())
+    else:
+        st.error("Nøglen 'opta_expected_goals' findes slet ikke i datapakken!")
+    # ---------------------
 
     # --- 2. ROBUST KOLONNE-RENSNING ---
     # Vi tvinger alle kolonnenavne til UPPERCASE for at matche din logik herunder
