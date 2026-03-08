@@ -116,46 +116,61 @@ def vis_side(dp):
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:10px;'>{a_name}</div>", unsafe_allow_html=True)
 
                 # --- STATISTIK FOR BEGGE HOLD ---
+                # --- STATISTIK SAMMENLIGNING ---
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
-                    sc = st.columns(5)
                     
+                    # Her definerer vi præcis hvilke stats vi vil vise fra din UNION ALL query
+                    # Nøglerne skal matche STAT_TYPE fra din SQL
                     opta_stats_map = {
-                        "possessionPercentage": "Poss.%",
-                        "totalScoringAtt": "Skud",
-                        "touchesInOppBox": "Felt",
-                        "wonCorners": "Hjørne",
-                        "totalPass": "Aflev."
+                        "expectedGoals": "Expected Goals (xG)",
+                        "attackingLineBroken": "Linjebrud (Angreb)",
+                        "possessionPercentage": "Boldbesiddelse",
+                        "totalScoringAtt": "Afslutninger",
+                        "touchesInOppBox": "Felt-berøringer",
+                        "totalPass": "Afleveringer"
                     }
                     
-                    # Hent alle stats for denne specifikke kamp
                     match_stats = df_stats[df_stats['MATCH_OPTAUUID'] == m_uuid]
                     
-                    for i, (stat_key, label) in enumerate(opta_stats_map.items()):
-                        # Find værdi for hjemmeholdet
-                        h_val = "-"
-                        h_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == h_uuid) & 
-                                            (match_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower())]
-                        if not h_row.empty:
-                            raw_h = h_row['STAT_TOTAL'].iloc[0]
-                            h_val = f"{int(float(raw_h))}%" if "possession" in stat_key.lower() else str(int(float(raw_h)))
-
-                        # Find værdi for udeholdet
-                        a_val = "-"
-                        a_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == a_uuid) & 
-                                            (match_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower())]
-                        if not a_row.empty:
-                            raw_a = a_row['STAT_TOTAL'].iloc[0]
-                            a_val = f"{int(float(raw_a))}%" if "possession" in stat_key.lower() else str(int(float(raw_a)))
+                    for stat_key, label in opta_stats_map.items():
+                        h_val = 0.0
+                        a_val = 0.0
                         
-                        # Tegn stat-kolonnen med begge værdier
-                        sc[i].markdown(f"""
-                            <div style='text-align:center;'>
-                                <div class='match-stat-label' style='font-size:10px;'>{label}</div>
-                                <div style='display:flex; justify-content:center; gap:8px; align-items:center;'>
-                                    <span style='font-size:12px; color:#666;'>{h_val}</span>
-                                    <span style='font-size:10px; color:#ccc;'>|</span>
-                                    <span style='font-size:12px; color:#666;'>{a_val}</span>
+                        # Find data for hjemme- og udehold
+                        h_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == h_uuid) & 
+                                            (match_stats['STAT_TYPE'] == stat_key)]
+                        a_row = match_stats[(match_stats['CONTESTANT_OPTAUUID'] == a_uuid) & 
+                                            (match_stats['STAT_TYPE'] == stat_key)]
+                        
+                        if not h_row.empty: h_val = float(h_row['STAT_TOTAL'].iloc[0])
+                        if not a_row.empty: a_val = float(a_row['STAT_TOTAL'].iloc[0])
+                        
+                        # --- FORMATERING AF TAL ---
+                        if stat_key == "expectedGoals":
+                            h_str, a_str = f"{h_val:.2f}", f"{a_val:.2f}"
+                        elif "possession" in stat_key.lower():
+                            h_str, a_str = f"{int(h_val)}%", f"{int(a_val)}%"
+                        else:
+                            h_str, a_str = f"{int(h_val)}", f"{int(a_val)}"
+                
+                        # --- VISUALISERING (BARS) ---
+                        total = h_val + a_val
+                        # Hvis begge er 0 (f.eks. ingen linjebrud), sætter vi baren til 50/50 grå
+                        h_pct = (h_val / total * 100) if total > 0 else 50
+                        bar_color_h = "#cc0000" if total > 0 else "#eee"
+                        bar_color_a = "#222" if total > 0 else "#eee"
+                
+                        st.markdown(f"""
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                                    <span style="font-weight: 800;">{h_str}</span>
+                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; font-weight: 600;">{label}</span>
+                                    <span style="font-weight: 800;">{a_str}</span>
+                                </div>
+                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
+                                    <div style="width: {h_pct}%; background-color: {bar_color_h}; transition: width 0.5s;"></div>
+                                    <div style="width: {100-h_pct}%; background-color: {bar_color_a}; transition: width 0.5s;"></div>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
