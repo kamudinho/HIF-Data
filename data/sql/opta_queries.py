@@ -123,5 +123,27 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 )
                 {event_filter}
             )
+        """,
+        "wyscout_match_history": f"""
+            SELECT 
+                tm.DATE, 
+                m.MATCHLABEL, 
+                tm.GAMEWEEK,
+                adv.GOALS, 
+                adv.XG, 
+                adv.POSSESSION_PERCENT, 
+                adv.PASSES_ACCURACY, 
+                adv.RECOVERIES,
+                c.COMPETITIONNAME AS COMPETITION_NAME
+            FROM {DB}.WYSCOUT_TEAMMATCHES tm
+            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
+            WHERE tm.COMPETITION_WYID = 328
+            AND s.SEASONNAME = '{SEASONNAME}'
+            AND tm.TEAM_WYID = {TEAM_WYID}
+            ORDER BY tm.DATE DESC
         """
     }
