@@ -7,13 +7,17 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
     # 1. Importér konstanter til fallback
-    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAMS
     
-    # 2. Definér variabler (LØSER 'saeson' is not defined fejlen)
+    # 2. Definér variabler
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
+    
+    # 3. Definitioner til Wyscout-query i bunden (Løser NameError)
+    SEASONNAME = saeson
+    TEAM_WYID = 7490 # Hvidovre ID fra din app-konfiguration
 
-    # 3. Dynamiske filtre baseret på hif_only flaget
+    # 4. Dynamiske filtre baseret på hif_only flaget
     event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
@@ -111,6 +115,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             -- Vi har tilføjet position 9 (EVENT_TIMEMIN) til grupperingen her:
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """,
+
         "opta_qualifiers": f"""
             SELECT 
                 EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
@@ -124,6 +129,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 {event_filter}
             )
         """,
+
         "wyscout_match_history": f"""
             SELECT 
                 tm.DATE, 
