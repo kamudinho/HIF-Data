@@ -5,32 +5,45 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     # 1. Importér konstanter
-    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, COMPETITIONS
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
 
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
-    
-    # Dynamisk Wyscout Competition ID
-    wy_comp_id = COMPETITIONS.get(liga, {}).get("wyid", 328)
 
-    # 2. Dynamiske filtre
-    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
+    # 2. Dynamiske filtre (Vi sikrer UPPER her for en sikkerheds skyld)
+    event_filter = f"AND UPPER(EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
+    e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
+    stats_filter = f"AND UPPER(CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
+    lineup_filter = f"AND UPPER(LINEUP_CONTESTANTUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
 
     return {
+        # Bruges til overblikket og kamp-listen
         "opta_matches": f"""
-            SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, 
-                   WINNER, MATCH_LOCALTIME, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, 
-                   CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, WEEK
+            SELECT 
+                UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
+                MATCH_DATE_FULL, 
+                MATCH_STATUS, 
+                TOTAL_HOME_SCORE, 
+                TOTAL_AWAY_SCORE, 
+                WINNER, 
+                MATCH_LOCALTIME, 
+                UPPER(CONTESTANTHOME_OPTAUUID) as CONTESTANTHOME_OPTAUUID, 
+                UPPER(CONTESTANTAWAY_OPTAUUID) as CONTESTANTAWAY_OPTAUUID, 
+                CONTESTANTHOME_NAME, 
+                CONTESTANTAWAY_NAME, 
+                WEEK
             FROM {DB}.OPTA_MATCHINFO 
             WHERE COMPETITION_NAME = '{liga}' AND TOURNAMENTCALENDAR_NAME = '{saeson}'
             ORDER BY MATCH_DATE_FULL DESC
         """,
 
+        # De 5 store stats (Possession, Skud, etc.)
         "opta_team_stats": f"""
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
+            SELECT 
+                UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
+                UPPER(CONTESTANT_OPTAUUID) as CONTESTANT_OPTAUUID, 
+                STAT_TYPE, 
+                STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
             WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
@@ -38,6 +51,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             ) {stats_filter}
         """,
 
+        # Bruges til Topsccorer / Assist liste (erstatter Wyscout-historik)
         "opta_assists": f"""
             WITH EventsWithQuals AS (
                 SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, 
@@ -62,24 +76,6 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             ORDER BY EVENT_TIMESTAMP DESC
         """,
 
-        "opta_linebreaks": f"""
-            SELECT MATCH_OPTAUUID, LINEUP_CONTESTANTUUID, PLAYER_OPTAUUID, STAT_TYPE, STAT_VALUE
-            FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
-                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
-            ) {lineup_filter}
-        """,
-
-        "opta_expected_goals": f"""
-            SELECT MATCH_ID, CONTESTANT_OPTAUUID, PLAYER_OPTAUUID, STAT_TYPE, STAT_VALUE, POSITION, MATCH_DATE
-            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
-                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
-            ) {stats_filter}
-        """,
-
         "opta_shotevents": f"""
             SELECT e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, 
                    e.EVENT_OUTCOME, e.EVENT_TYPEID,
@@ -92,30 +88,5 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
             )
             GROUP BY 1, 2, 3, 4, 5, 6, 7
-        """,
-
-        "opta_qualifiers": f"""
-            SELECT EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
-            FROM {DB}.OPTA_QUALIFIERS
-            WHERE EVENT_OPTAUUID IN (
-                SELECT EVENT_OPTAUUID FROM {DB}.OPTA_EVENTS
-                WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
-                    SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO  
-                    WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
-                ) {event_filter}
-            )
-        """,
-
-        "wyscout_match_history": f"""
-            SELECT tm.TEAM_WYID, tm.DATE, m.MATCHLABEL, tm.GAMEWEEK,
-                   adv.POSSESSIONPERCENT AS POSSESSION, adv.TOUCHINBOX AS TOUCHESINBOX,
-                   adv.SHOTS, adv.XG, adv.PPDA, adv.RECOVERIES
-            FROM {DB}.WYSCOUT_TEAMMATCHES tm
-            LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
-                ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-            JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-            JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-            WHERE s.SEASONNAME LIKE '2025%2026'
-            ORDER BY tm.DATE DESC
         """
     }
