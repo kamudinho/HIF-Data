@@ -75,19 +75,23 @@ def vis_side(dp):
 
     # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, is_played):
-        maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
-
         for _, row in df_list.iterrows():
-            # Kobling via WEEK -> GAMEWEEK
+            # --- RETTET KONVERTERING HER ---
             try:
-                aktuel_week = int(row.get('WEEK', 0))
+                # Vi konverterer først til float for at håndtere '39.8' 
+                # og derefter til int (39.8 bliver til 40)
+                aktuel_week = int(round(float(row.get('WEEK', 0))))
             except:
                 aktuel_week = 0
 
             wy_match = pd.DataFrame()
             if not df_wy.empty and aktuel_week > 0:
-                wy_match = df_wy[df_wy['GAMEWEEK'].astype(float).astype(int) == aktuel_week]
-            
+                # Vi sikrer os også at Wyscout GAMEWEEK sammenlignes korrekt
+                try:
+                    wy_match = df_wy[df_wy['GAMEWEEK'].astype(float).round().astype(int) == aktuel_week]
+                except:
+                    wy_match = pd.DataFrame()
+                    
             # Hent stats fra Wyscout (xG og Recoveries)
             xg_val = ""
             recov_val = "-"
