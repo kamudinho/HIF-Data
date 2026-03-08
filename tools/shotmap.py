@@ -85,26 +85,40 @@ def vis_side(dp):
             with col_dz_ctrl:
                 spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
                 v_dz = st.selectbox("Vælg spiller (DZ)", options=["Hvidovre IF"] + spiller_liste_dz, key="sb_dz")
-                df_dz_vis = df_skud if v_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_dz]
                 
-                dz_hits = df_dz_vis[df_dz_vis['IS_DZ']]
+                # Filtrér data baseret på valg
+                df_dz_full = df_skud if v_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_dz]
+                
+                # Del op i DZ og ikke-DZ for at kunne styre farverne i scatter
+                dz_hits = df_dz_full[df_dz_full['IS_DZ'] == True].copy()
+                non_dz = df_dz_full[df_dz_full['IS_DZ'] == False].copy()
+                
                 st.markdown(f'<div class="stat-box" style="border-left-color: {DZ_COLOR}"><div class="stat-label">Danger Zone Skud</div><div class="stat-value">{len(dz_hits)}</div></div>', unsafe_allow_html=True)
 
             with col_dz_viz:
                 pitch_dz = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_dz, ax_dz = pitch_dz.draw(figsize=(8, 10))
                 
-                # Manuel tegning af Danger Zone rektangel
-                # Opta Vertical: x (bund-til-top 0-100), y (venstre-til-højre 0-100)
-                # DZ er centralt (y: 37-63) og tæt på mål (x: 88.5-100)
+                # Tegn Danger Zone rektangel
+                # I VerticalPitch (Opta) er målet i toppen (X=100). 
+                # Rectangle( (y_start, x_start), bredde_y, højde_x )
                 dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=2, 
                                             edgecolor=DZ_COLOR, facecolor=DZ_COLOR, 
-                                            alpha=0.2, linestyle='--')
+                                            alpha=0.15, linestyle='--', zorder=1)
                 ax_dz.add_patch(dz_rect)
                 
-                # Plot prikker (Husk: VerticalPitch bytter om på X og Y i scatter internt for at matche orienteringen)
-                non_dz = df_dz_vis[~df_dz_vis['IS_DZ']]
-                pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], s=80, c='white', edgecolors='#cccccc', alpha=0.3, ax=ax_dz)
-                pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=180, c=HIF_RED, edgecolors='black', ax=ax_dz)
+                # 1. Tegn de skud der IKKE er i DZ (Gennemsigtige/Grå)
+                if not non_dz.empty:
+                    pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], 
+                                     s=80, c='white', edgecolors='#dddddd', 
+                                     alpha=0.2, ax=ax_dz, zorder=2)
+                
+                # 2. Tegn de skud der ER i DZ (Røde og tydelige)
+                if not dz_hits.empty:
+                    # Mål bliver helt røde, andre skud i DZ bliver hvide med rød kant
+                    c_dz = (dz_hits['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+                    pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], 
+                                     s=180, c=c_dz, edgecolors=HIF_RED, 
+                                     linewidth=2, ax=ax_dz, zorder=3)
                 
                 st.pyplot(fig_dz)
