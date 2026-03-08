@@ -23,8 +23,17 @@ def vis_side(dp):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # Sørg for at alle kolonnenavne i hoved-DF er store bogstaver med det samme
+    # Sørg for at alle kolonnenavne i hoved-DF er store bogstaver
     df_matches.columns = [c.upper() for c in df_matches.columns]
+
+    # HJÆLPEFUNKTION TIL SIKKER KONVERTERING
+    def safe_int(val):
+        try:
+            v = pd.to_numeric(val, errors='coerce')
+            if pd.isna(v): return 0
+            return int(v)
+        except:
+            return 0
 
     # --- 2. CSS STYLING ---
     st.markdown("""
@@ -54,7 +63,7 @@ def vis_side(dp):
             df_matches = pd.merge(df_matches, df_a, left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], right_on=['MATCH_OPTAUUID_AWAY', 'CONTESTANT_OPTAUUID_AWAY'], how='left')
         except: pass
 
-    # --- 4. TOPBAR (STATISTIKKER) ---
+    # --- 4. TOPBAR ---
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     h_list = sorted(liga_hold_options.keys())
     
@@ -70,9 +79,8 @@ def vis_side(dp):
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        # HER BRUGER VI pd.to_numeric FOR AT UNDGÅ DIN FEJL
-        h_s = int(pd.to_numeric(m.get('TOTAL_HOME_SCORE'), errors='coerce') or 0)
-        a_s = int(pd.to_numeric(m.get('TOTAL_AWAY_SCORE'), errors='coerce') or 0)
+        h_s = safe_int(m.get('TOTAL_HOME_SCORE'))
+        a_s = safe_int(m.get('TOTAL_AWAY_SCORE'))
         
         summary["M+"] += h_s if is_h else a_s
         summary["M-"] += a_s if is_h else h_s
@@ -92,9 +100,10 @@ def vis_side(dp):
             return
 
         for _, row in df_list.iterrows():
-            # Sikker WEEK-håndtering (vigtigt!)
+            # Sikker WEEK
             try:
-                aktuel_week = int(round(float(str(row.get('WEEK', 0)))))
+                w_val = pd.to_numeric(row.get('WEEK'), errors='coerce')
+                aktuel_week = int(round(w_val)) if not pd.isna(w_val) else 0
             except:
                 aktuel_week = 0
 
@@ -114,7 +123,7 @@ def vis_side(dp):
                     if not wy_match.empty:
                         v_xg = wy_match.iloc[0].get('XG', 0)
                         xg_val = f"xG {v_xg:.2f}" if v_xg else "xG -"
-                        recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
+                        recov_val = safe_int(wy_match.iloc[0].get('RECOVERIES'))
                 except: pass
 
             st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
@@ -129,8 +138,8 @@ def vis_side(dp):
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=30)
                 
                 if is_played:
-                    h_s = int(pd.to_numeric(row.get('TOTAL_HOME_SCORE'), errors='coerce') or 0)
-                    a_s = int(pd.to_numeric(row.get('TOTAL_AWAY_SCORE'), errors='coerce') or 0)
+                    h_s = safe_int(row.get('TOTAL_HOME_SCORE'))
+                    a_s = safe_int(row.get('TOTAL_AWAY_SCORE'))
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span><br><span class='xg-label'>{xg_val}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
@@ -150,8 +159,8 @@ def vis_side(dp):
                     ]
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         if isinstance(s_key, str):
-                            h_v = int(pd.to_numeric(row.get(f"{s_key}_HOME"), errors='coerce') or 0)
-                            a_v = int(pd.to_numeric(row.get(f"{s_key}_AWAY"), errors='coerce') or 0)
+                            h_v = safe_int(row.get(f"{s_key}_HOME"))
+                            a_v = safe_int(row.get(f"{s_key}_AWAY"))
                             val_str = f"{h_v}{suff} - {a_v}{suff}"
                         else:
                             val_str = str(s_key)
