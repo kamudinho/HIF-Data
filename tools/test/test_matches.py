@@ -60,11 +60,9 @@ def vis_side(dp):
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # Filtrering
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played = team_matches[team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
 
-    # Beregn opsummering (K, S, U, N...)
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -87,40 +85,29 @@ def vis_side(dp):
             return
 
         for _, row in df_list.iterrows():
-            # --- KONVERTERING AF WEEK (Håndterer '39.8') ---
+            # 1. Konverter WEEK (håndterer '39.8')
             try:
-                raw_week = row.get('WEEK', 0)
-                aktuel_week = int(round(float(raw_week)))
+                aktuel_week = int(round(float(row.get('WEEK', 0))))
             except:
                 aktuel_week = 0
 
-            # --- DATO FORMATERING (Her bruges maaned_map) ---
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
-            eng_month = dt.strftime('%b')
-            # Vi bruger .get() med fallback til engelsk hvis den fejler
-            m_navn = maaned_map.get(eng_month, eng_month.upper())
-            
-            st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
-
-            wy_match = pd.DataFrame()
-            if not df_wy.empty and aktuel_week > 0:
-                # Vi sikrer os også at Wyscout GAMEWEEK sammenlignes korrekt
-                try:
-                    wy_match = df_wy[df_wy['GAMEWEEK'].astype(float).round().astype(int) == aktuel_week]
-                except:
-                    wy_match = pd.DataFrame()
-                    
-            # Hent stats fra Wyscout (xG og Recoveries)
-            xg_val = ""
-            recov_val = "-"
-            if not wy_match.empty:
-                val_xg = wy_match.iloc[0].get('XG', 0)
-                xg_val = f"xG {val_xg:.2f}" if val_xg else "xG -"
-                recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
-
-            # Dato overskrift
+            # 2. Dato formatering
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
             m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
+            
+            # 3. Find Wyscout match via GAMEWEEK
+            wy_match = pd.DataFrame()
+            xg_val, recov_val = "", "-"
+            if not df_wy.empty and aktuel_week > 0:
+                try:
+                    wy_match = df_wy[df_wy['GAMEWEEK'].astype(float).round().astype(int) == aktuel_week]
+                    if not wy_match.empty:
+                        val_xg = wy_match.iloc[0].get('XG', 0)
+                        xg_val = f"xG {val_xg:.2f}" if val_xg else "xG -"
+                        recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
+                except: pass
+
+            # --- UI OUTPUT ---
             st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
@@ -142,7 +129,6 @@ def vis_side(dp):
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=30)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; font-size:15px;'>{a_name}</div>", unsafe_allow_html=True)
                 
-                # Bundle af stats i bunden (Opta + Wyscout)
                 if is_played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(4)
