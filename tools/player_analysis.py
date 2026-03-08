@@ -3,53 +3,67 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # --- 1. HENT DATA (Navne SKAL matche get_opta_queries nøgler) ---
-    # Vi bruger .get() med en tom DataFrame som fallback for at undgå None-fejl
-    df_xg = dp.get("opta_expected_goals", pd.DataFrame())
-    df_lb = dp.get("opta_linebreaks", pd.DataFrame())
-    df_shots = dp.get("opta_shotevents", pd.DataFrame())
-    df_quals = dp.get("opta_qualifiers", pd.DataFrame())
+    # --- 1. HENT DATA (Vi bruger de nøgler, din opta_queries.py leverer) ---
+    df_xg = dp.get("opta_expected_goals")
+    df_lb = dp.get("opta_linebreaks")
+    df_shots = dp.get("opta_shotevents")
+    df_quals = dp.get("opta_qualifiers")
     
-    # Hent name_map og rens
     raw_name_map = dp.get("name_map", {})
     name_map = {str(k).strip().lower(): str(v).strip() for k, v in raw_name_map.items()}
 
-    # Tjek om xG-data er tomme (brug .empty i stedet for None tjek)
-    if df_xg.empty:
-        st.warning("Ingen xG-data fundet i 'opta_expected_goals'.")
-        # Tip: Prøv st.write(dp.keys()) her for at se hvad der rent faktisk er tilgængeligt
+    # Tjek om xG-data overhovedet er landet i funktionen
+    if df_xg is None or df_xg.empty:
+        st.warning("⚠️ Data modtaget, men 'opta_expected_goals' er tom. Tjek liga/sæson-valg.")
         return
 
-    # --- 2. FORBEREDELSE AF DATA ---
+    # --- 2. ROBUST KOLONNE-RENSNING ---
+    # Vi tvinger alle kolonnenavne til UPPERCASE for at matche din logik herunder
+    df_xg.columns = [c.upper() for c in df_xg.columns]
+    
     df_working = df_xg.copy()
     df_working['STAT_VALUE'] = pd.to_numeric(df_working['STAT_VALUE'], errors='coerce').fillna(0)
     df_working['PLAYER_OPTAUUID'] = df_working['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
     
-    if df_shots is not None:
+    if df_shots is not None and not df_shots.empty:
+        df_shots.columns = [c.upper() for c in df_shots.columns]
         df_shots['PLAYER_OPTAUUID'] = df_shots['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
 
+    if df_quals is not None and not df_quals.empty:
+        df_quals.columns = [c.upper() for c in df_quals.columns]
+
     # --- 3. PIVOTERING ---
+    # Vi sikrer os at de nødvendige kolonner findes før pivot
+    needed = {'PLAYER_OPTAUUID', 'STAT_TYPE', 'STAT_VALUE'}
+    if not needed.issubset(df_working.columns):
+        st.error(f"Manglende kolonner i xG data. Fundet: {df_working.columns.tolist()}")
+        return
+
     pivot_stats = df_working.pivot_table(
         index='PLAYER_OPTAUUID', 
         columns='STAT_TYPE', 
         values='STAT_VALUE', 
         aggfunc='sum'
     ).fillna(0).reset_index()
+    
     pivot_stats['NAVN'] = pivot_stats['PLAYER_OPTAUUID'].map(name_map)
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
-    # --- 4. DANGER ZONE LOGIK ---
-    if df_shots is not None and df_quals is not None:
+    # --- 4. DANGER ZONE LOGIK (Kobling af Shots + Quals) ---
+    if df_shots is not None and not df_shots.empty and df_quals is not None:
         danger_ids = [16, 17, '16', '17']
-        dz_events = df_quals[df_quals['QUALIFIER_QID'].isin(danger_ids)]['EVENT_OPTAUUID'].unique()
+        # Finder alle unikke skud-ID'er der har de rigtige qualifiers
+        dz_events = df_quals[df_quals['QUALIFIER_QID'].astype(str).isin(['16', '17'])]['EVENT_OPTAUUID'].unique()
         df_shots['IS_DZ'] = df_shots['EVENT_OPTAUUID'].isin(dz_events)
 
-    # --- TABS ---
+    # --- 5. TABS ---
     tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL ANALYSE", "LINEBREAKS"])
 
     with tab_squad:
-        display_cols = ['NAVN', 'expectedGoals', 'expectedAssists']
-        st.dataframe(pivot_stats[[c for c in display_cols if c in pivot_stats.columns]].sort_values('expectedGoals', ascending=False), 
+        # Sørg for at vi kun prøver at vise kolonner der findes
+        cols_to_show = ['NAVN', 'expectedGoals', 'expectedAssists', 'minsPlayed']
+        existing_cols = [c for c in cols_to_show if c in pivot_stats.columns]
+        st.dataframe(pivot_stats[existing_cols].sort_values('expectedGoals', ascending=False), 
                      use_container_width=True, hide_index=True)
         
     with tab_single:
@@ -59,21 +73,28 @@ def vis_side(dp):
 
         # DZ Tæller
         dz_total = 0
-        if df_shots is not None:
-            p_dz = df_shots[(df_shots['PLAYER_OPTAUUID'] == selected_uuid) & (df_shots.get('IS_DZ', False) == True)]
+        if df_shots is not None and 'IS_DZ' in df_shots.columns:
+            p_dz = df_shots[(df_shots['PLAYER_OPTAUUID'] == selected_uuid) & (df_shots['IS_DZ'] == True)]
             dz_total = len(p_dz)
 
         # Metrics
-        p_xg = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid]
-        def get_v(stat): return p_xg[p_xg['STAT_TYPE'] == stat]['STAT_VALUE'].sum()
+        p_xg_indiv = df_working[df_working['PLAYER_OPTAUUID'] == selected_uuid]
+        def get_v(stat): 
+            return p_xg_indiv[p_xg_indiv['STAT_TYPE'] == stat]['STAT_VALUE'].sum() if not p_xg_indiv.empty else 0
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total xG", f"{get_v('expectedGoals'):.2f}")
         m2.metric("Total xA", f"{get_v('expectedAssists'):.2f}")
-        m3.metric("Skud i DZ", dz_total)
-        m4.metric("Skud i alt", len(df_shots[df_shots['PLAYER_OPTAUUID'] == selected_uuid]) if df_shots is not None else 0)
+        m3.metric("Skud i DZ", dz_total, help="Skud fra Q16 (Box-C) eller Q17 (Small Box-C)")
+        
+        # Skud i alt
+        total_shots = len(df_shots[df_shots['PLAYER_OPTAUUID'] == selected_uuid]) if df_shots is not None else 0
+        m4.metric("Skud i alt", total_shots)
 
         st.markdown("---")
+        # Grafer her...
+
+    # (Linebreaks fanen fortsætter herfra med samme indrykning som tab_single)
         # Her kan du indsætte xG-graferne igen
 
     with tab_lb:
