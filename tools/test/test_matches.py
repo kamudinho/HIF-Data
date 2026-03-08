@@ -82,14 +82,25 @@ def vis_side(dp):
 
     # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, is_played):
+        if df_list.empty:
+            st.info("Ingen kampe fundet.")
+            return
+
         for _, row in df_list.iterrows():
-            # --- RETTET KONVERTERING HER ---
+            # --- KONVERTERING AF WEEK (Håndterer '39.8') ---
             try:
-                # Vi konverterer først til float for at håndtere '39.8' 
-                # og derefter til int (39.8 bliver til 40)
-                aktuel_week = int(round(float(row.get('WEEK', 0))))
+                raw_week = row.get('WEEK', 0)
+                aktuel_week = int(round(float(raw_week)))
             except:
                 aktuel_week = 0
+
+            # --- DATO FORMATERING (Her bruges maaned_map) ---
+            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
+            eng_month = dt.strftime('%b')
+            # Vi bruger .get() med fallback til engelsk hvis den fejler
+            m_navn = maaned_map.get(eng_month, eng_month.upper())
+            
+            st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
 
             wy_match = pd.DataFrame()
             if not df_wy.empty and aktuel_week > 0:
