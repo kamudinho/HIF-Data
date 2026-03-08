@@ -50,10 +50,9 @@ def vis_side(dp):
     pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats['PLAYER_OPTAUUID'].apply(lambda x: f"Ukendt ({x[:5]})"))
 
     # --- 4. RENDER TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["📊 OVERSIGT", "👤 INDIVIDUEL PERFORMANCE", "📈 LINEBREAKS"])
+    tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL PERFORMANCE", "LINEBREAKS"])
 
     with tab_squad:
-        st.subheader("Holdets xG Performance")
         cols_to_show = ['NAVN', 'expectedGoals', 'expectedAssists', 'minsPlayed']
         existing_cols = [c for c in cols_to_show if c in pivot_stats.columns]
         
