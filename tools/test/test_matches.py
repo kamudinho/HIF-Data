@@ -32,6 +32,8 @@ def vis_side(dp):
     df_matches.columns = [c.upper() for c in df_matches.columns]
     if not df_wy.empty:
         df_wy.columns = [c.upper() for c in df_wy.columns]
+        # VIGTIGT: Opret en ren 'JOIN_KEY' i Wyscout dataen
+        df_wy['JOIN_KEY'] = pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').fillna(-1).astype(int)
 
     # --- 2. WYSCOUT STAT-MAPPER ---
     WY_STAT_MAP = {
@@ -96,21 +98,18 @@ def vis_side(dp):
             return
 
         for _, row in df_list.iterrows():
-            # SIKKER RUNDE-KONVERTERING
+            # SIKKER RUNDE-KONVERTERING FRA OPTA (WEEK)
             try:
-                aktuel_week = int(float(str(row.get('WEEK', '0'))))
+                opta_week = int(float(str(row.get('WEEK', '0'))))
             except:
-                aktuel_week = 0
+                opta_week = 0
 
             wy_match_data = pd.DataFrame()
             xg_display = "xG -"
             
-            # MATCH MOD WYSCOUT DATA
-            if not df_wy.empty and aktuel_week > 0:
-                # Vi matcher på både rundenummer og dato (eller bare rundenummer hvis data er unik)
-                # For at være sikker på at vi finder HIF-kampen og ikke bare enhver kamp i den runde:
-                mask = (pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').fillna(0).astype(int) == aktuel_week)
-                wy_match_data = df_wy[mask]
+            # MATCH MOD WYSCOUT DATA BRUGER 'JOIN_KEY'
+            if not df_wy.empty and opta_week > 0:
+                wy_match_data = df_wy[df_wy['JOIN_KEY'] == opta_week]
                 
                 if not wy_match_data.empty:
                     v_xg = wy_match_data.iloc[0].get('XG', 0)
@@ -124,7 +123,7 @@ def vis_side(dp):
                 dato_str = f"{dt.day}. {m_navn} {dt.year}"
             except: dato_str = "Ukendt dato"
 
-            st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {opta_week}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -151,7 +150,6 @@ def vis_side(dp):
                     for i, (wy_col, pænt_navn) in enumerate(WY_STAT_MAP.items()):
                         val = wy_match_data.iloc[0].get(wy_col, "-")
                         
-                        # Formatering
                         if wy_col == "XG":
                             display_val = f"{float(val):.2f}" if val != "-" else "-"
                         elif "POSSESSION" in wy_col:
@@ -166,7 +164,7 @@ def vis_side(dp):
                             </div>
                         """, unsafe_allow_html=True)
                 elif is_played:
-                    st.caption(f"Søger efter Wyscout data for runde {aktuel_week}...")
+                    st.caption(f"Wyscout data ikke fundet for runde {opta_week}")
 
     # --- 7. TABS ---
     tab_res, tab_fix = st.tabs(["Resultater", "Program"])
