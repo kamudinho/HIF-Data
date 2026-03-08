@@ -37,11 +37,11 @@ def vis_side(dp):
     # Her definerer du de kolonner, du vil trække fra din WYSCOUT-data (df_wy)
     # Venstre side: Kolonnenavnet i din Wyscout-tabel | Højre side: Navnet i Appen
     WY_STAT_MAP = {
-        "POSSESSIONPERCENTAGE": "Besiddelse",
-        "SHOTS": "Skud",
-        "XGSHOT": "xG",
-        "PASSES": "Afleveringer",
-        "TOUCHINBOX": "Berøringer i feltet"
+        "XG": "xG",
+        "SHOTSFROMDANGERZONE": "Skud i DZ",
+        "TOUCHESINBOX": "Touches i feltet",
+        "POSSESSION": "Possession %",
+        "RECOVERIES": "Erobringer"
     }
 
     # --- 3. CSS STYLING ---
