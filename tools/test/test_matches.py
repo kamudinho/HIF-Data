@@ -5,9 +5,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     # --- 1. DATAGRUNDLAG ---
-    # Opta bruges til kampskema og livescore
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
-    # Wyscout bruges som PRIMÆR kilde til statistikker
     df_wy = dp.get("match_history", pd.DataFrame()).copy() 
     
     config = dp.get("config", {})
@@ -19,7 +17,6 @@ def vis_side(dp):
         "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"
     }
 
-    # SIKKER KONVERTERING (Dræber NaN-fejl)
     def safe_val(val, is_float=False):
         try:
             v = pd.to_numeric(val, errors='coerce')
@@ -33,15 +30,17 @@ def vis_side(dp):
 
     df_matches.columns = [c.upper() for c in df_matches.columns]
 
-    # --- 2. WYSCOUT STAT-MAPPER ---
-    # Her definerer du de kolonner, du vil trække fra din WYSCOUT-data (df_wy)
-    # Venstre side: Kolonnenavnet i din Wyscout-tabel | Højre side: Navnet i Appen
+    # --- 2. WYSCOUT STAT-MAPPER (OPDATERET RÆKKEFØLGE) ---
+    # Her styres rækkefølgen og de præcise kolonnenavne fra dit dump
     WY_STAT_MAP = {
-        "XG": "xG",
-        "SHOTSFROMDANGERZONE": "Skud i DZ",
-        "TOUCHESINBOX": "Touches i feltet",
         "POSSESSION": "Possession %",
-        "RECOVERIES": "Erobringer"
+        "TOUCHESINBOX": "Touches i feltet",
+        "SHOTS": "Skud",
+        "SHOTSFROMDANGERZONE": "Skud i DZ",
+        "XG": "xG",
+        "PPDA": "PPDA",
+        "RECOVERIES": "Erobringer",
+        "CROSSES": "Indlæg"
     }
 
     # --- 3. CSS STYLING ---
@@ -53,7 +52,7 @@ def vis_side(dp):
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; }
         .xg-label { font-size: 12px; font-weight: bold; color: #cc0000; margin-top: 4px; background: #ffeeee; padding: 2px 8px; border-radius: 10px; display: inline-block; }
-        .match-stat-label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .match-stat-label { font-size: 9px; color: #888; text-transform: uppercase; line-height: 1.1; margin-bottom: 4px; height: 20px; display: flex; align-items: center; justify-content: center; }
         .match-stat-val { font-size: 13px; font-weight: 700; color: #333; }
         </style>
     """, unsafe_allow_html=True)
@@ -72,7 +71,7 @@ def vis_side(dp):
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played = team_matches[team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
 
-    # --- 5. TOPBAR STATS (OPTA BASERET) ---
+    # --- 5. TOPBAR STATS ---
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -88,28 +87,24 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 6. KAMP-VISNING (PRIMÆR DATA FRA WYSCOUT) ---
+    # --- 6. KAMP-VISNING ---
     def tegn_kampe(df_list, is_played):
         if df_list.empty:
             st.info("Ingen kampe fundet.")
             return
 
         for _, row in df_list.iterrows():
-            # A. Find rundenummer (Nøglen til Wyscout)
             w_val = pd.to_numeric(row.get('WEEK'), errors='coerce')
             aktuel_week = int(round(w_val)) if pd.notnull(w_val) else 0
 
-            # B. Opslag i WYSCOUT
             wy_match_data = pd.DataFrame()
             xg_display = "xG -"
             if not df_wy.empty and aktuel_week > 0:
-                # Vi henter rækken fra Wyscout-historikken der matcher runden
                 wy_match_data = df_wy[pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').round() == aktuel_week]
                 if not wy_match_data.empty:
                     v_xg = wy_match_data.iloc[0].get('XG', 0)
                     xg_display = f"xG {v_xg:.2f}" if v_xg else "xG -"
 
-            # C. Dato og Overskrift
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
@@ -119,7 +114,6 @@ def vis_side(dp):
             st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {aktuel_week}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
-                # Kamp-headlinere (Opta)
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 h_name = opta_to_name.get(row.get('CONTESTANTHOME_OPTAUUID'), row.get('CONTESTANTHOME_NAME'))
                 a_name = opta_to_name.get(row.get('CONTESTANTAWAY_OPTAUUID'), row.get('CONTESTANTAWAY_NAME'))
@@ -137,23 +131,21 @@ def vis_side(dp):
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=30)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; font-size:15px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                # D. STATISTIKKER FRA WYSCOUT (Her trækker vi dataen)
                 if is_played and not wy_match_data.empty:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
+                    # Bruger 8 kolonner til dine 8 valgte stats
                     sc = st.columns(len(WY_STAT_MAP))
                     
-                    # Her looper vi gennem dit Wyscout-map
                     for i, (wy_col, pænt_navn) in enumerate(WY_STAT_MAP.items()):
-                        # Vi tager værdien fra Wyscout-rækken
-                        val = wy_match_data.iloc[0].get(wy_col, "-")
+                        raw_val = wy_match_data.iloc[0].get(wy_col, "-")
                         
-                        # Formatering (hvis det er procenter eller xG)
-                        if "PERCENT" in wy_col or "ACCURACY" in wy_col:
-                            display_val = f"{val}%" if val != "-" else "-"
-                        elif isinstance(val, (int, float)):
-                            display_val = f"{val}"
+                        # Specifik formatering pr. kategori
+                        if wy_col == "XG":
+                            display_val = f"{float(raw_val):.2f}" if raw_val != "-" else "-"
+                        elif "POSSESSION" in wy_col:
+                            display_val = f"{raw_val}%" if raw_val != "-" else "-"
                         else:
-                            display_val = str(val)
+                            display_val = str(raw_val)
 
                         sc[i].markdown(f"""
                             <div style='text-align:center;'>
