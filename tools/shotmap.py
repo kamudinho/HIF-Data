@@ -126,7 +126,7 @@ def vis_side(dp):
             )
             
             the_table.auto_set_font_size(False)
-            the_table.set_fontsize(8)
+            the_table.set_fontsize(7.3)
             the_table.scale(1.0, 1.8)
             
             for (row, col), cell in the_table.get_celld().items():
