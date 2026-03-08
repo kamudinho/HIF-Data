@@ -10,14 +10,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
-    # 2. Dynamiske filtre (Vi sikrer UPPER her for en sikkerheds skyld)
+    # 2. Dynamiske filtre
     event_filter = f"AND UPPER(EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     stats_filter = f"AND UPPER(CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     lineup_filter = f"AND UPPER(LINEUP_CONTESTANTUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
 
     return {
-        # Bruges til overblikket og kamp-listen
         "opta_matches": f"""
             SELECT 
                 UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
@@ -37,8 +36,8 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             ORDER BY MATCH_DATE_FULL DESC
         """,
 
-        # De 5 store stats (Possession, Skud, etc.)
         "opta_team_stats": f"""
+            -- 1. Standard Match Stats
             SELECT 
                 UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
                 UPPER(CONTESTANT_OPTAUUID) as CONTESTANT_OPTAUUID, 
@@ -49,9 +48,40 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
             ) {stats_filter}
+
+            UNION ALL
+
+            -- 2. xG Stats (Summeret fra Expected Goals tabellen)
+            SELECT 
+                UPPER(MATCH_ID) as MATCH_OPTAUUID, 
+                UPPER(CONTESTANT_OPTAUUID) as CONTESTANT_OPTAUUID, 
+                'expectedGoals' as STAT_TYPE, 
+                SUM(CAST(STAT_VALUE AS FLOAT)) as STAT_TOTAL
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE STAT_TYPE = 'expectedGoals'
+            AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            ) {stats_filter}
+            GROUP BY 1, 2, 3
+
+            UNION ALL
+
+            -- 3. Linebreaking Passes (Fra Aggregates tabellen)
+            SELECT 
+                UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
+                UPPER(LINEUP_CONTESTANTUUID) as CONTESTANT_OPTAUUID, 
+                STAT_TYPE, 
+                SUM(CAST(STAT_VALUE AS FLOAT)) as STAT_TOTAL
+            FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES
+            WHERE STAT_TYPE IN ('attackingLineBroken', 'midfieldLineBroken', 'defenceLineBroken')
+            AND TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            ) {lineup_filter.replace('LINEUP_CONTESTANTUUID', 'LINEUP_CONTESTANTUUID')}
+            GROUP BY 1, 2, 3
         """,
 
-        # Bruges til Topsccorer / Assist liste (erstatter Wyscout-historik)
         "opta_assists": f"""
             WITH EventsWithQuals AS (
                 SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, 
