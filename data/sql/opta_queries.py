@@ -97,7 +97,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
         
         "opta_shotevents": f"""
             SELECT  
-                e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.PLAYER_NAME, 
+                e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.PLAYER_NAME, 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_OUTCOME, e.EVENT_TYPEID, e.EVENT_TIMEMIN,
                 MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
             FROM {DB}.OPTA_EVENTS e
