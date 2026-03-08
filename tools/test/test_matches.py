@@ -5,7 +5,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     st.write(f"Antal rækker i Wyscout data: {len(df_wy)}")
-    if not df_wy.empty:
+        if not df_wy.empty:
         st.write("De første 3 rækker fra Wyscout:", df_wy[['GAMEWEEK', 'XG']].head(3))
     # --- 1. DATAGRUNDLAG ---
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
