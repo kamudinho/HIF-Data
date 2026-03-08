@@ -73,7 +73,7 @@ def vis_side(dp):
             with col_dz_ctrl:
                 spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
                 v_dz = st.selectbox("Vælg spiller (DZ)", options=["Hvidovre IF"] + spiller_liste_dz, key="sb_dz")
-                df_dz_full = df_skud if v_dz == "Hvidovre IF" else df_skud[df_dz_full['PLAYER_NAME'] == v_dz]
+                df_dz_full = df_skud if v_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_dz]
                 dz_hits = df_dz_full[df_dz_full['IS_DZ_GEO']].copy()
                 dz_goals = len(dz_hits[dz_hits['EVENT_TYPEID'] == 16])
                 spiller_dz_pct = (len(dz_hits) / len(df_dz_full) * 100) if len(df_dz_full) > 0 else 0
