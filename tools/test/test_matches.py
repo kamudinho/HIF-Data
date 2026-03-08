@@ -152,10 +152,10 @@ def vis_side(dp):
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(4)
                     stats_map = [
-                        ("Besiddelse", "POSSESSIONPERCENTAGE", "%"), 
-                        ("Skud", "TOTALSCORINGATT", ""), 
+                        ("Besiddelse", "POSSESSIONPERCENT", "%"), 
+                        ("Skud", "SHOTS", ""), 
                         ("Erobringer (WY)", recov_val, ""), 
-                        ("Hjørne", "WONCORNER", "")
+                        ("Pasninger", "PASSES", "")
                     ]
                     for i, (label, s_key, suff) in enumerate(stats_map):
                         if isinstance(s_key, str):
