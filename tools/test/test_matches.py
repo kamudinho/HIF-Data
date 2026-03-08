@@ -4,6 +4,10 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
+    
+    df_stats = dp.get("opta", {}).get("team_stats", pd.DataFrame())
+if not df_stats.empty:
+    st.write("Tilgængelige Opta Stat-typer:", df_stats['STAT_TYPE'].unique())
     # --- 1. DATAGRUNDLAG ---
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_wy = dp.get("match_history", pd.DataFrame()).copy() 
