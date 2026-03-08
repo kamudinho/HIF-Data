@@ -178,7 +178,7 @@ def vis_side(dp):
             for (row, col), cell in the_table.get_celld().items():
                 # Header-rækken (spillernavne)
                 if row == 0 and col >= 0:
-                    cell.get_text().set_rotation(45)
+                    cell.get_text().set_rotation(85)
                     cell.get_text().set_ha('center') # Centreret i forhold til boksen
                     cell.get_text().set_va('bottom')
                     cell.set_height(0.4) # Gør header-boksen højere til efternavnet
