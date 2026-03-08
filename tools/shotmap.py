@@ -180,8 +180,8 @@ def vis_side(dp):
                 if row == 0 and col >= 0:
                     cell.get_text().set_rotation(270)
                     cell.get_text().set_ha('center') # Centreret i forhold til boksen
-                    cell.get_text().set_va('bottom')
-                    cell.set_height(0.2) # Gør header-boksen højere til efternavnet
+                    cell.get_text().set_va('top')
+                    cell.set_height(0.25) # Gør header-boksen højere til efternavnet
                 
                 # Række-labels (Skud i DZ, etc.)
                 elif col == -1:
