@@ -81,12 +81,22 @@ def vis_side(dp):
         valgt_uuid = liga_hold_options[valgt_navn]
 
     # Find WyID og filtrer data
+    # NY FILTRERING (Robust version)
     valgt_hold_info = TEAMS.get(valgt_navn, {})
     valgt_wyid = valgt_hold_info.get('team_wyid') 
     
     if not df_wy.empty and valgt_wyid:
-        df_wy['TEAM_WYID'] = pd.to_numeric(df_wy['TEAM_WYID'], errors='coerce')
-        df_wy = df_wy[df_wy['TEAM_WYID'] == int(valgt_wyid)].copy()
+        # Vi tvinger ALT til string for at fjerne tvivl om datatyper
+        df_wy['TEAM_WYID_STR'] = df_wy['TEAM_WYID'].astype(str)
+        target_id_str = str(int(valgt_wyid)) # Sikrer vi ikke har .0 til sidst
+        
+        df_wy_filtered = df_wy[df_wy['TEAM_WYID_STR'] == target_id_str].copy()
+        
+        # Hvis den stadig er tom, så lad os se hvad der rent faktisk ligger i dataen
+        if df_wy_filtered.empty:
+            st.warning(f"ADVARSEL: Ingen rækker fundet for ID {target_id_str}. Tilgængelige ID'er i data: {df_wy['TEAM_WYID'].unique()}")
+        else:
+            df_wy = df_wy_filtered
     
     st.write(f"Søger efter WYID: {valgt_wyid} for {valgt_navn}. Fundet: {len(df_wy)} rækker.")
 
