@@ -52,7 +52,7 @@ def vis_side(dp):
     tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL ANALYSE", "LINEBREAKS"])
 
     with tab_squad:
-        display_cols = ['NAVN', 'minPlayed', 'expectedGoals', 'xG_90', 'expectedAssists', 'xA_90']
+        display_cols = ['NAVN', 'minutesPlayed', 'expectedGoals', 'xG_90', 'expectedAssists', 'xA_90']
         st.dataframe(pivot_stats[[c for c in display_cols if c in pivot_stats.columns]].sort_values('expectedGoals', ascending=False), 
                      use_container_width=True, hide_index=True, height="content")
         
