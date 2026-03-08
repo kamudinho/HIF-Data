@@ -7,7 +7,7 @@ def vis_side(dp):
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_raw_stats = dp.get("opta_team_stats", pd.DataFrame()).copy()
     # Rettet nøgle til at matche din query-funktion
-    df_wy = dp.get("wyscout_match_history", pd.DataFrame()).copy() 
+    df_wy = dp.get("match_history", pd.DataFrame()).copy()    
     
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
