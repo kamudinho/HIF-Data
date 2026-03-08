@@ -108,9 +108,9 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
             )
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+            -- Vi har tilføjet position 9 (EVENT_TIMEMIN) til grupperingen her:
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """,
-
         "opta_qualifiers": f"""
             SELECT 
                 EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
