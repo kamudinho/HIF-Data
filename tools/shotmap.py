@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 # HIF Identitet
 HIF_RED = '#cc0000'
@@ -52,7 +53,7 @@ def vis_side(dp):
                 pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=150, c=c_map, edgecolors=HIF_RED, ax=ax)
                 st.pyplot(fig)
 
-    # --- TAB 2: ASSISTS (FIXET) ---
+    # --- TAB 2: ASSISTS ---
     with tab2:
         if df_assists.empty:
             st.warning("⚠️ Ingen assists fundet.")
@@ -75,7 +76,7 @@ def vis_side(dp):
                                     s=120, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
 
-    # --- TAB 3: DANGER ZONE (FIXET MED RECT) ---
+    # --- TAB 3: DANGER ZONE (FIXET MED MATPLOTLIB PATCHES) ---
     with tab3:
         if df_skud.empty:
             st.info("Ingen data til DZ analyse.")
@@ -93,10 +94,15 @@ def vis_side(dp):
                 pitch_dz = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_dz, ax_dz = pitch_dz.draw(figsize=(8, 10))
                 
-                # Brug .rect i stedet for .box
-                # Opta koordinater: x_min=88.5, y_min=37, bredde=11.5, højde=26
-                pitch_dz.rect(88.5, 37, 11.5, 26, ax=ax_dz, color=DZ_COLOR, alpha=0.15, linestyle='--', linewidth=2, zorder=1)
+                # Manuel tegning af Danger Zone rektangel
+                # Opta Vertical: x (bund-til-top 0-100), y (venstre-til-højre 0-100)
+                # DZ er centralt (y: 37-63) og tæt på mål (x: 88.5-100)
+                dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=2, 
+                                            edgecolor=DZ_COLOR, facecolor=DZ_COLOR, 
+                                            alpha=0.2, linestyle='--')
+                ax_dz.add_patch(dz_rect)
                 
+                # Plot prikker (Husk: VerticalPitch bytter om på X og Y i scatter internt for at matche orienteringen)
                 non_dz = df_dz_vis[~df_dz_vis['IS_DZ']]
                 pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], s=80, c='white', edgecolors='#cccccc', alpha=0.3, ax=ax_dz)
                 pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=180, c=HIF_RED, edgecolors='black', ax=ax_dz)
