@@ -4,13 +4,21 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
-    st.write(f"Antal rækker i Wyscout data: {len(df_wy)}")
-        if not df_wy.empty:
-            st.write("De første 3 rækker fra Wyscout:", df_wy[['GAMEWEEK', 'XG']].head(3))
     # --- 1. DATAGRUNDLAG ---
+    # Vi henter data først, ellers kan vi ikke skrive len(df_wy)
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_wy = dp.get("match_history", pd.DataFrame()).copy() 
     
+    # DEBUG-LINJER (Nu placeret korrekt efter definition og med rigtig indrykning)
+    st.write(f"Antal rækker i Wyscout data: {len(df_wy)}")
+    if not df_wy.empty:
+        # Vi tjekker hvilke kolonner der rent faktisk findes for at undgå fejl i debug
+        cols_to_show = [c for c in ['GAMEWEEK', 'XG'] if c in df_wy.columns]
+        if cols_to_show:
+            st.write("De første rækker fra Wyscout:", df_wy[cols_to_show].head(3))
+        else:
+            st.write("Wyscout kolonner fundet:", list(df_wy.columns))
+
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
