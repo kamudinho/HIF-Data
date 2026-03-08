@@ -4,22 +4,15 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
-    
-    df_stats = dp.get("opta", {}).get("team_stats", pd.DataFrame())
-if not df_stats.empty:
-    st.write("Tilgængelige Opta Stat-typer:", df_stats['STAT_TYPE'].unique())
     # --- 1. DATAGRUNDLAG ---
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
-    df_wy = dp.get("match_history", pd.DataFrame()).copy() 
+    df_wy = dp.get("match_history", pd.DataFrame()).copy()
+    df_stats = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
 
-    # DEBUG-LINJER
-    st.write(f"Antal rækker i Wyscout data: {len(df_wy)}")
-    if not df_wy.empty:
-        cols_to_show = [c for c in ['GAMEWEEK', 'XG'] if c in df_wy.columns]
-        if cols_to_show:
-            st.write("De første rækker fra Wyscout:", df_wy[cols_to_show].head(3))
-        else:
-            st.write("Wyscout kolonner fundet:", list(df_wy.columns))
+    # DEBUG: Se hvad Opta faktisk kalder deres stats
+    if not df_stats.empty:
+        df_stats.columns = [c.upper() for c in df_stats.columns]
+        # st.write("Opta stats fundet:", df_stats['STAT_TYPE'].unique()) # Kan slås til for debug
 
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
@@ -47,19 +40,7 @@ if not df_stats.empty:
         df_wy.columns = [c.upper() for c in df_wy.columns]
         df_wy['JOIN_KEY'] = pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').fillna(-1).astype(int)
 
-    # --- 2. WYSCOUT STAT-MAPPER ---
-    WY_STAT_MAP = {
-        "POSSESSION": "Possession %",
-        "TOUCHESINBOX": "Touches i feltet",
-        "SHOTS": "Skud",
-        "SHOTSFROMDANGERZONE": "Skud i DZ",
-        "XG": "xG",
-        "PPDA": "PPDA",
-        "RECOVERIES": "Erobringer",
-        "CROSSES": "Indlæg"
-    }
-
-    # --- 3. CSS STYLING ---
+    # --- 2. CSS STYLING ---
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px; border-bottom: 3px solid #cc0000; }
@@ -73,7 +54,7 @@ if not df_stats.empty:
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. HOLDVALG ---
+    # --- 3. HOLDVALG & FILTRERING ---
     opta_to_name = {v['opta_uuid']: k for k, v in TEAMS.items() if v.get('opta_uuid')}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     h_list = sorted(liga_hold_options.keys())
@@ -84,27 +65,15 @@ if not df_stats.empty:
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
-    # Find WyID og filtrer data
-    # NY FILTRERING (Robust version)
+    # Robust Wyscout filtrering
     valgt_hold_info = TEAMS.get(valgt_navn, {})
-    valgt_wyid = valgt_hold_info.get('team_wyid') 
+    valgt_wyid = valgt_hold_info.get('team_wyid')
     
     if not df_wy.empty and valgt_wyid:
-        # Vi tvinger ALT til string for at fjerne tvivl om datatyper
-        df_wy['TEAM_WYID_STR'] = df_wy['TEAM_WYID'].astype(str)
-        target_id_str = str(int(valgt_wyid)) # Sikrer vi ikke har .0 til sidst
-        
-        df_wy_filtered = df_wy[df_wy['TEAM_WYID_STR'] == target_id_str].copy()
-        
-        # Hvis den stadig er tom, så lad os se hvad der rent faktisk ligger i dataen
-        if df_wy_filtered.empty:
-            st.warning(f"ADVARSEL: Ingen rækker fundet for ID {target_id_str}. Tilgængelige ID'er i data: {df_wy['TEAM_WYID'].unique()}")
-        else:
-            df_wy = df_wy_filtered
-    
-    st.write(f"Søger efter WYID: {valgt_wyid} for {valgt_navn}. Fundet: {len(df_wy)} rækker.")
+        df_wy['TEAM_WYID_STR'] = df_wy['TEAM_WYID'].astype(str).str.replace('.0', '', regex=False)
+        df_wy = df_wy[df_wy['TEAM_WYID_STR'] == str(int(valgt_wyid))].copy()
 
-    # --- 5. TOPBAR STATS ---
+    # --- 4. TOPBAR STATS (KSUN) ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played = team_matches[team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
     
@@ -123,28 +92,27 @@ if not df_stats.empty:
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 6. KAMP-VISNING ---
+    # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, is_played):
         if df_list.empty:
             st.info("Ingen kampe fundet.")
             return
 
         for _, row in df_list.iterrows():
-            try:
-                opta_week = int(float(str(row.get('WEEK', '0'))))
-            except:
-                opta_week = 0
-
-            wy_match_data = pd.DataFrame()
+            m_uuid = row.get('MATCH_OPTAUUID')
+            opta_week = safe_val(row.get('WEEK'))
+            
+            # Find data fra Wyscout ELLER Opta
+            wy_match_data = df_wy[df_wy['JOIN_KEY'] == opta_week] if not df_wy.empty else pd.DataFrame()
+            opt_match_stats = df_stats[df_stats['MATCH_OPTAUUID'] == m_uuid] if not df_stats.empty else pd.DataFrame()
+            
+            # xG håndtering
             xg_display = "xG -"
+            if not wy_match_data.empty:
+                v_xg = wy_match_data.iloc[0].get('XG', 0)
+                xg_display = f"xG {float(v_xg):.2f}" if v_xg else "xG -"
 
-            if not df_wy.empty and opta_week > 0:
-                wy_match_data = df_wy[df_wy['JOIN_KEY'] == opta_week]
-                if not wy_match_data.empty:
-                    v_xg = wy_match_data.iloc[0].get('XG', 0)
-                    try: xg_display = f"xG {float(v_xg):.2f}" if v_xg else "xG -"
-                    except: xg_display = "xG -"
-
+            # Dato formatering
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
@@ -171,17 +139,34 @@ if not df_stats.empty:
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=30)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; font-size:15px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                if is_played and not wy_match_data.empty:
+                # --- STATS RÆKKE ---
+                if is_played:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
-                    sc = st.columns(len(WY_STAT_MAP))
-                    for i, (wy_col, pænt_navn) in enumerate(WY_STAT_MAP.items()):
-                        val = wy_match_data.iloc[0].get(wy_col, "-")
-                        display_val = f"{float(val):.2f}" if wy_col == "XG" and val != "-" else (f"{val}%" if "POSSESSION" in wy_col and val != "-" else str(val))
-                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{pænt_navn}</div><div class='match-stat-val'>{display_val}</div></div>", unsafe_allow_html=True)
-                elif is_played:
-                    st.caption(f"Wyscout data ikke fundet for runde {opta_week}")
+                    sc = st.columns(6)
+                    
+                    # Vi prøver at udfylde med de vigtigste stats fra Opta hvis Wyscout mangler
+                    def get_stat(opt_key, wy_key):
+                        if not wy_match_data.empty and wy_key in wy_match_data.columns:
+                            return wy_match_data.iloc[0].get(wy_key, "-")
+                        # Fallback til Opta team_stats
+                        val = opt_match_stats[(opt_match_stats['STAT_TYPE'] == opt_key) & (opt_match_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)]
+                        return val.iloc[0]['STAT_TOTAL'] if not val.empty else "-"
 
-    # --- 7. TABS ---
+                    stats_to_show = [
+                        ("possessionPercentage", "POSSESSION", "Poss.%"),
+                        ("totalScoringAtt", "SHOTS", "Skud"),
+                        ("touchesInOppBox", "TOUCHESINBOX", "Felt"),
+                        ("wonCorners", "CORNERS", "Hjørne"),
+                        ("totalPass", "PASSES", "Aflev."),
+                        ("fkFoulWon", "RECOVERIES", "Frispark")
+                    ]
+
+                    for i, (opt_k, wy_k, label) in enumerate(stats_to_show):
+                        val = get_stat(opt_k, wy_k)
+                        display = f"{val}%" if "Poss" in label and val != "-" else str(val)
+                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{display}</div></div>", unsafe_allow_html=True)
+
+    # --- 6. TABS ---
     tab_res, tab_fix = st.tabs(["Resultater", "Program"])
     with tab_res:
         tegn_kampe(played.sort_values('MATCH_DATE_FULL', ascending=False), True)
