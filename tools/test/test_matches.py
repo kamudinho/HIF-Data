@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-def vis_side(dp):
+def vis_side():
     # --- 1. DATAGRUNDLAG ---
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_wy = dp.get("match_history", pd.DataFrame()).copy() 
