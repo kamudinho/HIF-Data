@@ -31,7 +31,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 MATCH_LOCALTIME, CONTESTANTHOME_OPTAUUID, 
                 CONTESTANTAWAY_OPTAUUID, CONTESTANTHOME_NAME, 
                 CONTESTANTAWAY_NAME, COMPETITION_NAME, 
-                GAMEWEEK, -- <--- DU SKAL TILFØJE DENNE LINJE
+                MATCHDAY, -- Vi ændrer GAMEWEEK til MATCHDAY her
                 TOURNAMENTCALENDAR_NAME, TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_MATCHINFO 
             WHERE COMPETITION_NAME = '{liga}' 
