@@ -169,7 +169,7 @@ def vis_side(dp):
             )
             
             # --- MAGIEN: Roter overskrifterne ---
-            the_table.auto_set_font_size(False)
+            the_table.auto_set_font_size(True)
             the_table.set_fontsize(10)
             the_table.scale(1.2, 1.8) # Gør rækkerne lidt højere
             
