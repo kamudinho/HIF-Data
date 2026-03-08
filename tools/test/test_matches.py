@@ -28,10 +28,12 @@ def vis_side(dp):
         st.warning("Ingen kampdata fundet.")
         return
 
+    # Standardiser kolonner til store bogstaver
     df_matches.columns = [c.upper() for c in df_matches.columns]
+    if not df_wy.empty:
+        df_wy.columns = [c.upper() for c in df_wy.columns]
 
-    # --- 2. WYSCOUT STAT-MAPPER (OPDATERET RÆKKEFØLGE) ---
-    # Her styres rækkefølgen og de præcise kolonnenavne fra dit dump
+    # --- 2. WYSCOUT STAT-MAPPER ---
     WY_STAT_MAP = {
         "POSSESSION": "Possession %",
         "TOUCHESINBOX": "Touches i feltet",
@@ -94,16 +96,27 @@ def vis_side(dp):
             return
 
         for _, row in df_list.iterrows():
-            w_val = pd.to_numeric(row.get('WEEK'), errors='coerce')
-            aktuel_week = int(round(w_val)) if pd.notnull(w_val) else 0
+            # SIKKER RUNDE-KONVERTERING
+            try:
+                aktuel_week = int(float(str(row.get('WEEK', '0'))))
+            except:
+                aktuel_week = 0
 
             wy_match_data = pd.DataFrame()
             xg_display = "xG -"
+            
+            # MATCH MOD WYSCOUT DATA
             if not df_wy.empty and aktuel_week > 0:
-                wy_match_data = df_wy[pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').round() == aktuel_week]
+                # Vi matcher på både rundenummer og dato (eller bare rundenummer hvis data er unik)
+                # For at være sikker på at vi finder HIF-kampen og ikke bare enhver kamp i den runde:
+                mask = (pd.to_numeric(df_wy['GAMEWEEK'], errors='coerce').fillna(0).astype(int) == aktuel_week)
+                wy_match_data = df_wy[mask]
+                
                 if not wy_match_data.empty:
                     v_xg = wy_match_data.iloc[0].get('XG', 0)
-                    xg_display = f"xG {v_xg:.2f}" if v_xg else "xG -"
+                    try:
+                        xg_display = f"xG {float(v_xg):.2f}" if v_xg else "xG -"
+                    except: xg_display = "xG -"
 
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
@@ -133,19 +146,18 @@ def vis_side(dp):
 
                 if is_played and not wy_match_data.empty:
                     st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
-                    # Bruger 8 kolonner til dine 8 valgte stats
                     sc = st.columns(len(WY_STAT_MAP))
                     
                     for i, (wy_col, pænt_navn) in enumerate(WY_STAT_MAP.items()):
-                        raw_val = wy_match_data.iloc[0].get(wy_col, "-")
+                        val = wy_match_data.iloc[0].get(wy_col, "-")
                         
-                        # Specifik formatering pr. kategori
+                        # Formatering
                         if wy_col == "XG":
-                            display_val = f"{float(raw_val):.2f}" if raw_val != "-" else "-"
+                            display_val = f"{float(val):.2f}" if val != "-" else "-"
                         elif "POSSESSION" in wy_col:
-                            display_val = f"{raw_val}%" if raw_val != "-" else "-"
+                            display_val = f"{val}%" if val != "-" else "-"
                         else:
-                            display_val = str(raw_val)
+                            display_val = str(val)
 
                         sc[i].markdown(f"""
                             <div style='text-align:center;'>
@@ -154,7 +166,7 @@ def vis_side(dp):
                             </div>
                         """, unsafe_allow_html=True)
                 elif is_played:
-                    st.caption("Venter på statistikker fra Wyscout...")
+                    st.caption(f"Søger efter Wyscout data for runde {aktuel_week}...")
 
     # --- 7. TABS ---
     tab_res, tab_fix = st.tabs(["Resultater", "Program"])
