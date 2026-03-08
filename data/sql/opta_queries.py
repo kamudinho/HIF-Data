@@ -19,11 +19,14 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     SEASONNAME = saeson
     TEAM_WYID = 7490 # Hvidovre ID
 
-    # 4. Dynamiske filtre baseret på hif_only flaget
-    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
-    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
-    stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
-    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if h_only else ""
+    # 4. Dynamiske filtre (RETTET FRA h_only TIL hif_only)
+    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if h_only else "" # Rettet her også
+
+    # Rettelse af den specifikke linje der fejlede:
+    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
         "opta_matches": f"""
