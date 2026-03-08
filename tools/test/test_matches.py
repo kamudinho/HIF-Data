@@ -8,7 +8,7 @@ def vis_side(dp):
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_stats = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
 
-    # Standardiser kolonner og rens ID'er
+    # Standardiser kolonner og rens ID'er med det samme
     for df in [df_matches, df_stats]:
         if not df.empty:
             df.columns = [c.upper() for c in df.columns]
@@ -19,9 +19,9 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
     
-    # --- DEBUG TJEK (Kan fjernes når det virker) ---
+    # Debug info hvis stats-tabellen er tom
     if df_stats.empty:
-        st.error("DEBUG: df_stats er helt tom fra Snowflake!")
+        st.info("System-info: Venter på statistik-data fra Snowflake.")
 
     maaned_map = {
         "Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", 
@@ -69,22 +69,32 @@ def vis_side(dp):
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played = team_matches[team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
     
-    # (Top-bar summary logik uændret...)
+    summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s, a_s = safe_val(m.get('TOTAL_HOME_SCORE')), safe_val(m.get('TOTAL_AWAY_SCORE'))
+        summary["M+"] += h_s if is_h else a_s
+        summary["M-"] += a_s if is_h else h_s
+        if h_s == a_s: summary["U"] += 1
+        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
+
+    stats_disp = [("K", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
+        top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     # --- 5. KAMP-VISNING ---
-    def tegn_kampe(df_list, is_played):
+    def tegn_kampe(df_list, spillet):
         for _, row in df_list.iterrows():
-            m_uuid = row.get('MATCH_OPTAUUID')
+            m_uuid = str(row.get('MATCH_OPTAUUID', '')).strip().upper()
             runde = safe_val(row.get('WEEK'))
             
-            # Dato & Header
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
                 dato_str = f"{dt.day}. {m_navn} {dt.year}"
             except: dato_str = "Ukendt dato"
 
-            # FIX: Tilføjet anførselstegn herunder
             st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {runde}</div>", unsafe_allow_html=True)
 
             with st.container(border=True):
@@ -95,18 +105,19 @@ def vis_side(dp):
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:10px;'>{h_name}</div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
-                if is_played:
+                if spillet:
                     h_s, a_s = safe_val(row.get('TOTAL_HOME_SCORE')), safe_val(row.get('TOTAL_AWAY_SCORE'))
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span></div>", unsafe_allow_html=True)
                 else:
+                    # Vis tidspunktet i en grå boks i stedet for scoren
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
 
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:10px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                # --- STATISTIKKER (Tegnes altid for spillede kampe) ---
-                if is_played:
+                # --- STATISTIKKER FOR SPILLEDE KAMPE ---
+                if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
                     
@@ -118,7 +129,7 @@ def vis_side(dp):
                         "totalPass": "Aflev."
                     }
                     
-                    # Filtrer data for denne specifikke kamp
+                    # Filtrer m_stats
                     m_stats = pd.DataFrame()
                     if not df_stats.empty:
                         m_stats = df_stats[(df_stats['MATCH_OPTAUUID'] == m_uuid) & (df_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)]
@@ -126,11 +137,17 @@ def vis_side(dp):
                     for i, (stat_key, label) in enumerate(opta_stats.items()):
                         display = "-"
                         if not m_stats.empty:
-                            # Robust tjek for stat_key
                             val_row = m_stats[m_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower()]
                             if not val_row.empty:
                                 val = val_row['STAT_TOTAL'].iloc[0]
                                 display = f"{val}%" if "possession" in stat_key.lower() else str(val)
                         
-                        # Nu tegnes HTML'en uanset hvad
                         sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{display}</div></div>", unsafe_allow_html=True)
+
+    # --- 6. TABS ---
+    t1, t2 = st.tabs(["⚽ RESULTATER", "📅 PROGRAM"])
+    with t1:
+        tegn_kampe(played.sort_values('MATCH_DATE_FULL', ascending=False), True)
+    with t2:
+        future = team_matches[~team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
+        tegn_kampe(future.sort_values('MATCH_DATE_FULL'), False)
