@@ -137,10 +137,10 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 m.MATCHLABEL, 
                 tm.GAMEWEEK,
                 adv.GOALS, 
-                adv.XG, 
-                adv.POSSESSION_PERCENT, 
-                adv.PASSES_ACCURACY, 
-                adv.RECOVERIES,
+                adv.XGSHOT, 
+                adv.POSSESSIONPERCENT, 
+                adv.PASSES, 
+                adv.TOUCHINBOX,
                 c.COMPETITIONNAME AS COMPETITION_NAME
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
