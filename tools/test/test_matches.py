@@ -84,7 +84,8 @@ def vis_side(dp):
                 dato_str = f"{dt.day}. {m_navn} {dt.year}"
             except: dato_str = "Ukendt dato"
 
-            st.markdown(f<div class='date-header'>{dato_str} — RUNDE {runde}</div>, unsafe_allow_html=True)
+            # FIX: Tilføjet anførselstegn herunder
+            st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {runde}</div>", unsafe_allow_html=True)
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
@@ -104,7 +105,7 @@ def vis_side(dp):
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:10px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                # --- STATISTIKKER (Flyttet ud så kategorierne ALTID ses ved spillede kampe) ---
+                # --- STATISTIKKER (Tegnes altid for spillede kampe) ---
                 if is_played:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
@@ -117,7 +118,7 @@ def vis_side(dp):
                         "totalPass": "Aflev."
                     }
                     
-                    # Filtrer m_stats kun hvis df_stats ikke er tom
+                    # Filtrer data for denne specifikke kamp
                     m_stats = pd.DataFrame()
                     if not df_stats.empty:
                         m_stats = df_stats[(df_stats['MATCH_OPTAUUID'] == m_uuid) & (df_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)]
@@ -125,17 +126,11 @@ def vis_side(dp):
                     for i, (stat_key, label) in enumerate(opta_stats.items()):
                         display = "-"
                         if not m_stats.empty:
+                            # Robust tjek for stat_key
                             val_row = m_stats[m_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower()]
                             if not val_row.empty:
                                 val = val_row['STAT_TOTAL'].iloc[0]
                                 display = f"{val}%" if "possession" in stat_key.lower() else str(val)
-                            
+                        
+                        # Nu tegnes HTML'en uanset hvad
                         sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{display}</div></div>", unsafe_allow_html=True)
-
-    # --- 6. TABS ---
-    t1, t2 = st.tabs(["⚽ RESULTATER", "📅 PROGRAM"])
-    with t1:
-        tegn_kampe(played.sort_values('MATCH_DATE_FULL', ascending=False), True)
-    with t2:
-        future = team_matches[~team_matches['MATCH_STATUS'].str.contains('Played', na=False)]
-        tegn_kampe(future.sort_values('MATCH_DATE_FULL'), False)
