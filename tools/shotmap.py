@@ -83,67 +83,68 @@ def vis_side(dp):
                                     s=120, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
 
-    # --- TAB 3: DANGER ZONE (MED SAMMENLIGNING) ---
     with tab3:
         if df_skud.empty:
-            st.info("Ingen data til DZ analyse.")
+            st.info("Ingen data fundet.")
         else:
             col_dz_viz, col_dz_ctrl = st.columns([3, 1])
             
-            # Beregn holdets samlede DZ-statistik (HIF samlet)
+            # Beregn holdets samlede DZ-statistik
             total_skud_hif = len(df_skud)
-            dz_skud_hif = len(df_skud[df_skud['IS_DZ_GEO'] == True])
+            dz_skud_hif = len(df_skud[df_skud['IS_DZ_GEO']])
             hif_dz_pct = (dz_skud_hif / total_skud_hif * 100) if total_skud_hif > 0 else 0
 
             with col_dz_ctrl:
                 spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
                 v_dz = st.selectbox("Vælg spiller (DZ)", options=["Hvidovre IF"] + spiller_liste_dz, key="sb_dz")
                 
-                # Filtrér data for den valgte visning
                 df_dz_full = df_skud if v_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_dz]
-                dz_hits = df_dz_full[df_dz_full['IS_DZ_GEO'] == True].copy()
+                dz_hits = df_dz_full[df_dz_full['IS_DZ_GEO']].copy()
                 dz_goals = len(dz_hits[dz_hits['EVENT_TYPEID'] == 16])
-                
-                # Beregn spillerens specifikke %
                 spiller_dz_pct = (len(dz_hits) / len(df_dz_full) * 100) if len(df_dz_full) > 0 else 0
                 
-                # --- STAT BOKSE MED LEGENDS ---
                 st.markdown(f"""
-                    <div class="stat-box" style="border-left-color: {DZ_COLOR}">
-                        <div class="stat-label">Skud i DZ</div>
-                        <div class="stat-value">{len(dz_hits)}</div>
-                    </div>
-                    <div class="stat-box" style="border-left-color: {HIF_RED}">
-                        <div class="stat-label">Mål i DZ</div>
-                        <div class="stat-value">{dz_goals}</div>
-                    </div>
-                    <div class="stat-box" style="border-left-color: #333;">
-                        <div class="stat-label">HIF samlet i DZ</div>
-                        <div class="stat-value">{hif_dz_pct:.1f}%</div>
-                    </div>
-                    <div class="stat-box" style="border-left-color: {HIF_GOLD}">
-                        <div class="stat-label">Spiller samlet i DZ</div>
-                        <div class="stat-value">{spiller_dz_pct:.1f}%</div>
-                    </div>
+                    <div class="stat-box" style="border-left-color: {DZ_COLOR}"><div class="stat-label">Skud i DZ</div><div class="stat-value">{len(dz_hits)}</div></div>
+                    <div class="stat-box" style="border-left-color: {HIF_RED}"><div class="stat-label">Mål i DZ</div><div class="stat-value">{dz_goals}</div></div>
+                    <div class="stat-box" style="border-left-color: #333;"><div class="stat-label">HIF samlet i DZ</div><div class="stat-value">{hif_dz_pct:.1f}%</div></div>
+                    <div class="stat-box" style="border-left-color: {HIF_GOLD}"><div class="stat-label">Spiller samlet i DZ</div><div class="stat-value">{spiller_dz_pct:.1f}%</div></div>
                 """, unsafe_allow_html=True)
 
             with col_dz_viz:
+                # ZOOM IND: Vi sætter half=True og justerer vi plotter kun fra X=70 til 105
                 pitch_dz = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-                fig_dz, ax_dz = pitch_dz.draw(figsize=(8, 10))
+                fig_dz, ax_dz = pitch_dz.draw(figsize=(8, 7))
                 
-                # Danger Zone Rektangel
-                dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=2, 
-                                            edgecolor=DZ_COLOR, facecolor=DZ_COLOR, 
-                                            alpha=0.15, linestyle='--', zorder=1)
+                # Begræns visningen til feltet (Opta X går fra 0-100, 100 er mål-linjen)
+                ax_dz.set_ylim(70, 102) 
+                
+                dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=2, edgecolor=DZ_COLOR, facecolor=DZ_COLOR, alpha=0.15, linestyle='--', zorder=1)
                 ax_dz.add_patch(dz_rect)
                 
-                # Plotting (samme logik som før)
-                non_dz = df_dz_full[df_dz_full['IS_DZ_GEO'] == False]
-                if not non_dz.empty:
-                    pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], s=60, c='white', edgecolors='#dddddd', alpha=0.15, ax=ax_dz)
+                non_dz = df_dz_full[~df_dz_full['IS_DZ_GEO']]
+                pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], s=70, c='white', edgecolors='#dddddd', alpha=0.2, ax=ax_dz)
                 
-                if not dz_hits.empty:
-                    c_dz = (dz_hits['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-                    pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=180, c=c_dz, edgecolors=HIF_RED, linewidth=2, ax=ax_dz)
-                
+                c_dz = (dz_hits['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+                pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=200, c=c_dz, edgecolors=HIF_RED, linewidth=2, ax=ax_dz)
                 st.pyplot(fig_dz)
+
+            # --- TABEL NEDENFOR: SPILLERE I KOLONNER ---
+            st.write("---")
+            st.subheader("Danger Zone Sammenligning")
+            
+            # Gruppér data per spiller
+            stats_list = []
+            for spiller in spiller_liste_dz:
+                s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
+                s_dz = s_data[s_data['IS_DZ_GEO']]
+                
+                stats_list.append({
+                    "Spiller": spiller,
+                    "Skud i DZ": len(s_dz),
+                    "Mål i DZ": len(s_dz[s_dz['EVENT_TYPEID'] == 16]),
+                    "DZ % af egne skud": f"{(len(s_dz)/len(s_data)*100):.1f}%" if len(s_data) > 0 else "0.0%"
+                })
+            
+            # Lav DF og vend det (transpose)
+            df_stats = pd.DataFrame(stats_list).set_index("Spiller").T
+            st.dataframe(df_stats, use_container_width=True)
