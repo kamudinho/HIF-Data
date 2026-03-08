@@ -1,17 +1,17 @@
 import pandas as pd
 
 def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
-    """
-    Returnerer alle SQL queries til OPTA og WYSCOUT data i Snowflake.
-    Sikrer korrekt mapping af liga og sæson samt udvidede Wyscout KPI'er.
-    """
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
+
+    # 1. Importér konstanter
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, COMPETITIONS
+
+    liga = liga_uuid if liga_uuid else COMPETITION_NAME
+    saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
     
-    # --- 1. Lav listen over hold baseret på ligaen ---
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
-    h_list = sorted(liga_hold_options.keys())
-    
+    # Dynamisk Wyscout Competition ID baseret på liga-navn
+    wy_comp_id = COMPETITIONS.get(liga, {}).get("wyid", 328)
     # --- 2. Find index for Hvidovre (hvis de findes i den valgte liga) ---
     try:
         hif_idx = h_list.index("Hvidovre")
