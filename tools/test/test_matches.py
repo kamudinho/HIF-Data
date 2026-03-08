@@ -8,13 +8,12 @@ def vis_side(dp):
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_stats = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
 
-    # Standardiser kolonner og rens ID'er med det samme
+    # Standardiser kolonnenavne til UPPERCASE for at matche Snowflake-output
     for df in [df_matches, df_stats]:
         if not df.empty:
             df.columns = [c.upper() for c in df.columns]
-            # Vi tvinger de kritiske ID-kolonner til string og fjerner mellemrum
-            cols_to_fix = ['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']
-            for col in cols_to_fix:
+            # Rens ID'er for at sikre match
+            for col in ['MATCH_OPTAUUID', 'CONTESTANT_OPTAUUID', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.strip().str.upper()
 
@@ -53,7 +52,7 @@ def vis_side(dp):
     """, unsafe_allow_html=True)
 
     # --- 3. HOLDVALG ---
-    opta_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     h_list = sorted(liga_hold_options.keys())
 
@@ -63,14 +62,11 @@ def vis_side(dp):
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
-    # --- 4. DATA FILTRERING ---
-    # Vi bruger .str.contains eller direkte sammenligning nu hvor alt er renset til UPPER
+    # --- 4. FILTRERING ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
-    
-    # Fleksibel status-tjek (virker både med 'Played', 'FullTime' osv)
     played = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
     
-    # --- TOPBAR STATS ---
+    # Render Topbar (K, S, U, N...)
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -85,12 +81,8 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 5. KAMP-VISNING FUNKTION ---
-    def tegn_kampe(df_list, is_played_tab):
-        if df_list.empty:
-            st.info("Ingen kampe fundet.")
-            return
-
+    # --- 5. KAMP-VISNING ---
+    def tegn_kampe(df_list, spillet):
         for _, row in df_list.iterrows():
             m_uuid = str(row.get('MATCH_OPTAUUID', '')).strip().upper()
             runde = safe_val(row.get('WEEK'))
@@ -105,16 +97,13 @@ def vis_side(dp):
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                h_uuid = str(row.get('CONTESTANTHOME_OPTAUUID', '')).upper()
-                a_uuid = str(row.get('CONTESTANTAWAY_OPTAUUID', '')).upper()
-                
-                h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
-                a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
+                h_name = opta_to_name.get(row.get('CONTESTANTHOME_OPTAUUID'), row.get('CONTESTANTHOME_NAME'))
+                a_name = opta_to_name.get(row.get('CONTESTANTAWAY_OPTAUUID'), row.get('CONTESTANTAWAY_NAME'))
 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:10px;'>{h_name}</div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
-                if is_played_tab:
+                if spillet:
                     h_s, a_s = safe_val(row.get('TOTAL_HOME_SCORE')), safe_val(row.get('TOTAL_AWAY_SCORE'))
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_s} - {a_s}</span></div>", unsafe_allow_html=True)
                 else:
@@ -124,36 +113,45 @@ def vis_side(dp):
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:10px;'>{a_name}</div>", unsafe_allow_html=True)
 
-                # --- STATISTIKKER (Kun i Resultater-fanen) ---
-                if is_played_tab:
+                # --- STATISTIK-LOGIK ---
+                if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     sc = st.columns(5)
                     
+                    # Definer de stats vi leder efter i STAT_TYPE kolonnen
                     opta_stats = {
                         "possessionPercentage": "Poss.%",
-                        "Passes": "totalPass",
+                        "totalScoringAtt": "Skud",
                         "touchesInOppBox": "Felt",
                         "wonCorners": "Hjørne",
                         "totalPass": "Aflev."
                     }
                     
-                    # Filtrer stats for denne kamp og det valgte hold
+                    # Filtrer m_stats for denne specifikke kamp og det valgte hold
                     m_stats = pd.DataFrame()
                     if not df_stats.empty:
-                        m_stats = df_stats[(df_stats['MATCH_OPTAUUID'] == m_uuid) & (df_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)]
+                        m_stats = df_stats[
+                            (df_stats['MATCH_OPTAUUID'] == m_uuid) & 
+                            (df_stats['CONTESTANT_OPTAUUID'] == valgt_uuid)
+                        ]
                     
                     for i, (stat_key, label) in enumerate(opta_stats.items()):
                         display = "-"
                         if not m_stats.empty:
+                            # Her kigger vi i STAT_TYPE kolonnen efter den rigtige række
                             val_row = m_stats[m_stats['STAT_TYPE'].astype(str).str.lower() == stat_key.lower()]
                             if not val_row.empty:
-                                raw_v = val_row['STAT_TOTAL'].iloc[0]
-                                display = f"{raw_v}%" if "possession" in stat_key.lower() else str(raw_v)
+                                val = val_row['STAT_TOTAL'].iloc[0]
+                                # Formatering: Procent for possession, heltal for resten
+                                if "possession" in stat_key.lower():
+                                    display = f"{int(float(val))}%"
+                                else:
+                                    display = str(int(float(val)))
                         
                         sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{display}</div></div>", unsafe_allow_html=True)
 
     # --- 6. TABS ---
-    t1, t2 = st.tabs(["⚽ RESULTATER", "📅 PROGRAM"])
+    t1, t2 = st.tabs(["RESULTATER", "KOMMENDE"])
     with t1:
         tegn_kampe(played.sort_values('MATCH_DATE_FULL', ascending=False), True)
     with t2:
