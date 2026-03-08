@@ -83,49 +83,67 @@ def vis_side(dp):
                                     s=120, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
 
-    # --- TAB 3: DANGER ZONE (GEOGRAFISK FILTRERING) ---
+    # --- TAB 3: DANGER ZONE (MED SAMMENLIGNING) ---
     with tab3:
         if df_skud.empty:
             st.info("Ingen data til DZ analyse.")
         else:
             col_dz_viz, col_dz_ctrl = st.columns([3, 1])
+            
+            # Beregn holdets samlede DZ-statistik (HIF samlet)
+            total_skud_hif = len(df_skud)
+            dz_skud_hif = len(df_skud[df_skud['IS_DZ_GEO'] == True])
+            hif_dz_pct = (dz_skud_hif / total_skud_hif * 100) if total_skud_hif > 0 else 0
+
             with col_dz_ctrl:
                 spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
                 v_dz = st.selectbox("Vælg spiller (DZ)", options=["Hvidovre IF"] + spiller_liste_dz, key="sb_dz")
                 
+                # Filtrér data for den valgte visning
                 df_dz_full = df_skud if v_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == v_dz]
-                
-                # Split data baseret på den geografiske beregning
                 dz_hits = df_dz_full[df_dz_full['IS_DZ_GEO'] == True].copy()
-                non_dz = df_dz_full[df_dz_full['IS_DZ_GEO'] == False].copy()
+                dz_goals = len(dz_hits[dz_hits['EVENT_TYPEID'] == 16])
                 
-                st.markdown(f'<div class="stat-box" style="border-left-color: {DZ_COLOR}"><div class="stat-label">Danger Zone Skud</div><div class="stat-value">{len(dz_hits)}</div></div>', unsafe_allow_html=True)
+                # Beregn spillerens specifikke %
+                spiller_dz_pct = (len(dz_hits) / len(df_dz_full) * 100) if len(df_dz_full) > 0 else 0
                 
-                if len(df_dz_full) > 0:
-                    dz_pct = (len(dz_hits) / len(df_dz_full)) * 100
-                    st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Andel</div><div class="stat-value">{dz_pct:.1f}%</div></div>', unsafe_allow_html=True)
+                # --- STAT BOKSE MED LEGENDS ---
+                st.markdown(f"""
+                    <div class="stat-box" style="border-left-color: {DZ_COLOR}">
+                        <div class="stat-label">Skud i DZ</div>
+                        <div class="stat-value">{len(dz_hits)}</div>
+                    </div>
+                    <div class="stat-box" style="border-left-color: {HIF_RED}">
+                        <div class="stat-label">Mål i DZ</div>
+                        <div class="stat-value">{dz_goals}</div>
+                    </div>
+                    <div class="stat-box" style="border-left-color: #333;">
+                        <div class="stat-label">HIF samlet i DZ</div>
+                        <div class="stat-value">{hif_dz_pct:.1f}%</div>
+                    </div>
+                    <div class="stat-box" style="border-left-color: {HIF_GOLD}">
+                        <div class="stat-label">Spiller samlet i DZ</div>
+                        <div class="stat-value">{spiller_dz_pct:.1f}%</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
             with col_dz_viz:
                 pitch_dz = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_dz, ax_dz = pitch_dz.draw(figsize=(8, 10))
                 
-                # Tegn Danger Zone rektangel (Matplotlib patches bruger Y, X for VerticalPitch)
+                # Danger Zone Rektangel
                 dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=2, 
                                             edgecolor=DZ_COLOR, facecolor=DZ_COLOR, 
                                             alpha=0.15, linestyle='--', zorder=1)
                 ax_dz.add_patch(dz_rect)
                 
-                # 1. Tegn skud udenfor (tonet helt ned)
+                # Plotting (samme logik som før)
+                non_dz = df_dz_full[df_dz_full['IS_DZ_GEO'] == False]
                 if not non_dz.empty:
-                    pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], 
-                                     s=60, c='white', edgecolors='#dddddd', 
-                                     alpha=0.15, ax=ax_dz, zorder=2)
+                    pitch_dz.scatter(non_dz['EVENT_X'], non_dz['EVENT_Y'], s=60, c='white', edgecolors='#dddddd', alpha=0.15, ax=ax_dz)
                 
-                # 2. Tegn skud indenfor (tydelige og farvekodede)
                 if not dz_hits.empty:
                     c_dz = (dz_hits['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-                    pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], 
-                                     s=180, c=c_dz, edgecolors=HIF_RED, 
-                                     linewidth=2, ax=ax_dz, zorder=3)
+                    pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=180, c=c_dz, edgecolors=HIF_RED, linewidth=2, ax=ax_dz)
                 
                 st.pyplot(fig_dz)
