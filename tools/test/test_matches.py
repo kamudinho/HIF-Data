@@ -131,7 +131,7 @@ def vis_side(dp):
                     
                     opta_stats = {
                         "possessionPercentage": "Poss.%",
-                        "totalScoringAtt": "Skud",
+                        "Passes": "totalPass",
                         "touchesInOppBox": "Felt",
                         "wonCorners": "Hjørne",
                         "totalPass": "Aflev."
