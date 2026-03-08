@@ -4,25 +4,25 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     # --- 1. DATAGRUNDLAG ---
+    # Vi henter data fra pakken 'dp'
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_raw_stats = dp.get("opta_team_stats", pd.DataFrame()).copy()
-    # Rettet nøgle til at matche din query-funktion
-    df_wy = dp.get("match_history", pd.DataFrame()).copy()    
+    
+    # Her bruger vi 'match_history' nøglen fra din loader
+    df_wy = dp.get("match_history", pd.DataFrame()).copy() 
     
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet i Snowflake.")
+        st.warning("Ingen kampdata fundet i Snowflake (Opta).")
         return
 
-    # Forbered datoer og status til merge
+    # Forbered Opta status (f.eks. 'Played', 'Fixture')
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
-    df_matches['DATE_ONLY'] = pd.to_datetime(df_matches['MATCH_DATE_FULL']).dt.date
-    if not df_wy.empty:
-        df_wy['DATE_ONLY'] = pd.to_datetime(df_wy['DATE']).dt.date
 
     # --- 2. LOOKUP DICTIONARIES ---
+    # Mapper Opta UUID til Wyscout ID, så vi kan koble kilderne
     opta_to_wyid = {v['opta_uuid']: v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid')}
     opta_to_name = {v['opta_uuid']: k for k, v in TEAMS.items() if v.get('opta_uuid')}
     
@@ -68,15 +68,17 @@ def vis_side(dp):
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = liga_hold_options[valgt_navn]
 
+    # Filtrer kampe for det valgte hold
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     played = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
     
-    # Statistik beregning
+    # --- STATISTIK BEREGNING ---
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0), int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
+        h_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0)
+        a_s = int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
         summary["M+"] += h_s if is_h else a_s
         summary["M-"] += a_s if is_h else h_s
         diff = h_s - a_s if is_h else a_s - h_s
@@ -88,26 +90,40 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 6. KAMP VISNING ---
+    # --- 6. KAMP VISNING FUNKTION ---
     def tegn_kampe(df_list, is_played):
         if df_list.empty:
             st.info("Ingen kampe fundet.")
             return
 
-        # Dansk måneds-mapping
         maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
         for _, row in df_list.iterrows():
             h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
             h_wyid, a_wyid = opta_to_wyid.get(h_uuid), opta_to_wyid.get(a_uuid)
             
-            # Find Wyscout data
-            wy_data = df_wy[(df_wy['DATE_ONLY'] == row['DATE_ONLY']) & 
-                           ((df_wy['TEAM_WYID'] == h_wyid) | (df_wy['TEAM_WYID'] == a_wyid))]
+            # Hent runden (GAMEWEEK) for at koble til Wyscout
+            aktuel_runde = row.get('GAMEWEEK')
             
-            xg_val = f"xG {wy_data.iloc[0]['XG']:.2f}" if not wy_data.empty else ""
-            recov_val = int(wy_data.iloc[0]['RECOVERIES']) if not wy_data.empty else "N/A"
+            # --- FIND WYSCOUT DATA (BASERET PÅ ID + RUNDE) ---
+            wy_match = pd.DataFrame()
+            if not df_wy.empty and aktuel_runde:
+                # Vi parrer på Gameweek og tjekker om et af holdenes ID findes i den række
+                wy_match = df_wy[
+                    (df_wy['GAMEWEEK'] == aktuel_runde) & 
+                    ((df_wy['TEAM_WYID'] == h_wyid) | (df_wy['TEAM_WYID'] == a_wyid))
+                ]
+            
+            # Uddrag xG og Recoveries hvis kampen findes i Wyscout-datasættet
+            xg_val = ""
+            recov_val = "-"
+            if not wy_match.empty:
+                # Vi tager xG og Recoveries fra den række der matcher
+                val_xg = wy_match.iloc[0].get('XG', 0)
+                xg_val = f"xG {val_xg:.2f}" if val_xg else "xG -"
+                recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
 
+            # Dato formatering
             dt = pd.to_datetime(row['MATCH_DATE_FULL'])
             m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
             st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year}</div>", unsafe_allow_html=True)
@@ -122,7 +138,9 @@ def vis_side(dp):
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=30)
                 
                 if is_played:
-                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span><br><span class='xg-label'>{xg_val}</span></div>", unsafe_allow_html=True)
+                    h_score = int(row.get('TOTAL_HOME_SCORE', 0) or 0)
+                    a_score = int(row.get('TOTAL_AWAY_SCORE', 0) or 0)
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_score} - {a_score}</span><br><span class='xg-label'>{xg_val}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
                     c3.markdown(f"<div style='text-align:center; font-weight:bold; color:#cc0000; margin-top:10px;'>Kl. {tid}</div>", unsafe_allow_html=True)
