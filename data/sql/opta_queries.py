@@ -155,7 +155,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
             JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-            WHERE tm.COMPETITION_WYID = 328
+            WHERE tm.COMPETITION_WYID = (328)
             AND s.SEASONNAME LIKE '2025%2026'
             AND tm.TEAM_WYID = {TEAM_WYID}
             ORDER BY tm.DATE DESC
