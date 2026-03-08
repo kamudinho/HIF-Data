@@ -8,16 +8,16 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
-    # 1. Importér konstanter til fallback
-    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAMS
-    
-    # 2. Definér variabler
+    # 1. Importér konstanter OG COMPETITIONS
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, COMPETITIONS
+
+    # 2. Find den valgte liga-konfiguration
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
     
-    # 3. Definitioner til Wyscout-query
-    SEASONNAME = saeson
-    TEAM_WYID = 7490 # Hvidovre ID
+    # Dynamisk find Wyscout Competition ID baseret på navnet (f.eks. "1. Division")
+    # Vi bruger 328 som fallback hvis navnet ikke findes
+    wy_comp_id = COMPETITIONS.get(liga, {}).get("wyid", 328)
 
     # 4. Dynamiske filtre (RETTET FRA h_only TIL hif_only)
     event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
@@ -137,7 +137,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
 
         "wyscout_match_history": f"""
             SELECT 
-                tm.TEAM_WYID, -- Tilføjet så vi kan filtrere i Python
+                tm.TEAM_WYID, 
                 tm.DATE, 
                 m.MATCHLABEL, 
                 tm.GAMEWEEK,
@@ -156,8 +156,9 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
             JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
-            WHERE tm.COMPETITION_WYID = 328 -- NordicBet Liga
-            AND s.SEASONNAME LIKE '2025%2026' -- Robust overfor / og -
+            WHERE tm.COMPETITION_WYID = {wy_comp_id} -- NU DYNAMISK!
+            AND s.SEASONNAME LIKE '2025%2026'
+            -- VI FJERNER FILTRERING PÅ TEAM_WYID HER, SÅ VI HAR DATA FOR ALLE HOLD
             ORDER BY tm.DATE DESC
         """
     }
