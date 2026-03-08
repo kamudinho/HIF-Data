@@ -8,16 +8,18 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
-    # 1. Importér konstanter OG COMPETITIONS
-    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, COMPETITIONS
-
-    # 2. Find den valgte liga-konfiguration
-    liga = liga_uuid if liga_uuid else COMPETITION_NAME
-    saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
+    # --- 1. Lav listen over hold baseret på ligaen ---
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    h_list = sorted(liga_hold_options.keys())
     
-    # Dynamisk find Wyscout Competition ID baseret på navnet (f.eks. "1. Division")
-    # Vi bruger 328 som fallback hvis navnet ikke findes
-    wy_comp_id = COMPETITIONS.get(liga, {}).get("wyid", 328)
+    # --- 2. Find index for Hvidovre (hvis de findes i den valgte liga) ---
+    try:
+        hif_idx = h_list.index("Hvidovre")
+    except ValueError:
+        hif_idx = 0  # Fallback til det første hold i listen, hvis Hvidovre ikke er i ligaen
+    
+    # --- 3. Nu kan du lave din selectbox uden fejl ---
+    valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx)
 
     # 4. Dynamiske filtre (RETTET FRA h_only TIL hif_only)
     event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
