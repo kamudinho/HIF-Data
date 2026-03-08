@@ -4,29 +4,32 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     # --- 1. DATAGRUNDLAG ---
-    # Vi henter data fra pakken 'dp'
+    # Henter data fra din loader (sikrer vi bruger de rigtige nøgler fra din get_opta_queries)
     df_matches = dp.get("opta", {}).get("matches", pd.DataFrame()).copy()
     df_raw_stats = dp.get("opta_team_stats", pd.DataFrame()).copy()
-    
-    # Her bruger vi 'match_history' nøglen fra din loader
+    # Din query hedder "wyscout_match_history" i SQL-filen, men loades ofte som "match_history" i dp
     df_wy = dp.get("match_history", pd.DataFrame()).copy() 
     
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet i Snowflake (Opta).")
+        st.warning("Ingen kampdata fundet i Snowflake.")
         return
 
-    # Forbered Opta status (f.eks. 'Played', 'Fixture')
+    # --- 2. FORBERED DATA (INGEN DATE_ONLY REFERENCER) ---
     df_matches['MATCH_STATUS_CLEAN'] = df_matches['MATCH_STATUS'].astype(str).str.strip().str.capitalize()
+    
+    # Konvertér datoer til datetime objekter med det samme
+    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'])
+    if not df_wy.empty:
+        df_wy['DATE'] = pd.to_datetime(df_wy['DATE'])
 
-    # --- 2. LOOKUP DICTIONARIES ---
-    # Mapper Opta UUID til Wyscout ID, så vi kan koble kilderne
+    # --- 3. LOOKUP & MAPPING ---
     opta_to_wyid = {v['opta_uuid']: v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid')}
     opta_to_name = {v['opta_uuid']: k for k, v in TEAMS.items() if v.get('opta_uuid')}
     
-    # --- 3. OPTA TEAM STATS PIVOT & MERGE ---
+    # --- 4. OPTA TEAM STATS PIVOT ---
     if not df_raw_stats.empty:
         try:
             df_pivot = df_raw_stats.pivot_table(
@@ -41,134 +44,70 @@ def vis_side(dp):
                                  right_on=['MATCH_OPTAUUID_HOME', 'CONTESTANT_OPTAUUID_HOME'], how='left')
             df_matches = pd.merge(df_matches, df_a, left_on=['MATCH_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID'], 
                                  right_on=['MATCH_OPTAUUID_AWAY', 'CONTESTANT_OPTAUUID_AWAY'], how='left')
-        except Exception as e:
-            st.error(f"Fejl ved behandling af Opta stats: {e}")
+        except Exception:
+            pass
 
-    # --- 4. CSS STYLING ---
-    st.markdown("""
-        <style>
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px; border-bottom: 3px solid #cc0000; }
-        .stat-label { font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; }
-        .stat-val { font-weight: 800; font-size: 16px; color: #111; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
-        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; }
-        .xg-label { font-size: 12px; font-weight: bold; color: #cc0000; margin-top: 4px; background: #ffeeee; padding: 2px 8px; border-radius: 10px; display: inline-block; }
-        .match-stat-label { font-size: 10px; color: #888; text-transform: uppercase; }
-        .match-stat-val { font-size: 13px; font-weight: 700; color: #333; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # --- 5. TOPBAR ---
+    # --- 5. UI & FILTRERING ---
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
     h_list = sorted(liga_hold_options.keys())
     
-    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
-    with top_cols[0]:
-        hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
-        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
-        valgt_uuid = liga_hold_options[valgt_navn]
+    valgt_navn = st.selectbox("Vælg hold", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
+    valgt_uuid = liga_hold_options[valgt_navn]
 
-    # Filtrer kampe for det valgte hold
     mask = (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
     team_matches = df_matches[mask].copy()
     played = team_matches[team_matches['MATCH_STATUS_CLEAN'] == 'Played']
-    
-    # --- STATISTIK BEREGNING ---
-    summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-    for _, m in played.iterrows():
-        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        h_s = int(m.get('TOTAL_HOME_SCORE', 0) or 0)
-        a_s = int(m.get('TOTAL_AWAY_SCORE', 0) or 0)
-        summary["M+"] += h_s if is_h else a_s
-        summary["M-"] += a_s if is_h else h_s
-        diff = h_s - a_s if is_h else a_s - h_s
-        if diff > 0: summary["S"] += 1
-        elif diff == 0: summary["U"] += 1
-        else: summary["N"] += 1
 
-    stats_disp = [("K", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
-    for i, (l, v) in enumerate(stats_disp):
-        top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
-
-    # --- 6. KAMP VISNING FUNKTION ---
+    # --- 6. TEGN KAMPE FUNKTION (RETTET TIL GAMEWEEK + DATE) ---
     def tegn_kampe(df_list, is_played):
         if df_list.empty:
             st.info("Ingen kampe fundet.")
             return
 
-        maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
-
         for _, row in df_list.iterrows():
+            # Hent ID'er og Gameweek
             h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
             h_wyid, a_wyid = opta_to_wyid.get(h_uuid), opta_to_wyid.get(a_uuid)
-            
-            # Hent runden (GAMEWEEK) for at koble til Wyscout
             aktuel_runde = row.get('GAMEWEEK')
             
-            # --- FIND WYSCOUT DATA (BASERET PÅ ID + RUNDE) ---
+            # --- KOBLING TIL WYSCOUT VIA GAMEWEEK ---
             wy_match = pd.DataFrame()
             if not df_wy.empty and aktuel_runde:
-                # Vi parrer på Gameweek og tjekker om et af holdenes ID findes i den række
-                wy_match = df_wy[
-                    (df_wy['GAMEWEEK'] == aktuel_runde) & 
-                    ((df_wy['TEAM_WYID'] == h_wyid) | (df_wy['TEAM_WYID'] == a_wyid))
-                ]
+                # Vi matcher på GAMEWEEK da det er unikt pr. runde i din query
+                wy_match = df_wy[df_wy['GAMEWEEK'] == aktuel_runde]
             
-            # Uddrag xG og Recoveries hvis kampen findes i Wyscout-datasættet
-            xg_val = ""
-            recov_val = "-"
-            if not wy_match.empty:
-                # Vi tager xG og Recoveries fra den række der matcher
+            # Udpakning af værdier
+            xg_display = ""
+            if not wy_match.empty and is_played:
                 val_xg = wy_match.iloc[0].get('XG', 0)
-                xg_val = f"xG {val_xg:.2f}" if val_xg else "xG -"
-                recov_val = int(wy_match.iloc[0].get('RECOVERIES', 0))
+                xg_display = f"xG {val_xg:.2f}" if val_xg else ""
 
-            # Dato formatering
-            dt = pd.to_datetime(row['MATCH_DATE_FULL'])
-            m_navn = maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())
-            st.markdown(f"<div class='date-header'>{dt.day}. {m_navn} {dt.year}</div>", unsafe_allow_html=True)
+            # Dato formatering (Bruger MATCH_DATE_FULL direkte)
+            dato_str = row['MATCH_DATE_FULL'].strftime('%d. %B %Y').upper()
+            st.markdown(f"**{dato_str}** — Runde {aktuel_runde}")
             
             with st.container(border=True):
-                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                
+                c1, c2, c3, c4, c5 = st.columns([2, 0.5, 1, 0.5, 2])
                 h_name = opta_to_name.get(h_uuid, row['CONTESTANTHOME_NAME'])
                 a_name = opta_to_name.get(a_uuid, row['CONTESTANTAWAY_NAME'])
 
-                c1.markdown(f"<div style='text-align:right; font-weight:bold; font-size:15px;'>{h_name}</div>", unsafe_allow_html=True)
+                c1.write(f"**{h_name}**")
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=30)
                 
                 if is_played:
-                    h_score = int(row.get('TOTAL_HOME_SCORE', 0) or 0)
-                    a_score = int(row.get('TOTAL_AWAY_SCORE', 0) or 0)
-                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{h_score} - {a_score}</span><br><span class='xg-label'>{xg_val}</span></div>", unsafe_allow_html=True)
+                    score = f"{int(row.get('TOTAL_HOME_SCORE', 0))} - {int(row.get('TOTAL_AWAY_SCORE', 0))}"
+                    c3.markdown(f"<div style='text-align:center'><b>{score}</b><br><small>{xg_display}</small></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
-                    c3.markdown(f"<div style='text-align:center; font-weight:bold; color:#cc0000; margin-top:10px;'>Kl. {tid}</div>", unsafe_allow_html=True)
+                    c3.write(f"Kl. {tid}")
                 
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=30)
-                c5.markdown(f"<div style='text-align:left; font-weight:bold; font-size:15px;'>{a_name}</div>", unsafe_allow_html=True)
-                
-                if is_played:
-                    st.markdown("<hr style='margin: 10px 0; opacity: 0.1;'>", unsafe_allow_html=True)
-                    sc = st.columns(4)
-                    stats_map = [
-                        ("Besiddelse", "possessionPercentage", "%"), 
-                        ("Skud (Opta)", "totalScoringAtt", ""), 
-                        ("Erobringer (WY)", recov_val, ""), 
-                        ("Hjørne", "wonCorner", "")
-                    ]
-                    for i, (label, s_key, suff) in enumerate(stats_map):
-                        if isinstance(s_key, str):
-                            h_v = row.get(f"{s_key}_HOME", 0)
-                            a_v = row.get(f"{s_key}_AWAY", 0)
-                            val_str = f"{h_v}{suff} - {a_v}{suff}"
-                        else:
-                            val_str = str(s_key)
-                        sc[i].markdown(f"<div style='text-align:center;'><div class='match-stat-label'>{label}</div><div class='match-stat-val'>{val_str}</div></div>", unsafe_allow_html=True)
+                c5.write(f"**{a_name}**")
 
     # --- 7. TABS ---
-    tab_res, tab_fix = st.tabs(["Resultater", "Program"])
-    with tab_res:
+    tab1, tab2 = st.tabs(["Resultater", "Program"])
+    with tab1:
         tegn_kampe(played.sort_values('MATCH_DATE_FULL', ascending=False), True)
-    with tab_fix:
-        tegn_kampe(team_matches[team_matches['MATCH_STATUS_CLEAN'] != 'Played'].sort_values('MATCH_DATE_FULL'), False)
+    with tab2:
+        future = team_matches[team_matches['MATCH_STATUS_CLEAN'] != 'Played']
+        tegn_kampe(future.sort_values('MATCH_DATE_FULL'), False)
