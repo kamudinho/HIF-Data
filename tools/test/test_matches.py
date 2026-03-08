@@ -11,6 +11,13 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
+    maaned_map = {
+        "Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", 
+        "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", 
+        "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", 
+        "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"
+    }
+    
     if df_matches.empty:
         st.warning("Ingen kampdata fundet.")
         return
