@@ -1,7 +1,9 @@
+import pandas as pd
+
 def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     """
-    Returnerer alle SQL queries til OPTA data i Snowflake.
-    Sikrer korrekt mapping af liga og sæson fra team_mapping.
+    Returnerer alle SQL queries til OPTA og WYSCOUT data i Snowflake.
+    Sikrer korrekt mapping af liga og sæson samt udvidede Wyscout KPI'er.
     """
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
@@ -13,15 +15,15 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     liga = liga_uuid if liga_uuid else COMPETITION_NAME
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
     
-    # 3. Definitioner til Wyscout-query i bunden (Løser NameError)
+    # 3. Definitioner til Wyscout-query
     SEASONNAME = saeson
-    TEAM_WYID = 7490 # Hvidovre ID fra din app-konfiguration
+    TEAM_WYID = 7490 # Hvidovre ID
 
     # 4. Dynamiske filtre baseret på hif_only flaget
-    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
+    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
+    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
+    stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if h_only else ""
+    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if h_only else ""
 
     return {
         "opta_matches": f"""
@@ -31,7 +33,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 MATCH_LOCALTIME, CONTESTANTHOME_OPTAUUID, 
                 CONTESTANTAWAY_OPTAUUID, CONTESTANTHOME_NAME, 
                 CONTESTANTAWAY_NAME, COMPETITION_NAME, 
-                WEEK, -- Vi bruger WEEK som bekræftet
+                WEEK, 
                 TOURNAMENTCALENDAR_NAME, TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_MATCHINFO 
             WHERE COMPETITION_NAME = '{liga}' 
@@ -113,7 +115,6 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
             )
-            -- Vi har tilføjet position 9 (EVENT_TIMEMIN) til grupperingen her:
             GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
         """,
 
@@ -136,11 +137,14 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 tm.DATE, 
                 m.MATCHLABEL, 
                 tm.GAMEWEEK,
-                adv.GOALS, 
-                adv.XGSHOT, 
-                adv.POSSESSIONPERCENT, 
-                adv.PASSES, 
-                adv.TOUCHINBOX,
+                adv.POSSESSIONPERCENT AS POSSESSION, 
+                adv.TOUCHINBOX AS TOUCHESINBOX,
+                adv.SHOTS,
+                adv.SHOTSFROMDANGERZONE,
+                adv.XG,
+                adv.PPDA,
+                adv.RECOVERIES,
+                adv.CROSSES,
                 c.COMPETITIONNAME AS COMPETITION_NAME
             FROM {DB}.WYSCOUT_TEAMMATCHES tm
             LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
