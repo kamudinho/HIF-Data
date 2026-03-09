@@ -4,7 +4,7 @@ import plotly.express as px
 
 def vis_side(dp):
     # 1. Hent dataframes
-    df_lb = dp.get("player_linebreaks", pd.DataFrame())
+    df_lb = dp.get("opta_player_linebreaks", pd.DataFrame())
     df_players = dp.get("local_players", pd.DataFrame())
 
     if df_lb.empty:
