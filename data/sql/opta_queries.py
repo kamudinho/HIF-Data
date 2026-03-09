@@ -68,7 +68,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
             LIMIT 100
-        """
+        """,
         
         "opta_team_linebreaks": f"""
             SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
