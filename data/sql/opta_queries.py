@@ -58,15 +58,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT 
                 PLAYER_OPTAUUID,
                 LINEUP_CONTESTANTUUID,
-                MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
-                MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
-                MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
-                MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE,
-                SUM(STAT_FH) AS TOTAL_LB_FH,
-                SUM(STAT_SH) AS TOTAL_LB_SH
+                STAT_TYPE,
+                STAT_VALUE,
+                STAT_FH,
+                STAT_SH
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            GROUP BY 1, 2
-            ORDER BY LB_TOTAL DESC
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_lb}
             LIMIT 100
         """,
         
