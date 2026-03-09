@@ -38,13 +38,15 @@ def vis_side(dp):
                                 (df_shots['EVENT_Y'] <= 63.0)
 
     # --- 3. PIVOTERING ---
-    # Vi bruger de kolonnenavne din SQL returnerer: STAT_TYPE og STAT_VALUE
     pivot_stats = df_working.pivot_table(
-        index=player_col, 
-        columns=stat_type_col, 
-        values=stat_val_col, 
+        index='PLAYER_OPTAUUID', 
+        columns='STAT_TYPE', 
+        values='STAT_VALUE', # Nu findes denne pga. AS STAT_VALUE i SQL
         aggfunc='sum'
     ).fillna(0).reset_index()
+    
+    # Tjek om de rigtige kolonner findes, ellers brug fallback
+    xg_col = 'expectedGoals' if 'expectedGoals' in pivot_stats.columns else pivot_stats.columns[1]
     
     # Mapping af navne
     pivot_stats['NAVN'] = pivot_stats[player_col].map(name_map)
