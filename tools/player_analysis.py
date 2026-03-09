@@ -131,7 +131,7 @@ def vis_side(dp):
                      x=selected_metric_key, 
                      y='NAVN', 
                      orientation='h',
-                     labels={selected_metric_key: metric_options[selected_metric_key], 'NAVN':},
+                     labels={selected_metric_key: metric_options[selected_metric_key], 'NAVN':' '},
                      color='Farve',
                      color_discrete_map="identity",
                      text_auto='.2f' if 'expected' in selected_metric_key else True)
