@@ -1,34 +1,33 @@
-#data/analyse_load.py
+# data/analyse_load.py
 import pandas as pd
 import streamlit as st
-from data.data_load import _get_snowflake_conn, load_local_players
-from data.sql.opta_queries import get_opta_queries
-from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 def get_analysis_package(hif_only=False):
+    # Vi flytter vores egne moduler herind for at undgå ImportError cirkler
+    from data.data_load import _get_snowflake_conn, load_local_players
+    from data.sql.opta_queries import get_opta_queries
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
+
     conn = _get_snowflake_conn()
     if not conn: 
         return {}
 
-    # 1. Setup filter-strenge
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
 
-    # 2. Hent queries (Sørg for at argumentnavne matcher get_opta_queries definitionen)
-    queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)    
+    # Her bruger vi de navne, du har defineret i din get_opta_queries
+    queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)
     
     def safe_query(query_key):
         q = queries.get(query_key)
-        if not q:
-            return pd.DataFrame()
+        if not q: return pd.DataFrame()
         try:
-            # Bruger Streamlit connection query metode
             return conn.query(q)
         except Exception as e:
             st.error(f"Fejl i query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # --- Hent data ---
+    # Hent data
     df_matches = safe_query("opta_matches")
     df_shots = safe_query("opta_shotevents")
     df_opta_stats = safe_query("opta_team_stats")
@@ -38,7 +37,7 @@ def get_analysis_package(hif_only=False):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
 
-    # --- Navne-mapping ---
+    # Navne-mapping fra lokal CSV
     df_local = load_local_players()
     name_map = {}
     if df_local is not None and not df_local.empty:
@@ -49,23 +48,11 @@ def get_analysis_package(hif_only=False):
                 df_local['NAVN'].astype(str).str.strip()
             ))
 
-    # Sikker mapping af linebreaks (vigtigt for Spillerperformance-siden)
-    if not df_player_linebreaks.empty:
-        df_player_linebreaks.columns = [c.upper() for c in df_player_linebreaks.columns]
-        if 'PLAYER_OPTAUUID' in df_player_linebreaks.columns:
-            df_player_linebreaks['PLAYER_NAME'] = (
-                df_player_linebreaks['PLAYER_OPTAUUID']
-                .astype(str).str.lower()
-                .map(name_map)
-                .fillna(df_player_linebreaks['PLAYER_OPTAUUID'])
-            )
-
     return {
         "matches": df_matches,
         "playerstats": df_shots,
         "xg_agg": df_xg_agg,
         "assists": df_assists,
-        "qualifiers": df_quals,
         "name_map": name_map,
         "players": df_local,
         "opta": {
@@ -74,8 +61,6 @@ def get_analysis_package(hif_only=False):
             "team_linebreaks": df_team_linebreaks,
             "player_linebreaks": df_player_linebreaks
         },
-        "team_linebreaks": df_team_linebreaks,
-        "player_linebreaks": df_player_linebreaks,
         "config": {
             "liga_navn": comp_f,
             "season": season_f,
