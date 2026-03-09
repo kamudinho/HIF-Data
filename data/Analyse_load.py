@@ -12,31 +12,25 @@ def get_analysis_package(hif_only=False):
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
     
-    # Henter de opdaterede queries (Hvor Wyscout er droppet)
+    # Henter de opdaterede queries
     queries = get_opta_queries(comp_f, season_f, hif_only=hif_only)
     
-    # --- HJÆLPEFUNKTION TIL SIKKER INDLÆSNING ---
     def safe_query(query_key):
         q = queries.get(query_key)
         if not q:
-            return pd.DataFrame() # Returner tom DF hvis query ikke findes
+            return pd.DataFrame()
         try:
             return conn.query(q)
         except Exception as e:
             print(f"Fejl i query {query_key}: {e}")
             return pd.DataFrame()
 
-    # --- 1. Hent Data (Vi bruger safe_query for at undgå 'Unknown Error') ---
+    # --- 1. Hent Data ---
     df_matches = safe_query("opta_matches")
     df_shots = safe_query("opta_shotevents")
-    df_opta_stats = safe_query("opta_team_stats")
+    df_opta_stats = safe_query("opta_team_stats") # Indeholder nu xG, Linebreaks, Touches
     df_assists = safe_query("opta_assists")
     
-    # Disse kan være fjernet fra din nye opta_queries.py - safe_query håndterer det
-    df_linebreaks = safe_query("opta_linebreaks")
-    df_xg_agg = safe_query("opta_expected_goals")
-    df_quals = safe_query("opta_qualifiers")
-
     # --- 2. Hent spillere og lav name_map ---
     df_local = load_local_players()
     name_map = {}
@@ -50,19 +44,15 @@ def get_analysis_package(hif_only=False):
                 df_local[n_col].astype(str).str.strip()
             ))
 
-    # --- 3. Samlet pakke (Struktureret så din vis_side kan læse det) ---
+    # --- 3. Samlet pakke ---
     return {
         "matches": df_matches,
-        "match_history": pd.DataFrame(), # Droppet Wyscout
         "opta": {
             "matches": df_matches,
-            "team_stats": df_opta_stats # VIGTIG: Sørg for at navnet matcher det vis_side leder efter
+            "team_stats": df_opta_stats
         },
         "playerstats": df_shots,
-        "linebreaks": df_linebreaks,
-        "xg_agg": df_xg_agg,
         "assists": df_assists,
-        "qualifiers": df_quals,
         "players": df_local,
         "name_map": name_map,
         "config": {
