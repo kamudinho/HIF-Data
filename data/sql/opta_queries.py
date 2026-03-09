@@ -70,13 +70,13 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
                 CONTESTANT_OPTAUUID, 
                 PLAYER_OPTAUUID, 
                 STAT_TYPE, 
-                STAT_VALUE, 
+                STAT AS STAT_VALUE,  -- Her var fejlen: kolonnen hedder STAT
                 POSITION, 
                 MATCH_DATE
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-            -- Vi bruger ILIKE for at være ligeglade med store/små bogstaver og fjerner de mest restriktive filtre
-            WHERE (TOURNAMENTCALENDAR_NAME ILIKE '%2025%202026%' OR TOURNAMENTCALENDAR_NAME ILIKE '%25%26%')
-              AND (COMPETITION_NAME ILIKE '%Nordic%' OR COMPETITION_NAME ILIKE '%Super%')
+            -- Vi bruger de UUID'er vi ved findes i din tabel (fra dit dump)
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = 'ecgticvxanikzudyjr458hcmr' -- NordicBet 25/26 UUID fra dit dump
+              AND COMPETITION_OPTAUUID = '6ifaeunfdele' -- Competition UUID fra dit dump
             {stats_filter}
         """,
 
