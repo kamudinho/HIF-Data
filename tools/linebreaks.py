@@ -24,8 +24,6 @@ def vis_side(dp):
     else:
         df['NAVN'] = "Ukendt Spiller"
 
-    st.title("🛡️ Hvidovre IF - Linebreak Analyse")
-
     # 5. TJEK FOR KOLONNER (Da vi lige har kørt en 'SELECT * LIMIT 100' uden CASE WHEN)
     # Hvis du kører din test-query uden pivotering, skal vi bruge de rå kolonner
     if 'STAT_TYPE' in df.columns:
