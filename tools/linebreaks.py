@@ -40,8 +40,7 @@ def vis_side(dp):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     # --- 4. TABS OG VISNING ---
-    st.subheader("HIF Linebreak Analyse")
-    tab1, tab2 = st.tabs(["📋 Oversigt", "📊 Grafer"])
+    tab1, tab2 = st.tabs(["Oversigt", "Grafer"])
 
     with tab1:
         # Sorter efter Total
