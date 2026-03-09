@@ -50,7 +50,7 @@ def vis_side(dp):
     pivot_stats['HOLD'] = pivot_stats[team_col].map(team_map).fillna("Ukendt Hold")
 
     # --- 4. TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["LIGAOVERSIGT", "SPILLER PERFORMANCE", "LINEBREAKS"])
+    tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
 
     with tab_squad:
         st.subheader(f"Top Performance - {saeson_f}")
