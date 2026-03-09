@@ -11,8 +11,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
     # 2. Dynamiske filtre
-    event_filter = f"AND UPPER(EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
-    e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
+    e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if h_only else ""
     stats_filter = f"AND UPPER(CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     lineup_filter = f"AND UPPER(LINEUP_CONTESTANTUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
 
@@ -37,14 +36,15 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
         """,
 
         "opta_team_stats": f"""
-            -- 1. Standard Match Stats
+            -- 1. Standard Match Stats (Inkl. touches og possession)
             SELECT 
                 UPPER(MATCH_OPTAUUID) as MATCH_OPTAUUID, 
                 UPPER(CONTESTANT_OPTAUUID) as CONTESTANT_OPTAUUID, 
                 STAT_TYPE, 
-                STAT_TOTAL
+                CAST(STAT_TOTAL AS FLOAT) as STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+            WHERE STAT_TYPE IN ('possessionPercentage', 'totalScoringAtt', 'touchesInOppBox', 'totalPass')
+            AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
             ) {stats_filter}
@@ -78,8 +78,22 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             AND TOURNAMENTCALENDAR_OPTAUUID IN (
                 SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
-            ) {lineup_filter.replace('LINEUP_CONTESTANTUUID', 'LINEUP_CONTESTANTUUID')}
+            ) {lineup_filter}
             GROUP BY 1, 2, 3
+        """,
+
+        "opta_shotevents": f"""
+            SELECT e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, 
+                   e.EVENT_OUTCOME, e.EVENT_TYPEID,
+                   MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
+            FROM {DB}.OPTA_EVENTS e
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16) {e_event_filter}
+            AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            )
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
         """,
 
         "opta_assists": f"""
@@ -104,19 +118,5 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
             FROM AssistsMapped
             WHERE EVENT_TYPEID = 16 AND ASSIST_PLAYER IS NOT NULL
             ORDER BY EVENT_TIMESTAMP DESC
-        """,
-
-        "opta_shotevents": f"""
-            SELECT e.MATCH_OPTAUUID, e.EVENT_OPTAUUID, e.PLAYER_NAME, e.EVENT_X, e.EVENT_Y, 
-                   e.EVENT_OUTCOME, e.EVENT_TYPEID,
-                   MAX(CASE WHEN q.QUALIFIER_QID = 142 THEN q.QUALIFIER_VALUE END) as XG_RAW
-            FROM {DB}.OPTA_EVENTS e
-            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID IN (13, 14, 15, 16) {e_event_filter}
-            AND e.TOURNAMENTCALENDAR_OPTAUUID IN (
-                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
-            )
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
     }
