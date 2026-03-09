@@ -62,9 +62,10 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
                 MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
-            LIMIT 100
         """,
         
         "opta_team_linebreaks": f"""
