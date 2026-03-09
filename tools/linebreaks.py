@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 def vis_side(dp):
-    df = dp.get("player_linebreaks", pd.DataFrame())
+    df = dp.get("opta_player_linebreaks", pd.DataFrame())
     # Hent name_map og sørg for at alle nøgler er strings, lowercase og strippet for mellemrum
     raw_name_map = dp.get("name_map", {})
     name_map = {str(k).lower().strip(): str(v) for k, v in raw_name_map.items()}
