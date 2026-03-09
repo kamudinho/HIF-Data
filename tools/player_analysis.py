@@ -71,7 +71,7 @@ def vis_side(dp):
     pivot_stats['SELECT_NAME'] = pivot_stats['NAVN']
 
     # --- 4. TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
+    tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE"])
 
     with tab_squad:        
         # Vi definerer de kolonner vi vil vise og sorterer efter xG som standard
@@ -162,6 +162,4 @@ def vis_side(dp):
         
         st.plotly_chart(fig, use_container_width=True)
 
-    with tab_lb:
-        # (Din eksisterende linebreak logik her...)
-        st.info("Linebreak data vises her.")
+    
