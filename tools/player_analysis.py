@@ -145,7 +145,7 @@ def vis_side(dp):
         
         # Markér valgt spiller
         chart_data['Farve'] = chart_data['SELECT_NAME'].apply(
-            lambda x: '#FF4B4B' if x == selected_display else '#D3D3D3'
+            lambda x: '#df003b' if x == selected_display else '#D3D3D3'
         )
 
         fig = px.bar(chart_data, 
