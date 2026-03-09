@@ -4,28 +4,27 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
-    # Sæson-ID for 25/26 (baseret på dine dumps)
-    SAESON_ID = 'ecgticvxanikzudyjr458hcmr'
 
-    # Filter-streng til HIF hvis hif_only er True
-    hif_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    # Vi bygger filters dynamisk for at undgå 'invalid identifier' fejl
+    hif_filter_standard = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    hif_filter_linebreaks = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     
     return {
-        # 1. Grundlæggende kampinfo
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}' 
             AND COMPETITION_NAME = '{liga_f}'
         """,
         
-        # 2. xG og xA (Færdigberegnet pr. spiller pr. kamp)
+        # Vi fjerner det hårde UUID filter og bruger Navnet i stedet for at sikre vi får data
         "opta_expected_goals": f"""
-            SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
-            {hif_filter}
+            SELECT x.* FROM {DB}.OPTA_MATCHEXPECTEDGOALS x
+            JOIN {DB}.OPTA_MATCHINFO m ON x.MATCH_ID = m.MATCH_OPTAUUID
+            WHERE m.TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            AND m.COMPETITION_NAME = '{liga_f}'
+            {hif_filter_standard.replace('CONTESTANT_OPTAUUID', 'x.CONTESTANT_OPTAUUID')}
         """,
         
-        # 3. Skud-events (Her joiner vi Qualifiers direkte for at få xG værdien 321)
         "opta_shotevents": f"""
             SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
             FROM {DB}.OPTA_EVENTS e 
@@ -33,31 +32,43 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID 
                 AND q.QUALIFIER_QID = 321
             WHERE e.EVENT_TYPEID IN (13,14,15,16) 
-            AND e.TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
+            AND e.MATCH_OPTAUUID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            )
         """,
 
-        # 4. Rå Qualifiers (Gode at have til andre analyser som f.eks. 'Big Chance Missed')
         "opta_qualifiers": f"""
             SELECT * FROM {DB}.OPTA_QUALIFIERS 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
+            WHERE MATCH_OPTAUUID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            )
         """,
         
-        # 5. Hold-statistik (Possession, kort, mål etc.)
         "opta_team_stats": f"""
             SELECT * FROM {DB}.OPTA_MATCHSTATS 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
-            {hif_filter}
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (
+                SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            )
+            {hif_filter_standard}
         """,
         
-        # 6. Linebreaks (Spiller og Hold)
         "opta_player_linebreaks": f"""
             SELECT * FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
+            WHERE MATCH_OPTAUUID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            )
         """,
         
         "opta_team_linebreaks": f"""
             SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_ID}'
-            {hif_filter}
+            WHERE MATCH_OPTAUUID IN (
+                SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}'
+            )
+            {hif_filter_linebreaks}
         """
     }
