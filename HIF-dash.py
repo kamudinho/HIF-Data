@@ -196,8 +196,8 @@ try:
                 import tools.player_analysis as pa
                 pa.vis_side(dp)
             elif sel == "Linebreaks": # Tilføj denne blok
-                import tools.player_analysis as pa
-                pa.vis_side(dp)
+                import tools.linebreaks as lb
+                lb.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
