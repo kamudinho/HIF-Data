@@ -75,9 +75,28 @@ def vis_side(dp):
     tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
 
     with tab_squad:
-        st.subheader(f"Top Performance - {saeson_f}")
-        display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].sort_values('expectedGoals', ascending=False)
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.subheader(f"Truppens Performance - {saeson_f}")
+        
+        # Vi definerer de kolonner vi vil vise og sorterer efter xG som standard
+        display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].copy()
+        display_df = display_df.sort_values('expectedGoals', ascending=False)
+        
+        # Dynamisk højde: (antal rækker * 35 pixels) + 38 pixels til headeren
+        # Vi sætter en max-højde på 800 for at undgå at siden bliver uendelig lang
+        calc_height = min((len(display_df) * 35) + 38, 800)
+
+        st.dataframe(
+            display_df.style.format({
+                'expectedGoals': '{:.2f}', 
+                'expectedAssists': '{:.2f}',
+                'Skud': '{:,.0f}',
+                'Skud i DZ': '{:,.0f}',
+                'touches': '{:,.0f}'
+            }), 
+            use_container_width=True, 
+            height=calc_height, 
+            hide_index=True
+        )
 
     with tab_single:
         # 1. Spiller-vælger (Top-sektion)
