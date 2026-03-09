@@ -150,7 +150,7 @@ def vis_side(dp):
                         if stat_key == "expectedGoals":
                             h_str, a_str = f"{h_val:.2f}", f"{a_val:.2f}"
                         elif "possession" in stat_key.lower():
-                            h_str, a_str = f"{int(h_val:)}%", f"{int(a_val)}%"
+                            h_str, a_str = f"{int(h_val)}%", f"{int(a_val)}%"
                         else:
                             h_str, a_str = f"{int(h_val)}", f"{int(a_val)}"
                 
