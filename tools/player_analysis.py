@@ -74,9 +74,7 @@ def vis_side(dp):
     # --- 4. TABS ---
     tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
 
-    with tab_squad:
-        st.subheader(f"Truppens Performance - {saeson_f}")
-        
+    with tab_squad:        
         # Vi definerer de kolonner vi vil vise og sorterer efter xG som standard
         display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].copy()
         display_df = display_df.sort_values('expectedGoals', ascending=False)
@@ -128,7 +126,7 @@ def vis_side(dp):
         with col_title:
             # Vi definerer titlen her, men viser den i selve figuren senere
             current_metric_name = metric_options[st.session_state.get('selected_metric', 'expectedGoals')]
-            st.subheader(f"Top 10: {current_metric_name}")
+            st.caption(f"Top 10: {current_metric_name}")
 
         with col_dropdown:
             selected_metric_key = st.selectbox(
