@@ -63,7 +63,7 @@ def get_analysis_package(hif_only=False):
         "assists": df_assists,
         "name_map": name_map,
         "local_players": df_local, # Vigtigt: Dette matcher nøglen i din vis_side()
-        "player_linebreaks": df_player_linebreaks,
+        "opta_player_linebreaks": df_opta_player_linebreaks,
         "opta": {
             "matches": df_matches,
             "team_stats": df_opta_stats,
