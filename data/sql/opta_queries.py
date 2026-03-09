@@ -66,10 +66,17 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
         # --- Expected Goals (xG) ---
         "opta_expected_goals": f"""
             SELECT 
-                MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID, PLAYER_OPTAUUID, 
-                STAT_TYPE, STAT_VALUE, POSITION, MATCH_DATE
+                MATCH_ID AS MATCH_OPTAUUID, 
+                CONTESTANT_OPTAUUID, 
+                PLAYER_OPTAUUID, 
+                STAT_TYPE, 
+                STAT_VALUE, 
+                POSITION, 
+                MATCH_DATE
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-            WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            -- Vi bruger ILIKE for at være ligeglade med store/små bogstaver og fjerner de mest restriktive filtre
+            WHERE (TOURNAMENTCALENDAR_NAME ILIKE '%2025%202026%' OR TOURNAMENTCALENDAR_NAME ILIKE '%25%26%')
+              AND (COMPETITION_NAME ILIKE '%Nordic%' OR COMPETITION_NAME ILIKE '%Super%')
             {stats_filter}
         """,
 
