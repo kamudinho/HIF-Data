@@ -6,10 +6,8 @@ TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- Turneringer ---
 COMPETITIONS = {
-    COMPETITIONS = {
     "1. Division": {
         "wyid": 328, 
-        # Vi forkorter denne til den stabile ID-stump
         "COMPETITION_OPTAUUID": "6ifaeunfdele", 
         "COMPETITION_NAME": "1. Division"
     },
@@ -38,6 +36,7 @@ TEAMS = {
     "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g3686_120x120.png"},
     "B 93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g620_120x120.png"},
     "Middelfart": {"team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},    
+    
     # --- 3F Superliga ---
     "FC København": {"team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
     "FC Midtjylland": {"team_wyid": 7455, "opta_uuid": "1000_uuid_dummy", "opta_id": 1000, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/286_120x120.png"},
