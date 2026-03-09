@@ -15,7 +15,7 @@ def get_analysis_package(hif_only=False):
     season_f = str(TOURNAMENTCALENDAR_NAME)
 
     # 2. Hent queries (Sørg for at argumentnavne matcher get_opta_queries definitionen)
-    queries = get_opta_queries(liga_uuid=comp_f, saeson_navn=season_f, hif_only=hif_only)
+    queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)    
     
     def safe_query(query_key):
         q = queries.get(query_key)
