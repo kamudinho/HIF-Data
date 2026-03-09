@@ -7,109 +7,100 @@ def vis_side(dp):
     df_xg = dp.get("xg_agg", pd.DataFrame())
     df_lb = dp.get("player_linebreaks", pd.DataFrame())
     df_shots = dp.get("playerstats", pd.DataFrame())
-    df_matches = dp.get("matches", pd.DataFrame()) # Vi bruger denne til holdnavne
     name_map = dp.get("name_map", {})
-    
-    # Hent valgte parametre til titler (hvis de findes i session_state)
-    saeson_f = st.session_state.get('saeson_f', 'Valgt Sæson')
 
     if df_xg.empty:
-        st.warning("⚠️ Ingen data fundet. Tjek filtre eller Snowflake forbindelse.")
+        st.warning("⚠️ Ingen data fundet i xG-tabellen.")
         return
 
-    # --- 2. DATA CLEANING & HOLD-MAPPING ---
+    # --- 2. DATA CLEANING ---
     df_xg.columns = [c.upper() for c in df_xg.columns]
-    player_col = 'PLAYER_OPTAUUID'
-    team_col = 'CONTESTANT_OPTAUUID'
+    df_working = df_xg.copy()
     
-    # Lav en lynhurtig mapping af Team UUID -> Holdnavn fra matchinfo
-    team_map = {}
-    if not df_matches.empty:
-        df_matches.columns = [c.upper() for c in df_matches.columns]
-        # Vi mapper både hjemme og udehold for at være sikre
-        for _, row in df_matches.iterrows():
-            team_map[row['CONTESTANTHOME_OPTAUUID']] = row['CONTESTANTHOME_NAME']
-            team_map[row['CONTESTANTAWAY_OPTAUUID']] = row['CONTESTANTAWAY_NAME']
+    player_col = 'PLAYER_OPTAUUID'
+    stat_type_col = 'STAT_TYPE'
+    stat_val_col = 'STAT_VALUE'
 
-    # --- 3. PIVOTERING (xG og xA) ---
-    pivot_stats = df_xg.pivot_table(
-        index=[player_col, team_col], 
-        columns='STAT_TYPE', 
-        values='STAT_VALUE',
+    # --- 3. PIVOTERING & ENSRETNING ---
+    # Vi samler alle stats pr. spiller
+    pivot_stats = df_working.pivot_table(
+        index=player_col, 
+        columns=stat_type_col, 
+        values=stat_val_col,
         aggfunc='sum'
     ).fillna(0).reset_index()
 
-    # SIKRING af kolonner
-    for col in ['expectedGoals', 'expectedAssists']:
+    # Logik til at fange Optas specifikke navne fra dit dump
+    # Vi mapper 'expectedGoalsNonpenalty' -> 'expectedGoals' hvis den mangler
+    if 'expectedGoals' not in pivot_stats.columns and 'expectedGoalsNonpenalty' in pivot_stats.columns:
+        pivot_stats['expectedGoals'] = pivot_stats['expectedGoalsNonpenalty']
+    
+    if 'expectedAssists' not in pivot_stats.columns and 'expectedAssistsOpenplay' in pivot_stats.columns:
+        pivot_stats['expectedAssists'] = pivot_stats['expectedAssistsOpenplay']
+
+    # Sikr at kolonnerne findes (minsPlayed og touches er i dit dump)
+    cols_to_ensure = ['expectedGoals', 'expectedAssists', 'minsPlayed', 'touches']
+    for col in cols_to_ensure:
         if col not in pivot_stats.columns:
             pivot_stats[col] = 0.0
 
-    # Navne og Holdnavne
-    pivot_stats[player_col] = pivot_stats[player_col].astype(str).str.strip().str.lower()
+    # Tilføj læsbart navn
     pivot_stats['NAVN'] = pivot_stats[player_col].map(name_map).fillna(pivot_stats[player_col])
-    pivot_stats['HOLD'] = pivot_stats[team_col].map(team_map).fillna("Ukendt Hold")
 
-    # --- 4. TABS ---
-    tab_squad, tab_single, tab_lb = st.tabs(["LIGAOVERSIGT", "SPILLER PERFORMANCE", "LINEBREAKS"])
+    # --- 4. VISNING (TABS) ---
+    tab_squad, tab_single, tab_lb = st.tabs(["🏆 OVERSIGT", "👤 INDIVIDUEL", "📈 LINEBREAKS"])
 
     with tab_squad:
-        st.subheader(f"Top Performance - {saeson_f}")
+        st.subheader("Holdoversigt - Sæson Performance")
+        # Tabel med de vigtigste metrics
+        display_df = pivot_stats[['NAVN', 'minsPlayed', 'expectedGoals', 'expectedAssists', 'touches']].sort_values('expectedGoals', ascending=False)
         
-        # Vi tilføjer HOLD kolonnen her, så det er nemt at se hvem der spiller hvor
-        display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists']].sort_values('expectedGoals', ascending=False)
-        
-        # Formatering til 2 decimaler
         st.dataframe(
-            display_df.style.format({'expectedGoals': '{:.2f}', 'expectedAssists': '{:.2f}'}),
+            display_df.style.format({
+                'expectedGoals': '{:.2f}', 
+                'expectedAssists': '{:.2f}', 
+                'minsPlayed': '{:.0f}',
+                'touches': '{:.0f}'
+            }), 
             use_container_width=True, hide_index=True
         )
 
     with tab_single:
-        # Selectbox med både Navn og Hold (så vi kan kende forskel på to spillere med samme navn)
-        pivot_stats['SELECT_NAME'] = pivot_stats['NAVN'] + " (" + pivot_stats['HOLD'] + ")"
-        all_names = sorted(pivot_stats['SELECT_NAME'].unique())
-        selected_display = st.selectbox("Vælg spiller", options=all_names, key="sb_performance")
+        all_names = sorted(pivot_stats['NAVN'].unique())
+        selected_name = st.selectbox("Vælg spiller", options=all_names, key="sb_perf_new")
         
-        # Find data for den valgte
-        p_row = pivot_stats[pivot_stats['SELECT_NAME'] == selected_display].iloc[0]
-        selected_uuid = p_row[player_col]
+        # Udtræk række for valgt spiller
+        p_row = pivot_stats[pivot_stats['NAVN'] == selected_name].iloc[0]
+        p_uuid = p_row[player_col]
 
-        # Metrics
+        # Metrics række
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total xG", f"{p_row['expectedGoals']:.2f}")
-        m2.metric("Total xA", f"{p_row['expectedAssists']:.2f}")
-        
-        # Skud-data (hvis tilgængelig)
-        if not df_shots.empty:
-            df_shots.columns = [c.upper() for c in df_shots.columns]
-            p_shots = df_shots[df_shots[player_col].astype(str).str.lower() == selected_uuid]
-            
-            if 'EVENT_X' in p_shots.columns:
-                is_dz = (p_shots['EVENT_X'] >= 88.5) & (p_shots['EVENT_Y'].between(37, 63))
-                m3.metric("Skud i DZ", int(is_dz.sum()))
-            else:
-                m3.metric("Skud i DZ", "N/A")
-            m4.metric("Skud i alt", len(p_shots))
+        m1.metric("Minutter", int(p_row['minsPlayed']))
+        m2.metric("Total xG", f"{p_row['expectedGoals']:.2f}")
+        m3.metric("Total xA", f"{p_row['expectedAssists']:.2f}")
+        m4.metric("Touches", int(p_row['touches']))
 
-        # Plot over hele ligaen (markér den valgte spiller)
+        # Graf: xG vs xA for alle spillere
         fig = px.scatter(pivot_stats, x='expectedAssists', y='expectedGoals', 
-                         hover_name='NAVN', color='HOLD',
-                         labels={'expectedAssists': 'xA', 'expectedGoals': 'xG'},
-                         title=f"xG vs xA i Ligaen")
+                         hover_name='NAVN', size='minsPlayed',
+                         color='expectedGoals', color_continuous_scale='Reds',
+                         labels={'expectedAssists': 'xA (Forventede Assists)', 'expectedGoals': 'xG (Forventede Mål)'},
+                         title=f"xG vs xA Fordeling")
         st.plotly_chart(fig, use_container_width=True)
 
     with tab_lb:
         if not df_lb.empty:
             df_lb.columns = [c.upper() for c in df_lb.columns]
-            # Filtrér linebreaks på spillerens UUID
-            p_lb_data = df_lb[df_lb[player_col].astype(str).str.lower() == selected_uuid]
+            # Vi matcher på UUID for at undgå navne-fejl
+            p_lb_data = df_lb[df_lb[player_col] == p_uuid]
             
             if not p_lb_data.empty:
-                st.write(f"Linebreak analyse for **{p_row['NAVN']}**")
-                # Pivotér linebreaks så de er nemme at læse
-                lb_pivot = p_lb_data.groupby('STAT_TYPE')['STAT_TOTAL'].sum().reset_index()
-                st.dataframe(lb_pivot, use_container_width=True, hide_index=True)
+                st.write(f"Linebreak analyse for **{selected_name}**")
+                # Gruppér per type (F.eks. 'Linebreak Complete')
+                lb_summary = p_lb_data.groupby('STAT_TYPE')['STAT_TOTAL'].sum().reset_index()
+                st.bar_chart(lb_summary.set_index('STAT_TYPE'))
+                st.dataframe(p_lb_data[['STAT_TYPE', 'STAT_TOTAL']], use_container_width=True, hide_index=True)
             else:
-                st.info(f"Ingen linebreaks fundet for denne spiller.")
+                st.info(f"Ingen linebreaks fundet for {selected_name}.")
         else:
-            st.info("Ingen linebreak-data tilgængelig.")
+            st.info("Linebreak-data ikke tilgængelig.")
