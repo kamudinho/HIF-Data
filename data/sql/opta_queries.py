@@ -63,8 +63,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 STAT_FH,
                 STAT_SH
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_lb}
             LIMIT 100
         """,
         
