@@ -4,17 +4,18 @@ import plotly.express as px
 
 def vis_side(dp):
     # --- 1. DATA HENTNING (Rettet til at matche dine SQL keys) ---
-    df_xg = dp.get("opta_expected_goals", pd.DataFrame())
-    df_lb = dp.get("opta_player_linebreaks", pd.DataFrame())
+    df_xg = dp.get("xg_agg", pd.DataFrame())
+    
+    # For linebreaks bruger vi også de flade keys fra din pakke
+    df_lb = dp.get("player_linebreaks", pd.DataFrame())
     df_shots = dp.get("playerstats", pd.DataFrame())
     name_map = dp.get("name_map", {})
 
-    # DEBUG SEKTION
-    st.write("### 🔍 Data Debug")
-    st.write(f"Antal rækker fundet i xG: {len(df_xg)}")
-    
-    if df_xg is None or df_xg.empty:
-        st.warning("⚠️ Ingen xG-data fundet. Tjek at 'opta_expected_goals' er inkluderet i dit datapakke-kald.")
+    # DEBUG
+    st.write(f"DEBUG - Rækker i xG: {len(df_xg)}")
+
+    if df_xg.empty:
+        st.warning("⚠️ Ingen xG-data fundet i 'xg_agg'.")
         return
 
     # --- 2. DATA CLEANING & DZ LOGIK ---
