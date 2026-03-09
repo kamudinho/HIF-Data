@@ -75,14 +75,13 @@ def vis_side(dp):
     tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
 
     with tab_squad:
-        st.subheader(f"Top Performance - {saeson_f}")
         display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].sort_values('expectedGoals', ascending=False)
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with tab_single:
         # 1. Spiller-vælger (Top-sektion)
         all_names = sorted(pivot_stats['SELECT_NAME'].unique())
-        selected_display = st.selectbox("Vælg spiller for detaljer", options=all_names, key="player_select")
+        selected_display = st.selectbox("Vælg spiller", options=all_names, key="player_select")
         p_row = pivot_stats[pivot_stats['SELECT_NAME'] == selected_display].iloc[0]
         selected_uuid = p_row[player_col]
 
@@ -109,7 +108,7 @@ def vis_side(dp):
         with col_title:
             # Vi definerer titlen her, men viser den i selve figuren senere
             current_metric_name = metric_options[st.session_state.get('selected_metric', 'expectedGoals')]
-            st.subheader(f"Top 10: {current_metric_name}")
+            st.caption(f"Top 10: {current_metric_name}")
 
         with col_dropdown:
             selected_metric_key = st.selectbox(
