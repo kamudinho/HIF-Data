@@ -65,8 +65,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SUM(STAT_FH) AS TOTAL_LB_FH,
                 SUM(STAT_SH) AS TOTAL_LB_SH
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_lb}
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
         """,
