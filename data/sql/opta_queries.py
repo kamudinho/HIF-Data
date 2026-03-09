@@ -21,8 +21,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     """
 
     # Dynamiske filtre
+    # Opdaterede filtre - vi bruger CONTESTANT_OPTAUUID som er standard
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
+    hif_filter_lb = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     
     return {
