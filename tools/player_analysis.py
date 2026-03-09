@@ -37,20 +37,21 @@ def vis_side(dp):
                                 (df_shots['EVENT_Y'] >= 37.0) & \
                                 (df_shots['EVENT_Y'] <= 63.0)
 
-    # --- 3. PIVOTERING ---
-    pivot_stats = df_working.pivot_table(
-        index='PLAYER_OPTAUUID', 
-        columns='STAT_TYPE', 
-        values='STAT_VALUE', # Nu findes denne pga. AS STAT_VALUE i SQL
-        aggfunc='sum'
-    ).fillna(0).reset_index()
-    
-    # Tjek om de rigtige kolonner findes, ellers brug fallback
-    xg_col = 'expectedGoals' if 'expectedGoals' in pivot_stats.columns else pivot_stats.columns[1]
-    
-    # Mapping af navne
-    pivot_stats['NAVN'] = pivot_stats[player_col].map(name_map)
-    pivot_stats['NAVN'] = pivot_stats['NAVN'].fillna(pivot_stats[player_col])
+    # --- 3. PIVOTERING (Robust version) ---
+    if not df_working.empty:
+        pivot_stats = df_working.pivot_table(
+            index='PLAYER_OPTAUUID', 
+            columns='STAT_TYPE', 
+            values='STAT_VALUE',
+            aggfunc='sum'
+        ).fillna(0).reset_index()
+    else:
+        pivot_stats = pd.DataFrame(columns=['PLAYER_OPTAUUID', 'expectedGoals', 'expectedAssists', 'NAVN'])
+
+    # SIKRING: Hvis xG eller xA mangler som kolonner (fordi ingen har scoret endnu), så opret dem
+    for col in ['expectedGoals', 'expectedAssists']:
+        if col not in pivot_stats.columns:
+            pivot_stats[col] = 0.0
 
     # --- 4. TABS ---
     tab_squad, tab_single, tab_lb = st.tabs(["OVERSIGT", "INDIVIDUEL PERFORMANCE", "LINEBREAKS"])
