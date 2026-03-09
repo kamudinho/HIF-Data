@@ -5,10 +5,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
-    # Mapping af ligaer til de UUID'er, vi lige har udtrukket fra din database
     tournament_map = {
-        "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o", # 1. Division
-        "Superliga": "3o8l1yf2irp018eaa2far455g"       # Superliga
+    "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
+    "Superliga": "29actv1ohj8r10kd9hu0jnb0n"  # Opdateret baseret på din dump
     }
     
     # Hent den korrekte UUID baseret på dit valg i appen
