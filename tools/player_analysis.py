@@ -76,7 +76,7 @@ def vis_side(dp):
 
     with tab_squad:        
         # Vi definerer de kolonner vi vil vise og sorterer efter xG som standard
-        display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].copy()
+        display_df = pivot_stats[['NAVN', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].copy()
         display_df = display_df.sort_values('expectedGoals', ascending=False)
         
         # Dynamisk højde: (antal rækker * 35 pixels) + 38 pixels til headeren
