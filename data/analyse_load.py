@@ -20,7 +20,9 @@ def get_analysis_package(hif_only=False):
         q = queries.get(query_key)
         if not q: return pd.DataFrame()
         try:
-            return conn.query(q)
+            # Tving konvertering til DataFrame med det samme
+            res = conn.query(q)
+            return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
         except Exception as e:
             st.error(f"Fejl i query '{query_key}': {e}")
             return pd.DataFrame()
