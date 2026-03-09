@@ -86,10 +86,10 @@ def vis_side(dp):
             
             if 'EVENT_X' in p_shots.columns:
                 is_dz = (p_shots['EVENT_X'] >= 88.5) & (p_shots['EVENT_Y'].between(37, 63))
-                m3.metric("Skud i DZ", int(is_dz.sum()))
+                m4.metric("Skud i DZ", int(is_dz.sum()))
             else:
-                m3.metric("Skud i DZ", "N/A")
-            m4.metric("Skud i alt", len(p_shots))
+                m3.metric("Skud i alt", len(p_shots))
+                m4.metric("Skud i DZ", "N/A")
 
         # Plot over hele ligaen (markér den valgte spiller)
         fig = px.scatter(pivot_stats, x='expectedAssists', y='expectedGoals', 
