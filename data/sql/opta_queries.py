@@ -57,17 +57,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT 
                 PLAYER_OPTAUUID,
                 LINEUP_CONTESTANTUUID,
-                COALESCE(MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END), 0) AS LB_TOTAL,
-                COALESCE(MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END), 0) AS LB_ATTACK_LINE,
-                COALESCE(MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END), 0) AS LB_MIDFIELD_LINE,
-                COALESCE(MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END), 0) AS LB_DEFENCE_LINE,
-                COALESCE(SUM(STAT_FH), 0) AS TOTAL_LB_FH,
-                COALESCE(SUM(STAT_SH), 0) AS TOTAL_LB_SH
+                MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
+                MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-            {hif_filter_lb}
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
+            LIMIT 100
         """,
         
         "opta_team_linebreaks": f"""
