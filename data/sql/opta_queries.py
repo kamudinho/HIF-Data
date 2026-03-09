@@ -26,7 +26,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-
     return {
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO 
@@ -58,9 +57,20 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
         
         "opta_player_linebreaks": f"""
-            SELECT * FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES 
+            SELECT 
+                PLAYER_OPTAUUID,
+                LINEUP_CONTESTANTUUID,
+                MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
+                MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE,
+                SUM(STAT_FH) AS TOTAL_LB_FH,
+                SUM(STAT_SH) AS TOTAL_LB_SH
+            FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
             {hif_filter_lb}
+            GROUP BY 1, 2
+            ORDER BY LB_TOTAL DESC
         """,
         
         "opta_team_linebreaks": f"""
