@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # NYE IMPORTS (Splitte data-loads)
 import data.HIF_load as hif_load
 from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
-import data.Analyse_load as analyse_load
+import data.analyse_load as analyse_load
 from data.users import get_users
 
 # --- 1. KONFIGURATION & BRANDING ---
