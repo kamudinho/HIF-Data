@@ -80,17 +80,6 @@ def vis_side(dp):
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with tab_single:
-        # Valg af metric til Bar Chart
-        metric_options = {
-            'expectedGoals': 'Expected Goals (xG)',
-            'expectedAssists': 'Expected Assists (xA)',
-            'Skud': 'Antal Skud',
-            'Skud i DZ': 'Skud i Dangerzone',
-            'touches': 'Touches (Berøringer)'
-        }
-        
-        selected_metric_key = st.radio("Vælg kategori til sammenligning", options=list(metric_options.keys()), 
-                                       format_func=lambda x: metric_options[x], horizontal=True)
 
         # Spiller-vælger
         all_names = sorted(pivot_stats['SELECT_NAME'].unique())
@@ -106,10 +95,21 @@ def vis_side(dp):
         m3.metric("Skud", int(p_row['Skud']))
         m4.metric("Skud i DZ", int(p_row['Skud i DZ']))
         m5.metric("Touches", int(p_row['touches']))
-        st.divider()
+
+        # Valg af metric til Bar Chart
+        metric_options = {
+            'expectedGoals': 'Expected Goals (xG)',
+            'expectedAssists': 'Expected Assists (xA)',
+            'Skud': 'Antal Skud',
+            'Skud i DZ': 'Skud i Dangerzone',
+            'touches': 'Touches (Berøringer)'
+        }
+        
+        selected_metric_key = st.radio("Vælg kategori til sammenligning", options=list(metric_options.keys()), 
+                                       format_func=lambda x: metric_options[x], horizontal=True)
 
         # --- Bar Chart Sektion ---
-        # Vi viser top 20 spillere inden for den valgte kategori
+        # Vi viser top 10 spillere inden for den valgte kategori
         chart_data = pivot_stats.sort_values(selected_metric_key, ascending=False).head(10).copy()
         
         # Farv den valgte spiller rød, de andre grå
