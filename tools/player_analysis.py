@@ -164,53 +164,41 @@ def vis_side(dp):
 
     with tab_lb:
         if not df_lb.empty:
-            # 1. Tving kolonnenavne til STORE (da Snowflake dumpet viser dem sådan)
+            # Tving kolonner til STORE bogstaver
             df_lb.columns = [c.upper() for c in df_lb.columns]
             
-            # 2. Filtrér på spillerens UUID (vi sikrer os at vi matcher lower-case)
+            # Filtrér på spillerens UUID (vi tvinger begge til lower for match)
             p_lb_data = df_lb[df_lb['PLAYER_OPTAUUID'].astype(str).str.lower() == selected_uuid].copy()
             
             if not p_lb_data.empty:
-                st.subheader(f"Linebreak Analyse: {p_row['NAVN']}")
+                # Layout: Overskrift og Dropdown til højre
+                col_h, col_d = st.columns([2, 1])
+                with col_h:
+                    st.subheader(f"Linebreaks: {p_row['NAVN']}")
                 
-                # 3. Filtrering: Vi skiller Volumen (antal) fra Effektivitet (procenter)
-                # Fra dit dump: 'percentageOfPasses' og 'percentageOfTeamProportion' skal ud af bar-chart
-                lb_counts = p_lb_data[~p_lb_data['STAT_TYPE'].str.contains('percentage', case=False)].copy()
+                # Fjern procenter fra grafen for at holde skalaen ren
+                chart_df = p_lb_data[~p_lb_data['STAT_TYPE'].str.contains('percentage', case=False)].copy()
+                chart_df = chart_df.sort_values('STAT_VALUE', ascending=True)
+
+                c1, c2 = st.columns([2, 1])
                 
-                # Sorter så de vigtigste (fx total eller attackingLineBroken) ligger øverst
-                lb_counts = lb_counts.sort_values('STAT_VALUE', ascending=True)
-
-                col_chart, col_stats = st.columns([2, 1])
-
-                with col_chart:
-                    fig_lb = px.bar(
-                        lb_counts, 
-                        x='STAT_VALUE', 
-                        y='STAT_TYPE', 
-                        orientation='h',
-                        title="Antal Linebreaks per type",
-                        color_discrete_sequence=['#FF4B4B'],
-                        labels={'STAT_VALUE': 'Antal', 'STAT_TYPE': 'Type'}
-                    )
-                    # Gør grafen renere
-                    fig_lb.update_layout(showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+                with c1:
+                    fig_lb = px.bar(chart_df, 
+                                  x='STAT_VALUE', 
+                                  y='STAT_TYPE', 
+                                  orientation='h',
+                                  color_discrete_sequence=['#FF4B4B'],
+                                  labels={'STAT_VALUE': 'Antal', 'STAT_TYPE': 'Type'})
+                    fig_lb.update_layout(margin=dict(t=0, b=0))
                     st.plotly_chart(fig_lb, use_container_width=True)
 
-                with col_stats:
-                    st.write("**Statistik detaljer**")
-                    # Vis den rå tabel med FH (1. halvleg) og SH (2. halvleg) som i dit dump
-                    res_df = p_lb_data[['STAT_TYPE', 'STAT_VALUE', 'STAT_FH', 'STAT_SH']].copy()
-                    
-                    # Formatering: Ingen decimaler for antal, 2 decimaler for procenter
-                    def format_stat(row):
-                        if 'percentage' in row['STAT_TYPE'].lower():
-                            return f"{row['STAT_VALUE']:.2f}%"
-                        return int(row['STAT_VALUE'])
-
-                    res_df['STAT_VALUE'] = res_df.apply(format_stat, axis=1)
-                    
-                    st.dataframe(res_df, use_container_width=True, hide_index=True)
+                with c2:
+                    st.write("**Detaljer (FH/SH)**")
+                    # Vis rækkerne med halvlegs-stats fra dit dump
+                    st.dataframe(p_lb_data[['STAT_TYPE', 'STAT_VALUE', 'STAT_FH', 'STAT_SH']], 
+                                 use_container_width=True, hide_index=True)
             else:
-                st.info(f"Ingen linebreaks fundet for {p_row['NAVN']} i denne kørsel.")
+                st.info(f"Ingen linebreaks fundet for {p_row['NAVN']}.")
         else:
-            st.error("⚠️ Ingen Linebreak-data fundet i 'df_lb'.")
+            # Denne besked kommer kun hvis 'opta_player_linebreaks' nøglen stadig er tom
+            st.error("⚠️ Ingen data i df_lb. Tjek at SQL-nøglen er 'opta_player_linebreaks'.")
