@@ -3,83 +3,49 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # 1. Hent data (som nu er pivoteret fra SQL)
+    # Hent dataframe
     df = dp.get("opta_player_linebreaks", pd.DataFrame())
-    name_map = dp.get("name_map", {})
+    
+    # Hent name_map og sørg for at alle keys er lowercase
+    raw_name_map = dp.get("name_map", {})
+    name_map = {str(k).lower().strip(): v for k, v in raw_name_map.items()}
 
     if df.empty:
-        st.warning("⚠️ Ingen data fundet. Tjek din SQL-forbindelse.")
+        st.error("⚠️ Ingen rækker returneret fra Snowflake. Tjek din SQL-query i 'get_opta_queries'.")
         return
 
-    # Sørg for at kolonnenavne er store bogstaver for at matche Snowflake output
+    # Tving alle kolonnenavne i DF til UPPERCASE (standard Snowflake)
     df.columns = [c.upper() for c in df.columns]
 
-    # Navne-mapping (Hvidovre-spillere)
-    df['NAVN'] = df['PLAYER_OPTAUUID'].str.lower().str.strip().map(name_map).fillna(df['PLAYER_OPTAUUID'])
+    # Rens UUID'er og map navne
+    # Vi bruger .astype(str) for at undgå problemer med typer
+    df['PLAYER_OPTAUUID'] = df['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
+    df['NAVN'] = df['PLAYER_OPTAUUID'].map(name_map).fillna(df['PLAYER_OPTAUUID'])
 
-    # --- UI LAYOUT ---
-    st.title("🛡️ Linebreak Analyse")
-    st.markdown("Baseret på Opta-data: Evnen til at spille forbi modstanderens kæder.")
+    # --- UI ---
+    st.title("🛡️ Hvidovre IF - Linebreak Analyse")
 
-    # 2. Top-liste (Hele truppen)
-    st.subheader("Truppens overblik")
+    # Vis top 5 for at tjekke om data overhovedet er der
+    st.subheader("Truppens Overblik")
     
-    # Vi vælger de mest relevante kolonner til hurtigt overblik
-    vis_cols = ['NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE', 'LB_PENALTY_AREA']
-    
-    # Sorter efter total og vis
-    df_display = df.sort_values('LB_TOTAL', ascending=False)
-    
+    # Sortering (Vi bruger de navne din SQL producerede)
+    df = df.sort_values('LB_TOTAL', ascending=False)
+
+    # Konfigurer visning
     st.dataframe(
-        df_display[vis_cols],
+        df[['NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']],
         use_container_width=True,
-        hide_index=True,
-        column_config={
-            "LB_TOTAL": st.column_config.NumberColumn("Total", help="Total antal linebreaks"),
-            "LB_PENALTY_AREA": st.column_config.NumberColumn("Ind i feltet", format="%d 📥")
-        }
+        hide_index=True
     )
 
-    st.divider()
-
-    # 3. Individuel Spiller-dyk
-    col_sel, col_empty = st.columns([1, 2])
-    with col_sel:
-        valgt_spiller = st.selectbox("Vælg spiller for detaljer", options=df_display['NAVN'].tolist())
-
-    # Find data for den valgte spiller
-    p_data = df_display[df_display['NAVN'] == valgt_spiller].iloc[0]
-
-    # Metrics række
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Linebreaks", int(p_data['LB_TOTAL']))
-    m2.metric("Under Pres", int(p_data.get('LB_UNDER_PRESSURE', 0)))
-    m3.metric("1. Halvleg", int(p_data['TOTAL_LB_FH']))
-    m4.metric("2. Halvleg", int(p_data['TOTAL_LB_SH']))
-
-    # Visualisering af linebreak typer
-    st.subheader(f"Fordeling for {valgt_spiller}")
+    # Spiller-vælger
+    spiller_liste = df['NAVN'].unique().tolist()
+    valgt = st.selectbox("Vælg spiller for detaljer", spiller_liste)
     
-    # Forbered data til graf (vi tager de specifikke LB kolonner)
-    plot_data = pd.DataFrame({
-        'Type': ['Mod Angreb', 'Mod Midtbane', 'Mod Forsvar', 'Ind i feltet'],
-        'Antal': [
-            p_data['LB_ATTACK_LINE'], 
-            p_data['LB_MIDFIELD_LINE'], 
-            p_data['LB_DEFENCE_LINE'], 
-            p_data['LB_PENALTY_AREA']
-        ]
-    })
-
-    fig = px.bar(
-        plot_data, 
-        x='Antal', 
-        y='Type', 
-        orientation='h',
-        color='Antal',
-        color_continuous_scale='Reds',
-        text_auto=True
-    )
+    # Spiller-data
+    p = df[df['NAVN'] == valgt].iloc[0]
     
-    fig.update_layout(showlegend=False, height=350)
-    st.plotly_chart(fig, use_container_width=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Linebreaks", int(p['LB_TOTAL']))
+    c2.metric("1. Halvleg", int(p['TOTAL_LB_FH']))
+    c3.metric("2. Halvleg", int(p['TOTAL_LB_SH']))
