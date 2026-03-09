@@ -5,6 +5,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
+    tournament_map = {
+        "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o", # 1. Division
+        "Superliga": "3o8l1yf2irp018eaa2far455g"       # Superliga
+    }
+    
+    # Hent UUID'en. Hvis ligaen ikke findes i mappet, falder den tilbage til 1. division
+    current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
+
     # Vi definerer de kampe, der hører til den valgte liga og sæson én gang.
     # Denne subquery virker som en "bro" til alle andre tabeller.
     match_id_subquery = f"""
