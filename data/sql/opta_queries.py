@@ -1,45 +1,36 @@
-import pandas as pd
-
 def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
-    """
-    Returnerer alle SQL queries til OPTA data i Snowflake.
-    Inkluderer Match Info, Team Stats, xG, Assists og både Team/Player Linebreaks.
-    """
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
-
-    # 1. Importér konstanter til fallback
-    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
     
-    # 2. Definér variabler for liga og sæson
-    liga = liga_uuid if liga_uuid else COMPETITION_NAME
-    saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
+    # Præcise UUIDs fra dit Snowflake-dump
+    NORDICBET_UUID = '6ifaeunfdelecgticvxanikzu' # Hele strengen fra mapping
+    SAESON_2526_UUID = 'ecgticvxanikzudyjr458hcmr'
 
-    # 3. Dynamiske filtre baseret på hif_only flaget
-    event_filter = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    lineup_filter = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
-        # --- Kampe og overblik ---
-        "opta_matches": f"""
+        # --- Expected Goals (Rettet med STAT og UUIDs) ---
+        "opta_expected_goals": f"""
             SELECT 
-                MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS, 
-                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, WINNER,
-                MATCH_LOCALTIME, CONTESTANTHOME_OPTAUUID, 
-                CONTESTANTAWAY_OPTAUUID, CONTESTANTHOME_NAME, 
-                CONTESTANTAWAY_NAME, WEEK
-            FROM {DB}.OPTA_MATCHINFO 
-            WHERE COMPETITION_NAME = '{liga}' AND TOURNAMENTCALENDAR_NAME = '{saeson}'
-            ORDER BY MATCH_DATE_FULL DESC
+                MATCH_ID AS MATCH_OPTAUUID, 
+                CONTESTANT_OPTAUUID, 
+                PLAYER_OPTAUUID, 
+                STAT_TYPE, 
+                STAT AS STAT_VALUE,  -- Rettet fra STAT_VALUE til STAT
+                POSITION, 
+                MATCH_DATE
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_UUID}'
+              AND COMPETITION_OPTAUUID = '6ifaeunfdele' -- Den korte version fra dit dump
+            {stats_filter}
         """,
 
-        # --- Hold-statistik (Possession, dueller osv.) ---
+        # --- Team Stats (Rettet til at bruge UUID i stedet for Navn) ---
         "opta_team_stats": f"""
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
-            WHERE TOURNAMENTCALENDAR_NAME = '{saeson}' AND COMPETITION_NAME = '{liga}'
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_UUID}' 
+              AND COMPETITION_OPTAUUID = '6ifaeunfdele'
             {stats_filter}
         """,
 
