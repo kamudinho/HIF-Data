@@ -5,13 +5,12 @@ import plotly.express as px
 def vis_side(dp):
     """
     HIF Spillerperformance Analyse
-    Fokuserer på xG, xA og geografiske Danger Zone (DZ) beregninger.
+    Fokuserer på xG, xA og geografiske Danger Zone (DZ) samt Linebreaks.
     """
-    
     # --- 1. DATA HENTNING ---
-    df_xg = dp.get("xg_agg")        # Fra OPTA_MATCHEXPECTEDGOALS
-    df_lb = dp.get("linebreaks")    # Fra OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-    df_shots = dp.get("playerstats") # Fra OPTA_EVENTS (indeholder koordinater)
+    df_xg = dp.get("xg_agg", pd.DataFrame())
+    df_lb = dp.get("player_linebreaks", pd.DataFrame()) # Matcher din get_analysis_package
+    df_shots = dp.get("playerstats", pd.DataFrame())
     name_map = dp.get("name_map", {})
 
     if df_xg is None or df_xg.empty:
@@ -27,9 +26,7 @@ def vis_side(dp):
     if df_shots is not None and not df_shots.empty:
         df_shots.columns = [c.upper() for c in df_shots.columns]
         df_shots['PLAYER_OPTAUUID'] = df_shots['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
-        
-        # --- DZ LOGIK (GEOMETRISK - SAMME SOM I DIT SHOTMAP) ---
-        # Vi bruger koordinaterne fra OPTA_EVENTS til at definere DZ
+        # DZ LOGIK (GEOMETRISK)
         df_shots['IS_DZ_GEO'] = (df_shots['EVENT_X'] >= 88.5) & \
                                 (df_shots['EVENT_Y'] >= 37.0) & \
                                 (df_shots['EVENT_Y'] <= 63.0)
@@ -55,7 +52,6 @@ def vis_side(dp):
     with tab_squad:
         cols_to_show = ['NAVN', 'expectedGoals', 'expectedAssists', 'minsPlayed']
         existing_cols = [c for c in cols_to_show if c in pivot_stats.columns]
-        
         st.dataframe(
             pivot_stats[existing_cols].sort_values('expectedGoals', ascending=False), 
             use_container_width=True, 
@@ -64,32 +60,28 @@ def vis_side(dp):
         
     with tab_single:
         sorted_names = sorted(pivot_stats['NAVN'].unique())
-        selected_name = st.selectbox("Vælg spiller", options=sorted_names)
+        selected_name = st.selectbox("Vælg spiller", options=sorted_names, key="sb_perf_single")
         
         selected_uuid = pivot_stats[pivot_stats['NAVN'] == selected_name]['PLAYER_OPTAUUID'].values[0]
         p_xg_data = pivot_stats[pivot_stats['PLAYER_OPTAUUID'] == selected_uuid]
 
-        # Beregn DZ stats baseret på koordinaterne i df_shots
         dz_total = 0
         total_shots = 0
         if df_shots is not None and not df_shots.empty:
             p_shots = df_shots[df_shots['PLAYER_OPTAUUID'] == selected_uuid]
             total_shots = len(p_shots)
-            dz_total = p_shots['IS_DZ_GEO'].sum()
+            dz_total = p_shots['IS_DZ_GEO'].sum() if 'IS_DZ_GEO' in p_shots.columns else 0
 
-        # Metrics række
         m1, m2, m3, m4 = st.columns(4)
         xg_val = p_xg_data['expectedGoals'].values[0] if 'expectedGoals' in p_xg_data.columns else 0
         xa_val = p_xg_data['expectedAssists'].values[0] if 'expectedAssists' in p_xg_data.columns else 0
 
         m1.metric("Total xG", f"{xg_val:.2f}")
         m2.metric("Total xA", f"{xa_val:.2f}")
-        m3.metric("Skud i DZ", int(dz_total), help="Geometrisk Danger Zone: X >= 88.5, Y mellem 37 og 63")
+        m3.metric("Skud i DZ", int(dz_total))
         m4.metric("Skud i alt", total_shots)
 
         st.markdown("---")
-        
-        # Visualisering: xG vs xA scatter plot for hele truppen
         fig_scatter = px.scatter(
             pivot_stats, x='expectedAssists', y='expectedGoals', 
             text='NAVN', title="xG vs xA Fordeling",
@@ -100,6 +92,7 @@ def vis_side(dp):
         st.plotly_chart(fig_scatter, use_container_width=True)
 
     with tab_lb:
+        # Genbrug valgt spiller fra tab_single for sammenhæng
         if df_lb is not None and not df_lb.empty:
             p_lb = df_lb[df_lb['PLAYER_OPTAUUID'] == selected_uuid].copy()
             
@@ -115,12 +108,10 @@ def vis_side(dp):
                 l1, l2, l3, l4 = st.columns(4)
                 l1.metric("Linebreaks I alt", int(get_lb_sum('total')))
                 l2.metric("Under Pres", int(get_lb_sum('underPressure')))
-                l3.metric("Farlige", int(get_lb_sum('leadingToDanger')))
+                l3.metric("Farlige (Danger)", int(get_lb_sum('leadingToDanger')))
                 l4.metric("Til Skud", int(get_lb_sum('leadingToShots')))
 
                 st.markdown("---")
-                
-                # Bar chart over hvilke kæder der brydes
                 lb_viz_data = pd.DataFrame({
                     'Kæde': ['Modst. Forsvar', 'Modst. Midtbane', 'Modst. Angreb'],
                     'Antal': [
@@ -135,5 +126,3 @@ def vis_side(dp):
                 st.plotly_chart(fig_lb, use_container_width=True)
             else:
                 st.info(f"Ingen linebreak-data fundet for {selected_name}.")
-        else:
-            st.error("Linebreak-data er ikke tilgængeligt.")
