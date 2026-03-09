@@ -1,3 +1,4 @@
+#data/analyse_load.py
 import pandas as pd
 from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
 from data.sql.opta_queries import get_opta_queries 
