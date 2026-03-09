@@ -70,7 +70,7 @@ def vis_side(dp):
                 orientation='h',
                 title="Top 10 Linebreakers",
                 color='LB_TOTAL', 
-                color_continuous_scale='Reds',
+                color_continuous_scale='#df003b',
                 text_auto=True
             )
             fig.update_layout(yaxis={'categoryorder':'total ascending'}, height=500)
