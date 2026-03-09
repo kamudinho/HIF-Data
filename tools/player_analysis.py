@@ -112,6 +112,7 @@ def vis_side(dp):
         m3.metric("Skud", int(p_row['Skud']))
         m4.metric("Skud i DZ", int(p_row['Skud i DZ']))
         m5.metric("Touches", int(p_row['touches']))
+        st.write("---")
 
         # 3. Bar Chart Overskrift og Dropdown på samme linje
         metric_options = {
