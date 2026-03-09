@@ -65,10 +65,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 COALESCE(SUM(STAT_FH), 0) AS TOTAL_LB_FH,
                 COALESCE(SUM(STAT_SH), 0) AS TOTAL_LB_SH
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_lb}
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            -- Vi udkommenterer hold-filteret lige nu for at se ALT
+            -- {hif_filter_lb} 
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
+            LIMIT 100
         """,
         
         "opta_team_linebreaks": f"""
