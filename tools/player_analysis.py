@@ -76,7 +76,7 @@ def vis_side(dp):
 
     with tab_squad:
         display_df = pivot_stats[['NAVN','expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].sort_values('expectedGoals', ascending=False)
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, use_container_width=True, height=Content hide_index=True)
 
     with tab_single:
         # 1. Spiller-vælger (Top-sektion)
