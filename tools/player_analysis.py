@@ -110,7 +110,7 @@ def vis_side(dp):
 
         # --- Bar Chart Sektion ---
         # Vi viser top 20 spillere inden for den valgte kategori
-        chart_data = pivot_stats.sort_values(selected_metric_key, ascending=False).head(20).copy()
+        chart_data = pivot_stats.sort_values(selected_metric_key, ascending=False).head(10).copy()
         
         # Farv den valgte spiller rød, de andre grå
         chart_data['Farve'] = chart_data['SELECT_NAME'].apply(lambda x: '#FF4B4B' if x == selected_display else '#D3D3D3')
@@ -119,7 +119,7 @@ def vis_side(dp):
                      x=selected_metric_key, 
                      y='NAVN', 
                      orientation='h',
-                     title=f"Top 20: {metric_options[selected_metric_key]}",
+                     title=f"Top 10: {metric_options[selected_metric_key]}",
                      labels={selected_metric_key: metric_options[selected_metric_key], 'NAVN': 'Spiller'},
                      color='Farve',
                      color_discrete_map="identity",
