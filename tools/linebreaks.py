@@ -3,8 +3,9 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
+    st.write("Tilgængelige tabeller:", list(dp.keys())) # Dette viser os om nøglen findes
+    df = dp.get("opta_player_linebreaks", pd.DataFrame())
     # Hent dataframe fra data-dictionary
-    df = dp.get("opta_player_linebreaks", pd.DataFrame()) # Sørg for nøglen matcher din query-nøgle
     name_map = {str(k).lower().strip(): v for k, v in dp.get("name_map", {}).items()}
 
     if df.empty:
