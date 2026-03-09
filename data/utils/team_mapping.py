@@ -6,9 +6,11 @@ TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 # --- Turneringer ---
 COMPETITIONS = {
+    COMPETITIONS = {
     "1. Division": {
         "wyid": 328, 
-        "COMPETITION_OPTAUUID": "6ifaeunfdelecgticvxanikzu",
+        # Vi forkorter denne til den stabile ID-stump
+        "COMPETITION_OPTAUUID": "6ifaeunfdele", 
         "COMPETITION_NAME": "1. Division"
     },
     "3F Superliga": {
