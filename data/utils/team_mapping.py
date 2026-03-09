@@ -1,4 +1,4 @@
-#data/utils/team_mapping.py
+# data/utils/team_mapping.py
 
 # --- GLOBAL KONTROL (RET KUN HER) ---
 COMPETITION_NAME = "1. Division"
@@ -20,7 +20,7 @@ COMPETITIONS = {
     "3. division": {"wyid": 43319, "opta_uuid": None},
     "Oddset Pokalen": {"wyid": 331, "opta_uuid": None},
     "U19 Ligaen": {"wyid": 1305, "opta_uuid": None}
-}
+} # <-- Denne her manglede sandsynligvis eller var placeret forkert
 
 # --- Hold ---
 TEAMS = {
@@ -35,7 +35,7 @@ TEAMS = {
     "Hillerød": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g19126_120x120.png"},
     "Aarhus Fremad": {"team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g3686_120x120.png"},
     "B 93": {"team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g620_120x120.png"},
-    "Middelfart": {"team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},    
+    "Middelfart": {"team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},
     
     # --- 3F Superliga ---
     "FC København": {"team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
@@ -50,34 +50,6 @@ TEAMS = {
     "Vejle Boldklub": {"team_wyid": 7473, "opta_uuid": "2450_uuid_dummy", "opta_id": 2450, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/g623_120x120.png"},
     "OB": {"team_wyid": 7460, "opta_uuid": "5rz9enoyknpg8ji78za5b82p8", "opta_id": 545, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/287_120x120.png"},
     "FC Fredericia": {"team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "league": "3F Superliga", "logo": "https://cdn5.wyscout.com/photos/team/public/2469_120x120.png"},
-
-    # --- 2. division ---
-    "AB": {"team_wyid": 7464, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2470_120x120.png"},
-    "Næstved": {"team_wyid": 7475, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2501_120x120.png"},
-    "Roskilde": {"team_wyid": 7497, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2656_120x120.png"},
-    "Thisted": {"team_wyid": 7513, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g4526_120x120.png"},
-    "HIK": {"team_wyid": 7476, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g626_120x120.png"},
-    "Vendsyssel": {"team_wyid": 7488, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2661_120x120.png"},
-    "VSK Aarhus": {"team_wyid": 38132, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g36661_120x120.png"},
-    "Fremad Amager": {"team_wyid": 7471, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g621_120x120.png"},
-    "Brabrand": {"team_wyid": 7482, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g633_120x120.png"},
-    "Ishøj": {"team_wyid": 70771, "league": "2. division", "logo": "-"},
-    "Skive": {"team_wyid": 7491, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2660_120x120.png"},
-    "Helsingør": {"team_wyid": 7566, "league": "2. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11023_120x120.png"},
-
-    # --- 3. division ---
-    "Nykøbing": {"team_wyid": 7526, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g6717_120x120.png"},
-    "FA 2000": {"team_wyid": 7644, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g15693_120x120.png"},
-    "Holbæk B&I": {"team_wyid": 30574, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g29003_120x120.png"},
-    "Brønshøj": {"team_wyid": 7472, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2663_120x120.png"},
-    "Hørsholm-Usserød": {"team_wyid": 71244, "league": "3. division", "logo": "-"},
-    "Frem": {"team_wyid": 7463, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/2575_120x120.png"},
-    "Vanløse": {"team_wyid": 7551, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g8650_120x120.png"},
-    "Næsby": {"team_wyid": 7503, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g3687_120x120.png"},
-    "Vejgaard B": {"team_wyid": 25748, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g24721_120x120.png"},
-    "Lyseng": {"team_wyid": 7649, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g15698_120x120.png"},
-    "Sundby": {"team_wyid": 34555, "league": "3. division", "logo": "-"},
-    "Odder": {"team_wyid": 7588, "league": "3. division", "logo": "https://cdn5.wyscout.com/photos/team/public/g11044_120x120.png"}
 }
 
 TEAM_COLORS = {
@@ -94,4 +66,3 @@ TEAM_COLORS = {
     "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
 }
-
