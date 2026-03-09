@@ -3,54 +3,84 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
+    # 1. Hent dataframes og name_map (ligesom på xG-siden)
     df_lb = dp.get("opta_player_linebreaks", pd.DataFrame())
-    df_local = dp.get("local_players", pd.DataFrame())
+    name_map = dp.get("name_map", {}) # Vi bruger den eksisterende name_map
 
     if df_lb.empty:
-        st.warning("Ingen linebreak-data fundet.")
+        st.warning("⚠️ Ingen linebreak-data fundet.")
         return
 
+    # Sørg for store bogstaver i kolonnenavne fra Snowflake
     df_lb.columns = [c.upper() for c in df_lb.columns]
     
-    # mapping logik
-    if not df_local.empty:
-        df_local.columns = [c.upper().strip() for c in df_local.columns]
-        
-        # VIGTIGT: Vi tvinger begge til string og fjerner alt whitespace
-        df_lb['JOIN_ID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
-        df_local['JOIN_ID'] = df_local['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower()
-        
-        navn_col = 'NAVN' if 'NAVN' in df_local.columns else 'PLAYER_NAME'
-        
-        df = pd.merge(df_lb, df_local[['JOIN_ID', navn_col]], on='JOIN_ID', how='left')
-        df['SPILLER_NAVN'] = df[navn_col].fillna(df['PLAYER_OPTAUUID'])
-        
-        # DEBUG SEKTION (Viser kun hvis noget er galt)
-        missing_count = df[navn_col].isna().sum()
-        if missing_count > 0:
-            with st.expander(f"⚠️ Debug: {missing_count} spillere mangler navn"):
-                st.write("Disse ID'er fra Snowflake findes IKKE i din CSV:")
-                st.write(df[df[navn_col].isna()]['PLAYER_OPTAUUID'].unique())
-    else:
-        df = df_lb.copy()
-        df['SPILLER_NAVN'] = df['PLAYER_OPTAUUID']
+    # 2. Mapping Logik (Samme metode som xG-siden)
+    # Vi renser ID'et så det er identisk med nøglerne i dit name_map
+    df_lb['JOIN_ID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
+    
+    # Oversæt ID til Navn via name_map. Hvis ikke fundet, behold UUID
+    df_lb['SPILLER_NAVN'] = df_lb['JOIN_ID'].map(name_map).fillna(df_lb['PLAYER_OPTAUUID'])
 
-    # --- TABS ---
+    # 3. Opsætning af Tabs
+    st.subheader("HIF Linebreak Analyse")
     tab1, tab2 = st.tabs(["📋 Oversigt", "📊 Grafer"])
 
     with tab1:
-        st.subheader("HIF Linebreak Analyse")
-        display_df = df.sort_values(by='LB_TOTAL', ascending=False).copy()
-        cols = ['SPILLER_NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']
-        existing = [c for c in cols if c in display_df.columns]
-        table_final = display_df[existing]
-        table_final.columns = ['Spiller', 'Total', 'Angreb', 'Midtbane', 'Forsvar'][:len(existing)]
+        # Klargør tabel til visning
+        display_df = df_lb.sort_values(by='LB_TOTAL', ascending=False).copy()
         
-        st.dataframe(table_final, use_container_width=True, hide_index=True)
+        # Vælg relevante kolonner
+        cols_to_show = ['SPILLER_NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']
+        existing_cols = [c for c in cols_to_show if c in display_df.columns]
+        
+        table_final = display_df[existing_cols]
+        table_final.columns = ['Spiller', 'Total', 'Angreb', 'Midtbane', 'Forsvar'][:len(existing_cols)]
+        
+        # Dynamisk højde baseret på antal spillere
+        calc_height = min((len(table_final) * 35) + 38, 800)
+        
+        st.dataframe(
+            table_final,
+            use_container_width=True,
+            hide_index=True,
+            height=calc_height
+        )
 
     with tab2:
-        top_10 = df.sort_values(by='LB_TOTAL', ascending=True).tail(10)
-        fig = px.bar(top_10, x='LB_TOTAL', y='SPILLER_NAVN', orientation='h',
-                     title="Top 10 Linebreakers",
-                     color='LB_TOTAL', color_continuous_scale='Reds', text='LB_TOTAL')
+        # Top 10 Graf
+        top_10 = df_lb.sort_values(by='LB_TOTAL', ascending=True).tail(10)
+        
+        fig = px.bar(
+            top_10, 
+            x='LB_TOTAL', 
+            y='SPILLER_NAVN', 
+            orientation='h',
+            title="Top 10 Linebreakers",
+            labels={'LB_TOTAL': 'Antal Linebreaks', 'SPILLER_NAVN': 'Spiller'},
+            color='LB_TOTAL', 
+            color_continuous_scale='Reds', 
+            text='LB_TOTAL'
+        )
+        
+        fig.update_layout(
+            yaxis={'categoryorder':'total ascending'},
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=500
+        )
+        
         st.plotly_chart(fig, use_container_width=True)
+
+        # Hurtig oversigt over linje-typer for top 5
+        st.write("---")
+        st.caption("Detaljeret fordeling (Top 5)")
+        top_5 = df_lb.sort_values(by='LB_TOTAL', ascending=False).head(5)
+        fig_lines = px.bar(
+            top_5,
+            x='SPILLER_NAVN',
+            y=['LB_DEFENCE_LINE', 'LB_MIDFIELD_LINE', 'LB_ATTACK_LINE'],
+            barmode='group',
+            color_discrete_sequence=['#ffcccc', '#ff6666', '#df003b'],
+            labels={'value': 'Antal', 'variable': 'Linje'}
+        )
+        st.plotly_chart(fig_lines, use_container_width=True)
