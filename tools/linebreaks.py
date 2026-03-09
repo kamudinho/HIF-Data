@@ -3,8 +3,15 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    st.write("Tilgængelige tabeller:", list(dp.keys())) # Dette viser os om nøglen findes
-    df = dp.get("opta_player_linebreaks", pd.DataFrame())
+    df = dp.get("player_linebreaks", pd.DataFrame())
+    
+    # DEBUG: Vis os hvad der sker
+    if not df.empty:
+        st.write(f"Dataframe fundet! Antal rækker: {len(df)}")
+        st.write("Kolonner i DF:", df.columns.tolist())
+        st.write(df.head(3)) # Vis de første 3 rækker
+    else:
+        st.error("Dataframe 'player_linebreaks' er tom!")
     # Hent dataframe fra data-dictionary
     name_map = {str(k).lower().strip(): v for k, v in dp.get("name_map", {}).items()}
 
