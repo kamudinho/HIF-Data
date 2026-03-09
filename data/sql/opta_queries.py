@@ -71,7 +71,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
         # --- Expected Goals (xG) ---
         "opta_expected_goals": f"""
             SELECT 
-                MATCH_ID AS MATCH_OPTAUUID, 
+                MATCH_UUID, 
                 CONTESTANT_OPTAUUID, 
                 PLAYER_OPTAUUID, 
                 STAT_TYPE, 
