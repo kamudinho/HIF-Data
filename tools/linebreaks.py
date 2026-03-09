@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    df = dp.get("player_linebreaks", pd.DataFrame())
+    df = dp.get("opta_player_linebreaks", pd.DataFrame())
     
     # DEBUG: Vis os hvad der sker
     if not df.empty:
