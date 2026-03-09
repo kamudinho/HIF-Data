@@ -3,86 +3,83 @@ import pandas as pd
 import plotly.express as px
 
 def vis_side(dp):
-    # --- 1. DATA HENTNING ---
-    df_lb_raw = dp.get("opta_player_linebreaks", pd.DataFrame())
+    # 1. Hent data (som nu er pivoteret fra SQL)
+    df = dp.get("opta_player_linebreaks", pd.DataFrame())
     name_map = dp.get("name_map", {})
 
-    if df_lb_raw.empty:
-        st.warning("⚠️ Ingen Linebreak-data fundet i 'opta_player_linebreaks'.")
+    if df.empty:
+        st.warning("⚠️ Ingen data fundet. Tjek din SQL-forbindelse.")
         return
 
-    # Standardiser kolonner
-    df_lb_raw.columns = [c.upper() for c in df_lb_raw.columns]
+    # Sørg for at kolonnenavne er store bogstaver for at matche Snowflake output
+    df.columns = [c.upper() for c in df.columns]
 
-    # --- 2. TRANSFORMATION (Fra 25 rækker til 1 række pr. spiller) ---
-    # Vi pumper STAT_TYPE op som kolonner, så 'total', 'oneLine' osv. bliver overskrifter
-    df_pivoted = df_lb_raw.pivot_table(
-        index=['PLAYER_OPTAUUID', 'LINEUP_CONTESTANTUUID'], 
-        columns='STAT_TYPE', 
-        values='STAT_VALUE',
-        aggfunc='sum'
-    ).fillna(0).reset_index()
+    # Navne-mapping (Hvidovre-spillere)
+    df['NAVN'] = df['PLAYER_OPTAUUID'].str.lower().str.strip().map(name_map).fillna(df['PLAYER_OPTAUUID'])
 
-    # Navne-mapping og rensning
-    df_pivoted['PLAYER_OPTAUUID'] = df_pivoted['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
-    df_pivoted['NAVN'] = df_pivoted['PLAYER_OPTAUUID'].map(name_map).fillna(df_pivoted['PLAYER_OPTAUUID'])
+    # --- UI LAYOUT ---
+    st.title("🛡️ Linebreak Analyse")
+    st.markdown("Baseret på Opta-data: Evnen til at spille forbi modstanderens kæder.")
+
+    # 2. Top-liste (Hele truppen)
+    st.subheader("Truppens overblik")
     
-    # Sorter efter 'total' linebreaks (hvis kolonnen findes)
-    sort_col = 'total' if 'total' in df_pivoted.columns else df_pivoted.columns[-1]
-    df_pivoted = df_pivoted.sort_values(sort_col, ascending=False)
-
-    # --- 3. UI LAYOUT ---
-    st.title("Linebreak Analyse")
-
-    # Top-oversigt (Den brede tabel)
-    st.subheader("Truppens Linebreak-performance")
+    # Vi vælger de mest relevante kolonner til hurtigt overblik
+    vis_cols = ['NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE', 'LB_PENALTY_AREA']
     
-    # Vi vælger de mest interessante kolonner til hovedtabellen
-    cols_to_show = ['NAVN'] + [c for c in ['total', 'attackingLineBroken', 'midfieldLineBroken', 'defenceLineBroken'] if c in df_pivoted.columns]
+    # Sorter efter total og vis
+    df_display = df.sort_values('LB_TOTAL', ascending=False)
     
     st.dataframe(
-        df_pivoted[cols_to_show],
+        df_display[vis_cols],
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "LB_TOTAL": st.column_config.NumberColumn("Total", help="Total antal linebreaks"),
+            "LB_PENALTY_AREA": st.column_config.NumberColumn("Ind i feltet", format="%d 📥")
+        }
     )
 
-    st.write("---")
+    st.divider()
 
-    # --- 4. INDIVIDUEL SPILLER-DYK ---
-    col_select, col_empty = st.columns([1, 2])
-    with col_select:
-        selected_navn = st.selectbox("Vælg spiller for detaljer", options=df_pivoted['NAVN'].tolist())
+    # 3. Individuel Spiller-dyk
+    col_sel, col_empty = st.columns([1, 2])
+    with col_sel:
+        valgt_spiller = st.selectbox("Vælg spiller for detaljer", options=df_display['NAVN'].tolist())
+
+    # Find data for den valgte spiller
+    p_data = df_display[df_display['NAVN'] == valgt_spiller].iloc[0]
+
+    # Metrics række
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Linebreaks", int(p_data['LB_TOTAL']))
+    m2.metric("Under Pres", int(p_data.get('LB_UNDER_PRESSURE', 0)))
+    m3.metric("1. Halvleg", int(p_data['TOTAL_LB_FH']))
+    m4.metric("2. Halvleg", int(p_data['TOTAL_LB_SH']))
+
+    # Visualisering af linebreak typer
+    st.subheader(f"Fordeling for {valgt_spiller}")
     
-    p_uuid = df_pivoted[df_pivoted['NAVN'] == selected_navn]['PLAYER_OPTAUUID'].iloc[0]
+    # Forbered data til graf (vi tager de specifikke LB kolonner)
+    plot_data = pd.DataFrame({
+        'Type': ['Mod Angreb', 'Mod Midtbane', 'Mod Forsvar', 'Ind i feltet'],
+        'Antal': [
+            p_data['LB_ATTACK_LINE'], 
+            p_data['LB_MIDFIELD_LINE'], 
+            p_data['LB_DEFENCE_LINE'], 
+            p_data['LB_PENALTY_AREA']
+        ]
+    })
+
+    fig = px.bar(
+        plot_data, 
+        x='Antal', 
+        y='Type', 
+        orientation='h',
+        color='Antal',
+        color_continuous_scale='Reds',
+        text_auto=True
+    )
     
-    # Her går vi tilbage til de rå rækker for den valgte spiller for at lave grafen
-    p_detail = df_lb_raw[df_lb_raw['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip() == p_uuid].copy()
-
-    c1, c2 = st.columns([2, 1])
-
-    with c1:
-        # Bar chart over typer (vi fjerner procenter og 'total' for at se fordelingen rent)
-        chart_df = p_detail[
-            (~p_detail['STAT_TYPE'].str.contains('percentage', case=False)) & 
-            (p_detail['STAT_TYPE'] != 'total')
-        ].sort_values('STAT_VALUE', ascending=True)
-
-        fig = px.bar(
-            chart_df, 
-            x='STAT_VALUE', 
-            y='STAT_TYPE', 
-            orientation='h',
-            title=f"Linebreak distribution: {selected_navn}",
-            color_discrete_sequence=['#df003b']
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with c2:
-        st.write("**Alle Stats (FH/SH)**")
-        # Her viser vi alle 25 rækker for den valgte spiller, så man kan se FH/SH detaljer
-        st.dataframe(
-            p_detail[['STAT_TYPE', 'STAT_VALUE', 'STAT_FH', 'STAT_SH']].sort_values('STAT_VALUE', ascending=False),
-            use_container_width=True,
-            hide_index=True,
-            height=400
-        )
+    fig.update_layout(showlegend=False, height=350)
+    st.plotly_chart(fig, use_container_width=True)
