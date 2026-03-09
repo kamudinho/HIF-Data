@@ -5,7 +5,7 @@ import plotly.express as px
 def vis_side(dp):
     # --- 1. DATA HENTNING ---
     df_xg = dp.get("xg_agg", pd.DataFrame())
-    df_lb = dp.get("player_linebreaks", pd.DataFrame())
+    df_lb = dp.get("opta_player_linebreaks", pd.DataFrame())
     df_shots = dp.get("playerstats", pd.DataFrame()) # Bruges til Skud & DZ
     df_matches = dp.get("matches", pd.DataFrame())
     name_map = dp.get("name_map", {})
