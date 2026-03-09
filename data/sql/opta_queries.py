@@ -1,6 +1,7 @@
 import panda as pd 
 
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
+    
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     DIVISION1_ID = '6ifaeunfdele' 
