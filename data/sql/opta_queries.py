@@ -56,21 +56,19 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_player_linebreaks": f"""
             SELECT 
-            PLAYER_OPTAUUID,
-            LINEUP_CONTESTANTUUID,
-            MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
-            MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
-            MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
-            MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE,
-            MAX(CASE WHEN STAT_TYPE = 'oneLine' THEN STAT_VALUE END) AS LB_1_LINE,
-            MAX(CASE WHEN STAT_TYPE = 'twoLines' THEN STAT_VALUE END) AS LB_2_LINES,
-            SUM(STAT_FH) AS TOTAL_LB_FH,
-            SUM(STAT_SH) AS TOTAL_LB_SH
-        FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
-        WHERE MATCH_OPTAUUID IN (SELECT DISTINCT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o')
-        -- Husk hif_filter_lb her hvis du kun vil se egne spillere
-        GROUP BY 1, 2
-        ORDER BY LB_TOTAL DESC
+                PLAYER_OPTAUUID,
+                LINEUP_CONTESTANTUUID,
+                COALESCE(MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END), 0) AS LB_TOTAL,
+                COALESCE(MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END), 0) AS LB_ATTACK_LINE,
+                COALESCE(MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END), 0) AS LB_MIDFIELD_LINE,
+                COALESCE(MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END), 0) AS LB_DEFENCE_LINE,
+                COALESCE(SUM(STAT_FH), 0) AS TOTAL_LB_FH,
+                COALESCE(SUM(STAT_SH), 0) AS TOTAL_LB_SH
+            FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_lb}
+            GROUP BY 1, 2
+            ORDER BY LB_TOTAL DESC
         """,
         
         "opta_team_linebreaks": f"""
