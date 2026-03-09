@@ -55,6 +55,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_player_linebreaks": f"""
             SELECT 
+                PLAYER_OPTAUUID,
                 LINEUP_CONTESTANTUUID, 
                 TOURNAMENTCALENDAR_OPTAUUID,
                 COUNT(*) as LINJER
