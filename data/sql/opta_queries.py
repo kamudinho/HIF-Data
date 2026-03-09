@@ -11,7 +11,7 @@ def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     saeson = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
 
     # 2. Dynamiske filtre
-    e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if h_only else ""
+    e_event_filter = f"AND UPPER(e.EVENT_CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     stats_filter = f"AND UPPER(CONTESTANT_OPTAUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
     lineup_filter = f"AND UPPER(LINEUP_CONTESTANTUUID) = UPPER('{HIF_UUID}')" if hif_only else ""
 
