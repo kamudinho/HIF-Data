@@ -72,7 +72,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_team_linebreaks": f"""
             SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             {hif_filter_lb}
         """
     }
