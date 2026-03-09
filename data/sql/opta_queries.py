@@ -53,7 +53,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             {hif_filter_std}
         """,
         
-        "opta_player_linebreaks": f"""
+        "player_linebreaks": f"""
             SELECT 
                 PLAYER_OPTAUUID,
                 LINEUP_CONTESTANTUUID,
