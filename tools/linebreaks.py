@@ -1,51 +1,49 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 def vis_side(dp):
-    # Hent dataframe
-    df = dp.get("opta_player_linebreaks", pd.DataFrame())
+    # 1. HENT DATA (Ret nøglen til 'player_linebreaks' så det matcher analyse_load)
+    df = dp.get("player_linebreaks", pd.DataFrame())
     
-    # Hent name_map og sørg for at alle keys er lowercase
+    # 2. NAVNE-MAPPING
     raw_name_map = dp.get("name_map", {})
     name_map = {str(k).lower().strip(): v for k, v in raw_name_map.items()}
 
     if df.empty:
-        st.error("⚠️ Ingen rækker returneret fra Snowflake. Tjek din SQL-query i 'get_opta_queries'.")
+        st.warning("Fandt ingen linebreak-data. Prøver at vise rå-data for fejlfinding...")
+        st.write(df) # Dette viser kolonnenavne hvis DF findes men er tom
         return
 
-    # Tving alle kolonnenavne i DF til UPPERCASE (standard Snowflake)
+    # 3. RENS KOLONNER (Snowflake returnerer altid UPPERCASE)
     df.columns = [c.upper() for c in df.columns]
 
-    # Rens UUID'er og map navne
-    # Vi bruger .astype(str) for at undgå problemer med typer
-    df['PLAYER_OPTAUUID'] = df['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
-    df['NAVN'] = df['PLAYER_OPTAUUID'].map(name_map).fillna(df['PLAYER_OPTAUUID'])
+    # 4. MAP NAVNE (Brug PLAYER_OPTAUUID til at finde navnet fra players.csv)
+    if 'PLAYER_OPTAUUID' in df.columns:
+        df['PLAYER_OPTAUUID_CLEAN'] = df['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
+        df['NAVN'] = df['PLAYER_OPTAUUID_CLEAN'].map(name_map).fillna(df['PLAYER_OPTAUUID'])
+    else:
+        df['NAVN'] = "Ukendt Spiller"
 
-    # --- UI ---
     st.title("🛡️ Hvidovre IF - Linebreak Analyse")
 
-    # Vis top 5 for at tjekke om data overhovedet er der
-    st.subheader("Truppens Overblik")
-    
-    # Sortering (Vi bruger de navne din SQL producerede)
-    df = df.sort_values('LB_TOTAL', ascending=False)
+    # 5. TJEK FOR KOLONNER (Da vi lige har kørt en 'SELECT * LIMIT 100' uden CASE WHEN)
+    # Hvis du kører din test-query uden pivotering, skal vi bruge de rå kolonner
+    if 'STAT_TYPE' in df.columns:
+        st.info("Viser rå Opta-data (ikke-pivoteret)")
+        st.dataframe(df.head(20))
+    else:
+        # Hvis du har genindsat din MAX(CASE...) SQL, kører vi denne:
+        df = df.sort_values('LB_TOTAL', ascending=False) if 'LB_TOTAL' in df.columns else df
+        
+        st.subheader("Truppens Overblik")
+        vis_cols = [c for c in ['NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE'] if c in df.columns]
+        st.dataframe(df[vis_cols], use_container_width=True, hide_index=True)
 
-    # Konfigurer visning
-    st.dataframe(
-        df[['NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']],
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # Spiller-vælger
-    spiller_liste = df['NAVN'].unique().tolist()
-    valgt = st.selectbox("Vælg spiller for detaljer", spiller_liste)
-    
-    # Spiller-data
-    p = df[df['NAVN'] == valgt].iloc[0]
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Linebreaks", int(p['LB_TOTAL']))
-    c2.metric("1. Halvleg", int(p['TOTAL_LB_FH']))
-    c3.metric("2. Halvleg", int(p['TOTAL_LB_SH']))
+        # Metrikker for valgt spiller
+        valgt = st.selectbox("Vælg spiller", df['NAVN'].unique())
+        p = df[df['NAVN'] == valgt].iloc[0]
+        
+        c1, c2, c3 = st.columns(3)
+        if 'LB_TOTAL' in p: c1.metric("Total", int(p['LB_TOTAL']))
+        if 'TOTAL_LB_FH' in p: c2.metric("1. Halvleg", int(p['TOTAL_LB_FH']))
+        if 'TOTAL_LB_SH' in p: c3.metric("2. Halvleg", int(p['TOTAL_LB_SH']))
