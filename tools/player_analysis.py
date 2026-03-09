@@ -75,7 +75,7 @@ def vis_side(dp):
     tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
 
     with tab_squad:
-        display_df = pivot_stats[['NAVN', 'HOLD', 'expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].sort_values('expectedGoals', ascending=False)
+        display_df = pivot_stats[['NAVN','expectedGoals', 'expectedAssists', 'Skud', 'Skud i DZ', 'touches']].sort_values('expectedGoals', ascending=False)
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with tab_single:
