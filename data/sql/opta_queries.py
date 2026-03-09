@@ -1,36 +1,46 @@
+import pandas as pd
+
 def get_opta_queries(liga_uuid=None, saeson_navn=None, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
     
-    # Præcise UUIDs fra dit Snowflake-dump
-    NORDICBET_UUID = '6ifaeunfdelecgticvxanikzu' # Hele strengen fra mapping
-    SAESON_2526_UUID = 'ecgticvxanikzudyjr458hcmr'
+    # --- KONSTANTER (UUIDs fra dit Snowflake dump) ---
+    # Vi kalder den 1DIVISION_ID som ønsket
+    DIVISION1_ID = '6ifaeunfdele' 
+    SAESON_2526_ID = 'ecgticvxanikzudyjr458hcmr'
 
+    # 1. Importér fallback fra mapping
+    from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME
+    
+    # 2. Definér variabler (Løser "saeson is not defined" fejlen)
+    liga_f = liga_uuid if liga_uuid else COMPETITION_NAME
+    saeson_f = saeson_navn if saeson_navn else TOURNAMENTCALENDAR_NAME
+
+    # 3. Filtre
     stats_filter = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    e_event_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
-        # --- Expected Goals (Rettet med STAT og UUIDs) ---
         "opta_expected_goals": f"""
             SELECT 
                 MATCH_ID AS MATCH_OPTAUUID, 
                 CONTESTANT_OPTAUUID, 
                 PLAYER_OPTAUUID, 
                 STAT_TYPE, 
-                STAT AS STAT_VALUE,  -- Rettet fra STAT_VALUE til STAT
+                STAT AS STAT_VALUE, 
                 POSITION, 
                 MATCH_DATE
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_UUID}'
-              AND COMPETITION_OPTAUUID = '6ifaeunfdele' -- Den korte version fra dit dump
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_ID}'
+              AND COMPETITION_OPTAUUID = '{DIVISION1_ID}'
             {stats_filter}
         """,
 
-        # --- Team Stats (Rettet til at bruge UUID i stedet for Navn) ---
         "opta_team_stats": f"""
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, STAT_TOTAL
             FROM {DB}.OPTA_MATCHSTATS
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_UUID}' 
-              AND COMPETITION_OPTAUUID = '6ifaeunfdele'
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{SAESON_2526_ID}'
+              AND COMPETITION_OPTAUUID = '{DIVISION1_ID}'
             {stats_filter}
         """,
 
