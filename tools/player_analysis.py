@@ -10,6 +10,12 @@ def vis_side(dp):
     df_shots = dp.get("playerstats", pd.DataFrame())
     name_map = dp.get("name_map", {})
 
+    st.write("DEBUG - Antal rækker i xG:", len(df_xg))
+        if not df_xg.empty:
+            st.write("DEBUG - Første 3 rækker:", df_xg.head(3))
+            st.write("DEBUG - Tilgængelige STAT_TYPES:", df_xg['STAT_TYPE'].unique())
+
+    
     if df_xg is None or df_xg.empty:
         st.warning("⚠️ Ingen xG-data fundet.")
         return
