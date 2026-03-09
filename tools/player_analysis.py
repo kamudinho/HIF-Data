@@ -80,22 +80,23 @@ def vis_side(dp):
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with tab_single:
-
-        # Spiller-vælger
+        # 1. Spiller-vælger (Top-sektion)
         all_names = sorted(pivot_stats['SELECT_NAME'].unique())
-        selected_display = st.selectbox("Vælg spiller for detaljer", options=all_names)
+        selected_display = st.selectbox("Vælg spiller for detaljer", options=all_names, key="player_select")
         p_row = pivot_stats[pivot_stats['SELECT_NAME'] == selected_display].iloc[0]
         selected_uuid = p_row[player_col]
 
-        # --- Metrics Sektion ---
+        # 2. Metrics Række
+        st.write("---")
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("xG", f"{p_row['expectedGoals']:.2f}")
         m2.metric("xA", f"{p_row['expectedAssists']:.2f}")
         m3.metric("Skud", int(p_row['Skud']))
         m4.metric("Skud i DZ", int(p_row['Skud i DZ']))
         m5.metric("Touches", int(p_row['touches']))
+        st.write("---")
 
-        # Valg af metric til Bar Chart
+        # 3. Bar Chart Overskrift og Dropdown på samme linje
         metric_options = {
             'expectedGoals': 'Expected Goals (xG)',
             'expectedAssists': 'Expected Assists (xA)',
@@ -103,28 +104,47 @@ def vis_side(dp):
             'Skud i DZ': 'Skud i Dangerzone',
             'touches': 'Touches (Berøringer)'
         }
+
+        col_title, col_dropdown = st.columns([2, 1])
         
-        selected_metric_key = st.radio("Vælg kategori til sammenligning", options=list(metric_options.keys()), 
-                                       format_func=lambda x: metric_options[x], horizontal=True)
+        with col_title:
+            # Vi definerer titlen her, men viser den i selve figuren senere
+            current_metric_name = metric_options[st.session_state.get('selected_metric', 'expectedGoals')]
+            st.subheader(f"Top 10: {current_metric_name}")
+
+        with col_dropdown:
+            selected_metric_key = st.selectbox(
+                "Vælg kategori", # Denne label kan skjules med label_visibility hvis ønsket
+                options=list(metric_options.keys()), 
+                format_func=lambda x: metric_options[x],
+                key='selected_metric',
+                label_visibility="collapsed" 
+            )
 
         # --- Bar Chart Sektion ---
-        # Vi viser top 10 spillere inden for den valgte kategori
         chart_data = pivot_stats.sort_values(selected_metric_key, ascending=False).head(10).copy()
         
-        # Farv den valgte spiller rød, de andre grå
-        chart_data['Farve'] = chart_data['SELECT_NAME'].apply(lambda x: '#FF4B4B' if x == selected_display else '#D3D3D3')
+        # Markér valgt spiller
+        chart_data['Farve'] = chart_data['SELECT_NAME'].apply(
+            lambda x: '#FF4B4B' if x == selected_display else '#D3D3D3'
+        )
 
         fig = px.bar(chart_data, 
                      x=selected_metric_key, 
                      y='NAVN', 
                      orientation='h',
-                     title=f"Top 10: {metric_options[selected_metric_key]}",
                      labels={selected_metric_key: metric_options[selected_metric_key], 'NAVN': 'Spiller'},
                      color='Farve',
                      color_discrete_map="identity",
                      text_auto='.2f' if 'expected' in selected_metric_key else True)
         
-        fig.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False)
+        fig.update_layout(
+            yaxis={'categoryorder':'total ascending'}, 
+            showlegend=False,
+            margin=dict(l=20, r=20, t=10, b=20), # Mindre margin i toppen da vi har subheader
+            height=400
+        )
+        
         st.plotly_chart(fig, use_container_width=True)
 
     with tab_lb:
