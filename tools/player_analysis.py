@@ -106,14 +106,12 @@ def vis_side(dp):
         selected_uuid = p_row[player_col]
 
         # 2. Metrics Række
-        st.write("---")
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("xG", f"{p_row['expectedGoals']:.2f}")
         m2.metric("xA", f"{p_row['expectedAssists']:.2f}")
         m3.metric("Skud", int(p_row['Skud']))
         m4.metric("Skud i DZ", int(p_row['Skud i DZ']))
         m5.metric("Touches", int(p_row['touches']))
-        st.write("---")
 
         # 3. Bar Chart Overskrift og Dropdown på samme linje
         metric_options = {
