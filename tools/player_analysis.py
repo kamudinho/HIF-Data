@@ -69,7 +69,7 @@ def vis_side(dp):
     pivot_stats[player_col] = pivot_stats[player_col].astype(str).str.lower()
     pivot_stats['NAVN'] = pivot_stats[player_col].map(name_map).fillna(pivot_stats[player_col])
     pivot_stats['HOLD'] = pivot_stats[team_col].map(team_map).fillna("Ukendt Hold")
-    pivot_stats['SELECT_NAME'] = pivot_stats['NAVN'] + " (" + pivot_stats['HOLD'] + ")"
+    pivot_stats['SELECT_NAME'] = pivot_stats['NAVN']
 
     # --- 4. TABS ---
     tab_squad, tab_single, tab_lb = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE", "LINEBREAKS"])
