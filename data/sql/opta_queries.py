@@ -5,32 +5,30 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
+    # Mapping af ligaer til de UUID'er, vi lige har udtrukket fra din database
     tournament_map = {
         "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o", # 1. Division
         "Superliga": "3o8l1yf2irp018eaa2far455g"       # Superliga
     }
     
-    # Hent UUID'en. Hvis ligaen ikke findes i mappet, falder den tilbage til 1. division
+    # Hent den korrekte UUID baseret på dit valg i appen
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
 
-    # Vi definerer de kampe, der hører til den valgte liga og sæson én gang.
-    # Denne subquery virker som en "bro" til alle andre tabeller.
+    # Denne subquery bruger nu de præcise UUID'er, hvilket sikrer at data findes
     match_id_subquery = f"""
-        SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-        WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}' 
-        AND COMPETITION_NAME = '{liga_f}'
+        SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
-    # Dynamisk filter: Hvis hif_only=True, tilføjer vi HIF-filteret. 
-    # Hvis False (som ved Betinia Ligaen), henter den alt.
+    # Dynamiske filtre
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    
     return {
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO 
-            WHERE TOURNAMENTCALENDAR_NAME = '{saeson_f}' 
-            AND COMPETITION_NAME = '{liga_f}'
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """,
         
         "opta_expected_goals": f"""
