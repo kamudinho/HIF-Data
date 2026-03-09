@@ -88,7 +88,6 @@ def vis_side(dp):
         selected_uuid = p_row[player_col]
 
         # --- Metrics Sektion ---
-        st.divider()
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("xG", f"{p_row['expectedGoals']:.2f}")
         m2.metric("xA", f"{p_row['expectedAssists']:.2f}")
