@@ -124,10 +124,10 @@ def vis_side(dp):
                     # Nøglerne skal matche STAT_TYPE fra din SQL
                     opta_stats_map = {
                         "expectedGoals": "Expected Goals (xG)",
-                        "attackingLineBroken": "Linjebrud (Angreb)",
+                        "attackingLineBroken": "Linebreaks (Offensivt)",
                         "possessionPercentage": "Boldbesiddelse",
                         "totalScoringAtt": "Afslutninger",
-                        "touchesInOppBox": "Felt-berøringer",
+                        "touchesInOppBox": "Berøringer i feltet",
                         "totalPass": "Afleveringer"
                     }
                     
