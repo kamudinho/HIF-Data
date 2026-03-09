@@ -57,7 +57,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT 
                 LINEUP_CONTESTANTUUID, 
                 TOURNAMENTCALENDAR_OPTAUUID,
-                COUNT(*) as rows
+                COUNT(*) as LINJER
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
             WHERE LINEUP_CONTESTANTUUID = '{HIF_UUID}'
             GROUP BY 1, 2
