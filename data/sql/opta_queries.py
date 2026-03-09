@@ -20,10 +20,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
-    # Dynamiske filtre
-    # Opdaterede filtre - vi bruger CONTESTANT_OPTAUUID som er standard
+    hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    hif_filter_lb = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    match_id_subquery = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'"
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     
     return {
@@ -67,11 +66,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 COALESCE(SUM(STAT_SH), 0) AS TOTAL_LB_SH
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-            -- Vi udkommenterer hold-filteret lige nu for at se ALT
-            -- {hif_filter_lb} 
+            {hif_filter_lb}
             GROUP BY 1, 2
             ORDER BY LB_TOTAL DESC
-            LIMIT 100
         """,
         
         "opta_team_linebreaks": f"""
