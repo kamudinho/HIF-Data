@@ -1,36 +1,75 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 
 def vis_side(dp):
-    df = dp.get("opta_player_linebreaks", pd.DataFrame())
-    # Hent name_map og sørg for at alle nøgler er strings, lowercase og strippet for mellemrum
-    raw_name_map = dp.get("name_map", {})
-    name_map = {str(k).lower().strip(): str(v) for k, v in raw_name_map.items()}
+    # 1. Hent dataframes med de korrekte nøgler
+    # Vi bruger 'opta_player_linebreaks' som du har navngivet den i din query
+    df_lb = dp.get("opta_player_linebreaks", pd.DataFrame())
+    df_local = dp.get("local_players", pd.DataFrame())
 
-    if df.empty:
-        st.warning("Ingen data fundet.")
+    if df_lb.empty:
+        st.warning("Ingen linebreak-data fundet for de valgte filtre.")
         return
 
-    # Lav en kopi så vi ikke ændrer i originalen
-    df = df.copy()
-    df.columns = [c.upper() for c in df.columns]
+    # Sørg for at alle kolonnenavne fra SQL er store bogstaver for en sikkerheds skyld
+    df_lb.columns = [c.upper() for c in df_lb.columns]
     
-    # Debug: Hvis du vil se om mappingen overhovedet indeholder noget
-    # st.write(f"Antal navne i map: {len(name_map)}")
+    # 2. Map navne via local_players (din players.csv)
+    if not df_local.empty:
+        df_local.columns = [c.upper() for c in df_local.columns]
+        
+        # Vi opretter en renset JOIN-nøgle i begge tabeller for at sikre et fejlfrit match
+        df_lb['JOIN_ID'] = df_lb['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
+        df_local['JOIN_ID'] = df_local['PLAYER_OPTAUUID'].astype(str).str.lower().str.strip()
+        
+        # Tjekker om din CSV bruger 'PLAYER_NAME' eller 'NAVN'
+        navn_col = 'PLAYER_NAME' if 'PLAYER_NAME' in df_local.columns else 'NAVN'
+        
+        # Vi laver en "Left Join" (merge) for at få navnene ind i linebreak-tabellen
+        df = pd.merge(
+            df_lb, 
+            df_local[['JOIN_ID', navn_col]], 
+            on='JOIN_ID', 
+            how='left'
+        )
+        
+        # Opret den endelige navne-kolonne (hvis spilleren ikke findes i CSV, vis UUID)
+        df['SPILLER_NAVN'] = df[navn_col].fillna(df['PLAYER_OPTAUUID'])
+    else:
+        # Fallback hvis players.csv af en grund ikke er indlæst
+        df = df_lb.copy()
+        df['SPILLER_NAVN'] = df['PLAYER_OPTAUUID']
 
-    # Map navne - vi stripper og lowercaser også UUID'en fra Snowflake for at sikre match
-    df['SPILLER_NAVN'] = (
-        df['PLAYER_OPTAUUID']
-        .astype(str)
-        .str.lower()
-        .str.strip()
-        .map(name_map)
-        .fillna(df['PLAYER_OPTAUUID']) # Behold UUID hvis navn ikke findes
+    # 3. Præsentation af tabel
+    st.subheader("HIF Linebreak Analyse")
+    
+    # Sorter efter LB_TOTAL så de bedste står øverst
+    df = df.sort_values(by='LB_TOTAL', ascending=False)
+    
+    # Vælg og omdøb kolonner til pæn visning
+    display_df = df[['SPILLER_NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']].copy()
+    display_df.columns = ['Spiller', 'Total Linebreaks', 'Angrebslinje', 'Midtbane', 'Forsvar']
+    
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True
     )
 
-    # Vis tabellen med det nye navn
-    st.subheader("Truppens Linebreak-performance")
-    display_df = df[['SPILLER_NAVN', 'LB_TOTAL', 'LB_ATTACK_LINE', 'LB_MIDFIELD_LINE', 'LB_DEFENCE_LINE']].copy()
-    display_df.columns = ['Spiller', 'Total', 'Angrebslinje', 'Midtbane', 'Forsvar']
+    # 4. Top 10 Graf
+    st.divider()
+    top_10 = df.head(10).sort_values(by='LB_TOTAL', ascending=True)
     
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    fig = px.bar(
+        top_10, 
+        x='LB_TOTAL', 
+        y='SPILLER_NAVN', 
+        orientation='h',
+        title="Top 10 Linebreakers",
+        labels={'LB_TOTAL': 'Antal', 'SPILLER_NAVN': 'Spiller'},
+        color_discrete_sequence=['#df003b'] # Hvidovre Rød
+    )
+    
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig, use_container_width=True)
