@@ -1,7 +1,8 @@
 #data/analyse_load.py
 import pandas as pd
-from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
-from data.sql.opta_queries import get_opta_queries 
+import streamlit as st
+from data.data_load import _get_snowflake_conn, load_local_players
+from data.sql.opta_queries import get_opta_queries
 from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
 def get_analysis_package(hif_only=False):
@@ -9,13 +10,11 @@ def get_analysis_package(hif_only=False):
     if not conn: 
         return {}
 
-    # 1. Hent de stabile værdier fra mapping
-    # Vi sikrer os at de er strenge
+    # 1. Setup filter-strenge
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
 
-    # 2. Hent queries - VIGTIGT: Brug de korrekte argumentnavne
-    # Her linker vi 'saeson_navn' til din 'season_f' variabel
+    # 2. Hent queries (Sørg for at argumentnavne matcher get_opta_queries definitionen)
     queries = get_opta_queries(liga_uuid=comp_f, saeson_navn=season_f, hif_only=hif_only)
 
     def safe_query(query_key):
@@ -23,11 +22,10 @@ def get_analysis_package(hif_only=False):
         if not q:
             return pd.DataFrame()
         try:
-            # Nogle Streamlit-forbindelser bruger st.connection, andre bruger legacy
-            # Jeg antager du bruger den nye st.connection format:
+            # Bruger Streamlit connection query metode
             return conn.query(q)
         except Exception as e:
-            print(f"Fejl i query '{query_key}': {e}")
+            st.error(f"Fejl i query '{query_key}': {e}")
             return pd.DataFrame()
 
     # --- Hent data ---
@@ -51,7 +49,7 @@ def get_analysis_package(hif_only=False):
                 df_local['NAVN'].astype(str).str.strip()
             ))
 
-    # Sikker mapping af linebreaks
+    # Sikker mapping af linebreaks (vigtigt for Spillerperformance-siden)
     if not df_player_linebreaks.empty:
         df_player_linebreaks.columns = [c.upper() for c in df_player_linebreaks.columns]
         if 'PLAYER_OPTAUUID' in df_player_linebreaks.columns:
@@ -59,7 +57,7 @@ def get_analysis_package(hif_only=False):
                 df_player_linebreaks['PLAYER_OPTAUUID']
                 .astype(str).str.lower()
                 .map(name_map)
-                .fillna(df_player_linebreaks['PLAYER_OPTAUUID']) # Fallback til ID hvis navn mangler
+                .fillna(df_player_linebreaks['PLAYER_OPTAUUID'])
             )
 
     return {
