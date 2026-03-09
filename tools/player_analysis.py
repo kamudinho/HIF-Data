@@ -94,18 +94,39 @@ def vis_side(dp):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab_lb:
-        # Vi genbruger den valgte spiller fra tab 2 eller lader dig vælge en ny her
         st.subheader(f"Linebreaks for {selected_name}")
         
         if not df_lb.empty:
+            # 1. Standardiser alle kolonner til store bogstaver
             df_lb.columns = [c.upper() for c in df_lb.columns]
-            p_lb_data = df_lb[df_lb[player_col] == p_uuid]
             
-            if not p_lb_data.empty:
-                lb_summary = p_lb_data.groupby('STAT_TYPE')['STAT_TOTAL'].sum().reset_index()
-                st.bar_chart(lb_summary.set_index('STAT_TYPE'))
-                st.dataframe(p_lb_data[['STAT_TYPE', 'STAT_TOTAL']], use_container_width=True, hide_index=True)
+            # 2. Find den rigtige spiller-kolonne (Opta UUID kan variere i navnet)
+            possible_id_cols = ['PLAYER_OPTAUUID', 'PLAYER_UUID', 'PLAYER_ID', 'PLAYERID']
+            lb_id_col = next((c for c in possible_id_cols if c in df_lb.columns), None)
+
+            if lb_id_col:
+                # Filtrer på spilleren
+                p_lb_data = df_lb[df_lb[lb_id_col] == p_uuid]
+                
+                if not p_lb_data.empty:
+                    # Tjek om STAT_TYPE og STAT_TOTAL findes
+                    type_col = 'STAT_TYPE' if 'STAT_TYPE' in p_lb_data.columns else None
+                    val_col = 'STAT_TOTAL' if 'STAT_TOTAL' in p_lb_data.columns else 'STAT_VALUE'
+
+                    if type_col and val_col in p_lb_data.columns:
+                        lb_summary = p_lb_data.groupby(type_col)[val_col].sum().reset_index()
+                        
+                        # Vis grafen
+                        st.bar_chart(lb_summary.set_index(type_col))
+                        
+                        # Vis rådata i en tabel under grafen
+                        st.dataframe(p_lb_data[[type_col, val_col]], use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("Data findes, men kolonne-formattet (STAT_TYPE/TOTAL) matcher ikke.")
+                else:
+                    st.info(f"Ingen registrerede linebreaks for {selected_name} i denne kamp/sæson.")
             else:
-                st.info(f"Ingen registrerede linebreaks for {selected_name}.")
+                st.error("Kunne ikke finde en spiller-ID kolonne i linebreak-data.")
+                st.write("Tilgængelige kolonner:", list(df_lb.columns))
         else:
-            st.info("Linebreak-data ikke tilgængelig.")
+            st.info("Linebreak-data er tom (df_lb er empty).")
