@@ -5,82 +5,109 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package):
-    # --- 1. HENT DATA ---
-    # Vi antager at data er hentet via din Snowflake query med de UUID'er du sendte
+    # --- 1. DATA-LOAD SIKRING ---
+    # Hvis data ikke findes i session_state, henter vi det nu
     if "events_data" not in st.session_state:
-        st.error("Ingen event-data fundet. Sørg for at data-load kører først.")
-        return
+        with st.spinner("Henter Opta-events fra Snowflake..."):
+            try:
+                from data.data_load import _get_snowflake_conn
+                conn = _get_snowflake_conn()
+                
+                # Din specifikke query med de UUID'er du sendte
+                query = """
+                SELECT 
+                    HOMECONTESTANT_NAME, HOMECONTESTANT_OPTAUUID,
+                    EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, 
+                    EVENT_X, EVENT_Y, PLAYER_NAME
+                FROM KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS
+                WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+                AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
+                AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
+                """
+                df_res = conn.query(query)
+                st.session_state["events_data"] = pd.DataFrame(df_res)
+            except Exception as e:
+                st.error(f"Kunne ikke hente data: {e}")
+                return
 
     df_events = st.session_state["events_data"]
-    df_matches = analysis_package.get("matches", pd.DataFrame())
 
-    # --- 2. STYLING & UI ---
+    # --- 2. UI & STYLING ---
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
 
-    st.markdown(f"""
-        <div style="background-color:{HIF_ROD}; padding:10px; border-radius:5px; border-left:8px solid {HIF_GOLD}; margin-bottom:20px;">
-            <h3 style="color:white; margin:0; text-transform:uppercase;">Opta Positionsanalyse</h3>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Vælg hold baseret på de unikke navne i dit data-dump
+    # --- 3. FILTRERING ---
+    # Vi finder alle unikke hold i ligaen fra din query
     hold_liste = sorted(df_events['HOMECONTESTANT_NAME'].unique())
-    valgt_hold = st.selectbox("Vælg hold til analyse:", hold_liste)
     
-    halvdel = st.radio("Vælg fokus:", ["Offensiv", "Defensiv"], horizontal=True, 
-                       help="Offensiv: Modstanderens halvdel | Defensiv: Egen halvdel (vises øverst)")
+    col_sel, col_halv = st.columns([2, 1])
+    with col_sel:
+        valgt_hold = st.selectbox("Vælg hold til analyse:", hold_liste)
+    with col_halv:
+        halvdel = st.radio("Fokus:", ["Offensiv", "Defensiv"], horizontal=True)
 
-    # --- 3. DATABEHANDLING ---
-    # Filtrer på det valgte hold (bruger EVENT_CONTESTANT_OPTAUUID for præcision)
+    # Find UUID for det valgte hold for at filtrere events korrekt
     hold_uuid = df_events[df_events['HOMECONTESTANT_NAME'] == valgt_hold]['HOMECONTESTANT_OPTAUUID'].iloc[0]
     df_hold = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy()
 
-    # Mapping af event typer baseret på din SQL logik
-    # 1=Pass, 4/5=Duel, 8=Interception, 49=Recovery
+    # Mapping
     def map_type(tid):
         if tid == 1: return 'pass'
         if tid in [4, 5]: return 'duel'
         if tid in [8, 49]: return 'erobring'
         return 'other'
-
     df_hold['type'] = df_hold['EVENT_TYPEID'].apply(map_type)
 
-    # --- 4. SPEJLINGS-LOGIK (Her fikser vi fejlen) ---
+    # --- 4. SPEJLINGS-LOGIK ---
     if halvdel == "Offensiv":
-        # Opta: 100 er modstanderens mål. Vi kigger på 50-100.
         df_plot = df_hold[df_hold['EVENT_X'] >= 50].copy()
     else:
-        # Opta: 0 er eget mål. Vi tager 0-50.
+        # Defensiv: Vi tager egen halvdel (<50) og spejler X-aksen
         df_plot = df_hold[df_hold['EVENT_X'] < 50].copy()
-        # Vi spejler KUN X (længden), så eget felt kommer op i toppen.
-        # Vi rører IKKE Y, så venstre side bliver i venstre side.
         df_plot['EVENT_X'] = 100 - df_plot['EVENT_X']
+        # Vi rører ikke EVENT_Y, så siderne passer!
 
     # --- 5. VISUALISERING ---
-    pitch = VerticalPitch(pitch_type='opta', half=True, goal_type='box', 
-                          pitch_color='#ffffff', line_color='#cccccc')
+    pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
     
     cols = st.columns(3)
-    typer = [('pass', 'Afleveringer', 'Reds'), 
-             ('duel', 'Dueller', 'Blues'), 
-             ('erobring', 'Erobringer', 'Greens')]
+    kategorier = [
+        ('pass', 'Afleveringer', 'Reds'),
+        ('duel', 'Dueller', 'Blues'),
+        ('erobring', 'Erobringer', 'Greens')
+    ]
 
-    for i, (t_slug, t_navn, t_cmap) in enumerate(typer):
+    for i, (kat_id, kat_navn, kat_cmap) in enumerate(kategorier):
         with cols[i]:
-            st.caption(f"**{t_navn}**")
-            fig, ax = pitch.draw(figsize=(4, 6))
-            df_type = df_plot[df_plot['type'] == t_slug]
+            st.write(f"**{kat_navn}**")
+            fig, ax = pitch.draw(figsize=(4, 5))
+            df_subset = df_plot[df_plot['type'] == kat_id]
 
-            if not df_type.empty:
+            if not df_subset.empty:
                 sns.kdeplot(
-                    x=df_type['EVENT_Y'], 
-                    y=df_type['EVENT_X'], 
-                    fill=True, cmap=t_cmap, alpha=0.6, 
-                    levels=8, thresh=0.1, ax=ax
+                    x=df_subset['EVENT_Y'], 
+                    y=df_subset['EVENT_X'], 
+                    fill=True, cmap=kat_cmap, alpha=0.7, 
+                    levels=10, thresh=0.05, ax=ax,
+                    clip=((0, 100), (50, 100)) # Holder det på halvbanen
                 )
             else:
-                ax.text(50, 75, "Ingen data", ha='center', alpha=0.5)
+                ax.text(50, 75, "Ingen hændelser", ha='center', color='gray')
             
             st.pyplot(fig)
             plt.close(fig)
+
+    # --- 6. TOP SPILLERE ---
+    st.write("---")
+    st.subheader(f"Mest aktive spillere - {valgt_hold} ({halvdel})")
+    
+    # Hurtig beregning af top 3 per kategori
+    stat_cols = st.columns(3)
+    for i, (kat_id, kat_navn, _) in enumerate(kategorier):
+        with stat_cols[i]:
+            top_spillere = df_plot[df_plot['type'] == kat_id]['PLAYER_NAME'].value_counts().head(3)
+            if not top_spillere.empty:
+                for navn, count in top_spillere.items():
+                    st.write(f"**{count}** {navn}")
+            else:
+                st.write("Ingen data")
