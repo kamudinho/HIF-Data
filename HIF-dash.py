@@ -117,7 +117,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Linebreaks"], # Tilføj denne
+        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Modstanderanalyse"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Holdoversigt", "Kampe"],
@@ -195,9 +195,9 @@ try:
             elif sel == "Spillerperformance": # Tilføj denne blok
                 import tools.player_analysis as pa
                 pa.vis_side(dp)
-            elif sel == "Linebreaks": # Tilføj denne blok
-                import tools.linebreaks as lb
-                lb.vis_side(dp)
+            elif sel == "Modstanderanalyse": # Tilføj denne blok
+                import tools.linebreaks as ma
+                ma.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
