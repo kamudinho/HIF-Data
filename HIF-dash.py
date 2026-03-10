@@ -196,7 +196,7 @@ try:
                 import tools.player_analysis as pa
                 pa.vis_side(dp)
             elif sel == "Modstanderanalyse": # Tilføj denne blok
-                import tools.linebreaks as ma
+                import tools.modstanderanalyse as ma
                 ma.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
