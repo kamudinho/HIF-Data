@@ -72,5 +72,22 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             {hif_filter_lb}
+        """,
+
+        "opta_events": f"""
+            SELECT 
+                EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_PERIODID, EVENT_TIME_MIN, EVENT_TIME_SEC,
+                EVENT_TYPEID, EVENT_CONTESTANT_OPTAUUID, EVENT_X as LOCATIONX, EVENT_Y as LOCATIONY,
+                CASE 
+                    WHEN EVENT_TYPEID = 1 THEN 'pass'
+                    WHEN EVENT_TYPEID IN (4, 5) THEN 'duel'
+                    WHEN EVENT_TYPEID = 8 THEN 'interception'
+                    ELSE 'other'
+                END as PRIMARYTYPE
+            FROM {DB}.OPTA_EVENTS
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            AND EVENT_TYPEID IN (1, 4, 5, 8)
+            ORDER BY EVENT_TIMESTAMP DESC
+            LIMIT 6000
         """
     }
