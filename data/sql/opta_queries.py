@@ -88,7 +88,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 CASE 
                     WHEN EVENT_TYPEID = 1 THEN 'pass'
                     WHEN EVENT_TYPEID IN (4, 5) THEN 'duel'
-                    WHEN EVENT_TYPEID = 8 THEN 'interception'
+                    WHEN EVENT_TYPEID IN (8, 49) THEN 'interception'
                     ELSE 'other'
                 END AS PRIMARYTYPE
             FROM {DB}.OPTA_EVENTS
