@@ -99,14 +99,13 @@ def vis_side(analysis_package):
 
     # --- 6. TOP SPILLERE ---
     st.write("---")
-    st.subheader(f"Mest aktive spillere - {valgt_hold} ({halvdel})")
     
     # Hurtig beregning af top 3 per kategori
     stat_cols = st.columns(3)
     for i, (kat_id, kat_navn, _) in enumerate(kategorier):
         with stat_cols[i]:
-            top_spillere = df_plot[df_plot['type'] == kat_id]['PLAYER_NAME'].value_counts().head(3)
-            if not top_spillere.empty:
+        top_spillere = df_plot[df_plot['type'] == kat_id]['PLAYER_NAME'].value_counts().head(5)
+        if not top_spillere.empty:
                 for navn, count in top_spillere.items():
                     st.write(f"**{count}** {navn}")
             else:
