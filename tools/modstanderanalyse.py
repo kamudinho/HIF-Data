@@ -26,35 +26,31 @@ def vis_side(analysis_package):
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
 
-    st.markdown(f"""
-        <div style="background-color:{HIF_ROD}; padding:10px; border-radius:5px; border-left:8px solid {HIF_GOLD}; margin-bottom:20px;">
-            <h3 style="color:white; margin:0; text-transform:uppercase;">Modstanderanalyse: Opta Engine</h3>
-        </div>
-    """, unsafe_allow_html=True)
-
     # --- 3. Filtrering af Modstander ---
+    # --- 3. Filtrering af Modstander (Opdateret til dine præcise kolonner) ---
     try:
-        # Vi samler unikke hold fra df_matches
+        # Vi samler unikke hold fra df_matches ved at kigge på CONTESTANTHOME og CONTESTANTAWAY
         hold_df = pd.concat([
-            df_matches[['HOMECONTESTANT_NAME', 'HOMECONTESTANT_OPTAUUID']].rename(
-                columns={'HOMECONTESTANT_NAME': 'NAVN', 'HOMECONTESTANT_OPTAUUID': 'UUID'}
+            df_matches[['CONTESTANTHOME_NAME', 'CONTESTANTHOME_OPTAUUID']].rename(
+                columns={'CONTESTANTHOME_NAME': 'NAVN', 'CONTESTANTHOME_OPTAUUID': 'UUID'}
             ),
-            df_matches[['AWAYCONTESTANT_NAME', 'AWAYCONTESTANT_OPTAUUID']].rename(
-                columns={'AWAYCONTESTANT_NAME': 'NAVN', 'AWAYCONTESTANT_OPTAUUID': 'UUID'}
+            df_matches[['CONTESTANTAWAY_NAME', 'CONTESTANTAWAY_OPTAUUID']].rename(
+                columns={'CONTESTANTAWAY_NAME': 'NAVN', 'CONTESTANTAWAY_OPTAUUID': 'UUID'}
             )
         ]).drop_duplicates().sort_values('NAVN')
 
         col_sel, col_halv = st.columns([2, 1])
         with col_sel:
             valgt_hold_navn = st.selectbox("Vælg Modstander:", hold_df['NAVN'].unique())
+            # Vi finder UUID'en for det valgte hold
             valgt_uuid = hold_df[hold_df['NAVN'] == valgt_hold_navn]['UUID'].iloc[0]
+        
         with col_halv:
             halvdel = st.radio("Fokus:", ["Offensiv", "Defensiv"], horizontal=True)
 
     except KeyError as e:
-        st.error(f"Kolonne-fejl: {e}. Tjek om df_matches indeholder de korrekte Opta-kolonner.")
-        st.write("Fundne kolonner i df_matches:", df_matches.columns.tolist())
-        return # Stop funktionen her hvis der er fejl
+        st.error(f"Kolonne-fejl: {e}. Opta-kolonnerne i df_matches matcher ikke.")
+        st.stop()
 
     # --- 4. Plotting ---
     # Vi filtrerer hændelser baseret på den valgte UUID
