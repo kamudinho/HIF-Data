@@ -4,10 +4,10 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package):
-    # --- 1. Hent data fra pakken ---
+    # --- 1. DATA LOAD ---
     df_matches = analysis_package.get("matches", pd.DataFrame())
     
-    # Hent events fra session_state
+    # Hent events fra session_state (eller load hvis de mangler)
     if "events_data" not in st.session_state:
         from data.data_load import _get_snowflake_conn
         from data.sql.opta_queries import get_opta_queries
@@ -17,16 +17,25 @@ def vis_side(analysis_package):
         saeson = analysis_package.get("config", {}).get("season", "")
         
         q = get_opta_queries(liga, saeson)
-        st.session_state["events_data"] = pd.DataFrame(conn.query(q["opta_events"]))
+        # Vi sikrer os at vi får en ren DataFrame
+        res = conn.query(q["opta_events"])
+        st.session_state["events_data"] = pd.DataFrame(res)
 
     df_events = st.session_state["events_data"]
 
-    # --- 2. Branding & Layout ---
+    # --- 2. BRANDING ---
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
 
-    # --- 3. Filtrering af Modstander ---
+    st.markdown(f"""
+        <div style="background-color:{HIF_ROD}; padding:10px; border-radius:5px; border-left:8px solid {HIF_GOLD}; margin-bottom:20px;">
+            <h3 style="color:white; margin:0; text-transform:uppercase; letter-spacing:1px;">Modstanderanalyse: Opta Heatmaps</h3>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # --- 3. FILTRERING ---
     try:
+        # Samler unikke hold fra matchlisten (Opta navne-standard)
         hold_df = pd.concat([
             df_matches[['CONTESTANTHOME_NAME', 'CONTESTANTHOME_OPTAUUID']].rename(
                 columns={'CONTESTANTHOME_NAME': 'NAVN', 'CONTESTANTHOME_OPTAUUID': 'UUID'}
@@ -42,27 +51,30 @@ def vis_side(analysis_package):
             valgt_uuid = hold_df[hold_df['NAVN'] == valgt_hold_navn]['UUID'].iloc[0]
         
         with col_halv:
-            halvdel = st.radio("Fokus:", ["Offensiv", "Defensiv"], horizontal=True)
+            halvdel = st.radio("Fokus på banehalvdel:", ["Offensiv", "Defensiv"], horizontal=True)
 
     except KeyError as e:
-        st.error(f"Kolonne-fejl: {e}. Opta-kolonnerne i df_matches matcher ikke.")
+        st.error(f"Kolonne-fejl: {e}. Tjek din df_matches struktur.")
         st.stop()
 
-    # --- 4. Plotting ---
+    # --- 4. PLOTTING LOGIK ---
     df_hold_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
 
     if not df_hold_ev.empty:
+        # Vi bruger 'opta' pitch_type (0-100 koordinater)
         pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#fdfdfd', line_color='#333')
         c1, c2, c3 = st.columns(3)
         
-        # Filtrering baseret på banehalvdel
+        # --- Rigtig Spejlings-logik ---
         if halvdel == "Offensiv":
-            df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50]
+            # Vis aktioner på modstanderens halvdel (X > 50)
+            df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50].copy()
         else:
+            # Vis aktioner på egen halvdel (X < 50)
             df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
-            # Ved defensivt fokus spejler vi banen til toppen
+            # Spejl KUN X-aksen så deres eget felt kommer i toppen af billedet.
+            # Vi rører IKKE Y, så venstre side forbliver venstre side.
             df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
-            df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
 
         config = [
             (c1, "Afleveringer", "pass", "Reds"),
@@ -70,7 +82,6 @@ def vis_side(analysis_package):
             (c3, "Erobringer", "interception", "Greens")
         ]
 
-        # LOOPET STARTER HER - Bemærk indrykningen
         for col, title, p_type, cmap in config:
             with col:
                 st.write(f"**{title}**")
@@ -78,7 +89,7 @@ def vis_side(analysis_package):
                 df_f = df_plot[df_plot['PRIMARYTYPE'] == p_type]
                 
                 if not df_f.empty:
-                    # Clip sikrer at KDE ikke tegner uden for kridtstregerne
+                    # Clip og Thresh sikrer at farverne holder sig inden for kridtstregerne
                     sns.kdeplot(
                         x=df_f['LOCATIONY'], 
                         y=df_f['LOCATIONX'], 
@@ -90,7 +101,7 @@ def vis_side(analysis_package):
                         thresh=0.05, 
                         clip=((0, 100), (50, 100))
                     )
-                    # Vi tvinger akserne til at blive på halvbanen
+                    # Tvinger akserne til halvbanen så plottet ikke "skrider"
                     ax.set_xlim(0, 100)
                     ax.set_ylim(50, 100)
                 else:
@@ -99,3 +110,7 @@ def vis_side(analysis_package):
                 st.pyplot(fig)
     else:
         st.warning(f"Ingen Opta-events fundet for {valgt_hold_navn} i de indlæste data.")
+
+    # --- 5. STATS SECTION (Valgfrit) ---
+    st.divider()
+    # Her kan du tilføje dine metrics (m1, m2, m3, m4) som før
