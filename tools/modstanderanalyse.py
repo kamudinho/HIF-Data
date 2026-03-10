@@ -96,9 +96,6 @@ def vis_side(analysis_package):
             
             st.pyplot(fig)
             plt.close(fig)
-
-    # --- 6. TOP SPILLERE (NU MED KORREKT INDRYKNING) ---
-    st.write("---")
     
     stat_cols = st.columns(3)
     for i, (kat_id, kat_navn, _) in enumerate(kategorier):
