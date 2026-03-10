@@ -36,15 +36,6 @@ def vis_side(analysis_package):
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
 
-    st.markdown(f"""
-        <div style="background-color:{HIF_ROD}; padding:15px; border-radius:5px; border-left:10px solid {HIF_GOLD}; margin-bottom:25px;">
-            <h2 style="color:white; margin:0; text-transform:uppercase; font-size:20px;">
-                Hvidovre IF Scout: NordicBet Liga 2025/2026
-            </h2>
-            <p style="color:white; margin:0; opacity:0.8;">Opta Event Analyse & Heatmaps</p>
-        </div>
-    """, unsafe_allow_html=True)
-
     # --- 3. FILTRERING ---
     hold_liste = sorted(df_events['HOMECONTESTANT_NAME'].unique())
     
