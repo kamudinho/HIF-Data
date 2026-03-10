@@ -99,7 +99,6 @@ def vis_side(analysis_package):
 
     # --- 6. TOP SPILLERE (NU MED KORREKT INDRYKNING) ---
     st.write("---")
-    st.subheader(f"Mest aktive spillere: {valgt_hold} ({halvdel})")
     
     stat_cols = st.columns(3)
     for i, (kat_id, kat_navn, _) in enumerate(kategorier):
