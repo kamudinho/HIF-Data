@@ -76,16 +76,31 @@ def vis_side(analysis_package):
         ]
 
         for col, title, p_type, cmap in config:
-            with col:
-                st.write(f"**{title}**")
-                fig, ax = pitch.draw(figsize=(4, 5))
-                df_f = df_plot[df_plot['PRIMARYTYPE'] == p_type]
-                
-                if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], ax=ax, 
-                                fill=True, cmap=cmap, alpha=0.7, levels=8, thresh=0.1)
-                else:
-                    ax.text(50, 75, "Ingen data", ha='center', color='gray')
-                st.pyplot(fig)
+    with col:
+        st.write(f"**{title}**")
+        fig, ax = pitch.draw(figsize=(4, 5))
+        df_f = df_plot[df_plot['PRIMARYTYPE'] == p_type]
+        
+        if not df_f.empty:
+            # Vi tilføjer 'clip' så farverne stopper ved stregerne
+            sns.kdeplot(
+                x=df_f['LOCATIONY'], 
+                y=df_f['LOCATIONX'], 
+                ax=ax, 
+                fill=True, 
+                cmap=cmap, 
+                alpha=0.7, 
+                levels=10, 
+                thresh=0.05, # Fjerner de helt svage skygger ved kanten
+                clip=((0, 100), (50, 100)) # (X-grænse, Y-grænse)
+            )
+            
+            # Vi tvinger aksen til at holde sig inden for banen
+            ax.set_xlim(0, 100)
+            ax.set_ylim(50, 100) 
+        else:
+            ax.text(50, 75, "Ingen data", ha='center', color='gray')
+            
+        st.pyplot(fig)
     else:
         st.warning(f"Ingen Opta-events fundet for {valgt_hold_navn} i de indlæste data.")
