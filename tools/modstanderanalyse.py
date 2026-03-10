@@ -26,13 +26,7 @@ def vis_side(analysis_package):
     # --- 2. BRANDING ---
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
-
-    st.markdown(f"""
-        <div style="background-color:{HIF_ROD}; padding:10px; border-radius:5px; border-left:8px solid {HIF_GOLD}; margin-bottom:20px;">
-            <h3 style="color:white; margin:0; text-transform:uppercase; letter-spacing:1px;">Modstanderanalyse: Opta Heatmaps</h3>
-        </div>
-    """, unsafe_allow_html=True)
-
+    
     # --- 3. FILTRERING ---
     try:
         # Samler unikke hold fra matchlisten (Opta navne-standard)
