@@ -76,15 +76,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
         "opta_events": f"""
             SELECT 
-                EVENT_OPTAUUID,
-                MATCH_OPTAUUID,
-                EVENT_CONTESTANT_OPTAUUID,
-                PLAYER_NAME,
-                EVENT_TYPEID,
-                EVENT_X AS LOCATIONX, 
-                EVENT_Y AS LOCATIONY,
-                EVENT_PERIODID,
-                -- Mapping af hændelser til typer vi kan bruge i Heatmaps
+                EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                EVENT_TYPEID, EVENT_X AS LOCATIONX, EVENT_Y AS LOCATIONY,
                 CASE 
                     WHEN EVENT_TYPEID = 1 THEN 'pass'
                     WHEN EVENT_TYPEID IN (4, 5) THEN 'duel'
@@ -93,7 +86,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 END AS PRIMARYTYPE
             FROM {DB}.OPTA_EVENTS
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            AND EVENT_TYPEID IN (1, 4, 5, 8) -- Kun relevante hændelser
+            AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
             ORDER BY EVENT_TIMESTAMP DESC
             LIMIT 6000
         """
