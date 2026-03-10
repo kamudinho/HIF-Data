@@ -3,168 +3,114 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from mplsoccer import VerticalPitch
-# Vigtigt: Sørg for at denne import er her
 from data.data_load import load_snowflake_query
 
-def vis_side(df_team_matches, hold_map, df_events=None):
-    # --- 2. FARVER & KONSTANTER ---
-    hif_rod = "#df003b"
-
-    # --- TOP BRANDING ---
-    st.markdown(f"""
-        <div style="background-color:{hif_rod}; padding:10px; border-radius:4px; margin-bottom:10px;">
-            <h3 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:1px; font-size:1.1rem;">MODSTANDERANALYSE</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    # --- AUTOMATISK DATA INDLÆSNING ---
-    # Vi tjekker om vi allerede har data. Hvis ikke, henter vi det uden at spørge.
+def vis_side(df_team_matches, hold_map):
+    # --- 1. FARVER & SETUP ---
+    HIF_ROD = "#df003b"
+    HIF_GOLD = "#b8860b"
+    
+    # --- 2. DATA LOAD (Optimering) ---
     if "events_data" not in st.session_state:
-        with st.spinner("Indlæser detaljeret kamp-data automatisk..."):
+        with st.spinner("Henter detaljeret kamp-data..."):
             dp = st.session_state["data_package"]
+            # Vi gemmer direkte i session_state
             st.session_state["events_data"] = load_snowflake_query(
                 "events", dp["comp_filter"], dp["season_filter"]
             )
-            # Vi tvinger et rerun så 'df_events' variablen bliver fyldt med det samme
-            st.rerun()
-
-    # Nu kan vi med sikkerhed bruge data fra session_state
+    
     df_events = st.session_state["events_data"]
-        
-    # --- 1. CSS STYLING ---
-    st.markdown("""
-        <style>
-            [data-testid="stMetric"] {
-                background-color: #ffffff; padding: 15px; border-radius: 10px; 
-                border-bottom: 4px solid #cc0000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-            }
-        </style>
+
+    # --- 3. TOP BRANDING ---
+    st.markdown(f"""
+        <div style="background-color:{HIF_ROD}; padding:15px; border-radius:10px; margin-bottom:20px; border-left: 8px solid {HIF_GOLD};">
+            <h2 style="color:white; margin:0; text-align:center; font-family:sans-serif; text-transform:uppercase; letter-spacing:2px;">
+                Modstanderanalyse: {st.session_state.get('valgt_modstander_navn', 'Vælg hold')}
+            </h2>
+        </div>
     """, unsafe_allow_html=True)
 
-    # --- 2. DROPDOWNS OG FILTRERING ---
-    if 'COMPETITION_NAME' in df_team_matches.columns:
+    # --- 4. FILTRERING (Dropdowns) ---
+    col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
+    
+    with col_sel1:
         comp_options = df_team_matches[['COMPETITION_NAME', 'COMPETITION_WYID']].drop_duplicates()
         comp_dict = dict(zip(comp_options['COMPETITION_NAME'], comp_options['COMPETITION_WYID']))
-        
-        col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
-        with col_sel1:
-            valgt_comp_navn = st.selectbox("Vælg Turnering:", options=sorted(comp_dict.keys()))
-            valgt_comp_id = comp_dict[valgt_comp_navn]
-    else:
-        turneringer = sorted(df_team_matches['COMPETITION_WYID'].unique())
-        col_sel1, col_sel2, col_sel3 = st.columns([1.5, 1.5, 1.2])
-        with col_sel1:
-            valgt_comp_id = st.selectbox("Vælg Turnering (ID):", options=turneringer)
+        valgt_comp_navn = st.selectbox("Turnering:", options=sorted(comp_dict.keys()))
+        valgt_comp_id = comp_dict[valgt_comp_navn]
 
-    # Filtrer hold baseret på turnering
+    # Filtrer hold
     df_filtered_comp = df_team_matches[df_team_matches['COMPETITION_WYID'] == valgt_comp_id]
-    
-    # Lav navne_dict
-    navne_dict = {}
-    for tid in df_filtered_comp['TEAM_WYID'].unique():
-        # Hvis det er et tal (Wyscout), konverter til int. 
-        # Hvis det er en tekst (Opta), behold det som str.
-        try:
-            lookup_id = int(float(tid)) if str(tid).replace('.','').isdigit() else str(tid)
-            navn = hold_map.get(lookup_id, f"Hold {tid}")
-            navne_dict[navn] = tid
-        except:
-            navne_dict[f"Ukendt {tid}"] = tid
+    navne_dict = {hold_map.get(tid, f"Hold {tid}"): tid for tid in df_filtered_comp['TEAM_WYID'].unique()}
     
     with col_sel2:
-        valgt_hold_navn = st.selectbox("Vælg Modstander:", options=sorted(navne_dict.keys()))
+        valgt_hold_navn = st.selectbox("Modstander:", options=sorted(navne_dict.keys()))
         valgt_hold_id = navne_dict[valgt_hold_navn]
+        st.session_state['valgt_modstander_navn'] = valgt_hold_navn # Bruges til overskrift
         
     with col_sel3:
-        halvdel = st.radio("Fokus:", ["Modstander", "Egen"], horizontal=True)
+        halvdel = st.radio("Fokus på banehalvdel:", ["Defensiv", "Offensiv"], horizontal=True)
 
     df_hold_data = df_filtered_comp[df_filtered_comp['TEAM_WYID'] == valgt_hold_id].copy()
 
-    # --- 3. STATISTISK OVERBLIK ---
-    st.subheader(f"Statistisk overblik: {valgt_hold_navn}")
+    # --- 5. STATS (Metrics) ---
     m1, m2, m3, m4 = st.columns(4)
-    
-    with m1:
-        st.metric("GNS. MÅL", round(df_hold_data['GOALS'].mean(), 1) if 'GOALS' in df_hold_data else 0.0)
-    with m2:
-        st.metric("GNS. XG", round(df_hold_data['XG'].mean(), 2) if 'XG' in df_hold_data else 0.0)
-    with m3:
-        st.metric("SKUD PR. KAMP", round(df_hold_data['SHOTS'].mean(), 1) if 'SHOTS' in df_hold_data else 0.0)
-    with m4:
-        st.metric("SKUD PÅ MÅL", round(df_hold_data['SHOTSONTARGET'].mean(), 1) if 'SHOTSONTARGET' in df_hold_data else 0.0)
+    with m1: st.metric("Mål pr. kamp", round(df_hold_data['GOALS'].mean(), 1))
+    with m2: st.metric("xG pr. kamp", round(df_hold_data['XG'].mean(), 2))
+    with m3: st.metric("Skud", round(df_hold_data['SHOTS'].mean(), 1))
+    with m4: st.metric("Skud imod", round(df_hold_data['SHOTS_AGAINST'].mean(), 1) if 'SHOTS_AGAINST' in df_hold_data else "N/A")
 
-    st.markdown("---")
+    st.divider()
 
-    # --- 4. HEATMAPS OG KAMP-LISTE ---
-    main_col, side_col = st.columns([3, 1])
+    # --- 6. VISUAL ANALYSE (Heatmaps) ---
+    main_col, side_col = st.columns([2.5, 1])
 
     with main_col:
-        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#f8f9fa', line_color='#333', half=True)
+        # Vi bruger Wyscout-banen som i din oprindelige kode
+        pitch = VerticalPitch(pitch_type='wyscout', pitch_color='#fdfdfd', line_color='#333', half=True)
         c1, c2, c3 = st.columns(3)
         
-        target_id_str = str(int(valgt_hold_id))
-        
-        # Filtrering af events
-        df_hold_ev = df_events[df_events['TEAM_WYID'].astype(str).str.contains(target_id_str)].copy()
+        # Filtrer events for det valgte hold
+        df_hold_ev = df_events[df_events['TEAM_WYID'] == valgt_hold_id].copy()
 
         if not df_hold_ev.empty:
-            if halvdel == "Modstander":
+            # Logik for banehalvdel
+            if halvdel == "Offensiv":
                 df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50]
             else:
+                # Ved defensiv spejler vi banen så vi ser deres forsvarsaktioner i toppen
                 df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
                 df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
                 df_plot['LOCATIONY'] = 100 - df_plot['LOCATIONY']
 
-            plots = [
-                (c1, "Afleveringer", "pass", "Reds"), 
-                (c2, "Dueller", "duel", "Blues"), 
-                (c3, "Erobringer", "interception", "Greens")
+            event_configs = [
+                (c1, "Passes", "pass", "Reds"),
+                (c2, "Def. Duels", "duel", "Blues"),
+                (c3, "Recoveries", "interception", "Greens")
             ]
-            
-            for col, title, p_type, cmap in plots:
+
+            for col, title, p_type, cmap in event_configs:
                 with col:
-                    st.write(f"**{title}**")
+                    st.caption(f"**{title} Density**")
                     fig, ax = pitch.draw(figsize=(4, 5))
-                    mask = df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)
-                    df_f = df_plot[mask]
+                    df_f = df_plot[df_plot['PRIMARYTYPE'].str.contains(p_type, case=False, na=False)]
                     
                     if not df_f.empty:
-                        sns.kdeplot(
-                            x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], ax=ax, 
-                            fill=True, cmap=cmap, alpha=0.7, levels=10,
-                            thresh=0.05, clip=((0, 100), (50, 100))
-                        )
-                        ax.set_xlim(0, 100)
-                        ax.set_ylim(50, 100)
+                        # Vi bruger fill=True og levels for et mere "flydende" look
+                        sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], ax=ax, 
+                                    fill=True, cmap=cmap, alpha=0.6, levels=8, thresh=0.1)
                     else:
-                        ax.text(50, 75, "Ingen data", ha='center', va='center', color='gray')
-                    st.pyplot(fig, use_container_width=True)
-        else:
-            st.warning(f"Ingen hændelsesdata fundet for {valgt_hold_navn}")
+                        ax.text(50, 75, "Ingen data", ha='center', color='gray')
+                    st.pyplot(fig)
 
     with side_col:
-        st.write("**Seneste kampe**")
+        st.subheader("Seneste Form")
         if not df_hold_data.empty:
-            # 1. Lav en kopi og konverter til datetime for korrekt sortering
-            df_display = df_hold_data.copy()
-            df_display['DATE'] = pd.to_datetime(df_display['DATE'])
-            
-            # 2. Sortér EFTER datoen (nyeste øverst) FØR vi laver det om til tekst
-            df_display = df_display.sort_values('DATE', ascending=False)
-            
-            # 3. Formater Dato til DD-MM-YY streng
-            df_display['DATE_STR'] = df_display['DATE'].dt.strftime('%d-%m-%y')
-            
-            # 4. Rens MATCHLABEL: Erstat ',' med ' - ' og fjern overflødige 'vs.' hvis de driller
-            if 'MATCHLABEL' in df_display.columns:
-                # Vi fjerner kommaet og indsætter en pæn separator
-                df_display['MATCHLABEL'] = df_display['MATCHLABEL'].str.replace(r',', ' -', regex=True)
-
-            # 5. Vælg kolonner og omdøb for visning
-            # Vi bruger 'DATE_STR' til visning, men holdt 'DATE' til sortering
-            df_final = df_display[['DATE_STR', 'MATCHLABEL']].rename(columns={'DATE_STR': 'DATO', 'MATCHLABEL': 'KAMP'})
-            
+            df_display = df_hold_data.sort_values('DATE', ascending=False).head(5)
+            # Formater MATCHLABEL pænt
+            df_display['KAMP'] = df_display['MATCHLABEL'].str.replace(',', ' -')
             st.dataframe(
-                df_final, 
-                hide_index=True,
+                df_display[['DATE', 'KAMP']], 
+                hide_index=True, 
                 use_container_width=True
             )
