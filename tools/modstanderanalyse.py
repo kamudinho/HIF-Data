@@ -1,110 +1,86 @@
 import streamlit as st
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package):
-    # --- 1. DATA LOAD ---
-    df_matches = analysis_package.get("matches", pd.DataFrame())
-    
-    # Hent events fra session_state (eller load hvis de mangler)
+    # --- 1. HENT DATA ---
+    # Vi antager at data er hentet via din Snowflake query med de UUID'er du sendte
     if "events_data" not in st.session_state:
-        from data.data_load import _get_snowflake_conn
-        from data.sql.opta_queries import get_opta_queries
-        
-        conn = _get_snowflake_conn()
-        liga = analysis_package.get("config", {}).get("liga_navn", "")
-        saeson = analysis_package.get("config", {}).get("season", "")
-        
-        q = get_opta_queries(liga, saeson)
-        # Vi sikrer os at vi får en ren DataFrame
-        res = conn.query(q["opta_events"])
-        st.session_state["events_data"] = pd.DataFrame(res)
+        st.error("Ingen event-data fundet. Sørg for at data-load kører først.")
+        return
 
     df_events = st.session_state["events_data"]
+    df_matches = analysis_package.get("matches", pd.DataFrame())
 
-    # --- 2. BRANDING ---
+    # --- 2. STYLING & UI ---
     HIF_ROD = "#df003b"
     HIF_GOLD = "#b8860b"
+
+    st.markdown(f"""
+        <div style="background-color:{HIF_ROD}; padding:10px; border-radius:5px; border-left:8px solid {HIF_GOLD}; margin-bottom:20px;">
+            <h3 style="color:white; margin:0; text-transform:uppercase;">Opta Positionsanalyse</h3>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Vælg hold baseret på de unikke navne i dit data-dump
+    hold_liste = sorted(df_events['HOMECONTESTANT_NAME'].unique())
+    valgt_hold = st.selectbox("Vælg hold til analyse:", hold_liste)
     
-    # --- 3. FILTRERING ---
-    try:
-        # Samler unikke hold fra matchlisten (Opta navne-standard)
-        hold_df = pd.concat([
-            df_matches[['CONTESTANTHOME_NAME', 'CONTESTANTHOME_OPTAUUID']].rename(
-                columns={'CONTESTANTHOME_NAME': 'NAVN', 'CONTESTANTHOME_OPTAUUID': 'UUID'}
-            ),
-            df_matches[['CONTESTANTAWAY_NAME', 'CONTESTANTAWAY_OPTAUUID']].rename(
-                columns={'CONTESTANTAWAY_NAME': 'NAVN', 'CONTESTANTAWAY_OPTAUUID': 'UUID'}
-            )
-        ]).drop_duplicates().sort_values('NAVN')
+    halvdel = st.radio("Vælg fokus:", ["Offensiv", "Defensiv"], horizontal=True, 
+                       help="Offensiv: Modstanderens halvdel | Defensiv: Egen halvdel (vises øverst)")
 
-        col_sel, col_halv = st.columns([2, 1])
-        with col_sel:
-            valgt_hold_navn = st.selectbox("Vælg Modstander:", hold_df['NAVN'].unique())
-            valgt_uuid = hold_df[hold_df['NAVN'] == valgt_hold_navn]['UUID'].iloc[0]
-        
-        with col_halv:
-            halvdel = st.radio("Fokus på banehalvdel:", ["Offensiv", "Defensiv"], horizontal=True)
+    # --- 3. DATABEHANDLING ---
+    # Filtrer på det valgte hold (bruger EVENT_CONTESTANT_OPTAUUID for præcision)
+    hold_uuid = df_events[df_events['HOMECONTESTANT_NAME'] == valgt_hold]['HOMECONTESTANT_OPTAUUID'].iloc[0]
+    df_hold = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy()
 
-    except KeyError as e:
-        st.error(f"Kolonne-fejl: {e}. Tjek din df_matches struktur.")
-        st.stop()
+    # Mapping af event typer baseret på din SQL logik
+    # 1=Pass, 4/5=Duel, 8=Interception, 49=Recovery
+    def map_type(tid):
+        if tid == 1: return 'pass'
+        if tid in [4, 5]: return 'duel'
+        if tid in [8, 49]: return 'erobring'
+        return 'other'
 
-    # --- 4. PLOTTING LOGIK ---
-    df_hold_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
+    df_hold['type'] = df_hold['EVENT_TYPEID'].apply(map_type)
 
-    if not df_hold_ev.empty:
-        # Vi bruger 'opta' pitch_type (0-100 koordinater)
-        pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#fdfdfd', line_color='#333')
-        c1, c2, c3 = st.columns(3)
-        
-        # --- Rigtig Spejlings-logik ---
-        if halvdel == "Offensiv":
-            # Vis aktioner på modstanderens halvdel (X > 50)
-            df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] >= 50].copy()
-        else:
-            # Vis aktioner på egen halvdel (X < 50)
-            df_plot = df_hold_ev[df_hold_ev['LOCATIONX'] < 50].copy()
-            # Spejl KUN X-aksen så deres eget felt kommer i toppen af billedet.
-            # Vi rører IKKE Y, så venstre side forbliver venstre side.
-            df_plot['LOCATIONX'] = 100 - df_plot['LOCATIONX']
-
-        config = [
-            (c1, "Afleveringer", "pass", "Reds"),
-            (c2, "Dueller", "duel", "Blues"),
-            (c3, "Erobringer", "interception", "Greens")
-        ]
-
-        for col, title, p_type, cmap in config:
-            with col:
-                st.write(f"**{title}**")
-                fig, ax = pitch.draw(figsize=(4, 5))
-                df_f = df_plot[df_plot['PRIMARYTYPE'] == p_type]
-                
-                if not df_f.empty:
-                    # Clip og Thresh sikrer at farverne holder sig inden for kridtstregerne
-                    sns.kdeplot(
-                        x=df_f['LOCATIONY'], 
-                        y=df_f['LOCATIONX'], 
-                        ax=ax, 
-                        fill=True, 
-                        cmap=cmap, 
-                        alpha=0.7, 
-                        levels=10, 
-                        thresh=0.05, 
-                        clip=((0, 100), (50, 100))
-                    )
-                    # Tvinger akserne til halvbanen så plottet ikke "skrider"
-                    ax.set_xlim(0, 100)
-                    ax.set_ylim(50, 100)
-                else:
-                    ax.text(50, 75, "Ingen data", ha='center', color='gray')
-                    
-                st.pyplot(fig)
+    # --- 4. SPEJLINGS-LOGIK (Her fikser vi fejlen) ---
+    if halvdel == "Offensiv":
+        # Opta: 100 er modstanderens mål. Vi kigger på 50-100.
+        df_plot = df_hold[df_hold['EVENT_X'] >= 50].copy()
     else:
-        st.warning(f"Ingen Opta-events fundet for {valgt_hold_navn} i de indlæste data.")
+        # Opta: 0 er eget mål. Vi tager 0-50.
+        df_plot = df_hold[df_hold['EVENT_X'] < 50].copy()
+        # Vi spejler KUN X (længden), så eget felt kommer op i toppen.
+        # Vi rører IKKE Y, så venstre side bliver i venstre side.
+        df_plot['EVENT_X'] = 100 - df_plot['EVENT_X']
 
-    # --- 5. STATS SECTION (Valgfrit) ---
-    st.divider()
-    # Her kan du tilføje dine metrics (m1, m2, m3, m4) som før
+    # --- 5. VISUALISERING ---
+    pitch = VerticalPitch(pitch_type='opta', half=True, goal_type='box', 
+                          pitch_color='#ffffff', line_color='#cccccc')
+    
+    cols = st.columns(3)
+    typer = [('pass', 'Afleveringer', 'Reds'), 
+             ('duel', 'Dueller', 'Blues'), 
+             ('erobring', 'Erobringer', 'Greens')]
+
+    for i, (t_slug, t_navn, t_cmap) in enumerate(typer):
+        with cols[i]:
+            st.caption(f"**{t_navn}**")
+            fig, ax = pitch.draw(figsize=(4, 6))
+            df_type = df_plot[df_plot['type'] == t_slug]
+
+            if not df_type.empty:
+                sns.kdeplot(
+                    x=df_type['EVENT_Y'], 
+                    y=df_type['EVENT_X'], 
+                    fill=True, cmap=t_cmap, alpha=0.6, 
+                    levels=8, thresh=0.1, ax=ax
+                )
+            else:
+                ax.text(50, 75, "Ingen data", ha='center', alpha=0.5)
+            
+            st.pyplot(fig)
+            plt.close(fig)
