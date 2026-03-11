@@ -3,11 +3,14 @@ import pandas as pd
 from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from data.utils.team_mapping import TEAMS
 
 # HIF Identitet
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b' 
 DZ_COLOR = '#1f77b4'
+
+hif_id = TEAMS["Hvidovre"]["opta_uuid"]
 
 def vis_side(dp):
     st.markdown("""
