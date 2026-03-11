@@ -13,22 +13,35 @@ def get_text_color(hex_color):
 
 def draw_h2h_chart_wyscout(n1, n2, metrics, labels, per_match=True):
     dp = st.session_state.get("dp", {})
+    # Vi bruger 'team_stats_full' som du allerede har i din SQL-fil
     df_wy = dp.get("wyscout", {}).get("team_stats_full", pd.DataFrame())
-    colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     
     if df_wy.empty:
-        st.warning("Wyscout data ikke tilgængelig.")
+        st.warning("Wyscout hold-data ikke fundet.")
         return
 
-    # Matcher holdnavne (Sørg for at 'Hvidovre' findes i begge)
+    # Sørg for kolonnenavne er UPPERCASE (pga Snowflake)
+    df_wy.columns = [c.upper() for c in df_wy.columns]
+
+    # Find de to hold
     t1_data = df_wy[df_wy['TEAMNAME'].str.contains(n1, case=False, na=False)]
     t2_data = df_wy[df_wy['TEAMNAME'].str.contains(n2, case=False, na=False)]
 
     if t1_data.empty or t2_data.empty:
-        st.info(f"Venter på Wyscout-match for {n1} vs {n2}...")
+        st.info(f"Finder ikke data for {n1} eller {n2} i team_stats_full.")
         return
 
-    t1, t2 = t1_data.iloc[0], t2_data.iloc[0]
+    # Hent værdierne (vi tager den første række der matcher)
+    y1 = [t1_data.iloc[0].get(m, 0) for m in metrics]
+    y2 = [t2_data.iloc[0].get(m, 0) for m in metrics]
+
+    # Tegn grafen
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name=n1, x=labels, y=y1, marker_color="#df003b"))
+    fig.add_trace(go.Bar(name=n2, x=labels, y=y2, marker_color="#0056a3"))
+    
+    fig.update_layout(barmode='group', height=350)
+    st.plotly_chart(fig, use_container_width=True)
 
     def get_vals(data):
         m_count = data.get('MATCHES', 1) or 1
