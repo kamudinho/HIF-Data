@@ -10,14 +10,13 @@ HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
 def vis_side(dp):
-    # --- CSS STYLING (Forbedret til at fjerne scroll og style bokse) ---
+    # --- CSS STYLING ---
     st.markdown("""
         <style>
             .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }
             .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }
             .stat-value { font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
-            .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
-            [data-testid="stMetricValue"] { font-size: 1.4rem !important; }
+            .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -26,7 +25,7 @@ def vis_side(dp):
         st.info("Ingen data fundet.")
         return
 
-    # --- 1. OPSÆTNING AF ZONER (PRÆCIS 7C-7B-7A RÆKKE) ---
+    # --- 1. ZONE DEFINITIONER ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -60,7 +59,7 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLER", "SKUD", "DZ", "ZONER (S)", "ZONER (M)"])
 
-    # --- TAB 1: SPILLEROVERSIGT (Fuld højde, ingen scroll) ---
+    # --- TAB 1: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
         for p in sorted(df_skud['PLAYER_NAME'].unique()):
@@ -73,23 +72,26 @@ def vis_side(dp):
                 "DZ-S": dzs, "DZ-M": dzm, "DZ%": (dzm/dzs*100) if dzs > 0 else 0,
                 "DZ-Andel": (dzs/s*100)
             })
-        df_final = pd.DataFrame(stats).sort_values("S", ascending=False)
-        st.dataframe(df_final, use_container_width=True, height=(len(df_final) + 1) * 36, # Dynamisk højde efter antal rækker
+        df_f = pd.DataFrame(stats).sort_values("S", ascending=False)
+        st.dataframe(df_f, use_container_width=True, height=(len(df_f) + 1) * 36, hide_index=True,
             column_config={
                 "Konv%": st.column_config.NumberColumn("Konv%", format="%.1f%%"),
                 "DZ%": st.column_config.NumberColumn("DZ-Konv%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-            }, hide_index=True)
+            })
 
-    # --- TAB 2: AFSLUTNINGER (Restaureret layout) ---
+    # --- TAB 2: AFSLUTNINGER (Rettet Konvertering) ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
             sel_p = st.selectbox("Vælg spiller", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()))
             d_v = df_skud if sel_p == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
-            st.metric("Konvertering", f"{(len(d_v[d_v['EVENT_TYPEID']==16])/len(d_v)*100 if len(d_v)>0 else 0):.2f}%")
+            s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
+            konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
+            
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -97,7 +99,7 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 3: DZ (Restaureret layout) ---
+    # --- TAB 3: DZ (Rettet med cirkler) ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -106,9 +108,10 @@ def vis_side(dp):
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-            st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-            st.metric("DZ Mål-andel", f"{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%")
+            
+            st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {DZ_COLOR};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -117,7 +120,7 @@ def vis_side(dp):
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 4 & 5: ZONER (Symmetriske og korrekte) ---
+    # --- TAB 4 & 5: ZONER (Filtreret Zone 8) ---
     def zone_plot(data, is_m):
         c1, c2 = st.columns([2, 1])
         z_map = {}
@@ -129,13 +132,15 @@ def vis_side(dp):
         
         with c2:
             st.write(f"**{'Mål' if is_m else 'Skud'} pr. Zone**")
-            st.dataframe(pd.DataFrame([{"Zone": k, "Antal": v[0]} for k, v in z_map.items() if v[0] > 0]), hide_index=True)
+            # Fjerner Zone 8 fra tabellen så den ikke fylder
+            df_zone_vis = pd.DataFrame([{"Zone": k, "Antal": v[0]} for k, v in z_map.items() if v[0] > 0 and k != "Zone 8"])
+            st.dataframe(df_zone_vis, hide_index=True)
         
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw()
-            ax.set_ylim(70, 105)
-            max_val = max([v[0] for v in z_map.values()]) if data.shape[0] > 0 else 1
+            ax.set_ylim(70, 105) # Fokus på angrebszoner
+            max_val = max([v[0] for k, v in z_map.items() if k != "Zone 8"]) if not df_zone_vis.empty else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
             
             for name, b in ZONE_BOUNDARIES.items():
