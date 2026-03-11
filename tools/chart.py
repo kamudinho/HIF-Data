@@ -69,7 +69,7 @@ def vis_side(*args, **kwargs):
     st.markdown("""
         <style>
             .block-container { padding-top: 0.1rem; }
-            div[data-testid="stRadio"] label p { font-size: 14px !important; margin-bottom: 0px !important; }
+            div[data-testid="stRadio"] label p { font-size: 12px !important; margin-bottom: 0px !important; }
             div[data-testid="stRadio"] > div { gap: 1px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -102,7 +102,7 @@ def vis_side(*args, **kwargs):
         # Margin styring
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         
-        V_OFFSET = 5
+        V_OFFSET = 25
         LIMIT_Y = 240 
         ax.set_ylim(0, LIMIT_Y)
         
