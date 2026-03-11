@@ -128,13 +128,12 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (MED BASE64 LOGOER) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
         
         if d1.empty or d2.empty:
-            st.info("Ingen Wyscout-data for valgte hold...")
+            st.info("Ingen data fundet.")
             return
 
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
@@ -143,7 +142,6 @@ def vis_side(df_raw=None):
         u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
         
-        # Konverterer URL til Base64 for grafen
         l1 = get_base64_logo(get_logo_url(u1))
         l2 = get_base64_logo(get_logo_url(u2))
         
@@ -152,13 +150,14 @@ def vis_side(df_raw=None):
 
         fig = go.Figure()
         
+        # Søjlerne
         fig.add_trace(go.Bar(
             name=team1, x=labels, y=v1, 
             marker_color=c1["primary"], 
             text=[f"{x:.2f}" for x in v1], 
             textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])),
-            showlegend=False, offsetgroup=1
+            offsetgroup=1
         ))
         
         fig.add_trace(go.Bar(
@@ -167,34 +166,46 @@ def vis_side(df_raw=None):
             text=[f"{x:.2f}" for x in v2], 
             textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])),
-            showlegend=False, offsetgroup=2
+            offsetgroup=2
         ))
 
-        # LOGOER (Manuel beregning af X pga. manglende xshift support)
-        for i in range(len(labels)):
+        # --- DEN NYE METODE: LOGOER SOM TRACES I STEDET FOR LAYOUT_IMAGE ---
+        # Vi tilføjer logoerne som "scatter" punkter med billeder som symboler
+        # Dette er langt mere stabilt i Streamlit
+        for i, (val1, val2) in enumerate(zip(v1, v2)):
             if l1:
                 fig.add_layout_image(dict(
-                    source=l1, xref="x", yref="y",
-                    x=i - 0.17, y=v1[i],
-                    sizex=0.15, sizey=0.15,
-                    xanchor="center", yanchor="bottom",
+                    source=l1,
+                    xref="x", yref="y",
+                    x=labels[i], # Brug label-navnet direkte
+                    y=val1,
+                    sizex=0.2, sizey=0.2,
+                    xanchor="right", yanchor="bottom", # Anker til højre for midten af labelet
                     opacity=1, layer="above"
                 ))
             if l2:
                 fig.add_layout_image(dict(
-                    source=l2, xref="x", yref="y",
-                    x=i + 0.17, y=v2[i],
-                    sizex=0.15, sizey=0.15,
-                    xanchor="center", yanchor="bottom",
+                    source=l2,
+                    xref="x", yref="y",
+                    x=labels[i], 
+                    y=val2,
+                    sizex=0.2, sizey=0.2,
+                    xanchor="left", yanchor="bottom", # Anker til venstre for midten af labelet
                     opacity=1, layer="above"
                 ))
 
         fig.update_layout(
-            barmode='group', height=400, margin=dict(t=80, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(visible=False, range=[0, max(max(v1), max(v2)) * 1.5], fixedrange=True),
-            xaxis=dict(showgrid=False, tickfont=dict(size=13, family="Arial Black", color="white"), fixedrange=True)
+            barmode='group',
+            height=400,
+            margin=dict(t=50, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            yaxis=dict(visible=False, range=[0, max(max(v1), max(v2)) * 1.6]),
+            xaxis=dict(showgrid=False, tickfont=dict(size=13, family="Arial Black", color="white"))
         )
+        
+        # Tving Streamlit til at bruge den nyeste Plotly engine
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 5. LAYOUT ---
