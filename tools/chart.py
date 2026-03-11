@@ -85,7 +85,7 @@ def vis_side(*args, **kwargs):
         </style>
     """, unsafe_allow_html=True)
 
-    menu_col, chart_col = st.columns([1, 3])
+    menu_col, chart_col = st.columns([1, 2])
 
     with menu_col:
         st.caption("Vælg Hold")
