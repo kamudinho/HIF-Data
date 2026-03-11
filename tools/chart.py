@@ -137,35 +137,35 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- TEKST OG LABELS (PRÆCISIONS-PLACERING) ---
+        # --- TEKST OG LABELS (RADIAL ROTATION) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Hvide labels - rykket ind på 115)
-            # Dette bringer dem helt tæt på kanten af de farvede barer
+            # 1. Værdibokse (Radius 115)
             box_y = 115
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # 2. Sort label-tekst (Stat-navne - rykket ind på 135)
-            # Ved at sætte denne på 135 sidder teksten lige ovenover tallene
-            label_y = 135 
+            # 2. Sort label-tekst (Radius 138)
+            label_y = 138 
             
-            # ROTATIONS-LOGIK: Teksten følger buen og vender rigtigt
-            rotation = angle_deg - 90
+            # NY RADIAL ROTATION:
+            # Vi bruger selve vinklen (minus 90 for at korrigere for Matplotlibs startpunkt)
+            # Vi flipper teksten i venstre side (90-270 grader), så den ikke vender på hovedet
+            rotation = angle_deg
             if 90 < angle_deg < 270:
-                rotation += 180
+                rotation -= 180
             
             ax.text(angle, label_y, label, 
                     ha='center', va='center', 
                     fontsize=7, fontweight='black', 
                     color='black', alpha=0.8,
-                    rotation=rotation, rotation_mode='anchor',
+                    rotation=rotation, 
+                    rotation_mode='anchor',
                     gid='overlay_text')
 
         # --- ZOOM JUSTERING ---
-        # Vi sætter LIMIT_Y til 165 for at fjerne det tomme hul i kanten nu hvor alt er rykket ind
         ax.set_ylim(0, 165)
 
         # Vis på skærmen
