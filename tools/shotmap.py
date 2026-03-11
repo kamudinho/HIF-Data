@@ -26,20 +26,12 @@ def vis_side(dp):
         st.info("Ingen data fundet.")
         return
 
-    # --- 1. OPSÆTNING AF ZONER MED DE NYE PRÆCISE KOORDINATER ---
-    PITCH_L = 105.0
-    PITCH_W = 68.0
+    # --- 1. OPSÆTNING AF ZONER (PRÆCISE KOORDINATER) ---
+    PITCH_L, PITCH_W = 105.0, 68.0
+    X_CENTER_MIN, X_CENTER_MAX = (PITCH_W - 18.32) / 2, (PITCH_W + 18.32) / 2
+    X_WIDE_INNER_MIN, X_WIDE_INNER_MAX = (PITCH_W - 40.2) / 2, (PITCH_W + 40.2) / 2
     
-    X_CENTER_MIN = (PITCH_W - 18.32) / 2
-    X_CENTER_MAX = (PITCH_W + 18.32) / 2
-    X_WIDE_INNER_MAX = (PITCH_W + 40.2) / 2
-    X_WIDE_INNER_MIN = (PITCH_W - 40.2) / 2
-    
-    Y_GOALLINE = 105.0
-    Y_SIX_YARD = 99.5
-    Y_PENALTY_SPOT = 94.0
-    Y_PENALTY_AREA = 88.5
-    Y_MID_DEFENSE = 75.0
+    Y_GOALLINE, Y_SIX_YARD, Y_PENALTY_SPOT, Y_PENALTY_AREA, Y_MID_DEFENSE = 105.0, 99.5, 94.0, 88.5, 75.0
 
     ZONE_BOUNDARIES = {
         "Zone 1": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
@@ -52,14 +44,14 @@ def vis_side(dp):
         "Zone 6A": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": X_WIDE_INNER_MAX, "x_max": PITCH_W},
         "Zone 6B": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": 0, "x_max": X_WIDE_INNER_MIN},
         "Zone 7B": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
-        "Zone 7C": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": 0, "x_max": X_CENTER_MIN},
-        "Zone 7A": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MAX, "x_max": PITCH_W},
+        "Zone 7C": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": 0, "x_max": X_WIDE_INNER_MIN},
+        "Zone 7A": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_WIDE_INNER_MAX, "x_max": PITCH_W},
         "Zone 8": {"y_min": 0, "y_max": Y_MID_DEFENSE, "x_min": 0, "x_max": PITCH_W}
     }
 
     def map_to_zone(r):
-        mx = r['EVENT_X'] * (PITCH_L / 100) # I VerticalPitch er Opta X banens længde (Y)
-        my = r['EVENT_Y'] * (PITCH_W / 100) # I VerticalPitch er Opta Y banens bredde (X)
+        mx = r['EVENT_X'] * (PITCH_L / 100)
+        my = r['EVENT_Y'] * (PITCH_W / 100)
         for z, b in ZONE_BOUNDARIES.items():
             if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]:
                 return z
@@ -71,7 +63,7 @@ def vis_side(dp):
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
     DOT_SIZE = 90
 
-    # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 1: SPILLEROVERSIGT (NU MED SORTERBAR KONVERTERING) ---
     with tab1:
         stats_list = []
         for spiller in sorted(df_skud['PLAYER_NAME'].unique()):
@@ -83,17 +75,29 @@ def vis_side(dp):
                 skud_dz = len(s_dz)
                 maal_dz = len(s_dz[s_dz['EVENT_TYPEID'] == 16])
                 stats_list.append({
-                    "Spiller": spiller.split()[-1], "Skud": total_skud, "Mål": total_mål,
-                    "Konv. %": f"{(total_mål/total_skud*100):.2f}%",
-                    "Skud DZ": skud_dz, "Mål DZ": maal_dz,
-                    "DZ Konv. %": f"{(maal_dz/skud_dz*100):.2f}%" if skud_dz > 0 else "0.00%",
+                    "Spiller": spiller.split()[-1], 
+                    "Skud": total_skud, 
+                    "Mål": total_mål,
+                    "Konv. %": (total_mål/total_skud*100), # Gemmes som tal for sortering
+                    "Skud DZ": skud_dz, 
+                    "Mål DZ": maal_dz,
+                    "DZ Konv. %": (maal_dz/skud_dz*100) if skud_dz > 0 else 0.0,
                     "DZ Andel": (skud_dz/total_skud*100)
                 })
-        st.dataframe(pd.DataFrame(stats_list).sort_values("Skud DZ", ascending=False), 
-                     column_config={"DZ Andel": st.column_config.ProgressColumn("DZ Andel %", format="%.1f%%", min_value=0, max_value=100)},
-                     hide_index=True, use_container_width=True)
+        
+        # Visuel formatering via column_config
+        st.dataframe(
+            pd.DataFrame(stats_list).sort_values("Skud DZ", ascending=False), 
+            column_config={
+                "Konv. %": st.column_config.NumberColumn("Konv. %", format="%.2f%%"),
+                "DZ Konv. %": st.column_config.NumberColumn("DZ Konv. %", format="%.2f%%"),
+                "DZ Andel": st.column_config.ProgressColumn("DZ Andel %", format="%.1f%%", min_value=0, max_value=100)
+            },
+            hide_index=True, 
+            use_container_width=True
+        )
 
-    # --- TAB 2: AFSLUTNINGER ---
+    # --- TAB 2 & 3: LIGESOM FØR MED LEGENDER ---
     with tab2:
         col_viz, col_ctrl = st.columns([2.2, 1])
         with col_ctrl:
@@ -110,7 +114,6 @@ def vis_side(dp):
             pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=DOT_SIZE, c=c_map, edgecolors=HIF_RED, linewidth=1.2, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 3: DZ-AFSLUTNINGER ---
     with tab3:
         col_dz_viz, col_dz_ctrl = st.columns([2.2, 1])
         with col_dz_ctrl:
@@ -131,7 +134,7 @@ def vis_side(dp):
                 pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=DOT_SIZE, c=c_dz, edgecolors=HIF_RED, linewidth=1.2, ax=ax_dz)
             st.pyplot(fig_dz)
 
-    # --- TAB 4 & 5 FÆLLES VISUALISERING ---
+    # --- TAB 4 & 5 (SYMMETRISKE ZONER) ---
     def draw_zone_pitch(data, is_goal_tab=False):
         col_viz, col_ctrl = st.columns([2.2, 1])
         z_stats = {}
@@ -149,7 +152,7 @@ def vis_side(dp):
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(70, 105) # Zoom til angreb
+            ax.set_ylim(70, 105)
             max_v = max([v['count'] for v in z_stats.values()]) if len(data)>0 else 1
             cmap = plt.cm.YlOrRd if is_goal_tab else plt.cm.Blues
             
