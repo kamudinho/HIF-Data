@@ -172,45 +172,26 @@ def vis_side(*args, **kwargs):
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Hvid tekst på farvet baggrund)
+            # 1. Værdibokse (Radius 135)
             box_y = 135
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # 2. Sort label-tekst placeret lige UNDER værdiboksen
-            # Vi bruger en lidt lavere y-værdi (radius) end boksene
-            label_under_y = 118 
+            # 2. Sort label-tekst placeret YDERS (Under boksen set fra centrum)
+            # Vi sætter denne radius højere end boksene
+            label_y = 158 
             
-            # Vi roterer teksten for at følge cirklen, så det ser professionelt ud
-            # Teksten vendes 180 grader i bunden af cirklen så den altid er læsbar fra top/bund
+            # Rotation: Vi vender teksten så den altid er læsbar
+            # Hvis vinklen er i bunden (mellem 90 og 270 grader), vender vi den 180 grader
             rotation = angle_deg if 270 > angle_deg > 90 else angle_deg + 180
             
-            ax.text(angle, label_under_y, label, 
+            ax.text(angle, label_y, label, 
                     ha='center', va='center', 
-                    fontsize=8, fontweight='bold', 
-                    color='black', alpha=0.7,
+                    fontsize=8, fontweight='black', 
+                    color='black', alpha=0.8,
                     rotation=rotation, rotation_mode='anchor',
-                    gid='overlay_text') # GID bruges stadig til at skjule ved download
+                    gid='overlay_text') # Bruges stadig til at fjerne ved download
 
         # --- VIS PÅ SKÆRMEN ---
         st.pyplot(fig, use_container_width=True)
-
-        # --- DOWNLOAD LOGIK ---
-        buf = BytesIO()
-        for t in ax.texts:
-            if t.get_gid() == 'overlay_text':
-                t.set_visible(False)
-        
-        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
-        
-        for t in ax.texts:
-            if t.get_gid() == 'overlay_text':
-                t.set_visible(True)
-
-        st.download_button(
-            label="Download Chart",
-            data=buf.getvalue(),
-            file_name=f"pizza_{valgt_hold_navn}.png",
-            mime="image/png"
-        )
