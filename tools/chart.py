@@ -65,46 +65,56 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- 1. LOGO-LINJE + RADIO (Uden tekst) ---
-    # Vi laver en række med logoer
-    logo_cols = st.columns(len(hold_data))
-    for i, (_, row) in enumerate(hold_data.iterrows()):
-        with logo_cols[i]:
-            st.image(row['IMAGEDATAURL'], width=30)
+    # --- CSS til at skjule tekst ved radio-knapper og gøre dem kompakte ---
+    st.markdown("""
+        <style>
+            div[data-testid="stRadio"] label p { display: none; } /* Skjuler teksten */
+            div[data-testid="stRadio"] > div { justify-content: center; gap: 0px; } /* Centrerer knapper */
+        </style>
+    """, unsafe_allow_html=True)
 
-    # Her er radio-knappen. Vi bruger 'label_visibility="collapsed"' 
-    # og vi giver den holdnavne, men fjerner teksten visuelt via CSS eller 
-    # blot ved at have en meget kompakt visning.
+    # --- 1. LOGOER OG KNAPPER (Synkroniseret) ---
+    cols = st.columns(len(hold_data))
+    
+    # Vi bruger en radio-knap pr. kolonne til at styre valget
+    # Men for at det virker som én samlet radio, bruger vi en usynlig radio til logikken
     valgt_hold_navn = st.radio(
-        "Vælg hold",
-        hold_navne,
-        horizontal=True,
+        "Vælg hold", 
+        hold_navne, 
+        horizontal=True, 
         label_visibility="collapsed"
     )
 
-    # --- 2. DATA KLARGØRING ---
+    for i, (_, row) in enumerate(hold_data.iterrows()):
+        with cols[i]:
+            st.image(row['IMAGEDATAURL'], use_container_width=True)
+            # Vi viser blot en indikator hvis holdet er valgt
+            if valgt_hold_navn == row['TEAMNAME']:
+                st.markdown("<div style='text-align:center; color:#FF4B4B;'>●</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='text-align:center; color:gray; opacity:0.3;'>○</div>", unsafe_allow_html=True)
+
+    # --- 2. DATA ---
     target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    # Normalisering (Divider med kampe undtagen PPDA)
+    # Normalisering
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
             df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
-
+    
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 3. PIZZA CHART (SKARPT LAYOUT + GENNEMSIGTIG) ---
-    # Vi bruger figsize 12x12 for høj opløsning
-    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
-    
-    # VIGTIGT: Dette sikrer at hvid tekst bevares ved kopiering
+    # --- 3. PIZZA CHART (Fuld visning) ---
+    # Vi øger LIMIT_Y en smule og bruger en fast figsize, der passer til skærmen
+    fig, ax = plt.subplots(figsize=(14, 14), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
     
     V_OFFSET = 28
-    LIMIT_Y = 165
+    LIMIT_Y = 175 # Øget for at give plads til hele figuren og labels
     ax.set_ylim(0, LIMIT_Y)
     
     color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
