@@ -1,120 +1,124 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
-import os
-import requests
 from PIL import Image
+import requests
 from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from data.utils.team_mapping import TEAMS
+from data.data_load import _get_snowflake_conn
 
-# --- 1. OPSÆTNING ---
-# (Behold dine METRIC_PAIRS og stier fra dit eget script)
+# --- 1. DIT DESIGN OPSÆTNING ---
+METRIC_PAIRS = {
+    'OFFENSIV': [
+        ('GOALS', 'GOALS'), ('SHOTS', 'SHOTS'), ('XGSHOT', 'XGSHOT')
+    ],
+    'OPBYGNING': [
+        ('FORWARD PASSES', 'FORWARDPASSES'),
+        ('PASSES TO FINAL THIRD', 'PASSESTOFINALTHIRD')
+    ],
+    'DEFENSIV': [
+        ('PPDA', 'PPDA'), ('CONCEDED GOALS', 'CONCEDEDGOALS')
+    ]
+}
 
-def create_pizza_total(df_orig, team_id):
-    df = df_orig.copy()
+def get_logo(url):
+    try:
+        response = requests.get(url, timeout=5)
+        return Image.open(BytesIO(response.content)).convert("RGBA")
+    except:
+        return None
 
-    # Data normalisering (Håndtering af komma og division med kampe)
-    all_metrics = [col for group in METRIC_PAIRS.values() for pair in group for col in pair]
-    for col in list(set(all_metrics)):
-        clean_col = col.replace(' ', '')
-        if clean_col in df.columns:
-            # Konverter til float og divider med kampe (undtagen PPDA)
-            df[clean_col] = pd.to_numeric(df[clean_col].astype(str).str.replace(',', '.'), errors='coerce')
-            if clean_col != 'PPDA':
-                df[clean_col] = df[clean_col] / df['MATCHES']
+def fetch_team_data():
+    conn = _get_snowflake_conn()
+    # Din præcise query fra tidligere
+    query = """
+    SELECT DISTINCT 
+        tm.TEAMNAME, t.GOALS, t.XGSHOT, t.CONCEDEDGOALS, t.SHOTS, t.PPDA,
+        t.PASSESTOFINALTHIRD, t.FORWARDPASSES, st.TOTALPLAYED AS MATCHES, t.TEAM_WYID
+    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS AS st 
+        ON t.TEAM_WYID = st.TEAM_WYID AND t.SEASON_WYID = st.SEASON_WYID
+    WHERE t.COMPETITION_WYID = 328
+    AND s.SEASONNAME = '2025/2026'
+    """
+    df_res = conn.query(query)
+    df = pd.DataFrame(df_res)
+    if not df.empty:
+        df.columns = [c.upper() for c in df.columns] # Vi bruger UPPER her pga. dit design
+    return df
 
-    target_team = df[df['TEAM_WYID'] == team_id]
-    if target_team.empty: 
-        print(f"Hold ID {team_id} ikke fundet."); return
+def vis_side(*args, **kwargs):
+    st.title("📊 Hvidovre IF: Modstander Analyse")
 
-    # --- DATA FORBEREDELSE ---
+    if "team_data_NB" not in st.session_state:
+        st.session_state["team_data_NB"] = fetch_team_data()
+    
+    df = st.session_state["team_data_NB"].copy()
+
+    if df.empty:
+        st.error("Kunne ikke hente data fra Snowflake.")
+        return
+
+    # 1. Valg af hold (Hvidovre-app stil)
+    hold_navne = sorted(df['TEAMNAME'].unique())
+    valgt_hold = st.selectbox("Vælg hold til analyse:", hold_navne)
+    target_team = df[df['TEAMNAME'] == valgt_hold]
+
+    # 2. Normalisering (Stats pr. kamp)
+    for group in METRIC_PAIRS.values():
+        for label, col in group:
+            if col in df.columns and col not in ['PPDA', 'MATCHES']:
+                df[col] = df[col] / df['MATCHES']
+
+    # 3. Pizza Chart Logik (Dit design)
     plot_labels, values, display_values, plot_colors = [], [], [], []
     color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
 
     for group_name, pairs in METRIC_PAIRS.items():
-        for total_col, _ in pairs:
-            col_to_use = total_col.replace(' ', '')
-            if col_to_use not in df.columns: continue
-
-            # Beregn percentil
-            p_val = stats.percentileofscore(df[col_to_use].dropna(), target_team[col_to_use].values[0])
+        for label, col in pairs:
+            p_val = stats.percentileofscore(df[col].dropna(), target_team[col].values[0])
+            if col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
             
-            # Inverter stats hvor lavt er godt (Mål imod og PPDA)
-            if col_to_use in ['CONCEDEDGOALS', 'PPDA']: 
-                p_val = 100 - p_val
-
-            plot_labels.append(total_col)
+            plot_labels.append(label)
             values.append(p_val)
-            display_values.append(f"{target_team[col_to_use].values[0]:.1f}")
+            display_values.append(f"{target_team[col].values[0]:.1f}")
             plot_colors.append(color_map[group_name])
 
-    # --- PLOTTING ---
+    # 4. PLOTTING (Gennemsigtig + Hvid tekst)
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig.patch.set_alpha(0) # Gennemsigtig baggrund
+    ax.set_facecolor('none')
+    
     num_vars = len(plot_labels)
-    # Beregn vinkler (0 til 2*pi)
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
-    width = (2 * np.pi) / num_vars # Bredden på hver "skive"
+    width = (2 * np.pi) / num_vars
 
-    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
+    # Selve pizza-skiverne
+    ax.bar(angles, values, width=width, bottom=20, color=plot_colors, 
+           alpha=0.9, edgecolor='white', linewidth=1.5, align='edge')
 
-    # GENNEMSIGTIGHED
-    fig.patch.set_alpha(0) # Gør figurens baggrund gennemsigtig
-    ax.set_facecolor('none') # Gør selve plottets baggrund gennemsigtig
-    
-    # Skjul grid og akser
-    ax.grid(False)
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    ax.spines['polar'].set_visible(False)
+    # Logo midt i
+    # Vi prøver at finde logoet via TEAMS mapping eller Snowflake URL
+    logo_url = target_team['IMAGEDATAURL'].values[0] if 'IMAGEDATAURL' in target_team else None
+    if logo_url:
+        logo_img = get_logo(logo_url)
+        if logo_img:
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False))
 
-    # Tegn de yderste hjælpelinjer (cirkler)
-    for r in [20, 40, 60, 80, 100]:
-        ax.plot(np.linspace(0, 2*np.pi, 100), [r]*100, color="white", linewidth=0.8, alpha=0.2, zorder=2)
+    # Styling (Hvid tekst)
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.axis('off')
 
-    # Tegn "pizzaskiverne" (baggrundslinjer)
-    ax.bar(angles, [100]*num_vars, width=width, color='none', edgecolor='white', 
-           linewidth=1, alpha=0.1, zorder=1, align='edge')
-
-    # Tegn data-barerne
-    # Vi sætter 'bottom' til f.eks. 20 for at give plads til logoet i midten
-    INNER_BLANK = 25 
-    ax.bar(angles, values, width=width, bottom=INNER_BLANK, color=plot_colors, 
-           edgecolor='white', linewidth=1.5, alpha=0.85, zorder=3, align='edge')
-
-    # Tilføj logo i midten
-    logo_img = get_logo(LOGO_URL)
-    if logo_img:
-        imagebox = OffsetImage(logo_img, zoom=0.8)
-        ab = AnnotationBbox(imagebox, (0, 0), frameon=False, zorder=10)
-        ax.add_artist(ab)
-
-    # Akse-indstillinger
-    ax.set_theta_offset(np.pi / 2) # Start i toppen
-    ax.set_theta_direction(-1)     # Gå med uret
-    ax.set_ylim(0, 130)            # Ekstra plads til tekst i kanten
-
-    # --- TEKST OG LABELS ---
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-        # Find position for label (lidt uden for cirklen)
-        # Vi lægger halvdelen af 'width' til vinklen for at centrere teksten over skiven
         text_angle = angle + (width / 2)
-        
-        # Labels (Hvid tekst)
-        ax.text(text_angle, 115, label.replace(' ', '\n'), ha='center', va='center', 
-                color='white', fontsize=10, fontweight='bold')
-        
-        # Værdi-bokse
-        ax.text(text_angle, 105, disp, ha='center', va='center', color='white',
-                fontsize=9, fontweight='bold', 
-                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', alpha=1))
+        ax.text(text_angle, 125, label, ha='center', color='white', fontweight='bold', fontsize=10)
+        ax.text(text_angle, 110, disp, ha='center', color='white', fontweight='bold',
+                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3'))
 
-    # Gem som transparent PNG
-    if not os.path.exists(OUTPUT_FOLDER): os.makedirs(OUTPUT_FOLDER)
-    save_path = f"{OUTPUT_FOLDER}MIDDELFART_PIZZA_FINAL.png"
-    plt.savefig(save_path, dpi=300, transparent=True, bbox_inches='tight')
-    
-    print(f"Success! Chart gemt her: {save_path}")
-    plt.show()
-
-# Kør funktionen
-create_pizza_total(df_raw, MIDDELFART_TEAM_ID)
+    st.pyplot(fig)
