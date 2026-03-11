@@ -20,23 +20,18 @@ def get_logo(url):
 def fetch_team_data():
     conn = _get_snowflake_conn()
     
-    # Vi bruger store bogstaver i WHERE-clausen for at matche Snowflake standard
-    # Og vi sikrer os, at tallene ikke er i anførselstegn, hvis kolonnen er numerisk
+    # Vi bruger en JOIN for at sikre, at vi rammer de rigtige navne i Snowflake
+    # Dette eliminerer fejlen med SEASON_WYID mismatch
     query = """
     SELECT 
-        TEAM_WYID, 
-        MATCHES,
-        GOALS, 
-        SHOTS, 
-        XGSHOT, 
-        PASSES, 
-        SUCCESSFULPASSES,
-        DEFENSIVEDUELS, 
-        INTERCEPTIONS, 
-        TOUCHINBOX
-    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL
-    WHERE SEASON_WYID = 188330 
-    AND COMPETITION_WYID = 328
+        t.TEAM_WYID, t.MATCHES, t.GOALS, t.SHOTS, t.XGSHOT, 
+        t.PASSES, t.SUCCESSFULPASSES, t.DEFENSIVEDUELS, 
+        t.INTERCEPTIONS, t.TOUCHINBOX
+    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL t
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_COMPETITIONS c ON t.COMPETITION_WYID = c.COMPETITION_WYID
+    WHERE c.COMPETITIONNAME = 'NordicBet Liga' 
+    AND s.SEASONNAME = '2025/2026'
     """
     df_res = conn.query(query)
     df = pd.DataFrame(df_res)
@@ -44,40 +39,28 @@ def fetch_team_data():
     if df.empty:
         return df
 
-    # Tving kolonner til små bogstaver for nemmere håndtering i Python
+    # Tving kolonner til små bogstaver
     df.columns = [c.lower() for c in df.columns]
     
-    # Sikr at ID er heltal
+    # Sikr at ID er heltal for korrekt matching med TEAMS mapping
     df['team_wyid'] = pd.to_numeric(df['team_wyid']).astype(int)
     return df
 
 def vis_side(*args, **kwargs):
-    # Ingen subheader her - direkte til titlen
-    def debug_find_ids():
-    conn = _get_snowflake_conn()
-    # Vi henter bare de unikke kombinationer af navne og ID'er
-    query = """
-    SELECT DISTINCT 
-        COMPETITION_WYID, 
-        SEASON_WYID
-    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL
-    LIMIT 20
-    """
-    return conn.query(query)
+    # Direkte til titlen som ønsket
+    st.title("📊 Hvidovre App: Performance Profiler")
 
-# Kør denne i din vis_side() for at se listen:
-# st.write(debug_find_ids())
-
+    # Session State håndtering for hurtigere indlæsning
     if "team_stats_1div" not in st.session_state:
-        with st.spinner("Henter data..."):
+        with st.spinner("Henter data fra Snowflake..."):
             st.session_state["team_stats_1div"] = fetch_team_data()
     
     df = st.session_state["team_stats_1div"].copy()
 
+    # Hvis data stadig er tom, vis fejl og genindlæs-knap
     if df.empty:
-        st.error("Fejl: Ingen rækker fundet i Snowflake (SEASON 188330, COMP 328).")
-        # Knap til at tvinge genindlæsning hvis data er blevet opdateret
-        if st.button("Prøv at genindlæse data"):
+        st.error("Fejl: Ingen rækker fundet for NordicBet Liga 2025/2026 i Snowflake.")
+        if st.button("Tving genindlæsning af data"):
             st.session_state.pop("team_stats_1div")
             st.rerun()
         return
@@ -90,7 +73,7 @@ def vis_side(*args, **kwargs):
     team_wyid = int(team_info['team_wyid'])
 
     # 2. Beregninger (PG = Per Game)
-    # Vi bruger fillna(0) for at undgå fejl ved division med nul
+    # Vi bruger en kopi for at undgå SettingWithCopyWarning
     df['goals_pg'] = df['goals'] / df['matches'].replace(0, np.nan)
     df['xg_pg'] = df['xgshot'] / df['matches'].replace(0, np.nan)
     df['shots_pg'] = df['shots'] / df['matches'].replace(0, np.nan)
@@ -105,7 +88,7 @@ def vis_side(*args, **kwargs):
     target_team = df[df['team_wyid'] == team_wyid]
 
     if target_team.empty:
-        st.warning(f"Holdet '{valgt_hold}' (ID: {team_wyid}) findes ikke i datasættet.")
+        st.warning(f"Holdet '{valgt_hold}' (ID: {team_wyid}) blev ikke fundet i liga-dataen.")
         return
 
     # 4. Pizza Chart setup
@@ -122,32 +105,41 @@ def vis_side(*args, **kwargs):
 
     labels, values, colors = [], [], []
     for col, label, color in metrics:
+        # Beregn percentil score i forhold til resten af ligaen
         p_val = stats.percentileofscore(df[col], target_team[col].values[0])
         labels.append(label)
         values.append(p_val)
         colors.append(color)
 
-    # 5. Plotting
+    # 5. Plotting (Pizza Chart)
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     fig.patch.set_facecolor('#0E1117')
     ax.set_facecolor('#0E1117')
     
     angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
-    ax.bar(angles, values, width=0.7, color=colors, alpha=0.6, edgecolor='white')
+    
+    # Sørg for at lukke cirklen ved at gentage første element (valgfrit for bar charts)
+    ax.bar(angles, values, width=0.7, color=colors, alpha=0.6, edgecolor='white', linewidth=1)
 
+    # Tilføj logo i midten
     logo = get_logo(team_info['logo'])
     if logo:
-        ax.add_artist(AnnotationBbox(OffsetImage(logo, zoom=0.4), (0, 0), frameon=False))
+        imagebox = OffsetImage(logo, zoom=0.4)
+        ab = AnnotationBbox(imagebox, (0, 0), frameon=False)
+        ax.add_artist(ab)
 
     ax.set_xticks(angles)
     ax.set_xticklabels(labels, color='white', size=11, fontweight='bold')
-    ax.set_yticklabels([])
+    ax.set_yticklabels([]) # Skjul 0-100 skalaen
     ax.grid(color='grey', linestyle='--', alpha=0.3)
     
     st.pyplot(fig)
 
-    # 6. Tabelvisning (uden subheader)
+    # 6. Tabelvisning (Bunden)
     st.dataframe(
-        target_team[['matches', 'goals_pg', 'xg_pg', 'pass_acc', 'touchbox_pg']],
+        target_team[['matches', 'goals_pg', 'xg_pg', 'pass_acc', 'touchbox_pg']].style.format(precision=2),
         use_container_width=True
     )
+
+if __name__ == "__main__":
+    vis_side()
