@@ -37,7 +37,6 @@ def get_logo(url):
 
 def fetch_data():
     conn = _get_snowflake_conn()
-    # Bruger dine saved values for 2025/2026 og NordicBet Liga (328)
     query = """
     SELECT 
         tm.TEAMNAME, tm.IMAGEDATAURL, t.TEAM_WYID, st.TOTALPLAYED AS MATCHES,
@@ -66,51 +65,22 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: EKSTREM KOMPRIMERING AF VENSTRE SIDE ---
+    # --- CSS: EKSTREM KOMPRIMERING ---
     st.markdown("""
         <style>
-            /* Fjern unødig luft i toppen af kolonner */
             .block-container { padding-top: 0.1rem; }
-            
-            /* Gør radio-knapperne og deres labels mindre og tættere */
-            div[data-testid="stRadio"] label p {
-                font-size: 14px !important;
-                margin-bottom: 0px !important;
-            }
-            div[data-testid="stRadio"] > div {
-                gap: 1px !important;
-            }
-            
-            /* Fjern padding mellem logo og radio */
-            .compact-row {
-                display: flex;
-                align-items: center;
-                margin-bottom: 1px;
-            }
+            div[data-testid="stRadio"] label p { font-size: 14px !important; margin-bottom: 0px !important; }
+            div[data-testid="stRadio"] > div { gap: 1px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- LAYOUT: 1 del til menu, 5 dele til chart ---
     menu_col, chart_col = st.columns([1, 5])
 
-    # --- 1. VENSTRE SIDE: KOMPAKT RADIO MENU ---
     with menu_col:
         st.write("### Vælg Hold")
-        
-        # Vi bruger st.radio til selve valget for stabilitet
-        # Men vi skjuler radio-teksten med CSS og laver vores egen række
-        valgt_hold_navn = st.radio(
-            "Hold", 
-            hold_navne, 
-            label_visibility="collapsed",
-            key="team_radio_select"
-        )
-        
-        # Vi viser de små logoer som en visuel guide ud for navnene
-        # (Dette er valgfrit, hvis du vil have logoerne helt tæt på navnene)
+        valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
         st.session_state.selected_team = valgt_hold_navn
 
-    # --- 2. HØJRE SIDE: DATA & CHART ---
     with chart_col:
         target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
         team_id = target_team_raw['TEAM_WYID'].values[0]
@@ -124,20 +94,18 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART (MAXIMERET & OPTIMERET) ---
-        # Vi øger figsize en smule, men holder indholdet småt for at skabe luft
+        # --- 3. PIZZA CHART DESIGN ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Øget margin for at undgå at teksten rammer kanten
-        plt.subplots_adjust(left=0.15, right=0.85, top=0.85, bottom=0.15)
+        # Balance mellem chart og whitespace
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         
         V_OFFSET = 18
-        LIMIT_Y = 220 # Øget markant for at "zoome ud"
+        LIMIT_Y = 185 # Giver perfekt zoom-niveau
         ax.set_ylim(0, LIMIT_Y)
         
-        # ... (Samme farve- og bar-plot kode som før) ...
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
 
@@ -160,51 +128,60 @@ def vis_side(*args, **kwargs):
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
         ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-        # Centralt Logo (Mindre zoom for at det ikke fylder for meget)
+        # Centralt Logo (Skaleret ned til 0.4 for elegance)
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.4), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- TEKST OG LABELS ---
+        # --- TEKST OG LABELS (PRÆCISIONS-PLACERING) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Radius 130 - lidt tættere på centrum for at give plads)
-            box_y = 130
+            # 1. Værdibokse (Radius 120)
+            box_y = 120
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
                     zorder=10,
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
+                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # 2. Sort label-tekst (Radius 155)
-            label_y = 155 
+            # 2. Sort label-tekst (Radius 142 - lige under boksene)
+            label_y = 142 
             
-            # NY ROTATION: Sørger for at teksten flugter med buen og vender læsbart
-            # Vi trækker 90 grader fra for at lægge teksten ned langs cirklen
+            # ROTATIONS-LOGIK: Teksten følger buen og vender rigtigt i bunden
             rotation = angle_deg - 90
-            
-            # Hvis teksten er i bunden (mellem 90 og 270 grader), vender vi den 180 grader
-            # så den ikke står på hovedet
-            if 90 <= angle_deg <= 270:
+            if 90 < angle_deg < 270:
                 rotation += 180
             
             ax.text(angle, label_y, label, 
                     ha='center', va='center', 
-                    fontsize=8, fontweight='black', 
+                    fontsize=7, fontweight='black', 
                     color='black', alpha=0.8,
-                    rotation=rotation, 
-                    rotation_mode='anchor',
+                    rotation=rotation, rotation_mode='anchor',
                     gid='overlay_text')
 
-        # --- FIGUR-JUSTERING (FIXER ZOOM OG WHITESPACE) ---
-        # Vi øger LIMIT_Y til 200 for at skabe en "buffer" så teksten ikke bliver skåret af
-        ax.set_ylim(0, 200)
-        
-        # Vi fjerner 'tight' justering her for at bevare kontrollen over zoomet
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
-
-        # Vis chartet - vi tvinger den til ikke at fylde ALT for meget vertikalt
+        # Vis på skærmen
         st.pyplot(fig, use_container_width=True)
+
+        # --- DOWNLOAD LOGIK ---
+        buf = BytesIO()
+        # Skjul sorte labels før gem
+        for t in ax.texts:
+            if t.get_gid() == 'overlay_text':
+                t.set_visible(False)
+        
+        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
+        
+        # Vis dem igen på skærmen
+        for t in ax.texts:
+            if t.get_gid() == 'overlay_text':
+                t.set_visible(True)
+
+        st.download_button(
+            label="Download PNG (Rent look)",
+            data=buf.getvalue(),
+            file_name=f"pizza_{valgt_hold_navn}.png",
+            mime="image/png"
+        )
