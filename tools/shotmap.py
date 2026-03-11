@@ -26,7 +26,7 @@ def vis_side(dp):
         return
 
     # --- 1. ZONE DEFINITIONER ---
-    P_L, P_W = 105.0, 68.0
+    P_L, P_W = 105.0, 55.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
