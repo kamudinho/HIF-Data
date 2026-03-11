@@ -69,11 +69,11 @@ def vis_side(*args, **kwargs):
     st.markdown("""
         <style>
             .block-container { padding-top: 0rem !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -40px !important; }
+            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -20px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    menu_col, chart_col = st.columns([1, 5])
+    menu_col, chart_col = st.columns([1, 8])
 
     with menu_col:
         st.write("### Vælg Hold")
