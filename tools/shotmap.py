@@ -27,23 +27,37 @@ def vis_side(dp):
         st.info("Ingen data fundet.")
         return
 
-    # --- KONSTANTE ZONE DEFINITIONER (Meter) ---
-    PITCH_L, PITCH_W = 105, 68
-    C_MIN, C_MAX = (PITCH_W - 18.32)/2, (PITCH_W + 18.32)/2
-    W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
-
-    ZONE_BOUNDS = {
-        "Zone 1": {"x_range": (95.0, 105.0), "y_range": (C_MIN, C_MAX)}, 
-        "Zone 2": {"x_range": (88.0, 95.0),  "y_range": (C_MIN, C_MAX)}, 
-        "Zone 3": {"x_range": (80.0, 88.0),  "y_range": (C_MIN, C_MAX)}, 
-        "Zone 4A": {"x_range": (95.0, 105.0), "y_range": (C_MAX, W_INNER_MAX)},
-        "Zone 4B": {"x_range": (95.0, 105.0), "y_range": (W_INNER_MIN, C_MIN)},
-        "Zone 5A": {"x_range": (88.0, 95.0),  "y_range": (C_MAX, W_INNER_MAX)},
-        "Zone 5B": {"x_range": (88.0, 95.0),  "y_range": (W_INNER_MIN, C_MIN)},
-        "Zone 6A": {"x_range": (88.0, 105.0), "y_range": (W_INNER_MAX, PITCH_W)},
-        "Zone 6B": {"x_range": (88.0, 105.0), "y_range": (0, W_INNER_MIN)},
-        "Zone 7":  {"x_range": (75.0, 88.0),  "y_range": (0, PITCH_W)},
-        "Zone 8":  {"x_range": (0, 75.0),     "y_range": (0, PITCH_W)}
+    # --- 1. OPSÆTNING AF ZONER MED PRÆCISE KOORDINATER TIL MPLSOCCER ---
+    PITCH_LENGTH = 105
+    PITCH_WIDTH = 68
+    
+    CENTER_ZONE_WIDTH = 18.32
+    X_CENTER_MIN = (PITCH_WIDTH - CENTER_ZONE_WIDTH) / 2
+    X_CENTER_MAX = (PITCH_WIDTH + CENTER_ZONE_WIDTH) / 2
+    
+    # Y-koordinater
+    Y_GOALLINE = 105.0
+    Y_SIX_YARD = 99.5
+    Y_PENALTY_SPOT = 94.0
+    Y_PENALTY_AREA = 88.5
+    Y_MID_DEFENSE = 75.0
+    X_WIDE_INNER_MAX = (PITCH_WIDTH + 40.2) / 2
+    X_WIDE_INNER_MIN = (PITCH_WIDTH - 40.2) / 2
+    
+    ZONE_BOUNDARIES = {
+        "Zone 1": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
+        "Zone 2": {"y_min": Y_PENALTY_SPOT, "y_max": Y_SIX_YARD, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
+        "Zone 3": {"y_min": Y_PENALTY_AREA, "y_max": Y_PENALTY_SPOT, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
+        "Zone 4A": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_CENTER_MAX, "x_max": X_WIDE_INNER_MAX},
+        "Zone 4B": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_WIDE_INNER_MIN, "x_max": X_CENTER_MIN},
+        "Zone 5A": {"y_min": Y_PENALTY_AREA, "y_max": Y_SIX_YARD, "x_min": X_CENTER_MAX, "x_max": X_WIDE_INNER_MAX},
+        "Zone 5B": {"y_min": Y_PENALTY_AREA, "y_max": Y_SIX_YARD, "x_min": X_WIDE_INNER_MIN, "x_max": X_CENTER_MIN},
+        "Zone 6A": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": X_WIDE_INNER_MAX, "x_max": PITCH_WIDTH},
+        "Zone 6B": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": 0, "x_max": X_WIDE_INNER_MIN},
+        "Zone 7B": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
+        "Zone 7C": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": 0, "x_max": X_CENTER_MIN},
+        "Zone 7A": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MAX, "x_max": PITCH_WIDTH},
+        "Zone 8": {"y_min": 0, "y_max": Y_MID_DEFENSE, "x_min": 0, "x_max": PITCH_WIDTH}
     }
 
     def map_to_meter_zone(r):
