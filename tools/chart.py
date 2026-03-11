@@ -35,8 +35,8 @@ def fetch_wyscout_data():
     df_res = conn.query(query)
     return pd.DataFrame(df_res)
 
-def vis_side():
-
+def vis_side(*args, **kwargs):
+    
     if "wyscout_stats_1div" not in st.session_state:
         with st.spinner("Henter data fra Snowflake..."):
             st.session_state["wyscout_stats_1div"] = fetch_wyscout_data()
