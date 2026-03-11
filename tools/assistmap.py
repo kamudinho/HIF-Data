@@ -46,29 +46,27 @@ def vis_side(dp):
         alle_spillere = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
         
         # KUN ÉT LOOP HERFRA
+        spiller_stats = []
+        alle_spillere = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
+        
         for spiller in alle_spillere:
             s_data = df_assists[df_assists[player_col] == spiller]
             
-            # 1. Assists (Mål)
+            # Tæl assists (Type 16)
             assists = len(s_data[s_data['NEXT_EVENT_TYPE'] == 16])
-            
-            # 2. Key Passes (Skud der ikke blev mål - 13, 14, 15)
+            # Tæl Key Passes (Type 13, 14, 15)
             key_passes = len(s_data[s_data['NEXT_EVENT_TYPE'].isin([13, 14, 15])])
-            
-            # 3. Alle pasninger (hvor outcome er succesfuldt)
-            # Vi tæller alle rækker i s_data, da din SQL nu henter alle pasninger
+            # Tæl ALLE succesfulde pasninger (nu inkl. dødbolde)
             passninger = len(s_data[s_data['EVENT_OUTCOME'] == 1])
-            
-            # 4. Fremadrettede pasninger (Progressive)
-            # Vi tjekker om kolonnen IS_PROGRESSIVE findes (fra SQL'en)
-            fremad = s_data['IS_PROGRESSIVE'].sum() if 'IS_PROGRESSIVE' in s_data.columns else 0
+            # Tæl progressive
+            fremad = s_data['IS_PROGRESSIVE'].sum()
             
             spiller_stats.append({
                 "Spiller": spiller.split()[-1],
-                "Assists": assists,
-                "Key Passes": key_passes,
-                "Passninger": passninger,
-                "Fremad": int(fremad)
+                "A": assists,
+                "KP": key_passes,
+                "Pas.": passninger,
+                "Prog.": int(fremad)
             })
         
         if spiller_stats:
