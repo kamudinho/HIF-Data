@@ -34,33 +34,32 @@ def vis_side(dp):
     player_col = 'ASSIST_PLAYER'
 
     # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 1: SPILLEROVERSIGT ---
     with tab1:
-        st.caption("Sæsonstatistik for Hvidovre IF (Opta Data)")
+        st.caption("Sæsonstatistik for Hvidovre IF baseret på Opta hændelser")
         
-        # Brug den nye SQL logik til at tælle assists (Type 16)
-        df_assists['is_assist'] = (df_assists['NEXT_EVENT_TYPE'] == 16).astype(int)
-        df_assists['is_key_pass'] = df_assists['NEXT_EVENT_TYPE'].isin([13, 14, 15]).astype(int)
-        
+        # Aggregering (behold din eksisterende logik)
         df_table = df_assists.groupby(player_col).agg(
             Assists=('is_assist', 'sum'),
             Key_Passes=('is_key_pass', 'sum'),
-            Hjørne_Assists=('IS_CORNER', 'sum'),
-            Indlæg_Assists=('IS_CROSS', 'sum'),
+            Hjorne_Assists=('IS_CORNER', 'sum'),
+            Indlaeg_Assists=('IS_CROSS', 'sum'),
             Fremadrettede=('IS_PROGRESSIVE', 'sum')
         ).reset_index()
-
+    
         df_table = df_table.rename(columns={player_col: "Spiller"})
         df_table = df_table.sort_values(["Assists", "Key_Passes"], ascending=False)
         
+        # Visning uden 'height' parameter tvinger fuld højde (ingen scroll)
         st.dataframe(
             df_table,
             column_config={
                 "Spiller": st.column_config.TextColumn("Spiller"),
-                "Assists": st.column_config.NumberColumn("🅰️"),
-                "Key_Passes": st.column_config.NumberColumn("🔑"),
-                "Hjørne_Assists": st.column_config.NumberColumn("🚩"),
-                "Indlæg_Assists": st.column_config.NumberColumn("⚽ Cross"),
-                "Fremadrettede": st.column_config.NumberColumn("↗️ Progressive")
+                "Assists": st.column_config.NumberColumn("Assists"),
+                "Key_Passes": st.column_config.NumberColumn("Key Passes"),
+                "Hjorne_Assists": st.column_config.NumberColumn("Corner Assists"),
+                "Indlaeg_Assists": st.column_config.NumberColumn("Cross Assists"),
+                "Fremadrettede": st.column_config.NumberColumn("Progressive")
             },
             hide_index=True,
             use_container_width=True
@@ -70,19 +69,18 @@ def vis_side(dp):
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         
+        # --- TAB 2: ASSIST-MAP ---
         with col_ctrl_a:
-            st.caption("Filtrér hændelser")
-            spiller_liste_a = sorted(df_table["Spiller"].tolist())
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
+            # Opdateret maske: Tillad 0,0 hvis det er et hjørnespark
+            mask_corner = (df_assists['IS_CORNER'] == 1)
+            mask_shot_exists = (df_assists['SHOT_X'] > 0)
             
-            # Nye filtre baseret på dine Qualifiers
-            show_corners = st.checkbox("Vis Hjørnespark (🚩)", value=True)
-            show_crosses = st.checkbox("Vis Indlæg (⚽)", value=True)
+            df_filtered = df_assists[mask_corner | mask_shot_exists].copy()
             
-            # Filtrering
-            df_filtered = df_assists.copy()
             if v_a != "Hvidovre IF":
-                df_filtered = df_filtered[df_filtered[player_col] == v_a]
+                df_map_data = df_filtered[df_filtered[player_col] == v_a]
+            else:
+                df_map_data = df_filtered
             
             if not show_corners:
                 df_filtered = df_filtered[df_filtered['IS_CORNER'] == 0]
