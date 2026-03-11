@@ -95,7 +95,7 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART DESIGN ---
-        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
@@ -103,7 +103,7 @@ def vis_side(*args, **kwargs):
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         
         V_OFFSET = 25
-        LIMIT_Y = 175 
+        LIMIT_Y = 240 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
