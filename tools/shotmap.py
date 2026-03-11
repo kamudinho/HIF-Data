@@ -42,7 +42,7 @@ def vis_side(dp):
         "Zone 5B": {"x_range": (88.0, 95.0),  "y_range": (W_INNER_MIN, C_MIN)},
         "Zone 6A": {"x_range": (88.0, 105.0), "y_range": (W_INNER_MAX, PITCH_W)},
         "Zone 6B": {"x_range": (88.0, 105.0), "y_range": (0, W_INNER_MIN)},
-        "Zone 7":  {"x_range": (75.0, 88.0),  "y_range": (0, PITCH_W)},
+        "Zone 7":  {"x_range": (75.0, 95.0),  "y_range": (0, PITCH_W)},
         "Zone 8":  {"x_range": (0, 75.0),     "y_range": (0, PITCH_W)}
     }
 
