@@ -72,10 +72,10 @@ def vis_side(dp):
                 df_table,
                 column_config={
                     "Spiller": st.column_config.TextColumn("Spiller"),
-                    "A": st.column_config.NumberColumn("A", help="Assists"),
-                    "KP": st.column_config.NumberColumn("KP", help="Key Passes"),
-                    "Pas.": st.column_config.NumberColumn("Pas.", help="Succesfulde afleveringer"),
-                    "Prog.": st.column_config.NumberColumn("Prog.", help="Fremadrettede pasninger")
+                    "Assists": st.column_config.NumberColumn("Assists", help="Assists"),
+                    "Key Passes": st.column_config.NumberColumn("Key Passes", help="Key Passes"),
+                    "Pasninger": st.column_config.NumberColumn("Pasninger", help="Succesfulde afleveringer"),
+                    "Fremadrettede (+10 m)": st.column_config.NumberColumn("Fremadrettede (+10 m)", help="Fremadrettede pasninger")
                 },
                 hide_index=True,
                 use_container_width=True,
