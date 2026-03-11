@@ -47,9 +47,11 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             {hif_filter_event}
         """,
         
+        # --- DEN NYE OPTIMEREDE ASSISTS QUERY ---
         "opta_assists": f"""
             WITH OrderedEvents AS (
                 SELECT 
+                    EVENT_OPTAUUID,
                     PLAYER_OPTAUUID, 
                     PLAYER_NAME, 
                     EVENT_X, 
@@ -60,37 +62,39 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     EVENT_CONTESTANT_OPTAUUID, 
                     EVENT_TIMESTAMP, 
                     EVENT_EVENTID,
-                    -- Finder den næste hændelse for at identificere assists/key passes
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
-                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_X,
-                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_Y
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_Y,
+                    LEAD(PLAYER_NAME) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_PLAYER
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-                AND EVENT_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy' -- Hvidovre IF
+                AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
             )
             SELECT 
-                PLAYER_NAME AS ASSIST_PLAYER,
-                EVENT_X AS PASS_START_X,
-                EVENT_Y AS PASS_START_Y,
-                NEXT_X AS SHOT_X,
-                NEXT_Y AS SHOT_Y,
-                NEXT_EVENT_TYPE,
-                EVENT_OUTCOME,
-                EVENT_TYPEID,
-                -- Progressiv logik: Flytter bolden min. 25% af banen fremad (Opta skala 0-100)
-                CASE 
-                    WHEN NEXT_X > (EVENT_X + 20) AND EVENT_OUTCOME = 1 
-                    THEN 1 ELSE 0 
-                END AS IS_PROGRESSIVE
-            FROM OrderedEvents
-            WHERE (
-                -- Hent alle pasninger og dødbolde (for volumen/Stenderup)
-                EVENT_TYPEID IN (1, 2, 107, 108, 109)
-                OR 
-                -- Hent alt der fører direkte til skud (Assists/Key Passes)
-                NEXT_EVENT_TYPE IN (13, 14, 15, 16)
-            )
-            ORDER BY EVENT_TIMESTAMP DESC
+                OE.PLAYER_NAME AS ASSIST_PLAYER,
+                OE.SHOT_PLAYER AS GOAL_SCORER,
+                OE.EVENT_X AS PASS_START_X,
+                OE.EVENT_Y AS PASS_START_Y,
+                OE.SHOT_X,
+                OE.SHOT_Y,
+                OE.NEXT_EVENT_TYPE,
+                OE.EVENT_OUTCOME,
+                OE.EVENT_TYPEID,
+                OE.EVENT_TIMESTAMP,
+                -- Qualifiers tilføjes via JOIN for præcision
+                MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) AS IS_CORNER,
+                MAX(CASE WHEN Q.QUALIFIER_QID = 2 THEN 1 ELSE 0 END) AS IS_CROSS,
+                CASE WHEN OE.NEXT_X > (OE.EVENT_X + 25) AND OE.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
+            FROM OrderedEvents OE
+            LEFT JOIN {DB}.OPTA_QUALIFIERS Q ON OE.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
+            WHERE OE.EVENT_OUTCOME = 1 -- Kun succesfulde aktioner
+            AND OE.EVENT_TYPEID = 1    -- Kun afleveringer
+            GROUP BY 
+                OE.PLAYER_NAME, OE.SHOT_PLAYER, OE.EVENT_X, OE.EVENT_Y, OE.SHOT_X, OE.SHOT_Y, 
+                OE.NEXT_EVENT_TYPE, OE.EVENT_OUTCOME, OE.EVENT_TYPEID, OE.EVENT_TIMESTAMP, OE.NEXT_X
+            HAVING (MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) = 1) -- Behold alle hjørnespark
+               OR (OE.NEXT_EVENT_TYPE IN (13, 14, 15, 16)) -- Behold alt der fører til skud
+            ORDER BY OE.EVENT_TIMESTAMP DESC
         """,
         
         "opta_team_stats": f"""
