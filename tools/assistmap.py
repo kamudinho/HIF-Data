@@ -146,7 +146,7 @@ def vis_side(dp):
 
                 # --- TEKST I ZONEN (Navn, Antal, Pct, Topspiller) ---
                 # Vi bruger en f-string til at lave flere linjer
-                z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Zone ')}}}$\n"
+                z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Zone  ')}}}$\n"
                           f"{stats['count']} ({stats['pct']:.1f}%)\n"
                           f"{stats['short_top']}")
                 
