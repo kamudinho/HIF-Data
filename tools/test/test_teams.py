@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
-# Her importerer vi din database-funktion
+# VIGTIGT: Vi skal bruge din query-funktion
 from data.db_connection import run_query 
 
 def vis_side(df_raw=None):
@@ -15,8 +15,8 @@ def vis_side(df_raw=None):
     logo_map = dp.get("logo_map", {})
     df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
     
-    # --- 1. DEFINER OG KØR WYSCOUT QUERY ---
-    # Her henter vi de avancerede stats direkte fra dine Wyscout tabeller
+    # --- 1. DEFINER OG KØR DIN QUERY (Dette manglede!) ---
+    # Vi henter gennemsnit direkte fra databasen for NordicBet Liga (328)
     query_adv = """
     SELECT 
         tm.TEAM_WYID, 
@@ -35,22 +35,24 @@ def vis_side(df_raw=None):
     JOIN WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
     JOIN WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
     WHERE tm.COMPETITION_WYID = 328
-    AND s.SEASONNAME LIKE '2025%2026'
+    AND s.SEASONNAME = '2025/2026'
     GROUP BY tm.TEAM_WYID
     """
     
-    # Vi kører queryen og gemmer resultatet i df_adv
+    # Hent dataen ind i appen
     try:
         df_adv = run_query(query_adv)
-    except Exception as e:
-        st.error(f"Fejl ved hentning af Wyscout data: {e}")
+        # Tving kolonnenavne til UPPERCASE så de matcher resten af koden
+        if not df_adv.empty:
+            df_adv.columns = df_adv.columns.str.upper()
+    except:
         df_adv = pd.DataFrame()
 
     if df_opta.empty:
         st.warning("Ingen Opta kampdata fundet.")
         return
 
-    # --- 2. HJÆLPEFUNKTIONER (DIN ORIGINALE LOGIK) ---
+    # --- 2. MAPNING MELLEM OPTA OG WYSCOUT ---
     opta_to_wyid = {info['opta_uuid']: info['team_wyid'] for name, info in TEAMS.items() if 'opta_uuid' in info}
 
     def get_logo_html(uuid):
@@ -68,7 +70,7 @@ def vis_side(df_raw=None):
             res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
         return res
 
-    # --- 3. BEREGN OPTA TABEL ---
+    # --- 3. BEREGN TABEL FRA OPTA ---
     stats = {}
     for _, row in df_opta.iterrows():
         if row['MATCH_STATUS'] != 'Played': continue
@@ -97,10 +99,12 @@ def vis_side(df_raw=None):
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     
-    # --- 4. MERGE DATA ---
+    # --- 4. MERGE OPTA OG WYSCOUT DATA ---
     df_liga['TEAM_WYID'] = df_liga['UUID'].map(opta_to_wyid)
     if not df_adv.empty:
-        df_adv.columns = df_adv.columns.str.upper() # Sikrer SHOTS, PPDA osv.
+        # Sikr at ID er tal så de kan matches
+        df_liga['TEAM_WYID'] = pd.to_numeric(df_liga['TEAM_WYID'], errors='coerce')
+        df_adv['TEAM_WYID'] = pd.to_numeric(df_adv['TEAM_WYID'], errors='coerce')
         df_liga = df_liga.merge(df_adv, on='TEAM_WYID', how='left')
 
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
@@ -114,18 +118,19 @@ def vis_side(df_raw=None):
         df_disp.insert(1, ' ', df_disp['UUID'].apply(get_logo_html))
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
-        # Omdøb Wyscout kolonner
-        rename_map = {'SHOTS': 'Skud/K', 'PPDA': 'PPDA'}
-        df_disp = df_disp.rename(columns={k: v for k, v in rename_map.items() if k in df_disp.columns})
+        # Omdøb kolonnerne til pæne danske navne HVIS de findes
+        df_disp = df_disp.rename(columns={'SHOTS': 'Skud/K', 'PPDA': 'PPDA', 'TOUCHESINBOX': 'Box Touches'})
         
-        # Dynamisk liste over kolonner (hvis Wyscout data findes)
+        # Definer hvilke kolonner der skal vises (Dynamisk check)
         vis_cols = ['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P']
-        for c in ['Skud/K', 'PPDA']:
-            if c in df_disp.columns: vis_cols.append(c)
+        for col in ['Skud/K', 'PPDA', 'Box Touches']:
+            if col in df_disp.columns:
+                vis_cols.append(col)
         vis_cols.append('FORM')
         
-        st.markdown("""<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-            .league-table th, .league-table td { text-align: center !important; padding: 8px; border-bottom: 1px solid #eee; }
-            .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>""", unsafe_allow_html=True)
+        st.markdown("""<style>.league-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            .league-table th { background: #f8f9fa; padding: 10px; border-bottom: 2px solid #dee2e6; }
+            .league-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+            .league-table td:nth-child(3) { text-align: left; font-weight: bold; }</style>""", unsafe_allow_html=True)
             
         st.write(df_disp[vis_cols].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
