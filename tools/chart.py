@@ -137,31 +137,29 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- TEKST OG LABELS (OPTIMERET RADIAL ROTATION) ---
+        # --- TEKST OG LABELS (FIXET ROTATION) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Vi konverterer vinklen til grader og korrigerer for vores offset
-            angle_deg = np.rad2deg(angle)
+            # Beregn den visuelle vinkel i grader, som tager højde for 
+            # offset (pi/2) og retning (clockwise)
+            vis_angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Radius 115)
-            box_y = 115
+            # 1. Værdibokse (Radius 112 - rykket en anelse tættere på)
+            box_y = 112
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # 2. Sort label-tekst (Radius 135)
-            label_y = 135 
+            # 2. Sort label-tekst (Radius 132 - rykket tættere på boksene)
+            label_y = 132 
             
-            # DYNAMISK ROTATION:
-            # Vi tager udgangspunkt i vinklen.
-            rotation = angle_deg
+            # ROTATIONS-LOGIK:
+            # Vi vil have teksten til at stå radialt (væk fra midten)
+            # Men vi skal flippe den i bunden, så den altid er læsbar.
+            rotation = vis_angle_deg
             
-            # Logik for at teksten aldrig står på hovedet:
-            # Hvis vinklen er i højre side (0-180 grader), skal vi trække 0 fra.
-            # Hvis den er i venstre side (180-360 grader), flipper vi den 180 grader.
-            if 90 < angle_deg <= 270:
-                rotation = angle_deg + 180
-            else:
-                rotation = angle_deg
+            # Flip tekst mellem kl. 3 og kl. 9 (90 til 270 grader visuelt)
+            if 90 < vis_angle_deg < 270:
+                rotation -= 180
 
             ax.text(angle, label_y, label, 
                     ha='center', va='center', 
@@ -172,8 +170,8 @@ def vis_side(*args, **kwargs):
                     gid='overlay_text')
 
         # --- ZOOM JUSTERING ---
-        # Vi holder den på 165 for at sikre at de nu vandrette labels ikke bliver skåret af
-        ax.set_ylim(0, 165)
+        # Sænk LIMIT_Y til 160 for at fjerne det tomme rum yderst
+        ax.set_ylim(0, 160)
 
         # Vis på skærmen
         st.pyplot(fig, use_container_width=True)
