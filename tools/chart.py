@@ -124,16 +124,17 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART (MAXIMERET) ---
-        fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART (MAXIMERET & OPTIMERET) ---
+        # Vi øger figsize en smule, men holder indholdet småt for at skabe luft
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # subplots_adjust fjerner whitespace omkring selve cirklen
-        plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.05)
+        # Øget margin for at undgå at teksten rammer kanten
+        plt.subplots_adjust(left=0.15, right=0.85, top=0.85, bottom=0.15)
         
         V_OFFSET = 18
-        LIMIT_Y = 160 
+        LIMIT_Y = 220 # Øget markant for at "zoome ud"
         ax.set_ylim(0, LIMIT_Y)
         
         # ... (Samme farve- og bar-plot kode som før) ...
