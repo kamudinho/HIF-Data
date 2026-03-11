@@ -58,24 +58,37 @@ def vis_side(dp):
                 "Total": len(s_data)
             })
         
-        if spiller_stats:
-            df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Key Passes"], ascending=False)
+        for spiller in alle_spillere:
+            s_data = df_assists[df_assists[player_col] == spiller]
             
-            # Beregn højden: (antal rækker + 1 til overskrift) * 35 pixels + lidt buffer
-            # Dette tvinger containeren til at være præcis så lang som tabellen
-            calc_height = (len(df_table) + 1) * 35 + 3
+            assists = len(s_data[s_data['NEXT_EVENT_TYPE'] == 16])
+            key_passes = len(s_data[(s_data['NEXT_EVENT_TYPE'].isin([13,14,15]))])
+            passninger = len(s_data[s_data['EVENT_OUTCOME'] == 1])
+            fremad = s_data['IS_PROGRESSIVE'].sum()
+            
+            spiller_stats.append({
+                "Spiller": spiller.split()[-1],
+                "Assists": assists,
+                "Key Passes": key_passes,
+                "Passninger": passninger,
+                "Fremad": int(fremad)
+            })
+        
+        if spiller_stats:
+            df_table = pd.DataFrame(spiller_stats).sort_values("Assists", ascending=False)
             
             st.dataframe(
                 df_table,
                 column_config={
                     "Spiller": st.column_config.TextColumn("Spiller"),
-                    "Assists": st.column_config.NumberColumn("Assists", format="%d"),
-                    "Key Passes": st.column_config.NumberColumn("Key Passes", format="%d"),
-                    "Total": st.column_config.NumberColumn("Total", format="%d")
+                    "Assists": st.column_config.NumberColumn("A", help="Assists"),
+                    "Key Passes": st.column_config.NumberColumn("KP", help="Key Passes"),
+                    "Passninger": st.column_config.NumberColumn("Pas.", help="Fuldførte afleveringer"),
+                    "Fremad": st.column_config.NumberColumn("Prog.", help="Fremadrettede pasninger")
                 },
                 hide_index=True,
                 use_container_width=True,
-                height=calc_height  # Her tvinger vi den
+                height=(len(df_table) + 1) * 35 + 3 # Tvinger højden igen
             )
             
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
