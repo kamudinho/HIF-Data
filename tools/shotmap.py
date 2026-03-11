@@ -250,16 +250,17 @@ def vis_side(dp):
 
                 st.pyplot(fig_z)
 
-    # --- TAB 5: MÅLZONER (Hvor målene scores fra) ---
+    # --- TAB 5: MÅLZONER ---
     with tab5:
-        df_goals_only = df_skud[df_skud['EVENT_TYPEID'] == 16].copy()
+        # TRIN 1: Isoler KUN mål med det samme. Intet andet beregnes.
+        df_goals = df_skud[df_skud['EVENT_TYPEID'] == 16].copy()
         
-        if df_goals_only.empty:
-            st.info("Ingen scoringer fundet i data.")
+        if df_goals.empty:
+            st.info("Der er ikke registreret nogen mål i de valgte data.")
         else:
             col_m_viz, col_m_ctrl = st.columns([2.2, 1])
             
-            # 1. Genbrug Zone-logik (Meter -> Opta)
+            # Grænser i meter (105x68)
             PITCH_L, PITCH_W = 105, 68
             C_MIN, C_MAX = (PITCH_W - 18.32)/2, (PITCH_W + 18.32)/2
             W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
@@ -280,65 +281,66 @@ def vis_side(dp):
                 "Zone 8":  {"y": (0, 75.0),     "x": (0, PITCH_W)}
             }
 
-            def map_goal_zone(r):
-                xm, ym = r['EVENT_Y'] * (PITCH_W/100), r['EVENT_X'] * (PITCH_L/100)
+            def map_only_goals(r):
+                # Konverter Opta (0-100) til dine meter
+                m_x = r['EVENT_X'] * (PITCH_L / 100)
+                m_y = r['EVENT_Y'] * (PITCH_W / 100)
                 for z, b in ZONE_BOUNDS.items():
-                    if b["y"][0] <= ym <= b["y"][1] and b["x"][0] <= xm <= b["x"][1]:
+                    if b["y"][0] <= m_x <= b["y"][1] and b["x"][0] <= m_y <= b["x"][1]:
                         return z
                 return "Zone 8"
 
-            df_goals_only['Zone'] = df_goals_only.apply(map_goal_zone, axis=1)
-            total_mål = len(df_goals_only)
+            df_goals['Zone'] = df_goals.apply(map_only_goals, axis=1)
+            total_goals = len(df_goals)
 
-            # Beregn zone-statistik
-            mål_zone_stats = {}
+            # TRIN 2: Beregn statistik udelukkende på mål-framet
+            z_stats = {}
             for zone in ZONE_BOUNDS.keys():
-                z_data = df_goals_only[df_goals_only['Zone'] == zone]
+                z_data = df_goals[df_goals['Zone'] == zone]
                 count = len(z_data)
-                pct = (count / total_mål * 100) if total_mål > 0 else 0
-                top_scorer = z_data['PLAYER_NAME'].mode().iloc[0] if not z_data.empty else "-"
-                short_name = top_scorer.split(' ')[-1] if top_scorer != "-" else "-"
-                mål_zone_stats[zone] = {'count': count, 'pct': pct, 'top': top_scorer, 'short': short_name}
+                if count > 0:
+                    top_scorer = z_data['PLAYER_NAME'].mode().iloc[0]
+                    short_name = top_scorer.split(' ')[-1]
+                    pct = (count / total_goals * 100)
+                    z_stats[zone] = {'mål': count, 'pct': pct, 'top': top_scorer, 'short': short_name}
+                else:
+                    z_stats[zone] = {'mål': 0, 'pct': 0, 'top': '-', 'short': '-'}
 
             with col_m_ctrl:
-                st.markdown("**MÅL-OVERSIGT PR. ZONE**")
-                m_df = pd.DataFrame([
-                    {'Zone': k, 'Mål': v['count'], 'Pct': f"{v['pct']:.1f}%", 'Topscorer': v['top']}
-                    for k, v in mål_zone_stats.items() if v['count'] > 0
-                ]).sort_values('Mål', ascending=False)
-                
-                st.dataframe(m_df, hide_index=True, use_container_width=True)
-                st.info(f"Hvidovre har scoret {total_mål} mål i denne periode.")
+                st.markdown(f"**MÅL-ANALYSE ({total_goals} mål)**")
+                # Tabel der kun viser zoner med mål
+                summary_data = [
+                    {'Zone': z, 'Antal': s['mål'], 'Topscorer': s['top']} 
+                    for z, s in z_stats.items() if s['mål'] > 0
+                ]
+                st.dataframe(pd.DataFrame(summary_data).sort_values('Antal', ascending=False), 
+                             hide_index=True, use_container_width=True)
 
             with col_m_viz:
-                pitch_m = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+                pitch_m = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
                 fig_m, ax_m = pitch_m.draw(figsize=(8, 10))
                 ax_m.set_ylim(50, 105)
 
-                max_mål = max([v['count'] for v in mål_zone_stats.values()]) if total_mål > 0 else 1
-                cmap = plt.cm.YlOrRd 
+                max_mål = max([v['mål'] for v in z_stats.values()]) if total_goals > 0 else 1
+                cmap = plt.cm.YlOrRd
 
                 for name, b in ZONE_BOUNDS.items():
                     if b["y"][1] <= 50: continue
-                    y_min_p = max(b["y"][0], 50)
-                    rect_h = b["y"][1] - y_min_p
+                    y_start = max(b["y"][0], 50)
+                    h = b["y"][1] - y_start
+                    w = b["x"][1] - b["x"][0]
                     
-                    s = mål_zone_stats[name]
-                    color_val = s['count'] / max_mål
-                    # Vi bruger en rød-gylden skala til mål
-                    face_color = cmap(color_val) if s['count'] > 0 else '#f9f9f9'
+                    s = z_stats[name]
+                    face_c = cmap(s['mål'] / max_mål) if s['mål'] > 0 else '#f9f9f9'
                     
-                    rect = patches.Rectangle((b["x"][0], y_min_p), b["x"][1]-b["x"][0], rect_h,
-                                     edgecolor='black', linestyle='--', facecolor=face_color, alpha=0.8)
+                    rect = patches.Rectangle((b["x"][0], y_start), w, h, 
+                                           facecolor=face_c, alpha=0.8, edgecolor='black', linestyle='--')
                     ax_m.add_patch(rect)
 
-                    # Tekst i zonen: Navn, Antal, Topscorer
-                    z_label = (f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n"
-                               f"{s['count']} mål\n"
-                               f"{s['short']}")
-                    
-                    ax_m.text(b["x"][0] + (b["x"][1]-b["x"][0])/2, y_min_p + rect_h/2, 
-                              z_label, ha='center', va='center', fontsize=8,
-                              color='black' if color_val < 0.6 else 'white')
-
+                    if s['mål'] > 0:
+                        txt = f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n{int(s['mål'])} mål\n{s['short']}"
+                        ax_m.text(b["x"][0] + w/2, y_start + h/2, txt, 
+                                ha='center', va='center', fontsize=8,
+                                color='black' if (s['mål']/max_mål) < 0.6 else 'white')
+                
                 st.pyplot(fig_m)
