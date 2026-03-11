@@ -22,7 +22,7 @@ def vis_side(df_raw=None):
 
     # --- 1. HJÆLPEFUNKTIONER & MAPPING ---
     # Vi bygger en bro mellem Opta UUID og Wyscout TEAM_WYID via team_mapping.py
-    opta_to_wyid = {info['opta_uuid']: info['wyid'] for name, info in TEAMS.items() if 'opta_uuid' in info}
+    opta_to_wyid = {info['opta_uuid']: info['team_wyid'] for name, info in TEAMS.items() if 'opta_uuid' in info}
 
     def get_logo_url(opta_uuid, team_name):
         wy_id = opta_to_wyid.get(opta_uuid)
