@@ -33,7 +33,9 @@ def vis_side(dp):
     tab1, tab2 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP"])
 
     DOT_SIZE = 90 
-    LINE_WIDTH = 1.2
+    
+    # Dynamisk kolonnenavn tjek
+    player_col = 'ASSIST_PLAYER' if 'ASSIST_PLAYER' in df_assists.columns else 'ASSIST_PLAYER_NAME'
 
     # --- TAB 1: SPILLEROVERSIGT (STATISTIK) ---
     with tab1:
@@ -41,31 +43,31 @@ def vis_side(dp):
         
         # Aggregering af spillerdata
         spiller_stats = []
-        alle_spillere = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
+        alle_spillere = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
         
         for spiller in alle_spillere:
-            s_data = df_assists[df_assists['ASSIST_PLAYER'] == spiller]
+            s_data = df_assists[df_assists[player_col] == spiller]
             
-            # Her kan du tilføje xA hvis det findes i dit datasæt
-            total_assists = len(s_data)
-            # Find ud af hvor mange af disse der førte til mål (hvis din df har en mål-indikator)
-            # Her antager vi at 'df_assists' i sig selv er Key Passes/Assists
+            assists = len(s_data[s_data['NEXT_EVENT_TYPE'] == 16])
+            key_passes = len(s_data[s_data['NEXT_EVENT_TYPE'] != 16])
             
             spiller_stats.append({
                 "Spiller": spiller.split()[-1],
-                "Assists": total_assists,
-                "Primære Zoner": s_data['PASS_TYPE'].mode()[0] if 'PASS_TYPE' in s_data else "Open Play"
+                "Assists": assists,
+                "Chancer Skabt": key_passes,
+                "Total involveringer": len(s_data)
             })
         
         if spiller_stats:
-            df_table = pd.DataFrame(spiller_stats).sort_values("Assists", ascending=False)
+            df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Chancer Skabt"], ascending=False)
             
             st.dataframe(
                 df_table,
                 column_config={
                     "Spiller": st.column_config.TextColumn("Spiller"),
-                    "Assists": st.column_config.NumberColumn("Antal Assists", format="%d"),
-                    "Primære Zoner": st.column_config.TextColumn("Type")
+                    "Assists": st.column_config.NumberColumn("⚽ Assists", format="%d"),
+                    "Chancer Skabt": st.column_config.NumberColumn("👟 Key Passes", format="%d"),
+                    "Total involveringer": st.column_config.NumberColumn("Total", format="%d")
                 },
                 hide_index=True,
                 use_container_width=True
@@ -73,60 +75,57 @@ def vis_side(dp):
 
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
-        if df_assists.empty:
-            st.warning("⚠️ Ingen assists fundet.")
-        else:
-            col_viz_a, col_ctrl_a = st.columns([2.2, 1])
+        col_viz_a, col_ctrl_a = st.columns([2.2, 1])
+        
+        with col_ctrl_a:
+            spiller_liste_a = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
+            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
             
-            with col_ctrl_a:
-                # Sørg for at kolonnenavnet matcher din SQL (f.eks. ASSIST_PLAYER_NAME)
-                player_col = 'ASSIST_PLAYER_NAME' if 'ASSIST_PLAYER_NAME' in df_assists.columns else 'ASSIST_PLAYER'
-                
-                spiller_liste_a = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
-                v_a = st.selectbox("Vælg spiller (Assists)", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
-                
-                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists[player_col] == v_a]
-                
-                st.markdown(f"""
-                    <div class="stat-box">
-                        <div class="stat-label">
-                            <span class="legend-dot" style="background-color:{HIF_GOLD}; border:1px solid black;"></span>
-                            Goal Assists
-                        </div>
-                        <div class="stat-value">{len(df_a_vis)}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+            df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists[player_col] == v_a]
+            
+            # Statistik bokse
+            goals_count = len(df_a_vis[df_a_vis['NEXT_EVENT_TYPE'] == 16])
+            kp_count = len(df_a_vis[df_a_vis['NEXT_EVENT_TYPE'] != 16])
+            
+            st.markdown(f"""
+                <div class="stat-box" style="border-left-color: {HIF_GOLD}">
+                    <div class="stat-label"><span class="legend-dot" style="background-color:{HIF_GOLD}; border:1px solid black;"></span> Goal Assists</div>
+                    <div class="stat-value">{goals_count}</div>
+                </div>
+                <div class="stat-box" style="border-left-color: #888888">
+                    <div class="stat-label"><span class="legend-dot" style="background-color:white; border:1px solid #888888;"></span> Key Passes (Skud)</div>
+                    <div class="stat-value">{kp_count}</div>
+                </div>
+            """, unsafe_allow_html=True)
 
-            # Inde i din vis_side funktion under Tab 2 (ASSIST-MAP)
-            with col_viz_a:
-                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-                fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
+        with col_viz_a:
+            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+            fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
+            
+            if not df_a_vis.empty:
+                mask_goal = df_a_vis['NEXT_EVENT_TYPE'] == 16
+                df_goals = df_a_vis[mask_goal]
+                df_key_passes = df_a_vis[~mask_goal]
+
+                # 1. Key Passes (Hvide cirkler)
+                pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
+                                s=DOT_SIZE-20, color='white', edgecolors='#888888', 
+                                linewidth=1, alpha=0.7, ax=ax_a, zorder=2)
                 
-                if not df_a_vis.empty:
-                    # 1. Opdel data
-                    mask_goal = df_a_vis['NEXT_EVENT_TYPE'] == 16
-                    df_goals = df_a_vis[mask_goal]
-                    df_key_passes = df_a_vis[~mask_goal]
+                # 2. Assists (Guld cirkler)
+                pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', 
+                                linewidth=1.5, ax=ax_a, zorder=3)
+                
+                # 3. Alle pile (svage)
+                pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                               df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
+                               color='#888888', alpha=0.2, width=1, ax=ax_a, zorder=1)
+                
+                # 4. Highlight mål-pile
+                if not df_goals.empty:
+                    pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                   df_goals['SHOT_X'], df_goals['SHOT_Y'], 
+                                   color=HIF_GOLD, alpha=0.8, width=2, ax=ax_a, zorder=1)
             
-                    # 2. Tegn Key Passes (Aflevering til skud - Grå)
-                    pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
-                                    s=DOT_SIZE-20, color='white', edgecolors='#888888', 
-                                    linewidth=1, alpha=0.7, ax=ax_a, zorder=2, label='Key Pass')
-                    
-                    # 3. Tegn Assists (Aflevering til mål - Guld)
-                    pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
-                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', 
-                                    linewidth=1.5, ax=ax_a, zorder=3, label='Assist')
-                    
-                    # 4. Tegn pile for alle (men lysere for skud)
-                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                                   color='#888888', alpha=0.3, width=1, ax=ax_a, zorder=1)
-                    
-                    # Highlight pile for mål
-                    if not df_goals.empty:
-                        pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
-                                       df_goals['SHOT_X'], df_goals['SHOT_Y'], 
-                                       color=HIF_GOLD, alpha=0.8, width=2, ax=ax_a, zorder=1)
-            
-                st.pyplot(fig_a)
+            st.pyplot(fig_a)
