@@ -19,8 +19,7 @@ def vis_side(dp):
             .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
             .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
             .legend-item { font-size: 0.85rem; color: #333; margin-bottom: 6px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 2px; }
-            /* Styling til statisk tabel for at matche appens look */
-            .stTable td { font-size: 0.9rem !important; }
+            .stTable td { font-size: 0.85rem !important; padding: 4px !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -30,28 +29,31 @@ def vis_side(dp):
         st.caption("Ingen data fundet.")
         return
 
-    # Data forberedelse
+    # Forberedelse af data til beregninger
     df_assists['is_assist'] = (df_assists['NEXT_EVENT_TYPE'] == 16).astype(int)
     df_assists['is_key_pass'] = df_assists['NEXT_EVENT_TYPE'].isin([13, 14, 15]).astype(int)
 
     player_col = 'ASSIST_PLAYER'
+    
+    # --- TAB 1: GENINDFØRSEL AF ALLE KOLONNER ---
     df_table = df_assists.groupby(player_col).agg(
         Assists=('is_assist', 'sum'),
         Key_Passes=('is_key_pass', 'sum'),
+        Corner_Assists=('IS_CORNER', 'sum'),
+        Cross_Assists=('IS_CROSS', 'sum'),
         Progressive=('IS_PROGRESSIVE', 'sum')
     ).reset_index()
 
     df_table = df_table.sort_values(["Assists", "Key_Passes"], ascending=False)
-    df_table.columns = ["Spiller", "Assists", "Key Passes", "Progressive"]
+    df_table.columns = ["Spiller", "Assists", "Key Passes", "Corner Assists", "Cross Assists", "Progressive"]
 
     tab1, tab2 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP"])
 
-    # --- TAB 1: SPILLEROVERSIGT (STATISK) ---
     with tab1:
-        # st.table viser ALTID alle rækker og kan ikke scrolle internt
+        st.caption("Sæsonstatistik (Fuld visning)")
         st.table(df_table)
 
-    # --- TAB 2: ASSIST-MAP ---
+    # --- TAB 2: ASSIST-MAP MED SHOT ASSISTS ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         
@@ -63,11 +65,18 @@ def vis_side(dp):
             if v_a != "Hvidovre IF":
                 df_filtered = df_filtered[df_filtered[player_col] == v_a]
             
-            # Stats bokse
+            # Stats bokse - Viser nu begge typer
+            g_count = df_filtered['is_assist'].sum()
+            k_count = df_filtered['is_key_pass'].sum()
+            
             st.markdown(f"""
                 <div class="stat-box">
                     <div class="stat-label">Goal Assists</div>
-                    <div class="stat-value">{df_filtered['is_assist'].sum()}</div>
+                    <div class="stat-value">{g_count}</div>
+                </div>
+                <div class="stat-box" style="border-left-color: #888888">
+                    <div class="stat-label">Shot Assists (Key Passes)</div>
+                    <div class="stat-value">{k_count}</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -75,7 +84,7 @@ def vis_side(dp):
             if not df_filtered.empty and 'GOAL_SCORER' in df_filtered.columns:
                 st.write("---")
                 st.markdown("**TOP 5: MODTAGERE**")
-                # Vi tæller kun succesfulde afslutninger (assists + key passes)
+                # Vi tæller hvem der modtager bolden ved både skud og mål
                 top_targets = df_filtered[df_filtered['GOAL_SCORER'].notna()]['GOAL_SCORER'].value_counts().head(5)
                 
                 for name, count in top_targets.items():
@@ -92,20 +101,20 @@ def vis_side(dp):
             fig_a, ax_a = pitch_a.draw(figsize=(8, 6))
             
             if not df_filtered.empty:
-                # Key Passes
+                # 1. Tegn Shot Assists (Key Passes) - Grå pile
                 df_kp = df_filtered[df_filtered['is_key_pass'] == 1]
                 if not df_kp.empty:
                     pitch_a.arrows(df_kp['PASS_START_X'], df_kp['PASS_START_Y'], 
                                    df_kp['SHOT_X'], df_kp['SHOT_Y'], 
-                                   color='#888888', alpha=0.2, width=1, ax=ax_a)
+                                   color='#888888', alpha=0.3, width=1.5, headwidth=3, ax=ax_a, label='Shot Assist')
                 
-                # Assists
+                # 2. Tegn Goal Assists - Guld pile
                 df_gs = df_filtered[df_filtered['is_assist'] == 1]
                 if not df_gs.empty:
                     pitch_a.arrows(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], 
                                    df_gs['SHOT_X'], df_gs['SHOT_Y'], 
-                                   color=HIF_GOLD, alpha=0.9, width=3, headwidth=5, ax=ax_a)
+                                   color=HIF_GOLD, alpha=0.9, width=3, headwidth=5, ax=ax_a, zorder=2)
                     pitch_a.scatter(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], 
-                                    marker='o', s=90, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
+                                    marker='o', s=100, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
 
             st.pyplot(fig_a, use_container_width=True)
