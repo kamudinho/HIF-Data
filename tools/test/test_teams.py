@@ -171,6 +171,6 @@ def vis_side(df_raw=None):
         with s1: 
             draw_h2h_chart(team1, team2, ['P', 'V', 'M+'], ['Point', 'Sejre', 'Mål'])
         with s2: 
-            draw_h2h_chart(team1, team2, ['SHOTS', 'XG', 'TOUCHESINBOX'], ['Skud', 'xG', 'Box Touches'])
+            draw_h2h_chart(team1, team2, ['SHOTS', 'XG', 'TOUCHINBOX'], ['Skud', 'xG', 'Touches'])
         with s3: 
             draw_h2h_chart(team1, team2, ['PPDA', 'PROG_PASS_OK'], ['PPDA (Pres)', 'Prog. Passes'])
