@@ -61,8 +61,22 @@ def vis_side(dp):
         if spiller_stats:
             df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Key Passes"], ascending=False)
             
-            # Vi bruger st.table i stedet for st.dataframe for at undgå scroll
-            st.table(df_table)
+            # Beregn højden: (antal rækker + 1 til overskrift) * 35 pixels + lidt buffer
+            # Dette tvinger containeren til at være præcis så lang som tabellen
+            calc_height = (len(df_table) + 1) * 35 + 3
+            
+            st.dataframe(
+                df_table,
+                column_config={
+                    "Spiller": st.column_config.TextColumn("Spiller"),
+                    "Assists": st.column_config.NumberColumn("Assists", format="%d"),
+                    "Key Passes": st.column_config.NumberColumn("Key Passes", format="%d"),
+                    "Total": st.column_config.NumberColumn("Total", format="%d")
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=calc_height  # Her tvinger vi den
+            )
             
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
