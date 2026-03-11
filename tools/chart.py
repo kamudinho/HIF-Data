@@ -53,7 +53,6 @@ def fetch_team_data():
 
 def vis_side(*args, **kwargs):
     # Ingen subheader her - direkte til titlen
-    st.title("📊 Hvidovre App: Performance Profiler")
 
     if "team_stats_1div" not in st.session_state:
         with st.spinner("Henter data..."):
