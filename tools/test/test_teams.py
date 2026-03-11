@@ -96,8 +96,7 @@ def vis_side(df_raw=None):
         query = f"""
         SELECT 
             t.TEAMNAME,
-            adv.XG, adv.SHOTS,
-            md.RECOVERIES, md.INTERCEPTIONS,
+            adv.XG, adv.SHOTS, md.INTERCEPTIONS,
             mp.PASSES
         FROM {DB}.WYSCOUT_TEAMMATCHES tm
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
@@ -148,7 +147,7 @@ def vis_side(df_raw=None):
                 # Vi har fjernet TOUCHINBOX herunder også
                 cats = {
                     "Angreb": (['XG', 'SHOTS'], ['xG', 'Skud']),
-                    "Forsvar": (['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions']),
+                    "Forsvar": (['INTERCEPTIONS'], ['Interceptions']),
                     "Spilopbygning": (['PASSES'], ['Afleveringer'])
                 }
                 
