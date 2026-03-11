@@ -71,7 +71,7 @@ def vis_side(dp):
     pivot_stats['SELECT_NAME'] = pivot_stats['NAVN']
 
     # --- 4. TABS ---
-    tab_squad, tab_single = st.tabs(["HOLDOVERSIGT", "SPILLERPERFORMANCE"])
+    tab_squad, tab_single = st.tabs(["SPILLEROVERSIGT", "SPILLERPERFORMANCE"])
 
     with tab_squad:        
         # Vi definerer de kolonner vi vil vise og sorterer efter xG som standard
