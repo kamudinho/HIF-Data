@@ -66,7 +66,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             )
             SELECT 
                 PLAYER_OPTAUUID AS ASSIST_PLAYER_UUID,
-                PLAYER_NAME AS ASSIST_PLAYER_NAME,
+                PLAYER_NAME AS ASSIST_PLAYER,
                 EVENT_X AS PASS_START_X,
                 EVENT_Y AS PASS_START_Y,
                 SHOT_X,
