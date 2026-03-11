@@ -178,27 +178,26 @@ def vis_side(*args, **kwargs):
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # 2. Sort label-tekst placeret UDEN FOR boksene
-            # Vi øger radius til 165 for at få den væk fra boksene
+            # 2. Sort label-tekst (Radius 165)
             label_y = 165 
             
-            # ROTATIONS-LOGIK: 
-            # Vi sørger for at teksten vender rigtigt, så man ikke skal stå på hovedet for at læse bunden
-            rotation = angle_deg if 270 > angle_deg > 90 else angle_deg + 180
+            # --- NY ROTATIONS-LOGIK ---
+            # Vi beregner rotationen så teksten altid vender "opad"
+            # Hvis vinklen er mellem 90 og 270 grader (bunden), flipper vi teksten 180 grader
+            # Men vi trækker 90 grader fra for at gøre den tangentiel til cirklen
+            rotation = angle_deg - 90 
+            if 90 <= angle_deg <= 270:
+                rotation += 180
             
-            # Vi bruger ha='center' og va='center' for at holde det snorlige
             ax.text(angle, label_y, label, 
                     ha='center', va='center', 
                     fontsize=8, fontweight='black', 
                     color='black', alpha=0.8,
-                    rotation=rotation, rotation_mode='anchor',
+                    rotation=rotation, 
+                    rotation_mode='anchor',
                     gid='overlay_text')
 
-        # --- FIGUR-JUSTERING (VIGTIG FOR WHITESPACE) ---
-        # Vi sætter LIMIT_Y lidt højere nu, så der er plads til de nye ydre labels
+        # --- FIGUR-JUSTERING ---
         ax.set_ylim(0, 185)
-        
-        # Ryk hele chartet op i toppen af kolonnen
         plt.subplots_adjust(left=0.05, right=0.95, top=0.98, bottom=0.02)
-
         st.pyplot(fig, use_container_width=True)
