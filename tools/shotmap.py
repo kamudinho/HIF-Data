@@ -59,7 +59,7 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLER", "SKUD", "DZ", "ZONER (S)", "ZONER (M)"])
 
-    # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 1, 2, 3 (Beholdes som de er) ---
     with tabs[0]:
         stats = []
         for p in sorted(df_skud['PLAYER_NAME'].unique()):
@@ -73,14 +73,8 @@ def vis_side(dp):
                 "DZ-Andel": (dzs/s*100)
             })
         df_f = pd.DataFrame(stats).sort_values("S", ascending=False)
-        st.dataframe(df_f, use_container_width=True, height=(len(df_f) + 1) * 36, hide_index=True,
-            column_config={
-                "Konv%": st.column_config.NumberColumn("Konv%", format="%.1f%%"),
-                "DZ%": st.column_config.NumberColumn("DZ-Konv%", format="%.1f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-            })
+        st.dataframe(df_f, use_container_width=True, height=(len(df_f) + 1) * 36, hide_index=True)
 
-    # --- TAB 2: AFSLUTNINGER (Rettet Konvertering) ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -88,7 +82,6 @@ def vis_side(dp):
             d_v = df_skud if sel_p == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
-            
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
@@ -99,7 +92,6 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 3: DZ (Rettet med cirkler) ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -108,7 +100,6 @@ def vis_side(dp):
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-            
             st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {DZ_COLOR};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
@@ -120,39 +111,60 @@ def vis_side(dp):
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 4 & 5: ZONER (Filtreret Zone 8) ---
-    def zone_plot(data, is_m):
-        c1, c2 = st.columns([2, 1])
-        z_map = {}
-        for z in ZONE_BOUNDARIES.keys():
-            zd = data[data['Zone'] == z]
-            cnt = len(zd)
-            top = zd['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
-            z_map[z] = (cnt, top)
+    # --- TAB 4 & 5: ZONER (OPDATERET LOGIK) ---
+    def zone_plot_enhanced(data, is_m):
+        col_viz, col_ctrl = st.columns([1.8, 1])
+        total_count = len(data)
         
-        with c2:
-            st.write(f"**{'Mål' if is_m else 'Skud'} pr. Zone**")
-            # Fjerner Zone 8 fra tabellen så den ikke fylder
-            df_zone_vis = pd.DataFrame([{"Zone": k, "Antal": v[0]} for k, v in z_map.items() if v[0] > 0 and k != "Zone 8"])
-            st.dataframe(df_zone_vis, hide_index=True)
-        
-        with c1:
+        zone_stats = {}
+        for zone, b in ZONE_BOUNDARIES.items():
+            z_data = data[data['Zone'] == zone]
+            cnt = len(z_data)
+            pct = (cnt / total_count * 100) if total_count > 0 else 0
+            top_p = z_data['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
+            zone_stats[zone] = {'cnt': cnt, 'pct': pct, 'top': top_p}
+
+        with col_ctrl:
+            label = "Mål" if is_m else "Skud"
+            st.markdown(f"**DETALJERET {label.upper()}SOVERSIGT**")
+            # Filtrer Zone 8 fra tabellen
+            z_df = pd.DataFrame([
+                {'Zone': k, label: v['cnt'], '%': f"{v['pct']:.1f}%", 'Top': v['top']}
+                for k, v in zone_stats.items() if v['cnt'] > 0 and k != "Zone 8"
+            ]).sort_values(label, ascending=False)
+            st.dataframe(z_df, hide_index=True, use_container_width=True)
+
+        with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-            fig, ax = pitch.draw()
-            ax.set_ylim(55, 105) # Fokus på angrebszoner
-            max_val = max([v[0] for k, v in z_map.items() if k != "Zone 8"]) if not df_zone_vis.empty else 1
-            cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
+            fig, ax = pitch.draw(figsize=(8, 10))
+            ax.set_ylim(55, 105)
             
+            # Find max val (uden Zone 8) til colormap
+            max_v = max([v['cnt'] for k, v in zone_stats.items() if k != "Zone 8"]) if total_count > 0 else 1
+            cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
+
             for name, b in ZONE_BOUNDARIES.items():
-                if b["y_max"] < 70: continue
-                val, top = z_map[name]
+                if b["y_max"] < 55: continue
+                
+                stats = zone_stats[name]
+                color_val = stats['cnt'] / max_v if max_v > 0 else 0
+                face_color = cmap(color_val) if stats['cnt'] > 0 else '#f9f9f9'
+                
                 rect = patches.Rectangle((b["x_min"], b["y_min"]), b["x_max"]-b["x_min"], b["y_max"]-b["y_min"], 
-                                         facecolor=cmap(val/max_val) if val > 0 else '#f9f9f9', alpha=0.6, edgecolor='black', linestyle='--')
+                                         facecolor=face_color, alpha=0.7, edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
-                if val > 0:
-                    ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, b["y_min"]+(b["y_max"]-b["y_min"])/2, 
-                            f"{name.replace('Zone ', 'Z')}\n{val}\n{top}", ha='center', va='center', fontsize=7, fontweight='bold')
+                
+                if stats['cnt'] > 0:
+                    z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n"
+                              f"{stats['cnt']} ({stats['pct']:.1f}%)\n"
+                              f"{stats['top']}")
+                    
+                    ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, 
+                            b["y_min"] + (b["y_max"] - b["y_min"])/2, 
+                            z_text, ha='center', va='center', fontsize=7,
+                            color='black' if color_val < 0.5 else 'white',
+                            linespacing=1.5)
             st.pyplot(fig)
 
-    with tabs[3]: zone_plot(df_skud, False)
-    with tabs[4]: zone_plot(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
+    with tabs[3]: zone_plot_enhanced(df_skud, False)
+    with tabs[4]: zone_plot_enhanced(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
