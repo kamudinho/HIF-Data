@@ -30,7 +30,7 @@ def vis_side(dp):
         st.caption("Ingen data fundet.")
         return
 
-    # --- 2. DINE ZONE DEFINITIONER (METER) ---
+    # --- 2. DINE ZONE DEFINITIONER (METER FRA PITCH_ANALYSIS.PY) ---
     PITCH_L, PITCH_W = 105, 68
     C_MIN, C_MAX = (PITCH_W - 18.32)/2, (PITCH_W + 18.32)/2
     W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
@@ -64,7 +64,7 @@ def vis_side(dp):
 
     tab1, tab2, tab3 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP", "ASSIST-ZONER"])
 
-    # --- TAB 1 & 2 (Beholdes intakte) ---
+    # --- TAB 1 & 2 (Uændret) ---
     with tab1:
         df_table = df_assists.groupby('ASSIST_PLAYER').agg(
             Assists=('is_assist', 'sum'), Key_Passes=('is_key_pass', 'sum'),
@@ -80,7 +80,7 @@ def vis_side(dp):
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         with col_ctrl_a:
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table['ASSIST_PLAYER'].tolist()), key="sb_a2")
+            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table['ASSIST_PLAYER'].tolist()), key="sb_tab2")
             df_f = df_assists[df_assists['ASSIST_PLAYER'] == v_a] if v_a != "Hvidovre IF" else df_assists
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Goal Assists</div><div class="stat-value">{df_f["is_assist"].sum()}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color: #888888"><div class="stat-label"><span class="icon-circle" style="background-color: #888888;"></span>Shot Assists</div><div class="stat-value">{df_f["is_key_pass"].sum()}</div></div>', unsafe_allow_html=True)
@@ -93,7 +93,7 @@ def vis_side(dp):
             pitch.scatter(df_gs.PASS_START_X, df_gs.PASS_START_Y, s=100, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=3)
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB 3: ASSIST-ZONER (Med heatmap og tabel til højre) ---
+    # --- TAB 3: ASSIST-ZONER (DINE PRÆCISE ZONER + TOP SPILLER) ---
     with tab3:
         col_viz_z, col_ctrl_z = st.columns([1.8, 1])
         
@@ -105,18 +105,23 @@ def vis_side(dp):
             z_data = df_goals[df_goals['Zone'] == zone]
             count = len(z_data)
             pct = (count / total_goals * 100) if total_goals > 0 else 0
+            # Finder spilleren med flest assists i denne zone
             top_p = z_data['ASSIST_PLAYER'].mode().iloc[0] if not z_data.empty else "-"
             zone_stats[zone] = {'count': count, 'pct': pct, 'top': top_p}
 
         with col_ctrl_z:
             st.markdown("**DETALJERET ZONEOVERSIGT**")
-            z_df = pd.DataFrame.from_dict(zone_stats, orient='index').reset_index()
-            z_df.columns = ['Zone', 'Assists', 'Pct', 'Top Spiller']
-            # Vis kun zoner med aktivitet og sorter efter antal
-            st.dataframe(z_df[z_df['Assists'] > 0].sort_values('Assists', ascending=False), 
-                         hide_index=True, use_container_width=True)
+            # Konverter dict til DataFrame for visning
+            z_df = pd.DataFrame([
+                {'Zone': k, 'Assists': v['count'], 'Pct': f"{v['pct']:.1f}%", 'Top Spiller': v['top']}
+                for k, v in zone_stats.items()
+                if v['count'] > 0
+            ]).sort_values('Assists', ascending=False)
             
-            st.info("Kortet viser Goal Assists fordelt på dine definerede zoner (Z1-Z8).")
+            # Bruger st.table eller st.dataframe for at vise topspillere tydeligt
+            st.dataframe(z_df, hide_index=True, use_container_width=True)
+            
+            st.caption("Oversigten viser hvem der har leveret flest målgivende afleveringer fra hver zone.")
 
         with col_viz_z:
             max_val = max([v['count'] for v in zone_stats.values()]) if total_goals > 0 else 1
@@ -140,11 +145,11 @@ def vis_side(dp):
                                  edgecolor='black', linestyle='--', facecolor=face_color, alpha=0.7)
                 ax_z.add_patch(rect)
 
-                # Tekst-label i zonen
-                z_label = f"Z{name.split(' ')[1]}\n{stats['count']}"
+                # Tekst i selve zonen (Zone Navn + Antal)
+                z_label = f"{name.replace('Zone ', 'Z')}\n{stats['count']}"
                 ax_z.text(bounds["x"][0] + (bounds["x"][1] - bounds["x"][0])/2, 
                           y_min_d + rect_h/2, z_label, 
-                          ha='center', va='center', fontsize=8, fontweight='bold', 
+                          ha='center', va='center', fontsize=9, fontweight='bold', 
                           color='black' if color_val < 0.6 else 'white')
 
             st.pyplot(fig_z, use_container_width=True)
