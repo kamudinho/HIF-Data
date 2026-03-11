@@ -3,25 +3,25 @@ import pandas as pd
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
     
     DB = "KLUB_HVIDOVREIF.AXIS"
+    # Her definerer vi navnet korrekt
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
-    "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
-    "Superliga": "29actv1ohj8r10kd9hu0jnb0n"  # Opdateret baseret på din dump
+        "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
+        "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
     }
     
-    # Hent den korrekte UUID baseret på dit valg i appen
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
 
-    # Denne subquery bruger nu de præcise UUID'er, hvilket sikrer at data findes
+    # Central subquery til genbrug
     match_id_subquery = f"""
         SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
+    # Filtre (Her bruger vi konsekvent HIF_UUID)
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
-    match_id_subquery = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'"
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     
     return {
@@ -57,7 +57,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     EVENT_TYPEID,
                     MATCH_OPTAUUID,
                     EVENT_CONTESTANT_OPTAUUID,
-                    -- Vi kigger på den NÆSTE hændelse i rækkefølgen for at se om det er et skud
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as NEXT_EVENT_TYPE,
                     LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_X,
                     LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_Y
@@ -73,9 +72,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SHOT_Y,
                 MATCH_OPTAUUID
             FROM OrderedEvents
-            WHERE EVENT_TYPEID = 1                 -- Den nuværende hændelse er en aflevering
-            AND NEXT_EVENT_TYPE IN (13, 14, 15, 16) -- Næste hændelse er et skud (mål, forsøg, på overligger osv.)
-            {f"AND EVENT_CONTESTANT_OPTAUUID = '{hif_id}'" if hif_only else ""}
+            WHERE EVENT_TYPEID = 1
+            AND NEXT_EVENT_TYPE IN (13, 14, 15, 16) 
+            {hif_filter_event}  -- HER VAR FEJLEN (Nu bruger vi hif_filter_event variablen)
         """,
         
         "opta_team_stats": f"""
