@@ -70,6 +70,7 @@ def vis_side(dp):
                     "Total involveringer": st.column_config.NumberColumn("Total", format="%d")
                 },
                 hide_index=True,
+                height=table_height,
                 use_container_width=True
             )
 
