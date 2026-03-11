@@ -35,7 +35,7 @@ def vis_side(dp):
 
     # --- TAB 1: SPILLEROVERSIGT ---
     with tab1:
-        st.caption("Assist & Kreativitet (Inkl. Dødbolde og Progressive)")
+        st.caption("Passes og assists")
         
         spiller_stats = []
         alle_spillere = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
@@ -58,10 +58,10 @@ def vis_side(dp):
             
             spiller_stats.append({
                 "Spiller": spiller.split()[-1],
-                "A": assists,
-                "KP": key_passes,
-                "Pas.": passninger,
-                "Prog.": int(fremad)
+                "Assists": assists,
+                "Key Passes": key_passes,
+                "Pasninger": passninger,
+                "Fremadrettede (+10 m)": int(fremad)
             })
         
         if spiller_stats:
