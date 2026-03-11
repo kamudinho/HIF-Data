@@ -172,7 +172,6 @@ def vis_side(dp):
         if df_skud.empty:
             st.info("Ingen data fundet til statistik.")
         else:
-            st.subheader("Danger Zone Effektivitet")
             
             stats_list = []
             spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
@@ -181,48 +180,55 @@ def vis_side(dp):
                 s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
                 s_dz = s_data[s_data['IS_DZ_GEO']]
                 
-                # Vi beregner alle de ønskede metrikker
+                # Grunddata
                 total_skud = len(s_data)
                 skud_dz = len(s_dz)
                 total_maal = len(s_data[s_data['EVENT_TYPEID'] == 16])
                 maal_dz = len(s_dz[s_dz['EVENT_TYPEID'] == 16])
-                dz_andel = (skud_dz / total_skud * 100) if total_skud > 0 else 0
                 
-                if total_skud > 0: # Vi viser alle spillere der har skudt
+                # Beregninger (sikret mod division med nul)
+                dz_andel = (skud_dz / total_skud * 100) if total_skud > 0 else 0
+                konv_total = (total_maal / total_skud * 100) if total_skud > 0 else 0
+                konv_dz = (maal_dz / skud_dz * 100) if skud_dz > 0 else 0
+                
+                if total_skud > 0:
                     efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
                     stats_list.append({
                         "Spiller": efternavn, 
                         "Skud": int(total_skud),
-                        "Skud i DZ": int(skud_dz),
                         "Mål": int(total_maal),
+                        "Konv. %": konv_total,
+                        "Skud i DZ": int(skud_dz),
                         "Mål i DZ": int(maal_dz),
-                        "DZ %": dz_andel
+                        "DZ Konv. %": konv_dz,
+                        "DZ Andel": dz_andel
                     })
             
             if stats_list:
                 df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
                 
-                # For at se "hele tabellen" uden scrollbar internt, kan vi beregne højden 
-                # eller bare sætte den tilstrækkelig højt.
-                table_height = min(len(df_table) * 35 + 40, 800) 
+                # Beregn højde så hele tabellen vises (ca. 35px pr række + header)
+                table_height = (len(df_table) + 1) * 35 + 2
 
                 st.dataframe(
                     df_table,
                     column_config={
                         "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
-                        "Skud": st.column_config.NumberColumn("Alle Skud", format="%d"),
-                        "Skud i DZ": st.column_config.NumberColumn("Skud i DZ", format="%d", help="Afslutninger i feltet"),
-                        "Mål": st.column_config.NumberColumn("Alle Mål", format="%d"),
-                        "Mål i DZ": st.column_config.NumberColumn("Mål i DZ", format="%d"),
-                        "DZ %": st.column_config.ProgressColumn(
-                            "DZ Andel", 
-                            help="Hvor stor en procentdel af spillerens samlede skud er i DZ?",
+                        "Skud": st.column_config.NumberColumn("Skud", format="%d"),
+                        "Mål": st.column_config.NumberColumn("Mål", format="%d"),
+                        "Konv. %": st.column_config.NumberColumn("Konv. %", format="%.1f%%", help="Generel konverteringsrate"),
+                        "Skud i DZ": st.column_config.NumberColumn("Skud DZ", format="%d"),
+                        "Mål i DZ": st.column_config.NumberColumn("Mål DZ", format="%d"),
+                        "DZ Konv. %": st.column_config.NumberColumn("DZ Konv. %", format="%.1f%%", help="Konverteringsrate inde i Danger Zone"),
+                        "DZ Andel": st.column_config.ProgressColumn(
+                            "DZ Andel %", 
+                            help="Hvor stor en del af spillerens skud er i DZ?",
                             format="%.1f%%",
                             min_value=0,
                             max_value=100
                         )
                     },
                     hide_index=True,
-                    height=table_height, # Dynamisk højde så du ser det hele
+                    height=table_height,
                     use_container_width=True
                 )
