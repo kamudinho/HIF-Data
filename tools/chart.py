@@ -20,11 +20,10 @@ def fetch_wyscout_data():
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     
-    # Vi henter specifikt de kolonner, du har i din tabel
     query = """
     SELECT 
         TEAM_WYID, COMPETITION_WYID, MATCHES,
-        GOALS, SHOTS, XGSHOT as XG, 
+        GOALS, SHOTS, XGSHOT, 
         PASSES, SUCCESSFULPASSES,
         DEFENSIVEDUELS, DEFENSIVEDUELSWON,
         INTERCEPTIONS, TOUCHINBOX
@@ -32,8 +31,21 @@ def fetch_wyscout_data():
     WHERE SEASON_WYID = 188330 
     AND COMPETITION_WYID = 328
     """
+    
     df_res = conn.query(query)
-    return pd.DataFrame(df_res)
+    df = pd.DataFrame(df_res)
+    
+    # FIX: Tving alle kolonnenavne til små bogstaver, 
+    # så de matcher resten af din logik (df['goals'] osv.)
+    df.columns = [col.lower() for col in df.columns]
+    
+    # FIX: Snowflake returnerer nogle gange kolonnenavne med omdøbte aliaser.
+    # Da du bruger 'XGSHOT as XG' i din SQL, men kalder den 'xgshot' i Snowflake,
+    # så lad os sikre os at 'xg' eksisterer:
+    if 'xgshot' in df.columns:
+        df = df.rename(columns={'xgshot': 'xg'})
+        
+    return df
 
 def vis_side(*args, **kwargs):
     
