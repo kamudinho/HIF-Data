@@ -13,24 +13,29 @@ DZ_COLOR = '#1f77b4'
 hif_id = TEAMS["Hvidovre"]["opta_uuid"]
 
 def vis_side(dp):
+    # CSS der tvinger dataframe til at fylde det hele og fjerner scroll
     st.markdown("""
         <style>
             .stat-box { background-color: #f8f9fa; padding: 8px 12px; border-radius: 8px; border-left: 5px solid #b8860b; margin-bottom: 8px; }
             .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }
             .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
             .legend-item { font-size: 0.8rem; color: #444; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+            
+            /* Tvinger dataframe til at vise alle rækker uden scroll */
+            [data-testid="stDataFrame"] > div {
+                height: auto !important;
+                max-height: none !important;
+            }
         </style>
     """, unsafe_allow_html=True)
     
-    # Hent data
     df_assists = dp.get('assists', pd.DataFrame()).copy()
     
     if df_assists.empty:
         st.caption("Ingen data fundet for denne periode.")
         return
 
-    # Forbered data til tabel (Tab 1)
-    # Vi skal bruge disse kolonner til aggregering
+    # Data forberedelse
     df_assists['is_assist'] = (df_assists['NEXT_EVENT_TYPE'] == 16).astype(int)
     df_assists['is_key_pass'] = df_assists['NEXT_EVENT_TYPE'].isin([13, 14, 15]).astype(int)
 
@@ -49,10 +54,8 @@ def vis_side(dp):
     tab1, tab2 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP"])
     DOT_SIZE = 90 
 
-    # --- TAB 1: SPILLEROVERSIGT ---
     with tab1:
-        st.caption("Sæsonstatistik for Hvidovre IF baseret på Opta hændelser")
-        # Ingen height parameter = fuld størrelse uden scroll
+        # Ved at udelade 'height' og bruge CSS ovenfor fjernes scroll
         st.dataframe(
             df_table,
             column_config={
@@ -67,32 +70,19 @@ def vis_side(dp):
             use_container_width=True
         )
 
-    # --- TAB 2: ASSIST-MAP ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         
         with col_ctrl_a:
-            st.caption("Vælg spiller og filtre")
             spiller_liste = sorted(df_table["Spiller"].tolist())
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste, key="sb_assist")
             
-            show_corners = st.checkbox("Vis Hjørnespark", value=True)
-            show_crosses = st.checkbox("Vis Indlæg (Crosses)", value=True)
-            
-            # Filtrering logik
-            # 1. Start med at tillade gyldige koordinater eller hjørnespark
+            # Filtrering
             mask_valid = (df_assists['SHOT_X'] > 0) | (df_assists['IS_CORNER'] == 1)
             df_filtered = df_assists[mask_valid].copy()
             
-            # 2. Spiller filter
             if v_a != "Hvidovre IF":
                 df_filtered = df_filtered[df_filtered[player_col] == v_a]
-            
-            # 3. Qualifier filtre
-            if not show_corners:
-                df_filtered = df_filtered[df_filtered['IS_CORNER'] == 0]
-            if not show_crosses:
-                df_filtered = df_filtered[df_filtered['IS_CROSS'] == 0]
             
             # Stats bokse
             goals_count = df_filtered['is_assist'].sum()
@@ -109,40 +99,28 @@ def vis_side(dp):
                 </div>
             """, unsafe_allow_html=True)
 
-            if not df_filtered.empty and 'GOAL_SCORER' in df_filtered.columns:
-                st.write("---")
-                st.caption("Top Modtagere")
-                top_targets = df_filtered[df_filtered['GOAL_SCORER'].notna()]['GOAL_SCORER'].value_counts().head(3)
-                for name, count in top_targets.items():
-                    st.markdown(f"<div class='legend-item'> {name}: <b>{count}</b></div>", unsafe_allow_html=True)
-
         with col_viz_a:
             from mplsoccer import Pitch
             pitch_a = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
             fig_a, ax_a = pitch_a.draw(figsize=(8, 6))
             
             if not df_filtered.empty:
-                # 1. Key Passes (Grå)
+                # 1. Key Passes (Grå pile)
                 df_kp = df_filtered[df_filtered['is_key_pass'] == 1]
                 if not df_kp.empty:
                     pitch_a.arrows(df_kp['PASS_START_X'], df_kp['PASS_START_Y'], 
                                    df_kp['SHOT_X'], df_kp['SHOT_Y'], 
                                    color='#888888', alpha=0.2, width=1, ax=ax_a)
                 
-                # 2. Assists (Guld/Rød)
+                # 2. Assists (Guld pile - alle vises nu som cirkler uanset type)
                 df_gs = df_filtered[df_filtered['is_assist'] == 1]
-                for _, row in df_gs.iterrows():
-                    # Stjerne for hjørnespark, cirkel for åbent spil
-                    marker = '*' if row['IS_CORNER'] == 1 else 'o'
-                    size = DOT_SIZE + 60 if row['IS_CORNER'] == 1 else DOT_SIZE
-                    
-                    pitch_a.arrows(row['PASS_START_X'], row['PASS_START_Y'], 
-                                   row['SHOT_X'], row['SHOT_Y'], 
+                if not df_gs.empty:
+                    pitch_a.arrows(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], 
+                                   df_gs['SHOT_X'], df_gs['SHOT_Y'], 
                                    color=HIF_GOLD, alpha=0.9, width=3, headwidth=5, ax=ax_a)
                     
-                    pitch_a.scatter(row['PASS_START_X'], row['PASS_START_Y'], 
-                                    marker=marker, s=size, color=HIF_GOLD, 
+                    pitch_a.scatter(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], 
+                                    marker='o', s=DOT_SIZE, color=HIF_GOLD, 
                                     edgecolors='black', linewidth=1, ax=ax_a, zorder=3)
 
             st.pyplot(fig_a, use_container_width=True)
-            st.caption("Stjerne = Hjørnespark | Cirkel = Åbent spil / Indlæg")
