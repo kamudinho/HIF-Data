@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import base64
+import requests
+from io import BytesIO
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
@@ -23,11 +26,22 @@ def vis_side(df_raw=None):
 
     # --- 1. HJÆLPEFUNKTIONER ---
     def get_logo_url(opta_uuid):
-        # Checker både mapping og TEAMS fallback
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
+
+    @st.cache_data(ttl=3600)
+    def get_base64_logo(url):
+        """Konverterer logo-URL til Base64-streng for stabil visning i Plotly."""
+        if not url or not url.startswith('http'):
+            return url
+        try:
+            response = requests.get(url, timeout=5)
+            img = BytesIO(response.content)
+            return f"data:image/png;base64,{base64.b64encode(img.getvalue()).decode()}"
+        except Exception:
+            return url
 
     def get_logo_html(uuid):
         url = get_logo_url(uuid)
@@ -72,7 +86,7 @@ def vis_side(df_raw=None):
             else:
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    # Næste modstander
+    # Næste modstander logik
     next_opponents = {}
     df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
     if not df_upcoming.empty:
@@ -114,13 +128,13 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (RETTET TIL PLOTLY UDEN XSHIFT) ---
+    # --- 4. GRAF FUNKTION (MED BASE64 LOGOER) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
         
         if d1.empty or d2.empty:
-            st.info("Søgning på Wyscout data...")
+            st.info("Ingen Wyscout-data for valgte hold...")
             return
 
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
@@ -128,14 +142,16 @@ def vis_side(df_raw=None):
         
         u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
-        l1, l2 = get_logo_url(u1), get_logo_url(u2)
+        
+        # Konverterer URL til Base64 for grafen
+        l1 = get_base64_logo(get_logo_url(u1))
+        l2 = get_base64_logo(get_logo_url(u2))
         
         c1 = colors_dict.get(team1, {"primary": "#df003b"})
         c2 = colors_dict.get(team2, {"primary": "#0056a3"})
 
         fig = go.Figure()
         
-        # Søjlerne får tildelt offsetgroup for at Plotly ved de skal stå ved siden af hinanden
         fig.add_trace(go.Bar(
             name=team1, x=labels, y=v1, 
             marker_color=c1["primary"], 
@@ -154,49 +170,33 @@ def vis_side(df_raw=None):
             showlegend=False, offsetgroup=2
         ))
 
-        # LOGOER VIA LAYOUT IMAGES (Manuel beregning af X)
+        # LOGOER (Manuel beregning af X pga. manglende xshift support)
         for i in range(len(labels)):
-            # Ved barmode='group' med 2 søjler, ligger de ca. 0.17 til venstre/højre for center
             if l1:
                 fig.add_layout_image(dict(
-                    source=l1,
-                    xref="x", yref="y",
-                    x=i - 0.17, # Manuelt forskudt til venstre søjle
-                    y=v1[i],
+                    source=l1, xref="x", yref="y",
+                    x=i - 0.17, y=v1[i],
                     sizex=0.15, sizey=0.15,
                     xanchor="center", yanchor="bottom",
                     opacity=1, layer="above"
                 ))
             if l2:
                 fig.add_layout_image(dict(
-                    source=l2,
-                    xref="x", yref="y",
-                    x=i + 0.17, # Manuelt forskudt til højre søjle
-                    y=v2[i],
+                    source=l2, xref="x", yref="y",
+                    x=i + 0.17, y=v2[i],
                     sizex=0.15, sizey=0.15,
                     xanchor="center", yanchor="bottom",
                     opacity=1, layer="above"
                 ))
 
         fig.update_layout(
-            barmode='group',
-            height=400,
-            margin=dict(t=80, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(
-                visible=False, 
-                range=[0, max(max(v1), max(v2)) * 1.4], 
-                fixedrange=True
-            ),
-            xaxis=dict(
-                showgrid=False, 
-                tickfont=dict(size=13, family="Arial Black", color="white"),
-                fixedrange=True
-            )
+            barmode='group', height=400, margin=dict(t=80, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(visible=False, range=[0, max(max(v1), max(v2)) * 1.5], fixedrange=True),
+            xaxis=dict(showgrid=False, tickfont=dict(size=13, family="Arial Black", color="white"), fixedrange=True)
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        
+
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
