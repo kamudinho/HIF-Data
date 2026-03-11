@@ -180,5 +180,5 @@ def vis_side(df_raw=None):
         st.subheader("Sammenligning")
         s1, s2, s3 = st.tabs(["Resultater", "Offensiv", "Pres & Opbygning"])
         with s1: draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with s2: draw_h2h_chart(team1, team2, ['AVERAGE_SHOTS', 'M+'], ['Skud pr. kamp', 'Mål total'])
-        with s3: draw_h2h_chart(team1, team2, ['PPDA', 'AVERAGE_FORWARD_PASSES'], ['PPDA', 'Forward Passes'])
+        with s2: draw_h2h_chart(team1, team2, ['SHOTS', 'M+'], ['Skud pr. kamp', 'Mål total'])
+        with s3: draw_h2h_chart(team1, team2, ['PPDA', 'FORWARDPASSES'], ['PPDA', 'Forward Passes'])
