@@ -109,7 +109,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION ---
+    # --- 4. GRAF FUNKTION (OPDATERET MED ANNOTATIONS FOR LOGOER) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -121,26 +121,66 @@ def vis_side(df_raw=None):
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
         
+        # Hent UUID'er fra df_liga for at få fat i logoer
         u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color="#df003b", text=[f"{v:.2f}" for v in v1], textposition='auto', showlegend=False))
-        fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color="#0056a3", text=[f"{v:.2f}" for v in v2], textposition='auto', showlegend=False))
+        
+        # Hold 1 Bar
+        fig.add_trace(go.Bar(
+            name=team1, x=labels, y=v1, 
+            marker_color="#df003b", 
+            text=[f"{x:.2f}" for x in v1], 
+            textposition='auto', 
+            showlegend=False,
+            offsetgroup=1
+        ))
+        
+        # Hold 2 Bar
+        fig.add_trace(go.Bar(
+            name=team2, x=labels, y=v2, 
+            marker_color="#0056a3", 
+            text=[f"{x:.2f}" for x in v2], 
+            textposition='auto', 
+            showlegend=False,
+            offsetgroup=2
+        ))
 
+        # LOGOER VIA ANNOTATIONS (Dette virker næsten altid)
         for i in range(len(labels)):
-            if l1: fig.add_layout_image(dict(source=l1, x=i, y=v1[i], xanchor="center", yanchor="bottom", sizex=0.15, sizey=0.15, xref="x", yref="y", xshift=-25))
-            if l2: fig.add_layout_image(dict(source=l2, x=i, y=v2[i], xanchor="center", yanchor="bottom", sizex=0.15, sizey=0.15, xref="x", yref="y", xshift=25))
+            # Logo for Hold 1 (venstre søjle i gruppen)
+            if l1:
+                fig.add_annotation(
+                    x=i, y=v1[i],
+                    text=f' <img src="{l1}" width="30" height="30">',
+                    showarrow=False, ay=-20, xshift=-22, yanchor="bottom"
+                )
+            # Logo for Hold 2 (højre søjle i gruppen)
+            if l2:
+                fig.add_annotation(
+                    x=i, y=v2[i],
+                    text=f' <img src="{l2}" width="30" height="30">',
+                    showarrow=False, ay=-20, xshift=22, yanchor="bottom"
+                )
 
         fig.update_layout(
-            barmode='group', height=400, margin=dict(t=60, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(visible=False, range=[0, max(max(v1), max(v2)) * 1.3]),
-            xaxis=dict(showgrid=False, tickfont=dict(family="Arial Black"))
+            barmode='group',
+            height=450,
+            margin=dict(t=80, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(
+                visible=False, 
+                range=[0, max(max(v1), max(v2)) * 1.4] # Gør plads til logoer
+            ),
+            xaxis=dict(
+                showgrid=False, 
+                tickfont=dict(size=14, family="Arial Black", color="white")
+            )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
