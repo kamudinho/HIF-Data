@@ -65,7 +65,7 @@ def vis_side(dp):
             })
         
         if spiller_stats:
-            df_table = pd.DataFrame(spiller_stats).sort_values(["A", "KP", "Prog."], ascending=False)
+            df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Key Passes", "Fremadrettede (+10 m)"], ascending=False)
             calc_height = (len(df_table) + 1) * 35 + 5
             
             st.dataframe(
