@@ -71,10 +71,10 @@ def vis_side(dp):
                 "Spiller": p.split()[-1], 
                 "Skud": s, 
                 "Mål": m, 
-                "Konv%": (m/s*100) if s > 0 else 0,
-                "DZ-S": dzs, 
-                "DZ-M": dzm, 
-                "DZ-Konv%": (dzm/dzs*100) if dzs > 0 else 0,
+                "Konvertering%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": dzs, 
+                "DZ-Mål": dzm, 
+                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
                 "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
         
@@ -87,8 +87,8 @@ def vis_side(dp):
             height=(len(df_f) + 1) * 36, 
             hide_index=True,
             column_config={
-                "Konv%": st.column_config.NumberColumn("Konv%", format="%.1f%%"),
-                "DZ-Konv%": st.column_config.NumberColumn("DZ-Konv%", format="%.1f%%"),
+                "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
+                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
             }
         )
