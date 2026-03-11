@@ -59,7 +59,7 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 1, 2, 3 (Beholdes som de er) ---
+    # --- TAB 1: SPILLEROVERSIGT (Rettet sortering og formatering) ---
     with tabs[0]:
         stats = []
         for p in sorted(df_skud['PLAYER_NAME'].unique()):
@@ -68,13 +68,30 @@ def vis_side(dp):
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
             stats.append({
-                "Spiller": p.split()[-1], "Skud": s, "Mål": m, "Konvertering%": (m/s*100),
-                "DZ-Skud": dzs, "DZ-Mål": dzm, "DZ-konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100)
+                "Spiller": p.split()[-1], 
+                "Skud": s, 
+                "Mål": m, 
+                "Konv%": (m/s*100) if s > 0 else 0,
+                "DZ-S": dzs, 
+                "DZ-M": dzm, 
+                "DZ-Konv%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
-        df_f = pd.DataFrame(stats).sort_values("S", ascending=False)
-        st.dataframe(df_f, use_container_width=True, height=(len(df_f) + 1) * 36, hide_index=True)
-
+        
+        # Rettet sortering: Vi sorterer nu efter "Skud" (ikke "S")
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        
+        st.dataframe(
+            df_f, 
+            use_container_width=True, 
+            height=(len(df_f) + 1) * 36, 
+            hide_index=True,
+            column_config={
+                "Konv%": st.column_config.NumberColumn("Konv%", format="%.1f%%"),
+                "DZ-Konv%": st.column_config.NumberColumn("DZ-Konv%", format="%.1f%%"),
+                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+            }
+        )
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
