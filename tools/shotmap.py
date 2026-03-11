@@ -176,9 +176,10 @@ def vis_side(dp):
             W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
 
             ZONE_BOUNDS = {
-                "Zone 1": {"y": (99.5, 105.0), "x": (C_MIN, C_MAX)},
-                "Zone 2": {"y": (94.0, 99.5),  "x": (C_MIN, C_MAX)},
-                "Zone 3": {"y": (88.5, 94.0),  "x": (C_MIN, C_MAX)},
+                ZONE_BOUNDS = {
+                "Zone 1": {"y": (95.0, 105.0), "x": (C_MIN, C_MAX)}, # Det helt tætte
+                "Zone 2": {"y": (88.0, 95.0),  "x": (C_MIN, C_MAX)}, # HER lander de 7 mål nu!
+                "Zone 3": {"y": (80.0, 88.0),  "x": (C_MIN, C_MAX)}, # Længere ude
                 "Zone 4A": {"y": (99.5, 105.0), "x": (C_MAX, W_INNER_MAX)},
                 "Zone 4B": {"y": (99.5, 105.0), "x": (W_INNER_MIN, C_MIN)},
                 "Zone 5A": {"y": (88.5, 99.5),  "x": (C_MAX, W_INNER_MAX)},
@@ -266,10 +267,10 @@ def vis_side(dp):
             W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
 
             ZONE_BOUNDS = {
-                "Zone 1": {"y": (99.5, 105.0), "x": (C_MIN, C_MAX)},
-                "Zone 2": {"y": (94.0, 99.5),  "x": (C_MIN, C_MAX)},
-                "Zone 3": {"y": (88.5, 94.0),  "x": (C_MIN, C_MAX)},
-                "Zone 4A": {"y": (99.5, 105.0), "x": (C_MAX, W_INNER_MAX)},
+                ZONE_BOUNDS = {
+                "Zone 1": {"y": (95.0, 105.0), "x": (C_MIN, C_MAX)}, # Det helt tætte
+                "Zone 2": {"y": (88.0, 95.0),  "x": (C_MIN, C_MAX)}, # HER lander de 7 mål nu!
+                "Zone 3": {"y": (80.0, 88.0),  "x": (C_MIN, C_MAX)}, # Længere ude                "Zone 4A": {"y": (99.5, 105.0), "x": (C_MAX, W_INNER_MAX)},
                 "Zone 4B": {"y": (99.5, 105.0), "x": (W_INNER_MIN, C_MIN)},
                 "Zone 5A": {"y": (88.5, 99.5),  "x": (C_MAX, W_INNER_MAX)},
                 "Zone 5B": {"y": (88.5, 99.5),  "x": (W_INNER_MIN, C_MIN)},
