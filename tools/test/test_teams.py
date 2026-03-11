@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
+# Her importerer du din eksisterende database-connector
+# f.eks. from data.db_connection import run_query
 
 def vis_side(df_raw=None):
     if "dp" not in st.session_state:
@@ -12,16 +14,39 @@ def vis_side(df_raw=None):
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
     
-    # Hent data fra DP
+    # --- SQL INTEGRATION DIREKTE ---
+    # Her indsættes din SQL query direkte i koden
+    query_adv = """
+    SELECT 
+        tm.TEAM_WYID, 
+        AVG(adv.SHOTS) as AVERAGE_SHOTS,
+        AVG(adv.XG) as AVERAGE_XG,
+        AVG(adv.PPDA) as PPDA,
+        AVG(adv.FORWARDPASSES) as AVERAGE_FORWARD_PASSES,
+        AVG(adv.TOUCHESINBOX) as AVERAGE_TOUCHESINBOX
+    FROM WYSCOUT_TEAMMATCHES tm
+    LEFT JOIN WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+        ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+    JOIN WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+    JOIN WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+    WHERE tm.COMPETITION_WYID = 328
+    AND s.SEASONNAME LIKE '2025%2026'
+    GROUP BY tm.TEAM_WYID
+    """
+    
+    # Vi henter Wyscout data direkte fra databasen
+    # df_adv = run_query(query_adv) 
+    # For demo-formål lader vi den tjekke session_state først som backup
+    df_adv = dp.get("team_stats_full", pd.DataFrame()) 
+    
+    # Hent Opta data
     df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
-    df_adv = dp.get("team_stats_full", pd.DataFrame()) # Din Wyscout query
     
     if df_opta.empty:
         st.warning("Ingen kampdata fundet.")
         return
 
     # --- 1. HJÆLPEFUNKTIONER & MAPPING ---
-    # Vi bygger en bro mellem Opta UUID og Wyscout TEAM_WYID via team_mapping.py
     opta_to_wyid = {info['opta_uuid']: info['team_wyid'] for name, info in TEAMS.items() if 'opta_uuid' in info}
 
     def get_logo_url(opta_uuid, team_name):
@@ -102,15 +127,14 @@ def vis_side(df_raw=None):
             else:
                 next_opponents[uuid] = "-"
 
-    # Omdan til DataFrame og Merge med Wyscout stats
+    # Omdan til DataFrame og Merge
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents)
     df_liga['TEAM_WYID'] = df_liga['UUID'].map(opta_to_wyid)
     
-    # Merge Wyscout Advanced Stats (Querien team_stats_full)
+    # Merge Wyscout Advanced Stats
     if not df_adv.empty:
-        # Vi sikrer os at vi merger på de rigtige kolonnenavne fra din query
         df_liga = df_liga.merge(
             df_adv[['TEAM_WYID', 'PPDA', 'AVERAGE_FORWARD_PASSES', 'AVERAGE_SHOTS']], 
             on='TEAM_WYID', 
@@ -163,10 +187,11 @@ def vis_side(df_raw=None):
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
-        # Kolonner til visning (Inkl. de nye Wyscout stats)
-        vis_cols = ['#', ' ', 'HOLD', 'K', 'P', 'SHOTS', 'FORWARDPASSES', 'PPDA', 'FORM', 'NÆSTE']
-        # Omdøb for pænere header
-        df_disp = df_disp.rename(columns={'SHOTS': 'Skud/K', 'FORWARDPASSES': 'Fwd P', 'PPDA': 'PPDA'})
+        df_disp = df_disp.rename(columns={
+            'AVERAGE_SHOTS': 'Skud/K', 
+            'AVERAGE_FORWARD_PASSES': 'Fwd P', 
+            'PPDA': 'PPDA'
+        })
         vis_cols_pretty = ['#', ' ', 'HOLD', 'K', 'P', 'Skud/K', 'Fwd P', 'PPDA', 'FORM', 'NÆSTE']
         
         st.write(df_disp[vis_cols_pretty].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
@@ -180,5 +205,5 @@ def vis_side(df_raw=None):
         st.subheader("Sammenligning")
         s1, s2, s3 = st.tabs(["Resultater", "Offensiv", "Pres & Opbygning"])
         with s1: draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with s2: draw_h2h_chart(team1, team2, ['SHOTS', 'M+'], ['Skud pr. kamp', 'Mål total'])
-        with s3: draw_h2h_chart(team1, team2, ['PPDA', 'FORWARDPASSES'], ['PPDA', 'Forward Passes'])
+        with s2: draw_h2h_chart(team1, team2, ['AVERAGE_SHOTS', 'M+'], ['Skud pr. kamp', 'Mål total'])
+        with s3: draw_h2h_chart(team1, team2, ['PPDA', 'AVERAGE_FORWARD_PASSES'], ['PPDA', 'Forward Passes'])
