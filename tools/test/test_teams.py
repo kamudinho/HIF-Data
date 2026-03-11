@@ -109,13 +109,22 @@ def vis_side(df_raw=None):
     df_liga.insert(0, '#', df_liga.index + 1)
 
     # --- 3. GRAF FUNKTION ---
-    def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
-        t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
-        t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
-        fig = go.Figure()
-
-        y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
-        y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 else t2[m] for m in metrics]
+    def draw_h2h_chart_wyscout(n1, n2, metrics, labels):
+    # 1. Hent Wyscout-data fra session_state (fra din get_wy_queries)
+        df_wy = st.session_state["dp"].get("wyscout", {}).get("team_stats_full", pd.DataFrame())
+        
+        if df_wy.empty:
+            st.warning("Wyscout team data ikke tilgængelig.")
+            return
+    
+        # 2. Filtrer for de to valgte hold
+        t1_data = df_wy[df_wy['TEAMNAME'] == n1].iloc[0]
+        t2_data = df_wy[df_wy['TEAMNAME'] == n2].iloc[0]
+    
+        # 3. Forbered værdier (Eksempel: Progressive Runs, Dribbles, etc.)
+        # Vi bruger 'MATCHES' fra din Opta-tabel til at få 'Per kamp' stats
+        y1_vals = [t1_data[m] / t1_data['MATCHES'] if 'MATCHES' in t1_data else t1_data[m] for m in metrics]
+        y2_vals = [t2_data[m] / t2_data['MATCHES'] if 'MATCHES' in t2_data else t2_data[m] for m in metrics]
 
         c1 = colors_dict.get(n1, {"primary": "#cc0000"})
         c2 = colors_dict.get(n2, {"primary": "#0056a3"})
