@@ -95,7 +95,7 @@ def vis_side(*args, **kwargs):
 
         # --- 3. PIZZA CHART DESIGN (OPTIMERET TIL TOP) ---
         # Mindre højde på figuren fjerner tomrum
-        fig, ax = plt.subplots(figsize=(10, 7.5), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(10, 3.5), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
