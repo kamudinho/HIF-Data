@@ -116,7 +116,7 @@ def vis_side(*args, **kwargs):
                 if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
                 
                 plot_labels.append(display_label)
-                scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
+                scaled_val = V_OFFSET + (p_val * (80 - V_OFFSET) / 80)
                 values.append(scaled_val)
                 display_values.append(f"{target_team[data_col].values[0]:.1f}")
                 plot_colors.append(color_map[group_name])
