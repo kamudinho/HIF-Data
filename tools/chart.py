@@ -9,7 +9,7 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DINE PRÆCISE METRIC PAIRS ---
+# --- 1. DATA OPSÆTNING ---
 METRIC_PAIRS = {
     'OFFENSIV': [
         ('GOALS', 'GOALS'), ('SHOTS', 'SHOTS'), ('DRIBBLES', 'SUCCESSFULDRIBBLES'),
@@ -37,7 +37,6 @@ def get_logo(url):
 
 def fetch_data():
     conn = _get_snowflake_conn()
-    # Vi henter alle nødvendige kolonner baseret på dine METRIC_PAIRS
     query = """
     SELECT 
         tm.TEAMNAME, tm.IMAGEDATAURL, t.TEAM_WYID, st.TOTALPLAYED AS MATCHES,
@@ -63,35 +62,29 @@ def vis_side(*args, **kwargs):
         st.session_state["df_pizza"] = fetch_data()
     
     df = st.session_state["df_pizza"].copy()
-    
-    # --- 1. LOGO-RADIOKNAPPER ---
-    st.write("### Vælg Hold")
-    
-    # Hent unikke hold og deres logo-URL'er
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
-    
-    # Lav en række kolonner til logoerne (f.eks. 6 pr. række)
-    cols = st.columns(6)
-    
-    # Initialize session state for valgt hold hvis det ikke findes
-    if "selected_team_id" not in st.session_state:
-        st.session_state.selected_team_id = hold_data.iloc[0]['TEAM_WYID']
 
-    for idx, (_, row) in enumerate(hold_data.iterrows()):
-        with cols[idx % 6]:
-            # Vis logoet med en lille caption. 
-            # Vi bruger st.button med logoet som billede (via st.image) ovenover
-            st.image(row['IMAGEDATAURL'], width=60)
-            if st.button(row['TEAMNAME'], key=f"btn_{row['TEAM_WYID']}", use_container_width=True):
-                st.session_state.selected_team_id = row['TEAM_WYID']
+    # --- 1. LOGO-LINJE (Små logoer øverst) ---
+    st.write("### NordicBet Liga Performance")
+    logo_cols = st.columns(len(hold_data))
+    for i, (_, row) in enumerate(hold_data.iterrows()):
+        with logo_cols[i]:
+            st.image(row['IMAGEDATAURL'], width=30) # Små logoer på én linje
 
-    # --- 2. DATA KLARGØRING ---
-    team_id = st.session_state.selected_team_id
-    target_team_raw = df[df['TEAM_WYID'] == team_id]
-    valgt_hold_navn = target_team_raw['TEAMNAME'].values[0]
+    # --- 2. RADIOKNAPPER TIL VALG ---
+    valgt_hold_navn = st.radio(
+        "Vælg hold", 
+        hold_data['TEAMNAME'].tolist(), 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
+
+    # --- 3. DATA KLARGØRING ---
+    target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
+    team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    # Din eksisterende normalisering og design-parametre
+    # Normalisering
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
@@ -99,14 +92,17 @@ def vis_side(*args, **kwargs):
 
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 3. PIZZA CHART (DIT SKARPE LAYOUT) ---
-    st.caption(f"## {valgt_hold_navn} Performance Profil")
-
-    # --- DIT DESIGN PARAMETRE ---
+    # --- 4. PIZZA CHART (SKALERET TIL SKÆRM) ---
+    # Vi bruger en lidt mindre figsize for at sikre, at den ikke fylder for meget på højkants-skærme
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor('none')
+    
     V_OFFSET = 28
     LIMIT_Y = 165
+    ax.set_ylim(0, LIMIT_Y)
+    
     color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
-
     plot_labels, values, display_values, plot_colors = [], [], [], []
 
     for group_name, pairs in METRIC_PAIRS.items():
@@ -122,44 +118,38 @@ def vis_side(*args, **kwargs):
             display_values.append(f"{target_team[data_col].values[0]:.1f}")
             plot_colors.append(color_map[group_name])
 
-    # --- DIT PLOTTING LAYOUT ---
-    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
-    fig.patch.set_alpha(0)
-    ax.set_facecolor('none')
-    ax.set_ylim(0, LIMIT_Y)
-    
     num_vars = len(plot_labels)
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
     width = (2 * np.pi) / num_vars
 
-    # De hvide hjælpelinjer/skiver
+    # Tegn skiver og barer
     ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
-
-    # Data-barer
     ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-    # Logo midt i (zoom 0.72 som i din kode)
+    # Logo midt i
     logo_img = get_logo(logo_url)
     if logo_img:
-        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.72), (0, 0), frameon=False, zorder=10))
+        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
 
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # DINE TEKST LABELS (ALTID HVID)
+    # Tekst labels
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
-        label_y = 150
-        box_y = 125
-
+        label_y = 152
+        box_y = 128
+        
+        # Dynamisk justering af tekstplacering baseret på vinkel
         if angle_deg == 0 or angle_deg == 180: ha = 'center'
         elif 0 < angle_deg < 180: ha = 'left'
         else: ha = 'right'
 
-        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
-        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
-                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
+        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=8, fontweight='black', color='white')
+        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
+                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=0.8))
 
-    # Vis i Streamlit
-    st.pyplot(fig)
+    # --- 5. RENDER (Responsiv) ---
+    # use_container_width=True sørger for at billedet tilpasser sig din browser/opløsning
+    st.pyplot(fig, use_container_width=True)
