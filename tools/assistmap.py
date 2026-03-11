@@ -4,22 +4,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Rectangle
-from mplsoccer import VerticalPitch
+from mplsoccer import Pitch, VerticalPitch
 
 # HIF Identitet
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
 def vis_side(dp):
-    # CSS Styling
+    # --- 1. CSS STYLING ---
     st.markdown(f"""
         <style>
-            .full-width-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+            .full-width-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; }}
             .full-width-table th {{ background-color: #f0f2f6; text-align: left; padding: 10px; border-bottom: 2px solid {HIF_GOLD}; font-size: 0.85rem; }}
             .full-width-table td {{ padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; }}
             .stat-box {{ background-color: #f8f9fa; padding: 8px 12px; border-radius: 8px; border-left: 5px solid {HIF_GOLD}; margin-bottom: 8px; }}
             .stat-label {{ font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
             .stat-value {{ font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
+            .legend-item {{ font-size: 0.85rem; color: #333; margin-bottom: 6px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 2px; }}
             .icon-circle {{ width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1.5px solid black; }}
         </style>
     """, unsafe_allow_html=True)
@@ -29,12 +30,11 @@ def vis_side(dp):
         st.caption("Ingen data fundet.")
         return
 
-    # --- DATA KONVERTERING OG ZONE-MAPPING ---
+    # --- 2. DINE ZONE DEFINITIONER (METER) ---
     PITCH_L, PITCH_W = 105, 68
     C_MIN, C_MAX = (PITCH_W - 18.32)/2, (PITCH_W + 18.32)/2
     W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
 
-    # Dine præcise grænser fra pitch_analysis.py
     ZONE_BOUNDS = {
         "Zone 1": {"y": (99.5, 105.0), "x": (C_MIN, C_MAX)},
         "Zone 2": {"y": (94.0, 99.5),  "x": (C_MIN, C_MAX)},
@@ -64,7 +64,7 @@ def vis_side(dp):
 
     tab1, tab2, tab3 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP", "ASSIST-ZONER"])
 
-    # --- TAB 1 & 2 (UÆNDRET) ---
+    # --- TAB 1 & 2 (Beholdes intakte) ---
     with tab1:
         df_table = df_assists.groupby('ASSIST_PLAYER').agg(
             Assists=('is_assist', 'sum'), Key_Passes=('is_key_pass', 'sum'),
@@ -80,12 +80,11 @@ def vis_side(dp):
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         with col_ctrl_a:
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table['ASSIST_PLAYER'].tolist()), key="sb_a")
+            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table['ASSIST_PLAYER'].tolist()), key="sb_a2")
             df_f = df_assists[df_assists['ASSIST_PLAYER'] == v_a] if v_a != "Hvidovre IF" else df_assists
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Goal Assists</div><div class="stat-value">{df_f["is_assist"].sum()}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color: #888888"><div class="stat-label"><span class="icon-circle" style="background-color: #888888;"></span>Shot Assists</div><div class="stat-value">{df_f["is_key_pass"].sum()}</div></div>', unsafe_allow_html=True)
         with col_viz_a:
-            from mplsoccer import Pitch
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(8, 6))
             df_gs = df_f[df_f['is_assist'] == 1]; df_kp = df_f[df_f['is_key_pass'] == 1]
@@ -94,9 +93,10 @@ def vis_side(dp):
             pitch.scatter(df_gs.PASS_START_X, df_gs.PASS_START_Y, s=100, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=3)
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB 3: ASSIST-ZONER (MATCHES DIT SCRIPT) ---
+    # --- TAB 3: ASSIST-ZONER (Med heatmap og tabel til højre) ---
     with tab3:
-        # Analyse pr. zone
+        col_viz_z, col_ctrl_z = st.columns([1.8, 1])
+        
         df_goals = df_assists[df_assists['is_assist'] == 1].copy()
         total_goals = len(df_goals)
         
@@ -105,44 +105,46 @@ def vis_side(dp):
             z_data = df_goals[df_goals['Zone'] == zone]
             count = len(z_data)
             pct = (count / total_goals * 100) if total_goals > 0 else 0
-            top_player = z_data['ASSIST_PLAYER'].mode().iloc[0] if not z_data.empty else "-"
-            zone_stats[zone] = {'count': count, 'pct': pct, 'top': top_player}
+            top_p = z_data['ASSIST_PLAYER'].mode().iloc[0] if not z_data.empty else "-"
+            zone_stats[zone] = {'count': count, 'pct': pct, 'top': top_p}
 
-        # Heatmap farver (Grøn-Gul-Rød)
-        max_val = max([v['count'] for v in zone_stats.values()]) if total_goals > 0 else 1
-        cmap = plt.cm.YlOrRd 
-
-        pitch_z = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-        fig_z, ax_z = pitch_z.draw(figsize=(10, 12))
-        ax_z.set_ylim(50, 105)
-
-        for name, bounds in ZONE_BOUNDS.items():
-            if bounds["y"][1] <= 50: continue
+        with col_ctrl_z:
+            st.markdown("**DETALJERET ZONEOVERSIGT**")
+            z_df = pd.DataFrame.from_dict(zone_stats, orient='index').reset_index()
+            z_df.columns = ['Zone', 'Assists', 'Pct', 'Top Spiller']
+            # Vis kun zoner med aktivitet og sorter efter antal
+            st.dataframe(z_df[z_df['Assists'] > 0].sort_values('Assists', ascending=False), 
+                         hide_index=True, use_container_width=True)
             
-            y_min_d = max(bounds["y"][0], 50)
-            rect_h = bounds["y"][1] - y_min_d
-            
-            # Tegn zonen med farve baseret på antal
-            stats = zone_stats[name]
-            color_val = stats['count'] / max_val
-            face_color = cmap(color_val) if stats['count'] > 0 else '#f9f9f9'
-            
-            rect = Rectangle((bounds["x"][0], y_min_d), bounds["x"][1] - bounds["x"][0], rect_h,
-                             edgecolor='black', linestyle='--', facecolor=face_color, alpha=0.7)
-            ax_z.add_patch(rect)
+            st.info("Kortet viser Goal Assists fordelt på dine definerede zoner (Z1-Z8).")
 
-            # Tekst i zonen
-            z_text = f"Z{name.split(' ')[1]}\n{stats['count']} ({stats['pct']:.1f}%)\n{stats['top']}"
-            ax_z.text(bounds["x"][0] + (bounds["x"][1] - bounds["x"][0])/2, 
-                      y_min_d + rect_h/2, z_text, 
-                      ha='center', va='center', fontsize=7, fontweight='bold', 
-                      color='black' if color_val < 0.7 else 'white')
+        with col_viz_z:
+            max_val = max([v['count'] for v in zone_stats.values()]) if total_goals > 0 else 1
+            cmap = plt.cm.YlOrRd 
 
-        st.pyplot(fig_z, use_container_width=True)
-        
-        # Tabel-oversigt nedenunder for hurtigt overblik
-        st.write("---")
-        st.markdown("**DETALJERET ZONEOVERSIGT**")
-        z_df = pd.DataFrame.from_dict(zone_stats, orient='index').reset_index()
-        z_df.columns = ['Zone', 'Antal Assists', 'Procentdel', 'Top Leverandør']
-        st.dataframe(z_df[z_df['Antal Assists'] > 0].sort_values('Antal Assists', ascending=False), hide_index=True)
+            pitch_z = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+            fig_z, ax_z = pitch_z.draw(figsize=(8, 10))
+            ax_z.set_ylim(50, 105)
+
+            for name, bounds in ZONE_BOUNDS.items():
+                if bounds["y"][1] <= 50: continue
+                
+                y_min_d = max(bounds["y"][0], 50)
+                rect_h = bounds["y"][1] - y_min_d
+                
+                stats = zone_stats[name]
+                color_val = stats['count'] / max_val
+                face_color = cmap(color_val) if stats['count'] > 0 else '#f9f9f9'
+                
+                rect = Rectangle((bounds["x"][0], y_min_d), bounds["x"][1] - bounds["x"][0], rect_h,
+                                 edgecolor='black', linestyle='--', facecolor=face_color, alpha=0.7)
+                ax_z.add_patch(rect)
+
+                # Tekst-label i zonen
+                z_label = f"Z{name.split(' ')[1]}\n{stats['count']}"
+                ax_z.text(bounds["x"][0] + (bounds["x"][1] - bounds["x"][0])/2, 
+                          y_min_d + rect_h/2, z_label, 
+                          ha='center', va='center', fontsize=8, fontweight='bold', 
+                          color='black' if color_val < 0.6 else 'white')
+
+            st.pyplot(fig_z, use_container_width=True)
