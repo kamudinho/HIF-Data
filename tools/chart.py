@@ -65,33 +65,46 @@ def vis_side(*args, **kwargs):
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     
+    # 1. Styring af valg
     if "selected_team" not in st.session_state:
         st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
 
-    # --- CSS: Centrerer checkbox præcis under logo ---
+    # --- CSS: Tvinger alt i kolonnerne til at være centreret og fjerner luft ---
     st.markdown("""
         <style>
+            /* Centrerer indholdet i kolonnerne */
             [data-testid="column"] {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                text-align: center;
+                justify-content: flex-start;
+                gap: 0px !important;
             }
+            /* Fjerner padding omkring checkbox og gør den mindre */
             [data-testid="stCheckbox"] {
                 margin-top: -10px;
-                padding-bottom: 20px;
+                padding: 0px;
+            }
+            /* Skjuler den tomme label tekst */
+            [data-testid="stCheckbox"] label span {
+                display: none;
             }
         </style>
     """, unsafe_allow_html=True)
 
     # --- 2. LOGO-MENU ---
     cols = st.columns(len(hold_data))
+    
     for i, (_, row) in enumerate(hold_data.iterrows()):
         with cols[i]:
-            st.image(row['IMAGEDATAURL'], width=35)
+            # Logo (mindre størrelse for at matche menuen)
+            st.image(row['IMAGEDATAURL'], width=40)
+            
+            # Checkbox logik
             is_checked = (st.session_state.selected_team == row['TEAMNAME'])
-            # Checkbox der trigger rerun ved nyt valg
-            if st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed"):
+            
+            # Ved at bruge on_change eller denne logik sikrer vi, at kun én er valgt
+            if st.checkbox("", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed"):
                 if not is_checked:
                     st.session_state.selected_team = row['TEAMNAME']
                     st.rerun()
@@ -102,17 +115,20 @@ def vis_side(*args, **kwargs):
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
-    for col in list(set(all_metrics_cols)):
+    # Normalisering
+    all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
+    for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
             df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 4. PIZZA CHART ---
+    # --- 4. PIZZA CHART (FULD VISNING) ---
     fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
+    
+    # Juster marginer så chartet ikke bliver mast i bunden
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
     
     V_OFFSET = 28
@@ -125,7 +141,6 @@ def vis_side(*args, **kwargs):
     for group_name, pairs in METRIC_PAIRS.items():
         for display_label, data_col in pairs:
             if data_col not in df.columns: continue
-            
             p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
             if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
 
@@ -139,7 +154,6 @@ def vis_side(*args, **kwargs):
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
     width = (2 * np.pi) / num_vars
 
-    # Tegn baggrund og data
     ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
     ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
@@ -152,20 +166,15 @@ def vis_side(*args, **kwargs):
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # --- TEKST LABELS LOOP ---
+    # TEKST LABELS
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
         label_y = 162
         box_y = 138
-        
-        # Horisontal alignment baseret på vinkel
-        if abs(angle_deg % 180) < 1: ha = 'center'
-        elif 0 < angle_deg < 180: ha = 'left'
-        else: ha = 'right'
+        ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
 
         ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
         ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
                 bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
 
-    # Render responsivt
     st.pyplot(fig, use_container_width=True)
