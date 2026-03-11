@@ -49,18 +49,17 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_assists": f"""
             SELECT 
-                e.EVENT_PLAYER_OPTAUUID as ASSIST_PLAYER_UUID,
-                e.EVENT_X as PASS_START_X,
-                e.EVENT_Y as PASS_START_Y,
-                -- Vi joiner med det efterfølgende skud for at få SHOT_X/Y
-                s.EVENT_X as SHOT_X,
-                s.EVENT_Y as SHOT_Y,
+                e.PLAYER_OPTAUUID AS ASSIST_PLAYER_UUID,
+                e.PLAYER_NAME AS ASSIST_PLAYER_NAME,
+                e.EVENT_X AS PASS_START_X,
+                e.EVENT_Y AS PASS_START_Y,
+                s.EVENT_X AS SHOT_X,
+                s.EVENT_Y AS SHOT_Y,
                 e.MATCH_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
-            JOIN {DB}.OPTA_EVENTS s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID 
-                AND s.EVENT_TYPEID IN (13,14,15,16) -- Skudtyper
-                -- Logik der binder assist-event til skud-event (f.eks. via sekvens eller timestamp)
-            WHERE e.EVENT_TYPEID = 1 -- Aflevering
+            JOIN {DB}.OPTA_EVENTS s ON e.EVENT_OPTAUUID = s.LAST_EVENT_OPTAUUID
+            WHERE e.EVENT_TYPEID = 1             -- Aflevering (Pass)
+            AND s.EVENT_TYPEID IN (13,14,15,16)  -- Skudtyper (Mål, skud på mål, forbi, stolpe)
             AND e.MATCH_OPTAUUID IN ({match_id_subquery})
             {hif_filter_event}
         """,
