@@ -65,40 +65,33 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: STYLING AF AFSTANDE ---
+    # --- CSS: TVING INDHOLDET SAMMEN ---
     st.markdown("""
         <style>
-            .block-container { padding-top: 0.5rem !important; }
-            
-            /* Fjerner mellemrum mellem kolonnerne */
+            /* Fjerner alt standard-mellemrum i Streamlits layout */
             [data-testid="column"] {
-                padding-left: 0rem !important;
-                padding-right: 0rem !important;
+                padding: 0rem !important;
+                margin: 0rem !important;
+            }
+            [data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
             }
-            
-            /* Gør download-knappen pæn */
+            /* Gør download-knappen lidt mere kompakt så den passer under listen */
             div.stDownloadButton > button {
-                background-color: white !important;
-                color: black !important;
-                border: 0.8px solid black !important;
-                border-radius: 4px !important;
-                padding: 0.4rem !important;
-                font-weight: bold !important;
-                width: 100% !important;
-                text-transform: uppercase;
-                font-size: 11px !important;
-                margin-top: 10px;
+                width: auto !important;
+                min-width: 100px;
+                padding: 0.2rem 1rem !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # Ændret til [1, 2] for at bringe diagrammet tættere på listen
-    menu_col, chart_col = st.columns([1, 2])
+    # Vi bruger et meget skævt forhold (1 til 5) for at trække chart_col mod venstre
+    menu_col, chart_col = st.columns([1, 5])
 
     with menu_col:
         st.caption("Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
+        st.write("") # Lille afstand før knap
         download_placeholder = st.empty()
 
     with chart_col:
@@ -114,13 +107,12 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART DESIGN ---
+        # --- PIZZA CHART POSITIONERING ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
-        ax.set_facecolor('none')
         
-        # JUSTRERING: left=0 rykker diagrammet helt mod menu_col
-        plt.subplots_adjust(top=0.95, bottom=0.05, left=0, right=0.9)
+        # Vi bruger en aggressiv 'left' her for at flytte selve cirklen helt mod kanten af kolonnen
+        plt.subplots_adjust(left=-0.1, right=0.9, top=0.95, bottom=0.05)
         
         V_OFFSET = 25
         LIMIT_Y = 160 
