@@ -172,7 +172,6 @@ def vis_side(dp):
         if df_skud.empty:
             st.info("Ingen data fundet til statistik.")
         else:
-            st.markdown("### Danger Zone Effektivitet")
             st.caption("Herunder ses spillernes evne til at komme til afslutninger i feltets mest farlige zone.")
             
             stats_list = []
