@@ -68,12 +68,26 @@ def vis_side(df_raw=None):
                 else:
                     s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    df_liga = pd.DataFrame(stats.values())
-    if not df_liga.empty:
-        df_liga['MD'] = df_liga['M+'] - df_liga['M-']
-        df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
-        df_liga.insert(0, '#', df_liga.index + 1)
+    # Næste modstander logik
+    next_opp = {}
+    df_up = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
+    if not df_up.empty:
+        df_up['MATCH_DATE_FULL'] = pd.to_datetime(df_up['MATCH_DATE_FULL'])
+        df_up = df_up.sort_values('MATCH_DATE_FULL')
+        for uuid in stats:
+            m = df_up[(df_up['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_up['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+            if not m.empty:
+                r = m.iloc[0]
+                is_h = r['CONTESTANTHOME_OPTAUUID'] == uuid
+                opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
+                opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
+                next_opp[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{get_logo_url(opp_u, "")}" width="18"><span>{opp_n}</span></div>'
 
+    df_liga = pd.DataFrame(stats.values())
+    df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
+    df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
+    df_liga.insert(0, '#', df_liga.index + 1)
     # --- WYSCOUT DATA HENTNING (RETTET SQL) ---
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
