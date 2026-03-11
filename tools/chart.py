@@ -65,57 +65,32 @@ def vis_side(*args, **kwargs):
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     
-    # 1. Styring af valg
     if "selected_team" not in st.session_state:
         st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
 
-    # --- CSS: Tvinger alt i kolonnerne til at være centreret og fjerner luft ---
-    st.markdown("""
-        <style>
-            /* Centrerer indholdet i kolonnerne */
-            [data-testid="column"] {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: flex-start;
-                gap: 0px !important;
-            }
-            /* Fjerner padding omkring checkbox og gør den mindre */
-            [data-testid="stCheckbox"] {
-                margin-top: -10px;
-                padding: 0px;
-            }
-            /* Skjuler den tomme label tekst */
-            [data-testid="stCheckbox"] label span {
-                display: none;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # --- 2. LOGO-MENU ---
+    # --- 1. LOGO MENU MED KNAPPER ---
     cols = st.columns(len(hold_data))
     
     for i, (_, row) in enumerate(hold_data.iterrows()):
         with cols[i]:
-            # Logo (mindre størrelse for at matche menuen)
+            # Vis logoet
             st.image(row['IMAGEDATAURL'], width=40)
             
-            # Checkbox logik
-            is_checked = (st.session_state.selected_team == row['TEAMNAME'])
+            # Lav en knap til hvert hold. Vi bruger 'use_container_width' 
+            # for at sikre de flugter, men fjerner teksten.
+            # Vi viser en prik (●) hvis valgt, ellers en cirkel (○)
+            label = "●" if st.session_state.selected_team == row['TEAMNAME'] else "○"
             
-            # Ved at bruge on_change eller denne logik sikrer vi, at kun én er valgt
-            if st.checkbox("", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed"):
-                if not is_checked:
-                    st.session_state.selected_team = row['TEAMNAME']
-                    st.rerun()
+            if st.button(label, key=f"btn_{row['TEAM_WYID']}", use_container_width=True):
+                st.session_state.selected_team = row['TEAMNAME']
+                st.rerun()
 
-    # --- 3. DATA PREP ---
+    # --- 2. DATA PREP ---
     valgt_hold_navn = st.session_state.selected_team
     target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    # Normalisering
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
@@ -123,13 +98,14 @@ def vis_side(*args, **kwargs):
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 4. PIZZA CHART (FULD VISNING) ---
-    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
+    # --- 3. PIZZA CHART (MAX VISNING) ---
+    # Vi bruger figsize=(10, 10) ogsubplots_adjust for at undgå beskæring
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
     
-    # Juster marginer så chartet ikke bliver mast i bunden
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    # VIGTIGT: Dette sikrer at bunden ikke bliver skåret af
+    plt.subplots_adjust(left=0.07, right=0.93, top=0.93, bottom=0.07)
     
     V_OFFSET = 28
     LIMIT_Y = 175 
@@ -143,7 +119,7 @@ def vis_side(*args, **kwargs):
             if data_col not in df.columns: continue
             p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
             if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
-
+            
             plot_labels.append(display_label)
             scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
             values.append(scaled_val)
@@ -157,24 +133,23 @@ def vis_side(*args, **kwargs):
     ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
     ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-    # Centralt logo
     logo_img = get_logo(logo_url)
     if logo_img:
-        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.72), (0, 0), frameon=False, zorder=10))
+        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.7), (0, 0), frameon=False, zorder=10))
 
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # TEKST LABELS
+    # TEKST (Skarpe positioner)
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
-        label_y = 162
-        box_y = 138
+        label_y = 158
+        box_y = 134
         ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
 
         ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
         ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
-                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
+                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
 
     st.pyplot(fig, use_container_width=True)
