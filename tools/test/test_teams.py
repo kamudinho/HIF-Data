@@ -57,6 +57,8 @@ def draw_h2h_chart_wyscout(n1, n2, metrics, labels, per_match=True):
 
 def vis_side(df_raw=None):
     if "dp" not in st.session_state: return
+
+    hif_rod = "#df003b"
     
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
