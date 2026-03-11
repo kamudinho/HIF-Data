@@ -11,84 +11,89 @@ from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 
 def get_logo(url):
+    if not url: return None
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content)).convert("RGBA")
     except:
         return None
 
-def fetch_team_data():
+def fetch_team_performance_data():
     conn = _get_snowflake_conn()
     
-    # Vi bruger en JOIN for at sikre, at vi rammer de rigtige navne i Snowflake
-    # Dette eliminerer fejlen med SEASON_WYID mismatch
+    # Din optimerede query med Standings join
     query = """
-    SELECT 
-        t.TEAM_WYID, t.MATCHES, t.GOALS, t.SHOTS, t.XGSHOT, 
-        t.PASSES, t.SUCCESSFULPASSES, t.DEFENSIVEDUELS, 
-        t.INTERCEPTIONS, t.TOUCHINBOX
-    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL t
-    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
-    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_COMPETITIONS c ON t.COMPETITION_WYID = c.COMPETITION_WYID
-    WHERE c.COMPETITIONNAME = 'NordicBet Liga' 
+    SELECT DISTINCT 
+        tm.TEAMNAME,
+        s.SEASONNAME,
+        tm.IMAGEDATAURL,
+        t.GOALS, 
+        t.XGSHOT, 
+        t.CONCEDEDGOALS,
+        t.XGSHOTAGAINST, 
+        t.SHOTS, 
+        t.PPDA,
+        t.PASSESTOFINALTHIRD,
+        t.FORWARDPASSES, 
+        t.SUCCESSFULPASSESTOFINALTHIRD,
+        st.TOTALPOINTS,
+        st.TOTALPLAYED AS MATCHES,
+        st.TOTALWINS,
+        st.TOTALDRAWS,
+        st.TOTALLOSSES,
+        t.TEAM_WYID
+    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS AS st 
+        ON t.TEAM_WYID = st.TEAM_WYID AND t.SEASON_WYID = st.SEASON_WYID
+    WHERE t.COMPETITION_WYID = 328
     AND s.SEASONNAME = '2025/2026'
     """
     df_res = conn.query(query)
     df = pd.DataFrame(df_res)
     
-    if df.empty:
-        return df
-
-    # Tving kolonner til små bogstaver
-    df.columns = [c.lower() for c in df.columns]
-    
-    # Sikr at ID er heltal for korrekt matching med TEAMS mapping
-    df['team_wyid'] = pd.to_numeric(df['team_wyid']).astype(int)
+    if not df.empty:
+        df.columns = [c.lower() for c in df.columns]
+        df['team_wyid'] = pd.to_numeric(df['team_wyid']).astype(int)
     return df
 
 def vis_side(*args, **kwargs):
-    # Direkte til titlen som ønsket
-    st.title("📊 Hvidovre App: Performance Profiler")
 
-    # Session State håndtering for hurtigere indlæsning
-    if "team_stats_1div" not in st.session_state:
-        with st.spinner("Henter data fra Snowflake..."):
-            st.session_state["team_stats_1div"] = fetch_team_data()
+    if "team_perf_stats" not in st.session_state:
+        with st.spinner("Henter performance data..."):
+            st.session_state["team_perf_stats"] = fetch_team_performance_data()
     
-    df = st.session_state["team_stats_1div"].copy()
+    df = st.session_state["team_perf_stats"].copy()
 
-    # Hvis data stadig er tom, vis fejl og genindlæs-knap
     if df.empty:
-        st.error("Fejl: Ingen rækker fundet for NordicBet Liga 2025/2026 i Snowflake.")
-        if st.button("Tving genindlæsning af data"):
-            st.session_state.pop("team_stats_1div")
-            st.rerun()
+        st.error("Kunne ikke finde data for 1. Division 2025/2026.")
         return
 
-    # 1. Valg af hold
+    # 1. Holdvalg
     hold_1div = [navn for navn, info in TEAMS.items() if info.get("league") == "1. Division"]
     valgt_hold = st.selectbox("Vælg hold:", sorted(hold_1div))
     
     team_info = TEAMS[valgt_hold]
     team_wyid = int(team_info['team_wyid'])
 
-    # 2. Beregninger (PG = Per Game)
-    # Vi bruger en kopi for at undgå SettingWithCopyWarning
-    df['goals_pg'] = df['goals'] / df['matches'].replace(0, np.nan)
-    df['xg_pg'] = df['xgshot'] / df['matches'].replace(0, np.nan)
-    df['shots_pg'] = df['shots'] / df['matches'].replace(0, np.nan)
-    df['passes_pg'] = df['passes'] / df['matches'].replace(0, np.nan)
-    df['pass_acc'] = (df['successfulpasses'] / df['passes'].replace(0, np.nan)) * 100
-    df['def_duels_pg'] = df['defensiveduels'] / df['matches'].replace(0, np.nan)
-    df['intercept_pg'] = df['interceptions'] / df['matches'].replace(0, np.nan)
-    df['touchbox_pg'] = df['touchinbox'] / df['matches'].replace(0, np.nan)
-    df = df.fillna(0)
+    # 2. Beregninger (Normalisering pr. kamp)
+    # Vi bruger 'matches' fra standings tabellen som nævner
+    df['goals_pg'] = df['goals'] / df['matches']
+    df['xg_pg'] = df['xgshot'] / df['matches']
+    df['conceded_pg'] = df['concededgoals'] / df['matches']
+    df['xg_against_pg'] = df['xgshotagainst'] / df['matches']
+    df['shots_pg'] = df['shots'] / df['matches']
+    df['pass_final_third_pg'] = df['passestofinalthird'] / df['matches']
+    
+    # PPDA er allerede et gennemsnit, så den skal ikke divideres
+    # Men vi inverterer den til percentil-brug (lav PPDA = høj aggressivitet)
+    df['pressing_intensity'] = 1 / df['ppda'] 
 
-    # 3. Find det valgte hold
+    # 3. Find target team
     target_team = df[df['team_wyid'] == team_wyid]
-
     if target_team.empty:
-        st.warning(f"Holdet '{valgt_hold}' (ID: {team_wyid}) blev ikke fundet i liga-dataen.")
+        st.warning(f"Ingen data fundet for {valgt_hold}.")
         return
 
     # 4. Pizza Chart setup
@@ -96,50 +101,50 @@ def vis_side(*args, **kwargs):
         ('goals_pg', 'Mål', '#2ecc71'),
         ('xg_pg', 'xG', '#2ecc71'),
         ('shots_pg', 'Skud', '#2ecc71'),
-        ('touchbox_pg', 'Felt-aktioner', '#2ecc71'),
-        ('passes_pg', 'Passes', '#f1c40f'),
-        ('pass_acc', 'Pass %', '#f1c40f'),
-        ('def_duels_pg', 'Def. Dueller', '#e74c3c'),
-        ('intercept_pg', 'Erobringer', '#e74c3c')
+        ('pass_final_third_pg', 'Felt-indlæg', '#f1c40f'),
+        ('pressing_intensity', 'Pres (PPDA)', '#e74c3c'),
+        ('xg_against_pg', 'xG Imod*', '#e74c3c') # Husk at lav score er bedst her
     ]
 
     labels, values, colors = [], [], []
     for col, label, color in metrics:
-        # Beregn percentil score i forhold til resten af ligaen
-        p_val = stats.percentileofscore(df[col], target_team[col].values[0])
+        # For xG Imod vil vi have at en LAV værdi giver en HØJ percentil (godt forsvar)
+        if col == 'xg_against_pg':
+            p_val = 100 - stats.percentileofscore(df[col], target_team[col].values[0])
+        else:
+            p_val = stats.percentileofscore(df[col], target_team[col].values[0])
+        
         labels.append(label)
         values.append(p_val)
         colors.append(color)
 
-    # 5. Plotting (Pizza Chart)
+    # 5. Plotting
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     fig.patch.set_facecolor('#0E1117')
     ax.set_facecolor('#0E1117')
     
     angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
-    
-    # Sørg for at lukke cirklen ved at gentage første element (valgfrit for bar charts)
-    ax.bar(angles, values, width=0.7, color=colors, alpha=0.6, edgecolor='white', linewidth=1)
+    ax.bar(angles, values, width=0.7, color=colors, alpha=0.6, edgecolor='white')
 
-    # Tilføj logo i midten
+    # Logo
     logo = get_logo(team_info['logo'])
     if logo:
-        imagebox = OffsetImage(logo, zoom=0.4)
-        ab = AnnotationBbox(imagebox, (0, 0), frameon=False)
-        ax.add_artist(ab)
+        ax.add_artist(AnnotationBbox(OffsetImage(logo, zoom=0.4), (0, 0), frameon=False))
 
     ax.set_xticks(angles)
     ax.set_xticklabels(labels, color='white', size=11, fontweight='bold')
-    ax.set_yticklabels([]) # Skjul 0-100 skalaen
+    ax.set_yticklabels([])
     ax.grid(color='grey', linestyle='--', alpha=0.3)
-    
     st.pyplot(fig)
 
-    # 6. Tabelvisning (Bunden)
-    st.dataframe(
-        target_team[['matches', 'goals_pg', 'xg_pg', 'pass_acc', 'touchbox_pg']].style.format(precision=2),
-        use_container_width=True
-    )
+    # 6. Standings Info (Nyt pga. din nye query!)
+    st.write("---")
+    c1, c2, c3, c4 = st.columns(4)
+    row = target_team.iloc[0]
+    c1.metric("Point", int(row['totalpoints']))
+    c2.metric("Vundne", int(row['totalwins']))
+    c3.metric("Uafgjorte", int(row['totaldraws']))
+    c4.metric("Tabte", int(row['totallosses']))
 
 if __name__ == "__main__":
     vis_side()
