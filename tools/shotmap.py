@@ -210,7 +210,7 @@ def vis_side(dp):
                         )
                     },
                     hide_index=True,
-                    height=calc_height,
+                    height=400,
                     use_container_width=True
                 )
                 
