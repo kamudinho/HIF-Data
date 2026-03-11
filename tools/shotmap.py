@@ -108,7 +108,7 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(5, 7))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
             colors = (dz_d['EVENT_TYPEID'] == 16).map({True: DZ_COLOR, False: 'white'})
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=DZ_COLOR, ax=ax)
             st.pyplot(fig)
 
     # --- TAB 4 & 5: ZONER (RETTET ZONE 8 PLACERING) ---
