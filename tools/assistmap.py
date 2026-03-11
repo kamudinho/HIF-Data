@@ -112,7 +112,7 @@ def vis_side(dp):
             # Ændret: half=False for at vise hele banen
             pitch_a = VerticalPitch(half=False, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             # Justeret figsize til en hel bane (større højde i forhold til bredde)
-            fig_a, ax_a = pitch_a.draw(figsize=(5.5, 9))
+            fig_a, ax_a = pitch_a.draw(figsize=(9, 5.5))
             
             if not df_map_data.empty:
                 mask_goal = df_map_data['NEXT_EVENT_TYPE'] == 16
