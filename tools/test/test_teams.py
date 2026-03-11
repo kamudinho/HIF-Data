@@ -114,7 +114,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (MED LAYOUT_IMAGE FIX) ---
+    # --- 4. GRAF FUNKTION (RETTET TIL PLOTLY UDEN XSHIFT) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -135,15 +135,14 @@ def vis_side(df_raw=None):
 
         fig = go.Figure()
         
-        # Vi definerer barerne med specifikke offsetgroups
+        # Søjlerne får tildelt offsetgroup for at Plotly ved de skal stå ved siden af hinanden
         fig.add_trace(go.Bar(
             name=team1, x=labels, y=v1, 
             marker_color=c1["primary"], 
             text=[f"{x:.2f}" for x in v1], 
             textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])),
-            showlegend=False, 
-            offsetgroup=1
+            showlegend=False, offsetgroup=1
         ))
         
         fig.add_trace(go.Bar(
@@ -152,33 +151,31 @@ def vis_side(df_raw=None):
             text=[f"{x:.2f}" for x in v2], 
             textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])),
-            showlegend=False, 
-            offsetgroup=2
+            showlegend=False, offsetgroup=2
         ))
 
-        # LOGOER VIA LAYOUT IMAGES
+        # LOGOER VIA LAYOUT IMAGES (Manuel beregning af X)
         for i in range(len(labels)):
+            # Ved barmode='group' med 2 søjler, ligger de ca. 0.17 til venstre/højre for center
             if l1:
                 fig.add_layout_image(dict(
                     source=l1,
                     xref="x", yref="y",
-                    x=i, y=v1[i],
-                    sizex=0.18, sizey=0.18, # Juster størrelsen her
+                    x=i - 0.17, # Manuelt forskudt til venstre søjle
+                    y=v1[i],
+                    sizex=0.15, sizey=0.15,
                     xanchor="center", yanchor="bottom",
-                    xshift=-25, # Skubber logoet til venstre over den røde søjle
-                    opacity=1,
-                    layer="above"
+                    opacity=1, layer="above"
                 ))
             if l2:
                 fig.add_layout_image(dict(
                     source=l2,
                     xref="x", yref="y",
-                    x=i, y=v2[i],
-                    sizex=0.18, sizey=0.18,
+                    x=i + 0.17, # Manuelt forskudt til højre søjle
+                    y=v2[i],
+                    sizex=0.15, sizey=0.15,
                     xanchor="center", yanchor="bottom",
-                    xshift=25, # Skubber logoet til højre over den blå søjle
-                    opacity=1,
-                    layer="above"
+                    opacity=1, layer="above"
                 ))
 
         fig.update_layout(
@@ -189,7 +186,7 @@ def vis_side(df_raw=None):
             paper_bgcolor='rgba(0,0,0,0)',
             yaxis=dict(
                 visible=False, 
-                range=[0, max(max(v1), max(v2)) * 1.4], # Plads til logoet øverst
+                range=[0, max(max(v1), max(v2)) * 1.4], 
                 fixedrange=True
             ),
             xaxis=dict(
@@ -199,6 +196,7 @@ def vis_side(df_raw=None):
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
