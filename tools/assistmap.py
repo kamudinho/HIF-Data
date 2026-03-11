@@ -97,17 +97,36 @@ def vis_side(dp):
                     </div>
                 """, unsafe_allow_html=True)
 
+            # Inde i din vis_side funktion under Tab 2 (ASSIST-MAP)
             with col_viz_a:
                 pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
                 
                 if not df_a_vis.empty:
-                    # Tegn pile fra aflevering til skud
+                    # 1. Opdel data
+                    mask_goal = df_a_vis['NEXT_EVENT_TYPE'] == 16
+                    df_goals = df_a_vis[mask_goal]
+                    df_key_passes = df_a_vis[~mask_goal]
+            
+                    # 2. Tegn Key Passes (Aflevering til skud - Grå)
+                    pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
+                                    s=DOT_SIZE-20, color='white', edgecolors='#888888', 
+                                    linewidth=1, alpha=0.7, ax=ax_a, zorder=2, label='Key Pass')
+                    
+                    # 3. Tegn Assists (Aflevering til mål - Guld)
+                    pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', 
+                                    linewidth=1.5, ax=ax_a, zorder=3, label='Assist')
+                    
+                    # 4. Tegn pile for alle (men lysere for skud)
                     pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
                                    df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                                   color='#888888', alpha=0.5, width=1.5, headwidth=3, ax=ax_a, zorder=1)
+                                   color='#888888', alpha=0.3, width=1, ax=ax_a, zorder=1)
                     
-                    # Tegn startpunktet for assisten
-                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
+                    # Highlight pile for mål
+                    if not df_goals.empty:
+                        pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                       df_goals['SHOT_X'], df_goals['SHOT_Y'], 
+                                       color=HIF_GOLD, alpha=0.8, width=2, ax=ax_a, zorder=1)
+            
                 st.pyplot(fig_a)
