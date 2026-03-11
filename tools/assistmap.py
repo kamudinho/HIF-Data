@@ -61,18 +61,8 @@ def vis_side(dp):
         if spiller_stats:
             df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Key Passes"], ascending=False)
             
-            # Ved at fjerne 'height' vil Streamlit automatisk udvide tabellen til at vise alle rækker
-            st.dataframe(
-                df_table,
-                column_config={
-                    "Spiller": st.column_config.TextColumn("Spiller"),
-                    "Assists": st.column_config.NumberColumn("Assists", format="%d"),
-                    "Key Passes": st.column_config.NumberColumn("Key Passes", format="%d"),
-                    "Total": st.column_config.NumberColumn("Total", format="%d")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
+            # Vi bruger st.table i stedet for st.dataframe for at undgå scroll
+            st.table(df_table)
             
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
