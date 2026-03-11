@@ -118,7 +118,7 @@ def vis_side(*args, **kwargs):
         plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
         
         V_OFFSET = 12
-        LIMIT_Y = 160 
+        LIMIT_Y = 130 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
