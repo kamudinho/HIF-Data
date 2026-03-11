@@ -168,15 +168,53 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # TEKST (Flyttet tættere på cirklen for at undgå whitespace)
+        # --- TEKST OG LABELS ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
-            label_y = 155
-            box_y = 132
-            ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
             
+            # 1. Labels uden for cirklen (HVID - ALTID SYNLIG)
+            label_y = 155
+            ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
             ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
+            
+            # 2. Værdibokse (HVID TAL - ALTID SYNLIG)
+            box_y = 132
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
+            
+            # 3. Sort tekst inde i segmenterne (KUN TIL SKÆRMEN)
+            # Vi giver dem et specifikt navn (gid), så vi kan finde og fjerne dem senere
+            inner_text_y = 75 
+            rotation = angle_deg if 270 > angle_deg > 90 else angle_deg + 180
+            ax.text(angle, inner_text_y, label, 
+                    ha='center', va='center', 
+                    fontsize=7, fontweight='bold', 
+                    color='black', alpha=0.4,
+                    rotation=rotation, rotation_mode='anchor',
+                    gid='overlay_text') # Dette ID bruger vi til at slette dem ved gem
 
+        # --- VIS PÅ SKÆRMEN ---
         st.pyplot(fig, use_container_width=True)
+
+        # --- DOWNLOAD LOGIK (FJERNER SORT TEKST AUTOMATISK) ---
+        buf = BytesIO()
+        
+        # Vi finder alle tekst-elementer med vores 'overlay_text' ID og gør dem usynlige
+        for t in ax.texts:
+            if t.get_gid() == 'overlay_text':
+                t.set_visible(False)
+        
+        # Gemmer den "rene" version til download
+        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
+        
+        # Gør dem synlige igen, så de ikke forsvinder fra web-interfacet efter download
+        for t in ax.texts:
+            if t.get_gid() == 'overlay_text':
+                t.set_visible(True)
+
+        st.download_button(
+            label="Download Chart (Uden sort overlay)",
+            data=buf.getvalue(),
+            file_name=f"pizza_{valgt_hold_navn}.png",
+            mime="image/png"
+        )
