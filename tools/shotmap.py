@@ -28,7 +28,7 @@ def vis_side(dp):
     else:
         df_skud['IS_DZ_GEO'] = False
 
-    tab1, tab2, tab3, tab4 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER"])
+    tab1, tab2, tab3 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER"])
 
     # Fælles indstilling for prikstørrelse
     DOT_SIZE = 90 
