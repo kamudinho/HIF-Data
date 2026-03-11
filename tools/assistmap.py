@@ -65,7 +65,6 @@ def vis_side(dp):
             height=calc_height
         )
 
-    # --- TAB 2: ASSIST-MAP ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([1.8, 1])
         
@@ -74,12 +73,16 @@ def vis_side(dp):
             spiller_liste_a = sorted(df_table["Spiller"].tolist())
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist", label_visibility="collapsed")
             
+            # FILTRERING: Her fjerner vi 0,0 og system-events (Type 34, 35 osv.)
+            mask_valid_pos = (df_assists['PASS_START_X'] > 0) & (df_assists['PASS_START_Y'] > 0)
+            df_filtered = df_assists[mask_valid_pos]
+    
             if v_a == "Hvidovre IF":
-                df_map_data = df_assists[df_assists['NEXT_EVENT_TYPE'].isin([13,14,15,16])]
+                df_map_data = df_filtered[df_filtered['NEXT_EVENT_TYPE'].isin([13,14,15,16])]
             else:
-                df_map_data = df_assists[
-                    (df_assists[player_col].str.endswith(v_a)) & 
-                    (df_assists['NEXT_EVENT_TYPE'].isin([13,14,15,16]))
+                df_map_data = df_filtered[
+                    (df_filtered[player_col].str.endswith(v_a)) & 
+                    (df_filtered['NEXT_EVENT_TYPE'].isin([13,14,15,16]))
                 ]
             
             goals_count = len(df_map_data[df_map_data['NEXT_EVENT_TYPE'] == 16])
