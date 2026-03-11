@@ -69,7 +69,7 @@ def vis_side(*args, **kwargs):
     st.markdown("""
         <style>
             .block-container { padding-top: 0rem !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -20px !important; }
+            [data-testid="stVerticalBlock"] > div:first-child { margin-top: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
 
