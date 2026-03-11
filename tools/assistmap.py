@@ -54,26 +54,26 @@ def vis_side(dp):
             spiller_stats.append({
                 "Spiller": spiller.split()[-1],
                 "Assists": assists,
-                "Chancer Skabt": key_passes,
-                "Total involveringer": len(s_data)
+                "Key Passes": key_passes,
+                "Total": len(s_data)
             })
         
         if spiller_stats:
-            df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Chancer Skabt"], ascending=False)
+            df_table = pd.DataFrame(spiller_stats).sort_values(["Assists", "Key Passes"], ascending=False)
             
+            # Ved at fjerne 'height' vil Streamlit automatisk udvide tabellen til at vise alle rækker
             st.dataframe(
                 df_table,
                 column_config={
                     "Spiller": st.column_config.TextColumn("Spiller"),
                     "Assists": st.column_config.NumberColumn("Assists", format="%d"),
-                    "Chancer Skabt": st.column_config.NumberColumn("Key Passes", format="%d"),
-                    "Total involveringer": st.column_config.NumberColumn("Total", format="%d")
+                    "Key Passes": st.column_config.NumberColumn("Key Passes", format="%d"),
+                    "Total": st.column_config.NumberColumn("Total", format="%d")
                 },
                 hide_index=True,
-                height=table_height,
                 use_container_width=True
             )
-
+            
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
         col_viz_a, col_ctrl_a = st.columns([2.2, 1])
