@@ -28,14 +28,80 @@ def vis_side(dp):
     else:
         df_skud['IS_DZ_GEO'] = False
 
-    tab1, tab2, tab3, tab4 = st.tabs(["AFSLUTNINGER", "DZ-AFSLUTNINGER", "ASSISTS", "DZ-SPILLERE"])
+    tab1, tab2, tab3, tab4 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "ASSISTS"])
 
     # Fælles indstilling for prikstørrelse
     DOT_SIZE = 90 
     LINE_WIDTH = 1.2
 
-    # --- TAB 1: AFSLUTNINGER ---
+    # --- TAB 1: SHOT-STATISTIK ---
     with tab1:
+        if df_skud.empty:
+            st.info("Ingen data fundet til statistik.")
+        else:
+            
+            stats_list = []
+            spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
+            
+            for spiller in spiller_liste_dz:
+                s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
+                s_dz = s_data[s_data['IS_DZ_GEO']]
+                
+                # Grunddata
+                total_skud = len(s_data)
+                skud_dz = len(s_dz)
+                total_maal = len(s_data[s_data['EVENT_TYPEID'] == 16])
+                maal_dz = len(s_dz[s_dz['EVENT_TYPEID'] == 16])
+                
+                # Beregninger (sikret mod division med nul)
+                dz_andel = (skud_dz / total_skud * 100) if total_skud > 0 else 0
+                konv_total = (total_maal / total_skud * 100) if total_skud > 0 else 0
+                konv_dz = (maal_dz / skud_dz * 100) if skud_dz > 0 else 0
+                
+                if total_skud > 0:
+                    efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
+                    stats_list.append({
+                        "Spiller": efternavn, 
+                        "Skud": int(total_skud),
+                        "Mål": int(total_maal),
+                        "Konv. %": konv_total,
+                        "Skud i DZ": int(skud_dz),
+                        "Mål i DZ": int(maal_dz),
+                        "DZ Konv. %": konv_dz,
+                        "DZ Andel": dz_andel
+                    })
+            
+            if stats_list:
+                df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
+                
+                # Beregn højde så hele tabellen vises (ca. 35px pr række + header)
+                table_height = (len(df_table) + 1) * 35 + 2
+
+                st.dataframe(
+                    df_table,
+                    column_config={
+                        "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
+                        "Skud": st.column_config.NumberColumn("Skud", format="%d"),
+                        "Mål": st.column_config.NumberColumn("Mål", format="%d"),
+                        "Konv. %": st.column_config.NumberColumn("Konv. %", format="%.1f%%", help="Generel konverteringsrate"),
+                        "Skud i DZ": st.column_config.NumberColumn("Skud DZ", format="%d"),
+                        "Mål i DZ": st.column_config.NumberColumn("Mål DZ", format="%d"),
+                        "DZ Konv. %": st.column_config.NumberColumn("DZ Konv. %", format="%.1f%%", help="Konverteringsrate inde i Danger Zone"),
+                        "DZ Andel": st.column_config.ProgressColumn(
+                            "DZ Andel %", 
+                            help="Hvor stor en del af spillerens skud er i DZ?",
+                            format="%.1f%%",
+                            min_value=0,
+                            max_value=100
+                        )
+                    },
+                    hide_index=True,
+                    height=table_height,
+                    use_container_width=True
+                )
+
+    # --- TAB 2: AFSLUTNINGER ---
+    with tab2:
         if df_skud.empty:
             st.info("Ingen skuddata fundet.")
         else:
@@ -58,8 +124,8 @@ def vis_side(dp):
                 pitch.scatter(df_vis['EVENT_X'], df_vis['EVENT_Y'], s=DOT_SIZE, c=c_map, edgecolors=HIF_RED, linewidth=LINE_WIDTH, ax=ax)
                 st.pyplot(fig)
 
-    # --- TAB 2: DANGER ZONE ---
-    with tab2:
+    # --- TAB 3: DANGER ZONE ---
+    with tab3:
         if df_skud.empty:
             st.info("Ingen data fundet.")
         else:
@@ -135,8 +201,8 @@ def vis_side(dp):
                     use_container_width=True
                 )
 
-    # --- TAB 3: ASSISTS ---
-    with tab3:
+    # --- TAB 4: ASSISTS ---
+    with tab4:
         if df_assists.empty:
             st.warning("⚠️ Ingen assists fundet.")
         else:
@@ -167,68 +233,4 @@ def vis_side(dp):
                                     s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
 
-    # --- TAB 4: DZ-STATISTIK ---
-    with tab4:
-        if df_skud.empty:
-            st.info("Ingen data fundet til statistik.")
-        else:
-            
-            stats_list = []
-            spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
-            
-            for spiller in spiller_liste_dz:
-                s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
-                s_dz = s_data[s_data['IS_DZ_GEO']]
-                
-                # Grunddata
-                total_skud = len(s_data)
-                skud_dz = len(s_dz)
-                total_maal = len(s_data[s_data['EVENT_TYPEID'] == 16])
-                maal_dz = len(s_dz[s_dz['EVENT_TYPEID'] == 16])
-                
-                # Beregninger (sikret mod division med nul)
-                dz_andel = (skud_dz / total_skud * 100) if total_skud > 0 else 0
-                konv_total = (total_maal / total_skud * 100) if total_skud > 0 else 0
-                konv_dz = (maal_dz / skud_dz * 100) if skud_dz > 0 else 0
-                
-                if total_skud > 0:
-                    efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
-                    stats_list.append({
-                        "Spiller": efternavn, 
-                        "Skud": int(total_skud),
-                        "Mål": int(total_maal),
-                        "Konv. %": konv_total,
-                        "Skud i DZ": int(skud_dz),
-                        "Mål i DZ": int(maal_dz),
-                        "DZ Konv. %": konv_dz,
-                        "DZ Andel": dz_andel
-                    })
-            
-            if stats_list:
-                df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
-                
-                # Beregn højde så hele tabellen vises (ca. 35px pr række + header)
-                table_height = (len(df_table) + 1) * 35 + 2
-
-                st.dataframe(
-                    df_table,
-                    column_config={
-                        "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
-                        "Skud": st.column_config.NumberColumn("Skud", format="%d"),
-                        "Mål": st.column_config.NumberColumn("Mål", format="%d"),
-                        "Konv. %": st.column_config.NumberColumn("Konv. %", format="%.1f%%", help="Generel konverteringsrate"),
-                        "Skud i DZ": st.column_config.NumberColumn("Skud DZ", format="%d"),
-                        "Mål i DZ": st.column_config.NumberColumn("Mål DZ", format="%d"),
-                        "DZ Konv. %": st.column_config.NumberColumn("DZ Konv. %", format="%.1f%%", help="Konverteringsrate inde i Danger Zone"),
-                        "DZ Andel": st.column_config.ProgressColumn(
-                            "DZ Andel %", 
-                            help="Hvor stor en del af spillerens skud er i DZ?",
-                            format="%.1f%%",
-                            min_value=0,
-                            max_value=100
-                        )
-                    },
-                    hide_index=True,
-                    height=table_height,
-                    use_container_width=True
-                )
+    
