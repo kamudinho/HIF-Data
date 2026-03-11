@@ -51,27 +51,28 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WITH OrderedEvents AS (
                 SELECT 
                     PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, EVENT_TYPEID, EVENT_OUTCOME,
-                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TIMESTAMP, EVENT_EVENTID,
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
                     LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_X,
                     LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-                AND EVENT_TYPEID = 1 -- Vi henter ALLE afleveringer nu
+                -- Vi inkluderer nu alle former for boldflytning:
+                AND EVENT_TYPEID IN (1, 2, 107, 108, 109)
             )
             SELECT 
                 PLAYER_NAME AS ASSIST_PLAYER,
                 EVENT_X AS PASS_START_X,
                 EVENT_Y AS PASS_START_Y,
-                END_X AS SHOT_X, -- Vi genbruger navnet til din eksisterende mapping
+                END_X AS SHOT_X,
                 END_Y AS SHOT_Y,
                 NEXT_EVENT_TYPE,
                 EVENT_OUTCOME,
-                -- Logik for fremadrettet: Bolden flyttes min. 10 meter frem (Opta banen er 100 enheder)
-                CASE WHEN END_X > (EVENT_X + 10) AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
+                EVENT_TYPEID,
+                -- IS_PROGRESSIVE: Bolden flyttes min. 25% af banens længde fremad
+                CASE WHEN END_X > (EVENT_X + 25) AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
             FROM OrderedEvents
-            WHERE (NEXT_EVENT_TYPE IN (13, 14, 15, 16)) -- Enten fører den til skud
-               OR EVENT_TYPEID = 1 -- Eller også er det bare en pasning
+            WHERE 1=1
             {hif_filter_event}
         """,
         
