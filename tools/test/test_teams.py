@@ -17,9 +17,8 @@ def get_text_color(hex_color):
 # --- 2. HOVEDSIDE ---
 
 def vis_side(df_raw=None):
-    # Vi henter dp fra session_state (den indeholder Opta data)
     if "dp" not in st.session_state: 
-        st.error("Data pakken 'dp' mangler i session_state.")
+        st.error("Data pakken 'dp' mangler.")
         return
     
     dp = st.session_state["dp"]
@@ -27,11 +26,10 @@ def vis_side(df_raw=None):
     logo_map = dp.get("logo_map", {})
     df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
     
-    # Etabler forbindelse direkte
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- HJÆLPEFUNKTIONER TIL LOGO OG FORM ---
+    # --- HJÆLPEFUNKTIONER ---
     def get_logo_url(opta_uuid, team_name):
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         return logo_map.get(wy_id, next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), ""))
@@ -50,7 +48,7 @@ def vis_side(df_raw=None):
             res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
         return res
 
-    # --- DATABEREGNING (LIGATABEL VIA OPTA) ---
+    # --- DATABEREGNING (OPTA LIGATABEL) ---
     stats = {}
     if not df_opta.empty:
         for _, row in df_opta.iterrows():
@@ -58,7 +56,6 @@ def vis_side(df_raw=None):
             for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
                 if uuid not in stats:
                     stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
-
             if row['MATCH_STATUS'] == 'Played':
                 h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0)), int(row.get('TOTAL_AWAY_SCORE', 0))
                 winner = str(row.get('WINNER', '')).lower()
@@ -77,14 +74,15 @@ def vis_side(df_raw=None):
         df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
         df_liga.insert(0, '#', df_liga.index + 1)
 
-    # --- WYSCOUT DATA HENTNING (DIN SQL DIREKTE) ---
+    # --- WYSCOUT DATA HENTNING (RETTET SQL) ---
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if conn is None: return pd.DataFrame()
+        # Jeg har fjernet TOUCHINBOX da den fejlede - vi finder det korrekte navn senere
         query = f"""
         SELECT 
             t.TEAMNAME,
-            adv.XG, adv.SHOTS, adv.TOUCHINBOX,
+            adv.XG, adv.SHOTS,
             md.RECOVERIES, md.INTERCEPTIONS,
             mp.PASSES
         FROM {DB}.WYSCOUT_TEAMMATCHES tm
@@ -100,7 +98,7 @@ def vis_side(df_raw=None):
         try:
             return conn.query(query)
         except Exception as e:
-            st.error(f"SQL Fejl: {e}")
+            st.error(f"SQL Fejl ved hentning af Wyscout: {e}")
             return pd.DataFrame()
 
     df_wy_raw = get_wyscout_direct()
@@ -109,9 +107,7 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        if df_liga.empty:
-            st.warning("Ingen Opta data fundet.")
-        else:
+        if not df_liga.empty:
             st.markdown("""<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
                         .league-table td, .league-table th { padding: 8px; text-align: center; border-bottom: 1px solid #eee; }</style>""", unsafe_allow_html=True)
             df_disp = df_liga.copy()
@@ -120,28 +116,24 @@ def vis_side(df_raw=None):
             st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
-        if df_liga.empty:
-            st.info("Venter på holdliste...")
-            return
-
+        if df_liga.empty: return
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
         team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
         team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
 
         if not df_wy_raw.empty:
-            # Snowflake returnerer altid uppercase kolonner
             df_wy_raw.columns = [c.upper() for c in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
-            # Find data for de to hold
             d1 = df_agg[df_agg['TEAMNAME'].str.contains(team1, case=False, na=False)]
             d2 = df_agg[df_agg['TEAMNAME'].str.contains(team2, case=False, na=False)]
 
             if not d1.empty and not d2.empty:
                 st.subheader("Wyscout Performance (Gns. pr. kamp)")
+                # Vi har fjernet TOUCHINBOX herunder også
                 cats = {
-                    "Angreb": (['XG', 'SHOTS', 'TOUCHINBOX'], ['xG', 'Skud', 'Felt-berør.']),
+                    "Angreb": (['XG', 'SHOTS'], ['xG', 'Skud']),
                     "Forsvar": (['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions']),
                     "Spilopbygning": (['PASSES'], ['Afleveringer'])
                 }
@@ -151,13 +143,12 @@ def vis_side(df_raw=None):
                     with c_tabs[i]:
                         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
                         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
-                        
                         fig = go.Figure()
                         fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color="#df003b", text=[f"{x:.2f}" for x in v1], textposition='auto'))
                         fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color="#0056a3", text=[f"{x:.2f}" for x in v2], textposition='auto'))
                         fig.update_layout(barmode='group', height=350, margin=dict(t=20, b=20, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info(f"Ingen match i Wyscout for {team1} vs {team2}. Navne i database: {df_agg['TEAMNAME'].unique()[:3]}...")
+                st.info(f"Ingen match i database for {team1} eller {team2}.")
         else:
-            st.error("Wyscout data ikke fundet i Snowflake (tjek SEASONNAME eller COMPETITION_WYID).")
+            st.error("Kunne ikke hente data. Tjek om sæson/liga findes i Snowflake.")
