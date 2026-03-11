@@ -73,15 +73,16 @@ def vis_side(*args, **kwargs):
             div.stDownloadButton > button {
                 background-color: white !important;
                 color: black !important;
-                border: 0.8px solid black !important;
+                border: 1px solid black !important;
                 border-radius: 4px !important;
-                padding: 0.4rem !important;
+                padding: 0.3rem !important;
                 font-weight: bold !important;
                 width: 100% !important;
                 text-transform: uppercase;
-                font-size: 11px !important;
+                font-size: 10px !important;
+                margin-top: 10px;
             }
-            div[data-testid="stRadio"] label p { font-size: 13px !important; }
+            div[data-testid="stRadio"] label p { font-size: 12px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -105,16 +106,16 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART DESIGN ---
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART DESIGN (KOMPAKT) ---
+        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # JUSTRERING: Giver plads til labels men fjerner spildplads i toppen
-        plt.subplots_adjust(top=0.9, bottom=0.1, left=0.1, right=0.9)
+        # Øger margins en smule så labels ikke rammer kanten af billedet
+        plt.subplots_adjust(top=0.85, bottom=0.15, left=0.15, right=0.85)
         
         V_OFFSET = 25
-        LIMIT_Y = 160 # Øget fra 110, ellers bliver dine labels på 142 beskåret!
+        LIMIT_Y = 165 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -141,23 +142,28 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
+            # Tilføjer en lille hvid kant (frame) omkring logoet i midten
+            ab = AnnotationBbox(OffsetImage(logo_img, zoom=0.5), (0, 0), 
+                                frameon=True, 
+                                bboxprops=dict(facecolor='white', edgecolor='white', boxstyle='circle,pad=0.1'),
+                                zorder=10)
+            ax.add_artist(ab)
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- 4. TEKST OG LABELS ---
+        # --- 4. TEKST OG LABELS (SKALERET NED) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Værdibokse (Farvede tal) - Radius 112
-            ax.text(angle, 112, disp, ha='center', va='center', 
-                    fontsize=9, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
+            # Tal-bokse rykket ind på 110
+            ax.text(angle, 110, disp, ha='center', va='center', 
+                    fontsize=8, fontweight='bold', color='white', zorder=12,
+                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.2', linewidth=1))
             
-            # Stat Labels (Hvide kasser) - Radius 145
-            ax.text(angle, 145, label, ha='center', va='center',
-                    fontsize=7, fontweight='bold', color='black', zorder=11,
-                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
+            # Navne-labels rykket ind på 140
+            ax.text(angle, 140, label, ha='center', va='center',
+                    fontsize=6.5, fontweight='bold', color='black', zorder=11,
+                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3', linewidth=0.7))
 
         st.pyplot(fig, use_container_width=True)
 
