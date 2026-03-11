@@ -3,60 +3,23 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from mplsoccer import VerticalPitch
+from mplsoccer import Pitch, VerticalPitch
 
 # HIF Identitet
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
-# --- 1. DINE PRÆCISE ZONE-DEFINITIONER (FRA PITCH_ANALYSIS.PY) ---
-PITCH_LENGTH = 105
-PITCH_WIDTH = 68
-CENTER_ZONE_WIDTH = 18.32
-X_CENTER_MIN = (PITCH_WIDTH - CENTER_ZONE_WIDTH) / 2
-X_CENTER_MAX = (PITCH_WIDTH + CENTER_ZONE_WIDTH) / 2
-
-Y_GOALLINE = 105.0
-Y_SIX_YARD = 99.5
-Y_PENALTY_SPOT = 94.0
-Y_PENALTY_AREA = 88.5
-Y_MID_DEFENSE = 75.0
-X_WIDE_INNER_MAX = (PITCH_WIDTH + 40.2) / 2
-X_WIDE_INNER_MIN = (PITCH_WIDTH - 40.2) / 2
-
-ZONE_BOUNDARIES = {
-    "Zone 1": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
-    "Zone 2": {"y_min": Y_PENALTY_SPOT, "y_max": Y_SIX_YARD, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
-    "Zone 3": {"y_min": Y_PENALTY_AREA, "y_max": Y_PENALTY_SPOT, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
-    "Zone 4A": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_CENTER_MAX, "x_max": X_WIDE_INNER_MAX},
-    "Zone 4B": {"y_min": Y_SIX_YARD, "y_max": Y_GOALLINE, "x_min": X_WIDE_INNER_MIN, "x_max": X_CENTER_MIN},
-    "Zone 5A": {"y_min": Y_PENALTY_AREA, "y_max": Y_SIX_YARD, "x_min": X_CENTER_MAX, "x_max": X_WIDE_INNER_MAX},
-    "Zone 5B": {"y_min": Y_PENALTY_AREA, "y_max": Y_SIX_YARD, "x_min": X_WIDE_INNER_MIN, "x_max": X_CENTER_MIN},
-    "Zone 6A": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": X_WIDE_INNER_MAX, "x_max": PITCH_WIDTH},
-    "Zone 6B": {"y_min": Y_PENALTY_AREA, "y_max": Y_GOALLINE, "x_min": 0, "x_max": X_WIDE_INNER_MIN},
-    "Zone 7B": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MIN, "x_max": X_CENTER_MAX},
-    "Zone 7C": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": 0, "x_max": X_CENTER_MIN},
-    "Zone 7A": {"y_min": Y_MID_DEFENSE, "y_max": Y_PENALTY_AREA, "x_min": X_CENTER_MAX, "x_max": PITCH_WIDTH},
-    "Zone 8": {"y_min": 0, "y_max": Y_MID_DEFENSE, "x_min": 0, "x_max": PITCH_WIDTH}
-}
-
-def get_zone_from_coords(x_meter, y_meter):
-    """Matcher en koordinat med dine ZONE_BOUNDARIES definitioner"""
-    for zone, b in ZONE_BOUNDARIES.items():
-        if (b["y_min"] <= y_meter <= b["y_max"]) and (b["x_min"] <= x_meter <= b["x_max"]):
-            return zone
-    return "Udenfor"
-
 def vis_side(dp):
-    # CSS Styling
+    # CSS (Beholdes for styling af tabeller og stats-bokse)
     st.markdown(f"""
         <style>
-            .full-width-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+            .full-width-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; }}
             .full-width-table th {{ background-color: #f0f2f6; text-align: left; padding: 10px; border-bottom: 2px solid {HIF_GOLD}; font-size: 0.85rem; }}
             .full-width-table td {{ padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; }}
             .stat-box {{ background-color: #f8f9fa; padding: 8px 12px; border-radius: 8px; border-left: 5px solid {HIF_GOLD}; margin-bottom: 8px; }}
             .stat-label {{ font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
             .stat-value {{ font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
+            .legend-item {{ font-size: 0.85rem; color: #333; margin-bottom: 6px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 2px; }}
             .icon-circle {{ width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1.5px solid black; }}
         </style>
     """, unsafe_allow_html=True)
@@ -66,20 +29,41 @@ def vis_side(dp):
         st.caption("Ingen data fundet.")
         return
 
-    # Forberedelse (Konverter Opta 0-100 til dine meter-mål)
-    df_assists['x_meter'] = df_assists['PASS_START_Y'] * (PITCH_WIDTH / 100) # Opta Y er bredde
-    df_assists['y_meter'] = df_assists['PASS_START_X'] * (PITCH_LENGTH / 100) # Opta X er længde
+    # Forberedelse
     df_assists['is_assist'] = (df_assists['NEXT_EVENT_TYPE'] == 16).astype(int)
     df_assists['is_key_pass'] = df_assists['NEXT_EVENT_TYPE'].isin([13, 14, 15]).astype(int)
-    
-    # Tildel zoner baseret på dine grænser
-    df_assists['Zone'] = df_assists.apply(lambda r: get_zone_from_coords(r['x_meter'], r['y_meter']), axis=1)
+    player_col = 'ASSIST_PLAYER'
+
+    # --- ZONE LOGIK (Konverteret fra dine meter til Opta 0-100) ---
+    def get_zone_name(opta_x, opta_y):
+        # Konverteringsfaktorer: Opta (0-100) -> Meter (105, 68)
+        x_m = opta_x * (105/100)
+        y_m = opta_y * (68/100)
+        
+        # Center grænser (Meter)
+        c_min, c_max = 24.84, 43.16 # (68 - 18.32)/2 og (68 + 18.32)/2
+        w_min, w_max = 13.9, 54.1  # Y_WIDE_INNER grænser i meter
+
+        if x_m < 75.0: return "Zone 8"
+        if x_m < 88.5:
+            if y_m > c_max: return "Zone 7A"
+            if y_m < c_min: return "Zone 7C"
+            return "Zone 7B"
+        if x_m < 99.5:
+            if y_m > c_max: return "Zone 5A"
+            if y_m < c_min: return "Zone 5B"
+            return "Zone 2/3"
+        if y_m > c_max: return "Zone 4A/6A"
+        if y_m < c_min: return "Zone 4B/6B"
+        return "Zone 1"
+
+    df_assists['Zone'] = df_assists.apply(lambda r: get_zone_name(r['PASS_START_X'], r['PASS_START_Y']), axis=1)
 
     tab1, tab2, tab3 = st.tabs(["ASSIST-OVERSIGT", "ASSIST-MAP", "ASSIST-ZONER"])
 
-    # --- TAB 1: OVERSIGT ---
+    # --- TAB 1: SPILLEROVERSIGT (Original) ---
     with tab1:
-        df_table = df_assists.groupby('ASSIST_PLAYER').agg(
+        df_table = df_assists.groupby(player_col).agg(
             Assists=('is_assist', 'sum'),
             Key_Passes=('is_key_pass', 'sum'),
             Corner_Assists=('IS_CORNER', 'sum'),
@@ -92,60 +76,74 @@ def vis_side(dp):
             table_html += f'<th>{col}</th>'
         table_html += '</tr></thead><tbody>'
         for _, row in df_table.iterrows():
-            table_html += f"<tr><td><b>{row['ASSIST_PLAYER']}</b></td><td>{row['Assists']}</td><td>{row['Key_Passes']}</td><td>{row['Corner_Assists']}</td><td>{row['Cross_Assists']}</td><td>{row['Progressive']}</td></tr>"
+            table_html += f"<tr><td><b>{row[player_col]}</b></td><td>{row['Assists']}</td><td>{row['Key_Passes']}</td><td>{row['Corner_Assists']}</td><td>{row['Cross_Assists']}</td><td>{row['Progressive']}</td></tr>"
         table_html += '</tbody></table>'
         st.markdown(table_html, unsafe_allow_html=True)
 
-    # --- TAB 2: MAP ---
+    # --- TAB 2: ASSIST-MAP (Original med dine pile/cirkler) ---
     with tab2:
-        col_viz, col_ctrl = st.columns([1.8, 1])
-        with col_ctrl:
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table["ASSIST_PLAYER"].tolist()))
-            df_f = df_assists[df_assists['ASSIST_PLAYER'] == v_a] if v_a != "Hvidovre IF" else df_assists
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Goal Assists</div><div class="stat-value">{df_f["is_assist"].sum()}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color: #888888"><div class="stat-label"><span class="icon-circle" style="background-color: #888888;"></span>Shot Assists</div><div class="stat-value">{df_f["is_key_pass"].sum()}</div></div>', unsafe_allow_html=True)
-
-        with col_viz:
-            pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(8, 6))
-            # Tegn assists (kunne udvides med pile)
-            df_gs = df_f[df_f['is_assist'] == 1]
-            pitch.scatter(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], s=100, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=3)
-            st.pyplot(fig, use_container_width=True)
-
-    # --- TAB 3: ASSIST-ZONER (DIN MODEL) ---
-    with tab3:
-        col_z_map, col_z_data = st.columns([1.8, 1])
-        df_z = df_assists[df_assists['is_assist'] == 1].copy()
-        
-        with col_z_data:
-            st.markdown("**ASSISTS PR. ZONE**")
-            z_summary = df_z['Zone'].value_counts().reindex(ZONE_BOUNDARIES.keys(), fill_value=0).reset_index()
-            z_summary.columns = ['Zone', 'Antal']
-            st.table(z_summary[z_summary['Antal'] > 0]) # Vis kun zoner med data
-
-        with col_z_map:
-            # Vi bruger din logik fra create_pitch_map
-            pitch_z = VerticalPitch(half=True, pitch_type='custom', pitch_length=PITCH_LENGTH, pitch_width=PITCH_WIDTH,
-                                    line_color='grey', goal_type='box')
-            fig_z, ax_z = pitch_z.draw(figsize=(8, 10))
-            ax_z.set_ylim(50, 105)
-
-            # Tegn dine rektangler præcis som i dit script
-            for name, bounds in ZONE_BOUNDARIES.items():
-                if bounds["y_max"] <= 50: continue
-                rect = Rectangle((bounds["x_min"], max(bounds["y_min"], 50)), 
-                                 bounds["x_max"] - bounds["x_min"], 
-                                 bounds["y_max"] - max(bounds["y_min"], 50),
-                                 edgecolor='black', linestyle='--', facecolor=HIF_GOLD, alpha=0.1)
-                ax_z.add_patch(rect)
-                # Tilføj zonenavn
-                ax_z.text(bounds["x_min"] + (bounds["x_max"] - bounds["x_min"])/2,
-                          bounds["y_min"] + (bounds["y_max"] - bounds["y_min"])/2,
-                          name, ha='center', va='center', fontsize=8, alpha=0.5)
-
-            # Plot de faktiske assists på zone-kortet
-            if not df_z.empty:
-                pitch_z.scatter(df_z['y_meter'], df_z['x_meter'], s=100, color=HIF_GOLD, edgecolors='black', ax=ax_z, zorder=5)
+        col_viz_a, col_ctrl_a = st.columns([1.8, 1])
+        with col_ctrl_a:
+            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + sorted(df_table[player_col].tolist()), key="sb_assist")
+            df_filtered = df_assists.copy()
+            if v_a != "Hvidovre IF":
+                df_filtered = df_filtered[df_filtered[player_col] == v_a]
             
+            st.markdown(f"""
+                <div class="stat-box">
+                    <div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Goal Assists</div>
+                    <div class="stat-value">{df_filtered['is_assist'].sum()}</div>
+                </div>
+                <div class="stat-box" style="border-left-color: #888888">
+                    <div class="stat-label"><span class="icon-circle" style="background-color: #888888;"></span>Shot Assists</div>
+                    <div class="stat-value">{df_filtered['is_key_pass'].sum()}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+            if not df_filtered.empty and 'GOAL_SCORER' in df_filtered.columns:
+                st.write("---")
+                st.markdown("**TOP 5: MODTAGERE**")
+                top_targets = df_filtered[df_filtered['GOAL_SCORER'].notna()]['GOAL_SCORER'].value_counts().head(5)
+                for name, count in top_targets.items():
+                    st.markdown(f'<div class="legend-item"><span>{name}</span><b>{count}</b></div>', unsafe_allow_html=True)
+
+        with col_viz_a:
+            pitch_a = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
+            fig_a, ax_a = pitch_a.draw(figsize=(8, 6))
+            if not df_filtered.empty:
+                df_kp = df_filtered[df_filtered['is_key_pass'] == 1]
+                pitch_a.arrows(df_kp['PASS_START_X'], df_kp['PASS_START_Y'], df_kp['SHOT_X'], df_kp['SHOT_Y'], color='#888888', alpha=0.3, width=1.5, ax=ax_a)
+                pitch_a.scatter(df_kp['PASS_START_X'], df_kp['PASS_START_Y'], marker='o', s=40, color='#888888', alpha=0.5, edgecolors='black', ax=ax_a)
+                df_gs = df_filtered[df_filtered['is_assist'] == 1]
+                pitch_a.arrows(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], df_gs['SHOT_X'], df_gs['SHOT_Y'], color=HIF_GOLD, alpha=0.9, width=3, headwidth=5, ax=ax_a, zorder=2)
+                pitch_a.scatter(df_gs['PASS_START_X'], df_gs['PASS_START_Y'], marker='o', s=100, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
+            st.pyplot(fig_a, use_container_width=True)
+
+    # --- TAB 3: ASSIST-ZONER (Baseret på din pitch_analysis.py) ---
+    with tab3:
+        col_viz_z, col_ctrl_z = st.columns([1.8, 1])
+        df_zone_goals = df_assists[df_assists['is_assist'] == 1].copy()
+        
+        with col_ctrl_z:
+            st.markdown("**ASSISTS PR. ZONE**")
+            if not df_zone_goals.empty:
+                z_counts = df_zone_goals['Zone'].value_counts().reset_index()
+                z_counts.columns = ['Zone', 'Antal']
+                st.table(z_counts.sort_values('Zone'))
+            else:
+                st.write("Ingen assists fundet.")
+
+        with col_viz_z:
+            # Her tegner vi banen præcis som din licens-opgave (105x68 meter)
+            pitch_z = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+            fig_z, ax_z = pitch_z.draw(figsize=(8, 10))
+            ax_z.set_ylim(50, 105) # Vis kun angrebshalvdel
+
+            # Konverter assists til meter for at plotte dem på det præcise kort
+            if not df_zone_goals.empty:
+                x_meter = df_zone_goals['PASS_START_X'] * (105/100)
+                y_meter = df_zone_goals['PASS_START_Y'] * (68/100)
+                # Scatter i (y, x) fordi VerticalPitch bruger bredde som x-akse
+                ax_z.scatter(y_meter, x_meter, s=120, color=HIF_GOLD, edgecolors='black', zorder=5)
+
             st.pyplot(fig_z, use_container_width=True)
