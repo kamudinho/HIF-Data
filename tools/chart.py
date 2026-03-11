@@ -102,7 +102,7 @@ def vis_side(*args, **kwargs):
         # Aggressiv justering af margins - top=1.0 fjerner alt luft over diagrammet
         plt.subplots_adjust(left=0.05, right=0.95, top=1.0, bottom=0.0)
         
-        V_OFFSET = 25
+        V_OFFSET = 10
         LIMIT_Y = 120 # Stram grænse for at undgå tom yderring
         ax.set_ylim(0, LIMIT_Y)
         
