@@ -133,7 +133,7 @@ def vis_side(*args, **kwargs):
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
         V_OFFSET = 28
-        LIMIT_Y = 170 
+        LIMIT_Y = 150 
         ax.set_ylim(0, LIMIT_Y)
         
         # ... (Samme farve- og bar-plot kode som før) ...
