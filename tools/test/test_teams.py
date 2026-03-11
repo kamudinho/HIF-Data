@@ -164,9 +164,9 @@ def vis_side(df_raw=None):
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
         # Kolonner til visning (Inkl. de nye Wyscout stats)
-        vis_cols = ['#', ' ', 'HOLD', 'K', 'P', 'AVERAGE_SHOTS', 'AVERAGE_FORWARD_PASSES', 'PPDA', 'FORM', 'NÆSTE']
+        vis_cols = ['#', ' ', 'HOLD', 'K', 'P', 'SHOTS', 'FORWARDPASSES', 'PPDA', 'FORM', 'NÆSTE']
         # Omdøb for pænere header
-        df_disp = df_disp.rename(columns={'AVERAGE_SHOTS': 'Skud/K', 'AVERAGE_FORWARD_PASSES': 'Fwd P', 'PPDA': 'PPDA'})
+        df_disp = df_disp.rename(columns={'SHOTS': 'Skud/K', 'FORWARDPASSES': 'Fwd P', 'PPDA': 'PPDA'})
         vis_cols_pretty = ['#', ' ', 'HOLD', 'K', 'P', 'Skud/K', 'Fwd P', 'PPDA', 'FORM', 'NÆSTE']
         
         st.write(df_disp[vis_cols_pretty].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
