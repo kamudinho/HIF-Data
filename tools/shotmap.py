@@ -28,7 +28,7 @@ def vis_side(dp):
     else:
         df_skud['IS_DZ_GEO'] = False
 
-    tab1, tab2, tab3 = st.tabs(["AFSLUTNINGER", "DZ-AFSLUTNINGER", "ASSISTS"])
+    tab1, tab2, tab3, tab4 = st.tabs(["AFSLUTNINGER", "DZ-AFSLUTNINGER", "ASSISTS", "DZ-SPILLERE"])
 
     # Fælles indstilling for prikstørrelse
     DOT_SIZE = 90 
@@ -166,3 +166,54 @@ def vis_side(dp):
                     pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
                                     s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
+
+    # --- TAB 4: DZ-STATISTIK (DEN NYE TAB) ---
+    with tab4:
+        if df_skud.empty:
+            st.info("Ingen data fundet til statistik.")
+        else:
+            st.markdown("### Danger Zone Effektivitet")
+            st.caption("Herunder ses spillernes evne til at komme til afslutninger i feltets mest farlige zone.")
+            
+            stats_list = []
+            spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
+            
+            for spiller in spiller_liste_dz:
+                s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
+                s_dz = s_data[s_data['IS_DZ_GEO']]
+                
+                if len(s_dz) > 0:
+                    # Vi tager efternavnet for at gøre tabellen mere mobilvenlig
+                    efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
+                    stats_list.append({
+                        "Spiller": efternavn, 
+                        "Skud i DZ": int(len(s_dz)), 
+                        "Mål i DZ": int(len(s_dz[s_dz['EVENT_TYPEID'] == 16])), 
+                        "DZ %": (len(s_dz)/len(s_data)*100)
+                    })
+            
+            if stats_list:
+                df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
+                
+                # Streamlit Dataframe med interaktive elementer
+                st.dataframe(
+                    df_table,
+                    column_config={
+                        "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
+                        "Skud i DZ": st.column_config.NumberColumn("Skud", help="Antal afslutninger i Danger Zone"),
+                        "Mål i DZ": st.column_config.NumberColumn("Mål"),
+                        "DZ %": st.column_config.ProgressColumn(
+                            "Andel af skud i DZ (%)", 
+                            help="Hvor stor en procentdel af spillerens samlede skud er foretaget i Danger Zone?",
+                            format="%.1f%%",
+                            min_value=0,
+                            max_value=100
+                        )
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                # En lille "Fun Fact" eller opsummering under tabellen
+                top_dz_spiller = df_table.iloc[0]['Spiller']
+                st.info(f"💡 **{top_dz_spiller}** er den spiller med flest afslutninger i Danger Zone.")
