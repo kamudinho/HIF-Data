@@ -77,7 +77,7 @@ def vis_side(*args, **kwargs):
                 border: 1px solid black !important;
                 border-radius: 2px !important;
                 padding: 0.5rem !important;
-                font-weight: 800 !important;
+                font-weight: 8 !important;
                 width: 100% !important;
                 text-transform: uppercase;
                 font-size: 10px !important;
