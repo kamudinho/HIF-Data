@@ -28,7 +28,7 @@ def vis_side(dp):
     else:
         df_skud['IS_DZ_GEO'] = False
 
-    tab1, tab2, tab3 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER"])
+    tab1, tab2, tab3, tab4 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER"])
 
     # Fælles indstilling for prikstørrelse
     DOT_SIZE = 90 
@@ -162,3 +162,90 @@ def vis_side(dp):
                     pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=DOT_SIZE, c=c_dz, edgecolors=HIF_RED, linewidth=LINE_WIDTH, ax=ax_dz, zorder=2)
                 
                 st.pyplot(fig_dz)
+
+    # --- TAB 4: AFSLUTNINGSZONER (NY) ---
+    with tab4:
+        if df_skud.empty:
+            st.info("Ingen data fundet.")
+        else:
+            col_z_viz, col_z_ctrl = st.columns([2.2, 1])
+            
+            # 1. Definer zoner (Præcis som dit assist-script)
+            PITCH_L, PITCH_W = 105, 68
+            C_MIN, C_MAX = (PITCH_W - 18.32)/2, (PITCH_W + 18.32)/2
+            W_INNER_MIN, W_INNER_MAX = (PITCH_W - 40.2)/2, (PITCH_W + 40.2)/2
+
+            ZONE_BOUNDS = {
+                "Zone 1": {"y": (99.5, 105.0), "x": (C_MIN, C_MAX)},
+                "Zone 2": {"y": (94.0, 99.5),  "x": (C_MIN, C_MAX)},
+                "Zone 3": {"y": (88.5, 94.0),  "x": (C_MIN, C_MAX)},
+                "Zone 4A": {"y": (99.5, 105.0), "x": (C_MAX, W_INNER_MAX)},
+                "Zone 4B": {"y": (99.5, 105.0), "x": (W_INNER_MIN, C_MIN)},
+                "Zone 5A": {"y": (88.5, 99.5),  "x": (C_MAX, W_INNER_MAX)},
+                "Zone 5B": {"y": (88.5, 99.5),  "x": (W_INNER_MIN, C_MIN)},
+                "Zone 6A": {"y": (88.5, 105.0), "x": (W_INNER_MAX, PITCH_W)},
+                "Zone 6B": {"y": (88.5, 105.0), "x": (0, W_INNER_MIN)},
+                "Zone 7B": {"y": (75.0, 88.5),  "x": (C_MIN, C_MAX)},
+                "Zone 7C": {"y": (75.0, 88.5),  "x": (0, C_MIN)},
+                "Zone 7A": {"y": (75.0, 88.5),  "x": (C_MAX, PITCH_W)},
+                "Zone 8":  {"y": (0, 75.0),     "x": (0, PITCH_W)}
+            }
+
+            def map_shot_to_zone(r):
+                # Opta Y er bredde (0-100), Opta X er længde (0-100)
+                xm, ym = r['EVENT_Y'] * (PITCH_W/100), r['EVENT_X'] * (PITCH_L/100)
+                for z, b in ZONE_BOUNDS.items():
+                    if b["y"][0] <= ym <= b["y"][1] and b["x"][0] <= xm <= b["x"][1]:
+                        return z
+                return "Zone 8"
+
+            df_skud['Zone'] = df_skud.apply(map_shot_to_zone, axis=1)
+            df_goals_only = df_skud[df_skud['EVENT_TYPEID'] == 16].copy()
+            total_goals = len(df_goals_only)
+
+            # Beregn stats pr. zone
+            zone_stats = {}
+            for zone in ZONE_BOUNDS.keys():
+                z_data = df_goals_only[df_goals_only['Zone'] == zone]
+                count = len(z_data)
+                pct = (count / total_goals * 100) if total_goals > 0 else 0
+                top_p = z_data['PLAYER_NAME'].mode().iloc[0] if not z_data.empty else "-"
+                short_p = top_p.split(' ')[-1] if top_p != "-" else "-"
+                zone_stats[zone] = {'count': count, 'pct': pct, 'top': top_p, 'short': short_p}
+
+            with col_z_ctrl:
+                st.markdown("**MÅL PR. ZONE**")
+                z_df = pd.DataFrame([
+                    {'Zone': k, 'Mål': v['count'], 'Pct': f"{v['pct']:.1f}%", 'Top Skytte': v['top']}
+                    for k, v in zone_stats.items() if v['count'] > 0
+                ]).sort_values('Mål', ascending=False)
+                st.dataframe(z_df, hide_index=True, use_container_width=True)
+
+            with col_z_viz:
+                pitch_z = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+                fig_z, ax_z = pitch_z.draw(figsize=(8, 10))
+                ax_z.set_ylim(50, 105) # Fokus på angrebshalvdel
+
+                max_goals = max([v['count'] for v in zone_stats.values()]) if total_goals > 0 else 1
+                cmap = plt.cm.YlOrRd 
+
+                for name, b in ZONE_BOUNDS.items():
+                    if b["y"][1] <= 50: continue
+                    y_min_plot = max(b["y"][0], 50)
+                    rect_h = b["y"][1] - y_min_plot
+                    
+                    s = zone_stats[name]
+                    color_val = s['count'] / max_goals
+                    face_color = cmap(color_val) if s['count'] > 0 else '#f9f9f9'
+                    
+                    rect = patches.Rectangle((b["x"][0], y_min_plot), b["x"][1]-b["x"][0], rect_h,
+                                     edgecolor='black', linestyle='--', facecolor=face_color, alpha=0.7)
+                    ax_z.add_patch(rect)
+
+                    # Tekst i zone (Z-navn, Antal, Navn)
+                    z_text = f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n{s['count']} ({s['pct']:.0f}%)\n{s['short']}"
+                    ax_z.text(b["x"][0] + (b["x"][1]-b["x"][0])/2, y_min_plot + rect_h/2, 
+                              z_text, ha='center', va='center', fontsize=7,
+                              color='black' if color_val < 0.6 else 'white')
+
+                st.pyplot(fig_z)
