@@ -57,7 +57,7 @@ def vis_side(dp):
     df_skud['Zone'] = df_skud.apply(map_to_zone, axis=1)
     df_skud['IS_DZ_GEO'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
-    tabs = st.tabs(["SPILLER", "SKUD", "DZ", "ZONER (S)", "ZONER (M)"])
+    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
     # --- TAB 1, 2, 3 (Beholdes som de er) ---
     with tabs[0]:
@@ -68,8 +68,8 @@ def vis_side(dp):
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
             stats.append({
-                "Spiller": p.split()[-1], "S": s, "M": m, "Konv%": (m/s*100),
-                "DZ-S": dzs, "DZ-M": dzm, "DZ%": (dzm/dzs*100) if dzs > 0 else 0,
+                "Spiller": p.split()[-1], "Skud": s, "Mål": m, "Konvertering%": (m/s*100),
+                "DZ-Skud": dzs, "DZ-Mål": dzm, "DZ-konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
                 "DZ-Andel": (dzs/s*100)
             })
         df_f = pd.DataFrame(stats).sort_values("S", ascending=False)
