@@ -65,8 +65,8 @@ def vis_side(dp):
                 df_table,
                 column_config={
                     "Spiller": st.column_config.TextColumn("Spiller"),
-                    "Assists": st.column_config.NumberColumn("⚽ Assists", format="%d"),
-                    "Chancer Skabt": st.column_config.NumberColumn("👟 Key Passes", format="%d"),
+                    "Assists": st.column_config.NumberColumn("Assists", format="%d"),
+                    "Chancer Skabt": st.column_config.NumberColumn("Key Passes", format="%d"),
                     "Total involveringer": st.column_config.NumberColumn("Total", format="%d")
                 },
                 hide_index=True,
