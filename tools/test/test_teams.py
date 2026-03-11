@@ -50,7 +50,7 @@ def vis_side(df_raw=None):
             'XG': 'mean',
             'PPDA': 'mean',
             'FORWARDPASSES': 'mean',
-            'TOUCHESINBOX': 'mean',
+            'TOUCHINBOX': 'mean',
             'PROG_PASS_OK': 'mean'
         }).reset_index()
     else:
