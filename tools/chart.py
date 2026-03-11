@@ -70,7 +70,7 @@ def vis_side(*args, **kwargs):
     st.markdown("""
         <style>
             /* Fjern unødig luft i toppen af kolonner */
-            .block-container { padding-top: 1rem; }
+            .block-container { padding-top: 0.1rem; }
             
             /* Gør radio-knapperne og deres labels mindre og tættere */
             div[data-testid="stRadio"] label p {
@@ -78,14 +78,14 @@ def vis_side(*args, **kwargs):
                 margin-bottom: 0px !important;
             }
             div[data-testid="stRadio"] > div {
-                gap: 2px !important;
+                gap: 1px !important;
             }
             
             /* Fjern padding mellem logo og radio */
             .compact-row {
                 display: flex;
                 align-items: center;
-                margin-bottom: 2px;
+                margin-bottom: 1px;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -125,7 +125,7 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART (MAXIMERET) ---
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
