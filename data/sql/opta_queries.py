@@ -56,10 +56,11 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     EVENT_Y,
                     EVENT_TYPEID,
                     MATCH_OPTAUUID,
-                    -- Hent koordinater fra det NÆSTE event (skuddet) ind på den nuværende række (assisten)
-                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_X,
-                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_Y,
-                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_EVENT_TYPE
+                    EVENT_CONTESTANT_OPTAUUID,
+                    -- Vi kigger på den NÆSTE hændelse i rækkefølgen for at se om det er et skud
+                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as NEXT_EVENT_TYPE,
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
             )
@@ -68,13 +69,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 PLAYER_NAME AS ASSIST_PLAYER_NAME,
                 EVENT_X AS PASS_START_X,
                 EVENT_Y AS PASS_START_Y,
-                NEXT_X AS SHOT_X,
-                NEXT_Y AS SHOT_Y,
+                SHOT_X,
+                SHOT_Y,
                 MATCH_OPTAUUID
             FROM OrderedEvents
-            WHERE EVENT_TYPEID = 1                 -- Den nuværende række er en aflevering
-            AND NEXT_EVENT_TYPE IN (13,14,15,16)   -- Den næste række er et skud
-            {hif_filter_event.replace('EVENT_CONTESTANT_OPTAUUID', 'PLAYER_OPTAUUID') if hif_only else ""}
+            WHERE EVENT_TYPEID = 1                 -- Den nuværende hændelse er en aflevering
+            AND NEXT_EVENT_TYPE IN (13, 14, 15, 16) -- Næste hændelse er et skud (mål, forsøg, på overligger osv.)
+            {f"AND EVENT_CONTESTANT_OPTAUUID = '{hif_id}'" if hif_only else ""}
         """,
         
         "opta_team_stats": f"""
