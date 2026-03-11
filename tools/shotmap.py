@@ -101,7 +101,7 @@ def vis_side(dp):
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {DZ_COLOR};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{DZ_COLOR};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
