@@ -23,7 +23,7 @@ def fetch_wyscout_data():
     
     # 328 er NordicBet Ligaen jf. dine indstillinger
     query = """
-    SELECT * FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL
+    SELECT * FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATSTOTAL
     WHERE SEASON_WYID = 188330 
     AND COMPETITION_WYID = 328
     """
