@@ -50,35 +50,47 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         "opta_assists": f"""
             WITH OrderedEvents AS (
                 SELECT 
-                    PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, EVENT_TYPEID, EVENT_OUTCOME,
-                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TIMESTAMP, EVENT_EVENTID,
-                    -- LEAD skal kigge på HELE tabellen for at finde næste hændelse (skuddet)
+                    PLAYER_OPTAUUID, 
+                    PLAYER_NAME, 
+                    EVENT_X, 
+                    EVENT_Y, 
+                    EVENT_TYPEID, 
+                    EVENT_OUTCOME,
+                    MATCH_OPTAUUID, 
+                    EVENT_CONTESTANT_OPTAUUID, 
+                    EVENT_TIMESTAMP, 
+                    EVENT_EVENTID,
+                    -- Finder den næste hændelse for at identificere assists/key passes
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
-                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_X,
-                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_Y
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+                AND EVENT_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy' -- Hvidovre IF
             )
             SELECT 
                 PLAYER_NAME AS ASSIST_PLAYER,
                 EVENT_X AS PASS_START_X,
                 EVENT_Y AS PASS_START_Y,
-                END_X AS SHOT_X,
-                END_Y AS SHOT_Y,
+                NEXT_X AS SHOT_X,
+                NEXT_Y AS SHOT_Y,
                 NEXT_EVENT_TYPE,
                 EVENT_OUTCOME,
                 EVENT_TYPEID,
-                -- Progressiv logik (Stadig aktiv)
-                CASE WHEN END_X > (EVENT_X + 20) AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
+                -- Progressiv logik: Flytter bolden min. 25% af banen fremad (Opta skala 0-100)
+                CASE 
+                    WHEN NEXT_X > (EVENT_X + 20) AND EVENT_OUTCOME = 1 
+                    THEN 1 ELSE 0 
+                END AS IS_PROGRESSIVE
             FROM OrderedEvents
             WHERE (
-                -- 1. Vi vil have alle pasninger (inkl. dødbolde) for at få Stenderups tal op
+                -- Hent alle pasninger og dødbolde (for volumen/Stenderup)
                 EVENT_TYPEID IN (1, 2, 107, 108, 109)
                 OR 
-                -- 2. ELLER vi vil have alt der førte til et skud (Assists/Key Passes)
+                -- Hent alt der fører direkte til skud (Assists/Key Passes)
                 NEXT_EVENT_TYPE IN (13, 14, 15, 16)
             )
-            {hif_filter_event}
+            ORDER BY EVENT_TIMESTAMP DESC
         """,
         
         "opta_team_stats": f"""
