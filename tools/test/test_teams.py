@@ -76,6 +76,7 @@ def vis_side(df_raw=None):
     df_wy_raw = get_wyscout_direct()
 
     # --- 4. GRAF FUNKTION (FORBEDRET LOGO-LOGIK) ---
+    # --- 4. GRAF FUNKTION (RETTET MED LABELS OG STABILE LOGOER) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -96,53 +97,56 @@ def vis_side(df_raw=None):
 
         fig = go.Figure()
         
-        # Søjler
+        # Søjler - vi bruger numeriske x-værdier for at kunne styre logo-placering præcist
+        x_vals = list(range(len(labels)))
+        
         fig.add_trace(go.Bar(
-            name=team1, x=labels, y=v1, marker_color=c1["primary"], 
+            name=team1, x=x_vals, y=v1, marker_color=c1["primary"], 
             text=[f"{x:.2f}" for x in v1], textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])),
             offsetgroup=1
         ))
         
         fig.add_trace(go.Bar(
-            name=team2, x=labels, y=v2, marker_color=c2["primary"], 
+            name=team2, x=x_vals, y=v2, marker_color=c2["primary"], 
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
             insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])),
             offsetgroup=2
         ))
 
-        # LOGOER - Vi kører dem som to separate loops for at undgå at en fejl i l1 stopper l2
+        # LOGOER - Placeret med numerisk offset for maksimal stabilitet
         for i in range(len(labels)):
-            if l1 and l1 != "":
+            if l1:
                 fig.add_layout_image(dict(
-                    source=l1,
-                    xref="x", yref="paper",
-                    x=labels[i], y=1.02,
-                    sizex=0.07, sizey=0.07,
-                    xanchor="right", yanchor="bottom",
-                    opacity=1, layer="above"
+                    source=l1, xref="x", yref="paper",
+                    x=i - 0.15, y=1.05, # Forskrubbet lidt til venstre for center
+                    sizex=0.1, sizey=0.1,
+                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
-        
-        for i in range(len(labels)):
-            if l2 and l2 != "":
+            if l2:
                 fig.add_layout_image(dict(
-                    source=l2,
-                    xref="x", yref="paper",
-                    x=labels[i], y=1.02,
-                    sizex=0.07, sizey=0.07,
-                    xanchor="left", yanchor="bottom",
-                    opacity=1, layer="above"
+                    source=l2, xref="x", yref="paper",
+                    x=i + 0.15, y=1.05, # Forskudt lidt til højre for center
+                    sizex=0.1, sizey=0.1,
+                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
 
         fig.update_layout(
-            barmode='group', height=350,
-            margin=dict(t=60, b=40, l=10, r=10),
+            barmode='group', height=400,
+            margin=dict(t=100, b=60, l=10, r=10), # Stor top-margin til logoer
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.2]),
-            xaxis=dict(showgrid=False, tickfont=dict(size=12, family="Arial Black", color="white"), fixedrange=True)
+            xaxis=dict(
+                showgrid=False, 
+                tickvals=x_vals,    # Her tvinger vi tallene (0,1,2)
+                ticktext=labels,    # ...til at vise dine labels ("xG", "Skud" osv)
+                tickfont=dict(size=13, family="Arial Black", color="white"), 
+                fixedrange=True
+            )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
