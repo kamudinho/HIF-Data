@@ -102,7 +102,7 @@ def vis_side(*args, **kwargs):
         # Margin styring
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         
-        V_OFFSET = 25
+        V_OFFSET = 5
         LIMIT_Y = 240 
         ax.set_ylim(0, LIMIT_Y)
         
