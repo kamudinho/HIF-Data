@@ -47,7 +47,6 @@ def fetch_team_data():
     return df
 
 def vis_side(*args, **kwargs):
-    st.title("📊 NordicBet Liga: Performance Profiler")
 
     if "team_stats_1div" not in st.session_state:
         with st.spinner("Henter liga-data..."):
