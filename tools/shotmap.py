@@ -26,7 +26,7 @@ def vis_side(dp):
         return
 
     # --- 1. ZONE DEFINITIONER ---
-    P_L, P_W = 105.0, 55.0
+    P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
@@ -139,7 +139,7 @@ def vis_side(dp):
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw()
-            ax.set_ylim(70, 105) # Fokus på angrebszoner
+            ax.set_ylim(55, 105) # Fokus på angrebszoner
             max_val = max([v[0] for k, v in z_map.items() if k != "Zone 8"]) if not df_zone_vis.empty else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
             
