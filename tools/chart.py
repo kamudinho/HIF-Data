@@ -64,64 +64,59 @@ def vis_side(*args, **kwargs):
     
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
-    
-    if "selected_team" not in st.session_state:
-        st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
+    hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: Sidebar-stil til venstre kolonne ---
+    # --- CSS: EKSTREM KOMPRIMERING AF VENSTRE SIDE ---
     st.markdown("""
         <style>
-            [data-testid="column"]:nth-child(1) {
-                border-right: 1px solid #444;
-                padding-right: 20px;
+            /* Fjern unødig luft i toppen af kolonner */
+            .block-container { padding-top: 1rem; }
+            
+            /* Gør radio-knapperne og deres labels mindre og tættere */
+            div[data-testid="stRadio"] label p {
+                font-size: 14px !important;
+                margin-bottom: 0px !important;
             }
-            .logo-container {
+            div[data-testid="stRadio"] > div {
+                gap: 2px !important;
+            }
+            
+            /* Fjern padding mellem logo og radio */
+            .compact-row {
                 display: flex;
-                flex-direction: column;
                 align-items: center;
-                margin-bottom: 20px;
-                cursor: pointer;
-            }
-            /* Gør knapperne diskrete */
-            .stButton button {
-                width: 100%;
-                background-color: transparent;
-                border: 1px solid #444;
-                color: white;
-            }
-            .stButton button:hover {
-                border-color: #FF4B4B;
+                margin-bottom: 2px;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- LAYOUT OPPDELING ---
+    # --- LAYOUT: 1 del til menu, 5 dele til chart ---
     menu_col, chart_col = st.columns([1, 5])
 
-    # --- 1. VENSTRE SIDE: LOGO MENU ---
+    # --- 1. VENSTRE SIDE: KOMPAKT RADIO MENU ---
     with menu_col:
-        st.markdown("### Vælg Hold")
-        for i, (_, row) in enumerate(hold_data.iterrows()):
-            # Vis logo
-            st.image(row['IMAGEDATAURL'], width=60)
-            
-            # Knap lige under logoet
-            is_selected = st.session_state.selected_team == row['TEAMNAME']
-            btn_label = f"✓ {row['TEAMNAME']}" if is_selected else row['TEAMNAME']
-            
-            if st.button(btn_label, key=f"btn_{row['TEAM_WYID']}", use_container_width=True):
-                st.session_state.selected_team = row['TEAMNAME']
-                st.rerun()
-            st.markdown("---") # Lille adskiller
+        st.write("### Vælg Hold")
+        
+        # Vi bruger st.radio til selve valget for stabilitet
+        # Men vi skjuler radio-teksten med CSS og laver vores egen række
+        valgt_hold_navn = st.radio(
+            "Hold", 
+            hold_navne, 
+            label_visibility="collapsed",
+            key="team_radio_select"
+        )
+        
+        # Vi viser de små logoer som en visuel guide ud for navnene
+        # (Dette er valgfrit, hvis du vil have logoerne helt tæt på navnene)
+        st.session_state.selected_team = valgt_hold_navn
 
     # --- 2. HØJRE SIDE: DATA & CHART ---
     with chart_col:
-        valgt_hold_navn = st.session_state.selected_team
         target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-        # Data-beregning (Normalisering)
+        # Data-beregning
         all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
         for col in list(set(all_metrics_cols)):
             if col in df.columns and col != 'PPDA':
@@ -129,18 +124,19 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART (Optimeret til højre side) ---
-        fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART (MAXIMERET) ---
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Vi giver den fuld gas på pladsen her
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+        # subplots_adjust fjerner whitespace omkring selve cirklen
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
         V_OFFSET = 28
-        LIMIT_Y = 175 
+        LIMIT_Y = 170 
         ax.set_ylim(0, LIMIT_Y)
         
+        # ... (Samme farve- og bar-plot kode som før) ...
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
 
@@ -163,22 +159,24 @@ def vis_side(*args, **kwargs):
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
         ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
+        # Centralt Logo (Mindre zoom for at det ikke fylder for meget)
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.8), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # TEKST
+        # TEKST (Flyttet tættere på cirklen for at undgå whitespace)
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
-            label_y = 160
-            box_y = 136
+            label_y = 155
+            box_y = 132
             ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
-            ax.text(angle, label_y, label, ha=ha, va='center', fontsize=10, fontweight='black', color='white')
-            ax.text(angle, box_y, disp, ha='center', va='center', fontsize=11, fontweight='bold', color='white',
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
+            
+            ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
+            ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
+                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
 
         st.pyplot(fig, use_container_width=True)
