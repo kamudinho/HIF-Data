@@ -48,20 +48,33 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
         
         "opta_assists": f"""
+            WITH OrderedEvents AS (
+                SELECT 
+                    PLAYER_OPTAUUID,
+                    PLAYER_NAME,
+                    EVENT_X,
+                    EVENT_Y,
+                    EVENT_TYPEID,
+                    MATCH_OPTAUUID,
+                    -- Hent koordinater fra det NÆSTE event (skuddet) ind på den nuværende række (assisten)
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_Y,
+                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_ID) as NEXT_EVENT_TYPE
+                FROM {DB}.OPTA_EVENTS
+                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            )
             SELECT 
-                e.PLAYER_OPTAUUID AS ASSIST_PLAYER_UUID,
-                e.PLAYER_NAME AS ASSIST_PLAYER_NAME,
-                e.EVENT_X AS PASS_START_X,
-                e.EVENT_Y AS PASS_START_Y,
-                s.EVENT_X AS SHOT_X,
-                s.EVENT_Y AS SHOT_Y,
-                e.MATCH_OPTAUUID
-            FROM {DB}.OPTA_EVENTS e
-            JOIN {DB}.OPTA_EVENTS s ON e.EVENT_OPTAUUID = s.LAST_EVENT_OPTAUUID
-            WHERE e.EVENT_TYPEID = 1             -- Aflevering (Pass)
-            AND s.EVENT_TYPEID IN (13,14,15,16)  -- Skudtyper (Mål, skud på mål, forbi, stolpe)
-            AND e.MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_event}
+                PLAYER_OPTAUUID AS ASSIST_PLAYER_UUID,
+                PLAYER_NAME AS ASSIST_PLAYER_NAME,
+                EVENT_X AS PASS_START_X,
+                EVENT_Y AS PASS_START_Y,
+                NEXT_X AS SHOT_X,
+                NEXT_Y AS SHOT_Y,
+                MATCH_OPTAUUID
+            FROM OrderedEvents
+            WHERE EVENT_TYPEID = 1                 -- Den nuværende række er en aflevering
+            AND NEXT_EVENT_TYPE IN (13,14,15,16)   -- Den næste række er et skud
+            {hif_filter_event.replace('EVENT_CONTESTANT_OPTAUUID', 'PLAYER_OPTAUUID') if hif_only else ""}
         """,
         
         "opta_team_stats": f"""
