@@ -73,14 +73,19 @@ def vis_side(dp):
 
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
-    if df_assists.empty:
+        if df_assists.empty:
             st.warning("⚠️ Ingen assists fundet.")
         else:
             col_viz_a, col_ctrl_a = st.columns([2.2, 1])
+            
             with col_ctrl_a:
-                spiller_liste_a = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
+                # Sørg for at kolonnenavnet matcher din SQL (f.eks. ASSIST_PLAYER_NAME)
+                player_col = 'ASSIST_PLAYER_NAME' if 'ASSIST_PLAYER_NAME' in df_assists.columns else 'ASSIST_PLAYER'
+                
+                spiller_liste_a = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
                 v_a = st.selectbox("Vælg spiller (Assists)", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
-                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
+                
+                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists[player_col] == v_a]
                 
                 st.markdown(f"""
                     <div class="stat-box">
@@ -95,10 +100,14 @@ def vis_side(dp):
             with col_viz_a:
                 pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
                 fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
+                
                 if not df_a_vis.empty:
+                    # Tegn pile fra aflevering til skud
                     pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
                                    df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
                                    color='#888888', alpha=0.5, width=1.5, headwidth=3, ax=ax_a, zorder=1)
+                    
+                    # Tegn startpunktet for assisten
                     pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
                                     s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
