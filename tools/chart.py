@@ -37,6 +37,7 @@ def get_logo(url):
 
 def fetch_data():
     conn = _get_snowflake_conn()
+    # Bruger dine saved values for 2025/2026 og NordicBet Liga (328)
     query = """
     SELECT 
         tm.TEAMNAME, tm.IMAGEDATAURL, t.TEAM_WYID, st.TOTALPLAYED AS MATCHES,
@@ -64,39 +65,36 @@ def vis_side(*args, **kwargs):
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     
-    # 1. Styring af valg (Logik for at kun én er valgt)
     if "selected_team" not in st.session_state:
         st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
 
-    # CSS til at fjerne padding og centrere checkbox præcis under logo
+    # --- CSS: Centrerer checkbox præcis under logo ---
     st.markdown("""
         <style>
             [data-testid="column"] {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                text-align: center;
             }
             [data-testid="stCheckbox"] {
-                margin-top: -15px; /* Trækker checkboxen helt op til logoet */
+                margin-top: -10px;
+                padding-bottom: 20px;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. LOGOER OG CHECKBOXE ---
+    # --- 2. LOGO-MENU ---
     cols = st.columns(len(hold_data))
-    
     for i, (_, row) in enumerate(hold_data.iterrows()):
         with cols[i]:
-            # Vis logo (lille størrelse)
             st.image(row['IMAGEDATAURL'], width=35)
-            
-            # Checkbox logik: Hvis denne klikkes, opdateres session_state og siden genindlæses
             is_checked = (st.session_state.selected_team == row['TEAMNAME'])
-            res = st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed")
-            
-            if res and not is_checked:
-                st.session_state.selected_team = row['TEAMNAME']
-                st.rerun()
+            # Checkbox der trigger rerun ved nyt valg
+            if st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed"):
+                if not is_checked:
+                    st.session_state.selected_team = row['TEAMNAME']
+                    st.rerun()
 
     # --- 3. DATA PREP ---
     valgt_hold_navn = st.session_state.selected_team
@@ -104,28 +102,46 @@ def vis_side(*args, **kwargs):
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
-    for col in list(set(all_metrics)):
+    all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
+    for col in list(set(all_metrics_cols)):
         if col in df.columns and col != 'PPDA':
             df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 4. PIZZA CHART (FULD VISNING) ---
+    # --- 4. PIZZA CHART ---
     fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
-    
-    # Juster marginer så chartet ikke bliver mast
-    plt.subplots_adjust(left=0.08, right=0.92, top=0.92, bottom=0.08)
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
     
     V_OFFSET = 28
     LIMIT_Y = 175 
     ax.set_ylim(0, LIMIT_Y)
     
-    # ... (Din eksisterende bar- og beregningslogik) ...
-    # Sørg for at bruge disse labels for at undgå beskæring:
-    # label_y = 162, box_y = 138
+    color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
+    plot_labels, values, display_values, plot_colors = [], [], [], []
+
+    for group_name, pairs in METRIC_PAIRS.items():
+        for display_label, data_col in pairs:
+            if data_col not in df.columns: continue
+            
+            p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
+            if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
+
+            plot_labels.append(display_label)
+            scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
+            values.append(scaled_val)
+            display_values.append(f"{target_team[data_col].values[0]:.1f}")
+            plot_colors.append(color_map[group_name])
+
+    num_vars = len(plot_labels)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
+    width = (2 * np.pi) / num_vars
+
+    # Tegn baggrund og data
+    ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
+    ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
     # Centralt logo
     logo_img = get_logo(logo_url)
@@ -136,9 +152,20 @@ def vis_side(*args, **kwargs):
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # TEKST LABELS
-    num_vars = len(all_metrics) # Justeret til dine faktiske metrics
-    # (Her indsættes plot-loopet fra tidligere svar)
+    # --- TEKST LABELS LOOP ---
+    for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
+        angle_deg = np.rad2deg(angle)
+        label_y = 162
+        box_y = 138
+        
+        # Horisontal alignment baseret på vinkel
+        if abs(angle_deg % 180) < 1: ha = 'center'
+        elif 0 < angle_deg < 180: ha = 'left'
+        else: ha = 'right'
+
+        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
+        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
+                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
 
     # Render responsivt
     st.pyplot(fig, use_container_width=True)
