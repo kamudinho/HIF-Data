@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd
+import pd as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
@@ -65,12 +65,36 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    menu_col, chart_col = st.columns([1, 8])
+    # --- CSS: STYLING AF KNAP OG FJERNELSE AF TOMRUM ---
+    st.markdown("""
+        <style>
+            .block-container { padding-top: 0.5rem !important; }
+            
+            /* Download knap styling: Hvid boks, sort kant, fed skrift */
+            div.stDownloadButton > button {
+                background-color: white !important;
+                color: black !important;
+                border: 1px solid black !important;
+                border-radius: 6px !important;
+                padding: 0.5rem !important;
+                font-weight: 800 !important;
+                width: 100% !important;
+                text-transform: uppercase;
+                font-size: 12px !important;
+            }
+            
+            div[data-testid="stRadio"] label p { font-size: 13px !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    menu_col, chart_col = st.columns([1, 6])
 
     with menu_col:
         st.caption("Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
-        st.session_state.selected_team = valgt_hold_navn
+        
+        # Placeholder til knappen så den kan stå under hold-listen
+        download_placeholder = st.empty()
 
     with chart_col:
         target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
@@ -85,17 +109,16 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART DESIGN (OPTIMERET TIL TOP) ---
-        # Mindre højde på figuren fjerner tomrum
-        fig, ax = plt.subplots(figsize=(6, 7.5), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART DESIGN ---
+        fig, ax = plt.subplots(figsize=(8, 9), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Aggressiv justering af margins - top=1.0 fjerner alt luft over diagrammet
-        plt.subplots_adjust(left=0.05, right=0.95, top=1.0, bottom=0.0)
+        # Dette fjerner de 5-7 cm luft i toppen af figuren
+        plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
         
-        V_OFFSET = 10
-        LIMIT_Y = 120 # Stram grænse for at undgå tom yderring
+        V_OFFSET = 12
+        LIMIT_Y = 160 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -108,7 +131,8 @@ def vis_side(*args, **kwargs):
                 if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
                 
                 plot_labels.append(display_label)
-                scaled_val = V_OFFSET + (p_val * (80 - V_OFFSET) / 80)
+                # Skalering
+                scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
                 values.append(scaled_val)
                 display_values.append(f"{target_team[data_col].values[0]:.1f}")
                 plot_colors.append(color_map[group_name])
@@ -117,12 +141,12 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
+        ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.2, zorder=1)
         ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.5), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
@@ -130,28 +154,27 @@ def vis_side(*args, **kwargs):
 
         # --- 4. TEKST OG LABELS (RYKKET TÆTTERE PÅ) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            
-            # Værdibokse (Farvede) - nu på Radius 110
-            box_y = 110
-            ax.text(angle, box_y, disp, ha='center', va='center', 
+            # Værdibokse (Farvede)
+            ax.text(angle, 110, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # Stat Labels (Hvide) - nu på Radius 142
-            label_y = 142
-            ax.text(angle, label_y, label, ha='center', va='center',
-                    fontsize=7, fontweight='bold', color='black', zorder=11,
+            # Stat Labels (Hvide)
+            ax.text(angle, 142, label, ha='center', va='center',
+                    fontsize=7, fontweight='black', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
-        # Vis i appen uden ekstra margin
         st.pyplot(fig, use_container_width=True)
 
-        # --- DOWNLOAD ---
+        # --- DOWNLOAD LOGIK ---
         buf = BytesIO()
         fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
-        st.download_button(
-            label="Download Pizza Chart",
-            data=buf.getvalue(),
-            file_name=f"pizza_{valgt_hold_navn}.png",
-            mime="image/png"
-        )
+        
+        # Placer knappen i menu-kolonnen
+        with download_placeholder:
+            st.download_button(
+                label="Hent Grafik",
+                data=buf.getvalue(),
+                file_name=f"pizza_{valgt_hold_navn}.png",
+                mime="image/png"
+            )
