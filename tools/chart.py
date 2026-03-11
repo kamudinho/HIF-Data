@@ -63,28 +63,38 @@ def vis_side(*args, **kwargs):
     
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
-    
-    if "selected_team" not in st.session_state:
-        st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
+    hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- 1. LOGO-MENU (Klikbare logoer uden tekst) ---
-    cols = st.columns(len(hold_data))
+    # --- CSS: TVINGER RADIO-KNAPPER IND UNDER LOGOER UDEN TEKST ---
+    st.markdown("""
+        <style>
+        /* Skjul tekst i radio buttons */
+        div[data-testid="stRadio"] label p { display: none; }
+        /* Gør radio-rækken super kompakt og centreret */
+        div[data-testid="stRadio"] > div { 
+            justify-content: space-around; 
+            padding: 0 10px;
+        }
+        /* Fjern unødig margin under logoer */
+        div[data-testid="column"] { padding: 0 !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 1. LOGO-RÆKKE ---
+    logo_cols = st.columns(len(hold_data))
     for i, (_, row) in enumerate(hold_data.iterrows()):
-        with cols[i]:
-            # Vi bruger en gennemsigtig knap til at vælge holdet
-            # label=" " (et mellemrum) for at skjule tekst helt
-            if st.button(" ", key=f"btn_{row['TEAM_WYID']}", use_container_width=True):
-                st.session_state.selected_team = row['TEAMNAME']
-            
-            # Vis logoet lige under knappen
+        with logo_cols[i]:
             st.image(row['IMAGEDATAURL'], use_container_width=True)
-            
-            # Indikator for valgt hold
-            color = "#FF4B4B" if st.session_state.selected_team == row['TEAMNAME'] else "rgba(0,0,0,0)"
-            st.markdown(f"<div style='height:3px; background-color:{color}; margin-top:-5px;'></div>", unsafe_allow_html=True)
 
-    # --- 2. DATA ---
-    valgt_hold_navn = st.session_state.selected_team
+    # --- 2. RADIO-KNAPPER (Lige under logoerne) ---
+    valgt_hold_navn = st.radio(
+        "Vælg hold", 
+        hold_navne, 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
+
+    # --- 3. DATA PREP ---
     target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
@@ -96,11 +106,13 @@ def vis_side(*args, **kwargs):
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 3. PIZZA CHART (Fuld visning uden beskæring) ---
-    # Vi bruger constrained_layout=True for at sikre at labels ikke ryger ud af billedet
-    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True), constrained_layout=True)
+    # --- 4. PIZZA CHART (MAXIMERET PLADS) ---
+    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
+    
+    # Juster marginerne manuelt så figuren fylder det hele
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
     
     V_OFFSET = 28
     LIMIT_Y = 170 
@@ -114,7 +126,7 @@ def vis_side(*args, **kwargs):
             if data_col not in df.columns: continue
             p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
             if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
-
+            
             plot_labels.append(display_label)
             scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
             values.append(scaled_val)
@@ -136,17 +148,17 @@ def vis_side(*args, **kwargs):
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # TEKST - Vi trækker dem en lille smule ind (155 og 132) for at undgå beskæring
+    # TEKST PLACERING
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
-        label_y = 155
-        box_y = 132
+        label_y = 158  # Lidt længere ud
+        box_y = 135    # Lidt længere ud
         
-        ha = 'center' if angle_deg in [0, 180] else ('left' if 0 < angle_deg < 180 else 'right')
+        ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
 
         ax.text(angle, label_y, label, ha=ha, va='center', fontsize=10, fontweight='black', color='white')
         ax.text(angle, box_y, disp, ha='center', va='center', fontsize=11, fontweight='bold', color='white',
                 bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
 
-    # Vis i Streamlit
+    # Render i Streamlit
     st.pyplot(fig, use_container_width=True)
