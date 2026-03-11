@@ -52,13 +52,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SELECT 
                     PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, EVENT_TYPEID, EVENT_OUTCOME,
                     MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TIMESTAMP, EVENT_EVENTID,
+                    -- LEAD skal kigge på HELE tabellen for at finde næste hændelse (skuddet)
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
                     LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_X,
                     LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as END_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-                -- Vi inkluderer nu alle former for boldflytning:
-                AND EVENT_TYPEID IN (1, 2, 107, 108, 109)
             )
             SELECT 
                 PLAYER_NAME AS ASSIST_PLAYER,
@@ -69,10 +68,16 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 NEXT_EVENT_TYPE,
                 EVENT_OUTCOME,
                 EVENT_TYPEID,
-                -- IS_PROGRESSIVE: Bolden flyttes min. 25% af banens længde fremad
-                CASE WHEN END_X > (EVENT_X + 25) AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
+                -- Progressiv logik (Stadig aktiv)
+                CASE WHEN END_X > (EVENT_X + 20) AND EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
             FROM OrderedEvents
-            WHERE 1=1
+            WHERE (
+                -- 1. Vi vil have alle pasninger (inkl. dødbolde) for at få Stenderups tal op
+                EVENT_TYPEID IN (1, 2, 107, 108, 109)
+                OR 
+                -- 2. ELLER vi vil have alt der førte til et skud (Assists/Key Passes)
+                NEXT_EVENT_TYPE IN (13, 14, 15, 16)
+            )
             {hif_filter_event}
         """,
         
