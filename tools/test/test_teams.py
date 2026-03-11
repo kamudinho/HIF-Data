@@ -75,7 +75,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (LOGOER PLACERET OVER HVER SØJLE-GRUPPE) ---
+    # --- 4. GRAF FUNKTION (FORBEDRET LOGO-LOGIK) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -111,19 +111,27 @@ def vis_side(df_raw=None):
             offsetgroup=2
         ))
 
-        # Små logoer placeret præcis over søjlerne (y=1.02 i paper-coords betyder lige over grafen)
+        # LOGOER - Vi kører dem som to separate loops for at undgå at en fejl i l1 stopper l2
         for i in range(len(labels)):
-            if l1:
+            if l1 and l1 != "":
                 fig.add_layout_image(dict(
-                    source=l1, xref="x", yref="paper",
-                    x=labels[i], y=1.02, sizex=0.08, sizey=0.08, # Mindre logoer (0.08)
-                    xanchor="right", yanchor="bottom", opacity=1, layer="above"
+                    source=l1,
+                    xref="x", yref="paper",
+                    x=labels[i], y=1.02,
+                    sizex=0.07, sizey=0.07,
+                    xanchor="right", yanchor="bottom",
+                    opacity=1, layer="above"
                 ))
-            if l2:
+        
+        for i in range(len(labels)):
+            if l2 and l2 != "":
                 fig.add_layout_image(dict(
-                    source=l2, xref="x", yref="paper",
-                    x=labels[i], y=1.02, sizex=0.08, sizey=0.08,
-                    xanchor="left", yanchor="bottom", opacity=1, layer="above"
+                    source=l2,
+                    xref="x", yref="paper",
+                    x=labels[i], y=1.02,
+                    sizex=0.07, sizey=0.07,
+                    xanchor="left", yanchor="bottom",
+                    opacity=1, layer="above"
                 ))
 
         fig.update_layout(
@@ -131,11 +139,10 @@ def vis_side(df_raw=None):
             margin=dict(t=60, b=40, l=10, r=10),
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.15]),
+            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.2]),
             xaxis=dict(showgrid=False, tickfont=dict(size=12, family="Arial Black", color="white"), fixedrange=True)
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
