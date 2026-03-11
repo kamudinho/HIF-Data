@@ -2,69 +2,17 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.data_load import _get_snowflake_conn
 
 # --- 1. GLOBALE HJÆLPEFUNKTIONER ---
 
 def get_text_color(hex_color):
-    hex_color = hex_color.lstrip('#')
+    if not hex_color: return "white"
+    hex_color = str(hex_color).lstrip('#')
+    if len(hex_color) != 6: return "white"
     r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     luminance = (r * 0.299 + g * 0.587 + b * 0.114)
     return "black" if luminance > 165 else "white"
-
-def draw_h2h_chart_wyscout(n1, n2, metrics, labels, per_match=True):
-    dp = st.session_state.get("dp", {})
-    # Vi bruger 'team_stats_full' som du allerede har i din SQL-fil
-    df_wy = dp.get("wyscout", {}).get("team_stats_full", pd.DataFrame())
-    
-    if df_wy.empty:
-        st.warning("Wyscout hold-data ikke fundet.")
-        return
-
-    # Sørg for kolonnenavne er UPPERCASE (pga Snowflake)
-    df_wy.columns = [c.upper() for c in df_wy.columns]
-
-    # Find de to hold
-    t1_data = df_wy[df_wy['TEAMNAME'].str.contains(n1, case=False, na=False)]
-    t2_data = df_wy[df_wy['TEAMNAME'].str.contains(n2, case=False, na=False)]
-
-    if t1_data.empty or t2_data.empty:
-        st.info(f"Finder ikke data for {n1} eller {n2} i team_stats_full.")
-        return
-
-    # Hent værdierne (vi tager den første række der matcher)
-    y1 = [t1_data.iloc[0].get(m, 0) for m in metrics]
-    y2 = [t2_data.iloc[0].get(m, 0) for m in metrics]
-
-    # Tegn grafen
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name=n1, x=labels, y=y1, marker_color="#df003b"))
-    fig.add_trace(go.Bar(name=n2, x=labels, y=y2, marker_color="#0056a3"))
-    
-    fig.update_layout(barmode='group', height=350)
-    st.plotly_chart(fig, use_container_width=True)
-
-    def get_vals(data):
-        m_count = data.get('MATCHES', 1) or 1
-        return [data.get(m, 0) / m_count if per_match else data.get(m, 0) for m in metrics]
-
-    y1, y2 = get_vals(t1), get_vals(t2)
-
-    fig = go.Figure()
-    c1 = colors_dict.get(n1, {"primary": "#cc0000"})
-    c2 = colors_dict.get(n2, {"primary": "#0056a3"})
-
-    for name, vals, color in [(n1, y1, c1), (n2, y2, color)]:
-        fig.add_trace(go.Bar(
-            name=name, x=labels, y=vals, 
-            marker_color=color["primary"],
-            text=[f"{v:.1f}" for v in vals],
-            textposition='inside',
-            insidetextfont=dict(size=14, color=get_text_color(color["primary"]), family="Arial Black")
-        ))
-
-    fig.update_layout(barmode='group', height=350, margin=dict(t=50, b=40, l=10, r=10),
-                      plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 # --- 2. HOVEDSIDE ---
 
@@ -74,9 +22,11 @@ def vis_side(df_raw=None):
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
-    df = dp.get("opta", {}).get("matches", pd.DataFrame())
+    df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
+    conn = _get_snowflake_conn()
+    DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- HJÆLPEFUNKTIONER (DIN ORIGINALE STIL) ---
+    # --- HJÆLPEFUNKTIONER TIL LOGO OG FORM ---
     def get_logo_url(opta_uuid, team_name):
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         return logo_map.get(wy_id, next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), ""))
@@ -95,9 +45,9 @@ def vis_side(df_raw=None):
             res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
         return res
 
-    # --- DATABEREGNING (LIGATABEL) ---
+    # --- DATABEREGNING (LIGATABEL VIA OPTA) ---
     stats = {}
-    for _, row in df.iterrows():
+    for _, row in df_opta.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
         for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
             if uuid not in stats:
@@ -115,9 +65,9 @@ def vis_side(df_raw=None):
             else:
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    # Næste modstander logik (Din originale)
+    # Næste modstander logik
     next_opp = {}
-    df_up = df[df['MATCH_STATUS'] != 'Played'].copy()
+    df_up = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
     if not df_up.empty:
         df_up['MATCH_DATE_FULL'] = pd.to_datetime(df_up['MATCH_DATE_FULL'])
         df_up = df_up.sort_values('MATCH_DATE_FULL')
@@ -136,7 +86,31 @@ def vis_side(df_raw=None):
     df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
-    # --- VISNING ---
+    # --- WYSCOUT DATA HENTNING (DIN SQL) ---
+    @st.cache_data(ttl=3600)
+    def get_wyscout_direct():
+        if not conn: return pd.DataFrame()
+        query = f"""
+        SELECT 
+            tm.TEAM_WYID, t.TEAMNAME,
+            adv.XG, adv.SHOTS, adv.TOUCHINBOX,
+            mp.PASSES, mp.ACCURATEPASSESPERCENT,
+            md.RECOVERIES, md.INTERCEPTIONS
+        FROM {DB}.WYSCOUT_TEAMMATCHES tm
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
+        JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+        JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+        JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
+        WHERE tm.COMPETITION_WYID = 328
+        AND s.SEASONNAME LIKE '2025%2026'
+        """
+        return conn.query(query)
+
+    df_wy_raw = get_wyscout_direct()
+
+    # --- LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
@@ -152,9 +126,37 @@ def vis_side(df_raw=None):
         c1, c2 = st.columns(2)
         team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
         team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
-        
-        st.subheader("Wyscout Advanced Stats (Per kamp)")
-        tabs = st.tabs(["Angreb", "Forsvar", "Spilopbygning"])
-        with tabs[0]: draw_h2h_chart_wyscout(team1, team2, ['XGSHOT', 'TOUCHINBOX'], ['Expected Goals', 'Berør. i felt'])
-        with tabs[1]: draw_h2h_chart_wyscout(team1, team2, ['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions'])
-        with tabs[2]: draw_h2h_chart_wyscout(team1, team2, ['PROGRESSIVERUN', 'SUCCESSFULDRIBBLES'], ['Prog. løb', 'Driblinger'])
+
+        if not df_wy_raw.empty:
+            df_wy_raw.columns = [c.upper() for c in df_wy_raw.columns]
+            # Aggregér til gennemsnit pr. kamp
+            df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
+            
+            d1 = df_agg[df_agg['TEAMNAME'].str.contains(team1, case=False, na=False)]
+            d2 = df_agg[df_agg['TEAMNAME'].str.contains(team2, case=False, na=False)]
+
+            if not d1.empty and not d2.empty:
+                st.subheader("Wyscout Performance (Gns. pr. kamp)")
+                
+                # Definer kategorier
+                cats = {
+                    "Angreb": (['XG', 'SHOTS', 'TOUCHINBOX'], ['xG', 'Skud', 'Felt-berør.']),
+                    "Forsvar": (['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions']),
+                    "Spilopbygning": (['PASSES'], ['Afleveringer'])
+                }
+                
+                c_tabs = st.tabs(list(cats.keys()))
+                for i, (name, (metrics, labels)) in enumerate(cats.items()):
+                    with c_tabs[i]:
+                        v1 = [d1.iloc[0].get(m, 0) for m in metrics]
+                        v2 = [d2.iloc[0].get(m, 0) for m in metrics]
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color="#df003b", text=[f"{x:.2f}" for x in v1], textposition='auto'))
+                        fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color="#0056a3", text=[f"{x:.2f}" for x in v2], textposition='auto'))
+                        fig.update_layout(barmode='group', height=350, margin=dict(t=20, b=20, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Ingen Wyscout-match fundet for valgte hold.")
+        else:
+            st.warning("Wyscout data kunne ikke hentes fra Snowflake.")
