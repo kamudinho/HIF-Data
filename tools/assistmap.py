@@ -73,18 +73,24 @@ def vis_side(dp):
             spiller_liste_a = sorted(df_table["Spiller"].tolist())
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist", label_visibility="collapsed")
             
-            # FILTRERING: Her fjerner vi 0,0 og system-events (Type 34, 35 osv.)
-            mask_valid_pos = (df_assists['PASS_START_X'] > 0) & (df_assists['PASS_START_Y'] > 0)
-            df_filtered = df_assists[mask_valid_pos]
+            # --- FEJLSIKRING AF FILTRERING ---
+            # Vi definerer hvad der er "system-støj" (typisk hændelser uden slut-koordinater)
+            # En ægte assist SKAL have en SHOT_X og SHOT_Y (hvor skuddet faldt)
+            mask_real_event = (df_assists['SHOT_X'] > 0) & (df_assists['SHOT_Y'] > 0)
+            
+            # Vi tillader nu X=0 og Y=0, så længe det er en valid event-type (13, 14, 15, 16)
+            valid_types = [13, 14, 15, 16]
+            mask_valid_type = df_assists['NEXT_EVENT_TYPE'].isin(valid_types)
+            
+            df_filtered = df_assists[mask_real_event & mask_valid_type].copy()
     
             if v_a == "Hvidovre IF":
-                df_map_data = df_filtered[df_filtered['NEXT_EVENT_TYPE'].isin([13,14,15,16])]
+                df_map_data = df_filtered
             else:
-                df_map_data = df_filtered[
-                    (df_filtered[player_col].str.endswith(v_a)) & 
-                    (df_filtered['NEXT_EVENT_TYPE'].isin([13,14,15,16]))
-                ]
+                # Vi bruger .str.contains eller direkte match for at være sikre
+                df_map_data = df_filtered[df_filtered[player_col].str.contains(v_a, na=False)]
             
+            # Statistik-visning
             goals_count = len(df_map_data[df_map_data['NEXT_EVENT_TYPE'] == 16])
             kp_count = len(df_map_data[df_map_data['NEXT_EVENT_TYPE'] != 16])
             
@@ -101,26 +107,30 @@ def vis_side(dp):
 
         with col_viz_a:
             from mplsoccer import Pitch
+            # pitch_type='opta' sørger for at 0,0 er hjørnet og 100,100 er det andet
             pitch_a = Pitch(half=False, pitch_type='opta', pitch_color='white', line_color='#cccccc')
             fig_a, ax_a = pitch_a.draw(figsize=(8, 5))
             
             if not df_map_data.empty:
+                # Opdel i mål og key passes for forskellig styling
                 mask_goal = df_map_data['NEXT_EVENT_TYPE'] == 16
                 df_goals = df_map_data[mask_goal]
                 df_key_passes = df_map_data[~mask_goal]
 
-                pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
-                                s=DOT_SIZE-20, color='white', edgecolors='#888888', alpha=0.7, ax=ax_a, zorder=2)
+                # Tegn Key Passes (Grå pile)
+                if not df_key_passes.empty:
+                    pitch_a.arrows(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
+                                   df_key_passes['SHOT_X'], df_key_passes['SHOT_Y'], 
+                                   color='#888888', alpha=0.3, width=1, headwidth=3, ax=ax_a, zorder=1)
+                    pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
+                                    s=DOT_SIZE-40, color='white', edgecolors='#888888', linewidth=1, alpha=0.7, ax=ax_a, zorder=2)
                 
-                pitch_a.arrows(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
-                               df_key_passes['SHOT_X'], df_key_passes['SHOT_Y'], 
-                               color='#888888', alpha=0.3, width=1, ax=ax_a, zorder=1)
-                
-                pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
-                                s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
-                
-                pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
-                               df_goals['SHOT_X'], df_goals['SHOT_Y'], 
-                               color=HIF_GOLD, alpha=0.9, width=3, ax=ax_a, zorder=1)
+                # Tegn Assists til mål (Guld pile)
+                if not df_goals.empty:
+                    pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                   df_goals['SHOT_X'], df_goals['SHOT_Y'], 
+                                   color=HIF_GOLD, alpha=0.9, width=2, headwidth=4, ax=ax_a, zorder=1)
+                    pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
+                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1.5, ax=ax_a, zorder=3)
             
             st.pyplot(fig_a, use_container_width=True)
