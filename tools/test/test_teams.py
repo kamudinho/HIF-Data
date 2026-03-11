@@ -11,15 +11,21 @@ def vis_side(df_raw=None):
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
-    df = dp.get("opta", {}).get("matches", pd.DataFrame())
     
-    if df.empty:
+    # Hent data fra DP
+    df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
+    df_adv = dp.get("team_stats_full", pd.DataFrame()) # Din Wyscout query
+    
+    if df_opta.empty:
         st.warning("Ingen kampdata fundet.")
         return
 
-    # --- 1. HJÆLPEFUNKTIONER ---
+    # --- 1. HJÆLPEFUNKTIONER & MAPPING ---
+    # Vi bygger en bro mellem Opta UUID og Wyscout TEAM_WYID via team_mapping.py
+    opta_to_wyid = {info['opta_uuid']: info['wyid'] for name, info in TEAMS.items() if 'opta_uuid' in info}
+
     def get_logo_url(opta_uuid, team_name):
-        wy_id = next((info.get('wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+        wy_id = opta_to_wyid.get(opta_uuid)
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
@@ -46,9 +52,9 @@ def vis_side(df_raw=None):
             res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
         return res
 
-    # --- 2. DATABEREGNING ---
+    # --- 2. DATABEREGNING (OPTA RESULTATER) ---
     stats = {}
-    for _, row in df.iterrows():
+    for _, row in df_opta.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
         h_name, a_name = row['CONTESTANTHOME_NAME'], row['CONTESTANTAWAY_NAME']
         h_g = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
@@ -76,116 +82,103 @@ def vis_side(df_raw=None):
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    # Find næste modstander - Sorteret kronologisk så vi fanger den AKTUELE næste kamp
+    # Find næste modstander
     next_opponents = {}
-    
-    # Vi tager kun de kommende kampe og sorterer dem efter dato (vigtigt!)
-    df_upcoming = df[df['MATCH_STATUS'] != 'Played'].copy()
-    df_upcoming['MATCH_DATE_FULL'] = pd.to_datetime(df_upcoming['MATCH_DATE_FULL'])
-    df_upcoming = df_upcoming.sort_values('MATCH_DATE_FULL', ascending=True)
+    df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
+    if not df_upcoming.empty:
+        df_upcoming['MATCH_DATE_FULL'] = pd.to_datetime(df_upcoming['MATCH_DATE_FULL'])
+        df_upcoming = df_upcoming.sort_values('MATCH_DATE_FULL', ascending=True)
 
-    for uuid in stats.keys():
-        future_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | 
-                               (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)]
-        
-        if not future_m.empty:
-            row = future_m.iloc[0]
-            is_home = row['CONTESTANTHOME_OPTAUUID'] == uuid
-            opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
-            opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
-            
-            # Vi fjerner alle manuelle linjeskift i f-strengen for at undgå \n i tabellen
-            dato = row['MATCH_DATE_FULL'].strftime('%d/%m')
-            logo = get_logo_url(opp_uuid, opp_name)
-            
-            # Alt på én linje uden mellemrum i koden
-            html_content = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_name}</span><span style="color:#888;font-size:11px;">{dato}</span></div>'
-            next_opponents[uuid] = html_content
-        else:
-            next_opponents[uuid] = "-"
+        for uuid in stats.keys():
+            future_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+            if not future_m.empty:
+                row = future_m.iloc[0]
+                is_home = row['CONTESTANTHOME_OPTAUUID'] == uuid
+                opp_name = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
+                opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
+                dato = row['MATCH_DATE_FULL'].strftime('%d/%m')
+                logo = get_logo_url(opp_uuid, opp_name)
+                next_opponents[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_name}</span><span style="color:#888;font-size:11px;">{dato}</span></div>'
+            else:
+                next_opponents[uuid] = "-"
 
+    # Omdan til DataFrame og Merge med Wyscout stats
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents)
+    df_liga['TEAM_WYID'] = df_liga['UUID'].map(opta_to_wyid)
     
-    # Sortering (Denne sørger for at tabellen er rigtig)
+    # Merge Wyscout Advanced Stats (Querien team_stats_full)
+    if not df_adv.empty:
+        # Vi sikrer os at vi merger på de rigtige kolonnenavne fra din query
+        df_liga = df_liga.merge(
+            df_adv[['TEAM_WYID', 'PPDA', 'AVERAGE_FORWARD_PASSES', 'AVERAGE_SHOTS']], 
+            on='TEAM_WYID', 
+            how='left'
+        )
+
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
     # --- 3. GRAF FUNKTION ---
-    def draw_h2h_chart(n1, n2, metrics, labels, per_match=False):
+    def draw_h2h_chart(n1, n2, metrics, labels):
         t1 = df_liga[df_liga['HOLD'] == n1].iloc[0].to_dict()
         t2 = df_liga[df_liga['HOLD'] == n2].iloc[0].to_dict()
         fig = go.Figure()
         
-        y1_vals = [t1[m] / t1['MATCHES'] if per_match and t1['MATCHES'] > 0 else t1[m] for m in metrics]
-        y2_vals = [t2[m] / t2['MATCHES'] if per_match and t2['MATCHES'] > 0 else t2[m] for m in metrics]
-        
         c1 = colors_dict.get(n1, {"primary": "#cc0000"})
         c2 = colors_dict.get(n2, {"primary": "#0056a3"})
         
-        bar_width = 0.25
-        for i, trace in enumerate([(n1, y1_vals, c1), (n2, y2_vals, c2)]):
+        for name, data, color in [(n1, t1, c1), (n2, t2, c2)]:
+            vals = [data.get(m, 0) for m in metrics]
             fig.add_trace(go.Bar(
-                name=trace[0], x=labels, y=trace[1], 
-                marker_color=trace[2]["primary"],
-                text=[f"{v:.1f}" if per_match else int(v) for v in trace[1]], 
-                textposition='inside', width=bar_width,
-                insidetextfont=dict(size=16, color=get_text_color(trace[2]["primary"]), family="Arial Black")
+                name=name, x=labels, y=vals, 
+                marker_color=color["primary"],
+                text=[f"{v:.1f}" if isinstance(v, float) else int(v) for v in vals],
+                textposition='inside', width=0.25,
+                insidetextfont=dict(size=14, color=get_text_color(color["primary"]), family="Arial Black")
             ))
 
-        for i in range(len(labels)):
-            url1 = logo_map.get(n1) or get_logo_url(t1['UUID'], n1)
-            url2 = logo_map.get(n2) or get_logo_url(t2['UUID'], n2)
-            if url1:
-                fig.add_layout_image(dict(source=url1, xref="x", yref="paper", x=i-0.20, y=1.15, sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"))
-            if url2:
-                fig.add_layout_image(dict(source=url2, xref="x", yref="paper", x=i+0.20, y=1.15, sizex=0.10, sizey=0.10, xanchor="center", yanchor="middle"))
-
         fig.update_layout(
-            barmode='group', bargap=0.25, height=450, margin=dict(t=110, b=40, l=10, r=10),
+            barmode='group', bargap=0.3, height=400, margin=dict(t=50, b=40, l=10, r=10),
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(y1_vals), max(y2_vals)) * 1.2]),
-            xaxis=dict(fixedrange=True, tickfont=dict(size=14, family="Arial Black"))
+            yaxis=dict(visible=False), xaxis=dict(tickfont=dict(size=12, family="Arial Black"))
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- 4. LAYOUT ---
+    st.markdown("""
+        <style>
+            .league-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            .league-table th { text-align: center; padding: 10px; border-bottom: 2px solid #eee; background: #f8f9fa; }
+            .league-table td { text-align: center; padding: 10px; border-bottom: 1px solid #eee; }
+            .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
+        </style>
+    """, unsafe_allow_html=True)
+
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("""
-            <style>
-                .league-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-                .league-table th { text-align: center !important; padding: 8px; border-bottom: 2px solid #eee; background-color: rgba(0,0,0,0.03); }
-                .league-table td { text-align: center !important; padding: 8px; border-bottom: 1px solid #eee; }
-                
-                /* Rank (#) centreret */
-                .league-table td:nth-child(1), .league-table th:nth-child(1) { text-align: center !important; width: 30px; font-weight: bold; }
-                
-                /* Logo kolonne centreret */
-                .league-table td:nth-child(2) { width: 40px; }
-                
-                /* HOLD venstrestillet */
-                .league-table td:nth-child(3), .league-table th:nth-child(3) { text-align: left !important; font-weight: bold; }
-            </style>
-        """, unsafe_allow_html=True)
-
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
-        # Vi viser '#' som den første kolonne (Rank)
-        vis_cols = ['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']
-        st.write(df_disp[vis_cols].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        # Kolonner til visning (Inkl. de nye Wyscout stats)
+        vis_cols = ['#', ' ', 'HOLD', 'K', 'P', 'AVERAGE_SHOTS', 'AVERAGE_FORWARD_PASSES', 'PPDA', 'FORM', 'NÆSTE']
+        # Omdøb for pænere header
+        df_disp = df_disp.rename(columns={'AVERAGE_SHOTS': 'Skud/K', 'AVERAGE_FORWARD_PASSES': 'Fwd P', 'PPDA': 'PPDA'})
+        vis_cols_pretty = ['#', ' ', 'HOLD', 'K', 'P', 'Skud/K', 'Fwd P', 'PPDA', 'FORM', 'NÆSTE']
+        
+        st.write(df_disp[vis_cols_pretty].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
-        team1 = c1.selectbox("Vælg Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
-        team2 = c2.selectbox("Vælg Hold 2", [h for h in h_list if h != team1])
+        team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
+        team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
 
-        sub_tabs = st.tabs(["Generelt", "Offensivt", "Defensivt"])
-        with sub_tabs[0]: draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
-        with sub_tabs[1]: draw_h2h_chart(team1, team2, ['M+'], ['Mål Scoret'])
-        with sub_tabs[2]: draw_h2h_chart(team1, team2, ['M-'], ['Mål Imod'])
+        st.subheader("Sammenligning")
+        s1, s2, s3 = st.tabs(["Resultater", "Offensiv", "Pres & Opbygning"])
+        with s1: draw_h2h_chart(team1, team2, ['P', 'V', 'K'], ['Point', 'Sejre', 'Kampe'])
+        with s2: draw_h2h_chart(team1, team2, ['AVERAGE_SHOTS', 'M+'], ['Skud pr. kamp', 'Mål total'])
+        with s3: draw_h2h_chart(team1, team2, ['PPDA', 'AVERAGE_FORWARD_PASSES'], ['PPDA', 'Forward Passes'])
