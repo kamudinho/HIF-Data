@@ -172,20 +172,21 @@ def vis_side(*args, **kwargs):
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Radius 135)
-            box_y = 135
-            ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
+            # 1. Værdibokse (Radius 130 - lidt tættere på centrum for at give plads)
+            box_y = 130
+            ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # 2. Sort label-tekst (Radius 165)
-            label_y = 165 
+            # 2. Sort label-tekst (Radius 155)
+            label_y = 155 
             
-            # --- NY ROTATIONS-LOGIK ---
-            # Vi beregner rotationen så teksten altid vender "opad"
-            # Hvis vinklen er mellem 90 og 270 grader (bunden), flipper vi teksten 180 grader
-            # Men vi trækker 90 grader fra for at gøre den tangentiel til cirklen
-            rotation = angle_deg - 90 
+            # NY ROTATION: Sørger for at teksten flugter med buen og vender læsbart
+            # Vi trækker 90 grader fra for at lægge teksten ned langs cirklen
+            rotation = angle_deg - 90
+            
+            # Hvis teksten er i bunden (mellem 90 og 270 grader), vender vi den 180 grader
+            # så den ikke står på hovedet
             if 90 <= angle_deg <= 270:
                 rotation += 180
             
@@ -197,7 +198,12 @@ def vis_side(*args, **kwargs):
                     rotation_mode='anchor',
                     gid='overlay_text')
 
-        # --- FIGUR-JUSTERING ---
-        ax.set_ylim(0, 185)
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.98, bottom=0.02)
+        # --- FIGUR-JUSTERING (FIXER ZOOM OG WHITESPACE) ---
+        # Vi øger LIMIT_Y til 200 for at skabe en "buffer" så teksten ikke bliver skåret af
+        ax.set_ylim(0, 200)
+        
+        # Vi fjerner 'tight' justering her for at bevare kontrollen over zoomet
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+
+        # Vis chartet - vi tvinger den til ikke at fylde ALT for meget vertikalt
         st.pyplot(fig, use_container_width=True)
