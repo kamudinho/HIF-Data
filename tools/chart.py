@@ -137,8 +137,9 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- TEKST OG LABELS (RADIAL ROTATION) ---
+        # --- TEKST OG LABELS (OPTIMERET RADIAL ROTATION) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
+            # Vi konverterer vinklen til grader og korrigerer for vores offset
             angle_deg = np.rad2deg(angle)
             
             # 1. Værdibokse (Radius 115)
@@ -147,16 +148,21 @@ def vis_side(*args, **kwargs):
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # 2. Sort label-tekst (Radius 138)
-            label_y = 138 
+            # 2. Sort label-tekst (Radius 135)
+            label_y = 135 
             
-            # NY RADIAL ROTATION:
-            # Vi bruger selve vinklen (minus 90 for at korrigere for Matplotlibs startpunkt)
-            # Vi flipper teksten i venstre side (90-270 grader), så den ikke vender på hovedet
+            # DYNAMISK ROTATION:
+            # Vi tager udgangspunkt i vinklen.
             rotation = angle_deg
-            if 90 < angle_deg < 270:
-                rotation -= 180
             
+            # Logik for at teksten aldrig står på hovedet:
+            # Hvis vinklen er i højre side (0-180 grader), skal vi trække 0 fra.
+            # Hvis den er i venstre side (180-360 grader), flipper vi den 180 grader.
+            if 90 < angle_deg <= 270:
+                rotation = angle_deg + 180
+            else:
+                rotation = angle_deg
+
             ax.text(angle, label_y, label, 
                     ha='center', va='center', 
                     fontsize=7, fontweight='black', 
@@ -166,6 +172,7 @@ def vis_side(*args, **kwargs):
                     gid='overlay_text')
 
         # --- ZOOM JUSTERING ---
+        # Vi holder den på 165 for at sikre at de nu vandrette labels ikke bliver skåret af
         ax.set_ylim(0, 165)
 
         # Vis på skærmen
