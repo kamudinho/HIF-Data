@@ -146,7 +146,7 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.70), (0, 0), frameon=True, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=True, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
