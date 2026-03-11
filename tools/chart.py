@@ -65,10 +65,19 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: STYLING AF KNAP ---
+    # --- CSS: STYLING AF AFSTANDE ---
     st.markdown("""
         <style>
             .block-container { padding-top: 0.5rem !important; }
+            
+            /* Fjerner mellemrum mellem kolonnerne */
+            [data-testid="column"] {
+                padding-left: 0rem !important;
+                padding-right: 0rem !important;
+                gap: 0rem !important;
+            }
+            
+            /* Gør download-knappen pæn */
             div.stDownloadButton > button {
                 background-color: white !important;
                 color: black !important;
@@ -81,11 +90,11 @@ def vis_side(*args, **kwargs):
                 font-size: 11px !important;
                 margin-top: 10px;
             }
-            div[data-testid="stRadio"] label p { font-size: 13px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    menu_col, chart_col = st.columns([1, 1])
+    # Ændret til [1, 2] for at bringe diagrammet tættere på listen
+    menu_col, chart_col = st.columns([1, 2])
 
     with menu_col:
         st.caption("Vælg Hold")
@@ -97,7 +106,7 @@ def vis_side(*args, **kwargs):
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-        # Data-beregning
+        # Data-beregning (uændret)
         all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
         for col in list(set(all_metrics_cols)):
             if col in df.columns and col != 'PPDA':
@@ -106,12 +115,12 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART DESIGN ---
-        # Vi bruger en fast figsize til visningen
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        plt.subplots_adjust(top=0.9, bottom=0.1, left=0.1, right=0.9)
+        # JUSTRERING: left=0 rykker diagrammet helt mod menu_col
+        plt.subplots_adjust(top=0.95, bottom=0.05, left=0, right=0.9)
         
         V_OFFSET = 25
         LIMIT_Y = 160 
@@ -156,19 +165,15 @@ def vis_side(*args, **kwargs):
                     fontsize=7, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
-        # Vis i appen
         st.pyplot(fig, use_container_width=True)
 
-        # --- DOWNLOAD OPTIMERING ---
         buf = BytesIO()
-        # bbox_inches='tight' fjerner alt tomrummet omkring diagrammet
-        # pad_inches=0.1 sikrer at labels ikke rører kanten af billedfilen helt
         fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', pad_inches=0.1, dpi=300)
         
         with download_placeholder:
             st.download_button(
                 label="Download",
                 data=buf.getvalue(),
-                file_name=f"pizza_{valgt_hold_navn}.png",
+                file_name=f"Pizzachart_{valgt_hold_navn}.png",
                 mime="image/png"
             )
