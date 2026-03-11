@@ -100,7 +100,7 @@ def vis_side(df_raw=None):
     def get_wyscout_direct():
         if not conn: return pd.DataFrame()
         query = f"""
-        SELECT t.TEAMNAME, adv.XG, adv.SHOTS, md.RECOVERIES, md.INTERCEPTIONS, mp.PASSES
+        SELECT t.TEAMNAME, adv.XG, adv.SHOTS, md.INTERCEPTIONS, mp.PASSES
         FROM {DB}.WYSCOUT_TEAMMATCHES tm
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
@@ -179,7 +179,7 @@ def vis_side(df_raw=None):
             
             sub_tabs = st.tabs(["Offensivt", "Defensivt", "Spilopbygning"])
             with sub_tabs[0]: draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG pr. kamp', 'Skud pr. kamp'], df_agg)
-            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions'], df_agg)
+            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg)
             with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg)
         else:
             st.error("Wyscout data kunne ikke hentes.")
