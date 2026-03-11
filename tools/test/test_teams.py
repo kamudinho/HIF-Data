@@ -17,9 +17,7 @@ def get_text_color(hex_color):
 # --- 2. HOVEDSIDE ---
 
 def vis_side(df_raw=None):
-    if "dp" not in st.session_state: 
-        st.error("Data pakken 'dp' mangler.")
-        return
+    if "dp" not in st.session_state: return
     
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
@@ -29,13 +27,14 @@ def vis_side(df_raw=None):
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- HJÆLPEFUNKTIONER ---
-    def get_logo_url(opta_uuid, team_name):
+    # --- HJÆLPEFUNKTIONER TIL LOGO OG FORM ---
+    def get_logo_url(opta_uuid):
+        # Finder Wyscout ID via mapping-filen for at ramme logo_map
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
-        return logo_map.get(wy_id, next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), ""))
+        return logo_map.get(wy_id, "")
 
     def get_logo_html(uuid):
-        url = get_logo_url(uuid, "")
+        url = get_logo_url(uuid)
         return f'<img src="{url}" width="20">' if url else ""
 
     def update_form(current_form, result):
@@ -56,6 +55,7 @@ def vis_side(df_raw=None):
             for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
                 if uuid not in stats:
                     stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
+            
             if row['MATCH_STATUS'] == 'Played':
                 h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0)), int(row.get('TOTAL_AWAY_SCORE', 0))
                 winner = str(row.get('WINNER', '')).lower()
@@ -68,7 +68,7 @@ def vis_side(df_raw=None):
                 else:
                     s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
-    # Næste modstander logik
+    # --- NÆSTE MODSTANDER LOGIK ---
     next_opp = {}
     df_up = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
     if not df_up.empty:
@@ -81,23 +81,22 @@ def vis_side(df_raw=None):
                 is_h = r['CONTESTANTHOME_OPTAUUID'] == uuid
                 opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
                 opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
-                next_opp[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{get_logo_url(opp_u, "")}" width="18"><span>{opp_n}</span></div>'
+                opp_logo = get_logo_url(opp_u)
+                next_opp[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{opp_logo}" width="18"><span>{opp_n}</span></div>'
 
     df_liga = pd.DataFrame(stats.values())
-    df_liga['MD'] = df_liga['M+'] - df_liga['M-']
-    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
-    df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
-    df_liga.insert(0, '#', df_liga.index + 1)
-    # --- WYSCOUT DATA HENTNING (RETTET SQL) ---
+    if not df_liga.empty:
+        df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+        df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
+        df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
+        df_liga.insert(0, '#', df_liga.index + 1)
+
+    # --- WYSCOUT DATA HENTNING ---
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if conn is None: return pd.DataFrame()
-        # Jeg har fjernet TOUCHINBOX da den fejlede - vi finder det korrekte navn senere
         query = f"""
-        SELECT 
-            t.TEAMNAME,
-            adv.XG, adv.SHOTS, md.INTERCEPTIONS,
-            mp.PASSES
+        SELECT t.TEAMNAME, adv.XG, adv.SHOTS, mp.FORWARDPASSES, md.INTERCEPTIONS, mp.PASSES
         FROM {DB}.WYSCOUT_TEAMMATCHES tm
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
@@ -105,14 +104,9 @@ def vis_side(df_raw=None):
         JOIN {DB}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
         JOIN {DB}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
-        WHERE tm.COMPETITION_WYID = 328
-        AND s.SEASONNAME LIKE '2025%2026'
+        WHERE tm.COMPETITION_WYID = 328 AND s.SEASONNAME LIKE '2025%2026'
         """
-        try:
-            return conn.query(query)
-        except Exception as e:
-            st.error(f"SQL Fejl ved hentning af Wyscout: {e}")
-            return pd.DataFrame()
+        return conn.query(query)
 
     df_wy_raw = get_wyscout_direct()
 
@@ -126,7 +120,7 @@ def vis_side(df_raw=None):
             df_disp = df_liga.copy()
             df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
             df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-            st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+            st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         if df_liga.empty: return
@@ -143,12 +137,15 @@ def vis_side(df_raw=None):
             d2 = df_agg[df_agg['TEAMNAME'].str.contains(team2, case=False, na=False)]
 
             if not d1.empty and not d2.empty:
-                st.subheader("Wyscout Performance (Gns. pr. kamp)")
-                # Vi har fjernet TOUCHINBOX herunder også
+                # Find logoer til grafen
+                u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
+                u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
+                l1, l2 = get_logo_url(u1), get_logo_url(u2)
+
                 cats = {
                     "Angreb": (['XG', 'SHOTS'], ['xG', 'Skud']),
                     "Forsvar": (['INTERCEPTIONS'], ['Interceptions']),
-                    "Spilopbygning": (['PASSES'], ['Afleveringer'])
+                    "Spilopbygning": (['PASSES', 'FORWARDPASSES'], ['Afleveringer', 'FREMADRETTEDE AFLEVERINGER'])
                 }
                 
                 c_tabs = st.tabs(list(cats.keys()))
@@ -156,12 +153,26 @@ def vis_side(df_raw=None):
                     with c_tabs[i]:
                         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
                         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
+                        
                         fig = go.Figure()
-                        fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color="#df003b", text=[f"{x:.2f}" for x in v1], textposition='auto'))
-                        fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color="#0056a3", text=[f"{x:.2f}" for x in v2], textposition='auto'))
-                        fig.update_layout(barmode='group', height=350, margin=dict(t=20, b=20, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info(f"Ingen match i database for {team1} eller {team2}.")
-        else:
-            st.error("Kunne ikke hente data. Tjek om sæson/liga findes i Snowflake.")
+                        # Søjle 1
+                        fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color="#df003b", 
+                                             text=[f"{x:.2f}" for x in v1], textposition='auto', showlegend=False))
+                        # Søjle 2
+                        fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color="#0056a3", 
+                                             text=[f"{x:.2f}" for x in v2], textposition='auto', showlegend=False))
+                        
+                        # Tilføj logoer over hver bar-gruppe
+                        for idx, label in enumerate(labels):
+                            # Logo 1
+                            fig.add_layout_image(dict(source=l1, x=idx, y=v1[idx], xanchor="right", yanchor="bottom", sizex=0.15, sizey=0.15, xref="x", yref="y"))
+                            # Logo 2
+                            fig.add_layout_image(dict(source=l2, x=idx, y=v2[idx], xanchor="left", yanchor="bottom", sizex=0.15, sizey=0.15, xref="x", yref="y"))
+
+                        fig.update_layout(
+                            barmode='group', height=350, margin=dict(t=50, b=20, l=10, r=10),
+                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                            xaxis=dict(showgrid=False)
+                        )
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
