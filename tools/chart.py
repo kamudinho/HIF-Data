@@ -141,16 +141,18 @@ def vis_side(*args, **kwargs):
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Radius 120)
-            box_y = 120
+            # 1. Værdibokse (Hvide labels - rykket ind på 115)
+            # Dette bringer dem helt tæt på kanten af de farvede barer
+            box_y = 115
             ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
                     zorder=10,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # 2. Sort label-tekst (Radius 142 - lige under boksene)
-            label_y = 142 
+            # 2. Sort label-tekst (Stat-navne - rykket ind på 135)
+            # Ved at sætte denne på 135 sidder teksten lige ovenover tallene
+            label_y = 135 
             
-            # ROTATIONS-LOGIK: Teksten følger buen og vender rigtigt i bunden
+            # ROTATIONS-LOGIK: Teksten følger buen og vender rigtigt
             rotation = angle_deg - 90
             if 90 < angle_deg < 270:
                 rotation += 180
@@ -161,6 +163,10 @@ def vis_side(*args, **kwargs):
                     color='black', alpha=0.8,
                     rotation=rotation, rotation_mode='anchor',
                     gid='overlay_text')
+
+        # --- ZOOM JUSTERING ---
+        # Vi sætter LIMIT_Y til 165 for at fjerne det tomme hul i kanten nu hvor alt er rykket ind
+        ax.set_ylim(0, 165)
 
         # Vis på skærmen
         st.pyplot(fig, use_container_width=True)
