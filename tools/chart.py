@@ -63,42 +63,35 @@ def vis_side(*args, **kwargs):
     
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
-    hold_navne = hold_data['TEAMNAME'].tolist()
+    
+    # Initialize valgt hold
+    if "selected_team" not in st.session_state:
+        st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
 
-    # --- CSS: TVINGER RADIO-KNAPPER IND UNDER LOGOER UDEN TEKST ---
-    st.markdown("""
-        <style>
-        /* Skjul tekst i radio buttons */
-        div[data-testid="stRadio"] label p { display: none; }
-        /* Gør radio-rækken super kompakt og centreret */
-        div[data-testid="stRadio"] > div { 
-            justify-content: space-around; 
-            padding: 0 10px;
-        }
-        /* Fjern unødig margin under logoer */
-        div[data-testid="column"] { padding: 0 !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # --- 1. LOGO-RÆKKE ---
-    logo_cols = st.columns(len(hold_data))
+    # --- 1. LOGO-MENU (Præcis styring) ---
+    # Vi laver 12 smalle kolonner
+    cols = st.columns(len(hold_data))
+    
     for i, (_, row) in enumerate(hold_data.iterrows()):
-        with logo_cols[i]:
-            st.image(row['IMAGEDATAURL'], use_container_width=True)
+        with cols[i]:
+            # Lille logo (35px er ofte perfekt til top-banner)
+            st.image(row['IMAGEDATAURL'], width=35)
+            
+            # Vi bruger en checkbox som en "knap" – den står altid centreret under logoet
+            # Vi fjerner label-teksten helt
+            is_selected = (st.session_state.selected_team == row['TEAMNAME'])
+            if st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_selected, label_visibility="collapsed"):
+                if st.session_state.selected_team != row['TEAMNAME']:
+                    st.session_state.selected_team = row['TEAMNAME']
+                    st.rerun()
 
-    # --- 2. RADIO-KNAPPER (Lige under logoerne) ---
-    valgt_hold_navn = st.radio(
-        "Vælg hold", 
-        hold_navne, 
-        horizontal=True, 
-        label_visibility="collapsed"
-    )
-
-    # --- 3. DATA PREP ---
+    # --- 2. DATA ---
+    valgt_hold_navn = st.session_state.selected_team
     target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
+    # Normalisering
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
@@ -106,21 +99,22 @@ def vis_side(*args, **kwargs):
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 4. PIZZA CHART (MAXIMERET PLADS) ---
+    # --- 3. PIZZA CHART (MAKSimeret visning) ---
     fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
     
-    # Juster marginerne manuelt så figuren fylder det hele
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    # Fjern alt spildplads i kanterne
+    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
     
     V_OFFSET = 28
-    LIMIT_Y = 170 
+    LIMIT_Y = 175 # Giver plads til at hele hjulet kan ses
     ax.set_ylim(0, LIMIT_Y)
     
     color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
     plot_labels, values, display_values, plot_colors = [], [], [], []
 
+    # ... (Samme beregnings-loop som før) ...
     for group_name, pairs in METRIC_PAIRS.items():
         for display_label, data_col in pairs:
             if data_col not in df.columns: continue
@@ -140,6 +134,7 @@ def vis_side(*args, **kwargs):
     ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
     ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
+    # Centralt logo
     logo_img = get_logo(logo_url)
     if logo_img:
         ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.72), (0, 0), frameon=False, zorder=10))
@@ -148,17 +143,17 @@ def vis_side(*args, **kwargs):
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # TEKST PLACERING
+    # TEKST MED DIN PRÆCISE LAYOUT-SKARPHED
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
-        label_y = 158  # Lidt længere ud
-        box_y = 135    # Lidt længere ud
+        label_y = 162  # Trækker teksten lidt længere ud for overblik
+        box_y = 138    # Giver plads til værdiboksen
         
         ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
 
-        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=10, fontweight='black', color='white')
-        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=11, fontweight='bold', color='white',
+        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
+        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
                 bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
 
-    # Render i Streamlit
+    # Render responsivt
     st.pyplot(fig, use_container_width=True)
