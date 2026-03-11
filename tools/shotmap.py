@@ -77,15 +77,13 @@ def vis_side(dp):
                 spiller_dz_pct = (len(dz_hits) / len(df_dz_full) * 100) if len(df_dz_full) > 0 else 0
                 
                 st.markdown(f"""
-                    <div class="stat-box" style="border-left-color: {DZ_COLOR}"><div class="stat-label"><span class="legend-dot" style="background-color:white; border:2px solid {HIF_RED};"></span>Skud i DZ</div><div class="stat-value">{len(dz_hits)}</div></div>
-                    <div class="stat-box" style="border-left-color: {HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background-color:{HIF_RED};"></span>Mål i DZ</div><div class="stat-value">{dz_goals}</div></div>
+                    <div class="stat-box" style="border-left-color: {DZ_COLOR}"><div class="stat-label">Skud i DZ</div><div class="stat-value">{len(dz_hits)}</div></div>
+                    <div class="stat-box" style="border-left-color: {HIF_RED}"><div class="stat-label">Mål i DZ</div><div class="stat-value">{dz_goals}</div></div>
                     <div class="stat-box" style="border-left-color: #333;"><div class="stat-label">HIF i DZ</div><div class="stat-value">{hif_dz_pct:.1f}%</div></div>
-                    <div class="stat-box" style="border-left-color: {HIF_GOLD}"><div class="stat-label">Spiller i DZ</div><div class="stat-value">{spiller_dz_pct:.1f}%</div></div>
                 """, unsafe_allow_html=True)
 
             with col_dz_viz:
                 pitch_dz = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-                # Vi gør figuren lidt højere her for at give plads til tabellen nedenunder
                 fig_dz, ax_dz = pitch_dz.draw(figsize=(6, 8)) 
                 ax_dz.set_ylim(70, 102) 
                 
@@ -93,76 +91,49 @@ def vis_side(dp):
                 dz_rect = patches.Rectangle((37, 88.5), 26, 11.5, linewidth=1.5, edgecolor=DZ_COLOR, facecolor=DZ_COLOR, alpha=0.1, linestyle='--', zorder=1)
                 ax_dz.add_patch(dz_rect)
                 
-                # VI PLOTTER KUN SKUD INDE I DZ NU:
                 if not dz_hits.empty:
                     c_dz = (dz_hits['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
                     pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=DOT_SIZE, c=c_dz, edgecolors=HIF_RED, linewidth=LINE_WIDTH, ax=ax_dz, zorder=2)
                 
                 st.pyplot(fig_dz)
 
-            # --- TABEL TILPASNING ---
+            # --- DEN NYE TABEL-SEKTION (KLINISK OG INTERAKTIV) ---
+            st.markdown("---")
+            st.subheader("Spillerstatistik i Danger Zone")
+            
             stats_list = []
             for spiller in spiller_liste_dz:
                 s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
                 s_dz = s_data[s_data['IS_DZ_GEO']]
-                if len(s_dz) > 0: # Vi viser kun spillere i tabellen, der faktisk HAR skud i DZ
+                if len(s_dz) > 0:
                     efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
                     stats_list.append({
-                        "Navn": efternavn, 
-                        "Skud": len(s_dz), 
-                        "Mål": len(s_dz[s_dz['EVENT_TYPEID'] == 16]), 
-                        "DZ %": (len(s_dz)/len(s_data)*100) if len(s_data) > 0 else 0
+                        "Spiller": efternavn, 
+                        "Skud i DZ": int(len(s_dz)), 
+                        "Mål i DZ": int(len(s_dz[s_dz['EVENT_TYPEID'] == 16])), 
+                        "DZ %": (len(s_dz)/len(s_data)*100)
                     })
             
-           # --- Erstat din nuværende tabel-sektion i Tab 2 med dette ---
             if stats_list:
-                st.markdown("### Spillerstatistik i Danger Zone")
-                df_table_data = pd.DataFrame(stats_list).sort_values("Skud", ascending=False)
+                df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
                 
-                # Brug st.dataframe for en interaktiv oplevelse
                 st.dataframe(
-                    df_table_data,
+                    df_table,
                     column_config={
-                        "Navn": "Spiller",
-                        "Skud": st.column_config.NumberColumn("Skud i DZ", help="Antal afslutninger i Danger Zone"),
-                        "Mål": st.column_config.NumberColumn("Mål i DZ"),
-                        "DZ %": st.column_config.ProgressColumn("DZ %", help="Procentdel af spillerens samlede skud der er i DZ", format="%.1f%%", min_value=0, max_value=100)
+                        "Spiller": st.column_config.TextColumn("Spiller"),
+                        "Skud i DZ": st.column_config.NumberColumn("Skud", help="Afslutninger i feltet"),
+                        "Mål i DZ": st.column_config.NumberColumn("Mål"),
+                        "DZ %": st.column_config.ProgressColumn(
+                            "Farlighed (DZ %)", 
+                            help="Hvor stor en del af spillerens skud er i DZ?",
+                            format="%.1f%%",
+                            min_value=0,
+                            max_value=100
+                        )
                     },
                     hide_index=True,
                     use_container_width=True
                 )
-                
-                # Vi øger bredden på figuren (12) og justerer højden dynamisk
-                fig_tab, ax_tab = plt.subplots(figsize=(12, 3)) 
-                ax_tab.axis('off')
-                
-                the_table = ax_tab.table(
-                    cellText=[
-                        [int(v) for v in df_table_data['Skud'].values], 
-                        [int(v) for v in df_table_data['Mål'].values], 
-                        [f"{v:.1f}%" for v in df_table_data['DZ %'].values]
-                    ], 
-                    rowLabels=["Skud i DZ", "Mål i DZ", "DZ %"], 
-                    colLabels=df_table_data['Navn'].values, 
-                    loc='center', 
-                    cellLoc='center'
-                )
-                
-                the_table.auto_set_font_size(False)
-                the_table.set_fontsize(8)
-                the_table.scale(1.1, 2.2) # Gør rækkerne højere og lettere at læse
-                
-                # Styling af header og navne
-                for (row, col), cell in the_table.get_celld().items():
-                    if row == 0: # Spillernavne
-                        cell.set_text_props(rotation=90, ha='center', va='center')
-                        cell.set_height(0.4)
-                    if col == -1: # Række-labels
-                        cell.set_facecolor('#f2f2f2')
-                        cell.set_text_props(weight='bold')
-
-                plt.tight_layout()
-                st.pyplot(fig_tab)
 
     # --- TAB 3: ASSISTS ---
     with tab3:
