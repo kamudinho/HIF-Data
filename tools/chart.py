@@ -65,12 +65,11 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS ---
+    # --- CSS: FJERNER TOP PADDING I STREAMLIT ---
     st.markdown("""
         <style>
-            .block-container { padding-top: 0.1rem; }
-            div[data-testid="stRadio"] label p { font-size: 12px !important; margin-bottom: 0px !important; }
-            div[data-testid="stRadio"] > div { gap: 1px !important; }
+            .block-container { padding-top: 0rem !important; }
+            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -20px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -94,19 +93,17 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART DESIGN (STRAMMET TOP) ---
-        # Vi sætter figsize til (10, 8) i stedet for (10, 10) for at fjerne den vertikale overflod
-        fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART DESIGN (OPTIMERET TIL TOP) ---
+        # Mindre højde på figuren fjerner tomrum
+        fig, ax = plt.subplots(figsize=(10, 7.5), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Vi trækker 'top' helt op til 0.98 og sænker 'bottom' 
-        # for at fjerne tomrummet over overskriften
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.98, bottom=0.02)
+        # Aggressiv justering af margins - top=1.0 fjerner alt luft over diagrammet
+        plt.subplots_adjust(left=0.05, right=0.95, top=1.0, bottom=0.0)
         
         V_OFFSET = 25
-        # Vi reducerer LIMIT_Y en smule, da 200 skaber meget tom luft yderst
-        LIMIT_Y = 170  
+        LIMIT_Y = 165 # Stram grænse for at undgå tom yderring
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -128,12 +125,9 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Pizzaskiver baggrund
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
-        # Data barer
         ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-        # Centralt Logo
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.5), (0, 0), frameon=False, zorder=10))
@@ -142,22 +136,22 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- 4. TEKST OG LABELS (SAMME DESIGN, BEDRE PLACERING) ---
+        # --- 4. TEKST OG LABELS (RYKKET TÆTTERE PÅ) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             
-            # Værdibokse
-            box_y = 112
+            # Værdibokse (Farvede) - nu på Radius 110
+            box_y = 110
             ax.text(angle, box_y, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # Stat Labels
-            label_y = 145
+            # Stat Labels (Hvide) - nu på Radius 142
+            label_y = 142
             ax.text(angle, label_y, label, ha='center', va='center',
                     fontsize=7, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
-        # Vi fjerner alt unødigt whitespace i selve Streamlit-containeren
+        # Vis i appen uden ekstra margin
         st.pyplot(fig, use_container_width=True)
 
         # --- DOWNLOAD ---
