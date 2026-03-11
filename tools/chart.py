@@ -65,7 +65,7 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: EKSTREM KOMPRIMERING ---
+    # --- CSS ---
     st.markdown("""
         <style>
             .block-container { padding-top: 0.1rem; }
@@ -99,11 +99,11 @@ def vis_side(*args, **kwargs):
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Balance mellem chart og whitespace
+        # Margin styring
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         
-        V_OFFSET = 18
-        LIMIT_Y = 185 # Giver perfekt zoom-niveau
+        V_OFFSET = 25
+        LIMIT_Y = 175 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -125,73 +125,43 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
+        # Pizzaskiver baggrund
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
+        # Data barer
         ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-        # Centralt Logo (Skaleret ned til 0.4 for elegance)
+        # Centralt Logo
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.4), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.5), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- TEKST OG LABELS (FIXET ROTATION) ---
+        # --- 4. TEKST OG LABELS (HVIDE BOKSE LOOK) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Beregn den visuelle vinkel i grader, som tager højde for 
-            # offset (pi/2) og retning (clockwise)
-            vis_angle_deg = np.rad2deg(angle)
             
-            # 1. Værdibokse (Radius 112 - rykket en anelse tættere på)
+            # Værdibokse (Farvede kasser med tal)
             box_y = 112
-            ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
-                    zorder=10,
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
+            ax.text(angle, box_y, disp, ha='center', va='center', 
+                    fontsize=9, fontweight='bold', color='white', zorder=12,
+                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # 2. Sort label-tekst (Radius 132 - rykket tættere på boksene)
-            label_y = 132 
-            
-            # ROTATIONS-LOGIK:
-            # Vi vil have teksten til at stå radialt (væk fra midten)
-            # Men vi skal flippe den i bunden, så den altid er læsbar.
-            rotation = vis_angle_deg
-            
-            # Flip tekst mellem kl. 3 og kl. 9 (90 til 270 grader visuelt)
-            if 90 < vis_angle_deg < 270:
-                rotation -= 180
+            # Stat Labels (Hvide kasser med sort tekst)
+            label_y = 145
+            ax.text(angle, label_y, label, ha='center', va='center',
+                    fontsize=7, fontweight='bold', color='black', zorder=11,
+                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
-            ax.text(angle, label_y, label, 
-                    ha='center', va='center', 
-                    fontsize=7, fontweight='black', 
-                    color='black', alpha=0.8,
-                    rotation=rotation, 
-                    rotation_mode='anchor',
-                    gid='overlay_text')
-
-        # --- ZOOM JUSTERING ---
-        # Sænk LIMIT_Y til 160 for at fjerne det tomme rum yderst
-        ax.set_ylim(0, 160)
-
-        # Vis på skærmen
+        # Vis i appen
         st.pyplot(fig, use_container_width=True)
 
-        # --- DOWNLOAD LOGIK ---
+        # --- DOWNLOAD ---
         buf = BytesIO()
-        # Skjul sorte labels før gem
-        for t in ax.texts:
-            if t.get_gid() == 'overlay_text':
-                t.set_visible(False)
-        
         fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
-        
-        # Vis dem igen på skærmen
-        for t in ax.texts:
-            if t.get_gid() == 'overlay_text':
-                t.set_visible(True)
-
         st.download_button(
-            label="Download PNG (Rent look)",
+            label="Download Pizza Chart",
             data=buf.getvalue(),
             file_name=f"pizza_{valgt_hold_navn}.png",
             mime="image/png"
