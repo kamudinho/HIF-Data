@@ -213,7 +213,4 @@ def vis_side(dp):
                     height=400,
                     use_container_width=True
                 )
-                
-                # En lille "Fun Fact" eller opsummering under tabellen
-                top_dz_spiller = df_table.iloc[0]['Spiller']
-                st.info(f"💡 **{top_dz_spiller}** er den spiller med flest afslutninger i Danger Zone.")
+           
