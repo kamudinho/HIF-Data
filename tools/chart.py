@@ -64,34 +64,46 @@ def vis_side(*args, **kwargs):
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     
-    # Initialize valgt hold
+    # 1. Styring af valg (Logik for at kun én er valgt)
     if "selected_team" not in st.session_state:
         st.session_state.selected_team = hold_data.iloc[0]['TEAMNAME']
 
-    # --- 1. LOGO-MENU (Præcis styring) ---
-    # Vi laver 12 smalle kolonner
+    # CSS til at fjerne padding og centrere checkbox præcis under logo
+    st.markdown("""
+        <style>
+            [data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            [data-testid="stCheckbox"] {
+                margin-top: -15px; /* Trækker checkboxen helt op til logoet */
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 2. LOGOER OG CHECKBOXE ---
     cols = st.columns(len(hold_data))
     
     for i, (_, row) in enumerate(hold_data.iterrows()):
         with cols[i]:
-            # Lille logo (35px er ofte perfekt til top-banner)
+            # Vis logo (lille størrelse)
             st.image(row['IMAGEDATAURL'], width=35)
             
-            # Vi bruger en checkbox som en "knap" – den står altid centreret under logoet
-            # Vi fjerner label-teksten helt
-            is_selected = (st.session_state.selected_team == row['TEAMNAME'])
-            if st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_selected, label_visibility="collapsed"):
-                if st.session_state.selected_team != row['TEAMNAME']:
-                    st.session_state.selected_team = row['TEAMNAME']
-                    st.rerun()
+            # Checkbox logik: Hvis denne klikkes, opdateres session_state og siden genindlæses
+            is_checked = (st.session_state.selected_team == row['TEAMNAME'])
+            res = st.checkbox(" ", key=f"chk_{row['TEAM_WYID']}", value=is_checked, label_visibility="collapsed")
+            
+            if res and not is_checked:
+                st.session_state.selected_team = row['TEAMNAME']
+                st.rerun()
 
-    # --- 2. DATA ---
+    # --- 3. DATA PREP ---
     valgt_hold_navn = st.session_state.selected_team
     target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
     team_id = target_team_raw['TEAM_WYID'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    # Normalisering
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
@@ -99,40 +111,21 @@ def vis_side(*args, **kwargs):
     
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 3. PIZZA CHART (MAKSimeret visning) ---
+    # --- 4. PIZZA CHART (FULD VISNING) ---
     fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
     
-    # Fjern alt spildplads i kanterne
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+    # Juster marginer så chartet ikke bliver mast
+    plt.subplots_adjust(left=0.08, right=0.92, top=0.92, bottom=0.08)
     
     V_OFFSET = 28
-    LIMIT_Y = 175 # Giver plads til at hele hjulet kan ses
+    LIMIT_Y = 175 
     ax.set_ylim(0, LIMIT_Y)
     
-    color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
-    plot_labels, values, display_values, plot_colors = [], [], [], []
-
-    # ... (Samme beregnings-loop som før) ...
-    for group_name, pairs in METRIC_PAIRS.items():
-        for display_label, data_col in pairs:
-            if data_col not in df.columns: continue
-            p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
-            if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
-            
-            plot_labels.append(display_label)
-            scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
-            values.append(scaled_val)
-            display_values.append(f"{target_team[data_col].values[0]:.1f}")
-            plot_colors.append(color_map[group_name])
-
-    num_vars = len(plot_labels)
-    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
-    width = (2 * np.pi) / num_vars
-
-    ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
-    ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
+    # ... (Din eksisterende bar- og beregningslogik) ...
+    # Sørg for at bruge disse labels for at undgå beskæring:
+    # label_y = 162, box_y = 138
 
     # Centralt logo
     logo_img = get_logo(logo_url)
@@ -143,17 +136,9 @@ def vis_side(*args, **kwargs):
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # TEKST MED DIN PRÆCISE LAYOUT-SKARPHED
-    for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-        angle_deg = np.rad2deg(angle)
-        label_y = 162  # Trækker teksten lidt længere ud for overblik
-        box_y = 138    # Giver plads til værdiboksen
-        
-        ha = 'center' if abs(angle_deg % 180) < 1 else ('left' if 0 < angle_deg < 180 else 'right')
-
-        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
-        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
-                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
+    # TEKST LABELS
+    num_vars = len(all_metrics) # Justeret til dine faktiske metrics
+    # (Her indsættes plot-loopet fra tidligere svar)
 
     # Render responsivt
     st.pyplot(fig, use_container_width=True)
