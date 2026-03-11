@@ -84,13 +84,14 @@ def vis_side(dp):
 
     # --- TAB 2: ASSIST-MAP ---
     with tab2:
-        col_viz_a, col_ctrl_a = st.columns([2.2, 1])
+        # Vi justerer ratioen lidt (fra 2.2 til 1.8), da en hel bane fylder mere vertikalt
+        col_viz_a, col_ctrl_a = st.columns([1.8, 1])
+        
         with col_ctrl_a:
             spiller_liste_a = sorted([s for s in df_assists[player_col].unique() if pd.notna(s)])
             v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
             df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists[player_col] == v_a]
             
-            # Her viser vi kun de afleveringer der førte til noget (Assists/KP) på kortet
             df_map_data = df_a_vis[df_a_vis['NEXT_EVENT_TYPE'].isin([13,14,15,16])]
             
             goals_count = len(df_map_data[df_map_data['NEXT_EVENT_TYPE'] == 16])
@@ -108,25 +109,30 @@ def vis_side(dp):
             """, unsafe_allow_html=True)
 
         with col_viz_a:
-            pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
+            # Ændret: half=False for at vise hele banen
+            pitch_a = VerticalPitch(half=False, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+            # Justeret figsize til en hel bane (større højde i forhold til bredde)
+            fig_a, ax_a = pitch_a.draw(figsize=(5.5, 9))
             
-            # På mappet viser vi kun dem der førte til skud (ellers bliver kortet helt rødt af prikker)
             if not df_map_data.empty:
                 mask_goal = df_map_data['NEXT_EVENT_TYPE'] == 16
                 df_goals = df_map_data[mask_goal]
                 df_key_passes = df_map_data[~mask_goal]
 
+                # 1. Key Passes
                 pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
                                 s=DOT_SIZE-20, color='white', edgecolors='#888888', alpha=0.7, ax=ax_a, zorder=2)
+                
+                # 2. Assists
                 pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
                                 s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
                 
-                # Tegn pile for chancer
+                # 3. Pile for alle chancer (svage)
                 pitch_a.arrows(df_map_data['PASS_START_X'], df_map_data['PASS_START_Y'], 
                                df_map_data['SHOT_X'], df_map_data['SHOT_Y'], 
                                color='#888888', alpha=0.2, width=1, ax=ax_a, zorder=1)
                 
+                # 4. Highlight mål-pile (tykke guld-pile)
                 if not df_goals.empty:
                     pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
                                    df_goals['SHOT_X'], df_goals['SHOT_Y'], 
