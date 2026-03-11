@@ -290,8 +290,16 @@ def vis_side(dp):
                         return z
                 return "Zone 8"
 
-            df_goals['Zone'] = df_goals.apply(map_only_goals, axis=1)
-            total_goals = len(df_goals)
+            # Filtrering der sikrer, at vi kun tæller mål
+            df_goals = df_skud[(df_skud['EVENT_TYPEID'] == 16) & (df_skud['EVENT_OUTCOME'] == 1)].copy()
+            
+            # Nu beregner vi zonerne kun på disse rækker
+            total_goals_count = len(df_goals)
+
+            # Topscorer beregning pr. zone
+            def get_top_scorer(zone_df):
+                if zone_df.empty: return "-"
+                return zone_df['PLAYER_NAME'].value_counts().idxmax()
 
             # TRIN 2: Beregn statistik udelukkende på mål-framet
             z_stats = {}
