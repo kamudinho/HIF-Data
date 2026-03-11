@@ -64,20 +64,43 @@ def vis_side(*args, **kwargs):
     
     df = st.session_state["df_pizza"].copy()
     
-    # Valg af hold
-    team_list = sorted(df['TEAMNAME'].unique())
-    valgt_hold_navn = st.selectbox("Vælg hold:", team_list)
-    target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
-    team_id = target_team_raw['TEAM_WYID'].values[0]
+    # --- 1. LOGO-RADIOKNAPPER ---
+    st.write("### Vælg Hold")
+    
+    # Hent unikke hold og deres logo-URL'er
+    hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
+    
+    # Lav en række kolonner til logoerne (f.eks. 6 pr. række)
+    cols = st.columns(6)
+    
+    # Initialize session state for valgt hold hvis det ikke findes
+    if "selected_team_id" not in st.session_state:
+        st.session_state.selected_team_id = hold_data.iloc[0]['TEAM_WYID']
+
+    for idx, (_, row) in enumerate(hold_data.iterrows()):
+        with cols[idx % 6]:
+            # Vis logoet med en lille caption. 
+            # Vi bruger st.button med logoet som billede (via st.image) ovenover
+            st.image(row['IMAGEDATAURL'], width=60)
+            if st.button(row['TEAMNAME'], key=f"btn_{row['TEAM_WYID']}", use_container_width=True):
+                st.session_state.selected_team_id = row['TEAM_WYID']
+
+    # --- 2. DATA KLARGØRING ---
+    team_id = st.session_state.selected_team_id
+    target_team_raw = df[df['TEAM_WYID'] == team_id]
+    valgt_hold_navn = target_team_raw['TEAMNAME'].values[0]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-    # --- DIN DATA NORMALISERING ---
+    # Din eksisterende normalisering og design-parametre
     all_metrics = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
     for col in list(set(all_metrics)):
         if col in df.columns and col != 'PPDA':
             df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
 
     target_team = df[df['TEAM_WYID'] == team_id]
+
+    # --- 3. PIZZA CHART (DIT SKARPE LAYOUT) ---
+    st.caption(f"## {valgt_hold_navn} Performance Profil")
 
     # --- DIT DESIGN PARAMETRE ---
     V_OFFSET = 28
