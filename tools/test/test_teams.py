@@ -17,12 +17,17 @@ def get_text_color(hex_color):
 # --- 2. HOVEDSIDE ---
 
 def vis_side(df_raw=None):
-    if "dp" not in st.session_state: return
+    # Vi henter dp fra session_state (den indeholder Opta data)
+    if "dp" not in st.session_state: 
+        st.error("Data pakken 'dp' mangler i session_state.")
+        return
     
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
     df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
+    
+    # Etabler forbindelse direkte
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
@@ -47,55 +52,41 @@ def vis_side(df_raw=None):
 
     # --- DATABEREGNING (LIGATABEL VIA OPTA) ---
     stats = {}
-    for _, row in df_opta.iterrows():
-        h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-        for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
-            if uuid not in stats:
-                stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
+    if not df_opta.empty:
+        for _, row in df_opta.iterrows():
+            h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+            for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
+                if uuid not in stats:
+                    stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
 
-        if row['MATCH_STATUS'] == 'Played':
-            h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0)), int(row.get('TOTAL_AWAY_SCORE', 0))
-            winner = str(row.get('WINNER', '')).lower()
-            s_h, s_a = stats[h_uuid], stats[a_uuid]
-            s_h['K'] += 1; s_a['K'] += 1; s_h['M+'] += h_g; s_h['M-'] += a_g; s_a['M+'] += a_g; s_a['M-'] += h_g
-            if winner == 'home':
-                s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V'); s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
-            elif winner == 'away':
-                s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V'); s_h['T'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'T')
-            else:
-                s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
-
-    # Næste modstander logik
-    next_opp = {}
-    df_up = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
-    if not df_up.empty:
-        df_up['MATCH_DATE_FULL'] = pd.to_datetime(df_up['MATCH_DATE_FULL'])
-        df_up = df_up.sort_values('MATCH_DATE_FULL')
-        for uuid in stats:
-            m = df_up[(df_up['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_up['CONTESTANTAWAY_OPTAUUID'] == uuid)]
-            if not m.empty:
-                r = m.iloc[0]
-                is_h = r['CONTESTANTHOME_OPTAUUID'] == uuid
-                opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
-                opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
-                next_opp[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{get_logo_url(opp_u, "")}" width="18"><span>{opp_n}</span></div>'
+            if row['MATCH_STATUS'] == 'Played':
+                h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0)), int(row.get('TOTAL_AWAY_SCORE', 0))
+                winner = str(row.get('WINNER', '')).lower()
+                s_h, s_a = stats[h_uuid], stats[a_uuid]
+                s_h['K'] += 1; s_a['K'] += 1; s_h['M+'] += h_g; s_h['M-'] += a_g; s_a['M+'] += a_g; s_a['M-'] += h_g
+                if winner == 'home':
+                    s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V'); s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
+                elif winner == 'away':
+                    s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V'); s_h['T'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'T')
+                else:
+                    s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U'); s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
     df_liga = pd.DataFrame(stats.values())
-    df_liga['MD'] = df_liga['M+'] - df_liga['M-']
-    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
-    df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
-    df_liga.insert(0, '#', df_liga.index + 1)
+    if not df_liga.empty:
+        df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+        df_liga = df_liga.sort_values(by=['P', 'MD'], ascending=False).reset_index(drop=True)
+        df_liga.insert(0, '#', df_liga.index + 1)
 
-    # --- WYSCOUT DATA HENTNING (DIN SQL) ---
-    @st.cache_data(ttl=3600)
+    # --- WYSCOUT DATA HENTNING (DIN SQL DIREKTE) ---
+    @st.cache_data(ttl=600)
     def get_wyscout_direct():
-        if not conn: return pd.DataFrame()
+        if conn is None: return pd.DataFrame()
         query = f"""
         SELECT 
-            tm.TEAM_WYID, t.TEAMNAME,
+            t.TEAMNAME,
             adv.XG, adv.SHOTS, adv.TOUCHINBOX,
-            mp.PASSES, mp.ACCURATEPASSESPERCENT,
-            md.RECOVERIES, md.INTERCEPTIONS
+            md.RECOVERIES, md.INTERCEPTIONS,
+            mp.PASSES
         FROM {DB}.WYSCOUT_TEAMMATCHES tm
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
@@ -106,7 +97,11 @@ def vis_side(df_raw=None):
         WHERE tm.COMPETITION_WYID = 328
         AND s.SEASONNAME LIKE '2025%2026'
         """
-        return conn.query(query)
+        try:
+            return conn.query(query)
+        except Exception as e:
+            st.error(f"SQL Fejl: {e}")
+            return pd.DataFrame()
 
     df_wy_raw = get_wyscout_direct()
 
@@ -114,31 +109,37 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("""<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
-                    .league-table td, .league-table th { padding: 8px; text-align: center; border-bottom: 1px solid #eee; }</style>""", unsafe_allow_html=True)
-        df_disp = df_liga.copy()
-        df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
-        df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        if df_liga.empty:
+            st.warning("Ingen Opta data fundet.")
+        else:
+            st.markdown("""<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
+                        .league-table td, .league-table th { padding: 8px; text-align: center; border-bottom: 1px solid #eee; }</style>""", unsafe_allow_html=True)
+            df_disp = df_liga.copy()
+            df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
+            df_disp['FORM'] = df_disp['FORM'].apply(style_form)
+            st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
+        if df_liga.empty:
+            st.info("Venter på holdliste...")
+            return
+
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
         team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
         team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1])
 
         if not df_wy_raw.empty:
+            # Snowflake returnerer altid uppercase kolonner
             df_wy_raw.columns = [c.upper() for c in df_wy_raw.columns]
-            # Aggregér til gennemsnit pr. kamp
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
+            # Find data for de to hold
             d1 = df_agg[df_agg['TEAMNAME'].str.contains(team1, case=False, na=False)]
             d2 = df_agg[df_agg['TEAMNAME'].str.contains(team2, case=False, na=False)]
 
             if not d1.empty and not d2.empty:
                 st.subheader("Wyscout Performance (Gns. pr. kamp)")
-                
-                # Definer kategorier
                 cats = {
                     "Angreb": (['XG', 'SHOTS', 'TOUCHINBOX'], ['xG', 'Skud', 'Felt-berør.']),
                     "Forsvar": (['RECOVERIES', 'INTERCEPTIONS'], ['Genvindinger', 'Interceptions']),
@@ -157,6 +158,6 @@ def vis_side(df_raw=None):
                         fig.update_layout(barmode='group', height=350, margin=dict(t=20, b=20, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Ingen Wyscout-match fundet for valgte hold.")
+                st.info(f"Ingen match i Wyscout for {team1} vs {team2}. Navne i database: {df_agg['TEAMNAME'].unique()[:3]}...")
         else:
-            st.warning("Wyscout data kunne ikke hentes fra Snowflake.")
+            st.error("Wyscout data ikke fundet i Snowflake (tjek SEASONNAME eller COMPETITION_WYID).")
