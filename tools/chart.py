@@ -64,24 +64,31 @@ def vis_side(*args, **kwargs):
     df = st.session_state["df_pizza"].copy()
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
 
-    # --- 1. LOGO-LINJE (Små logoer øverst) ---
-    st.write("### NordicBet Liga Performance")
+    # --- 1. LOGO-MENU (Klikbare logoer, ingen tekst) ---
+    if "selected_team_id" not in st.session_state:
+        st.session_state.selected_team_id = hold_data.iloc[0]['TEAM_WYID']
+
+    # Container til logoer på én linje
     logo_cols = st.columns(len(hold_data))
     for i, (_, row) in enumerate(hold_data.iterrows()):
         with logo_cols[i]:
-            st.image(row['IMAGEDATAURL'], width=30) # Små logoer på én linje
+            # Vi bruger en gennemsigtig knap med logoet indeni
+            # Hvis man klikker på logo/knap, opdateres session_state
+            if st.button(" ", key=f"logo_{row['TEAM_WYID']}", help=row['TEAMNAME']):
+                st.session_state.selected_team_id = row['TEAM_WYID']
+                st.rerun()
+            
+            # Vi placerer logoet lige over eller under knappen for visuel feedback
+            # Vi bruger custom CSS til at fjerne padding senere hvis nødvendigt
+            st.image(row['IMAGEDATAURL'], width=35)
+            
+            # Lille indikator for valgt hold
+            if st.session_state.selected_team_id == row['TEAM_WYID']:
+                st.markdown("<div style='border-bottom: 2px solid white; width: 35px;'></div>", unsafe_allow_html=True)
 
-    # --- 2. RADIOKNAPPER TIL VALG ---
-    valgt_hold_navn = st.radio(
-        "Vælg hold", 
-        hold_data['TEAMNAME'].tolist(), 
-        horizontal=True, 
-        label_visibility="collapsed"
-    )
-
-    # --- 3. DATA KLARGØRING ---
-    target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
-    team_id = target_team_raw['TEAM_WYID'].values[0]
+    # --- 2. DATA KLARGØRING ---
+    team_id = st.session_state.selected_team_id
+    target_team_raw = df[df['TEAM_WYID'] == team_id]
     logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
     # Normalisering
@@ -92,9 +99,10 @@ def vis_side(*args, **kwargs):
 
     target_team = df[df['TEAM_WYID'] == team_id]
 
-    # --- 4. PIZZA CHART (SKALERET TIL SKÆRM) ---
-    # Vi bruger en lidt mindre figsize for at sikre, at den ikke fylder for meget på højkants-skærme
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    # --- 3. PIZZA CHART ---
+    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(polar=True))
+    
+    # Her sikrer vi gennemsigtigheden så hvid tekst bevares ved kopi/gem
     fig.patch.set_alpha(0)
     ax.set_facecolor('none')
     
@@ -108,7 +116,6 @@ def vis_side(*args, **kwargs):
     for group_name, pairs in METRIC_PAIRS.items():
         for display_label, data_col in pairs:
             if data_col not in df.columns: continue
-            
             p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
             if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
 
@@ -122,34 +129,36 @@ def vis_side(*args, **kwargs):
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
     width = (2 * np.pi) / num_vars
 
-    # Tegn skiver og barer
     ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.3, zorder=1)
     ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
-    # Logo midt i
     logo_img = get_logo(logo_url)
     if logo_img:
-        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
+        ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.72), (0, 0), frameon=False, zorder=10))
 
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.axis('off')
 
-    # Tekst labels
     for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
         angle_deg = np.rad2deg(angle)
         label_y = 152
         box_y = 128
-        
-        # Dynamisk justering af tekstplacering baseret på vinkel
-        if angle_deg == 0 or angle_deg == 180: ha = 'center'
-        elif 0 < angle_deg < 180: ha = 'left'
-        else: ha = 'right'
+        ha = 'center' if angle_deg in [0, 180] else ('left' if 0 < angle_deg < 180 else 'right')
 
-        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=8, fontweight='black', color='white')
-        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=9, fontweight='bold', color='white',
-                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=0.8))
+        ax.text(angle, label_y, label, ha=ha, va='center', fontsize=9, fontweight='black', color='white')
+        ax.text(angle, box_y, disp, ha='center', va='center', fontsize=10, fontweight='bold', color='white',
+                bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.4', linewidth=1))
 
-    # --- 5. RENDER (Responsiv) ---
-    # use_container_width=True sørger for at billedet tilpasser sig din browser/opløsning
+    # Render i Streamlit
     st.pyplot(fig, use_container_width=True)
+
+    # --- 4. DOWNLOAD KNAP (Fastholder gennemsigtighed og hvid tekst) ---
+    buf = BytesIO()
+    fig.savefig(buf, format="png", transparent=True, dpi=300, bbox_inches='tight')
+    st.download_button(
+        label="Gem Chart som PNG",
+        data=buf.getvalue(),
+        file_name=f"performance_{team_id}.png",
+        mime="image/png"
+    )
