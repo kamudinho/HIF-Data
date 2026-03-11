@@ -28,7 +28,7 @@ def vis_side(dp):
     else:
         df_skud['IS_DZ_GEO'] = False
 
-    tab1, tab2, tab3, tab4 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "ASSISTS"])
+    tab1, tab2, tab3, tab4 = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER"])
 
     # Fælles indstilling for prikstørrelse
     DOT_SIZE = 90 
@@ -162,75 +162,3 @@ def vis_side(dp):
                     pitch_dz.scatter(dz_hits['EVENT_X'], dz_hits['EVENT_Y'], s=DOT_SIZE, c=c_dz, edgecolors=HIF_RED, linewidth=LINE_WIDTH, ax=ax_dz, zorder=2)
                 
                 st.pyplot(fig_dz)
-
-            # --- DEN NYE TABEL-SEKTION (KLINISK OG INTERAKTIV) ---
-            st.markdown("---")
-            st.subheader("Spillerstatistik i Danger Zone")
-            
-            stats_list = []
-            for spiller in spiller_liste_dz:
-                s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
-                s_dz = s_data[s_data['IS_DZ_GEO']]
-                if len(s_dz) > 0:
-                    efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
-                    stats_list.append({
-                        "Spiller": efternavn, 
-                        "Skud i DZ": int(len(s_dz)), 
-                        "Mål i DZ": int(len(s_dz[s_dz['EVENT_TYPEID'] == 16])), 
-                        "DZ %": (len(s_dz)/len(s_data)*100)
-                    })
-            
-            if stats_list:
-                df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
-                
-                st.dataframe(
-                    df_table,
-                    column_config={
-                        "Spiller": st.column_config.TextColumn("Spiller"),
-                        "Skud i DZ": st.column_config.NumberColumn("Skud", help="Afslutninger i feltet"),
-                        "Mål i DZ": st.column_config.NumberColumn("Mål"),
-                        "DZ %": st.column_config.ProgressColumn(
-                            "Farlighed (DZ %)", 
-                            help="Hvor stor en del af spillerens skud er i DZ?",
-                            format="%.1f%%",
-                            min_value=0,
-                            max_value=100
-                        )
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-
-    # --- TAB 4: ASSISTS ---
-    with tab4:
-        if df_assists.empty:
-            st.warning("⚠️ Ingen assists fundet.")
-        else:
-            col_viz_a, col_ctrl_a = st.columns([2.2, 1])
-            with col_ctrl_a:
-                spiller_liste_a = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
-                v_a = st.selectbox("Vælg spiller (Assists)", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
-                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
-                
-                st.markdown(f"""
-                    <div class="stat-box">
-                        <div class="stat-label">
-                            <span class="legend-dot" style="background-color:{HIF_GOLD}; border:1px solid black;"></span>
-                            Goal Assists
-                        </div>
-                        <div class="stat-value">{len(df_a_vis)}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-            with col_viz_a:
-                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-                fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
-                if not df_a_vis.empty:
-                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
-                                   color='#888888', alpha=0.5, width=1.5, headwidth=3, ax=ax_a, zorder=1)
-                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
-                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
-                st.pyplot(fig_a)
-
-    
