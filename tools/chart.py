@@ -173,7 +173,7 @@ def vis_side(*args, **kwargs):
         # Placer knappen i menu-kolonnen
         with download_placeholder:
             st.download_button(
-                label="Hent Grafik",
+                label="Download",
                 data=buf.getvalue(),
                 file_name=f"pizza_{valgt_hold_navn}.png",
                 mime="image/png"
