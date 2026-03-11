@@ -53,6 +53,20 @@ def fetch_team_data():
 
 def vis_side(*args, **kwargs):
     # Ingen subheader her - direkte til titlen
+    def debug_find_ids():
+    conn = _get_snowflake_conn()
+    # Vi henter bare de unikke kombinationer af navne og ID'er
+    query = """
+    SELECT DISTINCT 
+        COMPETITION_WYID, 
+        SEASON_WYID
+    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL
+    LIMIT 20
+    """
+    return conn.query(query)
+
+# Kør denne i din vis_side() for at se listen:
+# st.write(debug_find_ids())
 
     if "team_stats_1div" not in st.session_state:
         with st.spinner("Henter data..."):
