@@ -65,18 +65,10 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: FJERNER TOP PADDING I STREAMLIT ---
-    st.markdown("""
-        <style>
-            .block-container { padding-top: 0rem !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: 0px !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
     menu_col, chart_col = st.columns([1, 8])
 
     with menu_col:
-        st.write("### Vælg Hold")
+        st.caption("### Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
         st.session_state.selected_team = valgt_hold_navn
 
