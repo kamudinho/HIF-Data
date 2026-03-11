@@ -167,12 +167,12 @@ def vis_side(dp):
                                     s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
                 st.pyplot(fig_a)
 
-    # --- TAB 4: DZ-STATISTIK (DEN NYE TAB) ---
+    # --- TAB 4: DZ-STATISTIK ---
     with tab4:
         if df_skud.empty:
             st.info("Ingen data fundet til statistik.")
         else:
-            st.caption("Herunder ses spillernes evne til at komme til afslutninger i feltets mest farlige zone.")
+            st.subheader("Danger Zone Effektivitet")
             
             stats_list = []
             spiller_liste_dz = sorted(df_skud['PLAYER_NAME'].unique())
@@ -181,36 +181,48 @@ def vis_side(dp):
                 s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
                 s_dz = s_data[s_data['IS_DZ_GEO']]
                 
-                if len(s_dz) > 0:
-                    # Vi tager efternavnet for at gøre tabellen mere mobilvenlig
+                # Vi beregner alle de ønskede metrikker
+                total_skud = len(s_data)
+                skud_dz = len(s_dz)
+                total_maal = len(s_data[s_data['EVENT_TYPEID'] == 16])
+                maal_dz = len(s_dz[s_dz['EVENT_TYPEID'] == 16])
+                dz_andel = (skud_dz / total_skud * 100) if total_skud > 0 else 0
+                
+                if total_skud > 0: # Vi viser alle spillere der har skudt
                     efternavn = spiller.split()[-1] if isinstance(spiller, str) else spiller
                     stats_list.append({
                         "Spiller": efternavn, 
-                        "Skud i DZ": int(len(s_dz)), 
-                        "Mål i DZ": int(len(s_dz[s_dz['EVENT_TYPEID'] == 16])), 
-                        "DZ %": (len(s_dz)/len(s_data)*100)
+                        "Skud": int(total_skud),
+                        "Skud i DZ": int(skud_dz),
+                        "Mål": int(total_maal),
+                        "Mål i DZ": int(maal_dz),
+                        "DZ %": dz_andel
                     })
             
             if stats_list:
                 df_table = pd.DataFrame(stats_list).sort_values("Skud i DZ", ascending=False)
                 
-                # Streamlit Dataframe med interaktive elementer
+                # For at se "hele tabellen" uden scrollbar internt, kan vi beregne højden 
+                # eller bare sætte den tilstrækkelig højt.
+                table_height = min(len(df_table) * 35 + 40, 800) 
+
                 st.dataframe(
                     df_table,
                     column_config={
                         "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
-                        "Skud i DZ": st.column_config.NumberColumn("Skud", help="Antal afslutninger i Danger Zone"),
-                        "Mål i DZ": st.column_config.NumberColumn("Mål"),
+                        "Skud": st.column_config.NumberColumn("Alle Skud", format="%d"),
+                        "Skud i DZ": st.column_config.NumberColumn("Skud i DZ", format="%d", help="Afslutninger i feltet"),
+                        "Mål": st.column_config.NumberColumn("Alle Mål", format="%d"),
+                        "Mål i DZ": st.column_config.NumberColumn("Mål i DZ", format="%d"),
                         "DZ %": st.column_config.ProgressColumn(
-                            "Andel af skud i DZ (%)", 
-                            help="Hvor stor en procentdel af spillerens samlede skud er foretaget i Danger Zone?",
+                            "DZ Andel", 
+                            help="Hvor stor en procentdel af spillerens samlede skud er i DZ?",
                             format="%.1f%%",
                             min_value=0,
                             max_value=100
                         )
                     },
                     hide_index=True,
-                    height=400,
+                    height=table_height, # Dynamisk højde så du ser det hele
                     use_container_width=True
                 )
-           
