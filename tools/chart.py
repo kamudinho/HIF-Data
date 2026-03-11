@@ -94,16 +94,19 @@ def vis_side(*args, **kwargs):
         
         target_team = df[df['TEAM_WYID'] == team_id]
 
-        # --- 3. PIZZA CHART DESIGN ---
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+        # --- 3. PIZZA CHART DESIGN (STRAMMET TOP) ---
+        # Vi sætter figsize til (10, 8) i stedet for (10, 10) for at fjerne den vertikale overflod
+        fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Margin styring
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+        # Vi trækker 'top' helt op til 0.98 og sænker 'bottom' 
+        # for at fjerne tomrummet over overskriften
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.98, bottom=0.02)
         
         V_OFFSET = 25
-        LIMIT_Y = 200 
+        # Vi reducerer LIMIT_Y en smule, da 200 skaber meget tom luft yderst
+        LIMIT_Y = 170  
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -139,22 +142,22 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- 4. TEKST OG LABELS (HVIDE BOKSE LOOK) ---
+        # --- 4. TEKST OG LABELS (SAMME DESIGN, BEDRE PLACERING) ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             
-            # Værdibokse (Farvede kasser med tal)
+            # Værdibokse
             box_y = 112
             ax.text(angle, box_y, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # Stat Labels (Hvide kasser med sort tekst)
+            # Stat Labels
             label_y = 145
             ax.text(angle, label_y, label, ha='center', va='center',
                     fontsize=7, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
-        # Vis i appen
+        # Vi fjerner alt unødigt whitespace i selve Streamlit-containeren
         st.pyplot(fig, use_container_width=True)
 
         # --- DOWNLOAD ---
