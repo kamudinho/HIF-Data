@@ -111,7 +111,7 @@ def vis_side(dp):
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 4 & 5: ZONER (OPDATERET LOGIK) ---
+    # --- TAB 4 & 5: ZONER (RETTET ZONE 8 PLACERING) ---
     def zone_plot_enhanced(data, is_m):
         col_viz, col_ctrl = st.columns([1.8, 1])
         total_count = len(data)
@@ -127,7 +127,7 @@ def vis_side(dp):
         with col_ctrl:
             label = "Mål" if is_m else "Skud"
             st.markdown(f"**DETALJERET {label.upper()}SOVERSIGT**")
-            # Filtrer Zone 8 fra tabellen
+            # Filtrer Zone 8 fra tabellen til højre
             z_df = pd.DataFrame([
                 {'Zone': k, label: v['cnt'], '%': f"{v['pct']:.1f}%", 'Top': v['top']}
                 for k, v in zone_stats.items() if v['cnt'] > 0 and k != "Zone 8"
@@ -137,30 +137,41 @@ def vis_side(dp):
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(55, 105)
+            
+            # Vi sætter fokus fra midterlinjen og op
+            FOCUS_Y = 55
+            ax.set_ylim(FOCUS_Y, 105)
             
             # Find max val (uden Zone 8) til colormap
             max_v = max([v['cnt'] for k, v in zone_stats.items() if k != "Zone 8"]) if total_count > 0 else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
 
             for name, b in ZONE_BOUNDARIES.items():
-                if b["y_max"] < 55: continue
+                # Hvis zonen er helt under vores fokusområde, spring over
+                if b["y_max"] <= FOCUS_Y: continue
+                
+                # Ryk bunden op hvis zonen starter under FOCUS_Y (vigtigt for Zone 8)
+                y_draw_min = max(b["y_min"], FOCUS_Y)
+                rect_height = b["y_max"] - y_draw_min
                 
                 stats = zone_stats[name]
                 color_val = stats['cnt'] / max_v if max_v > 0 else 0
                 face_color = cmap(color_val) if stats['cnt'] > 0 else '#f9f9f9'
                 
-                rect = patches.Rectangle((b["x_min"], b["y_min"]), b["x_max"]-b["x_min"], b["y_max"]-b["y_min"], 
+                rect = patches.Rectangle((b["x_min"], y_draw_min), b["x_max"]-b["x_min"], rect_height, 
                                          facecolor=face_color, alpha=0.7, edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
                 
                 if stats['cnt'] > 0:
+                    # Zone 8 tekst placeres i den synlige del
+                    text_y = y_draw_min + (rect_height / 2)
+                    
                     z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n"
                               f"{stats['cnt']} ({stats['pct']:.1f}%)\n"
                               f"{stats['top']}")
                     
                     ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, 
-                            b["y_min"] + (b["y_max"] - b["y_min"])/2, 
+                            text_y, 
                             z_text, ha='center', va='center', fontsize=7,
                             color='black' if color_val < 0.5 else 'white',
                             linespacing=1.5)
