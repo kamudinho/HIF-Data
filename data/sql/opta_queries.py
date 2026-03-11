@@ -57,9 +57,10 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     EVENT_TYPEID,
                     MATCH_OPTAUUID,
                     EVENT_CONTESTANT_OPTAUUID,
-                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as NEXT_EVENT_TYPE,
-                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_X,
-                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_ID) as SHOT_Y
+                    -- Vi bruger EVENT_TIMESTAMP og EVENT_EVENTID til at sikre rækkefølgen
+                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_Y
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
             )
@@ -72,9 +73,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SHOT_Y,
                 MATCH_OPTAUUID
             FROM OrderedEvents
-            WHERE EVENT_TYPEID = 1
-            AND NEXT_EVENT_TYPE IN (13, 14, 15, 16) 
-            {hif_filter_event}  -- HER VAR FEJLEN (Nu bruger vi hif_filter_event variablen)
+            WHERE EVENT_TYPEID = 1                 -- Pass
+            AND NEXT_EVENT_TYPE IN (13, 14, 15, 16) -- Leder til skud/mål
+            {hif_filter_event}
         """,
         
         "opta_team_stats": f"""
