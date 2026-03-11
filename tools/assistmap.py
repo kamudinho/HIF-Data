@@ -73,39 +73,32 @@ def vis_side(dp):
 
     # --- TAB 2: ASSIST-MAP (VISUELT) ---
     with tab2:
-        col_viz, col_ctrl = st.columns([2.2, 1])
-        
-        with col_ctrl:
-            v_a = st.selectbox("Vælg spiller", options=["Hvidovre IF"] + alle_spillere, key="sb_assist_map")
-            df_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
-            
-            st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label"><span class="legend-dot" style="background-color:{HIF_GOLD};"></span>Total Assists</div>
-                    <div class="stat-value">{len(df_vis)}</div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.caption("Pilen viser afleveringens retning. Prikken er startpositionen.")
-
-        with col_viz:
-            pitch = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(6, 8))
-            
-            if not df_vis.empty:
-                # Tegn pile for afleveringerne
-                pitch.arrows(
-                    df_vis['PASS_START_X'], df_vis['PASS_START_Y'],
-                    df_vis['SHOT_X'], df_vis['SHOT_Y'],
-                    color=HIF_GOLD, alpha=0.6, width=2, headwidth=3, 
-                    ax=ax, zorder=1, label='Assist'
-                )
+    if df_assists.empty:
+            st.warning("⚠️ Ingen assists fundet.")
+        else:
+            col_viz_a, col_ctrl_a = st.columns([2.2, 1])
+            with col_ctrl_a:
+                spiller_liste_a = sorted([s for s in df_assists['ASSIST_PLAYER'].unique() if pd.notna(s)])
+                v_a = st.selectbox("Vælg spiller (Assists)", options=["Hvidovre IF"] + spiller_liste_a, key="sb_assist")
+                df_a_vis = df_assists if v_a == "Hvidovre IF" else df_assists[df_assists['ASSIST_PLAYER'] == v_a]
                 
-                # Prik ved startpunktet
-                pitch.scatter(
-                    df_vis['PASS_START_X'], df_vis['PASS_START_Y'],
-                    s=DOT_SIZE, color='white', edgecolors=HIF_GOLD, 
-                    linewidth=2, ax=ax, zorder=2
-                )
-            
-            st.pyplot(fig)
+                st.markdown(f"""
+                    <div class="stat-box">
+                        <div class="stat-label">
+                            <span class="legend-dot" style="background-color:{HIF_GOLD}; border:1px solid black;"></span>
+                            Goal Assists
+                        </div>
+                        <div class="stat-value">{len(df_a_vis)}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            with col_viz_a:
+                pitch_a = VerticalPitch(half=True, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+                fig_a, ax_a = pitch_a.draw(figsize=(5.5, 7.5))
+                if not df_a_vis.empty:
+                    pitch_a.arrows(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                   df_a_vis['SHOT_X'], df_a_vis['SHOT_Y'], 
+                                   color='#888888', alpha=0.5, width=1.5, headwidth=3, ax=ax_a, zorder=1)
+                    pitch_a.scatter(df_a_vis['PASS_START_X'], df_a_vis['PASS_START_Y'], 
+                                    s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', linewidth=1, ax=ax_a, zorder=2)
+                st.pyplot(fig_a)
