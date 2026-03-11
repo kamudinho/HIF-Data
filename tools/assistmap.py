@@ -39,7 +39,7 @@ def vis_side(dp):
 
     # --- TAB 1: SPILLEROVERSIGT (STATISTIK) ---
     with tab1:
-        st.subheader("Assist & Kreativitet")
+        st.caption("Assist & Kreativitet")
         
         # Aggregering af spillerdata
         spiller_stats = []
