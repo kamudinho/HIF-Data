@@ -114,8 +114,23 @@ def vis_side(dp):
                         "DZ %": (len(s_dz)/len(s_data)*100) if len(s_data) > 0 else 0
                     })
             
+           # --- Erstat din nuværende tabel-sektion i Tab 2 med dette ---
             if stats_list:
+                st.markdown("### Spillerstatistik i Danger Zone")
                 df_table_data = pd.DataFrame(stats_list).sort_values("Skud", ascending=False)
+                
+                # Brug st.dataframe for en interaktiv oplevelse
+                st.dataframe(
+                    df_table_data,
+                    column_config={
+                        "Navn": "Spiller",
+                        "Skud": st.column_config.NumberColumn("Skud i DZ", help="Antal afslutninger i Danger Zone"),
+                        "Mål": st.column_config.NumberColumn("Mål i DZ"),
+                        "DZ %": st.column_config.ProgressColumn("DZ %", help="Procentdel af spillerens samlede skud der er i DZ", format="%.1f%%", min_value=0, max_value=100)
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
                 
                 # Vi øger bredden på figuren (12) og justerer højden dynamisk
                 fig_tab, ax_tab = plt.subplots(figsize=(12, 3)) 
