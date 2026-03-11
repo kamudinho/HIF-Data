@@ -207,7 +207,7 @@ try:
                 import tools.test.test_matches as tm
                 tm.vis_side(dp)
             elif sel == "Charts":
-                import tools.charts as pc
+                import tools.chart as pc
                 pc.vis_side(dp)
 
     elif hoved_omraade == "ADMIN":
