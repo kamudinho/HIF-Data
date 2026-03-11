@@ -132,7 +132,7 @@ def vis_side(*args, **kwargs):
         # subplots_adjust fjerner whitespace omkring selve cirklen
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
-        V_OFFSET = 28
+        V_OFFSET = 18
         LIMIT_Y = 160 
         ax.set_ylim(0, LIMIT_Y)
         
