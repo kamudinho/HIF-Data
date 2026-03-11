@@ -10,16 +10,14 @@ HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
 def vis_side(dp):
-    # CSS Styling
+    # --- CSS STYLING (Forbedret til at fjerne scroll og style bokse) ---
     st.markdown("""
         <style>
-            .stat-box { background-color: #f8f9fa; padding: 8px 12px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 8px; }
-            .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }
-            .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
-            .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }
-            .stTabs [data-baseweb="tab-panel"] { padding-top: 10px; }
-            /* Forsøg på at tvinge højden op så scroll minimeres */
-            .stDataFrame div[data-testid="stTable"] { overflow: visible !important; }
+            .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }
+            .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+            .stat-value { font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
+            .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
+            [data-testid="stMetricValue"] { font-size: 1.4rem !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -28,11 +26,10 @@ def vis_side(dp):
         st.info("Ingen data fundet.")
         return
 
-    # --- 1. OPSÆTNING AF ZONER (RETTET ZONE 7 RÆKKE) ---
-    PITCH_L, PITCH_W = 105.0, 68.0
-    X_MID_L, X_MID_R = (PITCH_W - 18.32) / 2, (PITCH_W + 18.32) / 2
-    X_INN_L, X_INN_R = (PITCH_W - 40.2) / 2, (PITCH_W + 40.2) / 2
-    
+    # --- 1. OPSÆTNING AF ZONER (PRÆCIS 7C-7B-7A RÆKKE) ---
+    P_L, P_W = 105.0, 68.0
+    X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
+    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
 
     ZONE_BOUNDARIES = {
@@ -43,17 +40,16 @@ def vis_side(dp):
         "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
         "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
         "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": PITCH_W},
+        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
         "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
-        # Zone 7 rækken (3 zoner på tværs)
         "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
         "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": PITCH_W},
-        "Zone 8": {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": PITCH_W}
+        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
+        "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
     }
 
     def map_to_zone(r):
-        mx, my = r['EVENT_X'] * (PITCH_L / 100), r['EVENT_Y'] * (PITCH_W / 100)
+        mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
         for z, b in ZONE_BOUNDARIES.items():
             if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]:
                 return z
@@ -62,70 +58,96 @@ def vis_side(dp):
     df_skud['Zone'] = df_skud.apply(map_to_zone, axis=1)
     df_skud['IS_DZ_GEO'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["SPILLER", "SKUD", "DZ", "ZONER (SKUD)", "ZONER (MÅL)"])
+    tabs = st.tabs(["SPILLER", "SKUD", "DZ", "ZONER (S)", "ZONER (M)"])
 
-    # --- TAB 1: SPILLEROVERSIGT (UDEN SCROLL) ---
-    with tab1:
-        stats_list = []
-        for spiller in sorted(df_skud['PLAYER_NAME'].unique()):
-            s_data = df_skud[df_skud['PLAYER_NAME'] == spiller]
-            s_dz = s_data[s_data['IS_DZ_GEO']]
-            total_skud = len(s_data)
-            if total_skud > 0:
-                total_mål = len(s_data[s_data['EVENT_TYPEID'] == 16])
-                skud_dz = len(s_dz)
-                stats_list.append({
-                    "Spiller": spiller.split()[-1], "S": total_skud, "M": total_mål,
-                    "Konv%": (total_mål/total_skud*100),
-                    "DZ-S": skud_dz, "DZ-M": len(s_dz[s_dz['EVENT_TYPEID'] == 16]),
-                    "DZ-Konv%": (len(s_dz[s_dz['EVENT_TYPEID'] == 16])/skud_dz*100) if skud_dz > 0 else 0,
-                    "DZ-Andel": (skud_dz/total_skud*100)
-                })
-        
-        st.dataframe(
-            pd.DataFrame(stats_list).sort_values("S", ascending=False), 
+    # --- TAB 1: SPILLEROVERSIGT (Fuld højde, ingen scroll) ---
+    with tabs[0]:
+        stats = []
+        for p in sorted(df_skud['PLAYER_NAME'].unique()):
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            dz = d[d['IS_DZ_GEO']]
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            stats.append({
+                "Spiller": p.split()[-1], "S": s, "M": m, "Konv%": (m/s*100),
+                "DZ-S": dzs, "DZ-M": dzm, "DZ%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100)
+            })
+        df_final = pd.DataFrame(stats).sort_values("S", ascending=False)
+        st.dataframe(df_final, use_container_width=True, height=(len(df_final) + 1) * 36, # Dynamisk højde efter antal rækker
             column_config={
-                "Konv%": st.column_config.NumberColumn("%", format="%.1f%%"),
-                "DZ-Konv%": st.column_config.NumberColumn("DZ%", format="%.1f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn("DZ-A", format="%.0f%%", min_value=0, max_value=100)
-            },
-            hide_index=True, height=400 # Fast højde minimerer scroll internt i cellen
-        )
+                "Konv%": st.column_config.NumberColumn("Konv%", format="%.1f%%"),
+                "DZ%": st.column_config.NumberColumn("DZ-Konv%", format="%.1f%%"),
+                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+            }, hide_index=True)
 
-    # --- TAB 4 & 5 FÆLLES VISUALISERING ---
-    def draw_zone_pitch(data, is_goal_tab=False):
-        col_viz, col_ctrl = st.columns([2.2, 1])
-        z_stats = {}
-        for zone in ZONE_BOUNDARIES.keys():
-            z_data = data[data['Zone'] == zone]
-            count = len(z_data)
-            top_p = z_data['PLAYER_NAME'].mode().iloc[0] if count > 0 else "-"
-            z_stats[zone] = {'count': count, 'short': top_p.split(' ')[-1]}
+    # --- TAB 2: AFSLUTNINGER (Restaureret layout) ---
+    with tabs[1]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            sel_p = st.selectbox("Vælg spiller", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()))
+            d_v = df_skud if sel_p == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            st.metric("Konvertering", f"{(len(d_v[d_v['EVENT_TYPEID']==16])/len(d_v)*100 if len(d_v)>0 else 0):.2f}%")
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
+            st.pyplot(fig)
+
+    # --- TAB 3: DZ (Restaureret layout) ---
+    with tabs[2]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
+            d_v = df_skud if sel_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
+            dz_d = d_v[d_v['IS_DZ_GEO']]
+            m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
+            m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
+            st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            st.metric("DZ Mål-andel", f"{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%")
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
+            colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
+            st.pyplot(fig)
+
+    # --- TAB 4 & 5: ZONER (Symmetriske og korrekte) ---
+    def zone_plot(data, is_m):
+        c1, c2 = st.columns([2, 1])
+        z_map = {}
+        for z in ZONE_BOUNDARIES.keys():
+            zd = data[data['Zone'] == z]
+            cnt = len(zd)
+            top = zd['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
+            z_map[z] = (cnt, top)
         
-        with col_ctrl:
-            label = "Mål" if is_goal_tab else "Skud"
-            st.dataframe(pd.DataFrame([{'Zone': k, label: v['count']} for k, v in z_stats.items() if v['count'] > 0]), hide_index=True)
-
-        with col_viz:
+        with c2:
+            st.write(f"**{'Mål' if is_m else 'Skud'} pr. Zone**")
+            st.dataframe(pd.DataFrame([{"Zone": k, "Antal": v[0]} for k, v in z_map.items() if v[0] > 0]), hide_index=True)
+        
+        with c1:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-            fig, ax = pitch.draw(figsize=(8, 10))
+            fig, ax = pitch.draw()
             ax.set_ylim(70, 105)
-            max_v = max([v['count'] for v in z_stats.values()]) if len(data)>0 else 1
-            cmap = plt.cm.YlOrRd if is_goal_tab else plt.cm.Blues
+            max_val = max([v[0] for v in z_map.values()]) if data.shape[0] > 0 else 1
+            cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
             
             for name, b in ZONE_BOUNDARIES.items():
                 if b["y_max"] < 70: continue
-                val = z_stats[name]['count']
+                val, top = z_map[name]
                 rect = patches.Rectangle((b["x_min"], b["y_min"]), b["x_max"]-b["x_min"], b["y_max"]-b["y_min"], 
-                                         facecolor=cmap(val/max_v) if val > 0 else '#f9f9f9', alpha=0.7, edgecolor='black', linestyle='--')
+                                         facecolor=cmap(val/max_val) if val > 0 else '#f9f9f9', alpha=0.6, edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
                 if val > 0:
                     ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, b["y_min"]+(b["y_max"]-b["y_min"])/2, 
-                            f"{name.replace('Zone ', 'Z')}\n{int(val)} {label[0]}\n{z_stats[name]['short']}", 
-                            ha='center', va='center', fontsize=7, fontweight='bold')
+                            f"{name.replace('Zone ', 'Z')}\n{val}\n{top}", ha='center', va='center', fontsize=7, fontweight='bold')
             st.pyplot(fig)
 
-    with tab4: draw_zone_pitch(df_skud, False)
-    with tab5: draw_zone_pitch(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
-    
-    # Render Tab 2/3 her (samme logik som sidst)
+    with tabs[3]: zone_plot(df_skud, False)
+    with tabs[4]: zone_plot(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
