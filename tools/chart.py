@@ -68,7 +68,7 @@ def vis_side(*args, **kwargs):
     menu_col, chart_col = st.columns([1, 8])
 
     with menu_col:
-        st.caption("### Vælg Hold")
+        st.caption("Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
         st.session_state.selected_team = valgt_hold_navn
 
