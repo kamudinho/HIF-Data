@@ -65,24 +65,22 @@ def vis_side(*args, **kwargs):
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
-    # --- CSS: STYLING AF KNAP OG FJERNELSE AF TOMRUM ---
+    # --- CSS: STYLING AF KNAP ---
     st.markdown("""
         <style>
             .block-container { padding-top: 0.5rem !important; }
             
-            /* Download knap styling: Hvid boks, sort kant, fed skrift */
             div.stDownloadButton > button {
                 background-color: white !important;
                 color: black !important;
-                border: 1px solid black !important;
-                border-radius: 2px !important;
-                padding: 0.5rem !important;
-                font-weight: 8 !important;
+                border: 0.8px solid black !important;
+                border-radius: 4px !important;
+                padding: 0.4rem !important;
+                font-weight: bold !important;
                 width: 100% !important;
                 text-transform: uppercase;
-                font-size: 10px !important;
+                font-size: 11px !important;
             }
-            
             div[data-testid="stRadio"] label p { font-size: 13px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -92,8 +90,6 @@ def vis_side(*args, **kwargs):
     with menu_col:
         st.caption("Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
-        
-        # Placeholder til knappen så den kan stå under hold-listen
         download_placeholder = st.empty()
 
     with chart_col:
@@ -110,15 +106,15 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART DESIGN ---
-        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # Dette fjerner de 5-7 cm luft i toppen af figuren
-        plt.subplots_adjust(top=0.1, bottom=0.0, left=0.0, right=0.1)
+        # JUSTRERING: Giver plads til labels men fjerner spildplads i toppen
+        plt.subplots_adjust(top=0.9, bottom=0.1, left=0.1, right=0.9)
         
-        V_OFFSET = 12
-        LIMIT_Y = 110 
+        V_OFFSET = 25
+        LIMIT_Y = 160 # Øget fra 110, ellers bliver dine labels på 142 beskåret!
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -131,7 +127,6 @@ def vis_side(*args, **kwargs):
                 if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
                 
                 plot_labels.append(display_label)
-                # Skalering
                 scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
                 values.append(scaled_val)
                 display_values.append(f"{target_team[data_col].values[0]:.1f}")
@@ -146,31 +141,30 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=True, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- 4. TEKST OG LABELS (RYKKET TÆTTERE PÅ) ---
+        # --- 4. TEKST OG LABELS ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Værdibokse (Farvede)
-            ax.text(angle, 110, disp, ha='center', va='center', 
+            # Værdibokse (Farvede tal) - Radius 112
+            ax.text(angle, 112, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # Stat Labels (Hvide)
-            ax.text(angle, 142, label, ha='center', va='center',
-                    fontsize=7, fontweight='black', color='black', zorder=11,
+            # Stat Labels (Hvide kasser) - Radius 145
+            ax.text(angle, 145, label, ha='center', va='center',
+                    fontsize=7, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
         st.pyplot(fig, use_container_width=True)
 
-        # --- DOWNLOAD LOGIK ---
+        # --- DOWNLOAD ---
         buf = BytesIO()
         fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
         
-        # Placer knappen i menu-kolonnen
         with download_placeholder:
             st.download_button(
                 label="Download",
