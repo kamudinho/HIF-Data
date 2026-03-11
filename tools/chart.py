@@ -75,12 +75,12 @@ def vis_side(*args, **kwargs):
                 background-color: white !important;
                 color: black !important;
                 border: 1px solid black !important;
-                border-radius: 6px !important;
+                border-radius: 2px !important;
                 padding: 0.5rem !important;
                 font-weight: 800 !important;
                 width: 100% !important;
                 text-transform: uppercase;
-                font-size: 12px !important;
+                font-size: 10px !important;
             }
             
             div[data-testid="stRadio"] label p { font-size: 13px !important; }
@@ -110,15 +110,15 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART DESIGN ---
-        fig, ax = plt.subplots(figsize=(8, 9), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
         # Dette fjerner de 5-7 cm luft i toppen af figuren
-        plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
+        plt.subplots_adjust(top=0.1, bottom=0.0, left=0.0, right=0.1)
         
         V_OFFSET = 12
-        LIMIT_Y = 130 
+        LIMIT_Y = 110 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -146,7 +146,7 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.15), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
