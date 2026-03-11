@@ -109,21 +109,25 @@ def vis_side(dp):
             """, unsafe_allow_html=True)
 
         with col_viz_a:
-            # Ændret: half=False for at vise hele banen
-            pitch_a = VerticalPitch(half=False, pitch_type='opta', pitch_color='white', line_color='#cccccc')
-            # Justeret figsize til en hel bane (større højde i forhold til bredde)
-            fig_a, ax_a = pitch_a.draw(figsize=(9, 5.5))
+            from mplsoccer import Pitch
+            
+            # Vi bruger Pitch i stedet for VerticalPitch for at få den til at ligge ned
+            pitch_a = Pitch(half=False, pitch_type='opta', pitch_color='white', line_color='#cccccc')
+            
+            # Justeret figsize: Bredden er nu større (8) end højden (5)
+            fig_a, ax_a = pitch_a.draw(figsize=(8, 5))
             
             if not df_map_data.empty:
                 mask_goal = df_map_data['NEXT_EVENT_TYPE'] == 16
                 df_goals = df_map_data[mask_goal]
                 df_key_passes = df_map_data[~mask_goal]
 
-                # 1. Key Passes
+                # 1. Key Passes (Hvide cirkler)
+                # Bemærk: I horisontal Pitch er rækkefølgen (X, Y)
                 pitch_a.scatter(df_key_passes['PASS_START_X'], df_key_passes['PASS_START_Y'], 
                                 s=DOT_SIZE-20, color='white', edgecolors='#888888', alpha=0.7, ax=ax_a, zorder=2)
                 
-                # 2. Assists
+                # 2. Assists (Guld cirkler)
                 pitch_a.scatter(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
                                 s=DOT_SIZE, color=HIF_GOLD, edgecolors='black', ax=ax_a, zorder=3)
                 
@@ -132,10 +136,11 @@ def vis_side(dp):
                                df_map_data['SHOT_X'], df_map_data['SHOT_Y'], 
                                color='#888888', alpha=0.2, width=1, ax=ax_a, zorder=1)
                 
-                # 4. Highlight mål-pile (tykke guld-pile)
+                # 4. Highlight mål-pile
                 if not df_goals.empty:
                     pitch_a.arrows(df_goals['PASS_START_X'], df_goals['PASS_START_Y'], 
                                    df_goals['SHOT_X'], df_goals['SHOT_Y'], 
                                    color=HIF_GOLD, alpha=0.8, width=2, ax=ax_a, zorder=1)
             
-            st.pyplot(fig_a)
+            # Dette sikrer at banen tilpasser sig Streamlit kolonnen helt præcist
+            st.pyplot(fig_a, use_container_width=True)
