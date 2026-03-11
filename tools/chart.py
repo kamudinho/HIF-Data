@@ -69,7 +69,6 @@ def vis_side(*args, **kwargs):
     st.markdown("""
         <style>
             .block-container { padding-top: 0.5rem !important; }
-            
             div.stDownloadButton > button {
                 background-color: white !important;
                 color: black !important;
@@ -80,6 +79,7 @@ def vis_side(*args, **kwargs):
                 width: 100% !important;
                 text-transform: uppercase;
                 font-size: 11px !important;
+                margin-top: 10px;
             }
             div[data-testid="stRadio"] label p { font-size: 13px !important; }
         </style>
@@ -106,15 +106,15 @@ def vis_side(*args, **kwargs):
         target_team = df[df['TEAM_WYID'] == team_id]
 
         # --- 3. PIZZA CHART DESIGN ---
+        # Vi bruger en fast figsize til visningen
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
-        # JUSTRERING: Giver plads til labels men fjerner spildplads i toppen
         plt.subplots_adjust(top=0.9, bottom=0.1, left=0.1, right=0.9)
         
         V_OFFSET = 25
-        LIMIT_Y = 160 # Øget fra 110, ellers bliver dine labels på 142 beskåret!
+        LIMIT_Y = 160 
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
@@ -147,23 +147,23 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # --- 4. TEKST OG LABELS ---
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Værdibokse (Farvede tal) - Radius 112
             ax.text(angle, 112, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
             
-            # Stat Labels (Hvide kasser) - Radius 145
             ax.text(angle, 145, label, ha='center', va='center',
                     fontsize=7, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
 
+        # Vis i appen
         st.pyplot(fig, use_container_width=True)
 
-        # --- DOWNLOAD ---
+        # --- DOWNLOAD OPTIMERING ---
         buf = BytesIO()
-        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', dpi=300)
+        # bbox_inches='tight' fjerner alt tomrummet omkring diagrammet
+        # pad_inches=0.1 sikrer at labels ikke rører kanten af billedfilen helt
+        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', pad_inches=0.1, dpi=300)
         
         with download_placeholder:
             st.download_button(
