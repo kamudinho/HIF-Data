@@ -87,7 +87,7 @@ def vis_side(*args, **kwargs):
 
         # --- 3. PIZZA CHART DESIGN (OPTIMERET TIL TOP) ---
         # Mindre højde på figuren fjerner tomrum
-        fig, ax = plt.subplots(figsize=(10, 7.5), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(6, 7.5), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         ax.set_facecolor('none')
         
@@ -95,7 +95,7 @@ def vis_side(*args, **kwargs):
         plt.subplots_adjust(left=0.05, right=0.95, top=1.0, bottom=0.0)
         
         V_OFFSET = 10
-        LIMIT_Y = 180 # Stram grænse for at undgå tom yderring
+        LIMIT_Y = 120 # Stram grænse for at undgå tom yderring
         ax.set_ylim(0, LIMIT_Y)
         
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
