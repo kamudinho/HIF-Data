@@ -114,7 +114,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (MED LOGO FIX) ---
+    # --- 4. GRAF FUNKTION (MED LAYOUT_IMAGE FIX) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -134,24 +134,71 @@ def vis_side(df_raw=None):
         c2 = colors_dict.get(team2, {"primary": "#0056a3"})
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(name=team1, x=labels, y=v1, marker_color=c1["primary"], text=[f"{x:.2f}" for x in v1], textposition='inside', insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])), showlegend=False, offsetgroup=1))
-        fig.add_trace(go.Bar(name=team2, x=labels, y=v2, marker_color=c2["primary"], text=[f"{x:.2f}" for x in v2], textposition='inside', insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])), showlegend=False, offsetgroup=2))
+        
+        # Vi definerer barerne med specifikke offsetgroups
+        fig.add_trace(go.Bar(
+            name=team1, x=labels, y=v1, 
+            marker_color=c1["primary"], 
+            text=[f"{x:.2f}" for x in v1], 
+            textposition='inside', 
+            insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])),
+            showlegend=False, 
+            offsetgroup=1
+        ))
+        
+        fig.add_trace(go.Bar(
+            name=team2, x=labels, y=v2, 
+            marker_color=c2["primary"], 
+            text=[f"{x:.2f}" for x in v2], 
+            textposition='inside', 
+            insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])),
+            showlegend=False, 
+            offsetgroup=2
+        ))
 
-        # Annotations (Logoer) - Dette tvinger dem frem
+        # LOGOER VIA LAYOUT IMAGES
         for i in range(len(labels)):
             if l1:
-                fig.add_annotation(x=i, y=v1[i], text=f'<img src="{l1}" width="28" height="28">', showarrow=False, yanchor="bottom", xshift=-22, ay=-20)
+                fig.add_layout_image(dict(
+                    source=l1,
+                    xref="x", yref="y",
+                    x=i, y=v1[i],
+                    sizex=0.18, sizey=0.18, # Juster størrelsen her
+                    xanchor="center", yanchor="bottom",
+                    xshift=-25, # Skubber logoet til venstre over den røde søjle
+                    opacity=1,
+                    layer="above"
+                ))
             if l2:
-                fig.add_annotation(x=i, y=v2[i], text=f'<img src="{l2}" width="28" height="28">', showarrow=False, yanchor="bottom", xshift=22, ay=-20)
+                fig.add_layout_image(dict(
+                    source=l2,
+                    xref="x", yref="y",
+                    x=i, y=v2[i],
+                    sizex=0.18, sizey=0.18,
+                    xanchor="center", yanchor="bottom",
+                    xshift=25, # Skubber logoet til højre over den blå søjle
+                    opacity=1,
+                    layer="above"
+                ))
 
         fig.update_layout(
-            barmode='group', height=400, margin=dict(t=70, b=40, l=10, r=10),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(visible=False, range=[0, max(max(v1), max(v2)) * 1.4]),
-            xaxis=dict(showgrid=False, tickfont=dict(size=13, family="Arial Black"))
+            barmode='group',
+            height=400,
+            margin=dict(t=80, b=40, l=10, r=10),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(
+                visible=False, 
+                range=[0, max(max(v1), max(v2)) * 1.4], # Plads til logoet øverst
+                fixedrange=True
+            ),
+            xaxis=dict(
+                showgrid=False, 
+                tickfont=dict(size=13, family="Arial Black", color="white"),
+                fixedrange=True
+            )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
