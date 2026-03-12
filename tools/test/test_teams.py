@@ -205,8 +205,8 @@ def vis_side(df_raw=None):
             with sub_tabs[1]:
                 draw_h2h_chart_combined(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_agg, "xg_chart")
             with sub_tabs[2]:
-                draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'TACKLES', 'INTERCEPTIONS'], ['På mål', 'Tacklinger', 'Interceptions'], df_agg, "shot_chart")
+                draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'Udenfor felt', 'I feltet', 'I felt på mål', 'Danger Zone'], df_agg, "shot_chart")
             with sub_tabs[3]:
                 draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interceptions', 'Tacklinger', 'Clearinger'], df_agg, "def_chart")
             with sub_tabs[4]:
-                draw_h2h_chart_combined(team1, team2, ['PASSES', 'CROSSESTOTAL', 'FORWARDPASSES'], ['Afleveringer', 'Indlæg', 'Fremadrettede'], df_agg, "pass_chart")
+                draw_h2h_chart_combined(team1, team2, ['PASSES', 'CROSSESTOTAL', 'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Afleveringer', 'Indlæg', 'Fremadrettede', 'Progressive', 'Til sidste 1/3'], df_agg, "pass_chart")
