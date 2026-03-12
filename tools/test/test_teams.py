@@ -195,9 +195,22 @@ def vis_side(df_raw=None):
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
             sub_tabs = st.tabs(["Generelt", "Offensivt", "Afslutninger", "Defensivt", "Spilopbygning"])
-            with sub_tabs[0]: draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg)
-            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg)
-            with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], df_agg)
-            with sub_tabs[3]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg)
-            with sub_tabs[4]: draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg)
-
+            
+            # Tilføj et unikt navn til sidst i hvert kald:
+            with sub_tabs[0]: 
+                draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg, "gen_chart")
+            
+            with sub_tabs[1]: 
+                draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg, "off_chart")
+            
+            with sub_tabs[2]: 
+                draw_h2h_chart_combined(team1, team2, 
+                    ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], 
+                    ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], 
+                    df_agg, "shot_chart")
+            
+            with sub_tabs[3]: 
+                draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg, "def_chart")
+            
+            with sub_tabs[4]: 
+                draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg, "pass_chart")
