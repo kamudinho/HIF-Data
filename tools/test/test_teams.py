@@ -52,17 +52,40 @@ def vis_side(df_raw=None):
             a_g = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             winner = str(row['WINNER']).lower()
             s_h, s_a = stats[h_uuid], stats[a_uuid]
+            
             s_h['K'] += 1; s_a['K'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g; s_a['M+'] += a_g; s_a['M-'] += h_g
+            
             if winner == 'home':
-                s_h['V'] += 1; s_h['P'] += 3; s_a['T'] += 1
+                s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
+                s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
             elif winner == 'away':
-                s_a['V'] += 1; s_a['P'] += 3; s_h['T'] += 1
+                s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V')
+                s_h['T'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'T')
             else:
-                s_h['U'] += 1; s_h['P'] += 1; s_a['U'] += 1; s_a['P'] += 1
+                s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
+                s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
+
+    # Næste modstander logik til tabellen
+    next_opponents = {}
+    df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
+    if not df_upcoming.empty:
+        df_upcoming['MATCH_DATE_FULL'] = pd.to_datetime(df_upcoming['MATCH_DATE_FULL'])
+        df_upcoming = df_upcoming.sort_values('MATCH_DATE_FULL')
+        for uuid in stats.keys():
+            future_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+            if not future_m.empty:
+                r = future_m.iloc[0]
+                is_h = r['CONTESTANTHOME_OPTAUUID'] == uuid
+                opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
+                opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
+                dato = r['MATCH_DATE_FULL'].strftime('%d/%m')
+                logo = get_logo_url(opp_u, logo_map)
+                next_opponents[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_n}</span><span style="color:#888;font-size:11px;">{dato}</span></div>'
 
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
+    df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents).fillna("-")
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
