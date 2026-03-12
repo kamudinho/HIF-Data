@@ -184,16 +184,30 @@ def vis_side(df_raw=None):
 
         fig.update_layout(
             barmode='group',
+            bargap=0.30,      # Mellemrum mellem de forskellige metrikker
+            bargroupgap=0.10, # DETTE SKABER MELLEMRUMMET MELLEM DE TO HOLD
             height=500,
             margin=dict(t=100, b=150, l=20, r=20),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]),
+            yaxis=dict(
+                visible=False, 
+                fixedrange=True, 
+                range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]
+            ),
             xaxis=dict(
-                type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
+                type='category', 
+                showgrid=False, 
+                tickmode='array', 
+                tickvals=x_indices, 
+                ticktext=labels,
                 tickfont=dict(size=16, family="Arial", color="#333333"), 
-                tickangle=0, automargin=True, fixedrange=True, anchor="y", side="bottom"
+                tickangle=0, 
+                automargin=True, 
+                fixedrange=True, 
+                anchor="y", 
+                side="bottom"
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
