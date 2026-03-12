@@ -70,16 +70,22 @@ def vis_side(df_raw=None):
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if not conn: return pd.DataFrame()
-        query = f"SELECT t.TEAMNAME, 
-        dv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOY, adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, adv.SHOTSFROMDANGERZONE
-        md.INTERCEPTIONS, 
-        mp.PASSES 
+        # Brug triple quotes f""" for at tillade linjeskift i din SQL
+        query = f"""
+        SELECT t.TEAMNAME, 
+               adv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOTT as XGPERSHOT, 
+               adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, 
+               adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
+               adv.SHOTSFROMDANGERZONE,
+               md.INTERCEPTIONS, 
+               mp.PASSES 
         FROM {DB}.WYSCOUT_TEAMMATCHES tm 
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID 
-        WHERE tm.COMPETITION_WYID = 328"
+        WHERE tm.COMPETITION_WYID = 328
+        """
         return conn.query(query)
 
     df_wy_raw = get_wyscout_direct()
