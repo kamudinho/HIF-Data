@@ -70,7 +70,16 @@ def vis_side(df_raw=None):
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if not conn: return pd.DataFrame()
-        query = f"SELECT t.TEAMNAME, adv.XG, adv.SHOTS, md.INTERCEPTIONS, mp.PASSES FROM {DB}.WYSCOUT_TEAMMATCHES tm JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID WHERE tm.COMPETITION_WYID = 328"
+        query = f"SELECT t.TEAMNAME, 
+        dv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOY, adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, adv.SHOTSFROMDANGERZONE
+        md.INTERCEPTIONS, 
+        mp.PASSES 
+        FROM {DB}.WYSCOUT_TEAMMATCHES tm 
+        JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
+        LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID 
+        WHERE tm.COMPETITION_WYID = 328"
         return conn.query(query)
 
     df_wy_raw = get_wyscout_direct()
@@ -179,7 +188,10 @@ def vis_side(df_raw=None):
             df_wy_raw.columns = [col.upper() for col in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
-            sub_tabs = st.tabs(["Offensivt", "Defensivt", "Spilopbygning"])
+            sub_tabs = st.tabs(["Generelt", "Offensivt", "Afslutninger", "Defensivt", "Spilopbygning"])
             with sub_tabs[0]: draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg)
-            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg)
-            with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg)
+            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg)
+            with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], df_agg)
+            with sub_tabs[3]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg)
+            with sub_tabs[4]: draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg)
+
