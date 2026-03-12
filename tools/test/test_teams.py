@@ -159,8 +159,8 @@ def vis_side(df_raw=None):
                 tickvals=x_indices,
                 ticktext=labels,
                 # VI TVINGER SORT FARVE HER:
-                tickfont=dict(size=11, family="Arial Black", color="#333333"), 
-                tickangle=-45, # Drej dem så de ikke overlapper
+                tickfont=dict(size=11, family="Arial", color="#333333"), 
+                tickangle=-0, # Drej dem så de ikke overlapper
                 automargin=True, # Bed Plotly om selv at finde plads
                 fixedrange=True,
                 anchor="y",
