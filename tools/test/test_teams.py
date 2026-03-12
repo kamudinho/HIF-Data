@@ -122,7 +122,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
     
-    # --- 4. GRAF FUNKTION (DENNE MANGLER I DIN KODE) ---
+    # --- 4. GRAF FUNKTION ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -134,8 +134,9 @@ def vis_side(df_raw=None):
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
         
-        u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
-        u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
+        # Hent UUIDs for at finde logo-URL'er
+        u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0] if team1 in df_liga['HOLD'].values else None
+        u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
         
         c1 = colors_dict.get(team1, {"primary": "#df003b"})
@@ -158,6 +159,21 @@ def vis_side(df_raw=None):
             offsetgroup=2
         ))
 
+        # --- GENINDSAT LOGO-LOGIK ---
+        for i in range(len(labels)):
+            if l1:
+                fig.add_layout_image(dict(
+                    source=l1, xref="x", yref="paper",
+                    x=i - 0.18, y=1.05, sizex=0.18, sizey=0.18,
+                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
+                ))
+            if l2:
+                fig.add_layout_image(dict(
+                    source=l2, xref="x", yref="paper",
+                    x=i + 0.18, y=1.05, sizex=0.18, sizey=0.18,
+                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
+                ))
+
         fig.update_layout(
             barmode='group',
             height=500,
@@ -165,14 +181,14 @@ def vis_side(df_raw=None):
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.4]),
+            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]),
             xaxis=dict(
                 type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
                 tickfont=dict(size=16, family="Arial", color="#333333"), 
-                tickangle=0, automargin=True, fixedrange=True
+                tickangle=0, automargin=True, fixedrange=True, anchor="y", side="bottom"
             )
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key) 
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
