@@ -146,22 +146,25 @@ def vis_side(df_raw=None):
 
         fig.update_layout(
             barmode='group',
-            height=450, # Øget lidt for at give plads til bunden
-            margin=dict(t=100, b=120, l=10, r=10), # Mere plads i bunden (b=120)
+            height=500, # Vi sætter højden lidt op for at give plads
+            margin=dict(t=100, b=150, l=20, r=20), # Markant mere plads i bunden (150px)
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.4]),
             xaxis=dict(
-                type='category', # Tvinger kategorisk visning
+                type='category',
                 showgrid=False,
                 tickmode='array',
                 tickvals=x_indices,
                 ticktext=labels,
-                tickfont=dict(size=12, family="Arial Black", color="white"),
-                tickangle=-45, # Drejer teksten for at undgå overlap
-                automargin=True, # Tvinger layoutet til at give plads til teksten
-                fixedrange=True
+                # VI TVINGER SORT FARVE HER:
+                tickfont=dict(size=11, family="Arial Black", color="#333333"), 
+                tickangle=-45, # Drej dem så de ikke overlapper
+                automargin=True, # Bed Plotly om selv at finde plads
+                fixedrange=True,
+                anchor="y",
+                side="bottom"
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key) 
