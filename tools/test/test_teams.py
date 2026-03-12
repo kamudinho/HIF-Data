@@ -73,7 +73,7 @@ def vis_side(df_raw=None):
         # Brug triple quotes f""" for at tillade linjeskift i din SQL
         query = f"""
         SELECT t.TEAMNAME, 
-               adv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOTT as XGPERSHOT, 
+               adv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOT as XG pr. SHOT, 
                adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, 
                adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
                adv.SHOTSFROMDANGERZONE,
