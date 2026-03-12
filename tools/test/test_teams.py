@@ -77,7 +77,7 @@ def vis_side(df_raw=None):
                adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
                adv.SHOTSFROMDANGERZONE,
                md.INTERCEPTIONS, md.TACKLES, md.CLEARANCES, md.PPDA,
-               mp.PASSES, mp.PASSESSUCCESSFUL, mp.CROSSES, mp.FORWARDPASSES, 
+               mp.PASSES, mp.PASSESSUCCESSFUL, mp.CROSSESTOTAL, mp.FORWARDPASSES, 
                mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRD, mp.AVGPASSLENGTH, mp.MATCHTEMPO
         FROM {DB}.WYSCOUT_TEAMMATCHES tm 
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
@@ -223,7 +223,7 @@ def vis_side(df_raw=None):
             # 5. SPILOPBYGNING (Afleveringer og indlæg)
             with sub_tabs[4]:
                 metrics = [
-                    'PASSES', 'PASSESSUCCESFUL', 'CROSSES', 
+                    'PASSES', 'PASSESSUCCESFUL', 'CROSSESTOTAL', 
                     'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSESTOFINALTHIRD'
                 ]
                 labels = [
