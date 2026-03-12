@@ -155,7 +155,7 @@ def vis_side(df_raw=None):
         fig.add_trace(go.Bar(
             name=team2, x=x_indices, y=v2, marker_color=c2["primary"], 
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
-            insidetextfont=dict(size=14, family="Arial", color=get_text_color(c2["primary"])),
+            insidetextfont=dict(size=12, family="Arial", color=get_text_color(c2["primary"])),
             offsetgroup=2
         ))
 
@@ -183,7 +183,7 @@ def vis_side(df_raw=None):
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.4]),
             xaxis=dict(
                 type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
-                tickfont=dict(size=11, family="Arial", color="#333333"), 
+                tickfont=dict(size=16, family="Arial", color="#333333"), 
                 tickangle=-0, automargin=True, fixedrange=True, anchor="y", side="bottom"
             )
         )
