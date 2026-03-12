@@ -122,7 +122,6 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
     
-    # --- 4. GRAF FUNKTION ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -131,95 +130,79 @@ def vis_side(df_raw=None):
             st.info("Ingen data fundet.")
             return
 
+        # Definer x_indices med det samme baseret på labels
+        x_indices = list(range(len(labels)))
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
         
-        # Hent UUIDs for at finde logo-URL'er
+        # Logo URL logik
         u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0] if team1 in df_liga['HOLD'].values else None
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
         
-        # --- FARVE LOGIK: Secondary bruges kun som kant, hvis Primary er hvid ---
+        # Farve logik
         c1 = colors_dict.get(team1, {"primary": "#df003b", "secondary": "#df003b"})
         c2 = colors_dict.get(team2, {"primary": "#0056a3", "secondary": "#0056a3"})
 
-        # Funktion til at tjekke om farven er hvid/meget lys
         def is_white(color):
-            c = color.lower().strip()
+            c = str(color).lower().strip()
             return c in ['#ffffff', 'white', '#fff', '#fcfcfc']
 
-        # Hold 1 indstillinger
         h1_line_color = c1.get("secondary", c1["primary"]) if is_white(c1["primary"]) else c1["primary"]
         h1_line_width = 2 if is_white(c1["primary"]) else 0
-
-        # Hold 2 indstillinger
         h2_line_color = c2.get("secondary", c2["primary"]) if is_white(c2["primary"]) else c2["primary"]
         h2_line_width = 2 if is_white(c2["primary"]) else 0
 
         fig = go.Figure()
         
-        # Søjle for Hold 1
+        # Tilføj Bar traces
         fig.add_trace(go.Bar(
             name=team1, x=x_indices, y=v1, 
             marker_color=c1["primary"], 
-            marker_line_color=h1_line_color,
-            marker_line_width=h1_line_width,
+            marker_line_color=h1_line_color, marker_line_width=h1_line_width,
             text=[f"{x:.2f}" for x in v1], textposition='inside', 
             insidetextfont=dict(size=14, family="Arial", color=get_text_color(c1["primary"])),
             offsetgroup=1
         ))
         
-        # Søjle for Hold 2
         fig.add_trace(go.Bar(
             name=team2, x=x_indices, y=v2, 
             marker_color=c2["primary"], 
-            marker_line_color=h2_line_color,
-            marker_line_width=h2_line_width,
+            marker_line_color=h2_line_color, marker_line_width=h2_line_width,
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
             insidetextfont=dict(size=12, family="Arial", color=get_text_color(c2["primary"])),
             offsetgroup=2
         ))
-        # --- GENINDSAT LOGO-LOGIK ---
-        for i in range(len(labels)):
+
+        # Logo løkke (bruger nu x_indices korrekt)
+        for i in x_indices:
             if l1:
                 fig.add_layout_image(dict(
                     source=l1, xref="x", yref="paper",
-                    x=i - 0.18, y=1.05, sizex=0.18, sizey=0.18,
+                    x=i - 0.20, y=1.05, sizex=0.18, sizey=0.18,
                     xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
             if l2:
                 fig.add_layout_image(dict(
                     source=l2, xref="x", yref="paper",
-                    x=i + 0.18, y=1.05, sizex=0.18, sizey=0.18,
+                    x=i + 0.20, y=1.05, sizex=0.18, sizey=0.18,
                     xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
 
         fig.update_layout(
             barmode='group',
-            bargap=0.30,      # Mellemrum mellem de forskellige metrikker
-            bargroupgap=0.10, # DETTE SKABER MELLEMRUMMET MELLEM DE TO HOLD
+            bargap=0.30,
+            bargroupgap=0.12, # Mellemrum mellem de to hold
             height=500,
             margin=dict(t=100, b=150, l=20, r=20),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            yaxis=dict(
-                visible=False, 
-                fixedrange=True, 
-                range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]
-            ),
+            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]),
             xaxis=dict(
-                type='category', 
-                showgrid=False, 
-                tickmode='array', 
-                tickvals=x_indices, 
-                ticktext=labels,
+                type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
                 tickfont=dict(size=16, family="Arial", color="#333333"), 
-                tickangle=0, 
-                automargin=True, 
-                fixedrange=True, 
-                anchor="y", 
-                side="bottom"
+                tickangle=0, automargin=True, fixedrange=True, anchor="y", side="bottom"
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
