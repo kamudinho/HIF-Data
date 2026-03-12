@@ -91,7 +91,7 @@ def vis_side(df_raw=None):
     df_wy_raw = get_wyscout_direct()
 
     # --- 4. GRAF FUNKTION (RETTET: NU MED BÅDE LOGOER OG SYNLIGE LABELS) ---
-    def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source):
+    def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
         
@@ -174,7 +174,7 @@ def vis_side(df_raw=None):
                 side="bottom"
             )
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)  
         
     # --- 5. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
