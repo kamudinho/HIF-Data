@@ -134,13 +134,13 @@ def vis_side(df_raw=None):
             if l1:
                 fig.add_layout_image(dict(
                     source=l1, xref="x", yref="paper",
-                    x=i - 0.18, y=1.05, sizex=0.09, sizey=0.09,
+                    x=i - 0.18, y=1.05, sizex=0.09, sizey=0.15,
                     xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
             if l2:
                 fig.add_layout_image(dict(
                     source=l2, xref="x", yref="paper",
-                    x=i + 0.18, y=1.05, sizex=0.09, sizey=0.09,
+                    x=i + 0.18, y=1.05, sizex=0.09, sizey=0.15,
                     xanchor="center", yanchor="bottom", opacity=1, layer="above"
                 ))
 
