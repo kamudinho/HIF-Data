@@ -78,7 +78,7 @@ def vis_side(df_raw=None):
                adv.SHOTSFROMDANGERZONE,
                md.INTERCEPTIONS, md.TACKLES, md.CLEARANCES, md.PPDA,
                mp.PASSES, mp.PASSESSUCCESSFUL, mp.CROSSESTOTAL, mp.FORWARDPASSES, 
-               mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRD, mp.AVGPASSLENGTH, mp.MATCHTEMPO
+               mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRDS, mp.AVGPASSLENGTH, mp.MATCHTEMPO
         FROM {DB}.WYSCOUT_TEAMMATCHES tm 
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
@@ -224,7 +224,7 @@ def vis_side(df_raw=None):
             with sub_tabs[4]:
                 metrics = [
                     'PASSES', 'PASSESSUCCESFUL', 'CROSSESTOTAL', 
-                    'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSESTOFINALTHIRD'
+                    'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSESTOFINALTHIRDS'
                 ]
                 labels = [
                     'Afleveringer', 'Succesfulde', 'Indlæg', 
