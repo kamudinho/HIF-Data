@@ -139,19 +139,31 @@ def vis_side(df_raw=None):
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
         
-        # --- FARVE LOGIK MED SECONDARY SOM OMRIDS ---
+        # --- FARVE LOGIK: Secondary bruges kun som kant, hvis Primary er hvid ---
         c1 = colors_dict.get(team1, {"primary": "#df003b", "secondary": "#df003b"})
         c2 = colors_dict.get(team2, {"primary": "#0056a3", "secondary": "#0056a3"})
 
+        # Funktion til at tjekke om farven er hvid/meget lys
+        def is_white(color):
+            c = color.lower().strip()
+            return c in ['#ffffff', 'white', '#fff', '#fcfcfc']
+
+        # Hold 1 indstillinger
+        h1_line_color = c1.get("secondary", c1["primary"]) if is_white(c1["primary"]) else c1["primary"]
+        h1_line_width = 2 if is_white(c1["primary"]) else 0
+
+        # Hold 2 indstillinger
+        h2_line_color = c2.get("secondary", c2["primary"]) if is_white(c2["primary"]) else c2["primary"]
+        h2_line_width = 2 if is_white(c2["primary"]) else 0
+
         fig = go.Figure()
-        x_indices = list(range(len(labels)))
         
         # Søjle for Hold 1
         fig.add_trace(go.Bar(
             name=team1, x=x_indices, y=v1, 
             marker_color=c1["primary"], 
-            marker_line_color=c1.get("secondary", c1["primary"]), # Bruger secondary som omrids
-            marker_line_width=2, # Tykkelse på omridset
+            marker_line_color=h1_line_color,
+            marker_line_width=h1_line_width,
             text=[f"{x:.2f}" for x in v1], textposition='inside', 
             insidetextfont=dict(size=14, family="Arial", color=get_text_color(c1["primary"])),
             offsetgroup=1
@@ -161,8 +173,8 @@ def vis_side(df_raw=None):
         fig.add_trace(go.Bar(
             name=team2, x=x_indices, y=v2, 
             marker_color=c2["primary"], 
-            marker_line_color=c2.get("secondary", c2["primary"]), # Bruger secondary som omrids
-            marker_line_width=2,
+            marker_line_color=h2_line_color,
+            marker_line_width=h2_line_width,
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
             insidetextfont=dict(size=12, family="Arial", color=get_text_color(c2["primary"])),
             offsetgroup=2
