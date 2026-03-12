@@ -173,10 +173,38 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
+        # --- LIGATABEL ---
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P']].to_html(escape=False, index=False), unsafe_allow_html=True)
+        
+        # --- NÆSTE MODSTANDER (KUN TEKST) ---
+        st.markdown("---")
+        
+        # Find Hvidovres Opta UUID
+        hif_opta_uuid = next((info.get('opta_uuid') for name, info in TEAMS.items() if info.get('team_wyid') == 7490), None)
+        
+        if hif_opta_uuid:
+            next_m = df_opta[
+                (df_opta['MATCH_STATUS'] == 'Fixture') & 
+                ((df_opta['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid) | 
+                 (df_opta['CONTESTANTAWAY_OPTAUUID'] == hif_opta_uuid))
+            ].sort_values(by='TIME_UTC').head(1)
 
+            if not next_m.empty:
+                m = next_m.iloc[0]
+                is_home = m['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid
+                dato = pd.to_datetime(m['TIME_UTC']).strftime('%d. %b - kl. %H:%M')
+                
+                home_team = m['CONTESTANTHOME_NAME'].upper()
+                away_team = m['CONTESTANTAWAY_NAME'].upper()
+                spillested = "Hjemme" if is_home else "Ude"
+
+                # Rent tekst-layout
+                st.markdown(f"### NÆSTE KAMP: {home_team} vs {away_team}")
+                st.markdown(f"**Dato:** {dato}  \n**Lokation:** {spillested}")
+            else:
+                st.write("INGEN KOMMENDE KAMPE PLANLAGT")
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
