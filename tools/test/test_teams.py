@@ -148,14 +148,14 @@ def vis_side(df_raw=None):
         fig.add_trace(go.Bar(
             name=team1, x=x_indices, y=v1, marker_color=c1["primary"], 
             text=[f"{x:.2f}" for x in v1], textposition='inside', 
-            insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c1["primary"])),
+            insidetextfont=dict(size=14, family="Arial", color=get_text_color(c1["primary"])),
             offsetgroup=1
         ))
         
         fig.add_trace(go.Bar(
             name=team2, x=x_indices, y=v2, marker_color=c2["primary"], 
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
-            insidetextfont=dict(size=14, family="Arial Black", color=get_text_color(c2["primary"])),
+            insidetextfont=dict(size=14, family="Arial", color=get_text_color(c2["primary"])),
             offsetgroup=2
         ))
 
@@ -184,7 +184,7 @@ def vis_side(df_raw=None):
             xaxis=dict(
                 type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
                 tickfont=dict(size=11, family="Arial", color="#333333"), 
-                tickangle=-45, automargin=True, fixedrange=True, anchor="y", side="bottom"
+                tickangle=-0, automargin=True, fixedrange=True, anchor="y", side="bottom"
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key) 
