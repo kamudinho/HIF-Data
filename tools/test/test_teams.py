@@ -105,6 +105,9 @@ def vis_side(df_raw=None):
         query = f"""
         SELECT t.TEAMNAME, 
                adv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOT, 
+               adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, 
+               adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
+               adv.SHOTSFROMDANGERZONE,
                md.INTERCEPTIONS, md.TACKLES, md.CLEARANCES, md.PPDA,
                mp.PASSES, mp.PASSESSUCCESSFUL, mp.CROSSESTOTAL, mp.FORWARDPASSES, 
                mp.PROGRESSIVEPASSES, mp.PASSTOFINALTHIRDS, mp.AVGPASSLENGTH, mp.MATCHTEMPO
@@ -118,7 +121,7 @@ def vis_side(df_raw=None):
         return conn.query(query)
 
     df_wy_raw = get_wyscout_direct()
-
+    
     # --- 4. GRAF FUNKTION (DENNE MANGLER I DIN KODE) ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
