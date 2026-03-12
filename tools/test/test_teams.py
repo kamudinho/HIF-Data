@@ -77,8 +77,8 @@ def vis_side(df_raw=None):
                adv.AVGDISTANCE, adv.SHOTSONTARGET, adv.SHOTSBLOCKED, 
                adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
                adv.SHOTSFROMDANGERZONE,
-               md.INTERCEPTIONS, 
-               mp.PASSES 
+               md.INTERCEPTIONS, md.TACKLES, md.CLEARANCES, md.PPDA,
+               mp.PASSES, mp.PASSESSUCCESFUL, mp.CROSSES, mp.FORWARDPASSES, mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRD, mp.AVGPASSLENGTH, mp.MATCHTEMPO
         FROM {DB}.WYSCOUT_TEAMMATCHES tm 
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
@@ -187,23 +187,47 @@ def vis_side(df_raw=None):
             df_wy_raw.columns = [col.upper() for col in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
-            sub_tabs = st.tabs(["Generelt", "Offensivt", "Afslutninger", "Defensivt", "Spilopbygning"])
+            # Nye organiserede faner
+            sub_tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
             
-            # Tilføj et unikt navn til sidst i hvert kald:
-            with sub_tabs[0]: 
-                draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg, "gen_chart")
+            # 1. GENERELT (Overblik med blandede volumen-stats)
+            with sub_tabs[0]:
+                metrics = ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO']
+                labels = ['Skud', 'Mål', 'PPDA', 'Match Tempo']
+                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "gen_chart")
             
-            with sub_tabs[1]: 
-                draw_h2h_chart_combined(team1, team2, ['XG', 'SHOTS'], ['xG', 'Skud'], df_agg, "off_chart")
+            # 2. xG STATS (Egen fane pga. små decimalværdier)
+            with sub_tabs[1]:
+                metrics = ['XG', 'XGPERSHOT']
+                labels = ['Total xG', 'xG pr. skud']
+                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "xg_chart")
             
-            with sub_tabs[2]: 
-                draw_h2h_chart_combined(team1, team2, 
-                    ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], 
-                    ['SHOTS', 'AVGDISTANCE', 'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], 
-                    df_agg, "shot_chart")
+            # 3. AFSLUTNINGER (Specifikke skud-typer)
+            with sub_tabs[2]:
+                metrics = [
+                    'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 
+                    'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'
+                ]
+                labels = [
+                    'På mål', 'Blokeret', 'Udenfor felt', 
+                    'I feltet', 'I felt på mål', 'Danger Zone'
+                ]
+                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "shot_chart")
             
-            with sub_tabs[3]: 
-                draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS'], ['Interceptions'], df_agg, "def_chart")
+            # 4. DEFENSIVT (Forsvars-kategorier)
+            with sub_tabs[3]:
+                metrics = ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES']
+                labels = ['Interceptions', 'Tacklinger', 'Clearinger']
+                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "def_chart")
             
-            with sub_tabs[4]: 
-                draw_h2h_chart_combined(team1, team2, ['PASSES'], ['Afleveringer'], df_agg, "pass_chart")
+            # 5. SPILOPBYGNING (Afleveringer og indlæg)
+            with sub_tabs[4]:
+                metrics = [
+                    'PASSES', 'PASSESSUCCESFUL', 'CROSSES', 
+                    'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSESTOFINALTHIRD'
+                ]
+                labels = [
+                    'Afleveringer', 'Succesfulde', 'Indlæg', 
+                    'Fremadrettede', 'Progressive', 'Til sidste 1/3'
+                ]
+                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "pass_chart")
