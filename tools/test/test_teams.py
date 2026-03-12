@@ -28,12 +28,19 @@ def vis_side(df_raw=None):
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
-    def get_logo_html(uuid):
+    def get_logo_html(uuid, l_map=None): # Tilføjet l_map for at matche kaldet
         url = get_logo_url(uuid)
         return f'<img src="{url}" width="20">' if url else ""
 
     def update_form(current_form, result):
-    return "".join((list(current_form) + [result])[-5:])
+        return "".join((list(current_form) + [result])[-5:])
+
+    def style_form(f):
+        res = ""
+        for char in f:
+            color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
+            res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
+        return res
 
     def get_text_color(hex_color):
         if not hex_color: return "white"
@@ -83,7 +90,7 @@ def vis_side(df_raw=None):
                 opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
                 opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
                 dato = r['MATCH_DATE_FULL'].strftime('%d/%m')
-                logo = get_logo_url(opp_u, logo_map)
+                logo = get_logo_url(opp_u)
                 next_opponents[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{logo}" width="18"><span>{opp_n}</span><span style="color:#888;font-size:11px;">{dato}</span></div>'
 
     df_liga = pd.DataFrame(stats.values())
@@ -152,7 +159,6 @@ def vis_side(df_raw=None):
             offsetgroup=2
         ))
 
-        # LOGOER (Store størrelse)
         for i in range(len(labels)):
             if l1:
                 fig.add_layout_image(dict(
@@ -195,7 +201,7 @@ def vis_side(df_raw=None):
         </style>""", unsafe_allow_html=True)
         
         df_disp = df_liga.copy()
-        df_disp.insert(1, ' ', [get_logo_html(u, logo_map) for u in df_disp['UUID']])
+        df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
