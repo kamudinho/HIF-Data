@@ -223,11 +223,11 @@ def vis_side(df_raw=None):
             # 5. SPILOPBYGNING (Afleveringer og indlæg)
             with sub_tabs[4]:
                 metrics = [
-                    'PASSES', 'PASSESSUCCESFUL', 'CROSSESTOTAL', 
+                    'PASSES', 'CROSSESTOTAL', 
                     'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'
                 ]
                 labels = [
-                    'Afleveringer', 'Succesfulde', 'Indlæg', 
+                    'Afleveringer', 'Indlæg', 
                     'Fremadrettede', 'Progressive', 'Til sidste 1/3'
                 ]
                 draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "pass_chart")
