@@ -70,7 +70,6 @@ def vis_side(df_raw=None):
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if not conn: return pd.DataFrame()
-        # Brug triple quotes f""" for at tillade linjeskift i din SQL
         query = f"""
         SELECT t.TEAMNAME, 
                adv.XG, adv.SHOTS, adv.GOALS, adv.XGPERSHOT, 
@@ -78,7 +77,8 @@ def vis_side(df_raw=None):
                adv.SHOTSOUTSIDEBOX, adv.SHOTSFROMBOX, adv.SHOTSFROMBOXONTARGET, 
                adv.SHOTSFROMDANGERZONE,
                md.INTERCEPTIONS, md.TACKLES, md.CLEARANCES, md.PPDA,
-               mp.PASSES, mp.PASSESSUCCESFUL, mp.CROSSES, mp.FORWARDPASSES, mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRD, mp.AVGPASSLENGTH, mp.MATCHTEMPO
+               mp.PASSES, mp.PASSESSUCCESSFUL, mp.CROSSES, mp.FORWARDPASSES, 
+               mp.PROGRESSIVEPASSES, mp.PASSESTOFINALTHIRD, mp.AVGPASSLENGTH, mp.MATCHTEMPO
         FROM {DB}.WYSCOUT_TEAMMATCHES tm 
         JOIN {DB}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
         LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
