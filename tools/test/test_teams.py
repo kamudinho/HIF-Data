@@ -90,8 +90,7 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
 
-    # --- 4. GRAF FUNKTION (RETTET: NU MED BÅDE LOGOER OG SYNLIGE LABELS) ---
-    # --- 4. GRAF FUNKTION (OPDATERET MED ROTEREDE LABELS OG AUTOMARGIN) ---
+    # --- 4. GRAF FUNKTION ---
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
@@ -113,7 +112,6 @@ def vis_side(df_raw=None):
         fig = go.Figure()
         x_indices = list(range(len(labels)))
         
-        # Hold 1 Søjler
         fig.add_trace(go.Bar(
             name=team1, x=x_indices, y=v1, marker_color=c1["primary"], 
             text=[f"{x:.2f}" for x in v1], textposition='inside', 
@@ -121,7 +119,6 @@ def vis_side(df_raw=None):
             offsetgroup=1
         ))
         
-        # Hold 2 Søjler
         fig.add_trace(go.Bar(
             name=team2, x=x_indices, y=v2, marker_color=c2["primary"], 
             text=[f"{x:.2f}" for x in v2], textposition='inside', 
@@ -129,7 +126,6 @@ def vis_side(df_raw=None):
             offsetgroup=2
         ))
 
-        # LOGOER
         for i in range(len(labels)):
             if l1:
                 fig.add_layout_image(dict(
@@ -146,25 +142,16 @@ def vis_side(df_raw=None):
 
         fig.update_layout(
             barmode='group',
-            height=500, # Vi sætter højden lidt op for at give plads
-            margin=dict(t=100, b=150, l=20, r=20), # Markant mere plads i bunden (150px)
+            height=500,
+            margin=dict(t=100, b=150, l=20, r=20),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
             yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1), max(v2)) * 1.4]),
             xaxis=dict(
-                type='category',
-                showgrid=False,
-                tickmode='array',
-                tickvals=x_indices,
-                ticktext=labels,
-                # VI TVINGER SORT FARVE HER:
+                type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
                 tickfont=dict(size=11, family="Arial", color="#333333"), 
-                tickangle=-0, # Drej dem så de ikke overlapper
-                automargin=True, # Bed Plotly om selv at finde plads
-                fixedrange=True,
-                anchor="y",
-                side="bottom"
+                tickangle=-45, automargin=True, fixedrange=True, anchor="y", side="bottom"
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key) 
@@ -173,38 +160,22 @@ def vis_side(df_raw=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        # --- LIGATABEL ---
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P']].to_html(escape=False, index=False), unsafe_allow_html=True)
-        
-        # --- NÆSTE MODSTANDER (KUN TEKST) ---
-        st.markdown("---")
-        
-        # Find Hvidovres Opta UUID
-        hif_opta_uuid = next((info.get('opta_uuid') for name, info in TEAMS.items() if info.get('team_wyid') == 7490), None)
-        
-        if hif_opta_uuid:
-            next_m = df_opta[
-                (df_opta['MATCH_STATUS'] == 'Fixture') & 
-                ((df_opta['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid) | 
-                 (df_opta['CONTESTANTAWAY_OPTAUUID'] == hif_opta_uuid))
-            ].sort_values(by='TIME_UTC').head(1)
 
+        # --- NÆSTE MODSTANDER ---
+        st.markdown("---")
+        hif_opta_uuid = next((info.get('opta_uuid') for name, info in TEAMS.items() if info.get('team_wyid') == 7490), None)
+        if hif_opta_uuid:
+            next_m = df_opta[(df_opta['MATCH_STATUS'] == 'Fixture') & ((df_opta['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == hif_opta_uuid))].sort_values(by='TIME_UTC').head(1)
             if not next_m.empty:
                 m = next_m.iloc[0]
                 is_home = m['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid
                 dato = pd.to_datetime(m['TIME_UTC']).strftime('%d. %b - kl. %H:%M')
-                
-                home_team = m['CONTESTANTHOME_NAME'].upper()
-                away_team = m['CONTESTANTAWAY_NAME'].upper()
-                spillested = "Hjemme" if is_home else "Ude"
+                st.markdown(f"### NÆSTE KAMP: {m['CONTESTANTHOME_NAME'].upper()} vs {m['CONTESTANTAWAY_NAME'].upper()}")
+                st.markdown(f"**Dato:** {dato}  \n**Lokation:** {'Hjemme' if is_home else 'Ude'}")
 
-                # Rent tekst-layout
-                st.markdown(f"### NÆSTE KAMP: {home_team} vs {away_team}")
-                st.markdown(f"**Dato:** {dato}  \n**Lokation:** {spillested}")
-            else:
-                st.write("INGEN KOMMENDE KAMPE PLANLAGT")
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
@@ -214,48 +185,15 @@ def vis_side(df_raw=None):
         if not df_wy_raw.empty:
             df_wy_raw.columns = [col.upper() for col in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
-            
-            # Nye organiserede faner
             sub_tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
             
-            # 1. GENERELT (Overblik med blandede volumen-stats)
             with sub_tabs[0]:
-                metrics = ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO']
-                labels = ['Skud', 'Mål', 'PPDA', 'Match Tempo']
-                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "gen_chart")
-            
-            # 2. xG STATS (Egen fane pga. små decimalværdier)
+                draw_h2h_chart_combined(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_agg, "gen_chart")
             with sub_tabs[1]:
-                metrics = ['XG', 'XGPERSHOT']
-                labels = ['Total xG', 'xG pr. skud']
-                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "xg_chart")
-            
-            # 3. AFSLUTNINGER (Specifikke skud-typer)
+                draw_h2h_chart_combined(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_agg, "xg_chart")
             with sub_tabs[2]:
-                metrics = [
-                    'SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 
-                    'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'
-                ]
-                labels = [
-                    'På mål', 'Blokeret', 'Udenfor felt', 
-                    'I feltet', 'I felt på mål', 'Danger Zone'
-                ]
-                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "shot_chart")
-            
-            # 4. DEFENSIVT (Forsvars-kategorier)
+                draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'Udenfor felt', 'I feltet', 'I felt på mål', 'Danger Zone'], df_agg, "shot_chart")
             with sub_tabs[3]:
-                metrics = ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES']
-                labels = ['Interceptions', 'Tacklinger', 'Clearinger']
-                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "def_chart")
-            
-            # 5. SPILOPBYGNING (Afleveringer og indlæg)
+                draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interceptions', 'Tacklinger', 'Clearinger'], df_agg, "def_chart")
             with sub_tabs[4]:
-                metrics = [
-                    'PASSES', 'CROSSESTOTAL', 
-                    'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'
-                ]
-                labels = [
-                    'Afleveringer', 'Indlæg', 
-                    'Fremadrettede', 'Progressive', 'Til sidste 1/3'
-                ]
-                draw_h2h_chart_combined(team1, team2, metrics, labels, df_agg, "pass_chart")
+                draw_h2h_chart_combined(team1, team2, ['PASSES', 'CROSSESTOTAL', 'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Afleveringer', 'Indlæg', 'Fremadrettede', 'Progressive', 'Til sidste 1/3'], df_agg, "pass_chart")
