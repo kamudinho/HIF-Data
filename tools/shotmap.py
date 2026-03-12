@@ -115,15 +115,25 @@ def vis_side(dp):
             sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
             d_v = df_skud if sel_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
             dz_d = d_v[d_v['IS_DZ_GEO']]
+            
+            total_shots = len(d_v)
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
+            
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">Antal mål, samlet</div><div class="stat-value">{m_cnt/m_alt*100 if m_alt></div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Antal mål, DZ</div><div class="stat-value">{(m_dz/m_alt*100 if m_alt>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
+            
+            # Her er den rettede linje 122:
+            dz_andel_skud = (len(dz_d) / total_shots * 100) if total_shots > 0 else 0
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">Andel af skud i DZ</div><div class="stat-value">{dz_andel_skud:.1f}%</div></div>', unsafe_allow_html=True)
+            
+            dz_andel_maal = (m_dz / m_alt * 100) if m_alt > 0 else 0
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{dz_andel_maal:.1f}%</div></div>', unsafe_allow_html=True)
+            
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
+            # Tegn DZ rektangel
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
             colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
