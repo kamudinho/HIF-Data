@@ -126,6 +126,7 @@ def vis_side(df_raw=None):
             offsetgroup=2
         ))
 
+        # LOGOER (Store størrelse)
         for i in range(len(labels)):
             if l1:
                 fig.add_layout_image(dict(
@@ -164,18 +165,6 @@ def vis_side(df_raw=None):
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P']].to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        # --- NÆSTE MODSTANDER ---
-        st.markdown("---")
-        hif_opta_uuid = next((info.get('opta_uuid') for name, info in TEAMS.items() if info.get('team_wyid') == 7490), None)
-        if hif_opta_uuid:
-            next_m = df_opta[(df_opta['MATCH_STATUS'] == 'Fixture') & ((df_opta['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == hif_opta_uuid))].sort_values(by='TIME_UTC').head(1)
-            if not next_m.empty:
-                m = next_m.iloc[0]
-                is_home = m['CONTESTANTHOME_OPTAUUID'] == hif_opta_uuid
-                dato = pd.to_datetime(m['TIME_UTC']).strftime('%d. %b - kl. %H:%M')
-                st.markdown(f"### NÆSTE KAMP: {m['CONTESTANTHOME_NAME'].upper()} vs {m['CONTESTANTAWAY_NAME'].upper()}")
-                st.markdown(f"**Dato:** {dato}  \n**Lokation:** {'Hjemme' if is_home else 'Ude'}")
-
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
@@ -185,6 +174,7 @@ def vis_side(df_raw=None):
         if not df_wy_raw.empty:
             df_wy_raw.columns = [col.upper() for col in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
+            
             sub_tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
             
             with sub_tabs[0]:
