@@ -185,7 +185,7 @@ def vis_side(df_raw=None):
         fig.update_layout(
             barmode='group',
             bargap=0.30,      # Mellemrum mellem de forskellige metrikker
-            bargroupgap=0.15, # DETTE SKABER MELLEMRUMMET MELLEM DE TO HOLD
+            bargroupgap=0.10, # DETTE SKABER MELLEMRUMMET MELLEM DE TO HOLD
             height=500,
             margin=dict(t=100, b=150, l=20, r=20),
             plot_bgcolor='rgba(0,0,0,0)',
