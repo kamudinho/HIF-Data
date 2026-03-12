@@ -194,9 +194,9 @@ def vis_side(df_raw=None):
 
     with t_liga:
         st.markdown("""<style>
-            .league-table { width: 100%; border-collapse: collapse; font-size: 14px; color: white; }
-            .league-table th { background-color: rgba(255,255,255,0.05); padding: 8px; text-align: center !important; }
-            .league-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center !important; }
+            .league-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            .league-table th { background-color: rgba(128,128,128,0.1); padding: 8px; text-align: center !important; }
+            .league-table td { padding: 8px; border-bottom: 1px solid rgba(128,128,128,0.2); text-align: center !important; }
             .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
         </style>""", unsafe_allow_html=True)
         
@@ -205,7 +205,7 @@ def vis_side(df_raw=None):
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
-
+        
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
