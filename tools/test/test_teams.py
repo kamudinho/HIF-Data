@@ -32,6 +32,9 @@ def vis_side(df_raw=None):
         url = get_logo_url(uuid)
         return f'<img src="{url}" width="20">' if url else ""
 
+    def update_form(current_form, result):
+    return "".join((list(current_form) + [result])[-5:])
+
     def get_text_color(hex_color):
         if not hex_color: return "white"
         hex_color = hex_color.lstrip('#')
