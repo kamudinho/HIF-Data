@@ -3,7 +3,7 @@ import pandas as pd
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
     
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # Her definerer vi navnet korrekt
+    # HIF's unikke Opta ID
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
@@ -13,29 +13,83 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
 
-    # Central subquery til genbrug
+    # Central subquery til genbrug for at sikre performance
     match_id_subquery = f"""
         SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
-    # Filtre (Her bruger vi konsekvent HIF_UUID)
+    # Filtre til HIF-specifikke visninger
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
+        # 1. TEAM STATS MASTER QUERY (Til dit kamp-layout med xG, Possession, Skud, mm.)
+        "opta_team_stats": f"""
+            WITH MatchBase AS (
+                SELECT 
+                    MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS,
+                    CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME,
+                    CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME,
+                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
+                FROM {DB}.OPTA_MATCHINFO
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            ),
+            ExpectedGoalsPivot AS (
+                SELECT 
+                    MATCH_ID, CONTESTANT_OPTAUUID,
+                    SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS XG,
+                    SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE ELSE 0 END) AS SHOTS,
+                    SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX
+                FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+                WHERE MATCH_ID IN ({match_id_subquery})
+                GROUP BY 1, 2
+            ),
+            MatchStatsPivot AS (
+                SELECT 
+                    MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                    MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
+                    MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES,
+                    MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL END) AS YELLOW_CARDS,
+                    MAX(KIT_COLOUR1) AS KIT_COLOR,
+                    MAX(FORMATIONUSED) AS FORMATION
+                FROM {DB}.OPTA_MATCHSTATS
+                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+                GROUP BY 1, 2
+            )
+            SELECT 
+                b.*,
+                -- Hjemmehold Data
+                sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES,
+                msh.POSSESSION AS HOME_POSS, msh.TOTAL_PASSES AS HOME_PASSES, 
+                msh.KIT_COLOR AS HOME_KIT, msh.FORMATION AS HOME_FORMATION, msh.YELLOW_CARDS AS HOME_YELLOW,
+                -- Udehold Data
+                sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES,
+                msa.POSSESSION AS AWAY_POSS, msa.TOTAL_PASSES AS AWAY_PASSES, 
+                msa.KIT_COLOR AS AWAY_KIT, msa.FORMATION AS AWAY_FORMATION, msa.YELLOW_CARDS AS AWAY_YELLOW
+            FROM MatchBase b
+            LEFT JOIN ExpectedGoalsPivot sh ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID
+            LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID
+            LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID
+            LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID
+            ORDER BY b.MATCH_DATE_FULL DESC
+        """,
+
+        # 2. MATCH INFO
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """,
 
+        # 3. DETALJERET XG (Spillerniveau)
         "opta_expected_goals": f"""
             SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS
             WHERE MATCH_ID IN ({match_id_subquery})
             {hif_filter_std}
         """,
 
+        # 4. SKUD EVENTS
         "opta_shotevents": f"""
             SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
             FROM {DB}.OPTA_EVENTS e 
@@ -47,20 +101,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             {hif_filter_event}
         """,
 
+        # 5. ASSISTS OG CHANCESKABELSE
         "opta_assists": f"""
             WITH OrderedEvents AS (
                 SELECT 
-                    EVENT_OPTAUUID,
-                    PLAYER_OPTAUUID, 
-                    PLAYER_NAME, 
-                    EVENT_X, 
-                    EVENT_Y, 
-                    EVENT_TYPEID, 
-                    EVENT_OUTCOME,
-                    MATCH_OPTAUUID, 
-                    EVENT_CONTESTANT_OPTAUUID, 
-                    EVENT_TIMESTAMP, 
-                    EVENT_EVENTID,
+                    EVENT_OPTAUUID, PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, 
+                    EVENT_TYPEID, EVENT_OUTCOME, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, 
+                    EVENT_TIMESTAMP, EVENT_EVENTID,
                     LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
                     LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_X,
                     LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_Y,
@@ -70,42 +117,26 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
             )
             SELECT 
-                OE.PLAYER_NAME AS ASSIST_PLAYER,
-                OE.SHOT_PLAYER AS GOAL_SCORER,
-                OE.EVENT_X AS PASS_START_X,
-                OE.EVENT_Y AS PASS_START_Y,
-                OE.NEXT_X AS SHOT_X,
-                OE.NEXT_Y AS SHOT_Y,
-                OE.NEXT_EVENT_TYPE,
-                OE.EVENT_OUTCOME,
-                OE.EVENT_TYPEID,
-                OE.EVENT_TIMESTAMP,
+                OE.PLAYER_NAME AS ASSIST_PLAYER, OE.SHOT_PLAYER AS GOAL_SCORER,
+                OE.EVENT_X AS PASS_START_X, OE.EVENT_Y AS PASS_START_Y,
+                OE.NEXT_X AS SHOT_X, OE.NEXT_Y AS SHOT_Y,
+                OE.NEXT_EVENT_TYPE, OE.EVENT_OUTCOME, OE.EVENT_TYPEID, OE.EVENT_TIMESTAMP,
                 MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) AS IS_CORNER,
                 MAX(CASE WHEN Q.QUALIFIER_QID = 2 THEN 1 ELSE 0 END) AS IS_CROSS,
                 CASE WHEN OE.NEXT_X > (OE.EVENT_X + 25) AND OE.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
             FROM OrderedEvents OE
             LEFT JOIN {DB}.OPTA_QUALIFIERS Q ON OE.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
-            WHERE OE.EVENT_OUTCOME = 1 
-            AND OE.EVENT_TYPEID = 1
-            GROUP BY 
-                OE.PLAYER_NAME, OE.SHOT_PLAYER, OE.EVENT_X, OE.EVENT_Y, OE.NEXT_X, OE.NEXT_Y, 
-                OE.NEXT_EVENT_TYPE, OE.EVENT_OUTCOME, OE.EVENT_TYPEID, OE.EVENT_TIMESTAMP
+            WHERE OE.EVENT_OUTCOME = 1 AND OE.EVENT_TYPEID = 1
+            GROUP BY 1,2,3,4,5,6,7,8,9,10
             HAVING (MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) = 1) 
                OR (OE.NEXT_EVENT_TYPE IN (13, 14, 15, 16))
             ORDER BY OE.EVENT_TIMESTAMP DESC
         """,
 
-        "opta_team_stats": f"""
-            SELECT * FROM {DB}.OPTA_MATCHSTATS 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_std}
-        """,
-
+        # 6. SPILLER LINEBREAKS
         "opta_player_linebreaks": f"""
             SELECT 
-                PLAYER_OPTAUUID,
-                LINEUP_CONTESTANTUUID,
-                TOURNAMENTCALENDAR_OPTAUUID,
+                PLAYER_OPTAUUID, LINEUP_CONTESTANTUUID, TOURNAMENTCALENDAR_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
                 MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
                 MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
@@ -113,15 +144,16 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
             WHERE LINEUP_CONTESTANTUUID = '{HIF_UUID}'
             GROUP BY 1, 2, 3
-            LIMIT 100
         """,
 
+        # 7. HOLD LINEBREAKS
         "opta_team_linebreaks": f"""
             SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             {hif_filter_lb}
         """,
 
+        # 8. RAW EVENTS (Til Heatmaps etc.)
         "opta_events": f"""
             SELECT 
                 EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
