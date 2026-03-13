@@ -5,15 +5,19 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     # --- 1. DATAGRUNDLAG ---
-    # Vi bruger nu 'team_stats' som vores primære kilde, da den indeholder alt
     df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
 
     if df_matches.empty:
         st.warning("Ingen kampdata fundet.")
         return
 
-    # Standardiser kolonnenavne
+    # Standardiser kolonnenavne til UPPERCASE
     df_matches.columns = [c.upper() for c in df_matches.columns]
+    
+    # Rens ID'er for at sikre match
+    for col in ['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
+        if col in df_matches.columns:
+            df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
@@ -39,7 +43,8 @@ def vis_side(dp):
         .stat-val { font-weight: 800; font-size: 16px; color: #111; }
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .formation-text { font-size: 11px; color: #888; font-weight: normal; margin-top: 2px; }
+        .time-pill { background: #eee; color: #333; border: 1px solid #ccc; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
+        .formation-text { font-size: 10px; color: #888; font-weight: normal; margin-top: 2px; text-transform: uppercase; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -54,14 +59,29 @@ def vis_side(dp):
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
-    # --- 4. FILTRERING ---
+    # --- 4. FILTRERING OG OPSUMMERING ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    
+    summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s, a_s = safe_val(m.get('TOTAL_HOME_SCORE')), safe_val(m.get('TOTAL_AWAY_SCORE'))
+        summary["M+"] += h_s if is_h else a_s
+        summary["M-"] += a_s if is_h else h_s
+        if h_s == a_s: summary["U"] += 1
+        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
+
+    stats_disp = [("K", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
+        top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, spillet):
         for _, row in df_list.iterrows():
-            # Dato-håndtering
+            m_uuid = str(row.get('MATCH_OPTAUUID', '')).strip().upper()
+            
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 dato_str = f"{dt.day}. {maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())} {dt.year}"
@@ -72,37 +92,32 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
-                h_name = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
-                a_name = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
+                h_uuid = row.get('CONTESTANTHOME_OPTAUUID')
+                a_uuid = row.get('CONTESTANTAWAY_OPTAUUID')
+                h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
+                a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
-                # Hjemmehold info
-                c1.markdown(f"""
-                    <div style='text-align:right; font-weight:bold; padding-top:5px;'>
-                        {h_name}<br><span class='formation-text'>{row.get('HOME_FORMATION', '')}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                # Venstre Side (Hjemmehold)
+                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{row.get('HOME_FORMATION','')}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
-                # Score / Tid
+                # Midte (Score/Tid)
                 if spillet:
-                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row['TOTAL_HOME_SCORE'])} - {safe_val(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row.get('TOTAL_HOME_SCORE'))} - {safe_val(row.get('TOTAL_AWAY_SCORE'))}</span></div>", unsafe_allow_html=True)
                 else:
                     tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
 
-                # Udehold info
+                # Højre Side (Udehold)
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
-                c5.markdown(f"""
-                    <div style='text-align:left; font-weight:bold; padding-top:5px;'>
-                        {a_name}<br><span class='formation-text'>{row.get('AWAY_FORMATION', '')}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:5px;'>{a_name}<br><span class='formation-text'>{row.get('AWAY_FORMATION','')}</span></div>", unsafe_allow_html=True)
 
+                # --- STATS SEKTION ---
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     
-                    # Mapping af de nye kolonner fra din Master Query
-                    stats_to_draw = [
+                    # Definer hvad der skal tegnes ud fra den nye Master Query
+                    stats_config = [
                         ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", True),
                         ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", False, "%"),
                         ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", False),
@@ -110,13 +125,12 @@ def vis_side(dp):
                         ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False)
                     ]
 
-                    # Dynamiske farver fra Opta (eller fallback til Team Colors)
-                    h_color = row.get('HOME_KIT', '#cc0000')
-                    a_color = row.get('AWAY_KIT', '#222222')
+                    # Brug kit-farver fra SQL eller fallback til team_mapping
+                    h_color = row.get('HOME_KIT') if row.get('HOME_KIT') else TEAM_COLORS.get(h_name, "#cc0000")
+                    a_color = row.get('AWAY_KIT') if row.get('AWAY_KIT') else "#222222"
 
-                    for h_col, a_col, label, is_float, suffix in [
-                        (s[0], s[1], s[2], s[3], s[4] if len(s)>4 else "") for s in stats_to_draw
-                    ]:
+                    for h_col, a_col, label, is_float, *suffix_list in stats_config:
+                        suffix = suffix_list[0] if suffix_list else ""
                         h_val = safe_val(row.get(h_col), is_float)
                         a_val = safe_val(row.get(a_col), is_float)
                         
@@ -125,17 +139,17 @@ def vis_side(dp):
 
                         total = h_val + a_val
                         h_pct = (h_val / total * 100) if total > 0 else 50
-
+                
                         st.markdown(f"""
                             <div style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
                                     <span style="font-weight: 800;">{h_str}</span>
-                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600;">{label}</span>
+                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing:0.5px;">{label}</span>
                                     <span style="font-weight: 800;">{a_str}</span>
                                 </div>
                                 <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
-                                    <div style="width: {h_pct}%; background-color: {h_color};"></div>
-                                    <div style="width: {100-h_pct}%; background-color: {a_color};"></div>
+                                    <div style="width: {h_pct}%; background-color: {h_color}; transition: width 0.5s;"></div>
+                                    <div style="width: {100-h_pct}%; background-color: {a_color}; transition: width 0.5s;"></div>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
