@@ -33,7 +33,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
-        # 1. TEAM STATS MASTER QUERY
+        # 1. TEAM STATS MASTER QUERY (OPDATERET MED FORWARD PASSES)
         "opta_team_stats": f"""
             WITH MatchBase AS (
                 SELECT 
@@ -55,13 +55,27 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 WHERE MATCH_ID IN ({match_id_subquery})
                 GROUP BY 1, 2
             ),
+            -- NY BEREGNING: Forward Passes fra Events tabellen
+            ForwardPassesPivot AS (
+                SELECT 
+                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                    COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES
+                FROM (
+                    SELECT 
+                        MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, EVENT_OUTCOME, EVENT_X,
+                        LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as LEAD_X
+                    FROM {DB}.OPTA_EVENTS
+                    WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+                    AND EVENT_TYPEID = 1 -- Kun afleveringer
+                )
+                GROUP BY 1, 2
+            ),
             MatchStatsPivot AS (
                 SELECT 
                     MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                     MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
                     MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES,
                     MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL END) AS YELLOW_CARDS,
-                    MAX(KIT_COLOUR1) AS KIT_COLOR,
                     MAX(FORMATIONUSED) AS FORMATION
                 FROM {DB}.OPTA_MATCHSTATS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
@@ -70,16 +84,18 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT 
                 b.*,
                 sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES,
-                msh.POSSESSION AS HOME_POSS, msh.TOTAL_PASSES AS HOME_PASSES, 
-                msh.KIT_COLOR AS HOME_KIT, msh.FORMATION AS HOME_FORMATION, msh.YELLOW_CARDS AS HOME_YELLOW,
+                msh.POSSESSION AS HOME_POSS, msh.TOTAL_PASSES AS HOME_PASSES, msh.FORMATION AS HOME_FORMATION,
+                fp_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, -- Her lander de!
                 sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES,
-                msa.POSSESSION AS AWAY_POSS, msa.TOTAL_PASSES AS AWAY_PASSES, 
-                msa.KIT_COLOR AS AWAY_KIT, msa.FORMATION AS AWAY_FORMATION, msa.YELLOW_CARDS AS AWAY_YELLOW
+                msa.POSSESSION AS AWAY_POSS, msa.TOTAL_PASSES AS AWAY_PASSES, msa.FORMATION AS AWAY_FORMATION,
+                fp_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES -- Og her!
             FROM MatchBase b
             LEFT JOIN ExpectedGoalsPivot sh ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID
             LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID
             LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID
             LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID
+            LEFT JOIN ForwardPassesPivot fp_h ON b.MATCH_OPTAUUID = fp_h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = fp_h.EVENT_CONTESTANT_OPTAUUID
+            LEFT JOIN ForwardPassesPivot fp_a ON b.MATCH_OPTAUUID = fp_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = fp_a.EVENT_CONTESTANT_OPTAUUID
             ORDER BY b.MATCH_DATE_FULL DESC
         """,
 
