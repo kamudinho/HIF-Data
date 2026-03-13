@@ -13,19 +13,27 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
 
-    # Central subquery til genbrug for at sikre performance
+    # Central subquery til genbrug
     match_id_subquery = f"""
         SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
-    # Filtre til HIF-specifikke visninger
-    hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
+    # --- RETTEDE FILTRE ---
+    # Filter til MATCHINFO (hvor der er både Home og Away kolonner)
+    hif_filter_matchinfo = f"AND (CONTESTANTHOME_OPTAUUID = '{HIF_UUID}' OR CONTESTANTAWAY_OPTAUUID = '{HIF_UUID}')" if hif_only else ""
+    
+    # Filter til statistiktabeler (hvor der er én række pr. hold)
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    
+    # Filter til event-tabeller
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
+    
+    # Filter til linebreak-tabeller
+    hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
-        # 1. TEAM STATS MASTER QUERY (Til dit kamp-layout med xG, Possession, Skud, mm.)
+        # 1. TEAM STATS MASTER QUERY
         "opta_team_stats": f"""
             WITH MatchBase AS (
                 SELECT 
@@ -35,6 +43,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
                 FROM {DB}.OPTA_MATCHINFO
                 WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+                {hif_filter_matchinfo}
             ),
             ExpectedGoalsPivot AS (
                 SELECT 
@@ -60,11 +69,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             )
             SELECT 
                 b.*,
-                -- Hjemmehold Data
                 sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES,
                 msh.POSSESSION AS HOME_POSS, msh.TOTAL_PASSES AS HOME_PASSES, 
                 msh.KIT_COLOR AS HOME_KIT, msh.FORMATION AS HOME_FORMATION, msh.YELLOW_CARDS AS HOME_YELLOW,
-                -- Udehold Data
                 sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES,
                 msa.POSSESSION AS AWAY_POSS, msa.TOTAL_PASSES AS AWAY_PASSES, 
                 msa.KIT_COLOR AS AWAY_KIT, msa.FORMATION AS AWAY_FORMATION, msa.YELLOW_CARDS AS AWAY_YELLOW
@@ -76,13 +83,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY b.MATCH_DATE_FULL DESC
         """,
 
-        # 2. MATCH INFO
+        # 2. MATCH INFO (Rettet filter her)
         "opta_matches": f"""
             SELECT * FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            {hif_filter_matchinfo}
         """,
 
-        # 3. DETALJERET XG (Spillerniveau)
+        # 3. DETALJERET XG
         "opta_expected_goals": f"""
             SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS
             WHERE MATCH_ID IN ({match_id_subquery})
@@ -153,7 +161,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             {hif_filter_lb}
         """,
 
-        # 8. RAW EVENTS (Til Heatmaps etc.)
+        # 8. RAW EVENTS
         "opta_events": f"""
             SELECT 
                 EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
