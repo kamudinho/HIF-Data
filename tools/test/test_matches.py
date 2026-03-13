@@ -116,47 +116,60 @@ def vis_side(dp):
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:5px;'>{a_name}<br><span class='formation-text'>{a_form}</span></div>", unsafe_allow_html=True)
 
                 if spillet:
-                    st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
-                    
-                    h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
-                    a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
-
-                    # KONFIGURATION AF STATS (Her tilføjer vi Progressive/Forward Passes)
-                    stats_config = [
-                        ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", True),
-                        ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", False, "%"),
-                        ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", False),
-                        ("HOME_TOUCHES", "AWAY_TOUCHES", "Berøringer i feltet", False),
-                        ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False),
-                        ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede afleveringer", False)
-                    ]
-
-                    for h_col, a_col, label, is_float, *suffix_list in stats_config:
-                        suffix = suffix_list[0] if suffix_list else ""
-                        h_val, a_val = safe_val(row.get(h_col), is_float), safe_val(row.get(a_col), is_float)
-                        
-                        # Hvis kolonnen ikke findes i data endnu, springer vi den over så appen ikke fejler
-                        if h_col not in row and a_col not in row:
-                            continue
-
-                        h_str = f"{h_val:.2f}{suffix}" if is_float else f"{int(h_val)}{suffix}"
-                        a_str = f"{a_val:.2f}{suffix}" if is_float else f"{int(a_val)}{suffix}"
-                        total = h_val + a_val
-                        h_pct = (h_val / total * 100) if total > 0 else 50
+                st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                 
-                        st.markdown(f"""
-                            <div style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
-                                    <span style="font-weight: 800;">{h_str}</span>
-                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600;">{label}</span>
-                                    <span style="font-weight: 800;">{a_str}</span>
-                                </div>
-                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
-                                    <div style="width: {h_pct}%; background-color: {h_color};"></div>
-                                    <div style="width: {100-h_pct}%; background-color: {a_color};"></div>
-                                </div>
+                # Farvelogik: Valgt hold får sin farve, modstander får grå
+                h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
+                a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
+            
+                # KONFIGURATION AF STATS I DIN ØNSKEDE RÆKKEFØLGE
+                # Format: (Home_Col, Away_Col, Label, Antal_Decimaler, Suffix)
+                stats_config = [
+                    ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
+                    ("HOME_TOUCHES", "AWAY_TOUCHES", "Berøringer i feltet", 0, ""),
+                    ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", 0, ""),
+                    ("HOME_XG", "AWAY_XG", "xG", 2, ""),
+                    ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", 0, ""),
+                    ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede afleveringer", 0, "")
+                ]
+            
+                for h_col, a_col, label, decimals, suffix in stats_config:
+                    # Hent rå værdier
+                    h_val_raw = row.get(h_col)
+                    a_val_raw = row.get(a_col)
+                    
+                    # Konverter til tal
+                    h_val = safe_val(h_val_raw, is_float=(decimals > 0))
+                    a_val = safe_val(a_val_raw, is_float=(decimals > 0))
+            
+                    # Formatering af tekstvisning baseret på ønskede decimaler
+                    if decimals == 0:
+                        h_str = f"{int(h_val)}{suffix}"
+                        a_str = f"{int(a_val)}{suffix}"
+                    elif decimals == 1:
+                        h_str = f"{h_val:.1f}{suffix}"
+                        a_str = f"{a_val:.1f}{suffix}"
+                    else:
+                        h_str = f"{h_val:.2f}{suffix}"
+                        a_str = f"{a_val:.2f}{suffix}"
+            
+                    # Beregn procenter til bar-visning
+                    total = h_val + a_val
+                    h_pct = (h_val / total * 100) if total > 0 else 50
+            
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                                <span style="font-weight: 800;">{h_str}</span>
+                                <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">{label}</span>
+                                <span style="font-weight: 800;">{a_str}</span>
                             </div>
-                        """, unsafe_allow_html=True)
+                            <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
+                                <div style="width: {h_pct}%; background-color: {h_color}; transition: width 0.6s ease-in-out;"></div>
+                                <div style="width: {100-h_pct}%; background-color: {a_color}; transition: width 0.6s ease-in-out;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
     # --- 6. TABS ---
     t1, t2 = st.tabs(["RESULTATER", "KOMMENDE"])
