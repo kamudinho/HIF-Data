@@ -39,12 +39,12 @@ def vis_side(dp):
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px; border-bottom: 3px solid #cc0000; }
-        .stat-label { font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; }
+        .stat-label { font-size: 14px; color: #666; text-transform: uppercase; font-weight: 600; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; }
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
         .time-pill { background: #ffffff; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 12px; font-weight: 800; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .formation-text { font-size: 10px; color: #666; font-weight: 600; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .formation-text { font-size: 12px; color: #666; font-weight: 600; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
         </style>
     """, unsafe_allow_html=True)
 
