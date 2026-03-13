@@ -11,10 +11,8 @@ def vis_side(dp):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # Standardiser kolonnenavne til UPPERCASE
     df_matches.columns = [c.upper() for c in df_matches.columns]
     
-    # Rens ID'er for at sikre match
     for col in ['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         if col in df_matches.columns:
             df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
@@ -22,11 +20,17 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
 
-    maaned_map = {
-        "Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", 
-        "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", 
-        "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"
-    }
+    # Hjælpefunktion til at sikre HEX-farver fra Opta-tekst
+    def get_hex_color(color_val, team_name):
+        color_map = {
+            "red": "#cc0000", "white": "#ffffff", "blue": "#0000ff", 
+            "green": "#008000", "yellow": "#ffff00", "black": "#000000",
+            "navy": "#000080", "darkblue": "#00008b", "maroon": "#800000"
+        }
+        c = str(color_val).lower().strip()
+        if c.startswith('#'): return c
+        # Returner fra map, eller brug din TEAM_COLORS mapping, eller fallback til mørkegrå
+        return color_map.get(c, TEAM_COLORS.get(team_name, "#444444"))
 
     def safe_val(val, is_float=False):
         try:
@@ -43,7 +47,7 @@ def vis_side(dp):
         .stat-val { font-weight: 800; font-size: 16px; color: #111; }
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .time-pill { background: #eee; color: #333; border: 1px solid #ccc; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
+        .time-pill { background: #ffffff; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 12px; font-weight: 800; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
         .formation-text { font-size: 10px; color: #888; font-weight: normal; margin-top: 2px; text-transform: uppercase; }
         </style>
     """, unsafe_allow_html=True)
@@ -79,9 +83,9 @@ def vis_side(dp):
 
     # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, spillet):
+        maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
+        
         for _, row in df_list.iterrows():
-            m_uuid = str(row.get('MATCH_OPTAUUID', '')).strip().upper()
-            
             try:
                 dt = pd.to_datetime(row.get('MATCH_DATE_FULL'))
                 dato_str = f"{dt.day}. {maaned_map.get(dt.strftime('%b'), dt.strftime('%b').upper())} {dt.year}"
@@ -92,31 +96,28 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
-                h_uuid = row.get('CONTESTANTHOME_OPTAUUID')
-                a_uuid = row.get('CONTESTANTAWAY_OPTAUUID')
-                h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
-                a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
+                h_name = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
+                a_name = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
 
-                # Venstre Side (Hjemmehold)
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{row.get('HOME_FORMATION','')}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
-                # Midte (Score/Tid)
                 if spillet:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row.get('TOTAL_HOME_SCORE'))} - {safe_val(row.get('TOTAL_AWAY_SCORE'))}</span></div>", unsafe_allow_html=True)
                 else:
-                    tid = str(row.get('MATCH_LOCALTIME', ''))[:5]
-                    c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
+                    # RETTELSE: Robust tidshåndtering
+                    try:
+                        time_val = row.get('MATCH_LOCALTIME')
+                        tid_str = pd.to_datetime(time_val).strftime('%H:%M') if pd.notnull(time_val) else "TBA"
+                    except: tid_str = str(row.get('MATCH_LOCALTIME'))[:5]
+                    c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid_str}</span></div>", unsafe_allow_html=True)
 
-                # Højre Side (Udehold)
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:5px;'>{a_name}<br><span class='formation-text'>{row.get('AWAY_FORMATION','')}</span></div>", unsafe_allow_html=True)
 
-                # --- STATS SEKTION ---
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     
-                    # Definer hvad der skal tegnes ud fra den nye Master Query
                     stats_config = [
                         ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", True),
                         ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", False, "%"),
@@ -125,15 +126,17 @@ def vis_side(dp):
                         ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False)
                     ]
 
-                    # Brug kit-farver fra SQL eller fallback til team_mapping
-                    h_color = row.get('HOME_KIT') if row.get('HOME_KIT') else TEAM_COLORS.get(h_name, "#cc0000")
-                    a_color = row.get('AWAY_KIT') if row.get('AWAY_KIT') else "#222222"
+                    # RETTELSE: Farverne bliver nu vasket gennem get_hex_color
+                    h_color = get_hex_color(row.get('HOME_KIT'), h_name)
+                    a_color = get_hex_color(row.get('AWAY_KIT'), a_name)
+                    
+                    # Hvis udeholdet også er hvidt, så giv det en kontrast-farve
+                    if a_color.lower() in ["#ffffff", "white"] and h_color.lower() in ["#ffffff", "white"]:
+                        a_color = "#222222"
 
                     for h_col, a_col, label, is_float, *suffix_list in stats_config:
                         suffix = suffix_list[0] if suffix_list else ""
-                        h_val = safe_val(row.get(h_col), is_float)
-                        a_val = safe_val(row.get(a_col), is_float)
-                        
+                        h_val, a_val = safe_val(row.get(h_col), is_float), safe_val(row.get(a_col), is_float)
                         h_str = f"{h_val:.2f}{suffix}" if is_float else f"{int(h_val)}{suffix}"
                         a_str = f"{a_val:.2f}{suffix}" if is_float else f"{int(a_val)}{suffix}"
 
@@ -144,12 +147,12 @@ def vis_side(dp):
                             <div style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
                                     <span style="font-weight: 800;">{h_str}</span>
-                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing:0.5px;">{label}</span>
+                                    <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600;">{label}</span>
                                     <span style="font-weight: 800;">{a_str}</span>
                                 </div>
-                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
-                                    <div style="width: {h_pct}%; background-color: {h_color}; transition: width 0.5s;"></div>
-                                    <div style="width: {100-h_pct}%; background-color: {a_color}; transition: width 0.5s;"></div>
+                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden; border: 1px solid #eee;">
+                                    <div style="width: {h_pct}%; background-color: {h_color};"></div>
+                                    <div style="width: {100-h_pct}%; background-color: {a_color};"></div>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
