@@ -20,21 +20,6 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
-    # --- HJÆLPEFUNKTIONER ---
-    def get_team_color(team_name):
-        """Henter primær farve fra din team_mapping.py"""
-        color_data = TEAM_COLORS.get(team_name, {})
-        if isinstance(color_data, dict):
-            return color_data.get("primary", "#444444")
-        return "#444444"
-
-    def safe_val(val, is_float=False):
-        try:
-            v = pd.to_numeric(val, errors='coerce')
-            if pd.isna(v): return 0.0 if is_float else 0
-            return float(v) if is_float else int(v)
-        except: return 0
-
     # --- 2. CSS STYLING ---
     st.markdown("""
         <style>
@@ -58,6 +43,14 @@ def vis_side(dp):
         hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
+
+    # --- HJÆLPEFUNKTIONER ---
+    def safe_val(val, is_float=False):
+        try:
+            v = pd.to_numeric(val, errors='coerce')
+            if pd.isna(v): return 0.0 if is_float else 0
+            return float(v) if is_float else int(v)
+        except: return 0
 
     # --- 4. FILTRERING OG OPSUMMERING ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
@@ -92,8 +85,10 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
-                h_name = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
-                a_name = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
+                h_uuid = row.get('CONTESTANTHOME_OPTAUUID')
+                a_uuid = row.get('CONTESTANTAWAY_OPTAUUID')
+                h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
+                a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{row.get('HOME_FORMATION','')}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
@@ -101,14 +96,11 @@ def vis_side(dp):
                 if spillet:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row.get('TOTAL_HOME_SCORE'))} - {safe_val(row.get('TOTAL_AWAY_SCORE'))}</span></div>", unsafe_allow_html=True)
                 else:
-                    # FIX: Kamptidspunkt (robustos-metode)
                     match_time = row.get('MATCH_LOCALTIME')
                     try:
-                        # Håndterer både datetime objekter og strenge
                         tid_str = pd.to_datetime(match_time).strftime('%H:%M') if pd.notnull(match_time) else "TBA"
                     except:
                         tid_str = str(match_time)[:5] if match_time else "TBA"
-                    
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid_str}</span></div>", unsafe_allow_html=True)
 
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
@@ -117,6 +109,10 @@ def vis_side(dp):
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     
+                    # Farvelogik: Valgt hold får sin farve, modstander får grå
+                    h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
+                    a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
+
                     stats_config = [
                         ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", True),
                         ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", False, "%"),
@@ -124,14 +120,6 @@ def vis_side(dp):
                         ("HOME_TOUCHES", "AWAY_TOUCHES", "Berøringer i feltet", False),
                         ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False)
                     ]
-
-                    # BRUGER DINE NYE FARVER FRA TEAM_MAPPING.PY
-                    h_color = get_team_color(h_name)
-                    a_color = get_team_color(a_name)
-                    
-                    # Kontrast-sikring: Hvis begge er hvide (f.eks. Kolding mod Hvidovre)
-                    if h_color.lower() in ["#ffffff", "#fff"] and a_color.lower() in ["#ffffff", "#fff"]:
-                        a_color = "#222222"
 
                     for h_col, a_col, label, is_float, *suffix_list in stats_config:
                         suffix = suffix_list[0] if suffix_list else ""
@@ -149,7 +137,7 @@ def vis_side(dp):
                                     <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600;">{label}</span>
                                     <span style="font-weight: 800;">{a_str}</span>
                                 </div>
-                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden; border: 1px solid #eee;">
+                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
                                     <div style="width: {h_pct}%; background-color: {h_color};"></div>
                                     <div style="width: {100-h_pct}%; background-color: {a_color};"></div>
                                 </div>
