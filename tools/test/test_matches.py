@@ -153,7 +153,7 @@ def vis_side(dp):
                                     <span style="color: #888; text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">{label}</span>
                                     <span style="font-weight: 800;">{a_str}</span>
                                 </div>
-                                <div style="display: flex; height: 6px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
+                                <div style="display: flex; height: 12px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">
                                     <div style="width: {h_pct}%; background-color: {h_color}; transition: width 0.6s ease-in-out;"></div>
                                     <div style="width: {100-h_pct}%; background-color: {a_color}; transition: width 0.6s ease-in-out;"></div>
                                 </div>
