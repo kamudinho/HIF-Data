@@ -14,23 +14,28 @@ def get_analysis_package(hif_only=False):
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
 
+    # Henter alle queries fra din opdaterede opta_queries.py
     queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)
     
     def safe_query(query_key):
         q = queries.get(query_key)
-        if not q: return pd.DataFrame()
+        if not q: 
+            return pd.DataFrame()
         try:
-            # Tving konvertering til DataFrame med det samme
+            # Vi udfører query mod Snowflake
             res = conn.query(q)
+            # Sikrer at vi returnerer en rigtig Pandas DataFrame
             return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
         except Exception as e:
-            st.error(f"Fejl i query '{query_key}': {e}")
+            st.error(f"Fejl i Snowflake query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # 1. Hent Snowflake data
+    # 1. Hent data fra Snowflake via de nye queries
+    # 'opta_team_stats' er nu din "Master View" med xG, Possession, Kit Colors etc.
+    df_opta_stats = safe_query("opta_team_stats")
+    
     df_matches = safe_query("opta_matches")
     df_shots = safe_query("opta_shotevents")
-    df_opta_stats = safe_query("opta_team_stats")
     df_assists = safe_query("opta_assists")
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
@@ -41,32 +46,31 @@ def get_analysis_package(hif_only=False):
     name_map = {}
     
     if df_local is not None and not df_local.empty:
-        # Vi tvinger kolonner til UPPERCASE så vi er sikre på at finde PLAYER_OPTAUUID
+        # Tvinger kolonner til UPPERCASE for konsistens
         df_local.columns = [c.upper() for c in df_local.columns]
         
-        # Opretter navne-map til hurtig opslag
-        # Vi tjekker om dine kolonnenavne i CSV er PLAYER_NAME eller NAVN
+        # Opretter navne-map (ID -> Navn) til brug i visualiseringer
         navn_col = 'PLAYER_NAME' if 'PLAYER_NAME' in df_local.columns else 'NAVN'
         
         if 'PLAYER_OPTAUUID' in df_local.columns:
-            # Lav mapping: {uuid: navn}
             name_map = dict(zip(
                 df_local['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower(), 
                 df_local[navn_col].astype(str).str.strip()
             ))
 
-    # 3. Returnér pakken til vis_side()
+    # 3. Returnér den samlede pakke
+    # Denne struktur skal matche det, din 'vis_side()' forventer
     return {
         "matches": df_matches,
         "playerstats": df_shots,
         "xg_agg": df_xg_agg,
         "assists": df_assists,
         "name_map": name_map,
-        "local_players": df_local, # Vigtigt: Dette matcher nøglen i din vis_side()
+        "local_players": df_local,
         "opta_player_linebreaks": df_player_linebreaks,
         "opta": {
             "matches": df_matches,
-            "team_stats": df_opta_stats,
+            "team_stats": df_opta_stats, # Her ligger din Master-data til layoutet
             "team_linebreaks": df_team_linebreaks,
             "player_linebreaks": df_player_linebreaks
         },
