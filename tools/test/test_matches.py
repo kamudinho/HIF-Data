@@ -18,19 +18,15 @@ def vis_side(dp):
             df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
     config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
+    valgt_liga_global = config.get("liga_navn", "1. Division")
 
-    # Hjælpefunktion til at sikre HEX-farver fra Opta-tekst
-    def get_hex_color(color_val, team_name):
-        color_map = {
-            "red": "#cc0000", "white": "#ffffff", "blue": "#0000ff", 
-            "green": "#008000", "yellow": "#ffff00", "black": "#000000",
-            "navy": "#000080", "darkblue": "#00008b", "maroon": "#800000"
-        }
-        c = str(color_val).lower().strip()
-        if c.startswith('#'): return c
-        # Returner fra map, eller brug din TEAM_COLORS mapping, eller fallback til mørkegrå
-        return color_map.get(c, TEAM_COLORS.get(team_name, "#444444"))
+    # --- HJÆLPEFUNKTIONER ---
+    def get_team_color(team_name):
+        """Henter primær farve fra din team_mapping.py"""
+        color_data = TEAM_COLORS.get(team_name, {})
+        if isinstance(color_data, dict):
+            return color_data.get("primary", "#444444")
+        return "#444444"
 
     def safe_val(val, is_float=False):
         try:
@@ -105,11 +101,14 @@ def vis_side(dp):
                 if spillet:
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{safe_val(row.get('TOTAL_HOME_SCORE'))} - {safe_val(row.get('TOTAL_AWAY_SCORE'))}</span></div>", unsafe_allow_html=True)
                 else:
-                    # RETTELSE: Robust tidshåndtering
+                    # FIX: Kamptidspunkt (robustos-metode)
+                    match_time = row.get('MATCH_LOCALTIME')
                     try:
-                        time_val = row.get('MATCH_LOCALTIME')
-                        tid_str = pd.to_datetime(time_val).strftime('%H:%M') if pd.notnull(time_val) else "TBA"
-                    except: tid_str = str(row.get('MATCH_LOCALTIME'))[:5]
+                        # Håndterer både datetime objekter og strenge
+                        tid_str = pd.to_datetime(match_time).strftime('%H:%M') if pd.notnull(match_time) else "TBA"
+                    except:
+                        tid_str = str(match_time)[:5] if match_time else "TBA"
+                    
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid_str}</span></div>", unsafe_allow_html=True)
 
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
@@ -126,12 +125,12 @@ def vis_side(dp):
                         ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False)
                     ]
 
-                    # RETTELSE: Farverne bliver nu vasket gennem get_hex_color
-                    h_color = get_hex_color(row.get('HOME_KIT'), h_name)
-                    a_color = get_hex_color(row.get('AWAY_KIT'), a_name)
+                    # BRUGER DINE NYE FARVER FRA TEAM_MAPPING.PY
+                    h_color = get_team_color(h_name)
+                    a_color = get_team_color(a_name)
                     
-                    # Hvis udeholdet også er hvidt, så giv det en kontrast-farve
-                    if a_color.lower() in ["#ffffff", "white"] and h_color.lower() in ["#ffffff", "white"]:
+                    # Kontrast-sikring: Hvis begge er hvide (f.eks. Kolding mod Hvidovre)
+                    if h_color.lower() in ["#ffffff", "#fff"] and a_color.lower() in ["#ffffff", "#fff"]:
                         a_color = "#222222"
 
                     for h_col, a_col, label, is_float, *suffix_list in stats_config:
