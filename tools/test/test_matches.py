@@ -29,7 +29,7 @@ def vis_side(dp):
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
         .time-pill { background: #ffffff; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 12px; font-weight: 800; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .formation-text { font-size: 10px; color: #888; font-weight: normal; margin-top: 2px; text-transform: uppercase; }
+        .formation-text { font-size: 10px; color: #666; font-weight: 600; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -44,7 +44,6 @@ def vis_side(dp):
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
-    # --- HJÆLPEFUNKTIONER ---
     def safe_val(val, is_float=False):
         try:
             v = pd.to_numeric(val, errors='coerce')
@@ -90,7 +89,11 @@ def vis_side(dp):
                 h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
                 a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
-                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{row.get('HOME_FORMATION','')}</span></div>", unsafe_allow_html=True)
+                # --- Formation Logik ---
+                h_form = f"Formation: {row.get('HOME_FORMATION')}" if row.get('HOME_FORMATION') else ""
+                a_form = f"Formation: {row.get('AWAY_FORMATION')}" if row.get('AWAY_FORMATION') else ""
+
+                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{h_form}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
 
                 if spillet:
@@ -99,12 +102,11 @@ def vis_side(dp):
                     match_time = row.get('MATCH_LOCALTIME')
                     try:
                         tid_str = pd.to_datetime(match_time).strftime('%H:%M') if pd.notnull(match_time) else "TBA"
-                    except:
-                        tid_str = str(match_time)[:5] if match_time else "TBA"
+                    except: tid_str = "TBA"
                     c3.markdown(f"<div style='text-align:center;'><span class='time-pill'>{tid_str}</span></div>", unsafe_allow_html=True)
 
                 c4.image(TEAMS.get(a_name, {}).get('logo', ''), width=35)
-                c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:5px;'>{a_name}<br><span class='formation-text'>{row.get('AWAY_FORMATION','')}</span></div>", unsafe_allow_html=True)
+                c5.markdown(f"<div style='text-align:left; font-weight:bold; padding-top:5px;'>{a_name}<br><span class='formation-text'>{a_form}</span></div>", unsafe_allow_html=True)
 
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
