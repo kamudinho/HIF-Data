@@ -20,6 +20,22 @@ def vis_side(dp):
     config = dp.get("config", {})
     valgt_liga_global = config.get("liga_navn", "1. Division")
 
+    # --- HJÆLPEFUNKTIONER ---
+    def format_formation(f_val):
+        """Omdanner 433 til 4-3-3 eller 352 til 3-5-2"""
+        if not f_val: return ""
+        f_str = str(int(f_val)) if isinstance(f_val, (int, float)) else str(f_val).strip()
+        if len(f_str) >= 3:
+            return "-".join(list(f_str))
+        return f_str
+
+    def safe_val(val, is_float=False):
+        try:
+            v = pd.to_numeric(val, errors='coerce')
+            if pd.isna(v): return 0.0 if is_float else 0
+            return float(v) if is_float else int(v)
+        except: return 0
+
     # --- 2. CSS STYLING ---
     st.markdown("""
         <style>
@@ -43,13 +59,6 @@ def vis_side(dp):
         hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
-
-    def safe_val(val, is_float=False):
-        try:
-            v = pd.to_numeric(val, errors='coerce')
-            if pd.isna(v): return 0.0 if is_float else 0
-            return float(v) if is_float else int(v)
-        except: return 0
 
     # --- 4. FILTRERING OG OPSUMMERING ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
@@ -89,9 +98,11 @@ def vis_side(dp):
                 h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
                 a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
-                # --- Formation Logik ---
-                h_form = f"Formation: {row.get('HOME_FORMATION')}" if row.get('HOME_FORMATION') else ""
-                a_form = f"Formation: {row.get('AWAY_FORMATION')}" if row.get('AWAY_FORMATION') else ""
+                # FORMATIONER MED BINDESTREGER
+                h_form_raw = format_formation(row.get('HOME_FORMATION'))
+                a_form_raw = format_formation(row.get('AWAY_FORMATION'))
+                h_form = f"Formation: {h_form_raw}" if h_form_raw else ""
+                a_form = f"Formation: {a_form_raw}" if a_form_raw else ""
 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{h_form}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
@@ -111,7 +122,6 @@ def vis_side(dp):
                 if spillet:
                     st.markdown("<hr style='margin:10px 0; opacity:0.1;'>", unsafe_allow_html=True)
                     
-                    # Farvelogik: Valgt hold får sin farve, modstander får grå
                     h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
                     a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
 
