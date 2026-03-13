@@ -22,7 +22,6 @@ def vis_side(dp):
 
     # --- HJÆLPEFUNKTIONER ---
     def format_formation(f_val):
-        """Omdanner 433 til 4-3-3 eller 352 til 3-5-2"""
         if not f_val: return ""
         f_str = str(int(f_val)) if isinstance(f_val, (int, float)) else str(f_val).strip()
         if len(f_str) >= 3:
@@ -98,11 +97,8 @@ def vis_side(dp):
                 h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
                 a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
 
-                # FORMATIONER MED BINDESTREGER
-                h_form_raw = format_formation(row.get('HOME_FORMATION'))
-                a_form_raw = format_formation(row.get('AWAY_FORMATION'))
-                h_form = f"Formation: {h_form_raw}" if h_form_raw else ""
-                a_form = f"Formation: {a_form_raw}" if a_form_raw else ""
+                h_form = f"Formation: {format_formation(row.get('HOME_FORMATION'))}" if row.get('HOME_FORMATION') else ""
+                a_form = f"Formation: {format_formation(row.get('AWAY_FORMATION'))}" if row.get('AWAY_FORMATION') else ""
 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:5px;'>{h_name}<br><span class='formation-text'>{h_form}</span></div>", unsafe_allow_html=True)
                 c2.image(TEAMS.get(h_name, {}).get('logo', ''), width=35)
@@ -125,20 +121,26 @@ def vis_side(dp):
                     h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
                     a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
 
+                    # KONFIGURATION AF STATS (Her tilføjer vi Progressive/Forward Passes)
                     stats_config = [
                         ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", True),
                         ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", False, "%"),
                         ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", False),
                         ("HOME_TOUCHES", "AWAY_TOUCHES", "Berøringer i feltet", False),
-                        ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False)
+                        ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", False),
+                        ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede afleveringer", False)
                     ]
 
                     for h_col, a_col, label, is_float, *suffix_list in stats_config:
                         suffix = suffix_list[0] if suffix_list else ""
                         h_val, a_val = safe_val(row.get(h_col), is_float), safe_val(row.get(a_col), is_float)
+                        
+                        # Hvis kolonnen ikke findes i data endnu, springer vi den over så appen ikke fejler
+                        if h_col not in row and a_col not in row:
+                            continue
+
                         h_str = f"{h_val:.2f}{suffix}" if is_float else f"{int(h_val)}{suffix}"
                         a_str = f"{a_val:.2f}{suffix}" if is_float else f"{int(a_val)}{suffix}"
-
                         total = h_val + a_val
                         h_pct = (h_val / total * 100) if total > 0 else 50
                 
