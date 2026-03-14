@@ -208,13 +208,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Mål-fokuseret)
+        # 9. UNIVERSAL SEQUENCE MAP (Tilpasset MATCHINFO)
         "opta_sequence_map": f"""
             WITH GoalSequences AS (
                 SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
                 FROM {DB}.OPTA_EVENTS e
                 WHERE e.MATCH_OPTAUUID IN ({match_id_subquery})
-                AND e.EVENT_TYPEID = 16 -- Kun sekvenser med Mål
+                AND e.EVENT_TYPEID = 16 
                 {hif_filter_event}
             )
             SELECT 
@@ -225,10 +225,10 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TYPEID,
                 e.EVENT_X,
                 e.EVENT_Y,
-                m.HOME_TEAM_NAME,
-                m.AWAY_TEAM_NAME,
-                m.HOME_TEAM_SCORE as HOME_SCORE,
-                m.AWAY_TEAM_SCORE as AWAY_SCORE
+                m.CONTESTANTHOME_NAME as HOME_TEAM,
+                m.CONTESTANTAWAY_NAME as AWAY_TEAM,
+                m.FT_HOME_SCORE as HOME_SCORE,
+                m.FT_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             INNER JOIN GoalSequences gs ON e.SEQUENCEID = gs.SEQUENCEID 
                 AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
