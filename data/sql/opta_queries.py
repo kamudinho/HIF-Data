@@ -257,3 +257,4 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
+        }
