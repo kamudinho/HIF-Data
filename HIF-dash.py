@@ -156,11 +156,11 @@ try:
         elif hoved_omraade == "SCOUTING":
             if sel == "Scoutrapport":
                 import tools.scout_input as si
-                si.vis_side(dp)
+                si.scouting.vis_side(dp)
             elif sel == "Database":
                 import tools.scouting.scout_db as sdb
                 # Vi sender dp["scout_reports"] som det første argument
-                sdb.vis_side(
+                sdb.scouting.vis_side(
                     dp["scout_reports"], 
                     dp["players"], 
                     dp["sql_players"], 
@@ -169,7 +169,7 @@ try:
             elif sel == "Sammenligning":
                 import tools.comparison as comp
                 # Nu sender vi de rigtige data-pakker med:
-                comp.vis_side(
+                comp.scouting.vis_side(
                     dp["players"],      # df_spillere
                     None,               # d1 (ikke brugt pt)
                     None,               # d2 (ikke brugt pt)
@@ -191,27 +191,27 @@ try:
         if hoved_omraade == "HIF ANALYSE":
             if sel == "Afslutninger":
                 import tools.shotmap as sm
-                sm.vis_side(dp)
+                sm.hifanalyse.vis_side(dp)
             elif sel == "Spillerperformance": # Tilføj denne blok
                 import tools.player_analysis as pa
-                pa.vis_side(dp)
+                pa.hifanalyse.vis_side(dp)
             elif sel == "Assistmap": # Tilføj denne blok
                 import tools.assistmap as am
-                am.vis_side(dp)
+                am.hifanalyse.vis_side(dp)
             elif sel == "Modstanderanalyse": # Tilføj denne blok
                 import tools.modstanderanalyse as ma
-                ma.vis_side(dp)
+                ma.hifanalyse.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
                 import tools.test.test_teams as tt
-                tt.vis_side(dp)
+                tt.ligaen.vis_side(dp)
             elif sel == "Kampe":
                 import tools.test.test_matches as tm
-                tm.vis_side(dp)
+                tm.ligaen.vis_side(dp)
             elif sel == "Charts":
                 import tools.chart as pc
-                pc.vis_side(dp)
+                pc.ligaen.vis_side(dp)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
