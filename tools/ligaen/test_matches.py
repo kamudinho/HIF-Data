@@ -35,32 +35,7 @@ def vis_side(dp):
             return float(v) if is_float else int(v)
         except: return 0
 
-    # --- 2. CSS STYLING (Inkl. Sticky Header) ---
-    st.markdown("""
-        <style>
-        /* Sticky Header Effekt */
-        [data-testid="stVerticalBlock"] > div:has(div.sticky-anchor) {
-            position: sticky;
-            top: 2.8rem;
-            z-index: 1000;
-            background: white;
-            padding: 10px 0;
-            border-bottom: 2px solid #eee;
-        }
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px; border-bottom: 3px solid #cc0000; }
-        .stat-label { font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; }
-        .stat-val { font-weight: 800; font-size: 16px; color: #111; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 25px; border-left: 5px solid #cc0000; color: #333; }
-        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .time-pill { background: #ffffff; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 12px; font-weight: 800; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
-        .formation-text { font-size: 10px; color: #666; font-weight: 600; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
-        
-        /* Gennemsnits-bokse */
-        .avg-container { text-align: center; background: #ffffff; border-radius: 6px; padding: 4px; border: 1px solid #eee; }
-        .avg-label { font-size: 9px; color: #999; font-weight: 600; text-transform: uppercase; }
-        .avg-val { font-weight: 700; font-size: 13px; color: #333; }
-        </style>
-    """, unsafe_allow_html=True)
+    
 
     # --- 3. LOGIK & BEREGNINGER ---
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
