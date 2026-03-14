@@ -11,7 +11,9 @@ def vis_side(dp):
         return
 
     df_matches.columns = [c.upper() for c in df_matches.columns]
-    for col in ['MATCH_OPTAUUID', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
+    
+    # Rens UUIDs
+    for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         if col in df_matches.columns:
             df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
@@ -22,69 +24,58 @@ def vis_side(dp):
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 2. CSS STYLING ---
+    # --- 2. CSS STYLING (Uden sticky for at undgå at det forsvinder) ---
     st.markdown("""
         <style>
-        div[data-testid="stVerticalBlock"] > div:has(div.sticky-header) {
-            position: sticky;
-            top: 2.8rem;
-            z-index: 1000;
-            background-color: white;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #eee;
-        }
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 6px; border-bottom: 3px solid #cc0000; }
         .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; }
         .stat-val { font-weight: 800; font-size: 15px; color: #111; }
         .avg-container { text-align: center; background: #ffffff; border-radius: 6px; padding: 4px; border: 1px solid #eee; }
         .avg-label { font-size: 9px; color: #999; font-weight: 600; text-transform: uppercase; }
         .avg-val { font-weight: 700; font-size: 11px; color: #333; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; }
+        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
         .formation-text { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. STICKY TOP MENU ---
-    with st.container():
-        st.markdown('<div class="sticky-header"></div>', unsafe_allow_html=True)
-        
-        top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
-        with top_cols[0]:
-            valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
-            valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
+    # --- 3. TOP MENU (Holdvalg + K-S-U-N) ---
+    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    with top_cols[0]:
+        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx)
+        valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
-        team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
-        played = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
+    played = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
 
-        # Stats beregning (K-S-U-N)
-        summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-        for _, m in played.iterrows():
-            is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-            h_s, a_s = (int(m.get('TOTAL_HOME_SCORE', 0)), int(m.get('TOTAL_AWAY_SCORE', 0)))
-            summary["M+"] += h_s if is_h else a_s
-            summary["M-"] += a_s if is_h else h_s
-            if h_s == a_s: summary["U"] += 1
-            elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
-            else: summary["N"] += 1
+    # Beregn K-S-U-N
+    summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s, a_s = (int(m.get('TOTAL_HOME_SCORE', 0)), int(m.get('TOTAL_AWAY_SCORE', 0)))
+        summary["M+"] += h_s if is_h else a_s
+        summary["M-"] += a_s if is_h else h_s
+        if h_s == a_s: summary["U"] += 1
+        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
 
-        stats_disp = [("K", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
-        for i, (l, v) in enumerate(stats_disp):
-            top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
+    stats_disp = [("K", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
+        top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-        # Gennemsnit
-        avg_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
-        avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
-        avg_map = [("POSS", "Besid.", 1, "%"), ("TOUCHES", "Felt", 0, ""), ("SHOTS", "Afsl.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "Afl.", 0, ""), ("FORWARD_PASSES", "Frem", 0, "")]
-        for i, (key, label, dec, suffix) in enumerate(avg_map):
-            vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
-            avg_val = np.nanmean(vals) if vals else 0
-            fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-            avg_cols[i+2].markdown(f"<div class='avg-container'><div class='avg-label'>{label}</div><div class='avg-val'>{fmt}</div></div>", unsafe_allow_html=True)
+    # --- 4. GENNEMSNITSRÆKKE ---
+    avg_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
+    
+    avg_map = [("POSS", "Besid.", 1, "%"), ("TOUCHES", "Felt", 0, ""), ("SHOTS", "Afsl.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "Afl.", 0, ""), ("FORWARD_PASSES", "Frem", 0, "")]
+    for i, (key, label, dec, suffix) in enumerate(avg_map):
+        vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
+        avg_val = np.nanmean(vals) if vals else 0
+        fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
+        avg_cols[i+2].markdown(f"<div class='avg-container'><div class='avg-label'>{label}</div><div class='avg-val'>{fmt}</div></div>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
-
-    # --- 4. INDHOLD I TABS ---
+    # --- 5. TABS OG KAMPVISNING ---
+    tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
     with tab1:
@@ -96,17 +87,17 @@ def vis_side(dp):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 h_uuid, a_uuid = row.get('CONTESTANTHOME_OPTAUUID'), row.get('CONTESTANTAWAY_OPTAUUID')
-                h_n = opta_to_name.get(h_uuid, "Hjemme")
-                a_n = opta_to_name.get(a_uuid, "Ude")
+                h_n = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
+                a_n = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
                 
                 c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_n}</div>", unsafe_allow_html=True)
-                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=30)
+                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
-                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=30)
+                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_n}</div>", unsafe_allow_html=True)
 
                 # --- STATS BARS ---
-                st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+                st.write("") 
                 h_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
                 a_color = TEAM_COLORS.get(a_n, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
                 
@@ -153,8 +144,8 @@ def vis_side(dp):
                 h_n = opta_to_name.get(row.get('CONTESTANTHOME_OPTAUUID'), "Hjemme")
                 a_n = opta_to_name.get(row.get('CONTESTANTAWAY_OPTAUUID'), "Ude")
                 c1.markdown(f"<div style='text-align:right; font-weight:bold;'>{h_n}</div>", unsafe_allow_html=True)
-                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=30)
+                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
                 tid = pd.to_datetime(row.get('MATCH_LOCALTIME')).strftime('%H:%M') if pd.notnull(row.get('MATCH_LOCALTIME')) else 'TBA'
-                c3.markdown(f"<div style='text-align:center; font-weight:bold; color:red; border:1px solid red; border-radius:4px;'>{tid}</div>", unsafe_allow_html=True)
-                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=30)
+                c3.markdown(f"<div style='text-align:center; font-weight:bold; color:#cc0000; border:2px solid #cc0000; border-radius:4px; padding:4px;'>{tid}</div>", unsafe_allow_html=True)
+                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
                 c5.markdown(f"<div style='text-align:left; font-weight:bold;'>{a_n}</div>", unsafe_allow_html=True)
