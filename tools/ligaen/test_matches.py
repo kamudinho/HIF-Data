@@ -40,9 +40,9 @@ def vis_side(dp):
     """, unsafe_allow_html=True)
 
     # --- 3. TOP MENU (Holdvalg + K-S-U-N) ---
-    top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    top_cols = st.columns([2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
-        valgt_navn = st.selectbox(h_list, index=hif_idx)
+        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx)
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
@@ -64,7 +64,7 @@ def vis_side(dp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
     # --- 4. GENNEMSNITSRÆKKE ---
-    avg_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    avg_cols = st.columns([2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
     
     avg_map = [("POSS", "Besid.", 1, "%"), ("TOUCHES", "Felt", 0, ""), ("SHOTS", "Afsl.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "Afl.", 0, ""), ("FORWARD_PASSES", "Frem", 0, "")]
