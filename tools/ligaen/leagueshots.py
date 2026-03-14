@@ -14,7 +14,6 @@ DZ_COLOR = '#1f77b4'
 def vis_side(dp):
     # 1. DATA SETUP
     opta_data = dp.get('opta', {})
-    logo_map = dp.get("logo_map", {})
     df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
     if df_all.empty:
@@ -33,11 +32,6 @@ def vis_side(dp):
             .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
             .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
             .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
-            .hif-table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }}
-            .hif-table th {{ background: #eee; padding: 10px; border-bottom: 2px solid #ccc; }}
-            .hif-table td {{ padding: 8px; border-bottom: 1px solid #eee; text-align: center; vertical-align: middle; }}
-            .bar-container {{ background: #eee; width: 100%; height: 8px; border-radius: 4px; margin-top: 4px; }}
-            .bar-fill {{ background: {HIF_RED}; height: 100%; border-radius: 4px; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -74,29 +68,29 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT (1:1 fra shotmap) ---
     with tabs[0]:
         stats = []
-        for p in df_all['PLAYER_NAME'].unique():
+        for p in sorted(df_all['PLAYER_NAME'].unique()):
             d = df_all[df_all['PLAYER_NAME'] == p]
-            t_uuid = str(d[col_team_uuid].iloc[0]).upper()
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
             stats.append({
-                "UUID": t_uuid, "Spiller": p, "S": s, "M": m, 
-                "xG": d['EXPECTED_GOALS_VALUE'].sum() if 'EXPECTED_GOALS_VALUE' in d.columns else 0,
-                "DZ_A": (len(dz)/s*100) if s > 0 else 0
+                "Spiller": p.split()[-1], 
+                "Skud": s, "Mål": m, 
+                "Konvertering%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": dzs, "DZ-Mål": dzm, 
+                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
-        df_f = pd.DataFrame(stats).sort_values("M", ascending=False).head(20)
-        
-        html = '<table class="hif-table"><thead><tr><th>#</th><th></th><th>Spiller</th><th>S</th><th>M</th><th>xG</th><th>DZ-Andel</th></tr></thead><tbody>'
-        for i, row in df_f.reset_index(drop=True).iterrows():
-            wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), None)
-            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
-            img = f'<img src="{l_url}" width="22">' if l_url else ""
-            bar = f'<div class="bar-container"><div class="bar-fill" style="width:{row["DZ_A"]}%;"></div></div>'
-            html += f"<tr><td>{i+1}</td><td>{img}</td><td style='text-align:left;'><b>{row['Spiller']}</b></td><td>{row['S']}</td><td style='color:{HIF_RED}; font-weight:bold;'>{row['M']}</td><td>{row['xG']:.2f}</td><td>{bar}<span style='font-size:10px;'>{int(row['DZ_A'])}%</span></td></tr>"
-        st.markdown(html + "</tbody></table>", unsafe_allow_html=True)
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False).head(100)
+        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
+                    column_config={
+                        "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
+                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
+                        "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+                    })
 
     # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
@@ -106,7 +100,7 @@ def vis_side(dp):
             u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
             df_t = df_all[df_all[col_team_uuid].str.upper() == u]
             
-            sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()))
+            sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_afsl")
             d_v = df_t if sel_p == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_p]
             
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
@@ -129,7 +123,7 @@ def vis_side(dp):
             u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
             df_t = df_all[df_all[col_team_uuid].str.upper() == u]
             
-            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="dz_sel")
+            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_dz")
             d_v = df_t if sel_dz == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_dz]
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
@@ -155,7 +149,6 @@ def vis_side(dp):
             d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
             
             plot_data = d_v[d_v['EVENT_TYPEID'] == 16] if is_m else d_v
-            total_count = len(plot_data)
             label = "Mål" if is_m else "Skud"
             
             z_counts = plot_data.groupby('Zone').size()
