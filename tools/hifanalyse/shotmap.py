@@ -59,10 +59,9 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 1: SPILLEROVERSIGT (Opdateret med logoer og DZ-stats) ---
+    ## --- TAB 1: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
-        # Vi looper gennem alle spillere i liga-datasættet
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
             t_uuid = str(d[col_team_uuid].iloc[0]).upper()
@@ -74,22 +73,29 @@ def vis_side(dp):
             
             stats.append({
                 "UUID": t_uuid,
-                "Spiller": p, # Vi beholder fulde navn her til opslag
+                "Spiller": p,
                 "S": s, 
                 "M": m, 
                 "xG": round(xg, 2),
                 "K%": (m/s*100) if s > 0 else 0,
-                "DZ-S": dzs, 
-                "DZ-M": dzm, 
-                "DZ-K%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+                "DZ_S": dzs, 
+                "DZ_M": dzm, 
+                "DZ_K": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ_Andel": (dzs/s*100) if s > 0 else 0
             })
         
-        # Sorter efter Mål (M) og tag Top 20
+        # Sorter efter mål og tag top 20
         df_f = pd.DataFrame(stats).sort_values("M", ascending=False).head(20).reset_index(drop=True)
         
-        # Opbyg HTML tabellen
-        html = f"""
+        # HTML Tabellen med direkte CSS for at sikre visning
+        html = """
+        <style>
+            .hif-table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px; }
+            .hif-table th { background: #f2f2f2; padding: 10px; border-bottom: 2px solid #ccc; text-align: center; }
+            .hif-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; vertical-align: middle; }
+            .bar-bg { background: #eee; width: 100%; height: 10px; border-radius: 5px; position: relative; }
+            .bar-fill { background: #cc0000; height: 100%; border-radius: 5px; }
+        </style>
         <table class="hif-table">
             <thead>
                 <tr>
@@ -103,38 +109,41 @@ def vis_side(dp):
                     <th>DZ-S</th>
                     <th>DZ-M</th>
                     <th>DZ-K%</th>
-                    <th>DZ-Andel</th>
+                    <th style="width:100px;">DZ-Andel</th>
                 </tr>
             </thead>
             <tbody>
         """
         
         for i, row in df_f.iterrows():
-            # Find logoet via team_mapping
+            # FIND LOGO: Her skal vi være skarpe på om det er streng eller tal
             wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), None)
-            l_url = logo_map.get(wy_id, "")
-            logo_img = f'<img src="{l_url}" width="25">' if l_url else ""
             
-            # Formatering af progress bar til DZ-Andel
-            progress_bar = f"""
-            <div style="background:#eee; width:100%; height:8px; border-radius:4px;">
-                <div style="background:{HIF_RED}; width:{row['DZ-Andel']}%; height:100%; border-radius:4px;"></div>
+            # Prøv både tal og streng i logo_map
+            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
+            img_html = f'<img src="{l_url}" width="25" style="vertical-align:middle;">' if l_url else ""
+            
+            # Lav baren manuelt
+            bar_html = f"""
+            <div class="bar-bg">
+                <div class="bar-fill" style="width: {row['DZ_Andel']}%;"></div>
             </div>
+            <span style="font-size: 10px;">{int(row['DZ_Andel'])}%</span>
             """
 
             html += f"""
                 <tr>
                     <td>{i+1}</td>
-                    <td>{logo_img}</td>
+                    <td>{img_html}</td>
                     <td style="text-align:left;"><b>{row['Spiller']}</b></td>
                     <td>{row['S']}</td>
-                    <td style="color:{HIF_RED}; font-weight:800;">{row['M']}</td>
+                    <td style="color:#cc0000; font-weight:800;">{row['M']}</td>
                     <td>{row['xG']:.2f}</td>
                     <td>{row['K%']:.1f}%</td>
-                    <td>{row['DZ-S']}</td>
-                    <td>{row['DZ-M']}</td>
-                    <td>{row['DZ-K%']:.1f}%</td>
-                    <td style="width:80px;">{progress_bar}<span style="font-size:10px;">{int(row['DZ-Andel'])}%</span></td>
+                    <td>{row['DZ_S']}</td>
+                    <td>{row['DZ_M']}</td>
+                    <td>{row['DZ_K']:.1f}%</td>
+                    <td>{bar_html}</td>
                 </tr>
             """
         
