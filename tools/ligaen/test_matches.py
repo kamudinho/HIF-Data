@@ -77,7 +77,7 @@ def vis_side(dp):
     avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
     
     # Her har jeg ændret koden til at bruge 'stat-box' for at matche over-rækken
-    avg_map = [("POSS", "POSSESSION", 1, "%"), ("TOUCHES", "BERØRINGER I FELT", 0, ""), ("SHOTS", "SKUD.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASSES.", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
+    avg_map = [("POSS", "POSSESSION", 1, "%"), ("TOUCHES", "TOUCHES I FELT", 0, ""), ("SHOTS", "SKUD", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASSES", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
         avg_val = np.nanmean(vals) if vals else 0
