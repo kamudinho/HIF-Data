@@ -25,8 +25,9 @@ def vis_side(dp):
     df_all.columns = [c.upper() for c in df_all.columns]
     col_team_uuid = 'EVENT_CONTESTANT_OPTAUUID'
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    teams_in_data = sorted([uuid_to_name[u.upper()] for u in df_all[col_team_uuid].unique() if u.upper() in uuid_to_name])
 
-    # CSS til Tabel & Design (nøjagtig kopi fra din stil)
+    # CSS Setup
     st.markdown(f"""
         <style>
             .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 10px; }}
@@ -40,33 +41,16 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. HOLD DROPDOWN (Global styring) ---
-    teams_in_data = sorted([uuid_to_name[u.upper()] for u in df_all[col_team_uuid].unique() if u.upper() in uuid_to_name])
-    valgt_hold = st.selectbox("Vælg Hold", teams_in_data)
-    
-    # Filtrer data til det valgte hold
-    hold_uuid = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == valgt_hold)
-    df_hold = df_all[df_all[col_team_uuid].str.upper() == hold_uuid].copy()
-
-    # --- 3. ZONE DEFINITIONER ---
+    # --- ZONE HELPER ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
-    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
 
     ZONE_BOUNDS = {
         "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
         "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
         "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
-        "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
-        "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
         "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
         "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
     }
 
@@ -74,38 +58,37 @@ def vis_side(dp):
         mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
         for z, b in ZONE_BOUNDS.items():
             if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]: return z
-        return "Zone 8"
+        return "Øvrige"
 
-    df_hold['Zone'] = df_hold.apply(map_to_zone, axis=1)
-    df_hold['IS_DZ'] = (df_hold['EVENT_X'] >= 88.5) & (df_hold['EVENT_Y'] >= 37.0) & (df_hold['EVENT_Y'] <= 63.0)
+    df_all['Zone'] = df_all.apply(map_to_zone, axis=1)
+    df_all['IS_DZ'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
 
-    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "AFSLUTNINGSZONER", "MÅLZONER"])
+    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "ZONER (SKUD)", "ZONER (MÅL)"])
 
-    # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT (Hele Ligaen) ---
     with tabs[0]:
         stats = []
-        for p in df_hold['PLAYER_NAME'].unique():
-            d = df_hold[df_hold['PLAYER_NAME'] == p]
+        for p in df_all['PLAYER_NAME'].unique():
+            d = df_all[df_all['PLAYER_NAME'] == p]
+            t_uuid = str(d[col_team_uuid].iloc[0]).upper()
             dz = d[d['IS_DZ']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             stats.append({
-                "Spiller": p, "S": s, "M": m, 
+                "UUID": t_uuid, "Spiller": p, "S": s, "M": m, 
                 "xG": d['EXPECTED_GOALS_VALUE'].sum() if 'EXPECTED_GOALS_VALUE' in d.columns else 0,
                 "DZ_A": (len(dz)/s*100) if s > 0 else 0
             })
         
-        df_f = pd.DataFrame(stats).sort_values("M", ascending=False)
+        df_f = pd.DataFrame(stats).sort_values("M", ascending=False).head(25)
         
-        # Tabel med logo for det valgte hold
-        wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if k == valgt_hold), None)
-        l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
-        img_html = f'<img src="{l_url}" width="25">' if l_url else ""
-
         html = '<table class="hif-table"><thead><tr><th>#</th><th></th><th>Spiller</th><th>S</th><th>M</th><th>xG</th><th>DZ-Andel</th></tr></thead><tbody>'
         for i, row in df_f.reset_index(drop=True).iterrows():
+            wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), None)
+            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
+            img = f'<img src="{l_url}" width="22">' if l_url else ""
             bar = f'<div class="bar-container"><div class="bar-fill" style="width:{row["DZ_A"]}%;"></div></div>'
             html += f"""<tr>
-                <td>{i+1}</td><td>{img_html}</td><td style="text-align:left;"><b>{row['Spiller']}</b></td>
+                <td>{i+1}</td><td>{img}</td><td style="text-align:left;"><b>{row['Spiller']}</b></td>
                 <td>{row['S']}</td><td style="color:{HIF_RED}; font-weight:bold;">{row['M']}</td>
                 <td>{row['xG']:.2f}</td><td>{bar}<span style="font-size:10px;">{int(row['DZ_A'])}%</span></td>
             </tr>"""
@@ -115,8 +98,13 @@ def vis_side(dp):
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_hold['PLAYER_NAME'].unique()), key="p_afsl")
-            d_v = df_hold if sel_p == "Hele Holdet" else df_hold[df_hold['PLAYER_NAME'] == sel_p]
+            t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_afsl")
+            u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
+            df_t = df_all[df_all[col_team_uuid].str.upper() == u]
+            
+            p_sel = st.selectbox("Vælg Spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_afsl")
+            d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
+            
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
@@ -124,15 +112,19 @@ def vis_side(dp):
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#ccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
     # --- TAB 2: DZ ANALYSE ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_dz = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_hold['PLAYER_NAME'].unique()), key="p_dz")
-            d_v = df_hold if sel_dz == "Hele Holdet" else df_hold[df_hold['PLAYER_NAME'] == sel_dz]
+            t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_dz")
+            u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
+            df_t = df_all[df_all[col_team_uuid].str.upper() == u]
+            
+            p_sel = st.selectbox("Vælg Spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_dz")
+            d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
             dz_d = d_v[d_v['IS_DZ']]
             st.metric("DZ Skud", len(dz_d))
             st.metric("DZ Mål", len(dz_d[dz_d['EVENT_TYPEID']==16]))
@@ -146,9 +138,13 @@ def vis_side(dp):
             st.pyplot(fig)
 
     # --- TAB 3 & 4: ZONER ---
-    def zone_tab(is_m, key):
-        sel_z = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_hold['PLAYER_NAME'].unique()), key=key)
-        d_v = df_hold if sel_z == "Hele Holdet" else df_hold[df_hold['PLAYER_NAME'] == sel_z]
+    def zone_tab(is_m, key_suffix):
+        t_sel = st.selectbox("Vælg Hold", teams_in_data, key=f"t_z_{key_suffix}")
+        u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
+        df_t = df_all[df_all[col_team_uuid].str.upper() == u]
+        
+        p_sel = st.selectbox("Vælg Spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key=f"p_z_{key_suffix}")
+        d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
         plot_data = d_v[d_v['EVENT_TYPEID'] == 16] if is_m else d_v
         
         col_viz, col_ctrl = st.columns([1.8, 1])
@@ -160,7 +156,6 @@ def vis_side(dp):
             max_v = z_counts.max() if not z_counts.empty else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
             for name, b in ZONE_BOUNDS.items():
-                if b["y_max"] <= 55: continue
                 cnt = z_counts.get(name, 0)
                 face = cmap(cnt/max_v) if cnt > 0 else '#f9f9f9'
                 ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=face, alpha=0.6, edgecolor='black', ls='--'))
@@ -172,5 +167,5 @@ def vis_side(dp):
             z_df.columns = ['Zone', 'Antal']
             st.dataframe(z_df.sort_values('Antal', ascending=False), hide_index=True, use_container_width=True)
 
-    with tabs[3]: zone_tab(False, "z_s_sel")
-    with tabs[4]: zone_tab(True, "z_m_sel")
+    with tabs[3]: zone_tab(False, "skud")
+    with tabs[4]: zone_tab(True, "maal")
