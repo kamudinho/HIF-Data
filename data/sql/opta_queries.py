@@ -208,14 +208,24 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Tilpasset MATCHINFO)
+        # 9. UNIVERSAL SEQUENCE MAP (Opdateret med Qualifiers og LAG-logik)
         "opta_sequence_map": f"""
-            WITH GoalSequences AS (
+            WITH MatchIDs AS (
+                {match_id_subquery}
+            ),
+            GoalSequences AS (
                 SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
                 FROM {DB}.OPTA_EVENTS e
-                WHERE e.MATCH_OPTAUUID IN ({match_id_subquery})
+                WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
                 AND e.EVENT_TYPEID = 16 
                 {hif_filter_event}
+            ),
+            EventQualifiers AS (
+                SELECT 
+                    EVENT_OPTAUUID,
+                    LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
+                FROM {DB}.OPTA_QUALIFIERS
+                GROUP BY EVENT_OPTAUUID
             )
             SELECT 
                 e.MATCH_OPTAUUID,
@@ -223,16 +233,24 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TIMESTAMP,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                e.EVENT_X,
-                e.EVENT_Y,
+                -- LAG henter positionen fra forrige aktion i sekvensen til tegning af pile
+                LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X,
+                LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y,
+                e.EVENT_X AS RAW_X,
+                e.EVENT_Y AS RAW_Y,
+                q.QUALIFIER_LIST,
                 m.CONTESTANTHOME_NAME as HOME_TEAM,
                 m.CONTESTANTAWAY_NAME as AWAY_TEAM,
-                m.FT_HOME_SCORE as HOME_SCORE,
-                m.FT_AWAY_SCORE as AWAY_SCORE
+                m.TOTAL_HOME_SCORE as HOME_SCORE,
+                m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
-            INNER JOIN GoalSequences gs ON e.SEQUENCEID = gs.SEQUENCEID 
+            INNER JOIN GoalSequences gs 
+                ON e.SEQUENCEID = gs.SEQUENCEID 
                 AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-            LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            LEFT JOIN EventQualifiers q 
+                ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN {DB}.OPTA_MATCHINFO m 
+                ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
     }
