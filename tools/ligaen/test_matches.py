@@ -42,7 +42,6 @@ def vis_side(dp):
     # --- 3. TOP MENU (Holdvalg + K-S-U-N) ---
     top_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with top_cols[0]:
-        valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx)
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
