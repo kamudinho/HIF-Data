@@ -19,15 +19,15 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    # Vi henter ligadata her i stedet for kun HIF data
+    # Vi henter ligadata (df_all)
     df_all = dp.get('league_shotevents', pd.DataFrame()).copy()
     
     if df_all.empty:
-        st.info("Ingen ligadata fundet.")
+        st.info("Ingen ligadata fundet i league_shotevents.")
         return
 
     # --- 1. HOLD DROPDOWN ---
-    # Vi finder alle unikke holdnavne
+    # Placeret helt i toppen for at styre alt data underneden
     hold_liste = sorted(df_all['TEAM_NAME'].unique())
     valgt_hold = st.selectbox("Vælg Hold", hold_liste)
 
@@ -68,7 +68,7 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
         for p in sorted(df_skud['PLAYER_NAME'].unique()):
@@ -96,6 +96,7 @@ def vis_side(dp):
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
+            # Spillerdropdown under holddropdown
             sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_skud['PLAYER_NAME'].unique()))
             d_v = df_skud if sel_p == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
@@ -117,7 +118,6 @@ def vis_side(dp):
             sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
             d_v = df_skud if sel_dz == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
             dz_d = d_v[d_v['IS_DZ_GEO']]
-            m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
