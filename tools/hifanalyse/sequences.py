@@ -8,118 +8,87 @@ from mplsoccer import Pitch
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
+def get_action_type(row):
+    """Logik til at bestemme teksten over pilen baseret på hændelsestype og qualifiers"""
+    if row['EVENT_TYPEID'] == 16: return "MÅL"
+    if row['EVENT_TYPEID'] == 13 or row['EVENT_TYPEID'] == 14: return "AFSLUTNING"
+    
+    # Her kan du udbygge med de Qualifiers du trækker fra Snowflake
+    # Dette er eksempler baseret på standard Opta IDs
+    q_id = row.get('QUALIFIER_QID') 
+    
+    if q_id == 107: return "Indkast"
+    if q_id == 6: return "Hjørnespark"
+    if q_id == 124: return "Målspark"
+    if q_id == 2: return "Indlæg"
+    if row['EVENT_TYPEID'] == 1: return "Pasning"
+    
+    return ""
+
 def vis_side(dp):
-    # --- 1. CSS STYLING (Matcher dit billede 1:1) ---
+    # CSS (Uændret fra dit design)
     st.markdown(f"""
         <style>
-            .stat-box {{ 
-                background-color: #f8f9fa; 
-                padding: 15px 20px; 
-                border-radius: 8px; 
-                border-left: 5px solid {HIF_GOLD}; 
-                margin-bottom: 12px; 
-            }}
-            .stat-label {{ 
-                font-size: 0.75rem; 
-                text-transform: uppercase; 
-                color: #666; 
-                font-weight: bold; 
-                display: flex; 
-                align-items: center; 
-                gap: 10px; 
-            }}
-            .stat-value {{ 
-                font-size: 1.8rem; 
-                font-weight: 800; 
-                color: #1a1a1a; 
-                margin-top: 5px; 
-            }}
-            .icon-circle {{ 
-                width: 12px; 
-                height: 12px; 
-                border-radius: 50%; 
-                display: inline-block; 
-                border: 1.5px solid black; 
-            }}
-            .seq-list-item {{
-                padding: 8px 0;
-                border-bottom: 1px solid #eee;
-                font-size: 0.9rem;
-            }}
+            .stat-box {{ background-color: #f8f9fa; padding: 15px 20px; border-radius: 8px; border-left: 5px solid {HIF_GOLD}; margin-bottom: 12px; }}
+            .stat-label {{ font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 10px; }}
+            .stat-value {{ font-size: 1.8rem; font-weight: 800; color: #1a1a1a; margin-top: 5px; }}
+            .icon-circle {{ width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1.5px solid black; }}
         </style>
     """, unsafe_allow_html=True)
 
     df_seq = dp['opta'].get('opta_sequence_map', pd.DataFrame()).copy()
-
     if df_seq.empty:
         st.info("Ingen sekvens-data fundet.")
         return
 
-    # Find de interessante sekvenser
     important_seq_ids = df_seq[df_seq['EVENT_TYPEID'].isin([16, 13, 14, 15])]['SEQUENCEID'].unique()
     
-    # --- LAYOUT ---
     col_viz, col_ctrl = st.columns([2, 1])
 
     with col_ctrl:
         st.write("Vælg sekvens")
-        seq_options = []
-        for sid in important_seq_ids:
-            temp = df_seq[df_seq['SEQUENCEID'] == sid]
-            is_goal = any(temp['EVENT_TYPEID'] == 16)
-            label = f"{temp.iloc[-1]['PLAYER_NAME']} ({'Mål' if is_goal else 'Afslutning'})"
-            seq_options.append({"id": sid, "label": label})
-
-        selected_seq_obj = st.selectbox("Vælg sekvens", options=seq_options, 
-                                        format_func=lambda x: x['label'], label_visibility="collapsed")
-        selected_id = selected_seq_obj['id']
+        seq_options = [{"id": sid, "label": f"{df_seq[df_seq['SEQUENCEID']==sid].iloc[-1]['PLAYER_NAME']}"} for sid in important_seq_ids]
+        selected_seq_obj = st.selectbox("Vælg sekvens", options=seq_options, format_func=lambda x: x['label'], label_visibility="collapsed")
         
-        active_seq = df_seq[df_seq['SEQUENCEID'] == selected_id].sort_values('EVENT_TIMESTAMP')
-        num_passes = len(active_seq[active_seq['EVENT_TYPEID'] == 1])
-        is_goal = any(active_seq['EVENT_TYPEID'] == 16)
-
-        # Stat-bokse præcis som på dit billede
+        active_seq = df_seq[df_seq['SEQUENCEID'] == selected_seq_obj['id']].sort_values('EVENT_TIMESTAMP')
+        
         st.markdown(f"""
             <div class="stat-box">
-                <div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Antal Aktioner</div>
+                <div class="stat-label"><span class="icon-circle" style="background-color: {HIF_GOLD};"></span>Aktioner i sekvens</div>
                 <div class="stat-value">{len(active_seq)}</div>
             </div>
-            <div class="stat-box" style="border-left-color: #888888">
-                <div class="stat-label"><span class="icon-circle" style="background-color: #888888;"></span>Afleveringer</div>
-                <div class="stat-value">{num_passes}</div>
-            </div>
         """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.caption("SEKVENS FORLØB")
-        for i, row in active_seq.iterrows():
-            st.markdown(f"<div class='seq-list-item'>{row['PLAYER_NAME']}</div>", unsafe_allow_html=True)
 
     with col_viz:
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 8))
 
-        # Tegn sekvensen
         for i in range(len(active_seq)):
             row = active_seq.iloc[i]
             
             if not pd.isna(row['NEXT_X']):
-                # Tegn pilen (Guld hvis det er oplægget til afslutningen, ellers grå/lys)
-                is_last_action = (i == len(active_seq) - 2)
-                color = HIF_GOLD if is_last_action else '#cccccc'
-                alpha = 0.9 if is_last_action else 0.4
-                
+                # 1. Tegn pilen
+                is_last = (i == len(active_seq) - 2)
+                color = HIF_GOLD if is_last else '#cccccc'
                 pitch.arrows(row['EVENT_X'], row['EVENT_Y'], row['NEXT_X'], row['NEXT_Y'], 
-                             color=color, width=2, headwidth=4, ax=ax, alpha=alpha, zorder=2)
+                             color=color, width=2, headwidth=4, ax=ax, alpha=0.8, zorder=2)
+                
+                # 2. Skriv handlingen (Indlæg, pasning osv.) midt på pilen
+                action_text = get_action_type(row)
+                if action_text:
+                    mid_x = (row['EVENT_X'] + row['NEXT_X']) / 2
+                    mid_y = (row['EVENT_Y'] + row['NEXT_Y']) / 2
+                    ax.text(mid_x, mid_y + 1.5, action_text, fontsize=6, 
+                            fontstyle='italic', color='#555555', ha='center',
+                            bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1))
             
-            # Nodes: Cirkler med sort kant (ingen ikoner)
-            # Vi bruger guld til alle involverede spillere i sekvensen
+            # 3. Nodes (Spiller cirkler)
             pitch.scatter(row['EVENT_X'], row['EVENT_Y'], s=80, color=HIF_GOLD, 
                           edgecolors='black', linewidth=1, ax=ax, zorder=3)
             
-            # Efternavn tekst
+            # Navn ved spiller
             last_name = row['PLAYER_NAME'].split(' ')[-1]
-            ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, last_name, 
-                    color='#333333', fontsize=7, fontweight='bold', ha='center')
+            ax.text(row['EVENT_X'], row['EVENT_Y'] - 2.5, last_name, 
+                    color='black', fontsize=7, fontweight='bold', ha='center')
 
         st.pyplot(fig, use_container_width=True)
