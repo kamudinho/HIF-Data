@@ -8,7 +8,7 @@ from mplsoccer import Pitch, VerticalPitch
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
-def vis_sequence_side(dp):
+def vis_side(dp):
     """
     Visualiserer angrebsforløb og 'connections' mellem spillere.
     Kræver dp['opta']['opta_sequence_map']
