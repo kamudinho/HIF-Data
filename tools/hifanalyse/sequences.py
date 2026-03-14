@@ -81,21 +81,34 @@ def vis_side(dp):
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(12, 9))
 
+        # Inde i dit loop, hvor du tegner aktionerne:
         for i in range(len(active_seq) - 1):
             curr, nxt = active_seq.iloc[i], active_seq.iloc[i+1]
+            
+            # --- NY KORREKTIONSLOGIK ---
+            # Hvis næste hændelse er et mål, og den ligger helt ude ved flaget (Y < 10 eller Y > 90)
+            # så justerer vi visningen til at pege ind mod rammen (ca. 45-55)
+            target_x = nxt['EVENT_X']
+            target_y = nxt['EVENT_Y']
+            
+            if nxt['EVENT_TYPEID'] == 16:
+                target_x = 100 # Målet er altid ved 100
+                if target_y < 30 or target_y > 70:
+                    target_y = 50 # Tving pilen ind mod midten af målet
+            # ---------------------------
+
             is_last = (i == len(active_seq) - 2)
             color = HIF_GOLD if is_last else '#cccccc'
             
-            pitch.arrows(curr['EVENT_X'], curr['EVENT_Y'], nxt['EVENT_X'], nxt['EVENT_Y'], 
+            # Tegn pilen med de korrigerede target-koordinater
+            pitch.arrows(curr['EVENT_X'], curr['EVENT_Y'], target_x, target_y, 
                          color=color, width=2, headwidth=4, ax=ax, alpha=0.8, zorder=2)
             
-            action_text = get_action_type(curr)
-            mid_x, mid_y = (curr['EVENT_X'] + nxt['EVENT_X']) / 2, (curr['EVENT_Y'] + nxt['EVENT_Y']) / 2
-            ax.text(mid_x, mid_y + 1, action_text, fontsize=6, color='#666', ha='center', va='center', 
-                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.5))
-
-            pitch.scatter(curr['EVENT_X'], curr['EVENT_Y'], s=100, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=4)
-            ax.text(curr['EVENT_X'], curr['EVENT_Y'] - 2.5, curr['PLAYER_NAME'].split(' ')[-1], fontsize=8, fontweight='bold', ha='center')
+            # ... resten af din tekst og scatter logik ...
+            # Husk også at opdatere scatter for målscoreren:
+            if i + 1 == len(active_seq) - 1:
+                 pitch.scatter(target_x, target_y, s=100, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=4)
+                 ax.text(target_x, target_y - 2.5, nxt['PLAYER_NAME'].split(' ')[-1], fontsize=8, fontweight='bold', ha='center')
 
         # Sidste node
         last = active_seq.iloc[-1]
