@@ -34,14 +34,14 @@ def vis_side(dp):
             .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
             .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
             .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
-            .liga-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+            .liga-table {{ width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 30px; }}
             .liga-table th {{ background-color: #f2f2f2; padding: 10px; text-align: center; border-bottom: 2px solid #ddd; }}
             .liga-table td {{ padding: 10px; border-bottom: 1px solid #eee; text-align: center; }}
             .liga-table td.left {{ text-align: left; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. ZONE LOGIK ---
+    # --- 3. ZONE DEFINITIONER ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -76,7 +76,7 @@ def vis_side(dp):
     # --- 4. TABS ---
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT (TOP 20 - Mål) ---
+    # --- TAB 0: SPILLEROVERSIGT (TOP 20) ---
     with tabs[0]:
         stats = []
         for p in df_skud['PLAYER_NAME'].unique():
@@ -97,12 +97,12 @@ def vis_side(dp):
         
         df_f = pd.DataFrame(stats).sort_values("Mål", ascending=False).head(20).reset_index(drop=True)
         
-        # HTML Tabel Konstruktion
         html_table = '<table class="liga-table"><thead><tr><th>#</th><th></th><th class="left">Spiller</th><th class="left">Klub</th><th>S</th><th>M</th><th>K%</th><th>DZ-S</th><th>DZ-Andel</th></tr></thead><tbody>'
         for i, row in df_f.iterrows():
+            # Logo Logik
             wy_id = next((info.get('team_wyid') for k, info in TEAMS.items() if info.get('opta_uuid') == row['UUID']), None)
             logo_url = logo_map.get(wy_id, next((v['logo'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), ""))
-            logo_img = f'<img src="{logo_url}" height="20">' if logo_url else ""
+            logo_img = f'<img src="{logo_url}" width="22">' if logo_url else ""
             
             html_table += f"""
             <tr>
@@ -119,35 +119,42 @@ def vis_side(dp):
         html_table += "</tbody></table>"
         st.markdown(html_table, unsafe_allow_html=True)
 
-    # --- HJÆLPEFUNKTION TIL DROPDOWNS ---
+    # --- HJÆLPEFUNKTION TIL DROPDOWNS (RETTET) ---
     def get_filtered_data(key_suffix):
-        all_teams = sorted([uuid_to_name[str(u).upper()] for u in df_skud[col_team_uuid].unique() if str(u).upper() in uuid_to_name])
-        sel_team = st.selectbox("Vælg Hold", ["ALLE HOLD"] + all_teams, key=f"team_{key_suffix}")
+        # 1. Liste over alle hold baseret på UUIDs i data
+        uuids_in_data = df_skud[col_team_uuid].unique()
+        available_teams = sorted([uuid_to_name[str(u).upper()] for u in uuids_in_data if str(u).upper() in uuid_to_name])
         
+        c_left, c_right = st.columns(2)
+        with c_left:
+            sel_team = st.selectbox("Vælg Hold", ["ALLE HOLD"] + available_teams, key=f"t_{key_suffix}")
+        
+        # 2. Find spillere baseret på holdvalg
         if sel_team == "ALLE HOLD":
-            relevant_players = sorted(df_skud['PLAYER_NAME'].unique())
+            player_list = sorted(df_skud['PLAYER_NAME'].unique())
+            d_filtered = df_skud.copy()
         else:
             team_uuid = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == sel_team)
-            relevant_players = sorted(df_skud[df_skud[col_team_uuid] == team_uuid]['PLAYER_NAME'].unique())
+            d_filtered = df_skud[df_skud[col_team_uuid].str.upper() == team_uuid]
+            player_list = sorted(d_filtered['PLAYER_NAME'].unique())
             
-        sel_p = st.selectbox("Vælg Spiller", ["HELE HOLDET"] + relevant_players, key=f"player_{key_suffix}")
+        with c_right:
+            sel_p = st.selectbox("Vælg Spiller", ["HELE HOLDET"] + player_list, key=f"p_{key_suffix}")
         
-        d_v = df_skud.copy()
-        if sel_team != "ALLE HOLD":
-            d_v = d_v[d_v[col_team_uuid] == team_uuid]
         if sel_p != "HELE HOLDET":
-            d_v = d_v[d_v['PLAYER_NAME'] == sel_p]
-        return d_v
+            d_filtered = d_filtered[d_filtered['PLAYER_NAME'] == sel_p]
+            
+        return d_filtered
 
     # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
+        d_v = get_filtered_data("afsl")
         c1, c2 = st.columns([2, 1])
         with c2:
-            d_v = get_filtered_data("afsl")
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
@@ -158,14 +165,14 @@ def vis_side(dp):
 
     # --- TAB 2: DZ-AFSLUTNINGER ---
     with tabs[2]:
+        d_v = get_filtered_data("dz")
         c1, c2 = st.columns([2, 1])
         with c2:
-            d_v = get_filtered_data("dz")
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{(m_dz/m_alt*100 if m_alt > 0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
@@ -176,19 +183,19 @@ def vis_side(dp):
             st.pyplot(fig)
 
     # --- TAB 3 & 4: ZONER ---
-    def zone_plot_enhanced(data, is_m, suffix):
+    def zone_plot_enhanced(is_m, suffix):
+        d_v = get_filtered_data(suffix)
         col_viz, col_ctrl = st.columns([1.8, 1])
+        
+        data_to_plot = d_v[d_v['EVENT_TYPEID'] == 16] if is_m else d_v
+        zone_stats = {}
+        for zone, b in ZONE_BOUNDARIES.items():
+            z_data = data_to_plot[data_to_plot['Zone'] == zone]
+            cnt = len(z_data)
+            top_p = z_data['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
+            zone_stats[zone] = {'cnt': cnt, 'top': top_p}
+
         with col_ctrl:
-            d_v = get_filtered_data(suffix)
-            data_to_plot = d_v[d_v['EVENT_TYPEID'] == 16] if is_m else d_v
-            
-            zone_stats = {}
-            for zone, b in ZONE_BOUNDARIES.items():
-                z_data = data_to_plot[data_to_plot['Zone'] == zone]
-                cnt = len(z_data)
-                top_p = z_data['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
-                zone_stats[zone] = {'cnt': cnt, 'top': top_p}
-            
             st.markdown(f"**{'MÅL' if is_m else 'SKUD'} PER ZONE**")
             z_df = pd.DataFrame([{'Zone': k, 'Antal': v['cnt'], 'Top': v['top']} for k, v in zone_stats.items() if k != "Zone 8"]).sort_values("Antal", ascending=False)
             st.dataframe(z_df, hide_index=True, use_container_width=True)
@@ -211,5 +218,5 @@ def vis_side(dp):
                     ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, y_draw_min + (b["y_max"]-y_draw_min)/2, f"{stats['cnt']}\n{stats['top']}", ha='center', va='center', fontsize=8)
             st.pyplot(fig)
 
-    with tabs[3]: zone_plot_enhanced(df_skud, False, "z_s")
-    with tabs[4]: zone_plot_enhanced(df_skud, True, "z_m")
+    with tabs[3]: zone_plot_enhanced(False, "z_s")
+    with tabs[4]: zone_plot_enhanced(True, "z_m")
