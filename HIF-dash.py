@@ -117,10 +117,10 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Modstanderanalyse"], # Tilføj denne
+        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Modstanderanalyse", "Sekvenser"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Sekvenser"],
+        sel = option_menu(None, options=["Holdoversigt", "Kampe", "Charts", "Afslutninger - liga"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
@@ -201,6 +201,9 @@ try:
             elif sel == "Modstanderanalyse": # Tilføj denne blok
                 import tools.hifanalyse.modstanderanalyse as ma
                 ma.vis_side(dp)
+            elif sel == "Sekvenser":
+                import tools.hifanalyse.sequences as se
+                se.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Holdoversigt":
@@ -215,9 +218,6 @@ try:
             elif sel == "Afslutninger - liga":
                 import tools.ligaen.leagueshots as ls
                 ls.vis_side(dp)
-            elif sel == "Sekvenser":
-                import tools.ligaen.sequences as se
-                se.vis_side(dp)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
