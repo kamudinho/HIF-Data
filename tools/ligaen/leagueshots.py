@@ -92,7 +92,7 @@ def vis_side(dp):
                         "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
                     })
 
-    # --- TAB 1: AFSLUTNINGER ---
+    # --- TAB 1: AFSLUTNINGER (Dynamisk størrelse) ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -103,6 +103,9 @@ def vis_side(dp):
             sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_afsl")
             d_v = df_t if sel_p == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_p]
             
+            # --- DYNAMISK STØRRELSE LOGIK ---
+            dot_size = 80 if sel_p != "Hele Holdet" else 25
+            
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
@@ -112,10 +115,10 @@ def vis_side(dp):
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=dot_size, c=colors, edgecolors=HIF_RED, linewidth=0.8, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 2: DZ-AFSLUTNINGER ---
+    # --- TAB 2: DZ-AFSLUTNINGER (Dynamisk størrelse) ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -125,6 +128,10 @@ def vis_side(dp):
             
             sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_dz")
             d_v = df_t if sel_dz == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_dz]
+            
+            # --- DYNAMISK STØRRELSE LOGIK ---
+            dot_size_dz = 80 if sel_dz != "Hele Holdet" else 30
+            
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{DZ_COLOR}"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
@@ -134,7 +141,7 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(5, 7))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
             colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=dot_size_dz, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
     # --- ZONER FUNKTION ---
