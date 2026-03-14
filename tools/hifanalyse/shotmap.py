@@ -4,7 +4,7 @@ from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# HIF Identitet
+# HIF Identitet & Design
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
@@ -19,9 +19,11 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    df_skud = dp.get('playerstats', pd.DataFrame()).copy()
-    if df_skud.empty:
-        st.info("Ingen data fundet.")
+    # Henter data nøjagtigt som i shotmap.py
+    df_raw = dp.get('playerstats', pd.DataFrame()).copy()
+    
+    if df_raw.empty:
+        st.info("Ingen data fundet i 'playerstats'.")
         return
 
     # --- 1. ZONE DEFINITIONER ---
