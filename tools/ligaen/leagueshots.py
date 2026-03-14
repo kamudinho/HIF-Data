@@ -6,31 +6,24 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from data.utils.team_mapping import TEAMS
 
-# Liga/Benchmark Identitet
+# Konstanter til farver
 LIGA_BLUE = '#1f77b4'
-DZ_COLOR = '#ff7f0e' 
 
 def vis_side(dp):
-    # Skift stien til den nye liga-query
+    # --- 1. DATA INDLÆSNING ---
+    # Vi henter den specifikke liga-data, som du lige har tilføjet til analyse_load.py
     df_skud = dp.get('opta', {}).get('league_shotevents', pd.DataFrame()).copy()
     
     if df_skud.empty:
-        st.info("Ingen liga-skuddata fundet. Tjek om 'opta_league_shotevents' er indlæst korrekt.")
+        st.info("Ingen liga-skuddata fundet. Sørg for at 'opta_league_shotevents' er med i din analyse_load.py")
         return
 
-    # Sørg for kolonnenavne er konsistente
+    # Standardiser kolonnenavne til UPPERCASE
     df_skud.columns = [c.upper() for c in df_skud.columns]
     
-    # Din SQL bruger kolonnenavnet: EVENT_CONTESTANT_OPTAUUID
+    # Da SQL allerede har filtreret Hvidovre FRA, behøver vi ikke gøre det her.
+    # Vi skal bare definere hvilken kolonne der holder hold-ID'et til oversigten
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
-    
-    if col_team in df_raw.columns:
-        df_raw[col_team] = df_raw[col_team].astype(str).str.upper().str.strip()
-        # FILTER: Ekskluder Hvidovre
-        df_skud = df_raw[df_raw[col_team] != HIF_UUID].copy()
-    else:
-        st.error(f"Kolonnen {col_team} blev ikke fundet i data. Tilgængelige kolonner: {list(df_raw.columns)}")
-        return
 
     # --- 2. CSS STYLING ---
     st.markdown(f"""
@@ -64,7 +57,6 @@ def vis_side(dp):
     }
 
     def map_to_zone(r):
-        # Opta koordinater er 0-100. Konverter til meter.
         mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
         for z, b in ZONE_BOUNDARIES.items():
             if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]:
@@ -72,26 +64,26 @@ def vis_side(dp):
         return "Zone 8"
 
     df_skud['ZONE'] = df_skud.apply(map_to_zone, axis=1)
-    df_skud['IS_DZ_GEO'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
     # --- 4. TABS ---
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
     with tabs[0]:
         stats = []
-        # Mapping af UUID til Navn fra din TEAMS dict
+        # Mapping af UUID til Navn fra din TEAMS dict (Sørg for UUID er upper for match)
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
-            t_uuid = d[col_team].iloc[0]
-            t_name = uuid_to_name.get(t_uuid, "Andet hold")
+            t_uuid = str(d[col_team].iloc[0]).upper()
+            t_name = uuid_to_name.get(t_uuid, "Modstander")
             
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            if s > 1:
+            if s > 0:
                 stats.append({
                     "Spiller": p, "Hold": t_name, "Skud": s, "Mål": m, 
-                    "Konv.%": (m/s*100), "xG": pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
+                    "Konv.%": round((m/s*100), 1), 
+                    "xG": round(pd.to_numeric(d['XG_RAW'], errors='coerce').sum(), 2)
                 })
         st.dataframe(pd.DataFrame(stats).sort_values("Skud", ascending=False), 
                      use_container_width=True, hide_index=True)
@@ -99,20 +91,21 @@ def vis_side(dp):
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_p = st.selectbox("Vælg Modstander", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()))
+            sel_p = st.selectbox("Vælg Spiller (Liga)", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()))
             d_v = df_skud if sel_p == "HELE LIGAEN" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
             
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud (Liga)</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål (Liga)</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
         
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
+            # Mål er blå, missere er hvide med blå kant
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: LIGA_BLUE, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.5)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.6)
             st.pyplot(fig)
 
-    # --- 5. ZONE PLOTS ---
+    # --- 5. ZONE PLOTS FUNKTION ---
     def zone_viz(data, is_m):
         viz, ctrl = st.columns([1.8, 1])
         with ctrl:
