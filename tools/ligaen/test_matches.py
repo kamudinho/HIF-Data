@@ -28,7 +28,6 @@ def vis_side(dp):
     st.markdown("""
         <style>
         .stSelectbox { margin-bottom: 10px; }
-        
         .stat-box { 
             text-align: center; 
             background: #f8f9fa; 
@@ -42,24 +41,18 @@ def vis_side(dp):
         }
         .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
-        
         .label-box { background: #eee; border-bottom: 2px solid #666; }
-
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
         .time-pill { text-align: center; font-weight: bold; color: #cc0000; border: 1px solid #cc0000; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; }
         .team-name { font-weight: bold; font-size: 15px; padding-top: 8px; }
-        
-        /* Bar styles */
-        .bar-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #888; }
+        .bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; }
         .bar-val { font-weight: 700; font-size: 12px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP LAYOUT (Dropdowns + Stats) ---
+    # --- 3. TOP LAYOUT ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
-    
-    # RÆKKE 1
     row1 = st.columns(col_layout)
     with row1[0]:
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_sel")
@@ -82,7 +75,6 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_r1):
         row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # RÆKKE 2
     row2 = st.columns(col_layout)
     with row2[0]:
         valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="per_sel")
@@ -95,7 +87,6 @@ def vis_side(dp):
         p_matches = team_matches
 
     played_p = p_matches[p_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-    
     row2[1].markdown(f"<div class='stat-box label-box'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>I PERIODEN</div></div>", unsafe_allow_html=True)
 
     avg_map = [("POSS", "POSS", 1, "%"), ("TOUCHES", "FELT", 0, ""), ("SHOTS", "SKUD", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASS", 0, ""), ("FORWARD_PASSES", "FREM", 0, "")]
@@ -105,7 +96,7 @@ def vis_side(dp):
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
         row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TABS ---
+    # --- 4. TABS & KAMPVISNING ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
@@ -125,11 +116,12 @@ def vis_side(dp):
             
             if spillet:
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
-                
-                # BARS LOGIK
                 st.write("")
-                h_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000")
-                a_color = TEAM_COLORS.get(a_n, {}).get("primary", "#222222")
+                
+                # FARVELOGIK: Valgt hold får sin farve, modstander får grå
+                h_is_valgt = h_uuid == valgt_uuid
+                h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if h_is_valgt else "#d1d1d1"
+                a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#cc0000") if not h_is_valgt else "#d1d1d1"
                 
                 stats_conf = [
                     ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
@@ -156,8 +148,8 @@ def vis_side(dp):
                                 <span class="bar-val">{a_str}</span>
                             </div>
                             <div style="display: flex; height: 10px; background: #eee; border-radius: 5px; overflow: hidden;">
-                                <div style="width: {h_pct}%; background: {h_color};"></div>
-                                <div style="width: {100-h_pct}%; background: {a_color};"></div>
+                                <div style="width: {h_pct}%; background: {h_bar_color};"></div>
+                                <div style="width: {100-h_pct}%; background: {a_bar_color};"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
@@ -172,9 +164,6 @@ def vis_side(dp):
         if not played_p.empty:
             for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
                 tegn_kamp_række(row, True)
-        else:
-            st.info("Ingen resultater i denne periode.")
-
     with tab2:
         future = p_matches[~p_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
         for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
