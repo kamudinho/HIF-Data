@@ -11,7 +11,7 @@ HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
 def vis_side(dp):
-    # --- CSS STYLING ---
+    #--- CSS STYLING ---
     st.markdown("""
         <style>
             .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }
