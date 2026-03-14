@@ -35,8 +35,8 @@ def vis_side(dp):
             background: #f8f9fa; 
             border-radius: 6px; 
             padding: 8px 4px; 
-            border-bottom: 3px solid #cc0000;
-            height: 65px; /* Fast højde for alignment */
+            border-bottom: 1px solid #cc0000;
+            height: 50px; /* Fast højde for alignment */
             display: flex;
             flex-direction: column;
             justify-content: center;
