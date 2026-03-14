@@ -11,18 +11,15 @@ LIGA_BLUE = '#1f77b4'
 DZ_COLOR = '#ff7f0e' 
 
 def vis_side(dp):
-    # --- 1. DATA & FILTRERING (Brug EVENT_CONTESTANT_OPTAUUID fra din SQL) ---
-    df_raw = dp.get('opta', {}).get('shotevents', pd.DataFrame()).copy()
+    # Skift stien til den nye liga-query
+    df_skud = dp.get('opta', {}).get('league_shotevents', pd.DataFrame()).copy()
     
-    if df_raw.empty:
-        st.info("Ingen OPTA skuddata fundet.")
+    if df_skud.empty:
+        st.info("Ingen liga-skuddata fundet. Tjek om 'opta_league_shotevents' er indlæst korrekt.")
         return
 
-    # HIF UUID fra din team_mapping.py: '8gxd9ry2580pu1b1dd5ny9ymy'
-    HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY" 
-    
-    # Sørg for at alle kolonner er store bogstaver (Streamlit standardiserer ofte)
-    df_raw.columns = [c.upper() for c in df_raw.columns]
+    # Sørg for kolonnenavne er konsistente
+    df_skud.columns = [c.upper() for c in df_skud.columns]
     
     # Din SQL bruger kolonnenavnet: EVENT_CONTESTANT_OPTAUUID
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
