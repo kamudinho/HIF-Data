@@ -32,7 +32,8 @@ def vis_side(dp):
 
     def get_logo_html(uuid):
         url = get_logo_url(uuid)
-        return f'<img src="{url}" width="22" style="vertical-align: middle; margin-right: 8px;">' if url else ""
+        # Vi sikrer at logoet har en fast højde så rækkerne flugter
+        return f'<img src="{url}" height="22" style="vertical-align: middle;">' if url else ""
 
     # --- 3. DATABEREGNING ---
     df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
@@ -71,61 +72,48 @@ def vis_side(dp):
     tabs = st.tabs(["LIGAPROFILER (TOP 20)", "AFSLUTNINGER", "DZ-ANALYSE", "ZONER"])
 
     with tabs[0]:
-        # Styling af HTML tabellen
+        # CSS styling til den manuelle tabel
         st.markdown(f"""
             <style>
-                .custom-table {{ width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px; }}
-                .custom-table th {{ background-color: #f2f2f2; padding: 10px; text-align: center; border-bottom: 2px solid #ddd; }}
-                .custom-table td {{ padding: 10px; border-bottom: 1px solid #eee; text-align: center; }}
-                .custom-table td:nth-child(3) {{ text-align: left !important; font-weight: bold; }}
-                .progress-bg {{ background: #eee; border-radius: 4px; width: 80px; height: 12px; display: inline-block; }}
-                .progress-fill {{ background: {HIF_RED}; height: 100%; border-radius: 4px; }}
+                .liga-table {{ width: 100%; border-collapse: collapse; color: #333; font-size: 14px; margin-top: 10px; }}
+                .liga-table th {{ background-color: #f8f9fa; padding: 12px 8px; text-align: center; border-bottom: 2px solid #ddd; font-weight: bold; }}
+                .liga-table td {{ padding: 10px 8px; border-bottom: 1px solid #eee; text-align: center; }}
+                .liga-table td.left {{ text-align: left; }}
+                .bar-container {{ background: #f0f0f0; border-radius: 3px; width: 60px; height: 10px; display: inline-block; margin-right: 5px; }}
+                .bar-fill {{ background: {HIF_RED}; height: 100%; border-radius: 3px; }}
+                .goal-cell {{ font-weight: 800; color: {HIF_RED}; font-size: 15px; }}
             </style>
         """, unsafe_allow_html=True)
 
-        # Byg HTML rækker
-        rows_html = ""
+        # Start tabellen
+        html_code = '<table class="liga-table"><thead><tr>'
+        html_code += '<th>#</th><th></th><th class="left">Spiller</th><th class="left">Klub</th><th>S</th><th>M</th><th>K%</th><th>DZ-S</th><th>DZ-Andel</th>'
+        html_code += '</tr></thead><tbody>'
+
         for _, row in df_final.iterrows():
-            logo_html = get_logo_html(row['UUID'])
-            progress_bar = f'<div class="progress-bg"><div class="progress-fill" style="width: {row["DZ-Andel"]}%;"></div></div>'
+            logo = get_logo_html(row['UUID'])
+            bar = f'<div class="bar-container"><div class="bar-fill" style="width: {row["DZ-Andel"]}%;"></div></div>'
             
-            rows_html += f"""
+            html_code += f"""
             <tr>
                 <td>{row['#']}</td>
-                <td>{logo_html}</td>
-                <td>{row['Spiller']}</td>
-                <td>{row['Klub']}</td>
+                <td>{logo}</td>
+                <td class="left"><b>{row['Spiller']}</b></td>
+                <td class="left" style="color: #666; font-size: 12px;">{row['Klub']}</td>
                 <td>{row['Skud']}</td>
-                <td><b style="color:{HIF_RED};">{row['Mål']}</b></td>
+                <td class="goal-cell">{row['Mål']}</td>
                 <td>{row['K%']}%</td>
                 <td>{row['DZ-S']}</td>
-                <td>{progress_bar} <span style="font-size:11px;">{row['DZ-Andel']}%</span></td>
+                <td>{bar} <span style="font-size: 10px;">{row['DZ-Andel']}%</span></td>
             </tr>
             """
+        
+        html_code += '</tbody></table>'
+        
+        # DETTE ER DEN VIGTIGE LINJE:
+        st.markdown(html_code, unsafe_allow_html=True)
 
-        table_html = f"""
-        <table class="custom-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th></th>
-                    <th>Spiller</th>
-                    <th>Klub</th>
-                    <th>S</th>
-                    <th>M</th>
-                    <th>K%</th>
-                    <th>DZ-S</th>
-                    <th>DZ-Andel</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-            </tbody>
-        </table>
-        """
-        st.markdown(table_html, unsafe_allow_html=True)
-
-    # --- RESTEN AF FUNKTIONERNE (Shot map osv) ---
+    # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
