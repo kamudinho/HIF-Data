@@ -208,23 +208,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Rettet til Snowflake)
+        # 9. UNIVERSAL SEQUENCE MAP (Mål-fokuseret)
         "opta_sequence_map": f"""
-            WITH TargetEvents AS (
-                -- Find alle relevante start/slut hændelser først
-                SELECT e.SEQUENCEID, e.MATCH_OPTAUUID
+            WITH GoalSequences AS (
+                SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
                 FROM {DB}.OPTA_EVENTS e
-                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.MATCH_OPTAUUID IN ({match_id_subquery})
-                AND (
-                    (e.EVENT_TYPEID = 16) OR -- Mål
-                    (e.EVENT_TYPEID = 1 AND q.QUALIFIER_QID IN (6, 124)) -- Hjørne (6) eller Målspark (124)
-                )
+                AND e.EVENT_TYPEID = 16 -- Kun sekvenser med Mål
                 {hif_filter_event}
-            ),
-            SelectedSequences AS (
-                SELECT DISTINCT SEQUENCEID, MATCH_OPTAUUID
-                FROM TargetEvents
             )
             SELECT 
                 e.MATCH_OPTAUUID,
@@ -234,12 +225,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TYPEID,
                 e.EVENT_X,
                 e.EVENT_Y,
-                e.EVENT_OUTCOME,
-                LEAD(e.EVENT_X) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_X,
-                LEAD(e.EVENT_Y) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_Y
+                e.HOME_TEAM_NAME,
+                e.AWAY_TEAM_NAME,
+                e.HOME_SCORE,
+                e.AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
-            INNER JOIN SelectedSequences s ON e.SEQUENCEID = s.SEQUENCEID 
-                AND e.MATCH_OPTAUUID = s.MATCH_OPTAUUID
+            INNER JOIN GoalSequences gs ON e.SEQUENCEID = gs.SEQUENCEID 
+                AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
             ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
     }
