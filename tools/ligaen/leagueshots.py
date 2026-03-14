@@ -11,46 +11,34 @@ HIF_RED = '#d71920'
 LIGA_BLUE = '#1f77b4'
 
 def vis_side(dp):
-    # --- 1. DATA INDLÆSNING & LOGO SETUP ---
+    # --- 1. DATA & LOGO SETUP (Din præcise arkitektur) ---
     opta_data = dp.get('opta', {})
     logo_map = dp.get("logo_map", {})
     df_skud = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
     if df_skud.empty:
-        st.warning("Ingen liga-skuddata fundet.")
+        st.warning("Ingen skuddata fundet.")
         return
     
     df_skud.columns = [c.upper() for c in df_skud.columns]
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
 
-    # Hjælpefunktion: Returnerer kun den RÅ URL (Ingen HTML!)
-    def get_logo_url_raw(opta_uuid):
-        # 1. Tjek Wyscout ID mapping via logo_map
+    # DIN FUNKTION (Rå URL version til ImageColumn)
+    def get_logo_url(opta_uuid):
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
-        # 2. Backup fra TEAMS dict
-        return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+        return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
-    # --- 2. ZONE LOGIK & CSS ---
-    st.markdown(f"""
-        <style>
-            .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid {LIGA_BLUE}; margin-bottom: 10px; }}
-            .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; }}
-            .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; }}
-        </style>
-    """, unsafe_allow_html=True)
-
+    # --- 2. LOGIK & BEREGNING ---
     df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
-    # --- 3. DATABEREGNING ---
     stats_list = []
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     
     for p in df_skud['PLAYER_NAME'].unique():
         d = df_skud[df_skud['PLAYER_NAME'] == p]
         t_uuid = str(d[col_team].iloc[0]).upper()
-        t_name = uuid_to_name.get(t_uuid, "Modstander")
         
         s = len(d)
         m = len(d[d['EVENT_TYPEID'] == 16])
@@ -60,9 +48,9 @@ def vis_side(dp):
         
         if s > 0:
             stats_list.append({
-                "Logo": get_logo_url_raw(t_uuid), # Sender rå URL string
+                "Logo": get_logo_url(t_uuid), # Henter URL'en via din logik
                 "Spiller": p, 
-                "Klub": t_name, 
+                "Klub": uuid_to_name.get(t_uuid, "Modstander"), 
                 "Skud": int(s),
                 "Mål": int(m),
                 "K%": float(round((m/s*100), 1)),
@@ -74,7 +62,7 @@ def vis_side(dp):
     
     df_final = pd.DataFrame(stats_list).sort_values("Skud", ascending=False)
 
-    # --- 4. TABS ---
+    # --- 3. UI ---
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
     with tabs[0]:
@@ -83,15 +71,12 @@ def vis_side(dp):
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "Logo": st.column_config.ImageColumn("", width="small"),
+                "Logo": st.column_config.ImageColumn("", width="small"), # Tegner logoet ud fra URL
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
                 "Klub": st.column_config.TextColumn("Klub", width="small"),
                 "Skud": st.column_config.NumberColumn("S", format="%d"),
                 "Mål": st.column_config.NumberColumn("M", format="%d"),
                 "K%": st.column_config.NumberColumn("K%", format="%.1f%%"),
-                "DZ-S": st.column_config.NumberColumn("DZ-S", format="%d"),
-                "DZ-M": st.column_config.NumberColumn("DZ-M", format="%d"),
-                "DZ-K%": st.column_config.NumberColumn("DZ-K%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
                     format="%.0f%%", 
@@ -101,7 +86,7 @@ def vis_side(dp):
                 )
             }
         )
-
+    
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
