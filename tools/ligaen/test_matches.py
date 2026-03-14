@@ -77,6 +77,44 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
+    # --- 4.5 GENNEMSNITS-STATISTIKKER (Ny række) ---
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    avg_cols = st.columns([2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    avg_cols[0].markdown("<div style='line-height: 45px; font-size: 12px; font-weight: 700; color: #666; text-transform: uppercase;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
+
+    # Vi mapper dine 6 kategorier til de data-kolonner de bruger
+    avg_config = [
+        ("POSS", "Boldbesiddelse", 1, "%"),
+        ("TOUCHES", "Berøringer", 0, ""),
+        ("SHOTS", "Afslutninger", 0, ""),
+        ("XG", "xG", 2, ""),
+        ("PASSES", "Afleveringer", 0, ""),
+        ("FORWARD_PASSES", "Fremadrettede", 0, "")
+    ]
+
+    for i, (key, label, decimals, suffix) in enumerate(avg_config):
+        # Beregn gennemsnit på tværs af alle spillede kampe for det valgte hold
+        # Vi tager højde for om holdet var ude eller hjemme i hver kamp
+        vals = []
+        for _, m in played.iterrows():
+            prefix = "HOME_" if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "AWAY_"
+            val = safe_val(m.get(f"{prefix}{key}"), is_float=(decimals > 0))
+            vals.append(val)
+        
+        avg_val = np.mean(vals) if vals else 0
+        
+        # Formatering
+        if decimals == 0: fmt_val = f"{int(round(avg_val))}{suffix}"
+        elif decimals == 1: fmt_val = f"{avg_val:.1f}{suffix}"
+        else: fmt_val = f"{avg_val:.2f}{suffix}"
+
+        avg_cols[i+2].markdown(f"""
+            <div style='text-align: center; background: #ffffff; border-radius: 6px; padding: 4px; border: 1px solid #eee;'>
+                <div style='font-size: 9px; color: #999; font-weight: 600; text-transform: uppercase;'>{label}</div>
+                <div style='font-weight: 700; font-size: 13px; color: #333;'>{fmt_val}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
     # --- 5. KAMP-VISNING FUNKTION ---
     def tegn_kampe(df_list, spillet):
         maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
