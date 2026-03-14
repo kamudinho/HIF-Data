@@ -144,14 +144,14 @@ try:
         if hoved_omraade == "TRUPPEN":
             # Sørg for at vi sender dp["players"] (din players.csv) ind
             if sel == "Oversigt":
-                import tools.players as pl
+                import tools.truppen.players as pl
                 # Her skal vi sikre os, at vi sender DataFrame'en
-                pl.truppen.vis_side(dp["players"]) 
+                pl.vis_side(dp["players"]) 
                 
             elif sel == "Forecast":
-                import tools.squad as sq
+                import tools.truppen.squad as sq
                 # Her skal vi også sende DataFrame'en
-                sq.truppen.vis_side(dp["players"])
+                sq.vis_side(dp["players"])
                     
         elif hoved_omraade == "SCOUTING":
             if sel == "Scoutrapport":
