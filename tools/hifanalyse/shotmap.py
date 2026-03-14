@@ -58,16 +58,26 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT (Liga-version) ---
     with tabs[0]:
         stats = []
-        for p in sorted(df_skud['PLAYER_NAME'].unique()):
-            d = df_skud[df_skud['PLAYER_NAME'] == p]
+        # Vi itererer over alle unikke spillere i ligadataen
+        for p in df_all['PLAYER_NAME'].unique():
+            d = df_all[df_all['PLAYER_NAME'] == p]
+            
+            # Hent Team UUID for at kunne vise logo
+            t_uuid = str(d[col_team_uuid].iloc[0]).upper()
+            wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == t_uuid), None)
+            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
+            
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            
             stats.append({
-                "Spiller": p.split()[-1], 
+                "Logo": l_url,
+                "Spiller": p,
+                "Hold": uuid_to_name.get(t_uuid, "Ukendt"),
                 "Skud": s, 
                 "Mål": m, 
                 "Konvertering%": (m/s*100) if s > 0 else 0,
@@ -77,16 +87,19 @@ def vis_side(dp):
                 "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
 
-        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        df_f = pd.DataFrame(stats).sort_values("Mål", ascending=False).head(50) # Top 50 i ligaen
 
         st.dataframe(
             df_f, 
             use_container_width=True, 
-            height=(len(df_f) + 1) * 36, 
+            height=600, 
             hide_index=True,
             column_config={
-                "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
-                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
+                "Logo": st.column_config.ImageColumn("", width="small"),
+                "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
+                "Hold": st.column_config.TextColumn("Hold", width="small"),
+                "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
             }
         )
