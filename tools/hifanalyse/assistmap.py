@@ -89,8 +89,8 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(8, 6))
             df_gs = df_f[df_f['is_assist'] == 1]; df_kp = df_f[df_f['is_key_pass'] == 1]
             pitch.arrows(df_kp.PASS_START_X, df_kp.PASS_START_Y, df_kp.SHOT_X, df_kp.SHOT_Y, color='#888888', alpha=0.3, width=1.5, ax=ax)
-            pitch.arrows(df_gs.PASS_START_X, df_gs.PASS_START_Y, df_gs.SHOT_X, df_gs.SHOT_Y, color=HIF_GOLD, alpha=0.9, width=3, ax=ax)
-            pitch.scatter(df_gs.PASS_START_X, df_gs.PASS_START_Y, s=80, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=3)
+            pitch.arrows(df_gs.PASS_START_X, df_gs.PASS_START_Y, df_gs.SHOT_X, df_gs.SHOT_Y, color=HIF_GOLD, alpha=0.9, width=2, ax=ax)
+            pitch.scatter(df_gs.PASS_START_X, df_gs.PASS_START_Y, s=60, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=3)
             st.pyplot(fig, use_container_width=True)
 
     # --- TAB 3: ASSIST-ZONER (KOMPLET VISUALISERING) ---
