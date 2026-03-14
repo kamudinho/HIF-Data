@@ -212,7 +212,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         "opta_sequence_map": f"""
             WITH SelectedSequences AS (
                 -- Her finder vi de unikke sekvenser vi er interesserede i
-                SELECT DISTINCT SEQUENCE_ID, MATCH_OPTAUUID
+                SELECT DISTINCT SEQUENCEID, MATCH_OPTAUUID
                 FROM {DB}.OPTA_EVENTS
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
                 AND (
@@ -224,7 +224,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             )
             SELECT 
                 e.MATCH_OPTAUUID,
-                e.SEQUENCE_ID,
+                e.SEQUENCEID,
                 e.EVENT_TIMESTAMP,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
@@ -232,11 +232,11 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_Y,
                 e.EVENT_OUTCOME,
                 -- "Connectoren": Finder næste koordinat i samme sekvens
-                LEAD(e.EVENT_X) OVER (PARTITION BY e.SEQUENCE_ID ORDER BY e.EVENT_TIMESTAMP) as NEXT_X,
-                LEAD(e.EVENT_Y) OVER (PARTITION BY e.SEQUENCE_ID ORDER BY e.EVENT_TIMESTAMP) as NEXT_Y
+                LEAD(e.EVENT_X) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_X,
+                LEAD(e.EVENT_Y) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_Y
             FROM {DB}.OPTA_EVENTS e
-            INNER JOIN SelectedSequences s ON e.SEQUENCE_ID = s.SEQUENCE_ID 
+            INNER JOIN SelectedSequences s ON e.SEQUENCEID = s.SEQUENCEID 
                 AND e.MATCH_OPTAUUID = s.MATCH_OPTAUUID
-            ORDER BY e.SEQUENCE_ID, e.EVENT_TIMESTAMP ASC
+            ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
     }
