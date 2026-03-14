@@ -1,131 +1,186 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from mplsoccer import VerticalPitch
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+# Liga Identitet (Blå nuancer for at differentiere fra HIF's røde)
+LIGA_BLUE = '#1f77b4'
+LIGA_DARK = '#0e4f77'
+DZ_COLOR = '#ff7f0e' # Orange for DZ for at skille sig ud på den blå baggrund
 
 def vis_side(dp):
-    # --- 1. DATA CHECK & KONFIGURATION ---
-    df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
-    if df_matches.empty:
-        st.warning("Ingen kampdata fundet.")
-        return
-
-    config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "NordicBet Liga") # Fra din COMP_MAP
-    
-    # Mapping af Opta UUID til Navne
-    opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    
-    # Hent alle hold i den valgte liga
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
-    h_list = sorted(liga_hold_options.keys())
-    
-    # --- 2. HOLDVALG & FARVESTYRING ---
-    # Vi placerer holdvalg øverst
-    col_top = st.columns([1, 1, 1])
-    with col_top[0]:
-        valgt_navn = st.selectbox("Vælg Hold", h_list, index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
-        valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
-
-    # Hent farve med "Hvid-tjek"
-    team_cols = TEAM_COLORS.get(valgt_navn, {"primary": "#cc0000", "secondary": "#222222"})
-    primary_color = team_cols.get("primary", "#cc0000")
-    
-    # Hvis primary er hvid (eller meget tæt på), brug secondary
-    if primary_color.lower() in ["#ffffff", "#white", "#fff"]:
-        primary_color = team_cols.get("secondary", "#222222")
-
-    # --- 3. CSS STYLING (Dynamisk farve indsat) ---
-    st.markdown(f"""
+    # --- CSS STYLING ---
+    st.markdown("""
         <style>
-        .stat-box {{ 
-            text-align: center; 
-            background: #f8f9fa; 
-            border-radius: 6px; 
-            padding: 8px 4px; 
-            border-bottom: 2px solid {primary_color};
-            height: 52px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }}
-        .stat-label {{ font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; }}
-        .stat-val {{ font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }}
-        
-        .date-header {{ background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid {primary_color}; color: #333; }}
-        .score-pill {{ background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }}
-        .time-pill {{ text-align: center; font-weight: bold; color: {primary_color}; border: 1px solid {primary_color}; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; }}
+            .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #1f77b4; margin-bottom: 10px; }
+            .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+            .stat-value { font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
+            .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }
         </style>
     """, unsafe_allow_html=True)
-
-    # --- 4. DATA FILTRERING ---
-    df_matches.columns = [c.upper() for c in df_matches.columns]
-    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
-    # Filtrer kampe for det valgte hold
-    team_matches = df_matches[
-        (df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | 
-        (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)
-    ].copy()
+    # Hent data
+    df_raw = dp.get('playerstats', pd.DataFrame()).copy()
+    if df_raw.empty:
+        st.info("Ingen ligadata fundet.")
+        return
 
-    # --- 5. STATS RÆKKER (LAYOUT) ---
-    col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
-    
-    # Række 1: Sæson + K-S-U-N
-    row1 = st.columns(col_layout)
-    with row1[0]:
-        # Sæson/Periode vælger under holdvalg
-        valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed")
+    # --- FILTER: ALT UNDTAGEN HVIDOVRE ---
+    # Vi ekskluderer Hvidovre (WYID 7490) for at få rent liga-gennemsnit
+    HIF_WYID = 7490
+    df_skud = df_raw[df_raw['TEAM_WYID'] != HIF_WYID].copy()
 
-    # Anvend tidsfilter
-    if valgt_periode == "Efterår 25":
-        p_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
-    elif valgt_periode == "Forår 26":
-        p_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
-    else:
-        p_matches = team_matches
+    # --- 1. ZONE DEFINITIONER ---
+    P_L, P_W = 105.0, 68.0
+    X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
+    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
+    Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
 
-    played_p = p_matches[p_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    ZONE_BOUNDARIES = {
+        "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
+        "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
+        "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
+        "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
+        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
+        "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
+        "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
+        "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
+        "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
+    }
 
-    # Beregn K-S-U-N for det valgte hold
-    s = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-    for _, m in played_p.iterrows():
-        is_h = str(m['CONTESTANTHOME_OPTAUUID']).upper() == valgt_uuid
-        h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0)), int(m.get('TOTAL_AWAY_SCORE', 0))
-        s["M+"] += h_s if is_h else a_s
-        s["M-"] += a_s if is_h else h_s
-        if h_s == a_s: s["U"] += 1
-        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): s["S"] += 1
-        else: s["N"] += 1
+    def map_to_zone(r):
+        mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
+        for z, b in ZONE_BOUNDARIES.items():
+            if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]:
+                return z
+        return "Zone 8"
 
-    stats_disp = [("K", s["K"]), ("S", s["S"]), ("U", s["U"]), ("N", s["N"]), ("M+", s["M+"]), ("M-", s["M-"]), ("+/-", s["M+"]-s["M-"])]
-    for i, (l, v) in enumerate(stats_disp):
-        row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
+    df_skud['Zone'] = df_skud.apply(map_to_zone, axis=1)
+    df_skud['IS_DZ_GEO'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
-    # Række 2: Snit
-    row2 = st.columns(col_layout)
-    row2[1].markdown(f"<div class='stat-box' style='background:#eee; border-bottom-color:#666;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>I PERIODEN</div></div>", unsafe_allow_html=True)
-    
-    avg_map = [("POSS", "POSS", 1, "%"), ("TOUCHES", "FELT", 0, ""), ("SHOTS", "SKUD", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASS", 0, ""), ("FORWARD_PASSES", "FREM", 0, "")]
-    for i, (key, label, dec, suffix) in enumerate(avg_map):
-        vals = [pd.to_numeric(m.get(f"{'HOME_' if str(m['CONTESTANTHOME_OPTAUUID']).upper() == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played_p.iterrows()]
-        avg_val = np.nanmean(vals) if vals else 0
-        fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-        row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
+    st.title("LIGA BENCHMARK (Ekskl. Hvidovre)")
+    tabs = st.tabs(["LIGAPROFILER", "LIGA-AFSLUTNINGER", "DZ-ANALYSE", "VARMEKORT (SKUD)", "VARMEKORT (MÅL)"])
 
-    # --- 6. TABS (RESULTATER / TRUP) ---
-    st.write("---")
-    tab1, tab2, tab3 = st.tabs(["RESULTATER", "KOMMENDE", "SPILLERE"])
-    
-    with tab1:
-        # Genbrug din tegn_kamp_række funktion her, den vil nu automatisk 
-        # bruge primary_color og de grå modstander-bars pga. CSS'en ovenfor.
-        st.info(f"Viser resultater for {valgt_navn}...")
-        # (Indsæt tegn_kamp_række loop her)
+    # --- TAB 0: SPILLEROVERSIGT (LIGAENS TOP) ---
+    with tabs[0]:
+        stats = []
+        for p in df_skud['PLAYER_NAME'].unique():
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            # Find holdnavn (tager det mest hyppige for spilleren)
+            t_name = d['TEAM_NAME'].iloc[0] if 'TEAM_NAME' in d.columns else "Ukendt"
+            dz = d[d['IS_DZ_GEO']]
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            if s > 2: # Kun spillere med min. 3 skud
+                stats.append({
+                    "Spiller": p, 
+                    "Hold": t_name,
+                    "Skud": s, 
+                    "Mål": m, 
+                    "Konv.%": (m/s*100) if s > 0 else 0,
+                    "DZ-Andel": (dzs/s*100) if s > 0 else 0
+                })
+        
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        st.dataframe(df_f, use_container_width=True, hide_index=True,
+                     column_config={"Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
+                                   "DZ-Andel": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100)})
 
-    with tab3:
-        # Placeholder til dit næste step: Spillervalg
-        st.subheader(f"Profilér spillere fra {valgt_navn}")
-        # spillere = dp.get("players", df_players) -> filter by team
-        st.selectbox("Vælg spiller", ["Vælg spiller...", "Spiller 1", "Spiller 2"], label_visibility="collapsed")
+    # --- TAB 1: AFSLUTNINGER ---
+    with tabs[1]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            sel_p = st.selectbox("Vælg Liga-spiller", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()))
+            d_v = df_skud if sel_p == "HELE LIGAEN" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
+            s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
+            konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {LIGA_BLUE};"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{LIGA_BLUE};"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:grey"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.1f}%</div></div>', unsafe_allow_html=True)
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            colors = (d_v['EVENT_TYPEID'] == 16).map({True: LIGA_BLUE, False: 'white'})
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=LIGA_BLUE, linewidth=1, ax=ax, alpha=0.6 if sel_p == "HELE LIGAEN" else 1.0)
+            st.pyplot(fig)
+
+    # --- TAB 2: DZ-AFSLUTNINGER ---
+    with tabs[2]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            sel_dz = st.selectbox("Vælg spiller (DZ)", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
+            d_v = df_skud if sel_dz == "HELE LIGAEN" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
+            dz_d = d_v[d_v['IS_DZ_GEO']]
+            m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
+            m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
+            
+            st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{DZ_COLOR}"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            
+            dz_andel_skud = (len(dz_d) / len(d_v) * 100) if len(d_v) > 0 else 0
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Andel af skud i DZ</div><div class="stat-value">{dz_andel_skud:.1f}%</div></div>', unsafe_allow_html=True)
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
+            colors = (dz_d['EVENT_TYPEID'] == 16).map({True: LIGA_BLUE, False: 'white'})
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=60, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.5 if sel_dz == "HELE LIGAEN" else 1.0)
+            st.pyplot(fig)
+
+    # --- TAB 3 & 4: ZONER ---
+    def zone_plot_league(data, is_m):
+        col_viz, col_ctrl = st.columns([1.8, 1])
+        total_count = len(data)
+        zone_stats = {}
+        for zone, b in ZONE_BOUNDARIES.items():
+            z_data = data[data['Zone'] == zone]
+            cnt = len(z_data)
+            pct = (cnt / total_count * 100) if total_count > 0 else 0
+            # Top hold i zonen i stedet for spiller
+            top_h = z_data['TEAM_NAME'].mode().iloc[0] if cnt > 0 and 'TEAM_NAME' in z_data.columns else "-"
+            zone_stats[zone] = {'cnt': cnt, 'pct': pct, 'top': top_h}
+
+        with col_ctrl:
+            label = "Mål" if is_m else "Skud"
+            st.markdown(f"**LIGA-ZONE: {label.upper()}**")
+            z_df = pd.DataFrame([
+                {'Zone': k, label: v['cnt'], '%': f"{v['pct']:.1f}%", 'Farligste Hold': v['top']}
+                for k, v in zone_stats.items() if k != "Zone 8"
+            ]).sort_values(label, ascending=False)
+            st.dataframe(z_df, hide_index=True, use_container_width=True)
+
+        with col_viz:
+            pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+            fig, ax = pitch.draw(figsize=(8, 10))
+            ax.set_ylim(55, 105)
+            
+            max_v = max([v['cnt'] for k, v in zone_stats.items() if k != "Zone 8"]) if total_count > 0 else 1
+            cmap = plt.cm.Blues
+
+            for name, b in ZONE_BOUNDARIES.items():
+                if b["y_max"] <= 55: continue
+                y_draw_min = max(b["y_min"], 55)
+                rect_height = b["y_max"] - y_draw_min
+                stats = zone_stats[name]
+                color_val = stats['cnt'] / max_v if max_v > 0 else 0
+                
+                rect = patches.Rectangle((b["x_min"], y_draw_min), b["x_max"]-b["x_min"], rect_height, 
+                                         facecolor=cmap(color_val) if stats['cnt'] > 0 else '#f9f9f9', 
+                                         alpha=0.7, edgecolor='black', linestyle='--')
+                ax.add_patch(rect)
+                
+                if stats['cnt'] > 0:
+                    z_text = f"{name.replace('Zone ', 'Z')}\n{stats['cnt']}\n{stats['pct']:.1f}%"
+                    ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, y_draw_min + (rect_height / 2), 
+                            z_text, ha='center', va='center', fontsize=8,
+                            color='black' if color_val < 0.5 else 'white')
+            st.pyplot(fig)
+
+    with tabs[3]: zone_plot_league(df_skud, False)
+    with tabs[4]: zone_plot_league(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
