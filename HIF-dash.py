@@ -158,7 +158,7 @@ try:
                 import tools.scout_input as si
                 si.vis_side(dp)
             elif sel == "Database":
-                import tools.scout_db as sdb
+                import tools.scouting.scout_db as sdb
                 # Vi sender dp["scout_reports"] som det første argument
                 sdb.vis_side(
                     dp["scout_reports"], 
