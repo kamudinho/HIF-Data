@@ -8,7 +8,7 @@ from mplsoccer import Pitch
 HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
-def vis_sequence_side(dp):
+def vis_side(dp):
     # --- 1. CSS STYLING (Matcher dit billede 1:1) ---
     st.markdown(f"""
         <style>
