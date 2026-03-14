@@ -208,10 +208,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Opdateret med Qualifiers og LAG-logik)
+        # 9. UNIVERSAL SEQUENCE MAP (Renset og rettet CTE-logik)
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
-                {match_id_subquery}
+                SELECT DISTINCT MATCH_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
             ),
             GoalSequences AS (
                 SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
@@ -233,11 +235,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TIMESTAMP,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                -- LAG henter positionen fra forrige aktion i sekvensen til tegning af pile
-                LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X,
-                LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y,
-                e.EVENT_X AS RAW_X,
-                e.EVENT_Y AS RAW_Y,
+                -- Korrekt LAG logik for koordinater (X/Y for de foregående 2 aktioner)
+                LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
+                LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
+                LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_2,
+                LAG(e.EVENT_Y, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_2,
+                e.EVENT_X as RAW_X,
+                e.EVENT_Y as RAW_Y,
                 q.QUALIFIER_LIST,
                 m.CONTESTANTHOME_NAME as HOME_TEAM,
                 m.CONTESTANTAWAY_NAME as AWAY_TEAM,
@@ -253,4 +257,3 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
-    }
