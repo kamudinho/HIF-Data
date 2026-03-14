@@ -73,50 +73,53 @@ def vis_side(dp):
     # --- 4. TABS ---
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
+    # --- 4. TABS ---
+    tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
+
     with tabs[0]:
-    stats = []
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    
-    for p in df_skud['PLAYER_NAME'].unique():
-        d = df_skud[df_skud['PLAYER_NAME'] == p]
-        t_uuid = str(d[col_team].iloc[0]).upper()
-        t_name = uuid_to_name.get(t_uuid, "Modstander")
+        stats = []
+        uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         
-        s = len(d)
-        m = len(d[d['EVENT_TYPEID'] == 16])
-        
-        # --- HER ER FIXET ---
-        # Vi konverterer rå xG (der ofte er en streng i databasen) til float
-        xg_val = pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
-        
-        if s > 0:
-            stats.append({
-                "Spiller": p, 
-                "Hold": t_name, 
-                "Skud": int(s),         # Tving til heltal
-                "Mål": int(m),          # Tving til heltal
-                "Konv.%": float(round((m/s*100), 1)), 
-                "xG": float(round(xg_val, 2))
-            })
-    
-            # Lav dataframe
-            df_stats = pd.DataFrame(stats)
+        # Saml al data først
+        for p in df_skud['PLAYER_NAME'].unique():
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            t_uuid = str(d[col_team].iloc[0]).upper()
+            t_name = uuid_to_name.get(t_uuid, "Modstander")
             
-            # Sortering før visning (valgfrit, men godt for overblikket)
-            df_stats = df_stats.sort_values("Skud", ascending=False)
+            s = len(d)
+            m = len(d[d['EVENT_TYPEID'] == 16])
+            xg_val = pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
             
-            # Visning med specifikt format
-            st.dataframe(
-                df_stats, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "xG": st.column_config.NumberColumn(format="%.2f"),
-                    "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
-                    "Skud": st.column_config.NumberColumn(format="%d"),
-                    "Mål": st.column_config.NumberColumn(format="%d")
-                }
-            )
+            if s > 0:
+                stats.append({
+                    "Spiller": p, 
+                    "Hold": t_name, 
+                    "Skud": int(s),
+                    "Mål": int(m),
+                    "Konv.%": float(round((m/s*100), 1)) if s > 0 else 0.0, 
+                    "xG": float(round(xg_val, 2))
+                })
+        
+        # Lav DF og vis den UDENFOR for-loopet
+        df_stats = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        
+        st.dataframe(
+            df_stats, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "xG": st.column_config.NumberColumn("xG", format="%.2f"),
+                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                "Skud": st.column_config.NumberColumn("Skud", format="%d"),
+                "Mål": st.column_config.NumberColumn("Mål", format="%d")
+            }
+        )
+        
+        if dz_stats:
+            df_dz = pd.DataFrame(dz_stats).sort_values("DZ Skud", ascending=False)
+            st.dataframe(df_dz, use_container_width=True, hide_index=True)
+        else:
+            st.write("Ingen DZ-data fundet.")
 
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
@@ -134,6 +137,27 @@ def vis_side(dp):
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: LIGA_BLUE, False: 'white'})
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.6)
             st.pyplot(fig)
+
+    with tabs[2]:
+        st.subheader("Danger Zone (DZ) Analyse")
+        st.info("Danger Zone er det centrale område i feltet (mellem målstolperne), hvorfra de fleste mål scores.")
+        
+        # Beregn DZ skud (defineret geografisk i din zone logik tidligere)
+        # Vi genbruger din IS_DZ_GEO logik eller laver en hurtig filtrering:
+        df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
+        
+        dz_stats = []
+        for p in df_skud['PLAYER_NAME'].unique():
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            dz_d = d[d['IS_DZ'] == True]
+            
+            if len(dz_d) > 0:
+                dz_stats.append({
+                    "Spiller": p,
+                    "DZ Skud": len(dz_d),
+                    "DZ Mål": len(dz_d[dz_d['EVENT_TYPEID'] == 16]),
+                    "DZ xG": pd.to_numeric(dz_d['XG_RAW'], errors='coerce').sum()
+                })
 
     # --- 5. ZONE PLOTS FUNKTION ---
     def zone_viz(data, is_m):
