@@ -11,7 +11,7 @@ def vis_side(dp):
     st.markdown(f"<style>.match-header {{ font-size: 1.4rem; font-weight: 800; color: {HIF_RED}; text-align: center; margin-bottom: 20px; text-transform: uppercase; }}</style>", unsafe_allow_html=True)
 
     # Vi henter fra shotevents i stedet for sequence_map
-    df_shots = dp['opta'].get('opta_shotevents', pd.DataFrame()).copy()
+    df_shots = dp['opta'].get('playerstats', pd.DataFrame()).copy()
     
     if df_shots.empty:
         st.warning("Ingen skud-data fundet.")
