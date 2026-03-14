@@ -6,7 +6,7 @@ import matplotlib.patches as patches
 
 # HIF Identitet
 HIF_RED = '#cc0000'
-HIF_GOLD = '#b8860b' 
+HIF_GOLD = '#b8860b'
 HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
