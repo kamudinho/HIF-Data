@@ -19,7 +19,7 @@ def vis_side(dp):
             .legend-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }
         </style>
     """, unsafe_allow_html=True)
-    
+
     df_skud = dp.get('playerstats', pd.DataFrame()).copy()
     if df_skud.empty:
         st.info("Ingen data fundet.")
@@ -59,9 +59,43 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    ## --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 1: SPILLEROVERSIGT (Rettet sortering og formatering) ---
+    with tabs[0]:
+        stats = []
+        for p in sorted(df_skud['PLAYER_NAME'].unique()):
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            dz = d[d['IS_DZ_GEO']]
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            stats.append({
+                "Spiller": p.split()[-1], 
+                "Skud": s, 
+                "Mål": m, 
+                "Konvertering%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": dzs, 
+                "DZ-Mål": dzm, 
+                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+            })
+        
+        # Rettet sortering: Vi sorterer nu efter "Skud" (ikke "S")
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        
+        st.dataframe(
+            df_f, 
+            use_container_width=True, 
+            height=(len(df_f) + 1) * 36, 
+            hide_index=True,
+            column_config={
+                "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
+                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
+                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+            }
+        )
+    # --- TAB 1: SPILLEROVERSIGT (Opdateret med logoer og DZ-stats) ---
     with tabs[0]:
         stats = []
+        # Vi looper gennem alle spillere i liga-datasættet
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
             t_uuid = str(d[col_team_uuid].iloc[0]).upper()
@@ -73,29 +107,22 @@ def vis_side(dp):
             
             stats.append({
                 "UUID": t_uuid,
-                "Spiller": p,
+                "Spiller": p, # Vi beholder fulde navn her til opslag
                 "S": s, 
                 "M": m, 
                 "xG": round(xg, 2),
                 "K%": (m/s*100) if s > 0 else 0,
-                "DZ_S": dzs, 
-                "DZ_M": dzm, 
-                "DZ_K": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ_Andel": (dzs/s*100) if s > 0 else 0
+                "DZ-S": dzs, 
+                "DZ-M": dzm, 
+                "DZ-K%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
         
-        # Sorter efter mål og tag top 20
+        # Sorter efter Mål (M) og tag Top 20
         df_f = pd.DataFrame(stats).sort_values("M", ascending=False).head(20).reset_index(drop=True)
         
-        # HTML Tabellen med direkte CSS for at sikre visning
-        html = """
-        <style>
-            .hif-table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px; }
-            .hif-table th { background: #f2f2f2; padding: 10px; border-bottom: 2px solid #ccc; text-align: center; }
-            .hif-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; vertical-align: middle; }
-            .bar-bg { background: #eee; width: 100%; height: 10px; border-radius: 5px; position: relative; }
-            .bar-fill { background: #cc0000; height: 100%; border-radius: 5px; }
-        </style>
+        # Opbyg HTML tabellen
+        html = f"""
         <table class="hif-table">
             <thead>
                 <tr>
@@ -109,41 +136,38 @@ def vis_side(dp):
                     <th>DZ-S</th>
                     <th>DZ-M</th>
                     <th>DZ-K%</th>
-                    <th style="width:100px;">DZ-Andel</th>
+                    <th>DZ-Andel</th>
                 </tr>
             </thead>
             <tbody>
         """
         
         for i, row in df_f.iterrows():
-            # FIND LOGO: Her skal vi være skarpe på om det er streng eller tal
+            # Find logoet via team_mapping
             wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), None)
+            l_url = logo_map.get(wy_id, "")
+            logo_img = f'<img src="{l_url}" width="25">' if l_url else ""
             
-            # Prøv både tal og streng i logo_map
-            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
-            img_html = f'<img src="{l_url}" width="25" style="vertical-align:middle;">' if l_url else ""
-            
-            # Lav baren manuelt
-            bar_html = f"""
-            <div class="bar-bg">
-                <div class="bar-fill" style="width: {row['DZ_Andel']}%;"></div>
+            # Formatering af progress bar til DZ-Andel
+            progress_bar = f"""
+            <div style="background:#eee; width:100%; height:8px; border-radius:4px;">
+                <div style="background:{HIF_RED}; width:{row['DZ-Andel']}%; height:100%; border-radius:4px;"></div>
             </div>
-            <span style="font-size: 10px;">{int(row['DZ_Andel'])}%</span>
             """
 
             html += f"""
                 <tr>
                     <td>{i+1}</td>
-                    <td>{img_html}</td>
+                    <td>{logo_img}</td>
                     <td style="text-align:left;"><b>{row['Spiller']}</b></td>
                     <td>{row['S']}</td>
-                    <td style="color:#cc0000; font-weight:800;">{row['M']}</td>
+                    <td style="color:{HIF_RED}; font-weight:800;">{row['M']}</td>
                     <td>{row['xG']:.2f}</td>
                     <td>{row['K%']:.1f}%</td>
-                    <td>{row['DZ_S']}</td>
-                    <td>{row['DZ_M']}</td>
-                    <td>{row['DZ_K']:.1f}%</td>
-                    <td>{bar_html}</td>
+                    <td>{row['DZ-S']}</td>
+                    <td>{row['DZ-M']}</td>
+                    <td>{row['DZ-K%']:.1f}%</td>
+                    <td style="width:80px;">{progress_bar}<span style="font-size:10px;">{int(row['DZ-Andel'])}%</span></td>
                 </tr>
             """
         
@@ -173,21 +197,21 @@ def vis_side(dp):
             sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
             d_v = df_skud if sel_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
             dz_d = d_v[d_v['IS_DZ_GEO']]
-            
+
             total_shots = len(d_v)
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-            
+
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-            
+
             # Her er den rettede linje 122:
             dz_andel_skud = (len(dz_d) / total_shots * 100) if total_shots > 0 else 0
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">Andel af skud i DZ</div><div class="stat-value">{dz_andel_skud:.1f}%</div></div>', unsafe_allow_html=True)
-            
+
             dz_andel_maal = (m_dz / m_alt * 100) if m_alt > 0 else 0
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{dz_andel_maal:.1f}%</div></div>', unsafe_allow_html=True)
-            
+
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -201,7 +225,7 @@ def vis_side(dp):
     def zone_plot_enhanced(data, is_m):
         col_viz, col_ctrl = st.columns([1.8, 1])
         total_count = len(data)
-        
+
         zone_stats = {}
         for zone, b in ZONE_BOUNDARIES.items():
             z_data = data[data['Zone'] == zone]
@@ -223,11 +247,11 @@ def vis_side(dp):
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw(figsize=(8, 10))
-            
+
             # Vi sætter fokus fra midterlinjen og op
             FOCUS_Y = 55
             ax.set_ylim(FOCUS_Y, 105)
-            
+
             # Find max val (uden Zone 8) til colormap
             max_v = max([v['cnt'] for k, v in zone_stats.items() if k != "Zone 8"]) if total_count > 0 else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
@@ -235,27 +259,27 @@ def vis_side(dp):
             for name, b in ZONE_BOUNDARIES.items():
                 # Hvis zonen er helt under vores fokusområde, spring over
                 if b["y_max"] <= FOCUS_Y: continue
-                
+
                 # Ryk bunden op hvis zonen starter under FOCUS_Y (vigtigt for Zone 8)
                 y_draw_min = max(b["y_min"], FOCUS_Y)
                 rect_height = b["y_max"] - y_draw_min
-                
+
                 stats = zone_stats[name]
                 color_val = stats['cnt'] / max_v if max_v > 0 else 0
                 face_color = cmap(color_val) if stats['cnt'] > 0 else '#f9f9f9'
-                
+
                 rect = patches.Rectangle((b["x_min"], y_draw_min), b["x_max"]-b["x_min"], rect_height, 
                                          facecolor=face_color, alpha=0.7, edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
-                
+
                 if stats['cnt'] > 0:
                     # Zone 8 tekst placeres i den synlige del
                     text_y = y_draw_min + (rect_height / 2)
-                    
+
                     z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n"
                               f"{stats['cnt']} ({stats['pct']:.1f}%)\n"
                               f"{stats['top']}")
-                    
+
                     ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, 
                             text_y, 
                             z_text, ha='center', va='center', fontsize=7,
