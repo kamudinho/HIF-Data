@@ -11,6 +11,7 @@ def vis_side(dp):
         return
 
     df_matches.columns = [c.upper() for c in df_matches.columns]
+    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
     for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         if col in df_matches.columns:
@@ -23,7 +24,7 @@ def vis_side(dp):
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 2. CSS STYLING (Ensrettet design) ---
+    # --- 2. CSS STYLING ---
     st.markdown("""
         <style>
         .stat-box { 
@@ -39,21 +40,30 @@ def vis_side(dp):
         
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
-        .time-pill { text-align: center; font-weight: bold; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 0; font-size: 16px; }
+        .time-pill { text-align: center; font-weight: bold; color: #cc0000; border: 1px solid #cc0000; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; width: 60px; margin: 0 auto; }
         .team-name { font-weight: bold; font-size: 15px; padding-top: 8px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP MENU (Holdvalg + K-S-U-N) ---
-    # Vi bruger [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6] for at få præcis samme kolonner i begge rækker
+    # --- 3. TOP MENU (Holdvalg + Sæson + K-S-U-N) ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
-    
     top_cols = st.columns(col_layout)
+    
     with top_cols[0]:
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
+        
+        # Sæson dropdown lige under holdvalg
+        valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed")
 
+    # --- FILTERING BASERET PÅ PERIODE ---
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
+    
+    if valgt_periode == "Efterår 25":
+        team_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
+    elif valgt_periode == "Forår 26":
+        team_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
+
     played = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
 
     # K-S-U-N beregning
@@ -71,27 +81,24 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. GENNEMSNITSRÆKKE (Nu med stat-box klassen!) ---
-    st.write("") # Lille afstand
+    # --- 4. GENNEMSNITSRÆKKE ---
+    st.write("") 
     avg_cols = st.columns(col_layout)
-    avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
+    avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Gennemsnit i perioden</div>", unsafe_allow_html=True)
     
-    # Her har jeg ændret koden til at bruge 'stat-box' for at matche over-rækken
     avg_map = [("POSS", "POSSESSION", 1, "%"), ("TOUCHES", "TOUCHES I FELT", 0, ""), ("SHOTS", "SKUD", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASSES", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
         avg_val = np.nanmean(vals) if vals else 0
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-        
-        # Bruger nu samme HTML struktur som ovenover
         avg_cols[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
 
-    # --- 5. TABS OG KAMPVISNING ---
+    # --- 5. TABS ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
     def tegn_kamp_række(row, spillet):
-        dt = pd.to_datetime(row.get('MATCH_DATE_FULL'), errors='coerce')
+        dt = row.get('MATCH_DATE_FULL')
         dato_str = f"{dt.day}. {maaned_map.get(dt.strftime('%b'), '')} {dt.year}"
         st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {int(row.get('WEEK', 0))}</div>", unsafe_allow_html=True)
         
@@ -108,7 +115,7 @@ def vis_side(dp):
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
             else:
                 tid = pd.to_datetime(row.get('MATCH_LOCALTIME')).strftime('%H:%M') if pd.notnull(row.get('MATCH_LOCALTIME')) else 'TBA'
-                c3.markdown(f"<div class='time-pill'>{tid}</div>", unsafe_allow_html=True)
+                c3.markdown(f"<div style='text-align:center; padding-top:8px;'><div class='time-pill'>{tid}</div></div>", unsafe_allow_html=True)
                 
             c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
             c5.markdown(f"<div class='team-name' style='text-align:left;'>{a_n}</div>", unsafe_allow_html=True)
@@ -147,10 +154,16 @@ def vis_side(dp):
                     """, unsafe_allow_html=True)
 
     with tab1:
-        for _, row in played.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            tegn_kamp_række(row, True)
+        if not played.empty:
+            for _, row in played.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
+                tegn_kamp_række(row, True)
+        else:
+            st.info("Ingen resultater i denne periode.")
 
     with tab2:
         future = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
-            tegn_kamp_række(row, False)
+        if not future.empty:
+            for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
+                tegn_kamp_række(row, False)
+        else:
+            st.info("Ingen kommende kampe i denne periode.")
