@@ -74,24 +74,49 @@ def vis_side(dp):
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
     with tabs[0]:
-        stats = []
-        # Mapping af UUID til Navn fra din TEAMS dict (Sørg for UUID er upper for match)
-        uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    stats = []
+    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    
+    for p in df_skud['PLAYER_NAME'].unique():
+        d = df_skud[df_skud['PLAYER_NAME'] == p]
+        t_uuid = str(d[col_team].iloc[0]).upper()
+        t_name = uuid_to_name.get(t_uuid, "Modstander")
         
-        for p in df_skud['PLAYER_NAME'].unique():
-            d = df_skud[df_skud['PLAYER_NAME'] == p]
-            t_uuid = str(d[col_team].iloc[0]).upper()
-            t_name = uuid_to_name.get(t_uuid, "Modstander")
+        s = len(d)
+        m = len(d[d['EVENT_TYPEID'] == 16])
+        
+        # --- HER ER FIXET ---
+        # Vi konverterer rå xG (der ofte er en streng i databasen) til float
+        xg_val = pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
+        
+        if s > 0:
+            stats.append({
+                "Spiller": p, 
+                "Hold": t_name, 
+                "Skud": int(s),         # Tving til heltal
+                "Mål": int(m),          # Tving til heltal
+                "Konv.%": float(round((m/s*100), 1)), 
+                "xG": float(round(xg_val, 2))
+            })
+    
+            # Lav dataframe
+            df_stats = pd.DataFrame(stats)
             
-            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            if s > 0:
-                stats.append({
-                    "Spiller": p, "Hold": t_name, "Skud": s, "Mål": m, 
-                    "Konv.%": round((m/s*100), 1), 
-                    "xG": round(pd.to_numeric(d['XG_RAW'], errors='coerce').sum(), 2)
-                })
-        st.dataframe(pd.DataFrame(stats).sort_values("Skud", ascending=False), 
-                     use_container_width=True, hide_index=True)
+            # Sortering før visning (valgfrit, men godt for overblikket)
+            df_stats = df_stats.sort_values("Skud", ascending=False)
+            
+            # Visning med specifikt format
+            st.dataframe(
+                df_stats, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "xG": st.column_config.NumberColumn(format="%.2f"),
+                    "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Skud": st.column_config.NumberColumn(format="%d"),
+                    "Mål": st.column_config.NumberColumn(format="%d")
+                }
+            )
 
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
