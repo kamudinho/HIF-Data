@@ -8,63 +8,76 @@ HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 
 def vis_side(dp):
+    # Styling for overskriften
     st.markdown(f"<style>.match-header {{ font-size: 1.4rem; font-weight: 800; color: {HIF_RED}; text-align: center; margin-bottom: 20px; text-transform: uppercase; }}</style>", unsafe_allow_html=True)
 
     df_seq = dp['opta'].get('opta_sequence_map', pd.DataFrame()).copy()
-    if df_seq.empty: return
+    if df_seq.empty:
+        st.info("Ingen data fundet.")
+        return
 
-    # SIKKER SORTERING: Tid og derefter hændelses-ID
+    # Sikker sortering
     df_seq = df_seq.sort_values(['SEQUENCEID', 'EVENT_TIMESTAMP']).reset_index(drop=True)
     
-    important_ids = df_seq[df_seq['EVENT_TYPEID'].isin([16, 13, 14, 15])]['SEQUENCEID'].unique()
+    # Vi finder kun sekvenser med faktiske mål (EVENT_TYPEID 16)
+    goal_ids = df_seq[df_seq['EVENT_TYPEID'] == 16]['SEQUENCEID'].unique()
     
+    if len(goal_ids) == 0:
+        st.warning("Ingen scoringer fundet i de valgte data.")
+        return
+
     col_viz, col_ctrl = st.columns([2.5, 1])
 
     with col_ctrl:
-        selected_id = st.selectbox("Vælg sekvens", options=important_ids)
+        selected_id = st.selectbox("Vælg scoring", options=goal_ids)
         active_seq = df_seq[df_seq['SEQUENCEID'] == selected_id].copy().reset_index(drop=True)
         
-        # --- RETNINGS-FIX ---
-        # Vi sikrer os at angrebsretningen altid er mod højre (X=100)
-        # Hvis de fleste X-koordinater er lave i slutningen, spejler vi hele sekvensen
-        if active_seq.iloc[-1]['EVENT_X'] < 50:
-            active_seq['EVENT_X'] = 100 - active_seq['EVENT_X']
-            active_seq['EVENT_Y'] = 100 - active_seq['EVENT_Y']
+        # Identificer målet og assisten
+        goal_row = active_seq[active_seq['EVENT_TYPEID'] == 16].iloc[-1]
+        goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
+        
+        # Assist er den sidste hændelse med en spiller før målet
+        assist_row = None
+        if goal_idx > 0:
+            potential_assists = active_seq.iloc[:goal_idx]
+            assist_row = potential_assists[potential_assists['PLAYER_NAME'].notna()].iloc[-1]
 
-        last = active_seq.iloc[-1]
-        scorer_short = f"{last['PLAYER_NAME'].split(' ')[0][0]}. {last['PLAYER_NAME'].split(' ')[-1]}"
-        opp = last.get('AWAY_TEAM_NAME') if last.get('HOME_TEAM_NAME') == "Hvidovre IF" else last.get('HOME_TEAM_NAME')
-        match_title = f"{scorer_short} vs. {opp} ({int(last.get('HOME_SCORE',0))}-{int(last.get('AWAY_SCORE',0))})"
+        # Dynamisk tekst baseret på dine MATCHINFO kolonner
+        scorer_short = f"{goal_row['PLAYER_NAME'].split(' ')[0][0]}. {goal_row['PLAYER_NAME'].split(' ')[-1]}"
+        
+        # Håndter holdnavne (Sikrer vi finder modstanderen)
+        h_team = goal_row.get('HOME_TEAM', 'Hjemme')
+        a_team = goal_row.get('AWAY_TEAM', 'Ude')
+        opp = a_team if "Hvidovre" in h_team else h_team
+        
+        res = f"({int(goal_row.get('HOME_SCORE',0))}-{int(goal_row.get('AWAY_SCORE',0))})"
+        match_title = f"{scorer_short} vs. {opp} {res}"
 
     with col_viz:
         st.markdown(f'<div class="match-header">{match_title}</div>', unsafe_allow_html=True)
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(12, 8))
 
-        for i in range(len(active_seq)):
-            curr = active_seq.iloc[i]
-            x_start, y_start = curr['EVENT_X'], curr['EVENT_Y']
+        # --- RETNINGS-FIX ---
+        # Vi tvinger målet til at være i højre side (X=100)
+        flip = True if goal_row['EVENT_X'] < 50 else False
+        
+        def fx(x): return 100 - x if flip else x
+        def fy(y): return 100 - y if flip else y
+
+        # 1. Tegn Assisten (Den vigtige røde pil)
+        if assist_row is not None:
+            a_x, a_y = fx(assist_row['EVENT_X']), fy(assist_row['EVENT_Y'])
+            # Pilen går fra assist-position til midten af målet
+            pitch.arrows(a_x, a_y, 100, 50, color=HIF_RED, width=4, headwidth=5, ax=ax, zorder=2)
             
-            # Tving mål til midten af det RIGTIGE mål (højre side)
-            if curr['EVENT_TYPEID'] == 16: x_start, y_start = 100, 50
+            # Assistmager-punkt
+            pitch.scatter(a_x, a_y, s=150, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=4)
+            a_name = assist_row['PLAYER_NAME'].split(' ')[-1]
+            ax.text(a_x, a_y - 4, a_name, color='black', fontsize=9, fontweight='bold', ha='center')
 
-            if i < len(active_seq) - 1:
-                nxt = active_seq.iloc[i+1]
-                x_end, y_end = nxt['EVENT_X'], nxt['EVENT_Y']
-                if nxt['EVENT_TYPEID'] == 16: x_end, y_end = 100, 50
-                
-                # SIDSTE AKTION = RØD
-                is_last = (i == len(active_seq) - 2)
-                
-                # Tegn kun pilen hvis den bevæger sig i en logisk retning (ikke 80 meter baglæns)
-                if (x_end - x_start) > -20: 
-                    l_color = HIF_RED if is_last else '#e0e0e0'
-                    l_width = 3 if is_last else 1.5
-                    pitch.arrows(x_start, y_start, x_end, y_end, color=l_color, width=l_width, headwidth=4, ax=ax, zorder=2)
-
-            # Spiller-node
-            pitch.scatter(x_start, y_start, s=120, color=HIF_GOLD, edgecolors='black', ax=ax, zorder=4)
-            name = curr['PLAYER_NAME'].split(' ')[-1]
-            ax.text(x_start, y_start - 3, name, color='black', fontsize=8, fontweight='bold', ha='center', zorder=5)
+        # 2. Tegn Målscoreren (Selve målet)
+        pitch.scatter(100, 50, s=200, color=HIF_RED, edgecolors='black', marker='o', ax=ax, zorder=5)
+        ax.text(98, 46, scorer_short, color='black', fontsize=10, fontweight='bold', ha='right')
 
         st.pyplot(fig, use_container_width=True)
