@@ -11,22 +11,29 @@ LIGA_BLUE = '#1f77b4'
 DZ_COLOR = '#ff7f0e' 
 
 def vis_side(dp):
-    # --- 1. DATA & FILTRERING (OPTA UUID) ---
-    df_raw = dp.get('playerstats', pd.DataFrame()).copy()
+    # --- 1. DATA & FILTRERING (Brug EVENT_CONTESTANT_OPTAUUID fra din SQL) ---
+    df_raw = dp.get('opta', {}).get('shotevents', pd.DataFrame()).copy()
+    
     if df_raw.empty:
         st.info("Ingen OPTA skuddata fundet.")
         return
 
-    # Hvidovre UUID fra din konfiguration
-    HIF_UUID = "8638J8V8SHSNK67VTH1066V9D" 
+    # HIF UUID fra din team_mapping.py: '8gxd9ry2580pu1b1dd5ny9ymy'
+    HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY" 
     
-    # Sørg for at kolonner er uppercase og UUIDs er renset
+    # Sørg for at alle kolonner er store bogstaver (Streamlit standardiserer ofte)
     df_raw.columns = [c.upper() for c in df_raw.columns]
-    if 'CONTESTANT_OPTAUUID' in df_raw.columns:
-        df_raw['CONTESTANT_OPTAUUID'] = df_raw['CONTESTANT_OPTAUUID'].astype(str).str.upper().str.strip()
     
-    # FILTER: Ekskluder Hvidovre, så vi kun har resten af ligaen
-    df_skud = df_raw[df_raw['CONTESTANT_OPTAUUID'] != HIF_UUID].copy()
+    # Din SQL bruger kolonnenavnet: EVENT_CONTESTANT_OPTAUUID
+    col_team = 'EVENT_CONTESTANT_OPTAUUID'
+    
+    if col_team in df_raw.columns:
+        df_raw[col_team] = df_raw[col_team].astype(str).str.upper().str.strip()
+        # FILTER: Ekskluder Hvidovre
+        df_skud = df_raw[df_raw[col_team] != HIF_UUID].copy()
+    else:
+        st.error(f"Kolonnen {col_team} blev ikke fundet i data. Tilgængelige kolonner: {list(df_raw.columns)}")
+        return
 
     # --- 2. CSS STYLING ---
     st.markdown(f"""
@@ -34,11 +41,10 @@ def vis_side(dp):
             .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid {LIGA_BLUE}; margin-bottom: 10px; }}
             .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; }}
             .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; }}
-            .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. ZONE LOGIK (OPTA Pitch 100x100 -> Meter) ---
+    # --- 3. ZONE LOGIK ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -61,6 +67,7 @@ def vis_side(dp):
     }
 
     def map_to_zone(r):
+        # Opta koordinater er 0-100. Konverter til meter.
         mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
         for z, b in ZONE_BOUNDARIES.items():
             if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]:
@@ -75,14 +82,19 @@ def vis_side(dp):
 
     with tabs[0]:
         stats = []
+        # Mapping af UUID til Navn fra din TEAMS dict
+        uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+        
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
-            t_name = d['CONTESTANT_NAME'].iloc[0] if 'CONTESTANT_NAME' in d.columns else "Modstander"
+            t_uuid = d[col_team].iloc[0]
+            t_name = uuid_to_name.get(t_uuid, "Andet hold")
+            
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             if s > 1:
                 stats.append({
                     "Spiller": p, "Hold": t_name, "Skud": s, "Mål": m, 
-                    "Konv.%": (m/s*100), "xG": d['XG'].sum() if 'XG' in d.columns else 0
+                    "Konv.%": (m/s*100), "xG": pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
                 })
         st.dataframe(pd.DataFrame(stats).sort_values("Skud", ascending=False), 
                      use_container_width=True, hide_index=True)
@@ -103,7 +115,7 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.5)
             st.pyplot(fig)
 
-    # --- 5. ZONE PLOTS (Ekskl. Zone 8 i tabel) ---
+    # --- 5. ZONE PLOTS ---
     def zone_viz(data, is_m):
         viz, ctrl = st.columns([1.8, 1])
         with ctrl:
