@@ -67,7 +67,7 @@ def vis_side(dp):
         elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
         else: summary["N"] += 1
 
-    stats_disp = [("Kampe", summary["K"]), ("Sejr", summary["S"]), ("Uafgjort", summary["U"]), ("Nederlag", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    stats_disp = [("Kampe", summary["K"]), ("Sejr", summary["S"]), ("Uafgjort", summary["U"]), ("Nederlag", summary["N"]), ("Mål +", summary["M+"]), ("Mål -", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
@@ -77,7 +77,7 @@ def vis_side(dp):
     avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
     
     # Her har jeg ændret koden til at bruge 'stat-box' for at matche over-rækken
-    avg_map = [("POSS", "Besid.", 1, "%"), ("TOUCHES", "Felt", 0, ""), ("SHOTS", "Afsl.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "Afl.", 0, ""), ("FORWARD_PASSES", "Frem", 0, "")]
+    avg_map = [("POSS", "POSSESSION", 1, "%"), ("TOUCHES", "BERØRINGER I FELT", 0, ""), ("SHOTS", "SKUD.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "PASSES.", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
         avg_val = np.nanmean(vals) if vals else 0
