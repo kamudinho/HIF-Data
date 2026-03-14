@@ -19,7 +19,7 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    df_skud = dp.get('playerstats', pd.DataFrame()).copy()
+   df_skud = dp.get('playerstats', pd.DataFrame()).copy()
     if df_skud.empty:
         st.info("Ingen data fundet.")
         return
