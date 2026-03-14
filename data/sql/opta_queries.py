@@ -225,13 +225,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TYPEID,
                 e.EVENT_X,
                 e.EVENT_Y,
-                e.HOME_TEAM_NAME,
-                e.AWAY_TEAM_NAME,
-                e.HOME_SCORE,
-                e.AWAY_SCORE
+                m.HOME_TEAM_NAME,
+                m.AWAY_TEAM_NAME,
+                m.HOME_TEAM_SCORE as HOME_SCORE,
+                m.AWAY_TEAM_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             INNER JOIN GoalSequences gs ON e.SEQUENCEID = gs.SEQUENCEID 
                 AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+            LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
         """
     }
