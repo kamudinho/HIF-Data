@@ -104,7 +104,7 @@ def vis_side(dp):
             d_v = df_t if sel_p == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_p]
             
             # --- DYNAMISK STØRRELSE LOGIK ---
-            dot_size = 80 if sel_p != "Hele Holdet" else 25
+            dot_size = 25 if sel_p != "Hele Holdet" else 20
             
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
@@ -130,7 +130,7 @@ def vis_side(dp):
             d_v = df_t if sel_dz == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_dz]
             
             # --- DYNAMISK STØRRELSE LOGIK ---
-            dot_size_dz = 80 if sel_dz != "Hele Holdet" else 30
+            dot_size_dz = 25 if sel_dz != "Hele Holdet" else 20
             
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
