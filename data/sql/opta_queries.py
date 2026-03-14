@@ -208,19 +208,23 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Målspark, Hjørne, Frispark osv.)
+        # 9. UNIVERSAL SEQUENCE MAP (Rettet til Snowflake)
         "opta_sequence_map": f"""
-            WITH SelectedSequences AS (
-                -- Her finder vi de unikke sekvenser vi er interesserede i
-                SELECT DISTINCT SEQUENCEID, MATCH_OPTAUUID
-                FROM {DB}.OPTA_EVENTS
-                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            WITH TargetEvents AS (
+                -- Find alle relevante start/slut hændelser først
+                SELECT e.SEQUENCEID, e.MATCH_OPTAUUID
+                FROM {DB}.OPTA_EVENTS e
+                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+                WHERE e.MATCH_OPTAUUID IN ({match_id_subquery})
                 AND (
-                    (EVENT_TYPEID = 16) OR -- Mål
-                    (EVENT_TYPEID = 1 AND (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = OPTA_EVENTS.EVENT_OPTAUUID AND q.QUALIFIER_QID = 6)) OR -- Hjørnespark
-                    (EVENT_TYPEID = 1 AND (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = OPTA_EVENTS.EVENT_OPTAUUID AND q.QUALIFIER_QID = 124)) -- Målspark
+                    (e.EVENT_TYPEID = 16) OR -- Mål
+                    (e.EVENT_TYPEID = 1 AND q.QUALIFIER_QID IN (6, 124)) -- Hjørne (6) eller Målspark (124)
                 )
                 {hif_filter_event}
+            ),
+            SelectedSequences AS (
+                SELECT DISTINCT SEQUENCEID, MATCH_OPTAUUID
+                FROM TargetEvents
             )
             SELECT 
                 e.MATCH_OPTAUUID,
@@ -231,7 +235,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_X,
                 e.EVENT_Y,
                 e.EVENT_OUTCOME,
-                -- "Connectoren": Finder næste koordinat i samme sekvens
                 LEAD(e.EVENT_X) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_X,
                 LEAD(e.EVENT_Y) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as NEXT_Y
             FROM {DB}.OPTA_EVENTS e
