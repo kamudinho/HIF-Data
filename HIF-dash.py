@@ -120,7 +120,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Modstanderanalyse"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Holdoversigt", "Kampe", "Charts"],
+        sel = option_menu(None, options=["Holdoversigt", "Kampe", "Charts", "Afsutninger - liga"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
@@ -212,6 +212,9 @@ try:
             elif sel == "Charts":
                 import tools.ligaen.chart as pc
                 pc.vis_side(dp)
+            elif sel == "Afsutninger - liga":
+                import tools.ligaen.leagueshots as ls
+                ls.vis_side(dp)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
