@@ -10,16 +10,21 @@ from data.utils.team_mapping import TEAMS
 LIGA_BLUE = '#1f77b4'
 
 def vis_side(dp):
-    # --- 1. DATA INDLÆSNING ---
-    # Vi henter den specifikke liga-data, som du lige har tilføjet til analyse_load.py
-    df_skud = dp.get('opta', {}).get('league_shotevents', pd.DataFrame()).copy()
+    # --- DEBUG INFO ---
+    opta_data = dp.get('opta', {})
+    available_keys = list(opta_data.keys())
     
-    if df_skud.empty:
-        st.info("Ingen liga-skuddata fundet. Sørg for at 'opta_league_shotevents' er med i din analyse_load.py")
-        return
+    # Hvis vi slet ikke kan finde 'league_shotevents'
+    if 'league_shotevents' not in opta_data:
+        st.error(f"Nøglen 'league_shotevents' mangler i opta-pakken. Fundne nøgler: {available_keys}")
+        # Tjekker om den ligger i roden i stedet
+        df_skud = dp.get('league_shotevents', pd.DataFrame())
+    else:
+        df_skud = opta_data.get('league_shotevents', pd.DataFrame())
 
-    # Standardiser kolonnenavne til UPPERCASE
-    df_skud.columns = [c.upper() for c in df_skud.columns]
+    if df_skud.empty:
+        st.warning("Dataframe fundet, men den er TOM. Dette skyldes ofte at SQL-queryen ikke finder matches i Snowflake.")
+        return
     
     # Da SQL allerede har filtreret Hvidovre FRA, behøver vi ikke gøre det her.
     # Vi skal bare definere hvilken kolonne der holder hold-ID'et til oversigten
