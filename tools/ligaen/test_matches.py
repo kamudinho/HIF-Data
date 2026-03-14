@@ -134,12 +134,12 @@ def vis_side(dp):
                     h_pct = (hv / total * 100) if total > 0 else 50
                     st.markdown(f"""
                         <div style="margin-bottom: 8px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 2px;">
                                 <span style="font-weight: 700;">{h_str}</span>
                                 <span style="color: #888; text-transform: uppercase; font-size: 9px; font-weight: 600;">{label}</span>
                                 <span style="font-weight: 700;">{a_str}</span>
                             </div>
-                            <div style="display: flex; height: 6px; background: #eee; border-radius: 3px; overflow: hidden;">
+                            <div style="display: flex; height: 12px; background: #eee; border-radius: 3px; overflow: hidden;">
                                 <div style="width: {h_pct}%; background: {h_color};"></div>
                                 <div style="width: {100-h_pct}%; background: {a_color};"></div>
                             </div>
