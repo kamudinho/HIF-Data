@@ -6,31 +6,41 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from data.utils.team_mapping import TEAMS
 
-# Farver
+# Farver til branding
 HIF_RED = '#d71920'
 LIGA_BLUE = '#1f77b4'
 
 def vis_side(dp):
-    # --- 1. DATA & LOGO SETUP (Din præcise arkitektur) ---
+    # --- 1. DATA INDLÆSNING & LOGO SETUP ---
     opta_data = dp.get('opta', {})
     logo_map = dp.get("logo_map", {})
     df_skud = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
     if df_skud.empty:
-        st.warning("Ingen skuddata fundet.")
+        st.warning("Ingen liga-skuddata fundet.")
         return
     
     df_skud.columns = [c.upper() for c in df_skud.columns]
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
 
-    # DIN FUNKTION (Rå URL version til ImageColumn)
+    # Hjælpefunktion til logo-URL'er (samme logik som din ligatabel)
     def get_logo_url(opta_uuid):
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         if wy_id and wy_id in logo_map:
             return logo_map[wy_id]
         return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
 
-    # --- 2. LOGIK & BEREGNING ---
+    # --- 2. CSS STYLING ---
+    st.markdown(f"""
+        <style>
+            .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid {LIGA_BLUE}; margin-bottom: 10px; }}
+            .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; }}
+            .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 3. BEREGNING AF STATISTIK ---
+    # Danger Zone definition
     df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
     stats_list = []
@@ -48,11 +58,11 @@ def vis_side(dp):
         
         if s > 0:
             stats_list.append({
-                "Logo": get_logo_url(t_uuid), # Henter URL'en via din logik
+                "Logo": get_logo_url(t_uuid), 
                 "Spiller": p, 
                 "Klub": uuid_to_name.get(t_uuid, "Modstander"), 
-                "Skud": int(s),
-                "Mål": int(m),
+                "S": int(s),
+                "M": int(m),
                 "K%": float(round((m/s*100), 1)),
                 "DZ-S": int(dz_s),
                 "DZ-M": int(dz_m),
@@ -60,22 +70,23 @@ def vis_side(dp):
                 "DZ-Andel": float(round((dz_s/s*100), 1))
             })
     
-    df_final = pd.DataFrame(stats_list).sort_values("Skud", ascending=False)
+    df_final = pd.DataFrame(stats_list).sort_values("S", ascending=False)
 
-    # --- 3. UI ---
+    # --- 4. TABS ---
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
+    # TAB 0: HOVEDTABEL
     with tabs[0]:
         st.dataframe(
             df_final, 
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "Logo": st.column_config.ImageColumn("", width="small"), # Tegner logoet ud fra URL
+                "Logo": st.column_config.ImageColumn(" ", width="small"),
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
                 "Klub": st.column_config.TextColumn("Klub", width="small"),
-                "Skud": st.column_config.NumberColumn("S", format="%d"),
-                "Mål": st.column_config.NumberColumn("M", format="%d"),
+                "S": st.column_config.NumberColumn("S", format="%d"),
+                "M": st.column_config.NumberColumn("M", format="%d"),
                 "K%": st.column_config.NumberColumn("K%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
@@ -86,7 +97,8 @@ def vis_side(dp):
                 )
             }
         )
-    
+
+    # TAB 1: SHOT MAP
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -101,10 +113,19 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax, alpha=0.7)
             st.pyplot(fig)
 
-    # Zone definitioner til heatmap
+    # TAB 2: DZ-TABEL
+    with tabs[2]:
+        st.subheader("Danger Zone Performance")
+        st.dataframe(
+            df_final[['Logo', 'Spiller', 'Klub', 'DZ-S', 'DZ-M', 'DZ-K%']].sort_values('DZ-S', ascending=False),
+            use_container_width=True,
+            hide_index=True,
+            column_config={"Logo": st.column_config.ImageColumn(" ")}
+        )
+
+    # --- 5. ZONE HEATMAP LOGIK ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
-    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
 
     ZONE_BOUNDS = {
@@ -124,11 +145,11 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(8, 10))
             ax.set_ylim(55, 105)
             for name, b in ZONE_BOUNDS.items():
-                if b["y_max"] <= 55: continue
                 cnt = len(data[data['ZONE'] == name])
                 rect = patches.Rectangle((b["x_min"], max(b["y_min"], 55)), 
                                          b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55),
-                                         facecolor=LIGA_BLUE, alpha=min(cnt/15, 0.8) if cnt > 0 else 0.05, 
+                                         facecolor=LIGA_BLUE if cnt > 0 else '#f9f9f9',
+                                         alpha=min(cnt/15, 0.8) if cnt > 0 else 0.05, 
                                          edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
             st.pyplot(fig)
