@@ -108,7 +108,7 @@ def vis_side(dp):
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=20, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
             st.pyplot(fig)
 
     # --- TAB 3: DZ ---
@@ -127,7 +127,7 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(5, 7))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
             colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=20, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
     # --- ZONER FUNKTION ---
