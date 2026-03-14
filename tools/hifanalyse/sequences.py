@@ -31,10 +31,8 @@ def vis_side(dp):
 
     # --- FILTERING ---
     # Vi fokuserer på de sekvenser der enten indeholder et mål eller en afslutning
-    important_seq_ids = df_seq[df_seq['EVENT_TYPEID'].isin([16, 13, 14, 15])]['SEQUENCE_ID'].unique()
-    df_filtered = df_seq[df_seq['SEQUENCE_ID'].isin(important_seq_ids)]
-
-    st.title("🔄 Sequence Analysis")
+    important_seq_ids = df_seq[df_seq['EVENT_TYPEID'].isin([16, 13, 14, 15])]['SEQUENCEID'].unique()
+    df_filtered = df_seq[df_seq['SEQUENCEID'].isin(important_seq_ids)]
     
     col1, col2 = st.columns([1, 3])
 
@@ -43,7 +41,7 @@ def vis_side(dp):
         # Finder unikke sekvenser og giver dem et læsbart navn
         seq_options = []
         for sid in important_seq_ids:
-            temp = df_filtered[df_filtered['SEQUENCE_ID'] == sid]
+            temp = df_filtered[df_filtered['SEQUENCEID'] == sid]
             is_goal = any(temp['EVENT_TYPEID'] == 16)
             suffix = "⚽ MÅL" if is_goal else "🎯 Afslutning"
             player = temp.iloc[-1]['PLAYER_NAME']
@@ -57,7 +55,7 @@ def vis_side(dp):
         selected_id = selected_seq_obj['id']
 
         # Data for den valgte sekvens
-        active_seq = df_filtered[df_filtered['SEQUENCE_ID'] == selected_id].sort_values('EVENT_TIMESTAMP')
+        active_seq = df_filtered[df_filtered['SEQUENCEID'] == selected_id].sort_values('EVENT_TIMESTAMP')
         
         # Vis forløbet som en liste
         st.markdown("---")
