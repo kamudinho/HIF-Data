@@ -113,7 +113,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             {hif_filter_std}
         """,
 
-        # 4. SKUD EVENTS
+        # 4A. SKUD EVENTS
         "opta_shotevents": f"""
             SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
             FROM {DB}.OPTA_EVENTS e 
@@ -123,6 +123,19 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) 
             AND e.MATCH_OPTAUUID IN ({match_id_subquery})
             {hif_filter_event}
+        """,
+
+        # 4B. SKUD EVENTS
+        "opta_league_shotevents": f"""
+            SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
+            FROM {DB}.OPTA_EVENTS e 
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q 
+                ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID 
+                AND q.QUALIFIER_QID = 321
+            WHERE e.EVENT_TYPEID IN (13,14,15,16) 
+            AND e.MATCH_OPTAUUID IN ({match_id_subquery})
+            -- Vi fjerner HIF herfra, så vi kun har resten af ligaen
+            AND e.EVENT_CONTESTANT_OPTAUUID != '{HIF_UUID}'
         """,
 
         # 5. ASSISTS OG CHANCESKABELSE
