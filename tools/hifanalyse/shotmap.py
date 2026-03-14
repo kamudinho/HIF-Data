@@ -59,39 +59,88 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 1: SPILLEROVERSIGT (Rettet sortering og formatering) ---
-    with tabs[0]:
-        stats = []
-        for p in sorted(df_skud['PLAYER_NAME'].unique()):
-            d = df_skud[df_skud['PLAYER_NAME'] == p]
-            dz = d[d['IS_DZ_GEO']]
-            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
-            stats.append({
-                "Spiller": p.split()[-1], 
-                "Skud": s, 
-                "Mål": m, 
-                "Konvertering%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": dzs, 
-                "DZ-Mål": dzm, 
-                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100) if s > 0 else 0
-            })
-        
-        # Rettet sortering: Vi sorterer nu efter "Skud" (ikke "S")
-        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
-        
-        st.dataframe(
-            df_f, 
-            use_container_width=True, 
-            height=(len(df_f) + 1) * 36, 
-            hide_index=True,
-            column_config={
-                "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
-                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-            }
-        )
+    # --- TAB 1: SPILLEROVERSIGT (Opdateret med logoer og DZ-stats) ---
+    with tabs[0]:
+        stats = []
+        # Vi looper gennem alle spillere i liga-datasættet
+        for p in df_skud['PLAYER_NAME'].unique():
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
+            t_uuid = str(d[col_team_uuid].iloc[0]).upper()
+            dz = d[d['IS_DZ_GEO']]
+            
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            xg = d['EXPECTED_GOALS_VALUE'].sum() if 'EXPECTED_GOALS_VALUE' in d.columns else 0
+            
+            stats.append({
+                "UUID": t_uuid,
+                "Spiller": p, # Vi beholder fulde navn her til opslag
+                "S": s, 
+                "M": m, 
+                "xG": round(xg, 2),
+                "K%": (m/s*100) if s > 0 else 0,
+                "DZ-S": dzs, 
+                "DZ-M": dzm, 
+                "DZ-K%": (dzm/dzs*100) if dzs > 0 else 0,
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+            })
+        
+        # Sorter efter Mål (M) og tag Top 20
+        df_f = pd.DataFrame(stats).sort_values("M", ascending=False).head(20).reset_index(drop=True)
+        
+        # Opbyg HTML tabellen
+        html = f"""
+        <table class="hif-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th></th>
+                    <th style="text-align:left;">Spiller</th>
+                    <th>S</th>
+                    <th>M</th>
+                    <th>xG</th>
+                    <th>K%</th>
+                    <th>DZ-S</th>
+                    <th>DZ-M</th>
+                    <th>DZ-K%</th>
+                    <th>DZ-Andel</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        
+        for i, row in df_f.iterrows():
+            # Find logoet via team_mapping
+            wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == row['UUID']), None)
+            l_url = logo_map.get(wy_id, "")
+            logo_img = f'<img src="{l_url}" width="25">' if l_url else ""
+            
+            # Formatering af progress bar til DZ-Andel
+            progress_bar = f"""
+            <div style="background:#eee; width:100%; height:8px; border-radius:4px;">
+                <div style="background:{HIF_RED}; width:{row['DZ-Andel']}%; height:100%; border-radius:4px;"></div>
+            </div>
+            """
+
+            html += f"""
+                <tr>
+                    <td>{i+1}</td>
+                    <td>{logo_img}</td>
+                    <td style="text-align:left;"><b>{row['Spiller']}</b></td>
+                    <td>{row['S']}</td>
+                    <td style="color:{HIF_RED}; font-weight:800;">{row['M']}</td>
+                    <td>{row['xG']:.2f}</td>
+                    <td>{row['K%']:.1f}%</td>
+                    <td>{row['DZ-S']}</td>
+                    <td>{row['DZ-M']}</td>
+                    <td>{row['DZ-K%']:.1f}%</td>
+                    <td style="width:80px;">{progress_bar}<span style="font-size:10px;">{int(row['DZ-Andel'])}%</span></td>
+                </tr>
+            """
+        
+        html += "</tbody></table>"
+        st.markdown(html, unsafe_allow_html=True)
+      
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
