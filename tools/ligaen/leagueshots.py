@@ -96,15 +96,31 @@ def vis_side(dp):
         df_profiler = pd.DataFrame(stats_list)
         if not df_profiler.empty:
             df_profiler = df_profiler.sort_values("Skud", ascending=False)
+            
             st.dataframe(
                 df_profiler, 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "Skud": st.column_config.ProgressColumn("Skud", format="%d", min_value=0, max_value=int(df_profiler['Skud'].max())),
-                    "xG": st.column_config.NumberColumn("xG", format="%.2f"),
-                    "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                    "Mål": st.column_config.NumberColumn("Mål", format="%d")
+                    "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
+                    "Hold": st.column_config.TextColumn("Hold", width="small"),
+                    "Skud": st.column_config.NumberColumn("Skud", format="%d"),
+                    "Mål": st.column_config.NumberColumn("Mål", format="%d"),
+                    # Progress Bars til xG og Konv.%
+                    "xG": st.column_config.ProgressColumn(
+                        "xG", 
+                        help="Samlet Expected Goals",
+                        format="%.2f",
+                        min_value=0,
+                        max_value=float(df_profiler['xG'].max())
+                    ),
+                    "Konv.%": st.column_config.ProgressColumn(
+                        "Konv.%", 
+                        help="Mål divideret med skud",
+                        format="%.1f%%",
+                        min_value=0,
+                        max_value=float(df_profiler['Konv.%'].max())
+                    )
                 }
             )
 
