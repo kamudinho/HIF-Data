@@ -26,7 +26,16 @@ def vis_side(dp):
         st.info("Ingen data fundet i 'playerstats'.")
         return
 
-    # --- 1. ZONE DEFINITIONER ---
+    # --- 1. HOLDVALG (Den eneste forskel fra shotmap.py) ---
+    if 'TEAM_NAME' in df_raw.columns:
+        hold_liste = sorted(df_raw['TEAM_NAME'].unique())
+        valgt_hold = st.selectbox("Vælg Hold", hold_liste)
+        df_skud = df_raw[df_raw['TEAM_NAME'] == valgt_hold].copy()
+    else:
+        # Fallback hvis TEAM_NAME mangler
+        df_skud = df_raw.copy()
+
+    # --- 2. ZONE DEFINITIONER (Nøjagtig kopi) ---
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -60,61 +69,40 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT (Liga-version) ---
+    # --- TAB 1: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
-        # Vi itererer over alle unikke spillere i ligadataen
-        for p in df_all['PLAYER_NAME'].unique():
-            d = df_all[df_all['PLAYER_NAME'] == p]
-            
-            # Hent Team UUID for at kunne vise logo
-            t_uuid = str(d[col_team_uuid].iloc[0]).upper()
-            wy_id = next((v['team_wyid'] for k, v in TEAMS.items() if v.get('opta_uuid') == t_uuid), None)
-            l_url = logo_map.get(wy_id) or logo_map.get(str(wy_id), "")
-            
+        for p in sorted(df_skud['PLAYER_NAME'].unique()):
+            d = df_skud[df_skud['PLAYER_NAME'] == p]
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
-            
             stats.append({
-                "Logo": l_url,
-                "Spiller": p,
-                "Hold": uuid_to_name.get(t_uuid, "Ukendt"),
-                "Skud": s, 
-                "Mål": m, 
+                "Spiller": p.split()[-1], 
+                "Skud": s, "Mål": m, 
                 "Konvertering%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": dzs, 
-                "DZ-Mål": dzm, 
+                "DZ-Skud": dzs, "DZ-Mål": dzm, 
                 "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
                 "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
+                    column_config={
+                        "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
+                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
+                        "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+                    })
 
-        df_f = pd.DataFrame(stats).sort_values("Mål", ascending=False).head(50) # Top 50 i ligaen
-
-        st.dataframe(
-            df_f, 
-            use_container_width=True, 
-            height=600, 
-            hide_index=True,
-            column_config={
-                "Logo": st.column_config.ImageColumn("", width="small"),
-                "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
-                "Hold": st.column_config.TextColumn("Hold", width="small"),
-                "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-            }
-        )
-    
+    # --- TAB 2: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_p = st.selectbox("Vælg spiller", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()))
-            d_v = df_skud if sel_p == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
+            sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_skud['PLAYER_NAME'].unique()))
+            d_v = df_skud if sel_p == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
@@ -123,25 +111,17 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
             st.pyplot(fig)
 
+    # --- TAB 3: DZ ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hvidovre IF"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
-            d_v = df_skud if sel_dz == "Hvidovre IF" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
+            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_skud['PLAYER_NAME'].unique()), key="dz_sel")
+            d_v = df_skud if sel_dz == "Hele Holdet" else df_skud[df_skud['PLAYER_NAME'] == sel_dz]
             dz_d = d_v[d_v['IS_DZ_GEO']]
-            total_shots = len(d_v)
             m_alt = len(d_v[d_v["EVENT_TYPEID"]==16])
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:white; border:2px solid {HIF_RED};"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED};"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-            
-            dz_andel_skud = (len(dz_d) / total_shots * 100) if total_shots > 0 else 0
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_RED}"><div class="stat-label">Andel af skud i DZ</div><div class="stat-value">{dz_andel_skud:.1f}%</div></div>', unsafe_allow_html=True)
-            
-            dz_andel_maal = (m_dz / m_alt * 100) if m_alt > 0 else 0
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Andel af mål fra DZ</div><div class="stat-value">{dz_andel_maal:.1f}%</div></div>', unsafe_allow_html=True)
-
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -150,6 +130,7 @@ def vis_side(dp):
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
+    # --- ZONER FUNKTION ---
     def zone_plot_enhanced(data, is_m):
         col_viz, col_ctrl = st.columns([1.8, 1])
         total_count = len(data)
@@ -157,44 +138,28 @@ def vis_side(dp):
         for zone, b in ZONE_BOUNDARIES.items():
             z_data = data[data['Zone'] == zone]
             cnt = len(z_data)
-            pct = (cnt / total_count * 100) if total_count > 0 else 0
             top_p = z_data['PLAYER_NAME'].mode().iloc[0].split()[-1] if cnt > 0 else "-"
-            zone_stats[zone] = {'cnt': cnt, 'pct': pct, 'top': top_p}
+            zone_stats[zone] = {'cnt': cnt, 'pct': (cnt/total_count*100) if total_count>0 else 0, 'top': top_p}
 
         with col_ctrl:
             label = "Mål" if is_m else "Skud"
-            st.markdown(f"**DETALJERET {label.upper()}SOVERSIGT**")
-            z_df = pd.DataFrame([
-                {'Zone': k, label: v['cnt'], '%': f"{v['pct']:.1f}%", 'Top': v['top']}
-                for k, v in zone_stats.items() if v['cnt'] > 0 and k != "Zone 8"
-            ]).sort_values(label, ascending=False)
+            z_df = pd.DataFrame([{'Zone': k, label: v['cnt'], 'Top': v['top']} for k, v in zone_stats.items() if v['cnt'] > 0 and k != "Zone 8"]).sort_values(label, ascending=False)
             st.dataframe(z_df, hide_index=True, use_container_width=True)
 
         with col_viz:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw(figsize=(8, 10))
-            FOCUS_Y = 55
-            ax.set_ylim(FOCUS_Y, 105)
+            ax.set_ylim(55, 105)
             max_v = max([v['cnt'] for k, v in zone_stats.items() if k != "Zone 8"]) if total_count > 0 else 1
             cmap = plt.cm.YlOrRd if is_m else plt.cm.Blues
-
             for name, b in ZONE_BOUNDARIES.items():
-                if b["y_max"] <= FOCUS_Y: continue
-                y_draw_min = max(b["y_min"], FOCUS_Y)
-                rect_height = b["y_max"] - y_draw_min
+                if b["y_max"] <= 55: continue
+                y_min_draw = max(b["y_min"], 55)
                 stats = zone_stats[name]
-                color_val = stats['cnt'] / max_v if max_v > 0 else 0
-                face_color = cmap(color_val) if stats['cnt'] > 0 else '#f9f9f9'
-                rect = patches.Rectangle((b["x_min"], y_draw_min), b["x_max"]-b["x_min"], rect_height, 
-                                         facecolor=face_color, alpha=0.7, edgecolor='black', linestyle='--')
-                ax.add_patch(rect)
+                face = cmap(stats['cnt']/max_v) if stats['cnt'] > 0 else '#f9f9f9'
+                ax.add_patch(patches.Rectangle((b["x_min"], y_min_draw), b["x_max"]-b["x_min"], b["y_max"]-y_min_draw, facecolor=face, alpha=0.7, edgecolor='black', ls='--'))
                 if stats['cnt'] > 0:
-                    text_y = y_draw_min + (rect_height / 2)
-                    z_text = (f"$\\mathbf{{{name.replace('Zone ', 'Z')}}}$\n"
-                              f"{stats['cnt']} ({stats['pct']:.1f}%)\n"
-                              f"{stats['top']}")
-                    ax.text(b["x_min"] + (b["x_max"] - b["x_min"])/2, text_y, z_text, ha='center', va='center', fontsize=7,
-                            color='black' if color_val < 0.5 else 'white', linespacing=1.5)
+                    ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, y_min_draw+(b["y_max"]-y_min_draw)/2, f"{stats['cnt']}", ha='center', va='center', fontsize=8, fontweight='bold')
             st.pyplot(fig)
 
     with tabs[3]: zone_plot_enhanced(df_skud, False)
