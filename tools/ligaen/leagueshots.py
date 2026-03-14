@@ -10,24 +10,18 @@ from data.utils.team_mapping import TEAMS
 LIGA_BLUE = '#1f77b4'
 
 def vis_side(dp):
-    # --- DEBUG INFO ---
+    # --- 1. DATA INDLÆSNING & FEJLKONTROL ---
     opta_data = dp.get('opta', {})
-    available_keys = list(opta_data.keys())
     
-    # Hvis vi slet ikke kan finde 'league_shotevents'
-    if 'league_shotevents' not in opta_data:
-        st.error(f"Nøglen 'league_shotevents' mangler i opta-pakken. Fundne nøgler: {available_keys}")
-        # Tjekker om den ligger i roden i stedet
-        df_skud = dp.get('league_shotevents', pd.DataFrame())
-    else:
-        df_skud = opta_data.get('league_shotevents', pd.DataFrame())
+    # Vi henter den specifikke liga-query
+    df_skud = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
     if df_skud.empty:
-        st.warning("Dataframe fundet, men den er TOM. Dette skyldes ofte at SQL-queryen ikke finder matches i Snowflake.")
+        st.warning("Ingen liga-skuddata fundet i Snowflake for den valgte sæson.")
         return
     
-    # Da SQL allerede har filtreret Hvidovre FRA, behøver vi ikke gøre det her.
-    # Vi skal bare definere hvilken kolonne der holder hold-ID'et til oversigten
+    # Standardiser kolonner
+    df_skud.columns = [c.upper() for c in df_skud.columns]
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
 
     # --- 2. CSS STYLING ---
@@ -69,18 +63,17 @@ def vis_side(dp):
         return "Zone 8"
 
     df_skud['ZONE'] = df_skud.apply(map_to_zone, axis=1)
+    # Danger Zone Definition
+    df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
     # --- 4. TABS ---
     tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
-    # --- 4. TABS ---
-    tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
-
+    # --- TAB 0: LIGAPROFILER ---
     with tabs[0]:
-        stats = []
+        stats_list = []
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         
-        # Saml al data først
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
             t_uuid = str(d[col_team].iloc[0]).upper()
@@ -88,43 +81,38 @@ def vis_side(dp):
             
             s = len(d)
             m = len(d[d['EVENT_TYPEID'] == 16])
-            xg_val = pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
+            xg_sum = pd.to_numeric(d['XG_RAW'], errors='coerce').sum()
             
             if s > 0:
-                stats.append({
+                stats_list.append({
                     "Spiller": p, 
                     "Hold": t_name, 
                     "Skud": int(s),
                     "Mål": int(m),
-                    "Konv.%": float(round((m/s*100), 1)) if s > 0 else 0.0, 
-                    "xG": float(round(xg_val, 2))
+                    "Konv.%": float(round((m/s*100), 1)), 
+                    "xG": float(round(xg_sum, 2))
                 })
         
-        # Lav DF og vis den UDENFOR for-loopet
-        df_stats = pd.DataFrame(stats).sort_values("Skud", ascending=False)
-        
-        st.dataframe(
-            df_stats, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "xG": st.column_config.NumberColumn("xG", format="%.2f"),
-                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                "Skud": st.column_config.NumberColumn("Skud", format="%d"),
-                "Mål": st.column_config.NumberColumn("Mål", format="%d")
-            }
-        )
-        
-        if dz_stats:
-            df_dz = pd.DataFrame(dz_stats).sort_values("DZ Skud", ascending=False)
-            st.dataframe(df_dz, use_container_width=True, hide_index=True)
-        else:
-            st.write("Ingen DZ-data fundet.")
+        df_profiler = pd.DataFrame(stats_list)
+        if not df_profiler.empty:
+            df_profiler = df_profiler.sort_values("Skud", ascending=False)
+            st.dataframe(
+                df_profiler, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Skud": st.column_config.ProgressColumn("Skud", format="%d", min_value=0, max_value=int(df_profiler['Skud'].max())),
+                    "xG": st.column_config.NumberColumn("xG", format="%.2f"),
+                    "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                    "Mål": st.column_config.NumberColumn("Mål", format="%d")
+                }
+            )
 
+    # --- TAB 1: AFSLUTNINGER (Shot Map) ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            sel_p = st.selectbox("Vælg Spiller (Liga)", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()))
+            sel_p = st.selectbox("Vælg Spiller", ["HELE LIGAEN"] + sorted(df_skud['PLAYER_NAME'].unique()))
             d_v = df_skud if sel_p == "HELE LIGAEN" else df_skud[df_skud['PLAYER_NAME'] == sel_p]
             
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
@@ -133,31 +121,28 @@ def vis_side(dp):
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
-            # Mål er blå, missere er hvide med blå kant
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: LIGA_BLUE, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.6)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=LIGA_BLUE, ax=ax, alpha=0.7)
             st.pyplot(fig)
 
+    # --- TAB 2: DZ-ANALYSE ---
     with tabs[2]:
         st.subheader("Danger Zone (DZ) Analyse")
-        st.info("Danger Zone er det centrale område i feltet (mellem målstolperne), hvorfra de fleste mål scores.")
-        
-        # Beregn DZ skud (defineret geografisk i din zone logik tidligere)
-        # Vi genbruger din IS_DZ_GEO logik eller laver en hurtig filtrering:
-        df_skud['IS_DZ'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
-        
-        dz_stats = []
+        dz_list = []
         for p in df_skud['PLAYER_NAME'].unique():
             d = df_skud[df_skud['PLAYER_NAME'] == p]
             dz_d = d[d['IS_DZ'] == True]
-            
-            if len(dz_d) > 0:
-                dz_stats.append({
+            if not dz_d.empty:
+                dz_list.append({
                     "Spiller": p,
                     "DZ Skud": len(dz_d),
                     "DZ Mål": len(dz_d[dz_d['EVENT_TYPEID'] == 16]),
-                    "DZ xG": pd.to_numeric(dz_d['XG_RAW'], errors='coerce').sum()
+                    "DZ xG": round(pd.to_numeric(dz_d['XG_RAW'], errors='coerce').sum(), 2)
                 })
+        
+        if dz_list:
+            df_dz = pd.DataFrame(dz_list).sort_values("DZ Skud", ascending=False)
+            st.dataframe(df_dz, use_container_width=True, hide_index=True)
 
     # --- 5. ZONE PLOTS FUNKTION ---
     def zone_viz(data, is_m):
@@ -179,7 +164,7 @@ def vis_side(dp):
                 rect = patches.Rectangle((b["x_min"], max(b["y_min"], 55)), 
                                          b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55),
                                          facecolor=LIGA_BLUE if cnt > 0 else '#f9f9f9',
-                                         alpha=min(cnt/10, 0.8) if cnt > 0 else 0.1, 
+                                         alpha=min(cnt/15, 0.8) if cnt > 0 else 0.05, 
                                          edgecolor='black', linestyle='--')
                 ax.add_patch(rect)
             st.pyplot(fig)
