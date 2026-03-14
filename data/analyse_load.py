@@ -33,7 +33,7 @@ def get_analysis_package(hif_only=False):
     # 1. Hent data fra Snowflake via de nye queries
     # 'opta_team_stats' er nu din "Master View" med xG, Possession, Kit Colors etc.
     df_opta_stats = safe_query("opta_team_stats")
-    
+    df_sequence = safe_query("opta_sequence_map")
     df_matches = safe_query("opta_matches")
     df_shots = safe_query("opta_shotevents")
     df_league_shots = safe_query("opta_league_shotevents")
@@ -71,8 +71,9 @@ def get_analysis_package(hif_only=False):
         "opta_player_linebreaks": df_player_linebreaks,
         "opta": {
             "matches": df_matches,
-            "team_stats": df_opta_stats, # Her ligger din Master-data til layoutet
+            "team_stats": df_opta_stats,
             "team_linebreaks": df_team_linebreaks,
+            "opta_sequence_map": df_sequence,
             "player_linebreaks": df_player_linebreaks,
             "league_shotevents": df_league_shots
         },
