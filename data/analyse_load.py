@@ -36,6 +36,7 @@ def get_analysis_package(hif_only=False):
     
     df_matches = safe_query("opta_matches")
     df_shots = safe_query("opta_shotevents")
+    df_league_shots = safe_query("opta_league_shotevents")
     df_assists = safe_query("opta_assists")
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
@@ -72,7 +73,8 @@ def get_analysis_package(hif_only=False):
             "matches": df_matches,
             "team_stats": df_opta_stats, # Her ligger din Master-data til layoutet
             "team_linebreaks": df_team_linebreaks,
-            "player_linebreaks": df_player_linebreaks
+            "player_linebreaks": df_player_linebreaks,
+            "league_shotevents": df_league_shots
         },
         "config": {
             "liga_navn": comp_f,
