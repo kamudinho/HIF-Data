@@ -206,5 +206,37 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
             ORDER BY EVENT_TIMESTAMP DESC
             LIMIT 6000
+        """,
+        
+        # 9. UNIVERSAL SEQUENCE MAP (Målspark, Hjørne, Frispark osv.)
+        "opta_sequence_map": f"""
+            WITH SelectedSequences AS (
+                -- Her finder vi de unikke sekvenser vi er interesserede i
+                SELECT DISTINCT SEQUENCE_ID, MATCH_OPTAUUID
+                FROM {DB}.OPTA_EVENTS
+                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+                AND (
+                    (EVENT_TYPEID = 16) OR -- Mål
+                    (EVENT_TYPEID = 1 AND (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = OPTA_EVENTS.EVENT_OPTAUUID AND q.QUALIFIER_QID = 6)) OR -- Hjørnespark
+                    (EVENT_TYPEID = 1 AND (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = OPTA_EVENTS.EVENT_OPTAUUID AND q.QUALIFIER_QID = 124)) -- Målspark
+                )
+                {hif_filter_event}
+            )
+            SELECT 
+                e.MATCH_OPTAUUID,
+                e.SEQUENCE_ID,
+                e.EVENT_TIMESTAMP,
+                e.PLAYER_NAME,
+                e.EVENT_TYPEID,
+                e.EVENT_X,
+                e.EVENT_Y,
+                e.EVENT_OUTCOME,
+                -- "Connectoren": Finder næste koordinat i samme sekvens
+                LEAD(e.EVENT_X) OVER (PARTITION BY e.SEQUENCE_ID ORDER BY e.EVENT_TIMESTAMP) as NEXT_X,
+                LEAD(e.EVENT_Y) OVER (PARTITION BY e.SEQUENCE_ID ORDER BY e.EVENT_TIMESTAMP) as NEXT_Y
+            FROM {DB}.OPTA_EVENTS e
+            INNER JOIN SelectedSequences s ON e.SEQUENCE_ID = s.SEQUENCE_ID 
+                AND e.MATCH_OPTAUUID = s.MATCH_OPTAUUID
+            ORDER BY e.SEQUENCE_ID, e.EVENT_TIMESTAMP ASC
         """
     }
