@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from data.utils.team_mapping import TEAMS
 
-# Farver til branding
+# Farver til branding (Hvidovre stil)
 HIF_RED = '#d71920'
 LIGA_BLUE = '#1f77b4'
 
@@ -23,7 +23,7 @@ def vis_side(dp):
     df_skud.columns = [c.upper() for c in df_skud.columns]
     col_team = 'EVENT_CONTESTANT_OPTAUUID'
 
-    # Hjælpefunktion til logo-URL'er (samme logik som din ligatabel)
+    # Hjælpefunktion til logo-URL'er (samme arkitektur som din ligatabel)
     def get_logo_url(opta_uuid):
         wy_id = next((info.get('team_wyid') for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
         if wy_id and wy_id in logo_map:
@@ -70,12 +70,13 @@ def vis_side(dp):
                 "DZ-Andel": float(round((dz_s/s*100), 1))
             })
     
-    df_final = pd.DataFrame(stats_list).sort_values("S", ascending=False)
+    # Her laver vi Top 20 begrænsningen
+    df_final = pd.DataFrame(stats_list).sort_values("S", ascending=False).head(20)
 
     # --- 4. TABS ---
-    tabs = st.tabs(["LIGAPROFILER", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
+    tabs = st.tabs(["LIGAPROFILER (TOP 20)", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
-    # TAB 0: HOVEDTABEL
+    # TAB 0: HOVEDTABEL (Begrænset til Top 20)
     with tabs[0]:
         st.dataframe(
             df_final, 
@@ -85,8 +86,8 @@ def vis_side(dp):
                 "Logo": st.column_config.ImageColumn(" ", width="small"),
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
                 "Klub": st.column_config.TextColumn("Klub", width="small"),
-                "S": st.column_config.NumberColumn("S", format="%d"),
-                "M": st.column_config.NumberColumn("M", format="%d"),
+                "S": st.column_config.NumberColumn("S", format="%d", help="Skud i alt"),
+                "M": st.column_config.NumberColumn("M", format="%d", help="Mål i alt"),
                 "K%": st.column_config.NumberColumn("K%", format="%.1f%%"),
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
@@ -98,7 +99,7 @@ def vis_side(dp):
             }
         )
 
-    # TAB 1: SHOT MAP
+    # TAB 1: AFSLUTNINGER (Shot Map)
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -113,11 +114,12 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=colors, edgecolors=HIF_RED, ax=ax, alpha=0.7)
             st.pyplot(fig)
 
-    # TAB 2: DZ-TABEL
+    # TAB 2: DZ-TABEL (Top 20 efter DZ-skud)
     with tabs[2]:
-        st.subheader("Danger Zone Performance")
+        st.subheader("Danger Zone Performance (Top 20)")
+        dz_top20 = df_final[['Logo', 'Spiller', 'Klub', 'DZ-S', 'DZ-M', 'DZ-K%']].sort_values('DZ-S', ascending=False).head(20)
         st.dataframe(
-            df_final[['Logo', 'Spiller', 'Klub', 'DZ-S', 'DZ-M', 'DZ-K%']].sort_values('DZ-S', ascending=False),
+            dz_top20,
             use_container_width=True,
             hide_index=True,
             column_config={"Logo": st.column_config.ImageColumn(" ")}
