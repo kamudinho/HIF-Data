@@ -23,15 +23,20 @@ def vis_side(dp):
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 2. CSS STYLING ---
+    # --- 2. CSS STYLING (Ensrettet design) ---
     st.markdown("""
         <style>
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 6px; border-bottom: 3px solid #cc0000; }
-        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; }
+        .stat-box { 
+            text-align: center; 
+            background: #f8f9fa; 
+            border-radius: 6px; 
+            padding: 6px; 
+            border-bottom: 3px solid #cc0000;
+            height: 100%;
+        }
+        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 15px; color: #111; }
-        .avg-container { text-align: center; background: #ffffff; border-radius: 6px; padding: 4px; border: 1px solid #eee; }
-        .avg-label { font-size: 9px; color: #999; font-weight: 600; text-transform: uppercase; }
-        .avg-val { font-weight: 700; font-size: 11px; color: #333; }
+        
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
         .time-pill { text-align: center; font-weight: bold; color: #cc0000; border: 2px solid #cc0000; border-radius: 4px; padding: 4px 0; font-size: 16px; }
@@ -39,8 +44,11 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP MENU ---
-    top_cols = st.columns([2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    # --- 3. TOP MENU (Holdvalg + K-S-U-N) ---
+    # Vi bruger [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6] for at få præcis samme kolonner i begge rækker
+    col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
+    
+    top_cols = st.columns(col_layout)
     with top_cols[0]:
         valgt_navn = st.selectbox("Vælg hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
@@ -63,17 +71,22 @@ def vis_side(dp):
     for i, (l, v) in enumerate(stats_disp):
         top_cols[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # Gennemsnit
-    avg_cols = st.columns([2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
+    # --- 4. GENNEMSNITSRÆKKE (Nu med stat-box klassen!) ---
+    st.write("") # Lille afstand
+    avg_cols = st.columns(col_layout)
     avg_cols[0].markdown("<div style='font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; padding-top: 10px;'>Sæson gennemsnit</div>", unsafe_allow_html=True)
+    
+    # Her har jeg ændret koden til at bruge 'stat-box' for at matche over-rækken
     avg_map = [("POSS", "Besid.", 1, "%"), ("TOUCHES", "Felt", 0, ""), ("SHOTS", "Afsl.", 0, ""), ("XG", "xG", 2, ""), ("PASSES", "Afl.", 0, ""), ("FORWARD_PASSES", "Frem", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = [pd.to_numeric(m.get(f"{'HOME_' if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else 'AWAY_'}{key}"), errors='coerce') for _, m in played.iterrows()]
         avg_val = np.nanmean(vals) if vals else 0
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-        avg_cols[i+2].markdown(f"<div class='avg-container'><div class='avg-label'>{label}</div><div class='avg-val'>{fmt}</div></div>", unsafe_allow_html=True)
+        
+        # Bruger nu samme HTML struktur som ovenover
+        avg_cols[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TABS ---
+    # --- 5. TABS OG KAMPVISNING ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
@@ -101,7 +114,6 @@ def vis_side(dp):
             c5.markdown(f"<div class='team-name' style='text-align:left;'>{a_n}</div>", unsafe_allow_html=True)
 
             if spillet:
-                # Stats bars (kun for spillede kampe)
                 st.write("")
                 h_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if h_uuid == valgt_uuid else "#d1d1d1"
                 a_color = TEAM_COLORS.get(a_n, {}).get("primary", "#cc0000") if a_uuid == valgt_uuid else "#d1d1d1"
