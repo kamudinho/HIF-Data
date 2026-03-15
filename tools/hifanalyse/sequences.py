@@ -2,154 +2,83 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
 
-# Konstanter til visualisering
-GOAL_RED = '#cc0000'    # Mål
-ASSIST_BLUE = '#1e90ff'  # Assist
-SEQ_GRAY = '#999999'    # Øvrig sekvens
-
 def vis_side(dp):
-    st.markdown("""
-        <style>
-        .match-header { font-size: 1.6rem; font-weight: 800; text-align: center; margin-bottom: 25px; text-transform: uppercase; color: #cc0000; }
-        .seq-info { background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-top: 20px; }
-        </style>
-    """, unsafe_allow_html=True)
-
     # 1. Hent data
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
-    
     if df.empty:
         st.warning("Ingen sekvensdata fundet.")
         return
 
-    # Sørg for at koordinater er numeriske
-    coord_cols = ['RAW_X', 'RAW_Y', 'PREV_X_1', 'PREV_Y_1']
-    for col in coord_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Konverter koordinater
+    for col in ['RAW_X', 'RAW_Y', 'PREV_X_1', 'PREV_Y_1']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # 2. Find unikke mål til dropdown (EVENT_TYPEID 16)
+    # 2. Find mål til dropdown
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
-    
     if goal_events.empty:
         st.info("Ingen scoringer fundet.")
         return
 
-    # Lav dropdown label
-    goal_events['MATCH_LABEL'] = (
-        goal_events['PLAYER_NAME'] + " | " + 
-        goal_events['HOME_TEAM'] + " v " + goal_events['AWAY_TEAM']
-    )
-    selected_label = st.selectbox("Vælg mål-sekvens", options=goal_events['MATCH_LABEL'].unique())
+    goal_events['LABEL'] = goal_events['PLAYER_NAME'] + " | " + goal_events['HOME_TEAM'] + " v " + goal_events['AWAY_TEAM']
+    selected_label = st.selectbox("Vælg mål-sekvens", options=goal_events['LABEL'].unique())
     
-    # Hent SEQUENCEID for det valgte mål
-    selected_id = goal_events[goal_events['MATCH_LABEL'] == selected_label]['SEQUENCEID'].iloc[0]
+    # Hent SEQUENCEID
+    selected_id = goal_events[goal_events['LABEL'] == selected_label]['SEQUENCEID'].iloc[0]
 
-    # --- DATABEHANDLING AF HELE SEKVENSEN ---
-    # Vi henter ALLE events for den valgte sekvens og sorterer dem kronologisk
+    # 3. Filtrer og sorter hele sekvensen
     active_seq = df[df['SEQUENCEID'] == selected_id].copy().sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
     
-    if active_seq.empty: return
-
-    # Identificer målet, skytten (1 før målet) og assisten (2 før målet) via index
-    goal_indices = active_seq[active_seq['EVENT_TYPEID'] == 16].index
-    if len(goal_indices) == 0: return
-    
-    goal_idx = goal_indices[-1]  # Selve målet (Type 16)
-    shot_idx = goal_idx - 1      # Skytten (f.eks. modtager bolden og skyder)
-    assist_idx = goal_idx - 2    # Assisten (ligger afleveringen til skytten)
+    # Identificer roller ud fra index
+    goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
+    assist_idx = goal_idx - 1  # Den sidste pasning/aktion før målet
 
     # --- Visualisering ---
-    col_viz, col_data = st.columns([2.8, 1])
+    pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
+    fig, ax = pitch.draw(figsize=(12, 8))
 
-    with col_viz:
-        # Hent målet for at få overskrift og flip-logik
-        goal_row = active_seq.loc[goal_idx]
-        st.markdown(f'<div class="match-header">{goal_row["HOME_TEAM"]} {goal_row["HOME_SCORE"]} - {goal_row["AWAY_SCORE"]} {goal_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
+    # Flip logik (Hvidovre angriber mod højre)
+    goal_row = active_seq.loc[goal_idx]
+    flip = True if goal_row['RAW_X'] < 50 else False
+    def fx(x): return 100 - x if flip else x
+    def fy(y): return 100 - y if flip else y
 
-        # Pitch setup
-        pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
-        fig, ax = pitch.draw(figsize=(12, 8))
-
-        # Flip-logik: Vi vil altid have Hvidovre til at angribe mod højre (x=100)
-        # Vi definerer flip ud fra målet (goal_row)
-        flip = True if goal_row['RAW_X'] < 50 else False
-        def fx(x): return 100 - x if flip else x
-        def fy(y): return 100 - y if flip else y
-
-        # --- TEGN HELE SEKVENSEN ---
-        # Vi itererer gennem hvert event i sekvensen op til målet
-        # Vi bruger range, så vi kan styre zorder og farver
+    # 4. TEGN SEKVENSEN
+    for i, row in active_seq.iterrows():
+        if i > goal_idx: break
         
-        # Mål-koordinater (X=100, Y=50) for skudpilen
-        ax.text(fx(100), fy(50), "⚽", fontsize=18, fontweight='bold', ha='center', va='center', color=GOAL_RED, zorder=6)
+        cur_x, cur_y = fx(row['RAW_X']), fy(row['RAW_Y'])
+        prev_x, prev_y = fx(row['PREV_X_1']), fy(row['PREV_Y_1'])
+        p_name = str(row['PLAYER_NAME']).split(' ')[-1] if pd.notnull(row['PLAYER_NAME']) else ""
 
-        for i, row in active_seq.iterrows():
-            # Stop når vi har tegnet målet (Type 16)
-            if i > goal_idx: break
-            
-            # Startpunkt for pilen findes kun hvis der er en PREV_X_1
-            current_x = row['RAW_X']
-            current_y = row['RAW_Y']
-            prev_x = row['PREV_X_1']
-            prev_y = row['PREV_Y_1']
-            
-            player_name = str(row['PLAYER_NAME']).split(' ')[-1] if pd.notnull(row['PLAYER_NAME']) else ""
+        # Farvevalg baseret på din instruks
+        if i == goal_idx:
+            m_color = '#cc0000' # Rød prik for mål
+            t_color = '#cc0000'
+        elif i == assist_idx:
+            m_color = '#1e90ff' # Blå prik for assist
+            t_color = '#1e90ff'
+        else:
+            m_color = '#999999' # Grå for resten
+            t_color = '#333333'
 
-            # BESTEM FARVE, STØRRELSE OG NAVN BASERET PÅ INDEX
-            # A. SKYTTEN OG MÅLET
-            if i == goal_idx or i == shot_idx:
-                arrow_color = GOAL_RED
-                marker_color = GOAL_RED
-                marker_size = 280
-                text_color = 'white'
-                z_value = 5
-                
-            # B. ASSISTEN
-            elif i == assist_idx:
-                arrow_color = ASSIST_BLUE
-                marker_color = ASSIST_BLUE
-                marker_size = 220
-                text_color = 'white'
-                z_value = 4
-                
-            # C. RESTEN AF OPSPILLET
-            else:
-                arrow_color = SEQ_GRAY
-                marker_color = '#ffffff' # Hvid baggrund til den sorte prik
-                marker_size = 150
-                text_color = 'black'
-                z_value = 3
+        # Tegn stiplet linje (boldens vej) - INGEN RØDE STREGER
+        if pd.notnull(row['PREV_X_1']):
+            ax.plot([prev_x, cur_x], [prev_y, cur_y], color='#dddddd', 
+                    linestyle='--', linewidth=1.5, zorder=1)
 
-            # TEGN PIL (Kun hvis vi har PREV koordinater)
-            if pd.notnull(prev_x):
-                # Pilen går fra forrige aktion til nuværende aktion
-                pitch.arrows(fx(prev_x), fy(prev_y), fx(current_x), fy(current_y), 
-                             color=arrow_color, width=4 if z_value > 3 else 2.5, 
-                             headwidth=3.5, ax=ax, zorder=z_value)
-
-            # TEGN SPIL-AKTØR (Prik og Navn)
-            pitch.scatter(fx(current_x), fy(current_y), 
-                          s=marker_size, color=marker_color, edgecolors='black', 
-                          linewidth=1.2, ax=ax, zorder=z_value+1)
-            
-            # Tekst inde i eller ved prikken
-            ax.text(fx(current_x), fy(current_y), player_name, 
-                    fontsize=9 if z_value > 3 else 8, fontweight='bold', 
-                    ha='center', va='center', color=text_color, zorder=z_value+2)
-
-        st.pyplot(fig)
-
-    with col_data:
-        st.subheader("Sekvens Detaljer")
+        # Tegn prikken
+        pitch.scatter(cur_x, cur_y, s=150, color=m_color, edgecolors='black', 
+                      linewidth=0.8, ax=ax, zorder=3)
         
-        # Målscorer (findes i goal_row)
-        scorer_name = goal_row['PLAYER_NAME']
-        st.metric("Målscorer", scorer_name)
-        st.metric("Mål ID", goal_row['SEQUENCEID'])
-        st.metric("Måltid", str(goal_row['EVENT_TIMESTAMP']).split(' ')[0])
+        # Navn uden for prikken (lige over)
+        ax.text(cur_x, cur_y - 3, p_name, fontsize=10, fontweight='bold', 
+                ha='center', va='center', color=t_color, zorder=4)
 
-        st.divider()
-        st.caption("Viser hele opspillet. Mål (Rød), Assist (Blå), Øvrig (Grå).")
+    # Marker selve målet i nettet
+    ax.text(fx(100), fy(50), "⚽", fontsize=20, ha='center', va='center')
 
-# vis_side(dp)
+    st.pyplot(fig)
+
+    # 5. Tabel oversigt under banen
+    st.subheader("Sekvensens forløb")
+    st.dataframe(active_seq[['PLAYER_NAME', 'EVENT_TIMESTAMP']].rename(columns={'PLAYER_NAME': 'Spiller', 'EVENT_TIMESTAMP': 'Tid'}))
