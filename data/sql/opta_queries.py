@@ -208,7 +208,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Opdateret med TIMEMIN og "Aktion før")
+        # 9. UNIVERSAL SEQUENCE MAP (Den komplette og rettede version)
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
                 SELECT DISTINCT MATCH_OPTAUUID 
@@ -233,10 +233,10 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.MATCH_OPTAUUID,
                 e.SEQUENCEID,
                 e.EVENT_TIMESTAMP,
-                e.EVENT_TIMEMIN, -- Nu tilføjet her!
+                e.EVENT_TIMEMIN,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                -- LAG logik
+                -- LAG logik for at tegne streger mellem aktioner
                 LAG(e.EVENT_X, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
                 LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
                 e.EVENT_X as RAW_X,
@@ -248,13 +248,25 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             INNER JOIN GoalSequences gs 
-                -- Vi joiner nu på SEQUENCEID ELLER vi tager den aktion der kom lige før sekvensen
                 ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                AND (e.SEQUENCEID = gs.SEQUENCEID OR e.EVENT_EVENTID = (
-                    SELECT MIN(EVENT_EVENTID) - 1 
-                    FROM {DB}.OPTA_EVENTS 
-                    WHERE SEQUENCEID = gs.SEQUENCEID AND MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                ))
+                AND (
+                    -- Medtag alle hændelser i selve mål-sekvensen
+                    e.SEQUENCEID = gs.SEQUENCEID 
+                    OR 
+                    -- Medtag kun hændelsen lige før, hvis det er en erobring (8) eller opsamling (49)
+                    e.EVENT_EVENTID = (
+                        SELECT MAX(prev.EVENT_EVENTID)
+                        FROM {DB}.OPTA_EVENTS prev
+                        WHERE prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                          AND prev.EVENT_EVENTID < (
+                              SELECT MIN(first_ev.EVENT_EVENTID) 
+                              FROM {DB}.OPTA_EVENTS first_ev 
+                              WHERE first_ev.SEQUENCEID = gs.SEQUENCEID 
+                              AND first_ev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                          )
+                          AND prev.EVENT_TYPEID IN (8, 49)
+                    )
+                )
             LEFT JOIN EventQualifiers q 
                 ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m 
