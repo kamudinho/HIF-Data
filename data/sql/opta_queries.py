@@ -208,29 +208,35 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Den fulde, fejlsikrede version)
+        # 9. UNIVERSAL SEQUENCE MAP (Tidsbaseret version til din opta_queries.py)
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
                 SELECT DISTINCT MATCH_OPTAUUID 
                 FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             ),
-            GoalSequences AS (
-                SELECT e.SEQUENCEID, e.MATCH_OPTAUUID, MIN(e.EVENT_EVENTID) as FIRST_ID
+            -- Find alle HIF mål og deres tidspunkter
+            GoalEvents AS (
+                SELECT 
+                    e.MATCH_OPTAUUID, 
+                    e.EVENT_TIMESTAMP, 
+                    e.EVENT_EVENTID,
+                    e.SEQUENCEID
                 FROM {DB}.OPTA_EVENTS e
                 WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
                 AND e.EVENT_TYPEID = 16 
                 {hif_filter_event}
-                GROUP BY 1, 2
             ),
-            -- Find aktionen før hver sekvens (undgå modstander-støj og forrige mål)
-            PreActions AS (
-                SELECT prev.MATCH_OPTAUUID, gs.SEQUENCEID, MAX(prev.EVENT_EVENTID) as PRE_ID
-                FROM {DB}.OPTA_EVENTS prev
-                JOIN GoalSequences gs ON prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                WHERE prev.EVENT_EVENTID < gs.FIRST_ID
-                  AND prev.EVENT_TYPEID != 16 -- SIKKERHED: Aldrig træk et mål ind som optakt
-                GROUP BY 1, 2
+            -- Hent hændelser 20 sekunder før hvert mål
+            SequenceWindow AS (
+                SELECT 
+                    e.*,
+                    ge.EVENT_EVENTID as GOAL_REF_ID
+                FROM {DB}.OPTA_EVENTS e
+                JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
+                -- Vi trækker 20 sekunder fra måltidspunktet
+                WHERE e.EVENT_TIMESTAMP >= (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds')
+                  AND e.EVENT_TIMESTAMP <= ge.EVENT_TIMESTAMP
             ),
             EventQualifiers AS (
                 SELECT 
@@ -241,26 +247,22 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             )
             SELECT 
                 e.MATCH_OPTAUUID,
-                e.SEQUENCEID,
+                e.GOAL_REF_ID AS SEQUENCEID, -- Vi bruger Mål-ID som nøgle for hele sekvensen
                 e.EVENT_TIMESTAMP,
                 e.EVENT_TIMEMIN,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                e.EVENT_CONTESTANT_OPTAUUID, -- VIGTIG: Bruges til at kende modstandere
-                e.EVENT_X as RAW_X,
-                e.EVENT_Y as RAW_Y,
+                e.EVENT_CONTESTANT_OPTAUUID,
+                e.EVENT_X AS RAW_X,
+                e.EVENT_Y AS RAW_Y,
                 q.QUALIFIER_LIST,
-                m.CONTESTANTHOME_NAME as HOME_TEAM,
-                m.CONTESTANTAWAY_NAME as AWAY_TEAM,
-                m.TOTAL_HOME_SCORE as HOME_SCORE,
-                m.TOTAL_AWAY_SCORE as AWAY_SCORE
-            FROM {DB}.OPTA_EVENTS e
-            JOIN GoalSequences gs ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-            LEFT JOIN PreActions pa ON e.MATCH_OPTAUUID = pa.MATCH_OPTAUUID AND pa.SEQUENCEID = gs.SEQUENCEID
+                m.CONTESTANTHOME_NAME AS HOME_TEAM,
+                m.CONTESTANTAWAY_NAME AS AWAY_TEAM,
+                m.TOTAL_HOME_SCORE AS HOME_SCORE,
+                m.TOTAL_AWAY_SCORE AS AWAY_SCORE
+            FROM SequenceWindow e
             LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            -- Vi tager kun sekvensen eller den definerede PreAction
-            WHERE (e.SEQUENCEID = gs.SEQUENCEID OR e.EVENT_EVENTID = pa.PRE_ID)
             ORDER BY e.EVENT_TIMESTAMP ASC
         """
         }
