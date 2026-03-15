@@ -21,13 +21,6 @@ def vis_side(dp):
             }}
             .stat-label-side {{ font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: 800; }}
             .stat-value-side {{ font-size: 1.2rem; font-weight: 900; color: #1a1a1a; }}
-            .action-flow {{ 
-                font-family: monospace; 
-                font-size: 0.85rem; 
-                background: #ffffff; 
-                padding: 5px; 
-                border-bottom: 1px solid #eee;
-            }}
             .match-header {{
                 font-size: 1.3rem; font-weight: 800; color: {HIF_RED};
                 text-align: center; margin-bottom: 20px; text-transform: uppercase;
@@ -41,22 +34,29 @@ def vis_side(dp):
         st.info("Ingen sekvensdata fundet.")
         return
 
+    # Konverter typer og tider
     for col in ['RAW_X', 'RAW_Y', 'PREV_X_1', 'PREV_Y_1']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    if 'EVENT_TIMESTAMP' in df.columns:
+        df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
 
+    # 3. Find mål og sorter kronologisk (Nyeste øverst)
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
     if goal_events.empty:
         st.warning("Ingen mål fundet.")
         return
 
+    # Sorter efter timestamp synkende (Nyeste kamp/mål først)
+    goal_events = goal_events.sort_values('EVENT_TIMESTAMP', ascending=False)
     goal_events['LABEL'] = goal_events['PLAYER_NAME'] + " | " + goal_events['HOME_TEAM'] + " v " + goal_events['AWAY_TEAM']
     
     # --- LAYOUT ---
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
-        st.caption("Vælg scoring")
+        st.subheader("Vælg Scoring")
         selected_label = st.selectbox("", options=goal_events['LABEL'].unique(), label_visibility="collapsed")
         
         selected_id = goal_events[goal_events['LABEL'] == selected_label]['SEQUENCEID'].iloc[0]
@@ -67,25 +67,27 @@ def vis_side(dp):
         goal_row = active_seq.loc[goal_idx]
         assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx >= 0 else "N/A"
 
-        # --- STAT-BOKSE (RYKKET OP UNDER DROPDOWN) ---
+        # --- STAT-BOKSE ---
         st.markdown(f"""
             <div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{goal_row['PLAYER_NAME'].split()[-1]}</div></div>
             <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Assist</div><div class="stat-value-side">{assist_name}</div></div>
             <div class="stat-box-side" style="border-left-color: {HIF_GOLD}"><div class="stat-label-side">Aktioner / Resultat</div><div class="stat-value-side">{len(active_seq)} akt. | {int(goal_row["HOME_SCORE"])}-{int(goal_row["AWAY_SCORE"])}</div></div>
         """, unsafe_allow_html=True)
         
-        # --- NY AKTIONER VISNING (SMED -> OKOSUN) ---
+        # --- NY AKTIONER VISNING MED HANDLINGSTYPE ---
         st.write("**Spilsekvens:**")
-        flow_list = []
+        flow_data = []
         for i in range(len(active_seq)):
             current_p = active_seq.loc[i, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i, 'PLAYER_NAME']) else "?"
+            h_type = active_seq.loc[i, 'EVENT_TYPE_NAME'] if 'EVENT_TYPE_NAME' in active_seq.columns else "Aktion"
+            
             if i < len(active_seq) - 1:
                 next_p = active_seq.loc[i+1, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i+1, 'PLAYER_NAME']) else "?"
-                flow_list.append(f"{current_p} → {next_p}")
+                flow_data.append({"Flow": f"{current_p} → {next_p}", "Type": h_type})
             else:
-                flow_list.append(f"{current_p} (AFSLUTNING)")
+                flow_data.append({"Flow": f"{current_p}", "Type": "Mål ⚽"})
         
-        st.dataframe(pd.DataFrame(flow_list, columns=["Sekvens Flow"]), use_container_width=True, height=250, hide_index=True)
+        st.dataframe(pd.DataFrame(flow_data), use_container_width=True, height=280, hide_index=True)
 
     with col_main:
         st.markdown(f'<div class="match-header">{goal_row["HOME_TEAM"]} {int(goal_row["HOME_SCORE"])} - {int(goal_row["AWAY_SCORE"])} {goal_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
