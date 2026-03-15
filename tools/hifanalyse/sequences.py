@@ -9,7 +9,6 @@ ASSIST_BLUE = '#1e90ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 def vis_side(dp):
-    # CSS og Styling bevares
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
@@ -21,7 +20,7 @@ def vis_side(dp):
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
     if df.empty: return
 
-    # Rens data
+    # 1. Rens data og timestamps
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
     df = df[~((df['RAW_X'] == 0) & (df['RAW_Y'] == 0))].copy()
@@ -44,62 +43,45 @@ def vis_side(dp):
         start_idx = restarts.index[-1] if not restarts.empty else 0
         active_seq = temp_seq.iloc[start_idx:].reset_index(drop=True)
 
+        # Roller: Scorer og Sidste HIF-spiller
         goal_idx_val = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
         last_hif_idx = next((i for i in range(goal_idx_val - 1, -1, -1) 
                             if active_seq.loc[i, 'EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID), -1)
+
+        st.markdown(f'<div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{sel_row["PLAYER_NAME"].split()[-1]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Sidst på bolden</div><div class="stat-value-side">{active_seq.loc[last_hif_idx, "PLAYER_NAME"].split()[-1] if last_hif_idx != -1 else "Solo"}</div></div>', unsafe_allow_html=True)
 
     with col_main:
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
         should_flip = True if sel_row['RAW_X'] < 50 else False
 
-        # --- RADIKAL OPRYDNING AF SIDELINJE-STØJ ---
-        raw_elements = []
+        display_elements = []
         for i, r in active_seq.iterrows():
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
-            if is_hif or r['EVENT_TYPEID'] in [12, 13, 14, 15, 43, 44]:
-                raw_elements.append(r.to_dict())
+            
+            # --- AGGRESSIV DUPLIKAT-RENSNING (Spatial Clustering) ---
+            # Hvis den nye hændelse er tættere end 2 enheder på den forrige station, 
+            # så dropper vi den, medmindre det er selve målet.
+            if display_elements and r['EVENT_TYPEID'] != 16:
+                last = display_elements[-1]
+                dist = ((r['RAW_X'] - last['raw_x'])**2 + (r['RAW_Y'] - last['raw_y'])**2)**0.5
+                if dist < 2.5: # 2.5 enheders radius fjerner sidelinje-støj effektivt
+                    continue
 
-        display_elements = []
-        skip_next = False
-        
-        for i in range(len(raw_elements)):
-            if skip_next:
-                skip_next = False
-                continue
+            # Relevans-filter: HIF-spillere eller kritiske modstander-aktioner
+            if is_hif or (not is_hif and r['EVENT_TYPEID'] in [12, 13, 14, 15, 43, 44]):
+                rx, ry = r['RAW_X'], r['RAW_Y']
                 
-            curr = raw_elements[i]
-            
-            # Tjek om der kommer en hændelse lige efter (inden for 3 meter)
-            if i < len(raw_elements) - 1:
-                nxt = raw_elements[i+1]
-                dist = ((curr['RAW_X'] - nxt['RAW_X'])**2 + (curr['RAW_Y'] - nxt['RAW_Y'])**2)**0.5
+                # Modstander-alignment (tving dem til angrebsenden)
+                if not is_hif and ((not should_flip and rx < 50) or (should_flip and rx > 50)):
+                    rx, ry = 100 - rx, 100 - ry
                 
-                # Hvis de er tæt på hinanden, så behold kun den ENE af dem.
-                # Vi prioriterer 'målet' eller 'pasningen' frem for 'indkastet'.
-                if dist < 4.0: 
-                    # Hvis den næste er HIF, så snup den i stedet for den nuværende
-                    target = nxt if nxt['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID else curr
-                    active_r = target
-                    skip_next = True # Vi har "brugt" den næste hændelse nu
-                else:
-                    active_r = curr
-            else:
-                active_r = curr
-
-            # Beregn koordinater
-            rx, ry = active_r['RAW_X'], active_r['RAW_Y']
-            is_hif = active_r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
-            
-            if not is_hif and ((not should_flip and rx < 50) or (should_flip and rx > 50)):
-                rx, ry = 100 - rx, 100 - ry
-            
-            cx, cy = (100 - rx if should_flip else rx), (100 - ry if should_flip else ry)
-            
-            display_elements.append({
-                'x': cx, 'y': cy, 'is_hif': is_hif, 
-                'name': active_r['PLAYER_NAME'], 'type': active_r['EVENT_TYPEID']
-            })
+                cx, cy = (100 - rx if should_flip else rx), (100 - ry if should_flip else ry)
+                display_elements.append({
+                    'x': cx, 'y': cy, 'raw_x': r['RAW_X'], 'raw_y': r['RAW_Y'],
+                    'is_hif': is_hif, 'name': r['PLAYER_NAME'], 'idx': i
+                })
 
         # Tegn linjer
         for i in range(1, len(display_elements)):
@@ -110,9 +92,11 @@ def vis_side(dp):
         # Tegn spillere
         for el in display_elements:
             if el['is_hif']:
-                color = HIF_RED if el['type'] == 16 else (ASSIST_BLUE if el['name'] == active_seq.loc[last_hif_idx, 'PLAYER_NAME'] else '#aaaaaa')
+                # Find original index i active_seq for at matche farve korrekt
+                orig_idx = el['idx']
+                color = HIF_RED if orig_idx == goal_idx_val else (ASSIST_BLUE if orig_idx == last_hif_idx else '#aaaaaa')
                 s, z = 180, 4
-                ax.text(el['x'], el['y'] + 3, el['name'].split()[-1] if el['name'] else "", fontsize=8, ha='center', fontweight='bold')
+                ax.text(el['x'], el['y'] + 3, el['name'].split()[-1], fontsize=8, ha='center', fontweight='bold')
             else:
                 color, s, z = 'black', 80, 3
             
