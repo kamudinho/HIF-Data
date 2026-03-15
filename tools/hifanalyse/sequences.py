@@ -69,6 +69,18 @@ def vis_side(dp):
             st.markdown(f'<div class="stat-box-side"><span class="dot" style="background-color:{HIF_RED}"></span><b>Målscorer:</b> {scorer}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box-side" style="border-left-color:{ASSIST_BLUE}"><span class="dot" style="background-color:{ASSIST_BLUE}"></span><b>Assist:</b> {assist}</div>', unsafe_allow_html=True)
 
+        # --- TABEL: KAMP-INVOLVERINGER ---
+        st.caption("Involveringer i målsekvenser (denne kamp)")
+        
+        # Tæller kun i det nuværende kampspecifikke df
+        all_hif_game = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
+        if not all_hif_game.empty:
+            all_hif_game['Spiller'] = all_hif_game['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
+            top_players = all_hif_game['Spiller'].value_counts().reset_index()
+            top_players.columns = ['Spiller', 'Antal Aktioner']
+            st.table(top_players.head(10))
+
+
     with col_main:
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
@@ -89,7 +101,7 @@ def vis_side(dp):
         st.pyplot(fig)
 
         # --- SEKVENS OVERSIGT ---
-        st.write("### Angrebssekvens")
+        st.caption("### Sekvensen:")
         steps = []
         for _, r in hif_seq.iterrows():
             p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
@@ -102,14 +114,4 @@ def vis_side(dp):
         flow_string = ' <span class="flow-arrow">→</span> '.join(steps)
         st.markdown(f'<div class="play-flow-container">{flow_string}</div>', unsafe_allow_html=True)
 
-    # --- TABEL: KAMP-INVOLVERINGER ---
-    st.write("---")
-    st.subheader("Involveringer i målsekvenser (denne kamp)")
     
-    # Tæller kun i det nuværende kampspecifikke df
-    all_hif_game = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
-    if not all_hif_game.empty:
-        all_hif_game['Spiller'] = all_hif_game['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
-        top_players = all_hif_game['Spiller'].value_counts().reset_index()
-        top_players.columns = ['Spiller', 'Antal Aktioner']
-        st.table(top_players.head(10))
