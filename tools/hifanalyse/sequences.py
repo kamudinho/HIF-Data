@@ -27,14 +27,32 @@ DK_NAMES = {
 
 def vis_side(dp):
     # 1. CSS
-    st.markdown(f"""
-        <style>
-            .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
-            .stat-label-side {{ font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: 800; }}
-            .stat-value-side {{ font-size: 1.2rem; font-weight: 900; color: #1a1a1a; }}
-            .match-header {{ font-size: 1.3rem; font-weight: 800; color: {HIF_RED}; text-align: center; margin-bottom: 20px; text-transform: uppercase; }}
-        </style>
-    """, unsafe_allow_html=True)
+    # --- SIDEBAR STAT-BOKSE MED FARVEDE PRIKKER ---
+        
+        # Målscorer navn (efternavn)
+        scorer_name = goal_row['PLAYER_NAME'].split()[-1] if pd.notnull(goal_row['PLAYER_NAME']) else "HIF"
+        
+        # Assist navn (fundet via "skip-målscorer" logikken)
+        assist_disp = assist_name if assist_name != "N/A" else "Solo / Ingen"
+
+        st.markdown(f"""
+            <div class="stat-box-side">
+                <div class="stat-label-side">Målscorer</div>
+                <div class="stat-value-side">
+                    <span style="color: {HIF_RED}; margin-right: 5px;">●</span>{scorer_name}
+                </div>
+            </div>
+            <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}">
+                <div class="stat-label-side">Assist</div>
+                <div class="stat-value-side">
+                    <span style="color: {ASSIST_BLUE}; margin-right: 5px;">●</span>{assist_disp}
+                </div>
+            </div>
+            <div class="stat-box-side" style="border-left-color: {HIF_GOLD}">
+                <div class="stat-label-side">Aktioner / Tid</div>
+                <div class="stat-value-side">{len(active_seq)} akt. | {goal_row['EVENT_TIMEMIN']}'</div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # 2. Hent data
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
