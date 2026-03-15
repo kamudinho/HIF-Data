@@ -265,16 +265,33 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
-        # 10. PHYSICAL MASTER QUERY (Second Spectrum + Opta Match Join)
+        # 10. PHYSICAL MASTER QUERY (Second Spectrum - Filtreret på valgt kamp)
         "opta_physical_stats": f"""
             SELECT 
-                -- Vi tager alle fysiske data
-                f.*,
-                -- Da vi ikke har en nem JOIN til MATCHINFO her, 
-                -- bruger vi TEAM_NAME og MATCH_SSIID til at identificere kampen
-                f.MATCH_SSIID as MATCH_ID
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f
-            -- Vi begrænser til Hvidovre her for at gøre det hurtigere
-            WHERE f.TEAM_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
+                MATCH_OPTAUUID,
+                MATCH_DATE,
+                PERIOD,
+                TEAM_NAME,
+                PLAYER_NAME,
+                PLAYER_NUMBER,
+                TOTAL_DISTANCE,
+                MAX_SPEED,
+                SPRINT_DISTANCE,
+                AVG_SPEED,
+                PLAYER_SSIID
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            -- Vi kan også tilføje hif_filter hvis tabellen har et CONTESTANT_UUID
+            -- Ellers filtrerer vi i Python-loaderen på TEAM_NAME
+        """,
+
+        # 11. NY: PHYSICAL METADATA (Til at mappe spillere korrekt)
+        "opta_physical_metadata": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                HOME_PLAYERS,
+                AWAY_PLAYERS
+            FROM {DB}.SECONDSPECTRUM_METADATA -- Brug det korrekte tabelnavn her
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """
         }
