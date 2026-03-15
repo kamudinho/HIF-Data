@@ -8,20 +8,13 @@ HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
-# Ordbog til Sekvens-log
-EVENT_NAMES = {
-    1: "Aflevering", 3: "Dribling", 5: "Indkast", 6: "Hjørne", 
-    12: "Redning", 15: "Blokering", 16: "MÅL", 
-    43: "Interception", 44: "Tackling", 49: "Recovery (Prip-fix)", 107: "Restart"
-}
-
 def vis_side(dp):
+    # CSS og Styling bevares
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
             .stat-label-side {{ font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: 800; }}
             .stat-value-side {{ font-size: 1.2rem; font-weight: 900; color: #1a1a1a; }}
-            .match-header {{ font-size: 1.3rem; font-weight: 800; color: {HIF_RED}; text-align: center; margin-bottom: 20px; text-transform: uppercase; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -51,69 +44,78 @@ def vis_side(dp):
         start_idx = restarts.index[-1] if not restarts.empty else 0
         active_seq = temp_seq.iloc[start_idx:].reset_index(drop=True)
 
-        # FIND ROLLER (Prip-fix: Vi leder efter sidste HIF-aktion uanset TypeID)
-        goal_idx_orig = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
-        scorer_name = active_seq.loc[goal_idx_orig, 'PLAYER_NAME']
-        
-        last_hif_idx_orig = -1
-        for i in range(goal_idx_orig - 1, -1, -1):
-            if active_seq.loc[i, 'EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID:
-                last_hif_idx_orig = i
-                break
-        
-        last_hif_name = active_seq.loc[last_hif_idx_orig, 'PLAYER_NAME'] if last_hif_idx_orig != -1 else "Solo"
-
-        st.markdown(f'<div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{scorer_name.split()[-1]}</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Sidst på bolden</div><div class="stat-value-side">{last_hif_name.split()[-1]}</div></div>', unsafe_allow_html=True)
+        goal_idx_val = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
+        last_hif_idx = next((i for i in range(goal_idx_val - 1, -1, -1) 
+                            if active_seq.loc[i, 'EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID), -1)
 
     with col_main:
-        st.markdown(f'<div class="match-header">{sel_row.get("HOME_TEAM", "HIF")} v {sel_row.get("AWAY_TEAM", "MOD")}</div>', unsafe_allow_html=True)
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
         should_flip = True if sel_row['RAW_X'] < 50 else False
 
-        display_elements = []
+        # --- RADIKAL OPRYDNING AF SIDELINJE-STØJ ---
+        raw_elements = []
         for i, r in active_seq.iterrows():
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
-            # Relevans: HIF eller vigtige forsvarsaktioner
             if is_hif or r['EVENT_TYPEID'] in [12, 13, 14, 15, 43, 44]:
-                
-                # Spatial clustering (Ryd sidelinjen op)
-                if display_elements and r['EVENT_TYPEID'] != 16:
-                    last = display_elements[-1]
-                    dist = ((r['RAW_X'] - last['orig_x'])**2 + (r['RAW_Y'] - last['orig_y'])**2)**0.5
-                    if dist < 3.5: continue
+                raw_elements.append(r.to_dict())
 
-                rx, ry = r['RAW_X'], r['RAW_Y']
-                if not is_hif and ((not should_flip and rx < 50) or (should_flip and rx > 50)):
-                    rx, ry = 100 - rx, 100 - ry
+        display_elements = []
+        skip_next = False
+        
+        for i in range(len(raw_elements)):
+            if skip_next:
+                skip_next = False
+                continue
                 
-                cx, cy = (100 - rx if should_flip else rx), (100 - ry if should_flip else ry)
-                display_elements.append({
-                    'x': cx, 'y': cy, 'orig_x': r['RAW_X'], 'orig_y': r['RAW_Y'],
-                    'is_hif': is_hif, 'name': r['PLAYER_NAME'], 
-                    'is_goal': (i == goal_idx_orig), 'is_assist': (i == last_hif_idx_orig)
-                })
+            curr = raw_elements[i]
+            
+            # Tjek om der kommer en hændelse lige efter (inden for 3 meter)
+            if i < len(raw_elements) - 1:
+                nxt = raw_elements[i+1]
+                dist = ((curr['RAW_X'] - nxt['RAW_X'])**2 + (curr['RAW_Y'] - nxt['RAW_Y'])**2)**0.5
+                
+                # Hvis de er tæt på hinanden, så behold kun den ENE af dem.
+                # Vi prioriterer 'målet' eller 'pasningen' frem for 'indkastet'.
+                if dist < 4.0: 
+                    # Hvis den næste er HIF, så snup den i stedet for den nuværende
+                    target = nxt if nxt['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID else curr
+                    active_r = target
+                    skip_next = True # Vi har "brugt" den næste hændelse nu
+                else:
+                    active_r = curr
+            else:
+                active_r = curr
 
-        # Tegn banen
+            # Beregn koordinater
+            rx, ry = active_r['RAW_X'], active_r['RAW_Y']
+            is_hif = active_r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
+            
+            if not is_hif and ((not should_flip and rx < 50) or (should_flip and rx > 50)):
+                rx, ry = 100 - rx, 100 - ry
+            
+            cx, cy = (100 - rx if should_flip else rx), (100 - ry if should_flip else ry)
+            
+            display_elements.append({
+                'x': cx, 'y': cy, 'is_hif': is_hif, 
+                'name': active_r['PLAYER_NAME'], 'type': active_r['EVENT_TYPEID']
+            })
+
+        # Tegn linjer
         for i in range(1, len(display_elements)):
             curr, prev = display_elements[i], display_elements[i-1]
             ax.annotate('', xy=(curr['x'], curr['y']), xytext=(prev['x'], prev['y']),
                         arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1.5, alpha=0.4))
 
+        # Tegn spillere
         for el in display_elements:
             if el['is_hif']:
-                color = HIF_RED if el['is_goal'] else (ASSIST_BLUE if el['is_assist'] else '#aaaaaa')
-                ax.text(el['x'], el['y'] + 3, el['name'].split()[-1] if el['name'] else "", fontsize=8, ha='center', fontweight='bold')
+                color = HIF_RED if el['type'] == 16 else (ASSIST_BLUE if el['name'] == active_seq.loc[last_hif_idx, 'PLAYER_NAME'] else '#aaaaaa')
                 s, z = 180, 4
+                ax.text(el['x'], el['y'] + 3, el['name'].split()[-1] if el['name'] else "", fontsize=8, ha='center', fontweight='bold')
             else:
                 color, s, z = 'black', 80, 3
+            
             pitch.scatter(el['x'], el['y'], s=s, color=color, edgecolors='white', ax=ax, zorder=z)
 
         st.pyplot(fig)
-
-    # SEKVENS-LOG MED NAVNE
-    st.write("### Sekvens-log")
-    log_df = active_seq.copy()
-    log_df['Aktion'] = log_df['EVENT_TYPEID'].map(EVENT_NAMES).fillna(log_df['EVENT_TYPEID'])
-    st.dataframe(log_df[['EVENT_TIMEMIN', 'PLAYER_NAME', 'Aktion', 'RAW_X', 'RAW_Y']])
