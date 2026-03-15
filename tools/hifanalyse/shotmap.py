@@ -164,5 +164,3 @@ def vis_side(dp):
 
     with tabs[3]: zone_plot_enhanced(df_skud, False)
     with tabs[4]: zone_plot_enhanced(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
-
-Her ser du, hvordan boksene skal se ud
