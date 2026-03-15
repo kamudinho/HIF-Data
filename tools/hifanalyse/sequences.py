@@ -1,3 +1,8 @@
+import streamlit as st
+import pandas as pd
+from mplsoccer import Pitch
+import matplotlib.pyplot as plt
+
 def vis_side(dp):
     # CSS til styling
     st.markdown(f"""
