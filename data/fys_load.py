@@ -14,7 +14,7 @@ def get_physical_package(dp):
     
     # VIGTIGT: Tjek om F53A kræver UUID eller det almindelige ID
     # Vi tager OPTAID (tallet), da det er mest brugt i F53A
-    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAID'].values[0]
+    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAUUID'].values[0]
 
     # 2. Hent SQL fra fys_queries
     query = fys_queries.get_match_physical_stats(m_id)
