@@ -222,8 +222,10 @@ try:
                 fd = fys_loader.get_physical_package(dp) 
                 
                 if fd:
-                    # Tilføj session.sql som det andet argument her:
-                    fd_page.vis_side(fd, session.sql)
+                    # HENT SESSIONEN HER:
+                    conn = _get_snowflake_conn()
+                    # Nu sender vi conn.sql med, så 'session' ikke længere er udefineret
+                    fd_page.vis_side(fd, conn.sql)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
