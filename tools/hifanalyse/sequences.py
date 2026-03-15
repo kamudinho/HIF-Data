@@ -3,6 +3,23 @@ import pandas as pd
 from mplsoccer import Pitch
 import matplotlib.pyplot as plt
 
+# Importér fra din mapping-fil
+try:
+    from data.utils.mappings import OPTA_EVENT_TYPES, get_event_name
+except:
+    def get_event_name(eid): return f"Aktion {eid}"
+
+HIF_RED = '#cc0000'
+ASSIST_BLUE = '#1e90ff'
+# Din COMP_MAP værdier fra instruktioner (Hvidovre app)
+HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
+
+DK_NAMES = {
+    "Pass": "Aflevering", "Ball recovery": "Opsamling", "Goal": "MÅL",
+    "Clearance": "Clearing", "Tackle": "Tackling", "Attempt Saved": "Blokeret skud",
+    "Foul": "Frispark", "Out": "Bold ud", "Corner": "Hjørnespark", "Throw-in": "Indkast"
+}
+
 def vis_side(dp):
     # CSS til styling
     st.markdown(f"""
