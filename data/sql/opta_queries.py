@@ -266,23 +266,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
         # 10. PHYSICAL MASTER QUERY (Second Spectrum - Filtreret på valgt kamp)
+        # I opta_queries.py - Sektion 10
         "opta_physical_stats": f"""
             SELECT 
-                MATCH_OPTAUUID,
-                MATCH_DATE,
-                PERIOD,
-                TEAM_NAME,
-                PLAYER_NAME,
-                PLAYER_NUMBER,
-                TOTAL_DISTANCE,
-                MAX_SPEED,
-                SPRINT_DISTANCE,
-                AVG_SPEED,
-                PLAYER_SSIID
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            -- Vi kan også tilføje hif_filter hvis tabellen har et CONTESTANT_UUID
-            -- Ellers filtrerer vi i Python-loaderen på TEAM_NAME
+                * FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            -- Hvis MATCH_OPTAUUID fejler, så tjek om kolonnen hedder MATCH_ID eller MATCH_SSIID
+            WHERE MATCH_SSIID = '{{match_uuid}}' 
         """,
 
         # 11. NY: PHYSICAL METADATA (Til at mappe spillere korrekt)
