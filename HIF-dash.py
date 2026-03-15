@@ -220,9 +220,9 @@ try:
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
                 # Én linje henter alt, én linje viser det.
-                fd = fl.get_physical_package(dp) 
+                fd = fl.get_physical_package(df) 
                 if fd:
-                    fd_page.vis_side(fd)
+                    fd_page.vis_side(df)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
