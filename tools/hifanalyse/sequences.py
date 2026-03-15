@@ -9,7 +9,6 @@ HIF_GOLD = '#b8860b'
 ASSIST_BLUE = '#1e90ff'
 
 def vis_side(dp):
-    # CSS (Beholdes som før)
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
@@ -24,11 +23,12 @@ def vis_side(dp):
         st.info("Ingen sekvensdata fundet.")
         return
 
-    # Sørg for at vi har EVENT_TYPE_NAME (eller forsøg at mappe fra ID hvis den mangler)
-    if 'EVENT_TYPE_NAME' not in df.columns and 'EVENT_TYPEID' in df.columns:
-        # Hurtig mapping af de mest gængse hvis navnet mangler
-        opta_map = {1: 'Aflevering', 2: 'Indkast', 5: 'Frispark', 6: 'Hjørnespark', 16: 'Mål'}
-        df['EVENT_TYPE_NAME'] = df['EVENT_TYPEID'].map(opta_map).fillna('Aktion')
+    # Sørg for dansk oversættelse af de gængse typer
+    opta_dk = {
+        'Pass': 'Aflevering', 'Throw-in': 'Indkast', 'Corner Awarded': 'Hjørnespark',
+        'Goal': 'Mål', 'Interception': 'Erobring', 'Ball Recovery': 'Opsamling',
+        'Duel': 'Duel', 'Free Kick Won': 'Frispark vundet', 'Take On': 'Dribling'
+    }
 
     for col in ['RAW_X', 'RAW_Y', 'PREV_X_1', 'PREV_Y_1']:
         if col in df.columns:
@@ -37,65 +37,96 @@ def vis_side(dp):
     if 'EVENT_TIMESTAMP' in df.columns:
         df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
 
-    # 3. Find mål - Gør LABEL unik med SequenceID så vi ser ALLE mål
+    # Find mål og gør LABEL unik
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
     if goal_events.empty:
         st.warning("Ingen mål fundet.")
         return
 
     goal_events = goal_events.sort_values('EVENT_TIMESTAMP', ascending=False)
-    
-    # VI TILFØJER SEQUENCEID TIL LABEL FOR AT SIKRE UNIKE MÅL
     goal_events['LABEL'] = (
         goal_events['PLAYER_NAME'] + " | " + 
         goal_events['HOME_TEAM'] + " v " + goal_events['AWAY_TEAM'] + 
-        " (ID: " + goal_events['SEQUENCEID'].astype(str) + ")"
+        " (" + goal_events['EVENT_TIMESTAMP'].dt.strftime('%H:%M') + ")"
     )
     
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
         st.subheader("Vælg Scoring")
-        # Her sikrer vi os at vi henter det unikke ID baseret på den valgte LABEL
         selected_label = st.selectbox("", options=goal_events['LABEL'].unique(), label_visibility="collapsed")
-        selected_id = goal_events[goal_events['LABEL'] == selected_label]['SEQUENCEID'].iloc[0]
+        sel_row = goal_events[goal_events['LABEL'] == selected_label].iloc[0]
+        selected_id = sel_row['SEQUENCEID']
         
-        active_seq = df[df['SEQUENCEID'] == selected_id].copy().sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
+        # Hent sekvensen + tag én aktion FØR sekvensen (Interception/Duel logik)
+        active_seq = df[df['SEQUENCEID'] == selected_id].copy().sort_values('EVENT_TIMESTAMP')
+        first_idx = active_seq.index[0]
         
+        # Forsøg at gå ét skridt tilbage i det store datasæt for at se hvad der skete før
+        if first_idx > 0:
+            pre_action = df.loc[[first_idx - 1]]
+            # Kun hvis det er samme kamp
+            if pre_action['GAME_ID'].values[0] == sel_row['GAME_ID']:
+                active_seq = pd.concat([pre_action, active_seq]).reset_index(drop=True)
+        
+        active_seq = active_seq.reset_index(drop=True)
         goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
         assist_idx = goal_idx - 1 
         goal_row = active_seq.loc[goal_idx]
-        assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx >= 0 else "N/A"
 
         # Stat-bokse
+        assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx >= 0 else "N/A"
         st.markdown(f"""
             <div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{goal_row['PLAYER_NAME'].split()[-1]}</div></div>
             <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Assist</div><div class="stat-value-side">{assist_name}</div></div>
             <div class="stat-box-side" style="border-left-color: {HIF_GOLD}"><div class="stat-label-side">Aktioner / Resultat</div><div class="stat-value-side">{len(active_seq)} akt. | {int(goal_row["HOME_SCORE"])}-{int(goal_row["AWAY_SCORE"])}</div></div>
         """, unsafe_allow_html=True)
         
-        # TABEL MED TYPE
-        st.write("**Spilsekvens:**")
+        # Flow tabel
         flow_data = []
         for i in range(len(active_seq)):
-            current_p = active_seq.loc[i, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i, 'PLAYER_NAME']) else "?"
-            
-            # Vi tager EVENT_TYPE_NAME her
-            h_type = active_seq.loc[i, 'EVENT_TYPE_NAME']
+            p = active_seq.loc[i, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i, 'PLAYER_NAME']) else "?"
+            t = active_seq.loc[i, 'EVENT_TYPE_NAME']
+            t_dk = opta_dk.get(t, t) # Oversæt hvis muligt
             
             if i < len(active_seq) - 1:
-                next_p = active_seq.loc[i+1, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i+1, 'PLAYER_NAME']) else "?"
-                flow_data.append({"Flow": f"{current_p} → {next_p}", "Type": h_type})
+                n = active_seq.loc[i+1, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i+1, 'PLAYER_NAME']) else "?"
+                flow_data.append({"Flow": f"{p} → {n}", "Type": t_dk})
             else:
-                flow_data.append({"Flow": f"{current_p}", "Type": "Mål ⚽"})
+                flow_data.append({"Flow": f"{p}", "Type": "Mål ⚽"})
         
-        st.dataframe(pd.DataFrame(flow_data), use_container_width=True, height=280, hide_index=True)
+        st.dataframe(pd.DataFrame(flow_data), use_container_width=True, height=250, hide_index=True)
 
     with col_main:
-        # (Pitch koden er uændret og fungerer som før)
         st.markdown(f'<div class="match-header">{goal_row["HOME_TEAM"]} {int(goal_row["HOME_SCORE"])} - {int(goal_row["AWAY_SCORE"])} {goal_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
         fig, ax = pitch.draw(figsize=(10, 6.5))
-        
-        # ... (Resten af din tegnings-logik)
+
+        flip = True if goal_row['RAW_X'] < 50 else False
+        def fx(x): return 100 - x if flip else x
+        def fy(y): return 100 - y if flip else y
+
+        # TEGN PRIKKER OG STREGER (Garanteret tilbage)
+        for i in range(len(active_seq)):
+            if i > goal_idx: break
+            row = active_seq.loc[i]
+            
+            cur_x, cur_y = fx(row['RAW_X']), fy(row['RAW_Y'])
+            p_name = str(row['PLAYER_NAME']).split(' ')[-1] if pd.notnull(row['PLAYER_NAME']) else ""
+
+            # Bestem farve
+            if i == goal_idx: m_c = HIF_RED
+            elif i == assist_idx: m_c = ASSIST_BLUE
+            else: m_c = '#999999'
+
+            # Tegn linje til forrige aktion
+            if i > 0:
+                prev_row = active_seq.loc[i-1]
+                px, py = fx(prev_row['RAW_X']), fy(prev_row['RAW_Y'])
+                ax.plot([px, cur_x], [py, cur_y], color='#dddddd', linestyle='--', linewidth=1.5, zorder=1)
+
+            pitch.scatter(cur_x, cur_y, s=150, color=m_c, edgecolors='black', linewidth=1, ax=ax, zorder=3)
+            ax.text(cur_x, cur_y - 4, p_name, fontsize=10, fontweight='bold', ha='center', color=m_c, zorder=4)
+
+        ax.text(fx(100), fy(50), "⚽", fontsize=20, ha='center', va='center')
         st.pyplot(fig)
