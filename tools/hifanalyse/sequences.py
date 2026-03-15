@@ -21,10 +21,14 @@ def vis_side(dp):
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
     if df.empty: return
 
+    # 1. KONVERTER OG FILTRER None/NaN MED DET SAMME
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
+    df = df.dropna(subset=['RAW_X', 'RAW_Y']).copy() # Fjern spillere uden koordinater
+    
     df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
 
+    # Find mål
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
     if goal_events.empty: return
 
@@ -91,16 +95,10 @@ def vis_side(dp):
             cx, cy = fx(r['RAW_X']), fy(r['RAW_Y'])
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
 
-            # --- LOGIK FOR STREGER ---
+            # LOGIK FOR STREGER: Kun hvis det ender hos en HIF-spiller
             if i > 0:
                 pr = active_seq.loc[i-1]
                 px, py = fx(pr['RAW_X']), fy(pr['RAW_Y'])
-                prev_is_hif = pr['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
-                
-                # Tegn KUN streger hvis:
-                # 1. HIF spiller til HIF
-                # 2. Modstander spiller til HIF (f.eks. ved clearing eller duel)
-                # Vi tegner ALDRIG streger TIL en modstander eller MELLEM modstandere
                 if is_hif:
                     ax.annotate('', xy=(cx, cy), xytext=(px, py),
                                 arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1.5, alpha=0.6))
