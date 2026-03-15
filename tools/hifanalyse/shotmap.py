@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from mplsoccer import Pitch, VerticalPitch
+from mplsoccer import Pitch
 import matplotlib.pyplot as plt
 
 # HIF Design-konstanter
@@ -9,7 +9,7 @@ HIF_GOLD = '#b8860b'
 ASSIST_BLUE = '#1e90ff'
 
 def vis_side(dp):
-    # CSS til de bokse du sendte
+    # CSS til stat-bokse (fra din kode)
     st.markdown("""
         <style>
             .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }
@@ -29,15 +29,15 @@ def vis_side(dp):
     for col in ['RAW_X', 'RAW_Y', 'PREV_X_1', 'PREV_Y_1']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # 2. Dropdown menu setup
+    # 2. Find mål til dropdown
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
     if goal_events.empty:
-        st.warning("Ingen mål fundet i de valgte sekvenser.")
+        st.warning("Ingen mål fundet.")
         return
 
     goal_events['LABEL'] = goal_events['PLAYER_NAME'] + " | " + goal_events['HOME_TEAM'] + " v " + goal_events['AWAY_TEAM']
     
-    # --- LAYOUT START ---
+    # --- LAYOUT TOP: BANE (VENSTRE) + DROPDOWN/AKTIONER (HØJRE) ---
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
@@ -48,29 +48,26 @@ def vis_side(dp):
         selected_id = goal_events[goal_events['LABEL'] == selected_label]['SEQUENCEID'].iloc[0]
         active_seq = df[df['SEQUENCEID'] == selected_id].copy().sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
         
+        st.markdown("### Aktioner")
+        # Tabel med aktioner under dropdown
+        st.dataframe(
+            active_seq[['PLAYER_NAME']].rename(columns={'PLAYER_NAME': 'Spiller'}),
+            use_container_width=True,
+            height=300,
+            hide_index=True
+        )
+
+    with col_main:
         goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
         assist_idx = goal_idx - 1 
         goal_row = active_seq.loc[goal_idx]
-        assist_row = active_seq.loc[assist_idx] if assist_idx >= 0 else None
-
-        # --- STAT BOKSE (DINE BOKSE) ---
-        st.markdown(f'<div class="stat-box"><div class="stat-label">Målscorer</div><div class="stat-value">{goal_row["PLAYER_NAME"].split()[-1]}</div></div>', unsafe_allow_html=True)
         
-        assist_name = assist_row['PLAYER_NAME'].split()[-1] if assist_row is not None else "N/A"
-        st.markdown(f'<div class="stat-box" style="border-left-color:{ASSIST_BLUE}"><div class="stat-label">Assist</div><div class="stat-value">{assist_name}</div></div>', unsafe_allow_html=True)
-        
-        st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Aktioner i sekvens</div><div class="stat-value">{len(active_seq)}</div></div>', unsafe_allow_html=True)
-        
-        st.markdown(f'<div class="stat-box"><div class="stat-label">Resultat</div><div class="stat-value">{int(goal_row["HOME_SCORE"])} - {int(goal_row["AWAY_SCORE"])}</div></div>', unsafe_allow_html=True)
-
-    with col_main:
         st.markdown(f'<div class="match-header">{goal_row["HOME_TEAM"]} vs {goal_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
         
         # Pitch setup
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc', goal_type='box')
         fig, ax = pitch.draw(figsize=(10, 6.5))
 
-        # Flip logik
         flip = True if goal_row['RAW_X'] < 50 else False
         def fx(x): return 100 - x if flip else x
         def fy(y): return 100 - y if flip else y
@@ -78,12 +75,10 @@ def vis_side(dp):
         # Tegn sekvensen
         for i, row in active_seq.iterrows():
             if i > goal_idx: break
-            
             cur_x, cur_y = fx(row['RAW_X']), fy(row['RAW_Y'])
             prev_x, prev_y = fx(row['PREV_X_1']), fy(row['PREV_Y_1'])
             p_name = str(row['PLAYER_NAME']).split(' ')[-1] if pd.notnull(row['PLAYER_NAME']) else ""
 
-            # Farver: Mål=Rød, Assist=Blå, Rest=Grå
             if i == goal_idx:
                 m_color, t_color = HIF_RED, HIF_RED
             elif i == assist_idx:
@@ -91,14 +86,28 @@ def vis_side(dp):
             else:
                 m_color, t_color = '#999999', '#444444'
 
-            # Stiplet linje for boldens bevægelse
             if pd.notnull(row['PREV_X_1']):
                 ax.plot([prev_x, cur_x], [prev_y, cur_y], color='#eeeeee', linestyle='--', linewidth=1.2, zorder=1)
 
-            # Prik og Navn (uden for prikken)
             pitch.scatter(cur_x, cur_y, s=130, color=m_color, edgecolors='black', linewidth=0.8, ax=ax, zorder=3)
             ax.text(cur_x, cur_y - 4, p_name, fontsize=9, fontweight='bold', ha='center', color=t_color, zorder=4)
 
-        # Mål-ikon i nettet
         ax.text(fx(100), fy(50), "⚽", fontsize=18, ha='center', va='center')
         st.pyplot(fig)
+
+    # --- LAYOUT BUND: STAT-BOKSE ---
+    st.divider()
+    b1, b2, b3, b4 = st.columns(4)
+    
+    with b1:
+        st.markdown(f'<div class="stat-box"><div class="stat-label">Målscorer</div><div class="stat-value">{goal_row["PLAYER_NAME"].split()[-1]}</div></div>', unsafe_allow_html=True)
+    
+    with b2:
+        assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx >= 0 else "N/A"
+        st.markdown(f'<div class="stat-box" style="border-left-color:{ASSIST_BLUE}"><div class="stat-label">Assist</div><div class="stat-value">{assist_name}</div></div>', unsafe_allow_html=True)
+    
+    with b3:
+        st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Antal aktioner</div><div class="stat-value">{len(active_seq)}</div></div>', unsafe_allow_html=True)
+    
+    with b4:
+        st.markdown(f'<div class="stat-box"><div class="stat-label">Resultat</div><div class="stat-value">{int(goal_row["HOME_SCORE"])} - {int(goal_row["AWAY_SCORE"])}</div></div>', unsafe_allow_html=True)
