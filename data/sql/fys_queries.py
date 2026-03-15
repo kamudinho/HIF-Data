@@ -1,28 +1,31 @@
 # data/sql/fys_queries.py
 
 def get_match_physical_stats(match_id):
-    # Denne henter tallene pr. spiller (PLAYER_ID og PLAYER_NAME)
+    """Henter individuelle spiller-stats fra GAME_PLAYER tabellen"""
     return f"""
     SELECT 
         PLAYER_NAME,
-        TEAM_NAME,
-        TEAM_ID,
-        DISTANCE_TOTAL AS TOTAL_DISTANCE,
-        DISTANCE_HI_INTENSITY AS HI_DIST,
-        DISTANCE_SPRINT AS SPRINT_DIST,
-        SPEED_MAX AS MAX_SPEED
+        JERSEY,
+        TEAM_SSIID,
+        DISTANCE,
+        TOP_SPEED,
+        SPRINTS,
+        SPEEDRUNS,
+        PERCENTDISTANCEHIGHSPEEDSPRINTING as DIST_SPRINT_PCT,
+        PERCENTTIMEHIGHSPEEDSPRINTING as TIME_SPRINT_PCT
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-    WHERE MATCH_ID = '{match_id}'
+    WHERE MATCH_SSIID = '{match_id}'
     """
 
 def get_team_physical_stats(match_id):
-    # Denne henter tallene for hele holdet (din TEAM tabel)
+    """Henter hold-stats fra GAME_TEAM tabellen"""
     return f"""
     SELECT 
         TEAM_NAME,
-        DISTANCE_TOTAL,
-        DISTANCE_HI_INTENSITY,
-        DISTANCE_SPRINT
+        TEAM_SSIID,
+        TEAMDISTANCE,
+        TEAMPERCENTDISTANCEHIGHSPEEDSPRINTING as TEAM_SPRINT_PCT,
+        TEAMPERCENTDISTANCEHIGHSPEEDRUNNING as TEAM_HSR_PCT
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
-    WHERE MATCH_ID = '{match_id}'
+    WHERE MATCH_SSIID = '{match_id}'
     """
