@@ -219,7 +219,6 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                # Vi bruger 'fys_loader' (dit alias fra toppen) og sender 'dp' med
                 fd = fys_loader.get_physical_package(dp) 
                 if fd:
                     fd_page.vis_side(fd)
