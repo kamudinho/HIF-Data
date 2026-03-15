@@ -49,7 +49,7 @@ def vis_side(dp):
         
         # Tids-vindue: 15 sekunder før mål
         goal_time = sel_row['EVENT_TIMESTAMP']
-        start_time = goal_time - pd.Timedelta(seconds=15)
+        start_time = goal_time - pd.Timedelta(seconds=20)
         
         active_seq = active_seq[
             (active_seq['EVENT_TIMESTAMP'] >= start_time) & 
