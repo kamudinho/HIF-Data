@@ -10,7 +10,7 @@ ASSIST_BLUE = '#1e90ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 def vis_side(dp):
-    # 1. CSS og Styling
+    # 1. CSS og Styling (Stat-bokse bevaret)
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
@@ -75,16 +75,14 @@ def vis_side(dp):
         processed = []
         for i, r in active_seq.iterrows():
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
-            
-            # --- NY KOORDINAT LOGIK ---
-            # Hvis det er modstanderen (som Buur), og hans X er i den modsatte ende af jeres angreb,
-            # så skal han spejles ind i jeres zone, fordi de forsvarer samme mål.
             rx, ry = r['RAW_X'], r['RAW_Y']
             
+            # --- MODSTANDER LOGIK ---
+            # Vi tjekker om modstanderen er "out of sync" med Hvidovres banehalvdel.
+            # Hvis HIF angriber mod X=100, men modstanderen står i X<20, 
+            # så flipper vi både X og Y for at få dem ind i samme duel-zone.
             if not is_hif:
-                # Hvis modstanderens X er meget lav (<20) mens jeres mål er i den anden ende (>80),
-                # så er det en "defensiv" koordinat fra Opta der skal vendes.
-                if (not should_flip_base and rx < 50) or (should_flip_base and rx > 50):
+                if (not should_flip_base and rx < 40) or (should_flip_base and rx > 60):
                     rx = 100 - rx
                     ry = 100 - ry
 
@@ -104,7 +102,7 @@ def vis_side(dp):
                 z = 2
             pitch.scatter(cx, cy, s=180 if is_hif else 100, color=m_c, edgecolors='white', ax=ax, zorder=z)
 
-        # Tegn stregerne
+        # Tegn stregerne (Kun mod HIF-spillere)
         for i in range(1, len(processed)):
             curr, prev = processed[i], processed[i-1]
             if curr['hif']: 
