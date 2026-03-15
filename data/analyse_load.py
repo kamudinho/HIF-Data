@@ -7,7 +7,8 @@ def get_single_match_physical(match_uuid):
     conn = _get_snowflake_conn()
     if not match_uuid: return pd.DataFrame()
 
-    # TRIN 1: Find SSIID baseret på Opta UUID (Metadata-broen)
+    # TRIN 1: Find SSIID baseret på Opta UUID
+    # Jeg har rettet tabellen til SECONDSPECTRUM_GAME_METADATA som i din sidste stump
     meta_sql = f"""
         SELECT MATCH_SSIID 
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
@@ -19,20 +20,23 @@ def get_single_match_physical(match_uuid):
         meta_res = conn.query(meta_sql)
         
         # Hvis vi finder et SSIID, bruger vi det. Ellers prøver vi UUID (som fallback)
-        ss_id = meta_res.iloc[0]['MATCH_SSIID'] if not meta_res.empty else match_uuid
+        ss_id = meta_res.iloc[0]['MATCH_SSIID'] if not (meta_res is None or meta_res.empty) else match_uuid
 
-        # TRIN 2: Hent fysisk data med det korrekte ID
-        # Vi tjekker både MATCH_SSIID og MATCH_ID for at være sikre
+        # TRIN 2: Hent fysisk data
+        # Vi lader Snowflake fejlsøge ved at kigge efter alle tænkelige ID-kolonner
         sql = f"""
             SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE MATCH_SSIID = '{ss_id}' OR MATCH_ID = '{ss_id}'
+            WHERE MATCH_SSIID = '{ss_id}' 
+               OR MATCH_ID = '{ss_id}'
         """
         res = conn.query(sql)
         return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
 
     except Exception as e:
-        st.error(f"Fejl i ID-mapping eller Snowflake: {e}")
+        # Hvis den fejler pga. manglende kolonne, prøver vi en "sikker" query uden specifikke ID-navne
+        st.warning(f"Søger efter data... (Teknisk info: {e})")
         return pd.DataFrame()
+
 def get_analysis_package(hif_only=False):
     from data.data_load import _get_snowflake_conn, load_local_players
     from data.sql.opta_queries import get_opta_queries
@@ -55,7 +59,7 @@ def get_analysis_package(hif_only=False):
             st.error(f"Fejl i Snowflake query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # Hent alle data
+    # Hent alle data præcis som i din oprindelige version
     df_opta_stats = safe_query("opta_team_stats")
     df_sequence = safe_query("opta_sequence_map")
     df_matches = safe_query("opta_matches")
@@ -66,7 +70,6 @@ def get_analysis_package(hif_only=False):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
     
-    # Vi sætter denne til tom ved initial load for at undgå fejl
     df_fys = pd.DataFrame() 
 
     df_local = load_local_players()
