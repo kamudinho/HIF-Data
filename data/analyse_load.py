@@ -1,4 +1,3 @@
-# data/analyse_load.py
 import pandas as pd
 import streamlit as st
 
@@ -6,13 +5,14 @@ def get_single_match_physical(match_uuid):
     """Henter kun fysisk data for én specifik kamp on-demand"""
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
+    if not match_uuid: return pd.DataFrame()
     
-    # Vi definerer SQL her eller henter fra opta_queries
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
         WHERE MATCH_OPTAUUID = '{match_uuid}'
     """
-    return conn.query(sql)
+    res = conn.query(sql)
+    return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
 
 def get_analysis_package(hif_only=False):
     from data.data_load import _get_snowflake_conn, load_local_players
@@ -20,30 +20,23 @@ def get_analysis_package(hif_only=False):
     from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
 
     conn = _get_snowflake_conn()
-    if not conn: 
-        return {}
+    if not conn: return {}
 
     comp_f = str(COMPETITION_NAME)
     season_f = str(TOURNAMENTCALENDAR_NAME)
-
-    # Henter alle queries fra din opdaterede opta_queries.py
     queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)
     
     def safe_query(query_key):
         q = queries.get(query_key)
-        if not q: 
-            return pd.DataFrame()
+        if not q: return pd.DataFrame()
         try:
-            # Vi udfører query mod Snowflake
             res = conn.query(q)
-            # Sikrer at vi returnerer en rigtig Pandas DataFrame
             return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
         except Exception as e:
             st.error(f"Fejl i Snowflake query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # 1. Hent data fra Snowflake via de nye queries
-    # 'opta_team_stats' er nu din "Master View" med xG, Possession, Kit Colors etc.
+    # Hent alle data
     df_opta_stats = safe_query("opta_team_stats")
     df_sequence = safe_query("opta_sequence_map")
     df_matches = safe_query("opta_matches")
@@ -53,27 +46,18 @@ def get_analysis_package(hif_only=False):
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
-    df_fys = safe_query("opta_physical_stats")
+    
+    # Vi sætter denne til tom ved initial load for at undgå fejl
+    df_fys = pd.DataFrame() 
 
-    # 2. Hent lokal spillertrup (Hvidovre-appens rygrad)
     df_local = load_local_players()
     name_map = {}
-    
     if df_local is not None and not df_local.empty:
-        # Tvinger kolonner til UPPERCASE for konsistens
         df_local.columns = [c.upper() for c in df_local.columns]
-        
-        # Opretter navne-map (ID -> Navn) til brug i visualiseringer
         navn_col = 'PLAYER_NAME' if 'PLAYER_NAME' in df_local.columns else 'NAVN'
-        
         if 'PLAYER_OPTAUUID' in df_local.columns:
-            name_map = dict(zip(
-                df_local['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower(), 
-                df_local[navn_col].astype(str).str.strip()
-            ))
+            name_map = dict(zip(df_local['PLAYER_OPTAUUID'].astype(str).str.strip().str.lower(), df_local[navn_col].astype(str).str.strip()))
 
-    # 3. Returnér den samlede pakke
-    # Denne struktur skal matche det, din 'vis_side()' forventer
     return {
         "matches": df_matches,
         "playerstats": df_shots,
@@ -91,9 +75,5 @@ def get_analysis_package(hif_only=False):
             "player_linebreaks": df_player_linebreaks,
             "league_shotevents": df_league_shots
         },
-        "config": {
-            "liga_navn": comp_f,
-            "season": season_f,
-            "colors": TEAM_COLORS
-        }
+        "config": {"liga_navn": comp_f, "season": season_f, "colors": TEAM_COLORS}
     }
