@@ -19,18 +19,14 @@ def vis_side(dp):
     """, unsafe_allow_html=True)
 
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
-    if df.empty:
-        st.info("Ingen sekvensdata fundet.")
-        return
+    if df.empty: return
 
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
     df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
 
     goal_events = df[df['EVENT_TYPEID'] == 16].copy()
-    if goal_events.empty:
-        st.warning("Ingen mål fundet.")
-        return
+    if goal_events.empty: return
 
     goal_events = goal_events.sort_values('EVENT_TIMESTAMP', ascending=False)
     goal_events['LABEL'] = goal_events.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']} ({x['HOME_TEAM']} v {x['AWAY_TEAM']})", axis=1)
@@ -41,24 +37,21 @@ def vis_side(dp):
         selected_label = st.selectbox("Vælg scoring", options=goal_events['LABEL'].unique(), label_visibility="collapsed")
         sel_row = goal_events[goal_events['LABEL'] == selected_label].iloc[0]
         
-        # 1. Hent 20 sekunders data
+        # Hent 20 sekunders data
         full_seq = df[df['SEQUENCEID'] == sel_row['SEQUENCEID']].copy()
         goal_time = sel_row['EVENT_TIMESTAMP']
         start_time = goal_time - pd.Timedelta(seconds=20)
         
-        # Sorter kronologisk for at finde den naturlige start (f.eks. indkast)
         temp_seq = full_seq[
             (full_seq['EVENT_TIMESTAMP'] >= start_time) & 
             (full_seq['EVENT_TIMESTAMP'] <= goal_time)
         ].sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
 
-        # 2. Find det bedste startpunkt
-        # Vi leder efter det SIDSTE indkast (5) eller hjørne (6) før målet
-        restart_events = temp_seq[temp_seq['EVENT_TYPEID'].isin([5, 6, 107])].index # 107 er ofte restart
+        # FIND STARTPUNKT (Prioritér indkast/hjørne ellers maks 1 modstander)
+        restart_events = temp_seq[temp_seq['EVENT_TYPEID'].isin([5, 6, 107])].index
         if not restart_events.empty:
-            start_idx = restart_events[-1] # Start fra det seneste indkast/hjørne
+            start_idx = restart_events[-1]
         else:
-            # Hvis ingen faste situationer, så brug vores "maks 1 modstander" logik baglæns
             start_idx = 0
             opp_count = 0
             for i in range(len(temp_seq)-1, -1, -1):
@@ -70,7 +63,7 @@ def vis_side(dp):
         
         active_seq = temp_seq.iloc[start_idx:].reset_index(drop=True)
 
-        # 3. Find Assist og Scorer
+        # Analyse af roller
         try:
             goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
             scorer_name = active_seq.loc[goal_idx, 'PLAYER_NAME']
@@ -80,18 +73,9 @@ def vis_side(dp):
                     assist_idx = i
                     break
             
-            st.markdown(f"""
-                <div class="stat-box-side">
-                    <div class="stat-label-side">Målscorer</div>
-                    <div class="stat-value-side">{scorer_name.split()[-1] if pd.notnull(scorer_name) else "HIF"}</div>
-                </div>
-                <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}">
-                    <div class="stat-label-side">Oplæg</div>
-                    <div class="stat-value-side">{active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx != -1 else "Solo"}</div>
-                </div>
-            """, unsafe_allow_html=True)
-        except:
-            st.error("Fejl i analyse.")
+            st.markdown(f'<div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{scorer_name.split()[-1]}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Oplæg</div><div class="stat-value-side">{active_seq.loc[assist_idx, "PLAYER_NAME"].split()[-1] if assist_idx != -1 else "Solo"}</div></div>', unsafe_allow_html=True)
+        except: pass
 
     with col_main:
         st.markdown(f'<div class="match-header">{sel_row["HOME_TEAM"]} v {sel_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
@@ -107,18 +91,30 @@ def vis_side(dp):
             cx, cy = fx(r['RAW_X']), fy(r['RAW_Y'])
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
 
+            # --- LOGIK FOR STREGER ---
             if i > 0:
                 pr = active_seq.loc[i-1]
-                ax.annotate('', xy=(cx, cy), xytext=(fx(pr['RAW_X']), fy(pr['RAW_Y'])),
-                            arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1.5, alpha=0.6))
+                px, py = fx(pr['RAW_X']), fy(pr['RAW_Y'])
+                prev_is_hif = pr['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
+                
+                # Tegn KUN streger hvis:
+                # 1. HIF spiller til HIF
+                # 2. Modstander spiller til HIF (f.eks. ved clearing eller duel)
+                # Vi tegner ALDRIG streger TIL en modstander eller MELLEM modstandere
+                if is_hif:
+                    ax.annotate('', xy=(cx, cy), xytext=(px, py),
+                                arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1.5, alpha=0.6))
 
+            # Tegn prikker
             if is_hif:
                 m_c = HIF_RED if i == goal_idx else (ASSIST_BLUE if i == assist_idx else '#aaaaaa')
                 p_label = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
                 ax.text(cx, cy + 3, p_label, fontsize=9, ha='center', va='bottom', fontweight='bold')
+                z = 3
             else:
                 m_c = 'black'
+                z = 2
             
-            pitch.scatter(cx, cy, s=180 if is_hif else 100, color=m_c, edgecolors='white', ax=ax, zorder=3)
+            pitch.scatter(cx, cy, s=180 if is_hif else 100, color=m_c, edgecolors='white', ax=ax, zorder=z)
 
         st.pyplot(fig)
