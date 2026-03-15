@@ -223,13 +223,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 {hif_filter_event}
                 GROUP BY 1, 2
             ),
-            -- Find aktionen før hver sekvens separat
+            -- Find den ENE aktion der ligger lige før sekvensen starter
             PreActions AS (
                 SELECT prev.MATCH_OPTAUUID, gs.SEQUENCEID, MAX(prev.EVENT_EVENTID) as PRE_ID
                 FROM {DB}.OPTA_EVENTS prev
                 JOIN GoalSequences gs ON prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
                 WHERE prev.EVENT_EVENTID < gs.FIRST_ID
-                  AND prev.EVENT_TYPEID IN (8, 49)
+                  AND prev.EVENT_TYPEID != 16 -- SIKRER at vi ikke får det forrige mål med
                 GROUP BY 1, 2
             ),
             EventQualifiers AS (
@@ -240,26 +240,20 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 GROUP BY EVENT_OPTAUUID
             )
             SELECT 
-                e.MATCH_OPTAUUID,
-                e.SEQUENCEID,
-                e.EVENT_TIMESTAMP,
-                e.EVENT_TIMEMIN,
-                e.PLAYER_NAME,
-                e.EVENT_TYPEID,
+                e.MATCH_OPTAUUID, e.SEQUENCEID, e.EVENT_TIMESTAMP, e.EVENT_TIMEMIN,
+                e.PLAYER_NAME, e.EVENT_TYPEID,
                 LAG(e.EVENT_X, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
                 LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
-                e.EVENT_X as RAW_X,
-                e.EVENT_Y as RAW_Y,
+                e.EVENT_X as RAW_X, e.EVENT_Y as RAW_Y,
                 q.QUALIFIER_LIST,
-                m.CONTESTANTHOME_NAME as HOME_TEAM,
-                m.CONTESTANTAWAY_NAME as AWAY_TEAM,
-                m.TOTAL_HOME_SCORE as HOME_SCORE,
-                m.TOTAL_AWAY_SCORE as AWAY_SCORE
+                m.CONTESTANTHOME_NAME as HOME_TEAM, m.CONTESTANTAWAY_NAME as AWAY_TEAM,
+                m.TOTAL_HOME_SCORE as HOME_SCORE, m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalSequences gs ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
             LEFT JOIN PreActions pa ON e.MATCH_OPTAUUID = pa.MATCH_OPTAUUID AND pa.SEQUENCEID = gs.SEQUENCEID
             LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            -- Her samler vi det: Enten er det i sekvensen, ELLER det er den definerede 'PreAction'
             WHERE (e.SEQUENCEID = gs.SEQUENCEID) OR (e.EVENT_EVENTID = pa.PRE_ID)
             ORDER BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ASC
         """
