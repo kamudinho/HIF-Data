@@ -86,13 +86,26 @@ def vis_side(dp):
             if pre_action['MATCH_OPTAUUID'].values[0] == sel_row['MATCH_OPTAUUID']:
                 active_seq = pd.concat([pre_action, active_seq]).reset_index(drop=True)
         
+       # --- LOGIK: Find mål og korrekt assist ---
         active_seq = active_seq.reset_index(drop=True)
         goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
-        assist_idx = goal_idx - 1 
         goal_row = active_seq.loc[goal_idx]
-        
-        # Stat-bokse
-        assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx >= 0 else "N/A"
+        goal_scorer_id = goal_row['PLAYER_NAME'] # Eller PLAYER_OPTAUUID hvis du har det
+
+        # Find assisten: Gå baglæns fra målet
+        assist_idx = -1
+        for i in range(goal_idx - 1, -1, -1):
+            potential_assist = active_seq.loc[i]
+            # Hvis spilleren IKKE er målscoreren, har vi fundet assist-spilleren
+            if potential_assist['PLAYER_NAME'] != goal_scorer_id:
+                assist_idx = i
+                break
+
+        # Hent navnet til stat-boksen
+        assist_name = "N/A"
+        if assist_idx != -1:
+            assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1]
+            
         st.markdown(f"""
             <div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{goal_row['PLAYER_NAME'].split()[-1]}</div></div>
             <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Assist</div><div class="stat-value-side">{assist_name}</div></div>
