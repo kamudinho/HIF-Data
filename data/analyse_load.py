@@ -41,6 +41,7 @@ def get_analysis_package(hif_only=False):
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
+    df_fys = safe_query("opta_physical_stats")
 
     # 2. Hent lokal spillertrup (Hvidovre-appens rygrad)
     df_local = load_local_players()
@@ -64,6 +65,7 @@ def get_analysis_package(hif_only=False):
     return {
         "matches": df_matches,
         "playerstats": df_shots,
+        "fysisk_data": df_fys,
         "xg_agg": df_xg_agg,
         "assists": df_assists,
         "name_map": name_map,
