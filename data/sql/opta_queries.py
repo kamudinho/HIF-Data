@@ -208,7 +208,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Renset for dobbelt-mål)
+        # 9. UNIVERSAL SEQUENCE MAP (Den fulde, fejlsikrede version)
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
                 SELECT DISTINCT MATCH_OPTAUUID 
@@ -216,7 +216,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             ),
             GoalSequences AS (
-                -- Find alle hændelser i de sekvenser der ender med mål
                 SELECT e.SEQUENCEID, e.MATCH_OPTAUUID, MIN(e.EVENT_EVENTID) as FIRST_ID
                 FROM {DB}.OPTA_EVENTS e
                 WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
@@ -224,32 +223,43 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 {hif_filter_event}
                 GROUP BY 1, 2
             ),
+            -- Find aktionen før hver sekvens (undgå modstander-støj og forrige mål)
             PreActions AS (
-                -- Find kun hændelsen lige før hvis det IKKE er et mål
                 SELECT prev.MATCH_OPTAUUID, gs.SEQUENCEID, MAX(prev.EVENT_EVENTID) as PRE_ID
                 FROM {DB}.OPTA_EVENTS prev
                 JOIN GoalSequences gs ON prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
                 WHERE prev.EVENT_EVENTID < gs.FIRST_ID
-                  AND prev.EVENT_TYPEID != 16
+                  AND prev.EVENT_TYPEID != 16 -- SIKKERHED: Aldrig træk et mål ind som optakt
                 GROUP BY 1, 2
             ),
             EventQualifiers AS (
-                SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
-                FROM {DB}.OPTA_QUALIFIERS GROUP BY EVENT_OPTAUUID
+                SELECT 
+                    EVENT_OPTAUUID,
+                    LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
+                FROM {DB}.OPTA_QUALIFIERS
+                GROUP BY EVENT_OPTAUUID
             )
             SELECT 
-                e.MATCH_OPTAUUID, e.SEQUENCEID, e.EVENT_TIMESTAMP, e.EVENT_TIMEMIN,
-                e.PLAYER_NAME, e.EVENT_TYPEID,
-                e.EVENT_X as RAW_X, e.EVENT_Y as RAW_Y,
+                e.MATCH_OPTAUUID,
+                e.SEQUENCEID,
+                e.EVENT_TIMESTAMP,
+                e.EVENT_TIMEMIN,
+                e.PLAYER_NAME,
+                e.EVENT_TYPEID,
+                e.EVENT_CONTESTANT_OPTAUUID, -- VIGTIG: Bruges til at kende modstandere
+                e.EVENT_X as RAW_X,
+                e.EVENT_Y as RAW_Y,
                 q.QUALIFIER_LIST,
-                m.CONTESTANTHOME_NAME as HOME_TEAM, m.CONTESTANTAWAY_NAME as AWAY_TEAM,
-                m.TOTAL_HOME_SCORE as HOME_SCORE, m.TOTAL_AWAY_SCORE as AWAY_SCORE
+                m.CONTESTANTHOME_NAME as HOME_TEAM,
+                m.CONTESTANTAWAY_NAME as AWAY_TEAM,
+                m.TOTAL_HOME_SCORE as HOME_SCORE,
+                m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalSequences gs ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
             LEFT JOIN PreActions pa ON e.MATCH_OPTAUUID = pa.MATCH_OPTAUUID AND pa.SEQUENCEID = gs.SEQUENCEID
             LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            -- SIKRING: Vi tager kun sekvensen eller den specifikke PreAction
+            -- Vi tager kun sekvensen eller den definerede PreAction
             WHERE (e.SEQUENCEID = gs.SEQUENCEID OR e.EVENT_EVENTID = pa.PRE_ID)
             ORDER BY e.EVENT_TIMESTAMP ASC
         """
