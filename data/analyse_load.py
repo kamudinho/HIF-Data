@@ -2,6 +2,18 @@
 import pandas as pd
 import streamlit as st
 
+def get_single_match_physical(match_uuid):
+    """Henter kun fysisk data for én specifik kamp on-demand"""
+    from data.data_load import _get_snowflake_conn
+    conn = _get_snowflake_conn()
+    
+    # Vi definerer SQL her eller henter fra opta_queries
+    sql = f"""
+        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+        WHERE MATCH_OPTAUUID = '{match_uuid}'
+    """
+    return conn.query(sql)
+
 def get_analysis_package(hif_only=False):
     from data.data_load import _get_snowflake_conn, load_local_players
     from data.sql.opta_queries import get_opta_queries
