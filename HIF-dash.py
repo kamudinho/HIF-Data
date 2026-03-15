@@ -219,10 +219,10 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                # Én linje henter alt, én linje viser det.
-                fd = fl.get_physical_package(df) 
+                # Vi bruger 'fys_loader' (dit alias fra toppen) og sender 'dp' med
+                fd = fys_loader.get_physical_package(dp) 
                 if fd:
-                    fd_page.vis_side(df)
+                    fd_page.vis_side(fd)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
