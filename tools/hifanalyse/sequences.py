@@ -97,7 +97,7 @@ def vis_side(dp):
             elif raw_id == "6": display_name = "Hjørnespark"
             elif raw_id == "16": display_name = "Mål ⚽"
             else:
-                eng_name = OPTA_EVENT_TYPES.get(raw_id, f"Aktion {raw_id}")
+                eng_name = OPTA_EVENTTYPE.get(raw_id, f"Aktion {raw_id}")
                 display_name = DK_NAMES.get(eng_name, eng_name)
             
             if i < len(active_seq) - 1:
