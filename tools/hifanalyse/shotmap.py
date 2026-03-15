@@ -66,7 +66,7 @@ def vis_side(dp):
     df_skud['Zone'] = df_skud.apply(map_to_zone, axis=1)
     df_skud['IS_DZ_GEO'] = (df_skud['EVENT_X'] >= 88.5) & (df_skud['EVENT_Y'] >= 37.0) & (df_skud['EVENT_Y'] <= 63.0)
 
-    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
+    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER", "SEKVENSER"])
 
     # --- TAB 1: SPILLEROVERSIGT ---
     with tabs[0]:
@@ -162,3 +162,88 @@ def vis_side(dp):
 
     with tabs[3]: zone_plot_enhanced(df_skud, False)
     with tabs[4]: zone_plot_enhanced(df_skud[df_skud['EVENT_TYPEID'] == 16], True)
+    with tabs[5]:
+        # --- CSS TIL OPTIMERING AF LAYOUT ---
+        st.markdown(f"""
+            <style>
+                .stat-box-side {{ background-color: #f8f9fa; padding: 8px 12px; border-radius: 5px; border-left: 5px solid {HIF_RED}; margin-bottom: 6px; }}
+                .dot {{ height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }}
+                .play-flow-container {{ background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #eee; margin-top: 5px; }}
+                .flow-step {{ font-weight: 700; color: #333; font-size: 0.85rem; }}
+                .flow-action {{ color: #666; font-size: 0.75rem; font-weight: 400; }}
+                .flow-arrow {{ color: {HIF_RED}; margin: 0 4px; font-weight: bold; }}
+            </style>
+        """, unsafe_allow_html=True)
+
+        df_raw = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
+        if df_raw.empty:
+            st.info("Ingen sekvens-data fundet for denne kamp.")
+            return
+
+        # Data-forberedelse
+        df = df_raw.copy()
+        df.columns = [c.upper() for c in df.columns]
+        col_x = 'RAW_X' if 'RAW_X' in df.columns else 'EVENT_X'
+        col_y = 'RAW_Y' if 'RAW_Y' in df.columns else 'EVENT_Y'
+
+        df['EVENT_CONTESTANT_OPTAUUID'] = df['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.lower()
+        local_hif_uuid = HIF_UUID.lower()
+        
+        goals = df[df['EVENT_TYPEID'] == 16].sort_values('EVENT_TIMESTAMP', ascending=False)
+        if goals.empty:
+            st.warning("Ingen mål fundet i sekvens-data.")
+            return
+
+        goals['LABEL'] = goals.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']}", axis=1)
+        
+        col_main, col_side = st.columns([2.5, 1])
+
+        with col_side:
+            sel_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique(), label_visibility="collapsed")
+            sel_row = goals[goals['LABEL'] == sel_label].iloc[0]
+            
+            hif_seq = df[(df['SEQUENCEID'] == sel_row['SEQUENCEID']) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
+            hif_seq = hif_seq.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
+
+            if not hif_seq.empty:
+                scorer = hif_seq.iloc[-1]['PLAYER_NAME'].split()[-1] if pd.notnull(hif_seq.iloc[-1]['PLAYER_NAME']) else "HIF"
+                assist = hif_seq.iloc[-2]['PLAYER_NAME'].split()[-1] if len(hif_seq) > 1 else "Solo"
+                
+                st.markdown(f'<div class="stat-box-side"><span class="dot" style="background-color:{HIF_RED}"></span><b>Mål:</b> {scorer}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="stat-box-side" style="border-left-color:{ASSIST_BLUE}"><span class="dot" style="background-color:{ASSIST_BLUE}"></span><b>Assist:</b> {assist}</div>', unsafe_allow_html=True)
+
+                st.caption("Deltagere i sekvensen")
+                hif_seq['Spiller'] = hif_seq['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
+                st.table(hif_seq['Spiller'].value_counts().reset_index().rename(columns={'index': 'Spiller', 'Spiller': 'Aktioner'}))
+
+        with col_main:
+            pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(9, 6))
+            flip = True if sel_row[col_x] < 50 else False
+            
+            prev = None
+            for i, r in hif_seq.iterrows():
+                cx, cy = (100 - r[col_x] if flip else r[col_x]), (100 - r[col_y] if flip else r[col_y])
+                if prev:
+                    ax.annotate('', xy=(cx, cy), xytext=(prev[0], prev[1]),
+                                arrowprops=dict(arrowstyle='->', color='#ccc', lw=1.5, alpha=0.4, shrinkA=5, shrinkB=5))
+                
+                p_name = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
+                dot_col = HIF_RED if r['EVENT_TYPEID'] == 16 else (ASSIST_BLUE if p_name == assist else '#aaaaaa')
+                pitch.scatter(cx, cy, s=180, color=dot_col, edgecolors='white', ax=ax, zorder=5)
+                ax.text(cx, cy + 2.5, p_name, fontsize=8, ha='center', fontweight='bold')
+                prev = (cx, cy)
+            
+            st.pyplot(fig, bbox_inches='tight', pad_inches=0)
+
+            # Sekvens-oversigt tekst-flow
+            steps = []
+            for _, r in hif_seq.iterrows():
+                p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
+                tid = int(r['EVENT_TYPEID'])
+                h = OPTA_MAP_DK.get(tid, f"Aktion {tid}")
+                if tid == 16: h = "MÅL"
+                steps.append(f'<span class="flow-step">{p}</span> <span class="flow-action">({h})</span>')
+            
+            flow_string = ' <span class="flow-arrow">→</span> '.join(steps)
+            st.markdown(f'<div class="play-flow-container">{flow_string}</div>', unsafe_allow_html=True)
