@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 import data.sql.fys_queries as fys_queries
 
-def vis_side(match_id, run_query):
+def vis_side(fd, run_query=None): # Tilføj =None her
+    st.header(f"Fysisk Analyse: {fd['match_name']}")
+    
+    hif_df = fd['hif_stats']
+    
     st.write(f"Modtaget Match ID: {match_id}")
 
     # Hent SQL-strengen
