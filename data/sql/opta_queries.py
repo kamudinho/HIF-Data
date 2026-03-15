@@ -283,7 +283,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             FROM {DB}.OPTA_MATCHINFO m
             -- Vi joiner på SSIID og OPTAID som vi konstaterede var ens
             JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
-                ON m.MATCH_OPTAID = f.MATCH_SSIID
+                ON m.MATCH_OPTAUUID = f.MATCH_SSIID
             WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             {hif_filter_matchinfo}
             ORDER BY m.MATCH_DATE_FULL DESC, f.DISTANCE DESC
