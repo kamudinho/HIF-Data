@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 # --- KONSTANTER (Beholdes for konsistens) ---
 HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
+HIF_GOLD = '#FF0F0F'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 OPTA_MAP_DK = {
