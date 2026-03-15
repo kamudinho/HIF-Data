@@ -12,12 +12,11 @@ def get_physical_package(dp):
     df_m['MATCH_DISPLAY'] = df_m['CONTESTANTHOME_NAME'] + " - " + df_m['CONTESTANTAWAY_NAME']
     valgt_kamp = st.selectbox("Vælg kamp for fysisk analyse", df_m["MATCH_DISPLAY"].unique())
     
-    # VIGTIGT: Tjek om F53A kræver UUID eller det almindelige ID
-    # Vi tager OPTAID (tallet), da det er mest brugt i F53A
-    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAUUID'].values[0]
-
-    # 2. Hent SQL fra fys_queries
-    query = fys_queries.get_match_physical_stats(m_id)
+    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAID'].values[0]
+    
+    # Hent data fra begge tabeller
+    query_player = fys_queries.get_match_physical_stats(m_id)
+    query_team = fys_queries.get_team_physical_stats(m_id)
     
     conn = _get_snowflake_conn()
     try:
