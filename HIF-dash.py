@@ -218,21 +218,11 @@ try:
                 import tools.ligaen.leagueshots as ls
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
-                import data.fys_load as fl
-                import tools.ligaen.fysisk as f_page
-                
-                # Brug din eksisterende dp til at vælge kampen
-                all_matches = st.session_state["dp"]["matches"]
-                valgt_kamp = st.selectbox("Vælg kamp", all_matches["MATCH_NAME"].unique())
-                m_id = all_matches[all_matches["MATCH_NAME"] == valgt_kamp]["MATCH_OPTAID"].values[0]
-                
-                # HENT DIN FD PAKKE
-                with st.spinner("Henter fysisk pakke..."):
-                    fd = fl.get_physical_package(m_id)
-                
-                # SEND FD VIDERE
+                import tools.ligaen.fysisk as fd_page
+                # Én linje henter alt, én linje viser det.
+                fd = fl.get_physical_package(dp) 
                 if fd:
-                    f_page.vis_side(fd)
+                    fd_page.vis_side(fd)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
