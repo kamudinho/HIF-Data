@@ -10,7 +10,7 @@ ASSIST_BLUE = '#1e90ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 def vis_side(dp):
-    # 1. CSS og Styling (Stat-bokse bevaret)
+    # 1. CSS og Styling
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
@@ -23,7 +23,7 @@ def vis_side(dp):
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
     if df.empty: return
 
-    # Rens data: Fjern 0,0 og None
+    # Rens data
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
     df = df[~((df['RAW_X'] == 0) & (df['RAW_Y'] == 0))].copy()
@@ -69,31 +69,50 @@ def vis_side(dp):
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
 
-        # Flip-anker: Vi bestemmer retningen ud fra målet
         should_flip_base = True if sel_row['RAW_X'] < 50 else False
 
+        # --- MODSTANDER FILTRERING ---
+        # Vi vil kun have MAKS EN modstander-prik (den seneste før målet)
         processed = []
-        for i, r in active_seq.iterrows():
+        opp_included = False
+        
+        # Vi løber sekvensen igennem baglæns for at finde den relevante modstander-aktion
+        # men tegner den forlæns.
+        allowed_indices = []
+        for i in range(len(active_seq)-1, -1, -1):
+            row = active_seq.loc[i]
+            is_hif = row['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
+            if is_hif:
+                allowed_indices.append(i)
+            elif not is_hif and not opp_included:
+                # Her tager vi kun den første modstander-aktion vi møder (tættest på målet)
+                allowed_indices.append(i)
+                opp_included = True
+        
+        # Sorter tilbage til kronologisk
+        final_display_seq = active_seq.loc[sorted(allowed_indices)].reset_index(drop=True)
+
+        for i, r in final_display_seq.iterrows():
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
             rx, ry = r['RAW_X'], r['RAW_Y']
             
-            # --- MODSTANDER LOGIK ---
-            # Vi tjekker om modstanderen er "out of sync" med Hvidovres banehalvdel.
-            # Hvis HIF angriber mod X=100, men modstanderen står i X<20, 
-            # så flipper vi både X og Y for at få dem ind i samme duel-zone.
+            # Tving modstander til korrekt side (som tidligere aftalt)
             if not is_hif:
                 if (not should_flip_base and rx < 40) or (should_flip_base and rx > 60):
-                    rx = 100 - rx
-                    ry = 100 - ry
+                    rx, ry = 100 - rx, 100 - ry
 
             cx = 100 - rx if should_flip_base else rx
             cy = 100 - ry if should_flip_base else ry
-            
             processed.append({'x': cx, 'y': cy, 'hif': is_hif})
 
-            # Tegn prikker
             if is_hif:
-                m_c = HIF_RED if i == goal_idx else (ASSIST_BLUE if i == assist_idx else '#aaaaaa')
+                # Find det rigtige index for farvning (mål/assist)
+                # Vi tjekker mod det oprindelige active_seq for at bevare logikken
+                m_c = '#aaaaaa'
+                if r['EVENT_TYPEID'] == 16: m_c = HIF_RED
+                elif r['PLAYER_NAME'] == active_seq.loc[assist_idx, 'PLAYER_NAME'] if assist_idx != -1 else False: 
+                    m_c = ASSIST_BLUE
+                
                 p_label = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
                 ax.text(cx, cy + 3, p_label, fontsize=9, ha='center', fontweight='bold')
                 z = 3
@@ -102,7 +121,7 @@ def vis_side(dp):
                 z = 2
             pitch.scatter(cx, cy, s=180 if is_hif else 100, color=m_c, edgecolors='white', ax=ax, zorder=z)
 
-        # Tegn stregerne (Kun mod HIF-spillere)
+        # Tegn streger
         for i in range(1, len(processed)):
             curr, prev = processed[i], processed[i-1]
             if curr['hif']: 
