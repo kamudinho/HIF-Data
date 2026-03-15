@@ -4,10 +4,18 @@ from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# HIF Identitet & Design
+# --- KONSTANTER (Beholdes for konsistens) ---
 HIF_RED = '#cc0000'
-HIF_GOLD = '#b8860b'
-DZ_COLOR = '#1f77b4'
+ASSIST_BLUE = '#1e90ff'
+HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
+
+OPTA_MAP_DK = {
+    1: "Aflevering", 2: "Aflevering", 3: "Dribling", 4: "Tackling", 
+    5: "Frispark", 6: "Hjørnespark", 7: "Tackling", 8: "Interception",
+    10: "Redning", 12: "Skud", 13: "Skud", 14: "Skud", 15: "Skud", 
+    16: "MÅL", 43: "Frispark", 44: "Indkast", 49: "Opsamling", 50: "Opsnapning",
+    107: "Restart"
+}
 
 def vis_side(dp):
     st.markdown("""
