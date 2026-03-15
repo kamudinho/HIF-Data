@@ -17,7 +17,7 @@ OPTA_MAP_DK = {
 }
 
 def vis_side(dp):
-    # CSS: Strammer padding op og fjerner margin i toppen
+    # CSS: Optimeret til minimal luft og skarpt fokus
     st.markdown(f"""
         <style>
             .block-container {{ padding-top: 1rem; }}
@@ -35,13 +35,12 @@ def vis_side(dp):
                 border-radius: 8px; 
                 border: 1px solid #eee; 
                 margin-top: 5px; 
-                line-height: 1.6;
             }}
-            .flow-step {{ font-weight: 700; color: #333; font-size: 0.9rem; }}
-            .flow-action {{ color: #666; font-size: 0.8rem; font-weight: 400; }}
-            .flow-arrow {{ color: {HIF_RED}; margin: 0 6px; font-weight: bold; }}
-            /* Fjerner Streamlits standard-afstand over tabeller */
-            .stTable {{ margin-top: -15px; }}
+            .flow-step {{ font-weight: 700; color: #333; font-size: 0.85rem; }}
+            .flow-action {{ color: #666; font-size: 0.75rem; font-weight: 400; }}
+            .flow-arrow {{ color: {HIF_RED}; margin: 0 4px; font-weight: bold; }}
+            /* Tabel styling */
+            .stTable {{ margin-top: -10px; font-size: 0.8rem; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -65,10 +64,10 @@ def vis_side(dp):
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
-        # Flyt selectbox op så den flugter med banen
         sel_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique(), label_visibility="collapsed")
         sel_row = goals[goals['LABEL'] == sel_label].iloc[0]
         
+        # FILTRERING: Kun aktioner for den VALGTE sekvens
         hif_seq = df[(df['SEQUENCEID'] == sel_row['SEQUENCEID']) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
         hif_seq = hif_seq.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
 
@@ -79,21 +78,19 @@ def vis_side(dp):
             st.markdown(f'<div class="stat-box-side"><span class="dot" style="background-color:{HIF_RED}"></span><b>Målscorer:</b> {scorer}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box-side" style="border-left-color:{ASSIST_BLUE}"><span class="dot" style="background-color:{ASSIST_BLUE}"></span><b>Assist:</b> {assist}</div>', unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("Involveringer i sekvens")
-        
-        all_hif_game = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
-        if not all_hif_game.empty:
-            all_hif_game['Spiller'] = all_hif_game['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
-            top_players = all_hif_game['Spiller'].value_counts().reset_index()
-            top_players.columns = ['Spiller', 'Aktioner']
-            st.table(top_players.head(10))
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.caption("Deltagere i dette angreb")
+            
+            # TABEL: Tæller kun spillere i hif_seq (den specifikke sekvens)
+            hif_seq['Spiller'] = hif_seq['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
+            involvement = hif_seq['Spiller'].value_counts().reset_index()
+            involvement.columns = ['Spiller', 'Aktioner']
+            st.table(involvement)
 
     with col_main:
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
-        # Justeret figsize og constrained_layout for at mindske whitespace
         fig, ax = pitch.draw(figsize=(9, 6))
-        fig.set_facecolor('none') # Gør figuren gennemsigtig så den blender ind
+        fig.set_facecolor('none')
         
         flip = True if sel_row[col_x] < 50 else False
         
@@ -110,10 +107,9 @@ def vis_side(dp):
             ax.text(cx, cy + 2.5, p_name, fontsize=8, ha='center', fontweight='bold')
             prev = (cx, cy)
         
-        # Bruger bbox_inches='tight' for at fjerne hvid margin omkring plottet
         st.pyplot(fig, bbox_inches='tight', pad_inches=0)
 
-        # Sekvens-tekst lige under banen
+        # Sekvens-oversigt
         steps = []
         for _, r in hif_seq.iterrows():
             p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
