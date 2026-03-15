@@ -2,26 +2,19 @@ import streamlit as st
 import pandas as pd
 import data.sql.fys_queries as fys_queries
 
-def vis_side(fd, run_query=None): # Tilføj =None her
-    st.header(f"Fysisk Analyse: {fd['match_name']}")
+def vis_side(fd, run_query=None):
+    st.title("Fysisk Rapport")
     
-    hif_df = fd['hif_stats']
-    
-    st.write(f"Modtaget Match ID: {match_id}")
+    if fd is None:
+        st.error("Ingen data sendt til visningssiden.")
+        return
 
-    # Hent SQL-strengen
-    query = fys_queries.get_match_physical_stats(match_id)
+    hif_df = fd.get("hif_stats")
     
-    # Vis den rå SQL så vi kan se om match_id er indsat korrekt
-    st.code(query, language="sql")
+    if hif_df is None or hif_df.empty:
+        st.warning("Ingen Hvidovre-data at vise for denne kamp.")
+        return
 
-    # Kør query
-    try:
-        df = run_query(query)
-        if df is not None:
-            st.write(f"Antal rækker fundet: {len(df)}")
-            st.dataframe(df) # Vis hele tabellen råt
-        else:
-            st.error("Dataframe returnerede None")
-    except Exception as e:
-        st.error(f"Der skete en fejl i run_query: {e}")
+    # Herfra kan du begynde at tegne dine grafer/tabeller
+    st.write(f"Analyse af: {fd['match_name']}")
+    st.dataframe(hif_df)
