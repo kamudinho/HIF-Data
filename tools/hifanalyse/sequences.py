@@ -66,7 +66,7 @@ def vis_side(dp):
         if first_idx > 0:
             pre_action = df.loc[[first_idx - 1]]
             # Kun hvis det er samme kamp
-            if pre_action['GAME_ID'].values[0] == sel_row['GAME_ID']:
+            if pre_action['MATCH_OPTAUUID'].values[0] == sel_row['GAME_ID']:
                 active_seq = pd.concat([pre_action, active_seq]).reset_index(drop=True)
         
         active_seq = active_seq.reset_index(drop=True)
