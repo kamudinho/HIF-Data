@@ -130,5 +130,5 @@ def vis_side(dp):
             
             steps.append(f'<span class="flow-step">{p}</span> <span class="flow-action">({action})</span>')
         
-        flow_html = f'<div class="play-flow-container">{" <span class="flow-arrow">→</span> ".join(steps)}</div>'
+        flow_html = f'<div class="play-flow-container">{" <span class="flow-arrow">→</span> ".join(steps)}</div>')
         st.markdown(flow_html, unsafe_allow_html=True)
