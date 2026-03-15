@@ -117,9 +117,7 @@ def vis_side(dp):
 
         st.pyplot(fig)
 
-        # --- SEKVENS-OVERSIGT (TEKST) ---
-        st.write("### Angrebssekvens")
-        
+        # --- SEKVENS-OVERSIGT (TEKST) ---        
         steps = []
         for _, r in hif_seq.iterrows():
             p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
