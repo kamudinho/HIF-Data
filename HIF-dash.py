@@ -217,7 +217,7 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data - liga":
                 import tools.ligaen.fysisk as fd
-                fd.vis_side(dp)
+                fd.vis_side(dp, run_query)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
