@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import fys_queries  # Din nye query-fil
+import data.sql.fys_queries  # Din nye query-fil
 
 def show_physical_page(match_id):    
     # 1. Hent data via din nye query-struktur
