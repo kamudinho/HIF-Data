@@ -27,8 +27,6 @@ DK_NAMES = {
 
 def vis_side(dp):
     # 1. CSS
-    # --- SIDEBAR STAT-BOKSE MED FARVEDE PRIKKER ---
-        
         # Målscorer navn (efternavn)
         scorer_name = goal_row['PLAYER_NAME'].split()[-1] if pd.notnull(goal_row['PLAYER_NAME']) else "HIF"
         
@@ -52,7 +50,7 @@ def vis_side(dp):
                 <div class="stat-label-side">Aktioner / Tid</div>
                 <div class="stat-value-side">{len(active_seq)} akt. | {goal_row['EVENT_TIMEMIN']}'</div>
             </div>
-        """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)    
 
     # 2. Hent data
     df = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
