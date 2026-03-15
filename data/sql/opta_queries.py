@@ -208,7 +208,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Den komplette og rettede version)
+        # 9. UNIVERSAL SEQUENCE MAP (Rettet til Snowflake subquery-begrænsning)
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
                 SELECT DISTINCT MATCH_OPTAUUID 
@@ -216,11 +216,21 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             ),
             GoalSequences AS (
-                SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
+                SELECT e.SEQUENCEID, e.MATCH_OPTAUUID, MIN(e.EVENT_EVENTID) as FIRST_ID
                 FROM {DB}.OPTA_EVENTS e
                 WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
                 AND e.EVENT_TYPEID = 16 
                 {hif_filter_event}
+                GROUP BY 1, 2
+            ),
+            -- Find aktionen før hver sekvens separat
+            PreActions AS (
+                SELECT prev.MATCH_OPTAUUID, gs.SEQUENCEID, MAX(prev.EVENT_EVENTID) as PRE_ID
+                FROM {DB}.OPTA_EVENTS prev
+                JOIN GoalSequences gs ON prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                WHERE prev.EVENT_EVENTID < gs.FIRST_ID
+                  AND prev.EVENT_TYPEID IN (8, 49)
+                GROUP BY 1, 2
             ),
             EventQualifiers AS (
                 SELECT 
@@ -236,7 +246,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.EVENT_TIMEMIN,
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                -- LAG logik for at tegne streger mellem aktioner
                 LAG(e.EVENT_X, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
                 LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
                 e.EVENT_X as RAW_X,
@@ -247,30 +256,11 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 m.TOTAL_HOME_SCORE as HOME_SCORE,
                 m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
-            INNER JOIN GoalSequences gs 
-                ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                AND (
-                    -- Medtag alle hændelser i selve mål-sekvensen
-                    e.SEQUENCEID = gs.SEQUENCEID 
-                    OR 
-                    -- Medtag kun hændelsen lige før, hvis det er en erobring (8) eller opsamling (49)
-                    e.EVENT_EVENTID = (
-                        SELECT MAX(prev.EVENT_EVENTID)
-                        FROM {DB}.OPTA_EVENTS prev
-                        WHERE prev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                          AND prev.EVENT_EVENTID < (
-                              SELECT MIN(first_ev.EVENT_EVENTID) 
-                              FROM {DB}.OPTA_EVENTS first_ev 
-                              WHERE first_ev.SEQUENCEID = gs.SEQUENCEID 
-                              AND first_ev.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
-                          )
-                          AND prev.EVENT_TYPEID IN (8, 49)
-                    )
-                )
-            LEFT JOIN EventQualifiers q 
-                ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            LEFT JOIN {DB}.OPTA_MATCHINFO m 
-                ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            JOIN GoalSequences gs ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+            LEFT JOIN PreActions pa ON e.MATCH_OPTAUUID = pa.MATCH_OPTAUUID AND pa.SEQUENCEID = gs.SEQUENCEID
+            LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            WHERE (e.SEQUENCEID = gs.SEQUENCEID) OR (e.EVENT_EVENTID = pa.PRE_ID)
             ORDER BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ASC
         """
         }
