@@ -9,6 +9,7 @@ HIF_GOLD = '#b8860b'
 ASSIST_BLUE = '#1e90ff'
 
 def vis_side(dp):
+    st.write(df.columns)
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
