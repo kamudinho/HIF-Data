@@ -3,15 +3,16 @@ import pandas as pd
 from mplsoccer import Pitch
 import matplotlib.pyplot as plt
 
-# Sikker import fra din mappings-fil
+# Importér fra din mapping-fil
 try:
     from data.utils.mappings import OPTA_EVENT_TYPES, get_event_name
 except:
     def get_event_name(eid): return f"Aktion {eid}"
 
-# HIF Design
 HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
+# Din COMP_MAP værdier fra instruktioner (Hvidovre app)
+HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
 
 DK_NAMES = {
     "Pass": "Aflevering", "Ball recovery": "Opsamling", "Goal": "MÅL",
@@ -20,127 +21,123 @@ DK_NAMES = {
 }
 
 def vis_side(dp):
-    st.markdown(f"""
-        <style>
-            .stat-box-side {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
-            .stat-label-side {{ font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: 800; }}
-            .stat-value-side {{ font-size: 1.2rem; font-weight: 900; color: #1a1a1a; }}
-            .match-header {{ font-size: 1.3rem; font-weight: 800; color: {HIF_RED}; text-align: center; margin-bottom: 20px; text-transform: uppercase; }}
-        </style>
-    """, unsafe_allow_html=True)
-
+    # Hent data fra din specifikke query 'opta_sequence_map'
     df_raw = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
+    
     if df_raw.empty:
-        st.warning("Ingen Opta-data tilgængelig.")
+        st.warning("Ingen sekvensdata fundet i databasen.")
         return
 
-    # 1. Præ-processering: Sørg for tal og tid er korrekte før sortering
+    # 1. Datarens og benhård sortering
     df = df_raw.copy()
+    df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
-    df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
-    # Sorter benhårdt på tid og derefter rækkefølge-ID
-    df = df.sort_values(['EVENT_TIMESTAMP', 'EVENT_EVENTID']).reset_index(drop=True)
-
-    # 2. Identificer alle mål (Event 16)
-    goals = df[df['EVENT_TYPEID'] == 16].copy()
-    if goals.empty:
-        st.info("Ingen mål i denne kørsel.")
-        return
     
+    # Sorter efter tid, så flowet i tabellen passer
+    df = df.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
+
+    # 2. Find de unikke mål baseret på din GOAL_REF_ID (SEQUENCEID i SQL)
+    # Vi tager kun de rækker, hvor selve målet sker (Type 16)
+    goals = df[df['EVENT_TYPEID'] == 16].copy()
+    
+    if goals.empty:
+        st.info("Ingen mål (Type 16) fundet i datasættet.")
+        return
+
+    # Lav en label til selectbox
     goals['LABEL'] = goals.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']}", axis=1)
     
-    col_main, col_side = st.columns([2.5, 1])
+    col_main, col_side = st.columns([2.5, 1.2])
 
     with col_side:
-        selected_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique(), label_visibility="collapsed")
-        # Find præcis den række der matcher det valgte mål
-        goal_row = goals[goals['LABEL'] == selected_label].iloc[0]
-        hif_team_id = goal_row['EVENT_CONTESTANT_OPTAUUID']
+        selected_label = st.selectbox("Vælg scoring", options=goals['LABEL'].unique(), label_visibility="collapsed")
         
-        # 3. Hent den fulde sekvens for dette mål
-        active_seq = df[df['SEQUENCEID'] == goal_row['SEQUENCEID']].copy()
+        # FIND DET SPECIFIKKE MÅL
+        # Vi filtrerer på LABEL og tager den første (hvis der er dubletter)
+        target_goal = goals[goals['LABEL'] == selected_label].iloc[0]
         
-        # 4. Filtrer til KUN HIF og fjern alt EFTER målet (hvis der skulle være støj)
-        # Vi finder målets placering i den sorterede sekvens
-        goal_timestamp = goal_row['EVENT_TIMESTAMP']
-        hif_seq = active_seq[
-            (active_seq['EVENT_CONTESTANT_OPTAUUID'] == hif_team_id) & 
-            (active_seq['EVENT_TIMESTAMP'] <= goal_timestamp)
-        ].copy().reset_index(drop=True)
+        # VIGTIGT: Vi isolerer nu sekvensen til kun at være hændelser knyttet til DETTE mål-ID
+        # Dette løser fejlen fra din SQL JOIN
+        active_seq = df[df['SEQUENCEID'] == target_goal['SEQUENCEID']].copy()
+        
+        # Identificer HIF's ID fra målscoreren
+        hif_team_id = target_goal['EVENT_CONTESTANT_OPTAUUID']
+        
+        # Filtrer modstandere fra og behold kun kronologisk rækkefølge op til målet
+        hif_seq = active_seq[active_seq['EVENT_CONTESTANT_OPTAUUID'] == hif_team_id].copy()
+        hif_seq = hif_seq[hif_seq['EVENT_TIMESTAMP'] <= target_goal['EVENT_TIMESTAMP']]
 
-        # 5. Definer målscorer og assist (sidste to spillere i den filtrerede liste)
-        scorer_name = "HIF"
+        # Find assist (sidste HIF spiller før målscorer)
+        scorer_name = target_goal['PLAYER_NAME'].split()[-1] if pd.notnull(target_goal['PLAYER_NAME']) else "HIF"
         assist_name = "Solo"
         assist_idx = -1
         
-        if not hif_seq.empty:
-            # Den sidste række i hif_seq ER målet
-            final_goal_row = hif_seq.iloc[-1]
-            scorer_name = final_goal_row['PLAYER_NAME'].split()[-1] if pd.notnull(final_goal_row['PLAYER_NAME']) else "HIF"
-            
-            # Find den sidste spiller der IKKE er målscoreren
-            for i in range(len(hif_seq) - 2, -1, -1):
-                if hif_seq.loc[i, 'PLAYER_NAME'] != final_goal_row['PLAYER_NAME']:
-                    assist_name = hif_seq.loc[i, 'PLAYER_NAME'].split()[-1]
-                    assist_idx = i
-                    break
+        # Vi leder baglæns fra målet i den filtrerede liste
+        for i in range(len(hif_seq) - 2, -1, -1):
+            row = hif_seq.iloc[i]
+            if row['PLAYER_NAME'] != target_goal['PLAYER_NAME']:
+                assist_name = row['PLAYER_NAME'].split()[-1]
+                assist_idx = hif_seq.index[i]
+                break
 
-        # UI: Stats Bokse
+        # UI: Stats
         st.markdown(f"""
-            <div class="stat-box-side">
-                <div class="stat-label-side">Målscorer</div>
-                <div class="stat-value-side"><span style="color:{HIF_RED};">●</span> {scorer_name}</div>
+            <div style="background:#f8f9fa; padding:10px; border-left:5px solid {HIF_RED}; border-radius:5px; margin-bottom:10px;">
+                <small style="color:#666; font-weight:bold; text-transform:uppercase;">Målscorer</small><br>
+                <b style="font-size:1.2rem;">{scorer_name}</b>
             </div>
-            <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}">
-                <div class="stat-label-side">Assist / Sidst på bold</div>
-                <div class="stat-value-side"><span style="color:{ASSIST_BLUE};">●</span> {assist_name}</div>
+            <div style="background:#f8f9fa; padding:10px; border-left:5px solid {ASSIST_BLUE}; border-radius:5px; margin-bottom:10px;">
+                <small style="color:#666; font-weight:bold; text-transform:uppercase;">Assist / Sidst på bold</small><br>
+                <b style="font-size:1.2rem;">{assist_name}</b>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Tabel: Viser kun HIF kronologisk
-        flow_table = []
-        for _, r in hif_seq.iterrows():
+
+        # TABEL: Nu 100% synkroniseret
+        flow_list = []
+        for idx, r in hif_seq.iterrows():
             p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "?"
             ename = get_event_name(str(int(r['EVENT_TYPEID'])))
-            flow_table.append({
-                "Spiller": p,
-                "Aktion": DK_NAMES.get(ename, ename) if r['EVENT_TYPEID'] != 16 else "MÅL ⚽"
-            })
-        st.dataframe(pd.DataFrame(flow_table), use_container_width=True, hide_index=True, height=300)
+            disp_name = DK_NAMES.get(ename, ename)
+            if r['EVENT_TYPEID'] == 16: disp_name = "MÅL ⚽"
+            
+            flow_list.append({"Spiller": p, "Aktion": disp_name})
+            
+        st.dataframe(pd.DataFrame(flow_list), use_container_width=True, hide_index=True, height=300)
 
     with col_main:
-        st.markdown(f'<div class="match-header">{goal_row.get("HOME_TEAM", "HVIDOVRE")} V {goal_row.get("AWAY_TEAM", "MODSTANDER")}</div>', unsafe_allow_html=True)
+        # Overskrift med holdnavne fra din SQL
+        st.subheader(f"{target_goal['HOME_TEAM']} {int(target_goal['HOME_SCORE'])} - {int(target_goal['AWAY_SCORE'])} {target_goal['AWAY_TEAM']}")
         
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
         
-        # HIF angriber altid mod højre
-        should_flip = True if goal_row['RAW_X'] < 50 else False
+        # Retning: Hvis HIF scorer i venstre side (x < 50), flip banen
+        should_flip = True if target_goal['RAW_X'] < 50 else False
 
-        plot_data = []
-        for i, r in hif_seq.iterrows():
+        plot_points = []
+        for idx, r in hif_seq.iterrows():
             rx, ry = r['RAW_X'], r['RAW_Y']
             cx = (100 - rx if should_flip else rx)
             cy = (100 - ry if should_flip else ry)
             
-            plot_data.append({
+            plot_points.append({
                 'x': cx, 'y': cy,
                 'name': r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "",
                 'is_goal': (r['EVENT_TYPEID'] == 16),
-                'is_assist': (i == assist_idx)
+                'is_assist': (idx == assist_idx)
             })
 
-        # Pile og Punkter
-        for i in range(1, len(plot_data)):
-            p1, p2 = plot_data[i-1], plot_data[i]
+        # Tegn pile
+        for i in range(1, len(plot_points)):
+            p1, p2 = plot_points[i-1], plot_points[i]
             ax.annotate('', xy=(p2['x'], p2['y']), xytext=(p1['x'], p1['y']),
-                        arrowprops=dict(arrowstyle='->', color='#cccccc', lw=2, alpha=0.6))
+                        arrowprops=dict(arrowstyle='->', color='#cccccc', lw=2, alpha=0.5))
 
-        for pt in plot_data:
+        # Tegn spillere
+        for pt in plot_points:
             color = HIF_RED if pt['is_goal'] else (ASSIST_BLUE if pt['is_assist'] else '#999999')
-            z = 10 if pt['is_goal'] else 5
-            pitch.scatter(pt['x'], pt['y'], s=200 if pt['is_goal'] else 120, color=color, edgecolors='white', ax=ax, zorder=z)
-            ax.text(pt['x'], pt['y'] + 3, pt['name'], fontsize=10, ha='center', fontweight='bold')
+            pitch.scatter(pt['x'], pt['y'], s=150, color=color, edgecolors='white', ax=ax, zorder=5)
+            ax.text(pt['x'], pt['y'] + 3, pt['name'], fontsize=9, ha='center', fontweight='bold')
 
         st.pyplot(fig)
