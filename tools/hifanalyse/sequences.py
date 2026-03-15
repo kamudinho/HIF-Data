@@ -99,21 +99,27 @@ def vis_side(dp):
             <div class="stat-box-side" style="border-left-color: {HIF_GOLD}"><div class="stat-label-side">Aktioner / Resultat</div><div class="stat-value-side">{len(active_seq)} akt. | {int(goal_row["HOME_SCORE"])}-{int(goal_row["AWAY_SCORE"])}</div></div>
         """, unsafe_allow_html=True)
         
-        # --- FLOW TABEL (Med dine mappings) ---
+        # --- FLOW TABEL (Rettet: Bruger kun ID og dine mappings) ---
         st.write("**Spilsekvens:**")
         flow_data = []
         for i in range(len(active_seq)):
+            # Hent spillerens efternavn
             p = active_seq.loc[i, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i, 'PLAYER_NAME']) else "?"
             
-            # Brug din mapping her
-            tid = str(int(active_seq.loc[i, 'EVENT_TYPEID']))
-            raw_name = OPTA_EVENT_TYPES.get(tid, f"Aktion {tid}")
-            display_name = DK_NAMES.get(raw_name, raw_name) # Oversæt til dansk hvis muligt
+            # 1. Hent det rå ID (f.eks. 16) og lav det til en streng
+            raw_id = str(int(active_seq.loc[i, 'EVENT_TYPEID']))
+            
+            # 2. Slå op i din OPTA_EVENT_TYPES (fra din mappings.py)
+            event_name_eng = OPTA_EVENT_TYPES.get(raw_id, f"Aktion {raw_id}")
+            
+            # 3. Oversæt til dansk (valgfrit - bruger DK_NAMES hvis findes, ellers engelsk)
+            display_name = DK_NAMES.get(event_name_eng, event_name_eng)
             
             if i < len(active_seq) - 1:
                 n = active_seq.loc[i+1, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i+1, 'PLAYER_NAME']) else "?"
                 flow_data.append({"Flow": f"{p} → {n}", "Type": display_name})
             else:
+                # Sidste aktion er målet
                 flow_data.append({"Flow": f"{p}", "Type": "Mål ⚽"})
         
         st.dataframe(pd.DataFrame(flow_data), use_container_width=True, height=280, hide_index=True)
