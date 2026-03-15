@@ -29,7 +29,7 @@ def vis_side(dp):
     df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
     df['RAW_X'] = pd.to_numeric(df['RAW_X'], errors='coerce')
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
-    df = df.sort_values(['EVENT_TIMESTAMP', 'EVENT_ID']).reset_index(drop=True)
+    df = df.sort_values(['EVENT_TIMESTAMP', 'EVENT_EVENTID']).reset_index(drop=True)
 
     goals = df[df['EVENT_TYPEID'] == 16].copy()
     if goals.empty: return
