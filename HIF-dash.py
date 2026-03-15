@@ -219,13 +219,19 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                fd = fys_loader.get_physical_package(dp) 
                 
-                if fd:
-                    # HENT SESSIONEN HER:
+                # Hent det valgte match_uuid fra session_state (hvis du har gemt det under 'Kampe')
+                match_uuid = st.session_state.get('selected_match_uuid')
+                
+                if match_uuid:
+                    # Kald den nye funktion i analyse_load
+                    fysisk_df = analyse_load.get_single_match_physical(match_uuid)
+                    
+                    # Vi skal stadig bruge run_query/conn.sql til selve visningen i fd_page
                     conn = _get_snowflake_conn()
-                    # Nu sender vi conn.sql med, så 'session' ikke længere er udefineret
-                    fd_page.vis_side(fd, conn.sql)
+                    fd_page.vis_side(fysisk_df, conn.sql)
+                else:
+                    st.warning("Gå til 'Kampe' og vælg en kamp først for at se den fysiske data.")
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
