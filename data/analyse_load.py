@@ -27,7 +27,7 @@ def get_single_match_physical(match_uuid):
         sql = f"""
             SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
             WHERE MATCH_SSIID = '{ss_id}' 
-               OR MATCH_ID = '{ss_id}'
+               OR MATCH_OPTAUUID = '{ss_id}'
         """
         res = conn.query(sql)
         return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
