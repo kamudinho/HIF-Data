@@ -217,6 +217,8 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data - liga":
                 import tools.ligaen.fysisk as fd
+                # Tilføj en print her for at se om vi overhovedet rammer denne blok
+                st.write(f"Forsøger at indlæse fysisk data for kamp: {dp}") 
                 fd.vis_side(dp, run_query)
 
     elif hoved_omraade == "ADMIN":
