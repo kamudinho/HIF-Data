@@ -2,32 +2,37 @@ import pandas as pd
 import streamlit as st
 
 def get_single_match_physical(match_uuid):
-    """Henter fysisk data for én specifik kamp via SSIID"""
+    """Oversætter Opta UUID til SSIID og henter fysisk data korrekt"""
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     if not match_uuid: return pd.DataFrame()
-    
-    # Vi bruger MATCH_SSIID som er standard for Second Spectrum tabellerne
-    sql = f"""
-        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-        WHERE MATCH_SSIID = '{match_uuid}'
+
+    # TRIN 1: Find SSIID baseret på Opta UUID (Metadata-broen)
+    meta_sql = f"""
+        SELECT MATCH_SSIID 
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_METADATA 
+        WHERE MATCH_OPTAUUID = '{match_uuid}'
+        LIMIT 1
     """
+    
     try:
+        meta_res = conn.query(meta_sql)
+        
+        # Hvis vi finder et SSIID, bruger vi det. Ellers prøver vi UUID (som fallback)
+        ss_id = meta_res.iloc[0]['MATCH_SSIID'] if not meta_res.empty else match_uuid
+
+        # TRIN 2: Hent fysisk data med det korrekte ID
+        # Vi tjekker både MATCH_SSIID og MATCH_ID for at være sikre
+        sql = f"""
+            SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE MATCH_SSIID = '{ss_id}' OR MATCH_ID = '{ss_id}'
+        """
         res = conn.query(sql)
         return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
-    except Exception as e:
-        # Hvis SSIID fejler, prøver vi automatisk MATCH_ID som fallback
-        sql_fallback = f"""
-            SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE MATCH_ID = '{match_uuid}'
-        """
-        try:
-            res = conn.query(sql_fallback)
-            return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
-        except:
-            st.error(f"SQL Fejl: Kunne ikke finde en match-kolonne (Prøvede SSIID og MATCH_ID).")
-            return pd.DataFrame()
 
+    except Exception as e:
+        st.error(f"Fejl i ID-mapping eller Snowflake: {e}")
+        return pd.DataFrame()
 def get_analysis_package(hif_only=False):
     from data.data_load import _get_snowflake_conn, load_local_players
     from data.sql.opta_queries import get_opta_queries
