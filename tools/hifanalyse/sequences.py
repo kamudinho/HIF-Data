@@ -110,7 +110,3 @@ def vis_side(dp):
             pitch.scatter(el['x'], el['y'], s=s, color=color, edgecolors='white', ax=ax, zorder=z)
 
         st.pyplot(fig)
-
-    # 2. GENDAN SEKVENS-LOG (Tabel under banen)
-    st.write("### Sekvens-log")
-    st.dataframe(active_seq[['EVENT_TIMESTAMP', 'PLAYER_NAME', 'EVENT_TYPEID', 'RAW_X', 'RAW_Y']])
