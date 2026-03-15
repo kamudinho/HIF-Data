@@ -219,7 +219,7 @@ try:
                 import tools.ligaen.fysisk as fd
                 # Tilføj en print her for at se om vi overhovedet rammer denne blok
                 st.write(f"Forsøger at indlæse fysisk data for kamp: {dp}") 
-                fd.vis_side(dp, run_query)
+                fd.vis_side(fys_load)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
