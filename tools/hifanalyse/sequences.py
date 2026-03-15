@@ -78,49 +78,51 @@ def vis_side(dp):
         except:
             st.error("Kunne ikke analysere mål.")
 
+    def vis_side(dp):
+    # ... (CSS og data hentning er uændret) ...
+
     with col_main:
         st.markdown(f'<div class="match-header">{sel_row["HOME_TEAM"]} v {sel_row["AWAY_TEAM"]}</div>', unsafe_allow_html=True)
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
 
-        # 3. KORREKT RETNINGS-LOGIK
-        # Vi definerer, at HIF altid angriber fra venstre mod højre (mål X skal være > 50)
-        # Vi tjekker hver enkelt hændelse: Hvis den vender "væk" fra angrebsretningen, flipper vi den.
-        def get_fixed_coords(row, is_goal_right=True):
-            x, y = row['RAW_X'], row['RAW_Y']
-            # Hvis dette er målet, og det er registreret i venstre side, skal alt flippes
-            # Men da vi vil have et samlet flow, flipper vi baseret på mål-eventen
-            target_x = sel_row['RAW_X']
-            if target_x < 50: # Målet er registreret i venstre side (0-50)
-                return 100 - x, 100 - y
-            return x, y
+        # Vi bruger rå koordinater, men tjekker om vi skal flippe banen ÉN gang for hele sekvensen
+        # så Hvidovre altid angriber mod højre.
+        should_flip = True if sel_row['RAW_X'] < 50 else False
+        def fix_x(x): return 100 - x if should_flip else x
+        def fix_y(y): return 100 - y if should_flip else y
 
-        # Tegn sekvensen
+        # --- LOGIK: Tegn kun streger når HIF har bolden ---
         for i in range(len(active_seq)):
-            if i > goal_idx: break
+            if i > goal_idx: break # Stop ved målet
+            
             r = active_seq.loc[i]
-            cx, cy = get_fixed_coords(r)
+            cx, cy = fix_x(r['RAW_X']), fix_y(r['RAW_Y'])
             is_hif = r['EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID
 
-            # Farver
+            # 1. Tegn stregen FRA forrige aktion HVIS det giver mening
+            if i > 0:
+                prev = active_seq.loc[i-1]
+                px, py = fix_x(prev['RAW_X']), fix_y(prev['RAW_Y'])
+                
+                # Vi tegner KUN en streg hvis:
+                # Modstanderen clearer (sort prik) -> HIF samler op
+                # ELLER HIF spiller til HIF
+                ax.annotate('', xy=(cx, cy), xytext=(px, py),
+                            arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1.5, alpha=0.5))
+
+            # 2. Tegn selve prikken
             if is_hif:
                 if i == goal_idx: m_c = HIF_RED
                 elif i == assist_idx: m_c = ASSIST_BLUE
                 else: m_c = '#aaaaaa'
+                
+                # Navne-label
                 p_label = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
+                ax.text(cx, cy + 3, p_label, fontsize=9, ha='center', va='bottom', fontweight='bold')
             else:
                 m_c = 'black' # Modstanderens clearing
-                p_label = ""
-
-            # Tegn linjer (Kun mellem HIF eller fra clearing til HIF)
-            if i > 0:
-                pr = active_seq.loc[i-1]
-                px, py = get_fixed_coords(pr)
-                ax.annotate('', xy=(cx, cy), xytext=(px, py),
-                            arrowprops=dict(arrowstyle='->', color='#cccccc', lw=1, alpha=0.5))
-
-            pitch.scatter(cx, cy, s=160, color=m_c, edgecolors='white', ax=ax, zorder=3)
-            if p_label:
-                ax.text(cx, cy + 3, p_label, fontsize=8, ha='center', va='bottom', fontweight='bold')
+            
+            pitch.scatter(cx, cy, s=180, color=m_c, edgecolors='white', linewidth=1, ax=ax, zorder=3)
 
         st.pyplot(fig)
