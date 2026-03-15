@@ -3,17 +3,16 @@ import pandas as pd
 import data.sql.fys_queries as fys_queries  # Tilføjet 'as fys_queries'
 # fra din_db_fil import run_query          # Husk at importere din SQL-motor her
 
-def vis_side(match_id, run_query):  # Vi sender run_query med som argument eller importerer den
-    # 1. Hent data
+def vis_side(match_id, run_query):
+    # Print querien i appen så vi kan kopiere den til Snowflake/DBeaver
     query = fys_queries.get_match_physical_stats(match_id)
-    df_phys = run_query(query)
-
-    st.write("Debug - Kolonnenavne fundet:", df_phys.columns.tolist())
-    st.write("Debug - Antal rækker:", len(df_phys))
-    st.dataframe(df_phys.head()) # Se de første 5 rækker råt
+    st.code(query, language='sql') # Dette viser den rå SQL i appen
     
-    if df_phys is None or df_phys.empty:
-        st.warning("Ingen fysiske data fundet for denne kamp.")
+    try:
+        df_phys = run_query(query)
+        st.success("Forbindelse til database oprettet")
+    except Exception as e:
+        st.error(f"Fejl i databasekald: {e}")
         return
 
     # Sørg for at kolonnenavne er store bogstaver (hvis Snowflake/SQL returnerer det sådan)
