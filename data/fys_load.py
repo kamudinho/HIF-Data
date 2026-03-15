@@ -12,7 +12,7 @@ def get_physical_package(dp):
     df_m['MATCH_DISPLAY'] = df_m['CONTESTANTHOME_NAME'] + " - " + df_m['CONTESTANTAWAY_NAME']
     valgt_kamp = st.selectbox("Vælg kamp for fysisk analyse", df_m["MATCH_DISPLAY"].unique())
     
-    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAID'].values[0]
+    m_id = df_m[df_m["MATCH_DISPLAY"] == valgt_kamp]['MATCH_OPTAUUID'].values[0]
     
     # Hent data fra begge tabeller
     query_player = fys_queries.get_match_physical_stats(m_id)
