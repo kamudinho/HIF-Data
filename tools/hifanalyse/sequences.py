@@ -8,16 +8,17 @@ HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
-# Direkte oversættelse af Opta IDs (hvis get_event_name driller)
+# Dansk ordbog til aktioner
 OPTA_MAP_DK = {
     1: "Aflevering", 2: "Aflevering", 3: "Dribling", 4: "Tackling", 
     5: "Frispark", 6: "Hjørnespark", 7: "Tackling", 8: "Interception",
     10: "Redning", 12: "Skud", 13: "Skud", 14: "Skud", 15: "Skud", 
-    16: "MÅL", 43: "Frispark", 44: "Indkast", 49: "Opsamling", 50: "Opsnapning"
+    16: "MÅL", 43: "Frispark", 44: "Indkast", 49: "Opsamling", 50: "Opsnapning",
+    107: "Restart"
 }
 
 def vis_side(dp):
-    # 1. CSS (Enkel version for at undgå syntax fejl)
+    # CSS Styling
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 5px solid {HIF_RED}; margin-bottom: 5px; }}
@@ -26,23 +27,29 @@ def vis_side(dp):
         </style>
     """, unsafe_allow_html=True)
 
-    # Hent data
     df_raw = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
     if df_raw.empty:
-        st.info("Venter på data...")
+        st.info("Indlæser sekvens-data...")
         return
 
     df = df_raw.copy()
-    # Tving kolonnenavne til upper for at matche din SQL
     df.columns = [c.upper() for c in df.columns]
-    
-    # Rens UUID og find mål
+
+    # --- KOLONNE-TJEK (Løser 'EVENT_X' fejlen) ---
+    # Vi tjekker hvilke koordinat-navne din SQL bruger
+    col_x = 'RAW_X' if 'RAW_X' in df.columns else ('EVENT_X' if 'EVENT_X' in df.columns else None)
+    col_y = 'RAW_Y' if 'RAW_Y' in df.columns else ('EVENT_Y' if 'EVENT_Y' in df.columns else None)
+
+    if not col_x or not col_y:
+        st.error(f"Kunne ikke finde koordinat-kolonner (RAW_X eller EVENT_X). Fundne kolonner: {list(df.columns)}")
+        return
+
+    # Rens data
     df['EVENT_CONTESTANT_OPTAUUID'] = df['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.lower()
     local_hif_uuid = HIF_UUID.lower()
     
     goals = df[df['EVENT_TYPEID'] == 16].sort_values('EVENT_TIMESTAMP', ascending=False)
-    if goals.empty:
-        return
+    if goals.empty: return
 
     goals['LABEL'] = goals.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']}", axis=1)
     
@@ -52,9 +59,8 @@ def vis_side(dp):
         sel_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique())
         sel_row = goals[goals['LABEL'] == sel_label].iloc[0]
         
-        # Isoler hændelser for dette mål (HIF kun)
-        target_seq_id = sel_row['SEQUENCEID']
-        hif_seq = df[(df['SEQUENCEID'] == target_seq_id) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
+        # Find sekvens for HIF
+        hif_seq = df[(df['SEQUENCEID'] == sel_row['SEQUENCEID']) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
         hif_seq = hif_seq.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
 
         if not hif_seq.empty:
@@ -68,15 +74,13 @@ def vis_side(dp):
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 7))
         
-        # Flip logik (HIF angriber altid mod højre i visningen)
-        flip = True if sel_row['EVENT_X'] < 50 else False
+        # Flip logik baseret på den fundne X-kolonne
+        flip = True if sel_row[col_x] < 50 else False
         
         prev = None
         for i, r in hif_seq.iterrows():
-            # Brug EVENT_X/Y da de ofte er mere stabile end RAW_X/Y
-            x, y = r['EVENT_X'], r['EVENT_Y']
-            cx = 100 - x if flip else x
-            cy = 100 - y if flip else y
+            cx = 100 - r[col_x] if flip else r[col_x]
+            cy = 100 - r[col_y] if flip else r[col_y]
             
             if prev is not None:
                 ax.annotate('', xy=(cx, cy), xytext=(prev[0], prev[1]),
@@ -86,7 +90,7 @@ def vis_side(dp):
             dot_col = HIF_RED if r['EVENT_TYPEID'] == 16 else (ASSIST_BLUE if p_name == assist else '#999')
             
             pitch.scatter(cx, cy, s=150, color=dot_col, edgecolors='white', ax=ax, zorder=5)
-            ax.text(cx, cy + 3, p_name, fontsize=8, ha='center')
+            ax.text(cx, cy + 3, p_name, fontsize=8, ha='center', fontweight='bold')
             prev = (cx, cy)
         
         st.pyplot(fig)
@@ -96,21 +100,18 @@ def vis_side(dp):
         flow_list = []
         for i, r in hif_seq.iterrows():
             name = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
-            # Her henter vi oversættelsen fra vores ordbog
-            type_id = int(r['EVENT_TYPEID'])
-            handling = OPTA_MAP_DK.get(type_id, f"Aktion {type_id}")
+            handling = OPTA_MAP_DK.get(int(r['EVENT_TYPEID']), f"Aktion {r['EVENT_TYPEID']}")
             flow_list.append(f"**{name}** ({handling})")
         
         st.markdown(f'<div class="play-flow">{" → ".join(flow_list)}</div>', unsafe_allow_html=True)
 
-    # --- TOP INVOLVERINGER TABEL ---
+    # --- TABEL OVER INVOLVERINGER ---
     st.write("---")
-    st.subheader("Involveringer i målsekvenser")
+    st.subheader("Flest involveringer i målsekvenser (Top 5)")
     
-    # Vi tæller alle HIF-hændelser i hele det hentede datasæt
     all_hif = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
     if not all_hif.empty:
-        all_hif['Spiller'] = all_hif['PLAYER_NAME'].str.split().str[-1]
+        all_hif['Spiller'] = all_hif['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
         top_table = all_hif['Spiller'].value_counts().reset_index()
-        top_table.columns = ['Spiller', 'Involveringer']
-        st.dataframe(top_table.head(10), use_container_width=True, hide_index=True)
+        top_table.columns = ['Spiller', 'Aktioner']
+        st.table(top_table.head(5))
