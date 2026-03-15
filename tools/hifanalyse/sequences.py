@@ -35,33 +35,78 @@ def vis_side(dp):
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
-        selected_label = st.selectbox("Vælg mål", options=goal_events['LABEL'].unique())
+        st.caption("Vælg scoring")
+        selected_label = st.selectbox("", options=goal_events['LABEL'].unique(), label_visibility="collapsed")
         sel_row = goal_events[goal_events['LABEL'] == selected_label].iloc[0]
         
-        temp_seq = df[df['SEQUENCEID'] == sel_row['SEQUENCEID']].sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
+        # Hent sekvensen
+        active_seq = df[df['SEQUENCEID'] == sel_row['SEQUENCEID']].copy().sort_values('EVENT_TIMESTAMP')
         
-        # Start ved seneste restart (indkast/hjørne)
-        restarts = temp_seq[temp_seq['EVENT_TYPEID'].isin([5, 6])]
-        start_idx = restarts.index[-1] if not restarts.empty else 0
-        active_seq = temp_seq.iloc[start_idx:].reset_index(drop=True)
+        # Tjek for aktion før (fra SQL-Query 9)
+        first_global_idx = active_seq.index[0]
+        if first_global_idx > 0:
+            pre_action = df.loc[[first_global_idx - 1]]
+            if pre_action['MATCH_OPTAUUID'].values[0] == sel_row['MATCH_OPTAUUID']:
+                active_seq = pd.concat([pre_action, active_seq]).reset_index(drop=True)
+        
+        active_seq = active_seq.reset_index(drop=True)
+        goal_idx = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
+        goal_row = active_seq.loc[goal_idx]
+        goal_scorer_name = goal_row['PLAYER_NAME']
 
-        # FIND DE ORIGINALE ROLLER FØR FILTRERING
-        goal_idx_orig = active_seq[active_seq['EVENT_TYPEID'] == 16].index[-1]
-        scorer_name = active_seq.loc[goal_idx_orig, 'PLAYER_NAME']
-        
-        # Sidst på bolden (den ENESTE assist-blå spiller)
-        last_hif_idx_orig = -1
-        for i in range(goal_idx_orig - 1, -1, -1):
-            if active_seq.loc[i, 'EVENT_CONTESTANT_OPTAUUID'] == HIF_UUID:
-                last_hif_idx_orig = i
+        # LOGIK: Find assist (spring målscorerens egne aktioner over)
+        assist_idx = -1
+        for i in range(goal_idx - 1, -1, -1):
+            potential_p = active_seq.loc[i, 'PLAYER_NAME']
+            if potential_p != goal_scorer_name:
+                assist_idx = i
                 break
+
+        # Navne til visning
+        scorer_disp = goal_row['PLAYER_NAME'].split()[-1] if pd.notnull(goal_row['PLAYER_NAME']) else "HIF"
+        assist_name = active_seq.loc[assist_idx, 'PLAYER_NAME'].split()[-1] if assist_idx != -1 else "Solo"
+
+        # STAT-BOKSE MED FARVEDE PRIKKER
+        st.markdown(f"""
+            <div class="stat-box-side">
+                <div class="stat-label-side">Målscorer</div>
+                <div class="stat-value-side"><span style="color:{HIF_RED}; margin-right:8px;">●</span>{scorer_disp}</div>
+            </div>
+            <div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}">
+                <div class="stat-label-side">Assist</div>
+                <div class="stat-value-side"><span style="color:{ASSIST_BLUE}; margin-right:8px;">●</span>{assist_name}</div>
+            </div>
+            <div class="stat-box-side" style="border-left-color: {HIF_GOLD}">
+                <div class="stat-label-side">Resultat / Tid</div>
+                <div class="stat-value-side">{int(goal_row["HOME_SCORE"])}-{int(goal_row["AWAY_SCORE"])} | {goal_row['EVENT_TIMEMIN']}'</div>
+            </div>
+        """, unsafe_allow_html=True)
         
-        last_hif_name = active_seq.loc[last_hif_idx_orig, 'PLAYER_NAME'] if last_hif_idx_orig != -1 else "Solo"
-
-        # VIS STATS-BOKSE
-        st.markdown(f'<div class="stat-box-side"><div class="stat-label-side">Målscorer</div><div class="stat-value-side">{scorer_name.split()[-1]}</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="stat-box-side" style="border-left-color: {ASSIST_BLUE}"><div class="stat-label-side">Sidst på bolden</div><div class="stat-value-side">{last_hif_name.split()[-1]}</div></div>', unsafe_allow_html=True)
-
+        # FLOW TABEL
+        st.caption("**Spilsekvens:**")
+        flow_data = []
+        for i in range(len(active_seq)):
+            row = active_seq.loc[i]
+            p = row['PLAYER_NAME'].split()[-1] if pd.notnull(row['PLAYER_NAME']) else "?"
+            raw_id = str(int(row['EVENT_TYPEID']))
+            quals = str(row['QUALIFIER_LIST']) if pd.notnull(row['QUALIFIER_LIST']) else ""
+            
+            # Navngivning ud fra ID og Qualifiers
+            if "107" in quals: display_name = "Indkast"
+            elif raw_id == "6": display_name = "Hjørnespark"
+            elif raw_id == "16": display_name = "Mål ⚽"
+            else:
+                eng_name = OPTA_EVENT_TYPES.get(raw_id, f"Aktion {raw_id}")
+                display_name = DK_NAMES.get(eng_name, eng_name)
+            
+            if i < len(active_seq) - 1:
+                n = active_seq.loc[i+1, 'PLAYER_NAME'].split()[-1] if pd.notnull(active_seq.loc[i+1, 'PLAYER_NAME']) else "?"
+                flow_data.append({"Flow": f"{p} → {n}", "Type": display_name})
+            else:
+                flow_data.append({"Flow": f"{p}", "Type": display_name})
+        
+        st.dataframe(pd.DataFrame(flow_data), use_container_width=True, height=280, hide_index=True)
+        
     with col_main:
         st.markdown(f'<div class="match-header">{sel_row.get("HOME_TEAM", "HIF")} v {sel_row.get("AWAY_TEAM", "MOD")}</div>', unsafe_allow_html=True)
         pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
