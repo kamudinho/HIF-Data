@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import data.sql.fys_queries  # Din nye query-fil
 
-def show_physical_page(match_id):    
+def vis_side(match_id):    
     # 1. Hent data via din nye query-struktur
     # (Her antager vi, du har en funktion til at køre SQL)
     df_phys = run_query(fys_queries.get_match_physical_stats(match_id))
