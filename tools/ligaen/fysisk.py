@@ -1,21 +1,20 @@
 import streamlit as st
-import pandas as pd
+import data.analyse_load as analyse_load
 
 def vis_side(dp):
-    st.subheader("Vælg kamp")
+    st.title("Fysisk Rapport")
+    match_uuid = st.session_state.get('selected_match_uuid')
     
-    # Lav en liste af kampnavne
-    matches = dp['matches']
-    match_options = matches['MATCH_NAME'].tolist()
+    if not match_uuid:
+        st.warning("Gå til 'Kampe' og vælg en kamp først.")
+        return
+
+    # Siden henter selv sin data on-demand
+    df = analyse_load.get_single_match_physical(match_uuid)
     
-    # Brugeren vælger en kamp
-    valgt_kamp = st.selectbox("Vælg kamp for detaljer", match_options)
-    
-    # Find UUID for den valgte kamp
-    match_uuid = matches.loc[matches['MATCH_NAME'] == valgt_kamp, 'MATCH_OPTAUUID'].values[0]
-    
-    # GEM DET I SESSION STATE
-    st.session_state['selected_match_uuid'] = match_uuid
-    st.session_state['selected_match_name'] = valgt_kamp
-    
-    st.success(f"Valgt: {valgt_kamp}. Du kan nu gå til 'Fysisk data'.")
+    if df.empty:
+        st.error(f"Ingen data fundet for kamp: {st.session_state.get('selected_match_name')}")
+        return
+
+    st.subheader(f"Analyse: {st.session_state.get('selected_match_name')}")
+    st.dataframe(df)
