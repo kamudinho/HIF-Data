@@ -2,35 +2,22 @@ import streamlit as st
 import pandas as pd
 
 def get_physical_package(dp):
-    """
-    Denne funktion tager den store 'dp' pakke og filtrerer 
-    Second Spectrum dataen ud til en specifik kamp.
-    """
-    # Vi henter den rå fysiske data, som analyse_load lige har hentet fra Snowflake
-    # Vi tjekker begge steder, da vi lagde den i dp["opta"]["opta_physical_stats"]
-    df = None
-    if "opta" in dp and "opta_physical_stats" in dp["opta"]:
-        df = dp["opta"]["opta_physical_stats"]
-    elif "fysisk_data" in dp:
-        df = dp["fysisk_data"]
-
+    df = dp.get("opta", {}).get("opta_physical_stats")
+    
     if df is None or df.empty:
-        st.warning("Ingen fysiske data (F53A) fundet i datapakken.")
+        st.warning("Ingen fysiske data fundet.")
         return None
 
-    # Lav et pænt kamp-navn hvis det mangler
-    if 'MATCH_DISPLAY' not in df.columns:
-        df['MATCH_DISPLAY'] = df['CONTESTANTHOME_NAME'] + " - " + df['CONTESTANTAWAY_NAME']
-    
-    # Selectbox til at vælge kamp
+    # Lav kamp-vælger
+    df['MATCH_DISPLAY'] = df['CONTESTANTHOME_NAME'] + " - " + df['CONTESTANTAWAY_NAME']
     kampe = df['MATCH_DISPLAY'].unique()
-    valgt_kamp = st.selectbox("Vælg kamp for fysisk analyse", kampe)
+    valgt_kamp = st.selectbox("Vælg kamp", kampe)
     
-    # Filtrer data
     match_df = df[df['MATCH_DISPLAY'] == valgt_kamp].copy()
     
-    # Find Hvidovre (SSIID 7490)
-    hif_df = match_df[match_df['TEAM_SSIID'].astype(str).str.contains('7490')].copy()
+    # Filter for Hvidovre baseret på den UUID vi så i dit dump
+    hif_uuid = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
+    hif_df = match_df[match_df['TEAM_SSIID'] == hif_uuid].copy()
 
     return {
         "raw_stats": match_df,
