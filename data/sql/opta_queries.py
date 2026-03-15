@@ -1,3 +1,4 @@
+#data/sql/opta_queries.py
 import pandas as pd 
 
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
