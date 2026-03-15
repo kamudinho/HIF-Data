@@ -18,12 +18,12 @@ OPTA_MAP_DK = {
 }
 
 def vis_side(dp):
-    # CSS Styling til bokse og flow
+    # CSS Styling
     st.markdown(f"""
         <style>
             .stat-box-side {{ background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 5px solid {HIF_RED}; margin-bottom: 8px; }}
             .dot {{ height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }}
-            .play-flow-container {{ background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #eee; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
+            .play-flow-container {{ background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #eee; margin-top: 20px; }}
             .flow-step {{ font-weight: 700; color: #333; }}
             .flow-action {{ color: #666; font-size: 0.85rem; font-weight: 400; }}
             .flow-arrow {{ color: {HIF_RED}; margin: 0 10px; font-weight: bold; }}
@@ -32,28 +32,24 @@ def vis_side(dp):
 
     df_raw = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
     if df_raw.empty:
-        st.info("Ingen sekvens-data fundet.")
         return
 
-    # Standardiser kolonnenavne
+    # Standardiser kolonnenavne til store bogstaver
     df = df_raw.copy()
     df.columns = [c.upper() for c in df.columns]
 
-    # Find rigtige X/Y kolonner
+    # Find rigtige koordinat-kolonner (RAW_X eller EVENT_X)
     col_x = 'RAW_X' if 'RAW_X' in df.columns else ('EVENT_X' if 'EVENT_X' in df.columns else None)
     col_y = 'RAW_Y' if 'RAW_Y' in df.columns else ('EVENT_Y' if 'EVENT_Y' in df.columns else None)
-
-    if not col_x:
-        st.error("Kunne ikke finde koordinater i data.")
-        return
+    
+    if not col_x: return
 
     df['EVENT_CONTESTANT_OPTAUUID'] = df['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.lower()
     local_hif_uuid = HIF_UUID.lower()
     
-    # Isoler mål for drop-down
+    # Isoler mål
     goals = df[df['EVENT_TYPEID'] == 16].sort_values('EVENT_TIMESTAMP', ascending=False)
     if goals.empty: return
-
     goals['LABEL'] = goals.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']}", axis=1)
     
     col_main, col_side = st.columns([2.5, 1])
@@ -62,7 +58,7 @@ def vis_side(dp):
         sel_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique())
         sel_row = goals[goals['LABEL'] == sel_label].iloc[0]
         
-        # Hent HIF-sekvensen for det specifikke mål
+        # Hent HIF-sekvensen for det specifikke mål i denne kamp
         hif_seq = df[(df['SEQUENCEID'] == sel_row['SEQUENCEID']) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
         hif_seq = hif_seq.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
 
@@ -86,33 +82,34 @@ def vis_side(dp):
                             arrowprops=dict(arrowstyle='->', color='#ccc', lw=1.5, alpha=0.4, shrinkA=5, shrinkB=5))
             
             p_name = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
-            color = HIF_RED if r['EVENT_TYPEID'] == 16 else (ASSIST_BLUE if p_name == assist else '#999')
-            pitch.scatter(cx, cy, s=180, color=color, edgecolors='white', ax=ax, zorder=5)
+            dot_col = HIF_RED if r['EVENT_TYPEID'] == 16 else (ASSIST_BLUE if p_name == assist else '#aaaaaa')
+            pitch.scatter(cx, cy, s=180, color=dot_col, edgecolors='white', ax=ax, zorder=5)
             ax.text(cx, cy + 3, p_name, fontsize=8, ha='center', fontweight='bold')
             prev = (cx, cy)
         st.pyplot(fig)
 
-        # --- SEKVENS OVERSIGT (LAYOUT FIX) ---
+        # --- SEKVENS OVERSIGT ---
         st.write("### Angrebssekvens")
         steps = []
         for _, r in hif_seq.iterrows():
             p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
-            handling = OPTA_MAP_DK.get(int(r['EVENT_TYPEID']), f"Aktion {r['EVENT_TYPEID']}")
-            if int(r['EVENT_TYPEID']) == 16: handling = "MÅL"
-            
-            steps.append(f'<span class="flow-step">{p}</span> <span class="flow-action">({handling})</span>')
+            tid = int(r['EVENT_TYPEID'])
+            h = OPTA_MAP_DK.get(tid, f"Aktion {tid}")
+            if tid == 16: h = "MÅL"
+            steps.append(f'<span class="flow-step">{p}</span> <span class="flow-action">({h})</span>')
         
-        flow_html = f'<div class="play-flow-container">{" <span class="flow-arrow">→</span> ".join(steps)}</div>'
-        st.markdown(flow_html, unsafe_allow_html=True)
+        # Samler strengen uden for f-string'en for at undgå syntax fejl
+        flow_string = ' <span class="flow-arrow">→</span> '.join(steps)
+        st.markdown(f'<div class="play-flow-container">{flow_string}</div>', unsafe_allow_html=True)
 
     # --- TABEL: KAMP-INVOLVERINGER ---
     st.write("---")
-    st.subheader(f"Mål-involveringer i denne kamp")
+    st.subheader("Involveringer i målsekvenser (denne kamp)")
     
-    # Tæller kun i det nuværende df (som er kampspecifikt)
-    all_hif = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
-    if not all_hif.empty:
-        all_hif['Spiller'] = all_hif['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
-        top_df = all_hif['Spiller'].value_counts().reset_index()
-        top_df.columns = ['Spiller', 'Antal Aktioner']
-        st.table(top_df.head(10))
+    # Tæller kun i det nuværende kampspecifikke df
+    all_hif_game = df[df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid].copy()
+    if not all_hif_game.empty:
+        all_hif_game['Spiller'] = all_hif_game['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
+        top_players = all_hif_game['Spiller'].value_counts().reset_index()
+        top_players.columns = ['Spiller', 'Antal Aktioner']
+        st.table(top_players.head(10))
