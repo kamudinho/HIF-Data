@@ -4,10 +4,11 @@ from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# --- KONSTANTER (Beholdes for konsistens) ---
+# --- KONSTANTER ---
 HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
 HIF_GOLD = '#FF0F0F'
+DZ_COLOR = '#cc0000'  # Vi bruger HIF_RED til selve zonen (styret af alpha i koden)
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 OPTA_MAP_DK = {
