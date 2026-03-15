@@ -12,7 +12,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import data.HIF_load as hif_load
 from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
 import data.analyse_load as analyse_load
+import data.fys_load as fys_loader
 from data.users import get_users
+
 
 # --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
@@ -217,9 +219,7 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data - liga":
                 import tools.ligaen.fysisk as fd
-                # Tilføj en print her for at se om vi overhovedet rammer denne blok
-                st.write(f"Forsøger at indlæse fysisk data for kamp: {dp}") 
-                fd.vis_side(fys_load)
+                fd.vis_side(fd)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
