@@ -220,8 +220,10 @@ try:
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
                 fd = fys_loader.get_physical_package(dp) 
+                
                 if fd:
-                    fd_page.vis_side(fd)
+                    # Tilføj session.sql som det andet argument her:
+                    fd_page.vis_side(fd, session.sql)
 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
