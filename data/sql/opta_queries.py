@@ -208,12 +208,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 6000
         """,
         
-        # 9. UNIVERSAL SEQUENCE MAP (Renset og rettet CTE-logik)
+        # 9. UNIVERSAL SEQUENCE MAP (Opdateret med TIMEMIN og "Aktion før")
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
                 SELECT DISTINCT MATCH_OPTAUUID 
                 FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
             ),
             GoalSequences AS (
                 SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
@@ -233,13 +233,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 e.MATCH_OPTAUUID,
                 e.SEQUENCEID,
                 e.EVENT_TIMESTAMP,
+                e.EVENT_TIMEMIN, -- Nu tilføjet her!
                 e.PLAYER_NAME,
                 e.EVENT_TYPEID,
-                -- Korrekt LAG logik for koordinater (X/Y for de foregående 2 aktioner)
-                LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
-                LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
-                LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_2,
-                LAG(e.EVENT_Y, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_2,
+                -- LAG logik
+                LAG(e.EVENT_X, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
+                LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
                 e.EVENT_X as RAW_X,
                 e.EVENT_Y as RAW_Y,
                 q.QUALIFIER_LIST,
@@ -249,12 +248,17 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 m.TOTAL_AWAY_SCORE as AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             INNER JOIN GoalSequences gs 
-                ON e.SEQUENCEID = gs.SEQUENCEID 
-                AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                -- Vi joiner nu på SEQUENCEID ELLER vi tager den aktion der kom lige før sekvensen
+                ON e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                AND (e.SEQUENCEID = gs.SEQUENCEID OR e.EVENT_EVENTID = (
+                    SELECT MIN(EVENT_EVENTID) - 1 
+                    FROM {DB}.OPTA_EVENTS 
+                    WHERE SEQUENCEID = gs.SEQUENCEID AND MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+                ))
             LEFT JOIN EventQualifiers q 
                 ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m 
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC
+            ORDER BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ASC
         """
         }
