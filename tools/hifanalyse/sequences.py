@@ -70,7 +70,7 @@ def vis_side(dp):
     col_main, col_side = st.columns([2.5, 1])
 
     with col_side:
-        st.subheader("Vælg Scoring")
+        st.caption("Vælg scoring")
         selected_label = st.selectbox("", options=goal_events['LABEL'].unique(), label_visibility="collapsed")
         
         sel_row = goal_events[goal_events['LABEL'] == selected_label].iloc[0]
