@@ -271,16 +271,10 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 m.MATCH_DATE_FULL,
                 m.CONTESTANTHOME_NAME,
                 m.CONTESTANTAWAY_NAME,
-                f.MATCH_SSIID,
-                f.TEAM_SSIID,
-                f.TEAM_NAME,
-                f.TEAMDISTANCE as DISTANCE,
-                f.TEAMPERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT,
-                -- Tilføj de andre kolonner du har brug for herfra...
                 f.*
             FROM {DB}.OPTA_MATCHINFO m
             JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
-                ON m.MATCH_OPTAUUID = f.MATCH_SSIID -- Vi kobler på UUID!
+                ON LOWER(REPLACE(m.MATCH_OPTAUUID, 'opta-', '')) = LOWER(REPLACE(f.MATCH_SSIID, 'opta-', ''))
             WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """
         }
