@@ -10,7 +10,7 @@ def get_single_match_physical(match_uuid):
     # TRIN 1: Find SSIID baseret på Opta UUID (Metadata-broen)
     meta_sql = f"""
         SELECT MATCH_SSIID 
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_METADATA 
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
         WHERE MATCH_OPTAUUID = '{match_uuid}'
         LIMIT 1
     """
