@@ -40,7 +40,7 @@ def vis_side(dp):
     df['RAW_Y'] = pd.to_numeric(df['RAW_Y'], errors='coerce')
     df['EVENT_TIMESTAMP'] = pd.to_datetime(df['EVENT_TIMESTAMP'])
     # Sorter benhårdt på tid og derefter rækkefølge-ID
-    df = df.sort_values(['EVENT_TIMESTAMP', 'EVENT_OPTAUUID']).reset_index(drop=True)
+    df = df.sort_values(['EVENT_TIMESTAMP', 'EVENT_EVENTID']).reset_index(drop=True)
 
     # 2. Identificer alle mål (Event 16)
     goals = df[df['EVENT_TYPEID'] == 16].copy()
