@@ -264,5 +264,28 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.EVENT_TIMESTAMP ASC
+        """,
+        # 10. PHYSICAL MASTER QUERY (Second Spectrum + Opta Match Join)
+        "opta_physical_stats": f"""
+            SELECT 
+                m.MATCH_DATE_FULL,
+                m.CONTESTANTHOME_NAME,
+                m.CONTESTANTAWAY_NAME,
+                m.WEEK,
+                f.PLAYER_NAME,
+                f.JERSEY,
+                f.TEAM_SSIID,
+                f.DISTANCE,
+                f.TOP_SPEED,
+                f.SPRINTS,
+                f.SPEEDRUNS,
+                f.PERCENTDISTANCEHIGHSPEEDSPRINTING AS DIST_SPRINT_PCT
+            FROM {DB}.OPTA_MATCHINFO m
+            -- Vi joiner på SSIID og OPTAID som vi konstaterede var ens
+            JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
+                ON m.MATCH_OPTAID = f.MATCH_SSIID
+            WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            {hif_filter_matchinfo}
+            ORDER BY m.MATCH_DATE_FULL DESC, f.DISTANCE DESC
         """
         }
