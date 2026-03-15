@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from mplsoccer import VerticalPitch
+from mplsoccer import VerticalPitch, Pitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
