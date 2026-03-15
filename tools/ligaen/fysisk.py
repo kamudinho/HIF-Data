@@ -4,11 +4,13 @@ import data.sql.fys_queries as fys_queries  # Tilføjet 'as fys_queries'
 # fra din_db_fil import run_query          # Husk at importere din SQL-motor her
 
 def vis_side(match_id, run_query):  # Vi sender run_query med som argument eller importerer den
-    st.title("🏃 Fysisk Performance - Betinia Ligaen")
-
     # 1. Hent data
     query = fys_queries.get_match_physical_stats(match_id)
     df_phys = run_query(query)
+
+    st.write("Debug - Kolonnenavne fundet:", df_phys.columns.tolist())
+    st.write("Debug - Antal rækker:", len(df_phys))
+    st.dataframe(df_phys.head()) # Se de første 5 rækker råt
     
     if df_phys is None or df_phys.empty:
         st.warning("Ingen fysiske data fundet for denne kamp.")
