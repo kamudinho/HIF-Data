@@ -268,13 +268,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         # 10. PHYSICAL MASTER QUERY (Second Spectrum + Opta Match Join)
         "opta_physical_stats": f"""
             SELECT 
-                m.MATCH_DATE_FULL,
-                m.CONTESTANTHOME_NAME,
-                m.CONTESTANTAWAY_NAME,
-                f.*
-            FROM {DB}.OPTA_MATCHINFO m
-            JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
-                ON LOWER(REPLACE(m.MATCH_OPTAUUID, 'opta-', '')) = LOWER(REPLACE(f.MATCH_SSIID, 'opta-', ''))
-            WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+                -- Vi tager alle fysiske data
+                f.*,
+                -- Da vi ikke har en nem JOIN til MATCHINFO her, 
+                -- bruger vi TEAM_NAME og MATCH_SSIID til at identificere kampen
+                f.MATCH_SSIID as MATCH_ID
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f
+            -- Vi begrænser til Hvidovre her for at gøre det hurtigere
+            WHERE f.TEAM_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
         """
         }
