@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 # HIF Design-konstanter
 HIF_RED = '#cc0000'
 ASSIST_BLUE = '#1e90ff'
+HIF_GOLD = '#ff00ff'
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 def vis_side(dp):
