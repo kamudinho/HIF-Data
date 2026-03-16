@@ -69,35 +69,37 @@ def get_analysis_package(hif_only=False, match_uuid=None):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
     
-    # --- ULTRA-ROBUST LOGIK TIL FYSISK DATA ---
+    # --- I din get_analysis_package i analyse_load.py ---
     df_fys = pd.DataFrame()
     if match_uuid:
-        # Vi vasker UUID'en så den matcher præcis (stripper whitespaces og prøver case-insensitivt)
+        # 1. RENS UUID: Opta sender nogle gange 'g' foran, men metadata-tabellen bruger det ikke
+        # Eksempel: 'gd200y...' bliver til 'd200y...'
         clean_uuid = str(match_uuid).strip()
+        if clean_uuid.startswith('g') and len(clean_uuid) > 20: # Sikrer vi ikke stripper korte koder
+            clean_uuid = clean_uuid[1:]
         
-        # 1. Find Second Spectrum ID (vi bruger ILIKE for at ignorere store/små bogstaver)
+        # 2. Find Second Spectrum ID (SS_ID)
         meta_sql = f"""
             SELECT "MATCH_SSIID"
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
-            WHERE "MATCH_OPTAUUID" ILIKE '{clean_uuid}'
+            WHERE "MATCH_OPTAUUID" = '{clean_uuid}'
             LIMIT 1
         """
         
         try:
             meta_res = conn.query(meta_sql)
             if meta_res is not None and not meta_res.empty:
-                ss_id = meta_res.iloc[0, 0] # Hent SSIID uanset hvad kolonnen hedder
+                ss_id = meta_res.iloc[0, 0]
                 
-                # 2. Hent de fysiske stats med SS ID'et
-                # Her bruger vi igen gåseøjne for at være sikre på Snowflake-navngivning
+                # 3. Hent den fysiske data via SSIID
                 fys_sql = f"""
                     SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
                     WHERE "MATCH_SSIID" = '{ss_id}'
                 """
                 df_fys = conn.query(fys_sql)
             else:
-                # DEBUG: Hvis den ikke finder noget, så lad os se hvad den ledte efter
-                st.sidebar.warning(f"Ingen metadata fundet for UUID: {clean_uuid}")
+                # Hvis den stadig ikke finder noget, viser vi det rensede ID i debug
+                st.sidebar.error(f"Ingen metadata for: {clean_uuid}")
         except Exception as e:
             st.error(f"Fysisk data fejl: {e}")
 
