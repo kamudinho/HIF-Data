@@ -1,38 +1,48 @@
 import streamlit as st
 import pandas as pd
-from data.utils.team_mapping import TEAMS
 
-# Konstanter fra din profil
-HIF_WYID = 7490
+# Konstanter fra dit dump
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
+HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 
 def vis_side(conn, name_map=None):
     st.title("Hvidovre IF | Fysisk Data")
 
     @st.cache_data(ttl=600)
-    def get_hif_data():
-        # TRIN 1: Hent alle relevante MATCH_SSIIDs for sæsonen
+    def get_data_flow():
+        # 1. SEASON_METADATA: Find alle Hvidovre kampe
+        # Vi filtrerer på både Home og Away for at få alle runder
         query_season = f"""
-        SELECT MATCH_SSIID, DESCRIPTION, "DATE"
+        SELECT 
+            MATCH_SSIID, 
+            MATCH_OPTAUUID, 
+            DESCRIPTION, 
+            DATE,
+            HOME_SSIID,
+            AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = 2025
+        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}'
+          AND (HOME_SSIID = '{HIF_SSIID}' OR AWAY_SSIID = '{HIF_SSIID}')
+        ORDER BY DATE DESC
         """
         df_season = conn.query(query_season)
         
         if df_season.empty:
-            return pd.DataFrame(), pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-        # TRIN 2: Hent kamp-detaljer fra F53A (Oversættelse af kampen)
-        # Vi bruger SSIIDs fra første query til at filtrere
-        ssiid_list = "('" + "','".join(df_season['MATCH_SSIID'].tolist()) + "')"
+        # Lav en liste af de SSIIDs vi har fundet
+        ids = "('" + "','".join(df_season['MATCH_SSIID'].tolist()) + "')"
+
+        # 2. F53A_GAME: Oversæt kampene (Brug MATCH_SSIID som anker)
+        # Her henter vi de officielle holdnavne og kamp-detaljer
         query_f53a = f"""
         SELECT MATCH_SSIID, HOME_TEAM_NAME, AWAY_TEAM_NAME
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME
-        WHERE MATCH_SSIID IN {ssiid_list}
+        WHERE MATCH_SSIID IN {ids}
         """
         df_f53a = conn.query(query_f53a)
 
-        # TRIN 3: Hent fysisk data for spillere
+        # 3. PHYSICAL_SUMMARY_PLAYERS: Hent tallene
         query_phys = f"""
         SELECT 
             MATCH_SSIID, 
@@ -44,60 +54,57 @@ def vis_side(conn, name_map=None):
             TOP_SPEED, 
             MINUTES
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_SSIID IN {ssiid_list}
+        WHERE MATCH_SSIID IN {ids}
         """
         df_phys = conn.query(query_phys)
         
         return df_season, df_f53a, df_phys
 
-    df_season, df_f53a, df_phys = get_hif_data()
+    # Hent data
+    df_season, df_f53a, df_phys = get_data_flow()
 
     if df_season.empty:
-        st.error("Kunne ikke finde data for sæsonen 2025.")
+        st.warning("Ingen kampe fundet for Hvidovre i SEASON_METADATA.")
         return
 
-    # --- SAMLING AF DATA ---
-    # Vi merger Season og F53A for at få de rigtige holdnavne på kampene
+    # --- MERGE & FILTRERING ---
+    # Vi kobler metadata og holdnavne
     df_matches = pd.merge(df_season, df_f53a, on='MATCH_SSIID', how='left')
     
-    # Filtrér fysisk data til kun at være Hvidovre IF (HIF)
+    # Sørg for at vi kun har Hvidovres spillere fra den fysiske tabel
+    # Vi bruger "Hvidovre" som filter i MATCH_TEAMS
     df_hif_phys = df_phys[df_phys['MATCH_TEAMS'].str.contains('Hvidovre', case=False, na=False)].copy()
     df_hif_phys['HI_DIST'] = df_hif_phys['HIGH SPEED RUNNING'] + df_hif_phys['SPRINTING']
 
-    # --- UI: KAMPVALG ---
-    st.subheader("Vælg Kamp")
+    # --- VISNING ---
+    # Skab en pæn dropdown-menu
+    df_matches['display_name'] = df_matches['DATE'].astype(str) + " | " + df_matches['DESCRIPTION']
     
-    # Skab en læsbar label til selectboxen
-    df_matches['label'] = df_matches['DATE'].astype(str) + ": " + df_matches['HOME_TEAM_NAME'] + " - " + df_matches['AWAY_TEAM_NAME']
-    
-    valgt_match_label = st.selectbox("Kamp:", df_matches['label'].unique())
-    valgt_match_id = df_matches[df_matches['label'] == valgt_match_label]['MATCH_SSIID'].iloc[0]
+    valgt_label = st.selectbox("Vælg kamp fra sæsonen:", df_matches['display_name'].unique())
+    selected_id = df_matches[df_matches['display_name'] == valgt_label]['MATCH_SSIID'].iloc[0]
 
-    # --- UI: VISNING AF SPILLER DATA ---
-    st.divider()
-    st.write(f"### Fysisk output for {valgt_match_label}")
+    # Vis data for den valgte kamp
+    st.subheader(f"Statistik: {valgt_label}")
     
-    kamp_stats = df_hif_phys[df_hif_phys['MATCH_SSIID'] == valgt_match_id]
+    kamp_stats = df_hif_phys[df_hif_phys['MATCH_SSIID'] == selected_id]
     
     if not kamp_stats.empty:
-        # Hovedtal
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Distance", f"{round(kamp_stats['DISTANCE'].sum()/1000, 1)} km")
-        col2.metric("HI Distance", f"{int(kamp_stats['HI_DIST'].sum())} m")
-        col3.metric("Top Speed", f"{kamp_stats['TOP_SPEED'].max()} km/t")
+        # Metrics
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Dist", f"{round(kamp_stats['DISTANCE'].sum()/1000, 2)} km")
+        c2.metric("HI Distance", f"{int(kamp_stats['HI_DIST'].sum())} m")
+        c3.metric("Top Speed", f"{kamp_stats['TOP_SPEED'].max()} km/t")
 
-        # Spiller tabel
+        # Tabel
         st.dataframe(
             kamp_stats[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
             column_config={
                 "PLAYER_NAME": "Spiller",
-                "MINUTES": "Min",
                 "DISTANCE": "Meter",
-                "HI_DIST": "HI Meter",
-                "TOP_SPEED": "km/t"
+                "HI_DIST": "HI Meter"
             },
             use_container_width=True,
             hide_index=True
         )
     else:
-        st.warning("Ingen fysiske data fundet for denne kamp.")
+        st.info("Fysisk data for denne kamp er endnu ikke tilgængelig i summary-tabellen.")
