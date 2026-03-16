@@ -15,10 +15,10 @@ def vis_side(conn, name_map=None):
     def get_fysisk_data():
         # Metadata og resultater
         query_meta = f"""
-        SELECT DATE, MATCH_SSIID, DESCRIPTION, HOME_SSIID, AWAY_SSIID, HOME_SCORE, AWAY_SCORE
+        SELECT STARTTIME, MATCH_SSIID, DESCRIPTION, HOME_SSIID, AWAY_SSIID, HOME_SCORE, AWAY_SCORE
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
-        ORDER BY DATE DESC
+        ORDER BY STARTTIME DESC
         """
         
         # Fysisk data (Bemærk: vi bruger 'optaId' da det er kolonnenavnet i din tabel)
