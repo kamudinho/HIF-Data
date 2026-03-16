@@ -49,8 +49,26 @@ def vis_side(conn, name_map=None):
     # TAB 1: HVIDOVRE SÆSON-TOTALER
     with t1:
         st.markdown(f"### Hvidovre-spillere samlet for saesonen {SEASON_NAME}")
+        
+        # 1. Find alle kampe Hvidovre har spillet
         hif_match_ids = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)]['MATCH_SSIID'].unique()
-        df_hif_season = df_all_phys[df_all_phys['MATCH_SSIID'].isin(hif_match_ids)].groupby('Spiller').agg({
+        
+        # 2. Hent data for de kampe
+        df_hif_raw = df_all_phys[df_all_phys['MATCH_SSIID'].isin(hif_match_ids)]
+
+        # 3. FILTRERING: Her skal vi kun have HIF spillere. 
+        # Da vi ikke har en TEAM_SSIID i tabellen, filtrerer vi her på de spillere, 
+        # der optræder i din PLAYER_MAP eller en liste over HIF-navne.
+        # Hvis du ikke har en liste, kan vi filtrere på TEAM_SSIID hvis den findes i df_all_phys
+        
+        if 'TEAM_SSIID' in df_hif_raw.columns:
+            df_hif_only = df_hif_raw[df_hif_raw['TEAM_SSIID'] == HIF_SSIID]
+        else:
+            # Alternativ: Hvis vi ikke har TEAM_SSIID, viser vi alle, 
+            # men du kan tilføje en liste over efternavne her:
+            df_hif_only = df_hif_raw # Midlertidig indtil TEAM_SSIID bekræftes
+
+        df_hif_season = df_hif_only.groupby('Spiller').agg({
             'MINUTES': 'sum',
             'DISTANCE': 'sum',
             'HI_RUN': 'sum',
