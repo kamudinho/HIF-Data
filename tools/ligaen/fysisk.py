@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 
 # HIF's SSIID
-HIF_SSIID = 'f2b45639-d8e6-4d9b-9371-6f9f1fe2a9d9'
+HIF_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
 def vis_side(conn, teams_map=None, name_map=None):
     if name_map is None: name_map = {}
     if teams_map is None: teams_map = {}
-
-    st.subheader("Fysisk Performance (Second Spectrum) - Komplet Oversigt")
 
     # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
     @st.cache_data(ttl=600)
