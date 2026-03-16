@@ -267,24 +267,19 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
-        # 10. PHYSICAL MASTER QUERY (Den ultimative fix)
+        # 10. PHYSICAL MASTER QUERY (Nød-version)
         "opta_physical_stats": f"""
             SELECT 
-                m.STARTTIME::DATE as DATO,
-                m.MATCH_OPTAUUID,
-                p.PLAYER_NAME,
-                p.JERSEY,
-                p.TEAM_SSIID,
-                p.DISTANCE,
-                p.TOP_SPEED,
-                p.SPRINTS
-            FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
-            JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p 
-                ON m.MATCH_SSIID = p.MATCH_SSIID
-            WHERE m.STARTTIME >= '2025-07-01'  -- Her sikrer vi os data fra nuværende sæson
-            ORDER BY DATO DESC, p.DISTANCE DESC
+                MATCH_SSIID AS MATCH_OPTAUUID, -- Vi lader som om SSIID er OptaID for at teste
+                PLAYER_NAME,
+                JERSEY,
+                DISTANCE,
+                TOP_SPEED,
+                SPRINTS
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
+            LIMIT 2000
         """,
-
+        
         # 11. PHYSICAL SUMMARY (Til de dybe løbe-kategorier som HSR og Sprints)
         "opta_physical_summary": f"""
             SELECT 
