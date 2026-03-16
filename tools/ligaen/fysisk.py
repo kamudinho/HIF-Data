@@ -18,10 +18,9 @@ def vis_side(conn, name_map=None):
         SELECT DATE, HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
-        """,
+        """
         
-        # Henter relationen mellem kamp, hold og spillere (Din nye query)
-        # Vi bruger denne til at filtrere modstandere fra i HIF-tabben
+        # Henter relationen mellem kamp, hold og spillere
         query_hif_players = f"""
         SELECT MATCH_SSIID, PLAYER_SSIID, PLAYER_NAME
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
@@ -45,12 +44,9 @@ def vis_side(conn, name_map=None):
     # --- TABS ---
     t1, t2, t3 = st.tabs(["Saeson Oversigt (HIF)", "Top 5 Liga", "Kampoversigt"])
 
-    # TAB 1: HVIDOVRE SÆSON-TOTALER (NU RENSAT FOR MODSTANDERE)
+    # TAB 1: HVIDOVRE SÆSON-TOTALER
     with t1:
-        st.markdown(f"### Hvidovre-spillere samlet for saesonen {SEASON_NAME}")
-        
-        # Vi merger den fysiske data med din nye GAME_TEAM tabel
-        # På den måde beholder vi KUN de rækker, hvor PLAYER_SSIID findes i HIF-relationen
+        # Merger for at ramme kun HIF-spillere
         df_hif_only = pd.merge(
             df_all_phys, 
             df_hif_rel[['PLAYER_SSIID', 'MATCH_SSIID']], 
@@ -79,8 +75,6 @@ def vis_side(conn, name_map=None):
 
     # TAB 2: TOP 5 LIGA
     with t2:
-        st.markdown("### Top 5 paa tvaers af ligaen (Saeson)")
-        # Her bruger vi alle kampe fra turneringen (df_meta)
         df_liga_phys = df_all_phys[df_all_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
         
         c1, c2 = st.columns(2)
@@ -108,13 +102,20 @@ def vis_side(conn, name_map=None):
         valgt_kamp = st.selectbox("Vaelg kamp:", df_hif_meta['DISPLAY'])
         m_id = df_hif_meta[df_hif_meta['DISPLAY'] == valgt_kamp]['MATCH_SSIID'].values[0]
         
-        # Hold-vælger (Begge hold, HIF eller Modstander)
         row = df_hif_meta[df_hif_meta['MATCH_SSIID'] == m_id].iloc[0]
         hold_valg = st.selectbox("Vaelg hold:", ["Begge hold", get_team_name(row['HOME_SSIID']), get_team_name(row['AWAY_SSIID'])])
         
+        # Filtrering baseret på holdvalg
         df_match = df_all_phys[df_all_phys['MATCH_SSIID'].str.strip() == m_id.strip()]
         
+        if hold_valg != "Begge hold":
+            target_ssiid = row['HOME_SSIID'] if hold_valg == get_team_name(row['HOME_SSIID']) else row['AWAY_SSIID']
+            # Her bruger vi relationen til at filtrere spillere for det valgte hold
+            query_players = f"SELECT PLAYER_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM WHERE TEAM_SSIID = '{target_ssiid}' AND MATCH_SSIID = '{m_id}'"
+            target_players = conn.query(query_players)['PLAYER_SSIID'].tolist()
+            df_match = df_match[df_match['PLAYER_SSIID'].isin(target_players)]
+
         st.dataframe(
             df_match[['Spiller', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
-            use_container_width=True, height=content, hide_index=True
+            use_container_width=True, hide_index=True
         )
