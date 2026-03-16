@@ -1,88 +1,121 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from data.utils.team_mapping import TEAMS
 
-# Konstanter baseret på din profil
+# Konstanter fra dine indstillinger
 HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
-def vis_kamp_overblik(conn):
-    # --- 1. HENT DATA ---
+def vis_side(conn, name_map=None):
+    """Hovedfunktion til visning af Fysisk Data i appen."""
+    
+    # --- 1. DATA INDLÆSNING ---
     @st.cache_data(ttl=600)
-    def get_match_overview_data():
-        # Hent basis kamp-info
+    def get_fysisk_data():
+        # Metadata og resultater
         query_meta = f"""
-        SELECT 
-            DATE, 
-            MATCH_SSIID, 
-            DESCRIPTION, 
-            HOME_SSIID, 
-            AWAY_SSIID, 
-            HOME_SCORE, 
-            AWAY_SCORE
+        SELECT DATE, MATCH_SSIID, DESCRIPTION, HOME_SSIID, AWAY_SSIID, HOME_SCORE, AWAY_SCORE
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
         ORDER BY DATE DESC
         """
         
-        # Hent opsummeret fysisk data per kamp per hold
-        # Vi joiner med F53A for at kunne gruppere på hold-niveau
+        # Fysisk data (Bemærk: vi bruger 'optaId' da det er kolonnenavnet i din tabel)
         query_phys = """
         SELECT 
-            p.MATCH_SSIID,
-            t.TEAM_SSIID,
-            SUM(p.DISTANCE) as TOTAL_DIST,
-            SUM(p."HIGH SPEED RUNNING" + p.SPRINTING) as TOTAL_HI,
-            MAX(p.TOP_SPEED) as MAX_SPEED
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM t 
-            ON p.MATCH_SSIID = t.MATCH_SSIID 
-            AND p."optaId" = t.PLAYER_SSIID -- Vi ved nu det er optaId i summary tabellen
-        GROUP BY p.MATCH_SSIID, t.TEAM_SSIID
+            MATCH_SSIID,
+            "optaId" as PLAYER_OPTAID,
+            PLAYER_NAME,
+            DISTANCE,
+            "HIGH SPEED RUNNING" + "SPRINTING" as HI_DIST,
+            TOP_SPEED,
+            CAST(MINUTES AS FLOAT) as MINS
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
-        return conn.query(query_meta), conn.query(query_phys)
+        
+        # Relationstabel for at vide hvem der spiller for HIF
+        query_rel = f"""
+        SELECT MATCH_SSIID, PLAYER_SSIID as PLAYER_OPTAID, TEAM_SSIID
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
+        """
+        
+        return conn.query(query_meta), conn.query(query_phys), conn.query(query_rel)
 
-    df_meta, df_phys = get_match_overview_data()
+    try:
+        df_meta, df_phys, df_rel = get_fysisk_data()
+    except Exception as e:
+        st.error(f"Fejl ved hentning af data: {e}")
+        return
 
-    # --- 2. BEHANDLING AF DATA ---
-    # Merge fysisk data på metadata for både hjemme- og udehold
-    df = df_meta.copy()
+    # --- 2. LOGIK: KAMP-OVERBLIK ---
+    # Merge fysisk data med hold-relation
+    df_merged = pd.merge(df_phys, df_rel, on=['MATCH_SSIID', 'PLAYER_OPTAID'], how='inner')
     
-    # Mapper holdnavne fra din TEAMS ordbog
-    def name_lookup(ssiid):
+    # Gruppér på kamp og hold for at få hold-totaler
+    hold_stats = df_merged.groupby(['MATCH_SSIID', 'TEAM_SSIID']).agg({
+        'DISTANCE': 'sum',
+        'HI_DIST': 'sum',
+        'TOP_SPEED': 'max'
+    }).reset_index()
+
+    # --- 3. VISNING: KAMP LISTE ---
+    st.subheader("Kampoverblik (HIF)")
+
+    # Mapper holdnavne
+    def get_team_name(ssiid):
         for name, info in TEAMS.items():
             if info.get('ssid') == ssiid: return name
         return "Ukendt"
 
-    df['Hjemmehold'] = df['HOME_SSIID'].apply(name_lookup)
-    df['Udehold'] = df['AWAY_SSIID'].apply(name_lookup)
-    df['Resultat'] = df['HOME_SCORE'].astype(str) + " - " + df['AWAY_SCORE'].astype(str)
+    # Forbered tabel til visning
+    display_list = []
+    for _, match in df_meta.iterrows():
+        # Find HIF's stats for denne kamp
+        m_stats = hold_stats[(hold_stats['MATCH_SSIID'] == match['MATCH_SSIID']) & 
+                            (hold_stats['TEAM_SSIID'] == HIF_SSIID)]
+        
+        if not m_stats.empty:
+            stats = m_stats.iloc[0]
+            display_list.append({
+                "Dato": match['DATE'],
+                "Kamp": f"{get_team_name(match['HOME_SSIID'])} - {get_team_name(match['AWAY_SSIID'])}",
+                "Res.": f"{int(match['HOME_SCORE'])} - {int(match['AWAY_SCORE'])}",
+                "Total Dist (km)": round(stats['DISTANCE'] / 1000, 2),
+                "HI Løb (m)": int(stats['HI_DIST']),
+                "Topfart": round(stats['TOP_SPEED'], 1),
+                "MATCH_SSIID": match['MATCH_SSIID']
+            })
 
-    # Hent HIF's specifikke tal for hver kamp
-    hif_phys = df_phys[df_phys['TEAM_SSIID'] == HIF_SSIID]
-    df = pd.merge(df, hif_phys[['MATCH_SSIID', 'TOTAL_DIST', 'TOTAL_HI', 'MAX_SPEED']], on='MATCH_SSIID', how='left')
-
-    # --- 3. VISNING I STREAMLIT ---
-    st.write("### Kampoversigt: NordicBet Liga 25/26")
-    
-    # Key Metrics øverst
-    if not df.empty:
-        c1, c2, c3 = st.columns(3)
-        avg_dist = df['TOTAL_DIST'].mean() / 1000 # km
-        c1.metric("Gns. Hold-distance", f"{avg_dist:.1f} km")
-        c2.metric("Højeste HI Distance", f"{df['TOTAL_HI'].max():.0f} m")
-        c3.metric("Sæsonens Topfart", f"{df['MAX_SPEED'].max():.1f} km/t")
-
-    # Tabel med alle kampe
-    st.dataframe(
-        df[['DATE', 'Hjemmehold', 'Resultat', 'Udehold', 'TOTAL_DIST', 'TOTAL_HI']],
-        column_config={
-            "DATE": "Dato",
-            "TOTAL_DIST": st.column_config.NumberColumn("HIF Total Dist (m)", format="%.0f"),
-            "TOTAL_HI": st.column_config.NumberColumn("HIF HI-løb (m)", format="%.0f"),
-        },
-        use_container_width=True,
-        hide_index=True
-    )
-
-    return df
+    if display_list:
+        df_display = pd.DataFrame(display_list)
+        st.dataframe(
+            df_display.drop(columns=['MATCH_SSIID']),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Mulighed for at dykke ned i en kamp
+        st.divider()
+        valgt_kamp_navn = st.selectbox("Vælg en kamp for spiller-detaljer:", df_display['Kamp'] + " (" + df_display['Dato'].astype(str) + ")")
+        
+        # Find ID på valgt kamp
+        idx = st.session_state.get('kamp_index', 0) # Simpelt eksempel
+        m_id = df_display.iloc[0]['MATCH_SSIID'] # Default til nyeste
+        
+        # Vis spiller-stats for den valgte kamp
+        st.write(f"**Spillerstatistik for HIF**")
+        spiller_stats = df_merged[(df_merged['MATCH_SSIID'] == m_id) & (df_merged['TEAM_SSIID'] == HIF_SSIID)]
+        st.dataframe(
+            spiller_stats[['PLAYER_NAME', 'MINS', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
+            column_config={
+                "PLAYER_NAME": "Spiller",
+                "MINS": "Min",
+                "DISTANCE": "Meter",
+                "HI_DIST": "HI Meter",
+                "TOP_SPEED": "km/t"
+            },
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.info("Ingen fysiske data fundet for de valgte kampe.")
