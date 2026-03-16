@@ -21,8 +21,15 @@ def vis_side(dp):
     conn = _get_snowflake_conn()
     
     # Tjek dækning (Ikoner i dropdown)
-    with st.spinner("Tjekker dækning..."):
-        covered_df = conn.query("SELECT DISTINCT \"MATCH_OPTAUUID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA")
+   # --- Tjek dækning baseret på TEAM-data ---
+    with st.spinner("Tjekker dækning via Team-data..."):
+        # Vi tjekker om der findes rækker i GAME_TEAM tabellen
+        covered_df = conn.query("""
+            SELECT DISTINCT m."MATCH_OPTAUUID"
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m
+            INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM t
+               ON m."MATCH_SSIID" = t."MATCH_SSIID"
+        """)
         covered_uuids = set(covered_df["MATCH_OPTAUUID"].tolist()) if not covered_df.empty else set()
 
     def get_label(row):
