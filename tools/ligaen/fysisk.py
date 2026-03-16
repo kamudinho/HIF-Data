@@ -2,51 +2,42 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(dp):
-    # Overskriften er allerede i top-baren, men vi kan tilføje en subheader
-    st.markdown("### 🏃‍♂️ Fysisk Overblik")
+    st.title("Fysisk Data - Rapport")
 
     df_fys = dp.get("fysisk_data", pd.DataFrame())
     matches = dp.get("matches", pd.DataFrame())
 
     if df_fys.empty:
-        st.warning("Ingen fysisk data tilgængelig i datapakken for denne sæson.")
+        st.warning("Ingen fysisk data fundet i databasen for denne periode.")
         return
 
-    # 1. LIGA OVERBLIK (Leaderboard)
-    with st.expander("🏆 Top 10 Præstationer i Ligaen", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Distance (m)**")
-            # Vi tager de 10 højeste distancer
-            st.dataframe(df_fys.nlargest(10, 'DISTANCE')[['PLAYER_NAME', 'DISTANCE']], hide_index=True)
-        with col2:
-            st.write("**Topfart (km/t)**")
-            st.dataframe(df_fys.nlargest(10, 'TOP_SPEED')[['PLAYER_NAME', 'TOP_SPEED']], hide_index=True)
+    # 1. MATCH SELECTOR
+    match_labels = matches.apply(
+        lambda row: f"{row['MATCH_DATE_FULL'].strftime('%d/%m')} - {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}", 
+        axis=1
+    )
+    
+    selected_idx = st.selectbox("Vælg kamp", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
+    selected_match = matches.iloc[selected_idx]
+    
+    # 2. DEN SIKRE FILTRERING (Løser UUID problemet)
+    # Vi tager det korte ID fra kampen (f.eks. 2435012)
+    m_id = str(selected_match['MATCH_OPTAUUID']).replace('g', '')
+    
+    # Vi tjekker om det korte ID findes INDE I det lange ID fra Second Spectrum
+    current_match_data = df_fys[df_fys['MATCH_OPTAUUID'].str.contains(m_id, na=False)]
 
-    st.markdown("---")
-
-    # 2. SPECIFIK KAMP (Din eksisterende logik)
-    if not matches.empty:
-        match_labels = matches.apply(
-            lambda row: f"{row['MATCH_DATE_FULL'].strftime('%d/%m')} - {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}", 
-            axis=1
-        )
+    # 3. VISNING
+    if not current_match_data.empty:
+        st.subheader(f"Spiller Performance: {match_labels.iloc[selected_idx]}")
         
-        selected_idx = st.selectbox("Vælg kamp for detaljeret spiller-statistik", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
-        selected_match = matches.iloc[selected_idx]
+        # Omdøb kolonner så de er pæne
+        view_df = current_match_data[['PLAYER_NAME', 'JERSEY', 'DISTANCE', 'TOP_SPEED', 'SPRINTS']].copy()
+        view_df.columns = ['Spiller', 'Nr', 'Distance (m)', 'Topfart (km/t)', 'Sprints']
         
-        # Filtrering i hukommelsen (Lynhurtigt)
-        m_uuid = selected_match['MATCH_OPTAUUID']
-        current_match_data = df_fys[df_fys['MATCH_OPTAUUID'] == m_uuid]
-
-        if not current_match_data.empty:
-            st.subheader(f"Data for: {match_labels.iloc[selected_idx]}")
-            # Formatering af visningen
-            disp_df = current_match_data[['PLAYER_NAME', 'JERSEY', 'DISTANCE', 'SPRINTS', 'TOP_SPEED']].copy()
-            disp_df.columns = ['Spiller', 'Nr', 'Distance (m)', 'Sprints', 'Topfart (km/t)']
-            st.dataframe(disp_df.sort_values("Distance (m)", ascending=False), use_container_width=True, hide_index=True)
-        else:
-            st.info("Der er ikke indlæst tracking-data for denne specifikke kamp endnu.")
-
-        st.write(f"Antal rækker i df_fys: {len(df_fys)}")
-        st.write("Første 2 rækker af data:", df_fys.head(2))
+        st.dataframe(view_df.sort_values('Distance (m)', ascending=False), use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Ingen fysisk data matchet for ID: {m_id}. Systemet leder efter dette ID i de lange UUID-strenge.")
+        # Debug: Vis hvad vi rent faktisk har i tabellen
+        with st.expander("Se rå UUID'er i databasen (Debug)"):
+            st.write(df_fys['MATCH_OPTAUUID'].unique()[:5])
