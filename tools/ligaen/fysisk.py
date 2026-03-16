@@ -10,9 +10,6 @@ SEASON_NAME = "2025/2026"
 def vis_side(conn, name_map=None):
     if name_map is None: name_map = {}
 
-    st.title("BETINIA LIGAEN | FYSISK DATA")
-    st.subheader("Fysisk Rapport")
-
     # --- TRIN 1: HENT METADATA OG HIF-SPILLER RELATION ---
     @st.cache_data(ttl=600)
     def get_base_data():
