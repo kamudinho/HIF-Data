@@ -8,7 +8,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     tournament_map = {
         "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
         "Superliga": "29actv1ohj8r10kd9hu0jnb0n",
-        "1. Division": "6ifaeunfdele" # Tilføjet jf. dine metadata
+        "1. Division": "6ifaeunfdele" 
     }
 
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
