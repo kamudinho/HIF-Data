@@ -4,6 +4,10 @@ import pandas as pd
 
 def vis_side(dp):
     st.title("Fysisk Data")
+
+    # Sorter efter dato (nyeste først) hvis kolonnen findes
+    if 'MATCH_DATE_FULL' in matches.columns:
+        matches = matches.sort_values('MATCH_DATE_FULL', ascending=False)
     
     matches = dp.get("matches", pd.DataFrame())
     
