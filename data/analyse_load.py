@@ -2,6 +2,43 @@
 import pandas as pd
 import streamlit as st
 
+def check_physical_data_availability(match_uuid):
+    """Tjekker datadybden for en specifik kamp på tværs af tabeller"""
+    from data.data_load import _get_snowflake_conn
+    conn = _get_snowflake_conn()
+    
+    # 1. Rens UUID
+    clean_uuid = str(match_uuid).strip()
+    if clean_uuid.startswith('g'):
+        clean_uuid = clean_uuid[1:]
+        
+    stats = {"opta_uuid": clean_uuid}
+    
+    try:
+        # Tjek Metadata
+        meta = conn.query(f"""
+            SELECT "MATCH_SSIID" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
+            WHERE "MATCH_OPTAUUID" = '{clean_uuid}'
+        """)
+        stats["metadata_found"] = not meta.empty
+        
+        if not meta.empty:
+            ss_id = meta.iloc[0, 0]
+            stats["ss_id"] = ss_id
+            
+            # Tjek antal rækker i den fysiske tabel (F53A)
+            count_res = conn.query(f"""
+                SELECT COUNT(*) as RÆKKER FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+                WHERE "MATCH_SSIID" = '{ss_id}'
+            """)
+            stats["physical_rows"] = count_res.iloc[0, 0]
+        else:
+            stats["physical_rows"] = 0
+            
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
+
 def debug_physical_data_dump():
     """Henter et råt udtræk af de første rækker for at verificere indholdet"""
     from data.data_load import _get_snowflake_conn
