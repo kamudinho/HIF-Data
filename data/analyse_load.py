@@ -34,7 +34,7 @@ if st.button("Kør Rå Data Debug"):
         st.write("### Rå Fysisk Data (Første 3 rækker)")
         st.dataframe(data['physical_sample'])
 
-def get_analysis_package(hif_only=False):
+def get_analysis_package(hif_only=False, match_uuid=None):
     from data.data_load import _get_snowflake_conn, load_local_players
     from data.sql.opta_queries import get_opta_queries
     from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, TEAM_COLORS
@@ -46,9 +46,11 @@ def get_analysis_package(hif_only=False):
     season_f = str(TOURNAMENTCALENDAR_NAME)
     queries = get_opta_queries(liga_f=comp_f, saeson_f=season_f, hif_only=hif_only)
     
-    def safe_query(query_key):
+    def safe_query(query_key, params=None):
         q = queries.get(query_key)
         if not q: return pd.DataFrame()
+        if params:
+            q = q.format(**params) # Indsætter variabler som {ss_id} eller {match_uuid}
         try:
             res = conn.query(q)
             return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
@@ -56,7 +58,7 @@ def get_analysis_package(hif_only=False):
             st.error(f"Fejl i Snowflake query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # Hent alle data præcis som i din oprindelige version
+    # Standard data
     df_opta_stats = safe_query("opta_team_stats")
     df_sequence = safe_query("opta_sequence_map")
     df_matches = safe_query("opta_matches")
@@ -67,8 +69,18 @@ def get_analysis_package(hif_only=False):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
     
-    df_fys = pd.DataFrame() 
+    # --- NY LOGIK TIL FYSISK DATA ---
+    df_fys = pd.DataFrame()
+    if match_uuid:
+        # 1. Find Second Spectrum ID ud fra Opta UUID
+        meta_df = safe_query("opta_physical_metadata", {"match_uuid": match_uuid})
+        
+        if not meta_df.empty:
+            ss_id = meta_df.iloc[0]["MATCH_SSIID"]
+            # 2. Hent de fysiske stats med SS ID'et
+            df_fys = safe_query("opta_physical_stats", {"ss_id": ss_id})
 
+    # Resten af din eksisterende logik (name_map etc.)
     df_local = load_local_players()
     name_map = {}
     if df_local is not None and not df_local.empty:
@@ -80,7 +92,7 @@ def get_analysis_package(hif_only=False):
     return {
         "matches": df_matches,
         "playerstats": df_shots,
-        "fysisk_data": df_fys,
+        "fysisk_data": df_fys, # Nu indeholder denne data, hvis match_uuid er givet
         "xg_agg": df_xg_agg,
         "assists": df_assists,
         "name_map": name_map,
