@@ -28,14 +28,38 @@ def check_physical_data_availability(match_uuid):
         res["meta"] = True
         res["ss_id"] = ss_id
         
-        # 3. Nu søger vi i den fysiske tabel med det RIGTIGE SSIID (UUID-formatet)
+        # --- I din get_analysis_package i analyse_load.py ---
+    df_fys = pd.DataFrame()
+    if match_uuid:
+        # 1. RENS UUID
+        clean_uuid = str(match_uuid).strip()
+        if clean_uuid.startswith('g'):
+            clean_uuid = clean_uuid[1:]
+        
+        # 2. HENT DATA VIA JOIN (Sikrere metode)
+        # Vi joiner metadata og fysisk data direkte i Snowflake
         fys_sql = f"""
-            SELECT COUNT(*) as CNT 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE "MATCH_SSIID" = '{ss_id}'
+            SELECT 
+                p."PLAYER_NAME", 
+                p."JERSEY", 
+                p."DISTANCE", 
+                p."SPRINTS", 
+                p."SPEEDRUNS", 
+                p."TOP_SPEED",
+                p."AVERAGE_SPEED"
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER p
+            JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m 
+              ON p."MATCH_SSIID" = m."MATCH_SSIID"
+            WHERE m."MATCH_OPTAUUID" ILIKE '{clean_uuid}'
         """
-        count_df = conn.query(fys_sql)
-        res["rows"] = count_df.iloc[0, 0]
+        
+        try:
+            df_fys = conn.query(fys_sql)
+            if df_fys is None or df_fys.empty:
+                # Hvis JOIN fejler, tjekker vi om kampen overhovedet findes i F53A
+                st.sidebar.warning(f"Ingen fysisk data registreret for Opta ID: {clean_uuid}")
+        except Exception as e:
+            st.error(f"Fysisk data JOIN fejl: {e}")
         
     return res
 
