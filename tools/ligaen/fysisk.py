@@ -73,7 +73,8 @@ def vis_side(conn, name_map=None):
     # --- TRIN 3: VISNING ---
     st.caption(f"Statistik: {valgt_label}")
     
-    t1, t2, t3 = st.tabs(["Overblik", "Sprint & HI", "Besiddelse"])
+    # Tilføjet "Top 5" som den fjerde tab
+    t1, t4, t2, t3 = st.tabs(["Overblik", "Top 5 - liga", "Sprint & HI", "Besiddelse"])
 
     with t1:
         st.dataframe(
@@ -109,40 +110,35 @@ def vis_side(conn, name_map=None):
             use_container_width=True, hide_index=True
         )
 
-    # --- TRIN 4: TOP 5 OVERSIGTER (PÅ TVÆRS AF ALLE SPILLERE I KAMPEN) ---
-    st.markdown("---")
-    st.subheader("🏆 Top 5 - Alle spillere")
-    
-    c1, c2, c3 = st.columns(3)
-    
-    with c1:
-        st.write("**Total Distance**")
-        top_dist = df_phys.nlargest(5, 'DISTANCE')[['Spiller', 'DISTANCE']]
-        st.table(top_dist.assign(DISTANCE=top_dist['DISTANCE'].astype(int)).set_index('Spiller'))
+    # --- NY TAB: TOP 5 PÅ TVÆRS AF ALLE SPILLERE ---
+    with t4:
+        st.subheader("Kampens Top-præstationer")
+        
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            st.write("**Total Distance**")
+            top_dist = df_phys.nlargest(5, 'DISTANCE')[['Spiller', 'DISTANCE']]
+            st.table(top_dist.assign(DISTANCE=top_dist['DISTANCE'].astype(int)).set_index('Spiller'))
 
-    with c2:
-        st.write("**Højintenst løb (HI)**")
-        top_hi = df_phys.nlargest(5, 'HI_RUN')[['Spiller', 'HI_RUN']]
-        st.table(top_hi.assign(HI_RUN=top_hi['HI_RUN'].astype(int)).set_index('Spiller'))
+            st.write("**Sprint Distance**")
+            top_sprint = df_phys.nlargest(5, 'SPRINTING')[['Spiller', 'SPRINTING']]
+            st.table(top_sprint.assign(SPRINTING=top_sprint['SPRINTING'].astype(int)).set_index('Spiller'))
 
-    with c3:
-        st.write("**Topfart (km/h)**")
-        top_speed = df_phys.nlargest(5, 'TOP_SPEED')[['Spiller', 'TOP_SPEED']]
-        st.table(top_speed.set_index('Spiller'))
+        with c2:
+            st.write("**Højintenst løb (HI)**")
+            top_hi = df_phys.nlargest(5, 'HI_RUN')[['Spiller', 'HI_RUN']]
+            st.table(top_hi.assign(HI_RUN=top_hi['HI_RUN'].astype(int)).set_index('Spiller'))
 
-    c4, c5, c6 = st.columns(3)
+            st.write("**Distance m. bold**")
+            top_ball = df_phys.nlargest(5, 'DISTANCE_TIP')[['Spiller', 'DISTANCE_TIP']]
+            st.table(top_ball.assign(DISTANCE_TIP=top_ball['DISTANCE_TIP'].astype(int)).set_index('Spiller'))
 
-    with c4:
-        st.write("**Sprint Distance**")
-        top_sprint = df_phys.nlargest(5, 'SPRINTING')[['Spiller', 'SPRINTING']]
-        st.table(top_sprint.assign(SPRINTING=top_sprint['SPRINTING'].astype(int)).set_index('Spiller'))
+        with c3:
+            st.write("**Topfart (km/h)**")
+            top_speed = df_phys.nlargest(5, 'TOP_SPEED')[['Spiller', 'TOP_SPEED']]
+            st.table(top_speed.set_index('Spiller'))
 
-    with c5:
-        st.write("**Distance m. bold**")
-        top_ball = df_phys.nlargest(5, 'DISTANCE_TIP')[['Spiller', 'DISTANCE_TIP']]
-        st.table(top_ball.assign(DISTANCE_TIP=top_ball['DISTANCE_TIP'].astype(int)).set_index('Spiller'))
-
-    with c6:
-        st.write("**Antal HI-løb**")
-        top_runs = df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['Spiller', 'NO_OF_HIGH_INTENSITY_RUNS']]
-        st.table(top_runs.set_index('Spiller'))
+            st.write("**Antal HI-løb**")
+            top_runs = df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['Spiller', 'NO_OF_HIGH_INTENSITY_RUNS']]
+            st.table(top_runs.set_index('Spiller'))
