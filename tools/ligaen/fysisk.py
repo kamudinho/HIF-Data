@@ -6,139 +6,116 @@ from data.utils.team_mapping import TEAMS
 HIF_SSIID = TEAMS["Hvidovre"]["ssid"]
 
 def vis_side(conn, name_map=None):
-    """
-    Kører uafhængigt og oversætter SSID via TEAMS fra team_mapping.py
-    """
     if name_map is None: name_map = {}
 
-    # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
+    st.title("Fysisk Rapport")
+
+    # --- TRIN 1: HENT ALLE DATA FOR SÆSONEN (TIL TOP 5 OG SÆSON-TOTALER) ---
     @st.cache_data(ttl=600)
-    def get_matches():
-        query = f"""
-        SELECT 
-            STARTTIME,
-            MATCH_SSIID,
-            HOME_SSIID,
-            AWAY_SSIID
+    def get_season_data():
+        # Henter alt for ligaen for at kunne lave Top 5 på tværs
+        query = """
+        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        """
+        df = conn.query(query)
+        df['HI_RUN'] = df['HIGH SPEED RUNNING'] + df['SPRINTING']
+        df['Spiller'] = df['PLAYER_NAME']
+        return df
+
+    df_all = get_season_data()
+
+    # --- TABS ---
+    t1, t2, t3 = st.tabs(["Sæson Oversigt (HIF)", "Top 5 Liga", "Kampoversigt"])
+
+    # TAB 1: HVIDOVRE SÆSON-TOTALER
+    with t1:
+        st.subheader("Hvidovre-spillere samlet for sæsonen")
+        # Filtrer på Hvidovres spiller-data (vi antager de er knyttet til HIF_SSIID i dataen)
+        # Hvis MATCH_SSIID/TEAM_SSIID er tilgængelig, bruger vi den. 
+        # Her aggregerer vi per spiller:
+        df_hif_season = df_all[df_all['TEAM_SSIID'] == HIF_SSIID].groupby('Spiller').agg({
+            'MINUTES': 'sum',
+            'DISTANCE': 'sum',
+            'HI_RUN': 'sum',
+            'TOP_SPEED': 'max',
+            'SPRINTING': 'sum'
+        }).reset_index()
+
+        st.dataframe(
+            df_hif_season.sort_values('DISTANCE', ascending=False),
+            column_config={
+                "MINUTES": "Total Min.",
+                "DISTANCE": st.column_config.NumberColumn("Total Distance (m)", format="%.0f"),
+                "HI_RUN": "Total HI (m)",
+                "TOP_SPEED": "Max Topfart",
+                "SPRINTING": "Total Sprint (m)"
+            },
+            use_container_width=True, hide_index=True
+        )
+
+    # TAB 2: TOP 5 LIGA (HELE SÆSONEN)
+    with t2:
+        st.subheader("Top 5 på tværs af ligaen (Sæson)")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write("**Højeste Topfart**")
+            # Vi finder den absolutte max-fart per spiller i sæsonen
+            top_speed_season = df_all.groupby('Spiller')['TOP_SPEED'].max().nlargest(5).reset_index()
+            st.table(top_speed_season.set_index('Spiller'))
+
+            st.write("**Total Distance (m)**")
+            top_dist_season = df_all.groupby('Spiller')['DISTANCE'].sum().nlargest(5).reset_index()
+            st.table(top_dist_season.set_index('Spiller'))
+
+        with c2:
+            st.write("**Total HI-løb (m)**")
+            top_hi_season = df_all.groupby('Spiller')['HI_RUN'].sum().nlargest(5).reset_index()
+            st.table(top_hi_season.set_index('Spiller'))
+
+            st.write("**Total Sprint (m)**")
+            top_sprint_season = df_all.groupby('Spiller')['SPRINTING'].sum().nlargest(5).reset_index()
+            st.table(top_sprint_season.set_index('Spiller'))
+
+    # TAB 3: KAMPOVERSIGT MED BEGGE HOLD
+    with t3:
+        # Hent metadata for at vælge kamp
+        query_meta = f"""
+        SELECT STARTTIME, MATCH_SSIID, HOME_SSIID, AWAY_SSIID 
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
         WHERE (HOME_SSIID = '{HIF_SSIID}' OR AWAY_SSIID = '{HIF_SSIID}')
         ORDER BY STARTTIME DESC
         """
-        return conn.query(query)
-
-    df_meta = get_matches()
-
-    if df_meta.empty:
-        st.warning("⚠️ Ingen kamp-metadata fundet i systemet.")
-        return
-
-    # Oversæt modstanderens SSID ved hjælp af TEAMS fra team_mapping.py
-    def get_opponent_name(row):
-        opp_id = row['AWAY_SSIID'] if row['HOME_SSIID'] == HIF_SSIID else row['HOME_SSIID']
+        df_meta = conn.query(query_meta)
         
-        # Løber gennem TEAMS mappingen
-        for team_name, info in TEAMS.items():
-            if info.get('ssid') == opp_id:
-                return team_name
-        return f"Ukendt ({opp_id[:5]})"
+        # Hjælper til navne (bruger din TEAMS mapping)
+        def get_team_name(ssiid):
+            for name, info in TEAMS.items():
+                if info.get('ssid') == ssiid: return name
+            return ssiid[:5]
 
-    # Forbered kamp-vælgeren
-    df_meta['DATO'] = pd.to_datetime(df_meta['STARTTIME']).dt.strftime('%d/%m-%Y')
-    df_meta['MODSTANDER'] = df_meta.apply(get_opponent_name, axis=1)
-    df_meta['STED'] = df_meta.apply(lambda x: "Hjemme" if x['HOME_SSIID'] == HIF_SSIID else "Ude", axis=1)
-    df_meta['DISPLAY_NAME'] = df_meta['DATO'] + " - " + df_meta['MODSTANDER'] + " (" + df_meta['STED'] + ")"
+        df_meta['DATO'] = pd.to_datetime(df_meta['STARTTIME']).dt.strftime('%d/%m-%Y')
+        df_meta['KAMP'] = df_meta.apply(lambda x: f"{x['DATO']}: {get_team_name(x['HOME_SSIID'])} vs {get_team_name(x['AWAY_SSIID'])}", axis=1)
+        
+        valgt_kamp_label = st.selectbox("Vælg kamp:", df_meta['KAMP'])
+        valgt_match_id = df_meta[df_meta['KAMP'] == valgt_kamp_label]['MATCH_SSIID'].values[0]
+        
+        # Filtrer data for den valgte kamp
+        df_match = df_all[df_all['MATCH_SSIID'].str.strip() == valgt_match_id.strip()]
 
-    valgt_label = st.selectbox("Vælg kamp til fysisk analyse:", df_meta['DISPLAY_NAME'])
-    valgt_match = df_meta[df_meta['DISPLAY_NAME'] == valgt_label].iloc[0]
+        # Holddropdown til at filtrere i kampen
+        alle_hold_i_kamp = [get_team_name(id) for id in [df_meta[df_meta['MATCH_SSIID']==valgt_match_id]['HOME_SSIID'].values[0], 
+                                                        df_meta[df_meta['MATCH_SSIID']==valgt_match_id]['AWAY_SSIID'].values[0]]]
+        
+        valgt_hold = st.selectbox("Vis statistik for:", ["Begge hold"] + alle_hold_i_kamp)
 
-    # --- TRIN 2: HENT SPILLER-DATA (PHYSICAL_SUMMARY) ---
-    @st.cache_data(ttl=600)
-    def get_physical_stats(ssiid):
-        query = f"""
-        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE TRIM(MATCH_SSIID) = '{ssiid}'
-        """
-        return conn.query(query)
+        if valgt_hold != "Begge hold":
+            hold_ssiid = TEAMS[valgt_hold]['ssid']
+            df_display = df_match[df_match['TEAM_SSIID'] == hold_ssiid]
+        else:
+            df_display = df_match
 
-    df_phys = get_physical_stats(valgt_match['MATCH_SSIID'])
-
-    if df_phys.empty:
-        st.info(f"ℹ️ Metadata fundet, men de detaljerede fysiske data er ikke indlæst endnu.")
-        return
-
-    # Opret HI_RUN (HSR + Sprint) og map spillernavne
-    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
-    df_phys['Spiller'] = df_phys['PLAYER_NAME']
-
-    # --- TRIN 3: VISNING ---
-    st.caption(f"Statistik: {valgt_label}")
-    
-    # Tilføjet "Top 5" som den fjerde tab
-    t1, t4, t2, t3 = st.tabs(["Overblik", "Top 5 - liga", "Sprint & HI", "Besiddelse"])
-
-    with t1:
         st.dataframe(
-            df_phys[['Spiller', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
-            column_config={
-                "MINUTES": "Min.",
-                "DISTANCE": st.column_config.NumberColumn("Total (m)", format="%.0f"),
-                "HI_RUN": st.column_config.NumberColumn("Højintenst (m)", format="%.0f"),
-                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/h")
-            },
+            df_display[['Spiller', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
             use_container_width=True, hide_index=True
         )
-
-    with t2:
-        st.dataframe(
-            df_phys[['Spiller', 'SPRINTING', 'NO_OF_HIGH_INTENSITY_RUNS', 'TOP_SPEED']].sort_values('SPRINTING', ascending=False),
-            column_config={
-                "SPRINTING": "Sprint (m)",
-                "NO_OF_HIGH_INTENSITY_RUNS": "Antal HI-løb",
-                "TOP_SPEED": "Topfart (km/h)"
-            },
-            use_container_width=True, hide_index=True
-        )
-
-    with t3:
-        st.dataframe(
-            df_phys[['Spiller', 'DISTANCE_TIP', 'DISTANCE_OTIP', 'DISTANCE_BOP']].sort_values('DISTANCE_TIP', ascending=False),
-            column_config={
-                "DISTANCE_TIP": "Med bold (m)",
-                "DISTANCE_OTIP": "Modstander m. bold (m)",
-                "DISTANCE_BOP": "Bold ude (m)"
-            },
-            use_container_width=True, hide_index=True
-        )
-
-    # --- NY TAB: TOP 5 PÅ TVÆRS AF ALLE SPILLERE ---
-    with t4:
-        st.subheader("Kampens Top-præstationer")
-        
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            st.write("**Total Distance**")
-            top_dist = df_phys.nlargest(5, 'DISTANCE')[['Spiller', 'DISTANCE']]
-            st.table(top_dist.assign(DISTANCE=top_dist['DISTANCE'].astype(int)).set_index('Spiller'))
-
-            st.write("**Sprint Distance**")
-            top_sprint = df_phys.nlargest(5, 'SPRINTING')[['Spiller', 'SPRINTING']]
-            st.table(top_sprint.assign(SPRINTING=top_sprint['SPRINTING'].astype(int)).set_index('Spiller'))
-
-        with c2:
-            st.write("**Højintenst løb (HI)**")
-            top_hi = df_phys.nlargest(5, 'HI_RUN')[['Spiller', 'HI_RUN']]
-            st.table(top_hi.assign(HI_RUN=top_hi['HI_RUN'].astype(int)).set_index('Spiller'))
-
-            st.write("**Distance m. bold**")
-            top_ball = df_phys.nlargest(5, 'DISTANCE_TIP')[['Spiller', 'DISTANCE_TIP']]
-            st.table(top_ball.assign(DISTANCE_TIP=top_ball['DISTANCE_TIP'].astype(int)).set_index('Spiller'))
-
-        with c3:
-            st.write("**Topfart (km/h)**")
-            top_speed = df_phys.nlargest(5, 'TOP_SPEED')[['Spiller', 'TOP_SPEED']]
-            st.table(top_speed.set_index('Spiller'))
-
-            st.write("**Antal HI-løb**")
-            top_runs = df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['Spiller', 'NO_OF_HIGH_INTENSITY_RUNS']]
-            st.table(top_runs.set_index('Spiller'))
