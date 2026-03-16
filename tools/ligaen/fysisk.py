@@ -11,26 +11,26 @@ def vis_side(conn, name_map=None):
 
     @st.cache_data(ttl=600)
     def get_matches():
-        # Vi bruger LEFT JOIN for at sikre, at kampen dukker op, 
-        # selvom F53A dataen er et par timer forsinket.
+        # Vi fjerner YEAR filteret helt for at undgå fejl mellem tal/strenge,
+        # og sorterer i stedet bare efter STARTTIME for at få de nyeste.
         query = f"""
         SELECT 
-            TRIM(m.MATCH_SSIID) as MATCH_SSIID,
-            m.STARTTIME as DATE_TIME,
-            m.HOME_SSIID,
-            m.AWAY_SSIID,
-            m.HOMEOPTA_UUID,
-            m.AWAY_OPTAUUID,
-            m.YEAR
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME g 
-            ON TRIM(m.MATCH_SSIID) = TRIM(g.MATCH_SSIID)
-        WHERE (m.HOMEOPTA_UUID = '{HIF_OPTA_UUID}' OR m.AWAY_OPTAUUID = '{HIF_OPTA_UUID}')
-          AND m.YEAR >= 2025  -- Sikrer vi ser sæsonen 25/26
-        ORDER BY m.STARTTIME DESC
+            TRIM(MATCH_SSIID) as MATCH_SSIID,
+            STARTTIME,
+            HOME_SSIID,
+            AWAY_SSIID,
+            HOMEOPTA_UUID,
+            AWAY_OPTAUUID,
+            HOME_SCORE,
+            AWAY_SCORE,
+            YEAR
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
+        WHERE (HOMEOPTA_UUID = '{HIF_OPTA_UUID}' OR AWAY_OPTAUUID = '{HIF_OPTA_UUID}')
+        ORDER BY STARTTIME DESC
+        LIMIT 25
         """
         return conn.query(query)
-
+    
     df_matches = get_matches()
 
     if df_matches.empty:
