@@ -1,87 +1,116 @@
 import streamlit as st
 import pandas as pd
 
+# Hvidovre Opta UUID til at finde kampene i metadata
 HIF_OPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 def vis_side(conn, name_map=None):
     if name_map is None:
         name_map = {}
 
-    # Ingen st.title - bruger markdown for et rent look
+    st.markdown("### 🏃 Fysisk Overblik (F53A Data)")
 
+    # --- TRIN 1: METADATA (Find kampen) ---
     @st.cache_data(ttl=600)
-    def get_hif_matches():
-        # Vi henter kampene og sikrer at vi får MATCH_SSIID i et rent format
+    def get_matches():
+        # Vi joiner den overordnede GAME metadata med din specifikke F53A_GAME tabel
         query = f"""
-        SELECT DISTINCT
-            TRIM(m.MATCH_SSIID) as MATCH_SSIID, 
-            COALESCE(s.MATCH_TEAMS, 'Kamp ' || m.MATCH_SSIID) as MATCH_TEAMS, 
-            m.STARTTIME as DATE_TIME,
-            m.HOME_SSIID, m.AWAY_SSIID, m.HOMEOPTA_UUID
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m
-        LEFT JOIN (SELECT DISTINCT MATCH_SSIID, MATCH_TEAMS FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS) s
-            ON TRIM(m.MATCH_SSIID) = TRIM(s.MATCH_SSIID)
+        SELECT 
+            TRIM(g.MATCH_SSIID) as MATCH_SSIID,
+            g.MATCH_DATE,
+            g.HOME_SSIID,
+            g.AWAY_SSIID,
+            m.HOMEOPTA_UUID,
+            m.AWAY_OPTAUUID
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME g
+        JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON TRIM(g.MATCH_SSIID) = TRIM(m.MATCH_SSIID)
         WHERE m.HOMEOPTA_UUID = '{HIF_OPTA_UUID}' OR m.AWAY_OPTAUUID = '{HIF_OPTA_UUID}'
-        ORDER BY m.STARTTIME DESC
+        ORDER BY g.MATCH_DATE DESC
         """
         return conn.query(query)
 
-    df_matches = get_hif_matches()
-    
+    df_matches = get_matches()
+
     if df_matches.empty:
-        st.warning("Ingen Hvidovre-kampe fundet med UUID.")
+        st.warning("Ingen kampe fundet i F53A-tabellerne for Hvidovre.")
         return
 
-    # Lav dropdown
-    df_matches['DROPDOWN_LABEL'] = df_matches['DATE_TIME'].dt.strftime('%d/%m-%Y') + ": " + df_matches['MATCH_TEAMS']
-    valgt_label = st.selectbox("Vælg kamp:", df_matches['DROPDOWN_LABEL'].unique())
-    match_row = df_matches[df_matches['DROPDOWN_LABEL'] == valgt_label].iloc[0]
-    
-    # Her er nøglen: Vi stripper SSIID helt ren
-    valgt_ssiid = str(match_row['MATCH_SSIID']).strip()
+    # Valg af kamp
+    df_matches['LABEL'] = df_matches['MATCH_DATE'].dt.strftime('%d/%m-%Y') + " (ID: " + df_matches['MATCH_SSIID'].str[:6] + ")"
+    valgt_label = st.selectbox("Vælg Kamp (Metadata):", df_matches['LABEL'].unique())
+    m = df_matches[df_matches['LABEL'] == valgt_label].iloc[0]
+    v_ssiid = m['MATCH_SSIID']
 
-    @st.cache_data(ttl=300)
-    def get_player_data(ssiid):
-        # Vi bruger ILIKE og TRIM for at være ekstremt fleksible med ID-match
-        query = f"""
-        SELECT 
-            PLAYER_SSIID, PLAYER_NAME, TEAM_SSIID,
-            DISTANCE, TOP_SPEED, AVERAGE_SPEED, SPRINTS
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-        WHERE LOWER(TRIM(MATCH_SSIID)) = LOWER('{ssiid}')
-        AND DISTANCE > 0
-        """
-        res = conn.query(query)
+    # --- TRIN 2: TEAM DATA (Hold-statistik) ---
+    @st.cache_data(ttl=600)
+    def get_team_stats(ssiid):
+        return conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM WHERE TRIM(MATCH_SSIID) = '{ssiid}'")
+
+    df_teams = get_team_stats(v_ssiid)
+
+    if not df_teams.empty:
+        st.write("---")
+        # Find Hvidovres række i team-tabellen
+        hif_team_id = m['HOME_SSIID'] if m['HOMEOPTA_UUID'] == HIF_OPTA_UUID else m['AWAY_SSIID']
         
-        # Backup-plan: Hvis den er tom, prøv at søge på dato og holdnavn i stedet for ID
-        if res.empty:
-            alt_query = f"""
-            SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE MATCH_DATE = '{match_row['DATE_TIME'].date()}'
-            AND (MATCH_TEAMS ILIKE '%Hvidovre%' OR MATCH_TEAMS ILIKE '%HVI%')
-            """
-            res = conn.query(alt_query)
-        return res
+        c1, c2 = st.columns(2)
+        for idx, row in df_teams.iterrows():
+            is_hif = (str(row['TEAM_SSIID']) == str(hif_team_id))
+            with (c1 if is_hif else c2):
+                st.metric(
+                    label=f"{'🏠' if is_hif else '🚌'} {row['TEAM_NAME']}", 
+                    value=f"{row['TEAMDISTANCE']/1000:.2f} km",
+                    delta="Hvidovre IF" if is_hif else "Modstander"
+                )
+                with st.expander("Team Fordeling"):
+                    st.write(f"Sprints: {row['TEAMPERCENTDISTANCEHIGHSPEEDSPRINTING']:.1f}%")
+                    st.write(f"Jogging: {row['TEAMPERCENTDISTANCEJOGGING']:.1f}%")
+                    st.write(f"Walking: {row['TEAMPERCENTDISTANCEWALKING']:.1f}%")
 
-    df_fys = get_player_data(valgt_ssiid)
+    # --- TRIN 3: PLAYER DATA (Individuelle stats) ---
+    @st.cache_data(ttl=300)
+    def get_player_stats(ssiid):
+        query = f"""
+        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+        WHERE TRIM(MATCH_SSIID) = '{ssiid}'
+        """
+        return conn.query(query)
 
-    if df_fys.empty:
-        st.error(f"❌ Fejl: Kunne ikke finde spiller-data for {valgt_label}")
-        st.info("Dette sker ofte hvis MATCH_SSIID i spiller-tabellen ikke matcher metadata-tabellen.")
-        return
+    df_players = get_player_stats(v_ssiid)
 
-    # --- Herfra kører din normale visning ---
-    df_fys['DISPLAY_NAME'] = df_fys['PLAYER_SSIID'].map(name_map).fillna(df_fys['PLAYER_NAME'])
-    
-    # Find HIF team ID
-    hif_ssiid = match_row['HOME_SSIID'] if match_row['HOMEOPTA_UUID'] == HIF_OPTA_UUID else match_row['AWAY_SSIID']
-    teams = df_fys['TEAM_SSIID'].unique().tolist()
-    
-    st.write("---")
-    valgt_hold = st.radio("Vælg hold:", teams, 
-                          index=teams.index(hif_ssiid) if hif_ssiid in teams else 0,
-                          horizontal=True,
-                          format_func=lambda x: "Hvidovre IF" if x == hif_ssiid else "Modstander")
-    
-    df_display = df_fys[df_fys['TEAM_SSIID'] == valgt_hold]
-    st.dataframe(df_display[['DISPLAY_NAME', 'DISTANCE', 'TOP_SPEED', 'SPRINTS']].sort_values('DISTANCE', ascending=False))
+    if not df_players.empty:
+        st.write("---")
+        # Mapper navne fra din CSV/dictionary
+        df_players['DISPLAY_NAME'] = df_players['PLAYER_SSIID'].map(name_map).fillna(df_players['PLAYER_NAME'])
+        
+        # Filtrer på det hold man vil se
+        valgt_hold_navn = st.radio("Vis spillere for:", df_teams['TEAM_NAME'].unique(), horizontal=True)
+        t_id = df_teams[df_teams['TEAM_NAME'] == valgt_hold_navn]['TEAM_SSIID'].iloc[0]
+        
+        df_display = df_players[df_players['TEAM_SSIID'] == t_id].copy()
+
+        # Metrics for top-performers
+        p1, p2, p3 = st.columns(3)
+        top_dist = df_display.loc[df_display['DISTANCE'].idxmax()]
+        top_speed = df_display.loc[df_display['TOP_SPEED'].idxmax()]
+        
+        p1.metric("Længst", top_dist['DISPLAY_NAME'], f"{top_dist['DISTANCE']/1000:.2f} km")
+        p2.metric("Hurtigst", top_speed['DISPLAY_NAME'], f"{top_speed['TOP_SPEED']:.1f} km/h")
+        p3.metric("Sprints", int(df_display['SPRINTS'].sum()))
+
+        # Tabelvisning
+        st.dataframe(
+            df_display[['DISPLAY_NAME', 'JERSEY', 'DISTANCE', 'TOP_SPEED', 'SPRINTS', 'SPEEDRUNS']].sort_values('DISTANCE', ascending=False),
+            column_config={
+                "DISPLAY_NAME": "Spiller",
+                "JERSEY": "Nr.",
+                "DISTANCE": st.column_config.NumberColumn("Meter", format="%.0f"),
+                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/h"),
+                "SPRINTS": "Sprints",
+                "SPEEDRUNS": "Speedruns"
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.error("Kunne ikke finde spiller-data (F53A_GAME_PLAYER) for denne kamp.")
