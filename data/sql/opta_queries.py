@@ -267,7 +267,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
-        # 10. PHYSICAL MASTER QUERY (Nu med liga-overblik og korrekte navne)
+        # 10. PHYSICAL MASTER QUERY (Den ultimative fix)
         "opta_physical_stats": f"""
             SELECT 
                 m.STARTTIME::DATE as DATO,
@@ -277,12 +277,11 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 p.TEAM_SSIID,
                 p.DISTANCE,
                 p.TOP_SPEED,
-                p.SPRINTS,
-                p.MATCH_SSIID
+                p.SPRINTS
             FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
             JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p 
                 ON m.MATCH_SSIID = p.MATCH_SSIID
-            WHERE m.MATCH_OPTAUUID IN ({match_id_subquery})
+            WHERE m.STARTTIME >= '2025-07-01'  -- Her sikrer vi os data fra nuværende sæson
             ORDER BY DATO DESC, p.DISTANCE DESC
         """,
 
