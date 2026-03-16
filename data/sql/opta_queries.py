@@ -170,18 +170,28 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT e.*, m.CONTESTANTHOME_NAME AS HOME_TEAM, m.CONTESTANTAWAY_NAME AS AWAY_TEAM FROM SequenceWindow e LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
-        # 10. PHYSICAL MASTER QUERY (RETTET TIL 2025 SUMMARY)
         "opta_physical_stats": f"""
             SELECT 
-                p.PLAYER_NAME, p.TEAM_NAME, p.DISTANCE, p.TOP_SPEED, p.SPRINTING, p.AVERAGE_SPEED, m.MATCH_OPTAUUID
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+                p.PLAYER_SSIID,
+                p.PLAYER_NAME as RAW_NAME,
+                p.TEAM_SSIID,
+                p.DISTANCE,
+                p.TOP_SPEED,
+                p.AVERAGE_SPEED,
+                p.SPRINTS as SPRINTING, -- Kolonnen hedder SPRINTS i dit skema
+                m.MATCH_OPTAUUID,
+                m.HOME_SSIID,
+                m.AWAY_SSIID,
+                m.HOMEOPTA_UUID, -- Bemærk: Ingen underscore i dit skema!
+                m.AWAY_OPTAUUID
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
             JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
             WHERE m.MATCH_OPTAUUID IN (
                 SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_matchinfo}
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' 
+                {hif_filter_matchinfo}
             )
             AND p.DISTANCE > 0
-            ORDER BY p.DISTANCE DESC
         """,
 
         # 11. PHYSICAL METADATA
