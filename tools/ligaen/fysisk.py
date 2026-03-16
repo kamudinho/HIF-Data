@@ -9,7 +9,7 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
     def get_combined_data():
-        # 1. Hent Metadata (Joiner Season og Game for at filtrere korrekt)
+        # 1. Hent Metadata
         query_meta = f"""
         SELECT 
             g.STARTTIME, 
@@ -26,12 +26,12 @@ def vis_side(conn, name_map=None):
         ORDER BY g.STARTTIME DESC
         """
         
-        # 2. Hent Fysisk Data
-        # Vi henter MATCH_TEAMSTEXT for at kunne filtrere på HIF direkte i denne tabel
+        # 2. Hent Fysisk Data fra SUMMARY_PLAYERS
+        # Kolonnenavne rettet jf. din liste: "MATCH_TEAMS" (ikke MATCH_TEAMSTEXT)
         query_phys = """
         SELECT 
             MATCH_SSIID,
-            MATCH_TEAMSTEXT,
+            MATCH_TEAMS,
             "optaId", 
             PLAYER_NAME,
             DISTANCE,
@@ -50,20 +50,19 @@ def vis_side(conn, name_map=None):
         return
 
     # --- DATABEHANDLING ---
-    # Vi bruger MATCH_TEAMSTEXT til at finde HIF-spillere, hvis vi ikke kan joine team-tabellen sikkert
-    # Typisk format: "TeamA vs TeamB" eller "TeamA - TeamB"
-    df_hif_players = df_phys[df_phys['MATCH_TEAMSTEXT'].str.contains('Hvidovre', case=False, na=False)].copy()
+    # Vi filtrerer på Hvidovre i MATCH_TEAMS kolonnen
+    df_hif_players = df_phys[df_phys['MATCH_TEAMS'].str.contains('Hvidovre', case=False, na=False)].copy()
     
-    # Beregn HI_DIST
+    # Beregn HI_DIST (HSR + Sprint)
     df_hif_players['HI_DIST'] = df_hif_players['HIGH SPEED RUNNING'] + df_hif_players['SPRINTING']
 
     # --- VISNING ---
-    st.title("Fysisk Data: Hvidovre IF")
+    st.title("Betinia Ligaen | Fysisk Data")
 
     def get_team_name(ssiid):
         for name, info in TEAMS.items():
             if info.get('ssid') == ssiid: return name
-        return "Ukendt"
+        return "Modstander"
 
     # Kampoversigt
     kamp_data = []
@@ -72,27 +71,38 @@ def vis_side(conn, name_map=None):
         phys_match = df_hif_players[df_hif_players['MATCH_SSIID'] == m_id]
         
         if not phys_match.empty:
+            is_home = m['HOME_SSIID'] == HIF_SSIID
+            modstander = get_team_name(m['AWAY_SSIID'] if is_home else m['HOME_SSIID'])
+            
             kamp_data.append({
                 "Dato": m['STARTTIME'].strftime('%d/%m') if m['STARTTIME'] else "N/A",
-                "Modstander": get_team_name(m['AWAY_SSIID'] if m['HOME_SSIID'] == HIF_SSIID else m['HOME_SSIID']),
-                "Resultat": f"{int(m['HOME_SCORE'])} - {int(m['AWAY_SCORE'])}",
-                "Total Dist (km)": round(phys_match['DISTANCE'].sum() / 1000, 1),
+                "Kamp": f"{'HIF' if is_home else modstander} - {modstander if is_home else 'HIF'}",
+                "Res.": f"{int(m['HOME_SCORE'])} - {int(m['AWAY_SCORE'])}",
+                "Total km": round(phys_match['DISTANCE'].sum() / 1000, 1),
                 "HI Løb (m)": int(phys_match['HI_DIST'].sum()),
-                "SSIID": m_id
+                "SSIID": m_id,
+                "Sort_Date": m['STARTTIME']
             })
 
     if kamp_data:
-        df_display = pd.DataFrame(kamp_data)
-        st.dataframe(df_display.drop(columns=['SSIID']), use_container_width=True, hide_index=True)
+        df_display = pd.DataFrame(kamp_data).sort_values('Sort_Date', ascending=False)
+        st.dataframe(
+            df_display[['Dato', 'Kamp', 'Res.', 'Total km', 'HI Løb (m)']], 
+            use_container_width=True, 
+            hide_index=True
+        )
 
         st.divider()
-        valgt_id = st.selectbox("Vælg kamp for spiller-detaljer:", 
-                               options=df_display['SSIID'].tolist(),
-                               format_func=lambda x: next(i['Modstander'] for i in kamp_data if i['SSIID'] == x))
+        valgt_id = st.selectbox(
+            "Vælg kamp for spiller-detaljer:", 
+            options=df_display['SSIID'].tolist(),
+            format_func=lambda x: next(i['Kamp'] for i in kamp_data if i['SSIID'] == x)
+        )
 
-        # Spillerdetaljer for valgt kamp
+        # Spillerdetaljer
         detail_df = df_hif_players[df_hif_players['MATCH_SSIID'] == valgt_id].sort_values('DISTANCE', ascending=False)
         
+        st.write(f"### Spillerstatistik")
         st.dataframe(
             detail_df[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']],
             column_config={
@@ -100,9 +110,9 @@ def vis_side(conn, name_map=None):
                 "MINUTES": "Min",
                 "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
                 "HI_DIST": "HI (m)",
-                "TOP_SPEED": "Topfart"
+                "TOP_SPEED": "Top (km/t)"
             },
             use_container_width=True, hide_index=True
         )
     else:
-        st.warning("Fandt ingen kampe med tilhørende fysisk data.")
+        st.info("Ingen fysisk data matchede de fundne kampe fra metadata.")
