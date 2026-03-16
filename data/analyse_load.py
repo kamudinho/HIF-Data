@@ -2,43 +2,37 @@
 import pandas as pd
 import streamlit as st
 
-def get_single_match_physical(match_uuid):
-    """Oversætter Opta UUID til SSIID og henter fysisk data uden dikkedarer"""
+def debug_physical_data_dump():
+    """Henter et råt udtræk af de første rækker for at verificere indholdet"""
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
-    if not match_uuid: return pd.DataFrame()
-
+    
+    results = {}
+    
     try:
-        # TRIN 1: Find SSIID. Vi tjekker de to mest sandsynlige kolonner fra dit dump
-        meta_sql = f"""
-            SELECT MATCH_SSIID 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
-            WHERE MATCH_OPTAUUID = '{match_uuid}' 
-               OR MATCH_OPTAID = '{match_uuid}'
-            LIMIT 1
-        """
-        meta_res = conn.query(meta_sql)
+        # 1. Tjek Metadata-tabellen (første 3 rækker)
+        # Vi vælger SELECT * for at se ALLE kolonnenavne præcis som de er
+        meta_sql = 'SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA LIMIT 3'
+        results['metadata_sample'] = conn.query(meta_sql)
         
-        # Hvis vi får bid, bruger vi SSIID'et. Ellers prøver vi råt med match_uuid
-        if meta_res is not None and not meta_res.empty:
-            ss_id = meta_res.iloc[0]['MATCH_SSIID']
-        else:
-            ss_id = match_uuid
-
-        # TRIN 2: Hent data fra den fysiske tabel
-        # Vi tjekker både SSIID og OPTA ID direkte i den fysiske tabel også
-        sql = f"""
-            SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE MATCH_SSIID = '{ss_id}' 
-               OR MATCH_ID = '{ss_id}'
-        """
-        res = conn.query(sql)
-        return pd.DataFrame(res)
-
+        # 2. Tjek den fysiske tabel (første 3 rækker)
+        fys_sql = 'SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER LIMIT 3'
+        results['physical_sample'] = conn.query(fys_sql)
+        
+        return results
     except Exception as e:
-        # Hvis den fejler her, er det fordi en af kolonnenavnene i TRIN 2 er forkerte
-        st.error(f"Data-gennembrud fejlede: {e}")
-        return pd.DataFrame()
+        st.error(f"Debug udtræk fejlede: {e}")
+        return None
+
+# I din Streamlit main fil eller hvor du tester:
+if st.button("Kør Rå Data Debug"):
+    data = debug_physical_data_dump()
+    if data:
+        st.write("### Rå Metadata (Første 3 rækker)")
+        st.dataframe(data['metadata_sample'])
+        
+        st.write("### Rå Fysisk Data (Første 3 rækker)")
+        st.dataframe(data['physical_sample'])
 
 def get_analysis_package(hif_only=False):
     from data.data_load import _get_snowflake_conn, load_local_players
