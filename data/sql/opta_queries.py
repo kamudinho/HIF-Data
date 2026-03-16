@@ -178,18 +178,17 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 p.DISTANCE,
                 p.TOP_SPEED,
                 p.AVERAGE_SPEED,
-                p.SPRINTS as SPRINTING, -- Kolonnen hedder SPRINTS i dit skema
+                p.SPRINTS,
                 m.MATCH_OPTAUUID,
                 m.HOME_SSIID,
-                m.AWAY_SSIID,
-                m.HOMEOPTA_UUID, -- Bemærk: Ingen underscore i dit skema!
-                m.AWAY_OPTAUUID
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
-            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
+                m.AWAY_SSIID
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER p
+            JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
             WHERE m.MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' 
-                {hif_filter_matchinfo}
+                SELECT DISTINCT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '6ifaeunfdele' -- 1. Division 25/26
+                AND (HOME_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
+                     OR AWAY_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy')
             )
             AND p.DISTANCE > 0
         """,
