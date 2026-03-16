@@ -4,7 +4,7 @@ import pandas as pd
 # Dine gemte værdier
 HIF_OPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
-def vis_kamp_oversigt(conn):
+def vis_side(conn):
     st.title("Hvidovre IF - Kampoversigt 25/26")
     st.caption("Data fra Second Spectrum via Axis")
 
