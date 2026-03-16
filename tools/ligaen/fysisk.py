@@ -33,36 +33,28 @@ def vis_side(dp):
         icon = "📈" if uid in covered_uuids else "❌"
         return f"{icon} {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}"
 
-    match_labels = matches.apply(get_label, axis=1)
-    selected_idx = st.selectbox("Vælg kamp (📈 = Data tilgængelig)", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
-    
-    selected_match = matches.iloc[selected_idx]
-    match_uuid = selected_match['MATCH_OPTAUUID']
-    
-    if st.button("Hent fysisk data"):
-        with st.spinner("Henter data..."):
-            status = analyse_load.check_physical_data_availability(match_uuid)
+            match_labels = matches.apply(get_label, axis=1)
+            selected_idx = st.selectbox("Vælg kamp (📈 = Data tilgængelig)", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
             
-            if status["rows"] > 0:
-                full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
-                df_fys = full_dp["fysisk_data"]
-                
-                # --- NAVNE MAPPING ---
-                # Finder kolonnen med spiller ID (typisk PLAYER_OPTAUUID eller lign)
-                id_col = next((c for c in df_fys.columns if 'OPTAUUID' in c.upper()), None)
-                if id_col:
-                    df_fys['SPILLER'] = df_fys[id_col].astype(str).str.lower().map(name_map).fillna(df_fys[id_col])
-                    # Flyt spiller til første kolonne
-                    cols = ['SPILLER'] + [c for c in df_fys.columns if c != 'SPILLER']
-                    df_fys = df_fys[cols]
-
-                st.success(f"Viser data for {selected_match['CONTESTANTHOME_NAME']} vs {selected_match['CONTESTANTAWAY_NAME']}")
-                st.dataframe(df_fys, use_container_width=True)
-            else:
-                st.error(f"❌ Data findes ikke i systemet endnu.")
-                st.info(f"""
-                **Teknisk status for denne kamp:**
-                * **Metadata:** {"Fundet ✅" if status['meta'] else "Ikke fundet ❌"}
-                * **SSIID:** `{status.get('ss_id', 'Mangler')}`
-                * **Rækker i F53A-tabellen:** `{status['rows']}`
-                """)
+            selected_match = matches.iloc[selected_idx]
+            match_uuid = selected_match['MATCH_OPTAUUID']
+            
+            if st.button("Kør Database Diagnostik"):
+            from data.data_load import _get_snowflake_conn
+            conn = _get_snowflake_conn()
+            
+            st.write("### Diagnostik af Second Spectrum Tabeller")
+            
+            # 1. Hvor mange rækker er der i alt?
+            total_fys = conn.query("SELECT COUNT(*) FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER")
+            st.write(f"Total antal rækker i F53A tabellen: `{total_fys.iloc[0,0]}`")
+            
+            # 2. Vis de 5 nyeste unikke SSIID'er i F53A tabellen
+            st.write("### De 5 nyeste SSIID'er med FAKTISK data i F53A:")
+            latest_ids = conn.query("""
+                SELECT DISTINCT "MATCH_SSIID", COUNT(*) as ANTAL_RÆKKER 
+                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+                GROUP BY "MATCH_SSIID" 
+                LIMIT 5
+            """)
+            st.dataframe(latest_ids)
