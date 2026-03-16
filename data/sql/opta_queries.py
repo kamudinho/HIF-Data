@@ -106,45 +106,54 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
         """,
 
-        # 10. PHYSICAL MASTER QUERY - BYGGET PÅ DINE KOLONNE-DATA
+        # 10. PHYSICAL MASTER QUERY - BASERET PÅ DINE TABEL-SPECS
         "opta_physical_stats": f"""
-            WITH TargetMatches AS (
-                -- Her laver vi broen mellem Opta og Second Spectrum
-                -- Vi filtrerer specifikt på 1. division (NordicBet Liga) via Opta-logik
+            WITH SS_Bridge AS (
+                -- Finder SSIID via Opta UUID for 1. division
                 SELECT 
-                    MATCH_SSIID,
-                    MATCH_OPTAUUID,
-                    HOME_OPTAUUID,
-                    AWAY_OPTAUUID
+                    MATCH_SSIID, 
+                    MATCH_OPTAUUID
                 FROM {DB}.SECONDSPECTRUM_GAME_METADATA
                 WHERE MATCH_OPTAUUID IN (
                     SELECT DISTINCT MATCH_OPTAUUID 
                     FROM {DB}.OPTA_MATCHINFO
-                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- NordicBet Liga ID
+                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
                 )
+                -- Genbruger dit HIF-filter men mapper til kolonnenavne i denne tabel
                 {hif_filter_matchinfo.replace('CONTESTANTHOME_OPTAUUID', 'HOME_OPTAUUID').replace('CONTESTANTAWAY_OPTAUUID', 'AWAY_OPTAUUID')}
             )
             SELECT 
-                m.MATCH_OPTAUUID,
+                b.MATCH_OPTAUUID,
                 p.PLAYER_NAME,
                 p.JERSEY,
                 p.DISTANCE,
                 p.TOP_SPEED,
                 p.SPRINTS,
                 p.AVERAGE_SPEED,
-                p.PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT,
+                p.PERCENTDISTANCEHIGHSPEEDRUNNING AS HSR_PCT,
+                p.PERCENTDISTANCEHIGHSPEEDSPRINTING AS SPRINT_PCT,
                 p.MATCH_SSIID
             FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
-            INNER JOIN TargetMatches m ON p.MATCH_SSIID = m.MATCH_SSIID
+            INNER JOIN SS_Bridge b ON p.MATCH_SSIID = b.MATCH_SSIID
             ORDER BY p.DISTANCE DESC
         """,
-        # 11. PHYSICAL SUMMARY
+
+        # 11. PHYSICAL SUMMARY - MED PRÆCISE KOLONNER FRA DIN LISTE
         "opta_physical_summary": f"""
-            SELECT * FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            SELECT 
+                MATCH_DATE,
+                MATCH_TEAMS,
+                PLAYER_NAME,
+                DISTANCE,
+                "HIGH SPEED RUNNING" AS HSR, -- Bemærk gåseøjne pga. mellemrum i dit skema
+                SPRINTING,
+                TOP_SPEED,
+                AVERAGE_SPEED,
+                MATCH_SSIID
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
             WHERE MATCH_SSIID IN (
                 SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA
                 WHERE MATCH_OPTAUUID IN ({match_id_subquery})
             )
             ORDER BY MATCH_DATE DESC
         """
-    }
