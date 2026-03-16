@@ -30,7 +30,6 @@ def vis_side(conn, name_map=None):
             TEAM_SSIID, 
             TEAM_NAME, 
             "TEAMDISTANCE", 
-            "HIGHSPEEDSPRINTING"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
         WHERE MATCH_SSIID IN {ids}
         """
