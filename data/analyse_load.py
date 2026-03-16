@@ -7,7 +7,7 @@ def check_physical_data_availability(match_uuid):
     conn = _get_snowflake_conn()
     
     # Rens UUID (hvis der er et 'g' foran)
-    clean_uuid = str(match_uuid).strip()
+    clean_uuid = str(match_uuid).strip().lower() # Tilføj .lower()
     if clean_uuid.startswith('g'):
         clean_uuid = clean_uuid[1:]
         
