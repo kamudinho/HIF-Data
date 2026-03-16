@@ -11,8 +11,6 @@ def vis_side(conn, name_map=None):
     """
     if name_map is None: name_map = {}
 
-    st.markdown("---")
-
     # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
     @st.cache_data(ttl=600)
     def get_matches():
