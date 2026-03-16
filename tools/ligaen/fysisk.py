@@ -1,30 +1,30 @@
 import streamlit as st
 import pandas as pd
 
-# HIF's specifikke ID fra dine indstillinger
-HIF_OPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
+# Hvidovres SSID fra dine indstillinger
+HIF_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
-def vis_side(conn, name_map=None):
+def vis_side(conn, teams_map=None, name_map=None):
     if name_map is None:
         name_map = {}
+    if teams_map is None:
+        teams_map = {}
 
     st.subheader("Fysisk Performance (Second Spectrum)")
 
     # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
     @st.cache_data(ttl=600)
     def get_matches():
-        # Query rettet til dit SEASON_METADATA dump
+        # Din SQL 1:1 - henter oversigt til UI
         query = f"""
         SELECT 
-            DATE,
-            MATCH_SSIID,
-            HOME_OPTAUUID,
-            AWAY_OPTAUUID,
-            COMPETITION_OPTAUUID
+            *
+            
+            -- Tilføjer disse for at kunne sortere og identificere kampen i UI
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-        WHERE (HOME_OPTAUUID = '{HIF_OPTA_UUID}' OR AWAY_OPTAUUID = '{HIF_OPTA_UUID}')
+        WHERE (HOME_SSIID = '{HIF_SSIID}' OR AWAY_SSIID = '{HIF_SSIID}')
           AND COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
-        ORDER BY DATE DESC
+        ORDER BY DATE DESC, START_TIME DESC;
         """
         return conn.query(query)
 
@@ -34,10 +34,26 @@ def vis_side(conn, name_map=None):
         st.warning("Ingen fysiske kampdata fundet for denne sæson.")
         return
 
+    # --- HJÆLPEFUNKTION TIL MODSTANDER-NAVN ---
+    def get_opponent(row):
+        # Find ud af hvem der ikke er Hvidovre
+        opp_id = row['AWAY_SSIID'] if row['HOME_SSIID'] == HIF_SSIID else row['HOME_SSIID']
+        
+        # Slå op i din TEAMS mapping (baseret på SSID)
+        for name, info in teams_map.items():
+            if info.get('ssid') == opp_id:
+                return name
+        return "Ukendt modstander"
+
     # Lav en pæn label til selectbox
     df_meta['DATE'] = pd.to_datetime(df_meta['DATE'])
-    df_meta['DISPLAY_NAME'] = df_meta['DATE'].dt.strftime('%d/%m-%Y') + " - " + \
-                               df_meta.apply(lambda x: "Hjemme" if x['HOME_OPTAUUID'] == HIF_OPTA_UUID else "Ude", axis=1)
+    df_meta['OPPONENT'] = df_meta.apply(get_opponent, axis=1)
+    df_meta['VENUE'] = df_meta.apply(lambda x: "(H)" if x['HOME_SSIID'] == HIF_SSIID else "(U)", axis=1)
+    
+    df_meta['DISPLAY_NAME'] = (
+        df_meta['DATE'].dt.strftime('%d/%m-%Y') + 
+        " - " + df_meta['OPPONENT'] + " " + df_meta['VENUE']
+    )
 
     valgt_kamp_label = st.selectbox("Vælg kamp for fysisk analyse:", df_meta['DISPLAY_NAME'])
     valgt_match = df_meta[df_meta['DISPLAY_NAME'] == valgt_kamp_label].iloc[0]
@@ -46,7 +62,6 @@ def vis_side(conn, name_map=None):
     # --- TRIN 2: HENT SPILLER-DATA (F53A) ---
     @st.cache_data(ttl=600)
     def get_physical_stats(ssiid):
-        # Vi trimmer ID'et for at sikre match mod Snowflake
         query = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
         WHERE TRIM(MATCH_SSIID) = '{ssiid}'
@@ -60,10 +75,9 @@ def vis_side(conn, name_map=None):
         return
 
     # --- TRIN 3: VISNING ---
-    # Mapping af navne hvis muligt
+    # Mapper spiller-navne (SSIID -> Navn)
     df_phys['Navn'] = df_phys['PLAYER_SSIID'].map(name_map).fillna(df_phys['PLAYER_NAME'])
     
-    # Opdel i faner for overblik
     tab1, tab2 = st.tabs(["Løbedistance", "Højintenst løb"])
 
     with tab1:
@@ -77,5 +91,5 @@ def vis_side(conn, name_map=None):
         )
 
     with tab2:
-        # Her kan du tilføje High Speed Running hvis kolonnerne findes i din F53A tabel
-        st.write("Detaljeret sprint-analyse kommer her...")
+        st.write(f"Analyse af sprints og højintensitetsløb for kampen mod {valgt_match['OPPONENT']}.")
+        # Her kan du tilføje yderligere kolonner fra F53A tabellen
