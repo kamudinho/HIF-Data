@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import TEAM_COLORS
 
-def vis_side(conn, name_map):
+def vis_side(conn, name_map=None):
+    if name_map is None:
+        name_map = {}
+    
     st.title("🏃 Fysisk Data (Second Spectrum)")
 
     # 1. Hent alle tilgængelige kampe fra Metadata-tabellen
