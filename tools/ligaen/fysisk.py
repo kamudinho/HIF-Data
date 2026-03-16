@@ -47,3 +47,6 @@ def vis_side(dp):
             st.dataframe(disp_df.sort_values("Distance (m)", ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Der er ikke indlæst tracking-data for denne specifikke kamp endnu.")
+
+    st.write(f"Antal rækker i df_fys: {len(df_fys)}")
+    st.write("Første 2 rækker af data:", df_fys.head(2))
