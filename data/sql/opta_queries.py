@@ -106,8 +106,20 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
         """,
 
-        # 10. PHYSICAL MASTER QUERY - BASERET PÅ DINE TABEL-SPECS
+        # 10. ULTRA-SIMPEL TEST
         "opta_physical_stats": f"""
+            SELECT 
+                MATCH_SSIID, 
+                PLAYER_NAME, 
+                DISTANCE, 
+                SEASONLABEL, 
+                SECOND_SPECTRUM_COMPETITION_ID
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
+            LIMIT 5
+        """,
+        
+        # 10. PHYSICAL MASTER QUERY - BASERET PÅ DINE TABEL-SPECS
+        "upta_physical_stats": f"""
             WITH SS_Bridge AS (
                 -- Finder SSIID via Opta UUID for 1. division
                 SELECT 
