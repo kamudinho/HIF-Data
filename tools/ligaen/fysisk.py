@@ -5,7 +5,6 @@ import pandas as pd
 def vis_side(dp):
     st.title("Fysisk Data")
 
-    # 1. Hent matches og name_map
     matches = dp.get("matches", pd.DataFrame())
     name_map = dp.get("name_map", {}) 
     
@@ -13,19 +12,18 @@ def vis_side(dp):
         st.warning("Ingen kampe fundet.")
         return
 
-    # 2. Sorter efter dato (nyeste først)
+    # Sorter efter nyeste dato
     if 'MATCH_DATE_FULL' in matches.columns:
         matches['MATCH_DATE_FULL'] = pd.to_datetime(matches['MATCH_DATE_FULL'])
         matches = matches.sort_values('MATCH_DATE_FULL', ascending=False)
     
-    # --- Tjek dækning i metadata ---
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     
+    # Tjek dækning (Ikoner i dropdown)
     with st.spinner("Tjekker dækning..."):
-        # Vi henter alle OptaUUIDs fra metadata for at sætte ikoner (📈/❌)
-        covered_matches_df = conn.query("SELECT DISTINCT \"MATCH_OPTAUUID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA")
-        covered_uuids = set(covered_matches_df["MATCH_OPTAUUID"].tolist()) if not covered_matches_df.empty else set()
+        covered_df = conn.query("SELECT DISTINCT \"MATCH_OPTAUUID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA")
+        covered_uuids = set(covered_df["MATCH_OPTAUUID"].tolist()) if not covered_df.empty else set()
 
     def get_label(row):
         uid = str(row['MATCH_OPTAUUID'])
@@ -33,19 +31,50 @@ def vis_side(dp):
         icon = "📈" if uid in covered_uuids else "❌"
         return f"{icon} {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}"
 
-    # VIGTIGT: Disse skal være i samme indrykningsniveau som 'def get_label'
     match_labels = matches.apply(get_label, axis=1)
-    selected_idx = st.selectbox("Vælg kamp (📈 = Data tilgængelig)", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
+    selected_idx = st.selectbox("Vælg kamp", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
     
     selected_match = matches.iloc[selected_idx]
     match_uuid = selected_match['MATCH_OPTAUUID']
     
-    # --- Diagnostik Knap ---
-    if st.button("Hvilke ID'er findes i F53A?"):
-        # Vi henter bare de 5 første unikke ID'er fra den fysiske tabel
-        sample_ids = conn.query('SELECT DISTINCT "MATCH_SSIID" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER LIMIT 5')
-        st.write("### Eksempler på SSIID'er der FAKTISK har data:")
-        st.dataframe(sample_ids)
-        
-        st.write("---")
-        st.write(f"**Dit valgte kamps ID:** `{match_uuid}`")
+    if st.button("Hent Fysisk Performance"):
+        with st.spinner("Henter data..."):
+            # Vi bruger din analyse_load funktion til at hente den fulde pakke for kampen
+            full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
+            df_fys = full_dp.get("fysisk_data", pd.DataFrame())
+            
+            if not df_fys.empty:
+                # 1. Navne Mapping
+                # Vi kigger efter spillerens UUID i F53A og kobler på name_map
+                id_col = next((c for c in df_fys.columns if 'PLAYER_OPTAUUID' in c.upper()), None)
+                if id_col:
+                    df_fys['SPILLER'] = df_fys[id_col].astype(str).str.lower().map(name_map).fillna(df_fys[id_col])
+                
+                # 2. Top-performere sektion (Metrics)
+                st.subheader(f"🚀 Top Performere: {selected_match['CONTESTANTHOME_NAME']} vs {selected_match['CONTESTANTAWAY_NAME']}")
+                m1, m2, m3 = st.columns(3)
+                
+                # Find relevante kolonner (Distance, Speed, Sprints)
+                dist_c = next((c for c in df_fys.columns if 'TOTAL_DISTANCE' in c.upper()), None)
+                speed_c = next((c for c in df_fys.columns if 'MAX_SPEED' in c.upper()), None)
+                sprint_c = next((c for c in df_fys.columns if 'SPRINT' in c.upper() and 'COUNT' in c.upper()), None)
+
+                if dist_c:
+                    top = df_fys.nlargest(1, dist_c)
+                    m1.metric("Mest Distance", f"{top['SPILLER'].values[0]}", f"{round(top[dist_c].values[0]/1000, 2)} km")
+                
+                if speed_c:
+                    top = df_fys.nlargest(1, speed_c)
+                    m2.metric("Topfart", f"{top['SPILLER'].values[0]}", f"{round(top[speed_c].values[0], 1)} km/t")
+                
+                if sprint_c:
+                    top = df_fys.nlargest(1, sprint_c)
+                    m3.metric("Flest Sprints", f"{top['SPILLER'].values[0]}", f"{int(top[sprint_c].values[0])} stk")
+
+                # 3. Den fulde tabel (Renset for ID-støj)
+                st.subheader("Fuld Spilleroversigt")
+                vis_cols = ['SPILLER'] + [c for c in df_fys.columns if any(x in c.upper() for x in ['DISTANCE', 'SPEED', 'SPRINT']) and 'UUID' not in c.upper() and 'SSIID' not in c.upper()]
+                st.dataframe(df_fys[vis_cols].sort_values(by=dist_c if dist_c else vis_cols[0], ascending=False), use_container_width=True)
+                
+            else:
+                st.error("Ingen fysiske data fundet for denne kamp. Tjek om tracking-kameraerne var aktive.")
