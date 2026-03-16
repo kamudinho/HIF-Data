@@ -2,38 +2,44 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(dp):
-    st.title("⚽ Fysisk Data - Hvidovre IF")
+    st.title("⚽ Fysisk Data - 1. Division")
     
     df_fys = dp.get("fysisk_data", pd.DataFrame())
-    
-    # 1. Sikrere filtrering
+    df_matches = dp.get("matches", pd.DataFrame())
+
     if df_fys.empty:
-        st.warning("Ingen fysisk data fundet i databasen overhovedet.")
+        st.warning("Databasen returnerede ingen fysisk data.")
         return
 
-    # Kamp-vælger (Sørg for at vi kun vælger blandt kampe der har data)
-    uuids = df_fys['MATCH_OPTAUUID'].unique()
-    # ... din kamp-vælger logik her ...
-    
-    # Lad os sige vi har filtreret til 'df' for den valgte kamp:
-    df = df_fys[df_fys['MATCH_OPTAUUID'] == selected_uuid] 
+    # --- KAMPVÆLGER ---
+    # Vi viser kun de kampe i dropdown, som vi FAKTISK har fysisk data for
+    uuids_med_data = df_fys['MATCH_OPTAUUID'].unique()
+    relevant_matches = df_matches[df_matches['MATCH_OPTAUUID'].isin(uuids_med_data)]
 
-    # 2. DETTE FIXER FEJLEN
-    if df.empty:
-        st.error(f"🚨 Der er ingen rækker for den valgte kamp i databasen.")
-        st.info("Dette sker ofte hvis kampen er lige spillet, og Second Spectrum ikke har uploadet tallene endnu.")
-    else:
-        # Nu tør vi godt bruge .iloc[0] eller .idxmax()
+    if relevant_matches.empty:
+        st.info("Der findes endnu ingen fysiske data for de seneste kampe.")
+        return
+
+    # Lav labels og vælger
+    relevant_matches['label'] = relevant_matches['MATCH_DATE_FULL'].astype(str) + " vs " + relevant_matches['CONTESTANTAWAY_NAME']
+    valgt_kamp = st.selectbox("Vælg kamp:", relevant_matches['label'].tolist())
+    valgt_uuid = relevant_matches[relevant_matches['label'] == valgt_kamp]['MATCH_OPTAUUID'].values[0]
+
+    # Filtrer data til den valgte kamp
+    df = df_fys[df_fys['MATCH_OPTAUUID'] == valgt_uuid]
+
+    # --- SIKKER VISNING (Dette forhindrer 'Out of bounds' fejlen) ---
+    if not df.empty:
         col1, col2, col3 = st.columns(3)
         
-        idx_dist = df['DISTANCE'].idxmax()
-        idx_speed = df['TOP_SPEED'].idxmax()
+        # Vi bruger idxmax() sikkert her
+        top_dist_row = df.loc[df['DISTANCE'].idxmax()]
+        top_speed_row = df.loc[df['TOP_SPEED'].idxmax()]
         
-        top_dist = df.loc[idx_dist]
-        top_speed = df.loc[idx_speed]
-        
-        col1.metric("Mest løbende", f"{top_dist['PLAYER_NAME']}", f"{top_dist['DISTANCE']/1000:.2f} km")
-        col2.metric("Højeste Topfart", f"{top_speed['PLAYER_NAME']}", f"{top_speed['TOP_SPEED']:.1f} km/h")
+        col1.metric("Mest løbende", f"{top_dist_row['PLAYER_NAME']}", f"{top_dist_row['DISTANCE']/1000:.2f} km")
+        col2.metric("Højeste Topfart", f"{top_speed_row['PLAYER_NAME']}", f"{top_speed_row['TOP_SPEED']:.1f} km/h")
         col3.metric("Spillere", len(df))
 
-        st.dataframe(df)
+        st.dataframe(df[['PLAYER_NAME', 'DISTANCE', 'TOP_SPEED', 'SPRINTING']])
+    else:
+        st.error("Data for denne kamp er ikke klar i Snowflake endnu.")
