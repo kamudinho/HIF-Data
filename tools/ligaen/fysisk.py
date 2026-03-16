@@ -5,32 +5,37 @@ import pandas as pd
 def vis_side(dp):
     st.title("Fysisk Data")
     
-    # Hent matches og name_map fra din data-pakke
     matches = dp.get("matches", pd.DataFrame())
-    name_map = dp.get("name_map", {})
     
-    match_list = matches['CONTESTANTHOME_NAME'] + " vs " + matches['CONTESTANTAWAY_NAME']
-    selected_idx = st.selectbox("Vælg kamp", range(len(match_list)), format_func=lambda x: match_list.iloc[x])
+    # --- NYT: Tjek hvilke kampe der findes i metadata-tabellen ---
+    # Dette hjælper dig med at se hvilke kampe der OVERHOVEDET har tracking-mulighed
+    from data.data_load import _get_snowflake_conn
+    conn = _get_snowflake_conn()
+    
+    # Hent alle tilgængelige SSIID'er i ét hug for at optimere
+    with st.spinner("Tjekker dækning..."):
+        covered_matches_df = conn.query("SELECT DISTINCT \"MATCH_OPTAUUID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA")
+        covered_uuids = set(covered_matches_df["MATCH_OPTAUUID"].tolist()) if not covered_matches_df.empty else set()
+
+    def get_label(row):
+        # Vi fjerner 'g' for at tjekke mod metadata-listen
+        uid = str(row['MATCH_OPTAUUID'])
+        if uid.startswith('g'): uid = uid[1:]
+        
+        icon = "📈" if uid in covered_uuids else "❌"
+        return f"{icon} {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}"
+
+    match_labels = matches.apply(get_label, axis=1)
+    selected_idx = st.selectbox("Vælg kamp (📈 = Data tilgængelig)", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
     
     match_uuid = matches.iloc[selected_idx]['MATCH_OPTAUUID']
     
     if st.button("Hent fysisk data"):
-        with st.spinner("Henter og mapper data..."):
-            full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
-            df_fys = full_dp["fysisk_data"]
-            
-            if not df_fys.empty:
-                # MAP NAVNE: Vi tager PLAYER_OPTAUUID fra fys-data og kigger i din name_map
-                # OBS: Tjek om kolonnen i F53A hedder PLAYER_OPTAUUID eller PLAYER_ID
-                id_col = next((c for c in df_fys.columns if 'OPTAUUID' in c.upper() or 'PLAYER_ID' in c.upper()), None)
-                
-                if id_col:
-                    df_fys['SPILLER'] = df_fys[id_col].astype(str).str.lower().map(name_map).fillna(df_fys[id_col])
-                
-                # Filtrér til de mest interessante kolonner for hurtigt overblik
-                vigtige_kolonner = ['SPILLER'] + [c for c in df_fys.columns if any(x in c.upper() for x in ['DISTANCE', 'SPEED', 'SPRINT', 'HIGH_INTENSITY'])]
-                
-                st.write(f"### Resultater for {match_list.iloc[selected_idx]}")
-                st.dataframe(df_fys[vigtige_kolonner].sort_values(by=vigtige_kolonner[1], ascending=False))
-            else:
-                st.warning("Ingen fysiske rækker fundet for denne kamp endnu.")
+        # Her kører din eksisterende load-logik...
+        full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
+        df_fys = full_dp["fysisk_data"]
+        
+        if not df_fys.empty:
+            st.dataframe(df_fys)
+        else:
+            st.error("Denne kamp har ingen fysiske tracking-data i systemet (F53A).")
