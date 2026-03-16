@@ -185,14 +185,15 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER p
             JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
             WHERE m.MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = '6ifaeunfdele' -- 1. Division 25/26
-                AND (HOME_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
-                     OR AWAY_CONTESTANT_OPTAUUID = '8gxd9ry2580pu1b1dd5ny9ymy')
+                SELECT DISTINCT MATCH_OPTAUUID 
+                FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '6ifaeunfdele'
             )
+            -- Vi filtrerer her på metadata-tabellen i stedet for matchinfo
+            AND (m.HOMEOPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
+                 OR m.AWAYOPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy')
             AND p.DISTANCE > 0
         """,
-
         # 11. PHYSICAL METADATA
         "opta_physical_metadata": f"SELECT MATCH_OPTAUUID, HOME_PLAYERS, AWAY_PLAYERS FROM {DB}.SECONDSPECTRUM_GAME_METADATA WHERE MATCH_OPTAUUID IN ({match_id_subquery})"
     }
