@@ -219,7 +219,11 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                vis_side(st.session_state.conn, st.session_state.get('name_map', {}))
+                # Vi kalder vis_side VIA modulet fd_page
+                fd_page.vis_side(
+                    _get_snowflake_conn(), 
+                    st.session_state.get('name_map', {})
+                )
                 
     elif hoved_omraade == "ADMIN":
         st.info("Systemet kører i modulariseret tilstand.")
