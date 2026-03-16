@@ -169,3 +169,4 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             )
             ORDER BY MATCH_DATE DESC
         """
+    }
