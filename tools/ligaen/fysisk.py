@@ -31,11 +31,20 @@ def vis_side(dp):
     match_uuid = matches.iloc[selected_idx]['MATCH_OPTAUUID']
     
     if st.button("Hent fysisk data"):
-        # Her kører din eksisterende load-logik...
-        full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
-        df_fys = full_dp["fysisk_data"]
-        
-        if not df_fys.empty:
-            st.dataframe(df_fys)
-        else:
-            st.error("Denne kamp har ingen fysiske tracking-data i systemet (F53A).")
+        with st.spinner("Henter data..."):
+            # Tjekker råt i Snowflake om rækkerne findes
+            status = analyse_load.check_physical_data_availability(match_uuid)
+            
+            if status["rows"] > 0:
+                full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
+                st.dataframe(full_dp["fysisk_data"])
+            else:
+                st.error(f"❌ Data findes ikke endnu.")
+                st.info(f"""
+                **Status for denne kamp:**
+                * **Metadata:** Fundet ✅
+                * **SSIID:** `{status.get('ss_id', 'Mangler')}`
+                * **Rækker i F53A-tabellen:** 0
+                
+                Dette skyldes typisk, at Second Spectrum ikke har færdigbehandlet tracking-data for denne kamp endnu.
+                """)
