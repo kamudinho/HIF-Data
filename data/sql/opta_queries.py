@@ -118,36 +118,26 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LIMIT 5
         """,
         
-        # 10. PHYSICAL MASTER QUERY - BASERET PÅ DINE TABEL-SPECS
-        "upta_physical_stats": f"""
-            WITH SS_Bridge AS (
-                -- Finder SSIID via Opta UUID for 1. division
-                SELECT 
-                    MATCH_SSIID, 
-                    MATCH_OPTAUUID
-                FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-                WHERE MATCH_OPTAUUID IN (
-                    SELECT DISTINCT MATCH_OPTAUUID 
-                    FROM {DB}.OPTA_MATCHINFO
-                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-                )
-                -- Genbruger dit HIF-filter men mapper til kolonnenavne i denne tabel
-                {hif_filter_matchinfo.replace('CONTESTANTHOME_OPTAUUID', 'HOME_OPTAUUID').replace('CONTESTANTAWAY_OPTAUUID', 'AWAY_OPTAUUID')}
-            )
+        # 10. PHYSICAL MASTER QUERY - NU MED FILTRE DER RAMMER 2025
+        "opta_physical_stats": f"""
             SELECT 
-                b.MATCH_OPTAUUID,
+                m.DESCRIPTION_FULL as MATCH_NAME,
                 p.PLAYER_NAME,
-                p.JERSEY,
                 p.DISTANCE,
                 p.TOP_SPEED,
-                p.SPRINTS,
+                p.SPRINTING,
                 p.AVERAGE_SPEED,
-                p.PERCENTDISTANCEHIGHSPEEDRUNNING AS HSR_PCT,
-                p.PERCENTDISTANCEHIGHSPEEDSPRINTING AS SPRINT_PCT,
-                p.MATCH_SSIID
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
-            INNER JOIN SS_Bridge b ON p.MATCH_SSIID = b.MATCH_SSIID
-            ORDER BY p.DISTANCE DESC
+                m.MATCH_OPTAUUID
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
+            WHERE m.MATCH_OPTAUUID IN (
+                SELECT DISTINCT MATCH_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- NordicBet Liga
+                {hif_filter_matchinfo} -- Dette sikrer at vi kun ser HIF-kampe
+            )
+            AND p.DISTANCE > 0 -- Filtrer spillere fra, der ikke har løbet (f.eks. bænken)
+            ORDER BY m.MATCH_DATE DESC, p.DISTANCE DESC
         """,
 
         # 11. PHYSICAL SUMMARY - MED PRÆCISE KOLONNER FRA DIN LISTE
