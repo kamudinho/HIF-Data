@@ -33,9 +33,9 @@ hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only e
 # Filter til linebreak-tabeller
 hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
-return {
+       return {
 # 1. TEAM STATS MASTER QUERY (OPDATERET MED FORWARD PASSES)
-"opta_team_stats": f"""
+       "opta_team_stats": f"""
            WITH MatchBase AS (
                SELECT 
                    MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS,
@@ -100,22 +100,22 @@ return {
            ORDER BY b.MATCH_DATE_FULL DESC
        """,
 
-# 2. MATCH INFO (Rettet filter her)
-"opta_matches": f"""
+       # 2. MATCH INFO (Rettet filter her)
+       "opta_matches": f"""
            SELECT * FROM {DB}.OPTA_MATCHINFO 
            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
            {hif_filter_matchinfo}
        """,
 
-# 3. DETALJERET XG
-"opta_expected_goals": f"""
+       # 3. DETALJERET XG
+       "opta_expected_goals": f"""
            SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS
            WHERE MATCH_ID IN ({match_id_subquery})
            {hif_filter_std}
        """,
 
-# 4A. SKUD EVENTS
-"opta_shotevents": f"""
+       # 4A. SKUD EVENTS
+       "opta_shotevents": f"""
            SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
            FROM {DB}.OPTA_EVENTS e 
            LEFT JOIN {DB}.OPTA_QUALIFIERS q 
@@ -126,8 +126,8 @@ return {
            {hif_filter_event}
        """,
 
-# 4B. SKUD EVENTS
-"opta_league_shotevents": f"""
+       # 4B. SKUD EVENTS
+       "opta_league_shotevents": f"""
            SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
            FROM {DB}.OPTA_EVENTS e 
            LEFT JOIN {DB}.OPTA_QUALIFIERS q 
@@ -139,8 +139,8 @@ return {
            AND e.EVENT_CONTESTANT_OPTAUUID != '{HIF_UUID}'
        """,
 
-# 5. ASSISTS OG CHANCESKABELSE
-"opta_assists": f"""
+       # 5. ASSISTS OG CHANCESKABELSE
+       "opta_assists": f"""
            WITH OrderedEvents AS (
                SELECT 
                    EVENT_OPTAUUID, PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, 
@@ -171,8 +171,8 @@ return {
            ORDER BY OE.EVENT_TIMESTAMP DESC
        """,
 
-# 6. SPILLER LINEBREAKS
-"opta_player_linebreaks": f"""
+       # 6. SPILLER LINEBREAKS
+       "opta_player_linebreaks": f"""
            SELECT 
                PLAYER_OPTAUUID, LINEUP_CONTESTANTUUID, TOURNAMENTCALENDAR_OPTAUUID,
                MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
@@ -184,15 +184,15 @@ return {
            GROUP BY 1, 2, 3
        """,
 
-# 7. HOLD LINEBREAKS
-"opta_team_linebreaks": f"""
+       # 7. HOLD LINEBREAKS
+       "opta_team_linebreaks": f"""
            SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
            {hif_filter_lb}
        """,
 
-# 8. RAW EVENTS
-"opta_events": f"""
+       # 8. RAW EVENTS
+       "opta_events": f"""
            SELECT 
                EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
                EVENT_TYPEID, EVENT_X AS LOCATIONX, EVENT_Y AS LOCATIONY,
@@ -209,8 +209,8 @@ return {
            LIMIT 6000
        """,
 
-# 9. UNIVERSAL SEQUENCE MAP (Tidsbaseret version til din opta_queries.py)
-"opta_sequence_map": f"""
+       # 9. UNIVERSAL SEQUENCE MAP (Tidsbaseret version til din opta_queries.py)
+       "opta_sequence_map": f"""
            WITH MatchIDs AS (
                SELECT DISTINCT MATCH_OPTAUUID 
                FROM {DB}.OPTA_MATCHINFO 
@@ -267,26 +267,16 @@ return {
            ORDER BY e.EVENT_TIMESTAMP ASC
        """,
 
-        # 10. PHYSICAL MASTER QUERY (Nød-version)
         # 10. TEST QUERY - Henter metadata direkte
-"opta_physical_stats": f"""
-            SELECT 
-                MATCH_SSIID AS MATCH_OPTAUUID, -- Vi lader som om SSIID er OptaID for at teste
-                PLAYER_NAME,
-                JERSEY,
-                DISTANCE,
-                TOP_SPEED,
-                SPRINTS
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
-            LIMIT 2000
-            SELECT *
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-            WHERE SEASONLABEL = 2025
-            AND COMPETITIONLABEL = '1. Division'
+       "opta_physical_stats": f"""
+           SELECT *
+           FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
+           WHERE SEASONLABEL = 2025
+           AND COMPETITIONLABEL = '1. Division'
        """,
 
-# 11. PHYSICAL SUMMARY (Til de dybe løbe-kategorier som HSR og Sprints)
-"opta_physical_summary": f"""
+       # 11. PHYSICAL SUMMARY (Til de dybe løbe-kategorier som HSR og Sprints)
+       "opta_physical_summary": f"""
            SELECT 
                MATCH_DATE,
                optaId as PLAYER_OPTAUUID,
