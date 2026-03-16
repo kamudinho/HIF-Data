@@ -3,87 +3,59 @@ import pandas as pd
 from datetime import datetime
 
 def vis_side(dp):
-    st.title("Fysisk Data - Rapport")
-
-    # 1. Hent kampe fra datapakken
+    # 1. Hent data fra din centrale pakke (Analyse_load har allerede hentet liga-data)
+    # Vi bruger 'fysisk_data' fra dp, som nu indeholder hele ligaen
+    df_liga = dp.get("fysisk_data", pd.DataFrame())
     matches = dp.get("matches", pd.DataFrame())
-    if matches.empty:
-        st.warning("Ingen kampe fundet.")
-        return
 
-    # Sørg for at vi kun ser spillede kampe
-    if 'MATCH_DATE_FULL' in matches.columns:
-        matches['MATCH_DATE_FULL'] = pd.to_datetime(matches['MATCH_DATE_FULL'])
-        nu = datetime.now()
-        matches = matches[matches['MATCH_DATE_FULL'] <= nu]
-        matches = matches.sort_values('MATCH_DATE_FULL', ascending=False)
+    tab1, tab2 = st.tabs(["🏆 Liga Overblik", "📊 Kamp Rapport"])
 
-    match_labels = matches.apply(
-        lambda row: f"{row['MATCH_DATE_FULL'].strftime('%d/%m')} - {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}", 
-        axis=1
-    )
-    
-    selected_idx = st.selectbox("Vælg kamp", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
-    selected_match = matches.iloc[selected_idx]
-    match_uuid = selected_match['MATCH_OPTAUUID']
-
-    st.markdown("---")
-
-    # 2. SNOWFLAKE FORBINDELSE
-    from data.data_load import _get_snowflake_conn
-    conn = _get_snowflake_conn()
-
-    with st.spinner("Henter data..."):
-        clean_opta_id = str(match_uuid).strip().lower()
-        if clean_opta_id.startswith('g'):
-            clean_opta_id = clean_opta_id[1:]
-
-        # A. Find MATCH_SSIID via Metadata-tabellen
-        meta_sql = f"""
-            SELECT "MATCH_SSIID" 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
-            WHERE "MATCH_OPTAUUID" ILIKE '{clean_opta_id}'
-            LIMIT 1
-        """
-        meta_res = conn.query(meta_sql)
-
-        if not meta_res.empty:
-            ss_id = meta_res.iloc[0, 0]
-            st.success(f"✅ Metadata fundet: {ss_id}")
-
-            # --- DEBUG AFSNIT: Kør dette for at se hvad der faktisk står i tabellen ---
-            st.write("### 🔍 ID-Detektiv")
-            # Vi trækker 1 række fra tabellen for at se formatet på MATCH_SSIID
-            format_check = conn.query('SELECT "MATCH_SSIID" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER LIMIT 1')
-            if not format_check.empty:
-                st.write(f"Eksempel på ID i F53A-tabellen: `{format_check.iloc[0,0]}`")
-                st.write(f"Dit ID fra Metadata: `{ss_id}`")
-            # -----------------------------------------------------------------------
-
-            # B. HENT Fysisk Data
-            # Hvis de to ovenstående ikke ligner hinanden (f.eks. store/små bogstaver),
-            # så prøv at ændre WHERE til: WHERE "MATCH_SSIID" ILIKE '{ss_id}'
-            player_sql = f"""
-                SELECT 
-                    "PLAYER_NAME", "JERSEY", "DISTANCE", "SPRINTS", 
-                    "SPEEDRUNS", "TOP_SPEED", "AVERAGE_SPEED"
-                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-                WHERE "MATCH_SSIID" = '{ss_id}'
-            """
-            df_p = conn.query(player_sql)
+    with tab1:
+        st.subheader("Fysiske Top-performers i Betinia Ligaen")
+        if not df_liga.empty:
+            col1, col2, col3 = st.columns(3)
             
-            if not df_p.empty:
-                df_p = df_p.rename(columns={
-                    "PLAYER_NAME": "Spiller", "JERSEY": "Nr.",
-                    "DISTANCE": "Distance (m)", "SPRINTS": "Sprints",
-                    "SPEEDRUNS": "Speedruns", "TOP_SPEED": "Topfart (km/t)"
-                })
-                df_p["Distance (m)"] = df_p["Distance (m)"].round(0)
-                df_p["Topfart (km/t)"] = df_p["Topfart (km/t)"].round(1)
+            # Top 3 High-end stats
+            with col1:
+                fastest = df_liga.nlargest(5, 'TOP_SPEED')[['PLAYER_NAME', 'TOP_SPEED']]
+                st.write("**Topfart (km/t)**")
+                st.dataframe(fastest, hide_index=True)
+            
+            with col2:
+                maraton = df_liga.nlargest(5, 'DISTANCE')[['PLAYER_NAME', 'DISTANCE']]
+                st.write("**Distance (m)**")
+                st.dataframe(maraton, hide_index=True)
 
-                st.subheader("Spiller Performance")
-                st.dataframe(df_p.sort_values("Distance (m)", ascending=False), use_container_width=True, hide_index=True)
-            else:
-                st.info(f"Ingen spiller-data fundet for ID: {ss_id}")
+            with col3:
+                sprinters = df_liga.nlargest(5, 'SPRINTS')[['PLAYER_NAME', 'SPRINTS']]
+                st.write("**Flest Sprints**")
+                st.dataframe(sprinters, hide_index=True)
+            
+            st.markdown("---")
+            st.write("### Komplet Ligaliste")
+            st.dataframe(df_liga.sort_values("DISTANCE", ascending=False), use_container_width=True)
         else:
-            st.error(f"❌ Ingen metadata fundet for Opta ID: {clean_opta_id}")
+            st.warning("Ingen liga-data tilgængelig. Tjek om query 'opta_physical_stats' kører korrekt.")
+
+    with tab2:
+        # Din eksisterende kode til kampvalg
+        if matches.empty:
+            st.warning("Ingen kampe fundet.")
+            return
+
+        match_labels = matches.apply(
+            lambda row: f"{row['MATCH_DATE_FULL'].strftime('%d/%m')} - {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}", 
+            axis=1
+        )
+        
+        selected_idx = st.selectbox("Vælg kamp for detaljer", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
+        selected_match = matches.iloc[selected_idx]
+        m_uuid = selected_match['MATCH_OPTAUUID'].replace('g', '') # Hurtig rens
+
+        # Filtrér liga-dataen lokalt i stedet for at gå i databasen igen!
+        df_match = df_liga[df_liga['MATCH_OPTAUUID'].str.contains(m_uuid, na=False, case=False)]
+        
+        if not df_match.empty:
+            st.dataframe(df_match.sort_values("DISTANCE", ascending=False), use_container_width=True)
+        else:
+            st.info("Ingen data for denne specifikke kamp i det indlæste sæt.")
