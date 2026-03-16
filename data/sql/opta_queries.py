@@ -173,7 +173,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         # 10. PHYSICAL MASTER QUERY (RETTET TIL 2025 SUMMARY)
         "opta_physical_stats": f"""
             SELECT 
-                p.PLAYER_NAME, p.DISTANCE, p.TOP_SPEED, p.SPRINTING, p.AVERAGE_SPEED, m.MATCH_OPTAUUID
+                p.PLAYER_NAME, p.TEAM_NAME, p.DISTANCE, p.TOP_SPEED, p.SPRINTING, p.AVERAGE_SPEED, m.MATCH_OPTAUUID
             FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
             JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
             WHERE m.MATCH_OPTAUUID IN (
