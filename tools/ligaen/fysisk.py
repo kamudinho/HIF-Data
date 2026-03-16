@@ -43,39 +43,25 @@ def vis_side(dp):
     match_uuid = selected_match['MATCH_OPTAUUID']
     
     if st.button("Hent Fysisk Performance"):
-        with st.spinner("Henter data..."):
-            # Vi bruger din analyse_load funktion til at hente den fulde pakke for kampen
-            full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
-            df_fys = full_dp.get("fysisk_data", pd.DataFrame())
+       if st.button("Hent Hold-sammenligning"):
+        with st.spinner("Henter hold-data..."):
+            # Find SSIID via metadata
+            status = analyse_load.check_physical_data_availability(match_uuid)
+            ss_id = status.get('ss_id')
             
-            if not df_fys.empty:
-                # 1. Navne Mapping
-                # Vi kigger efter spillerens UUID i F53A og kobler på name_map
-                id_col = next((c for c in df_fys.columns if 'PLAYER_OPTAUUID' in c.upper()), None)
-                if id_col:
-                    df_fys['SPILLER'] = df_fys[id_col].astype(str).str.lower().map(name_map).fillna(df_fys[id_col])
+            if ss_id:
+                team_sql = f"""
+                    SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM 
+                    WHERE "MATCH_SSIID" = '{ss_id}'
+                """
+                df_team = conn.query(team_sql)
                 
-                # 2. Top-performere sektion (Metrics)
-                st.subheader(f"🚀 Top Performere: {selected_match['CONTESTANTHOME_NAME']} vs {selected_match['CONTESTANTAWAY_NAME']}")
-                m1, m2, m3 = st.columns(3)
-                
-                # Find relevante kolonner (Distance, Speed, Sprints)
-                dist_c = next((c for c in df_fys.columns if 'TOTAL_DISTANCE' in c.upper()), None)
-                speed_c = next((c for c in df_fys.columns if 'MAX_SPEED' in c.upper()), None)
-                sprint_c = next((c for c in df_fys.columns if 'SPRINT' in c.upper() and 'COUNT' in c.upper()), None)
-
-                if dist_c:
-                    top = df_fys.nlargest(1, dist_c)
-                    m1.metric("Mest Distance", f"{top['SPILLER'].values[0]}", f"{round(top[dist_c].values[0]/1000, 2)} km")
-                
-                if speed_c:
-                    top = df_fys.nlargest(1, speed_c)
-                    m2.metric("Topfart", f"{top['SPILLER'].values[0]}", f"{round(top[speed_c].values[0], 1)} km/t")
-                
-                if sprint_c:
-                    top = df_fys.nlargest(1, sprint_c)
-                    m3.metric("Flest Sprints", f"{top['SPILLER'].values[0]}", f"{int(top[sprint_c].values[0])} stk")
-
+                if not df_team.empty:
+                    st.subheader("Hold-performance")
+                    # Her kan vi f.eks. vise Total Distance for begge hold side om side
+                    st.dataframe(df_team)
+                else:
+                    st.warning("Ingen hold-rækker fundet i F53A_GAME_TEAM.")
                 # 3. Den fulde tabel (Renset for ID-støj)
                 st.subheader("Fuld Spilleroversigt")
                 vis_cols = ['SPILLER'] + [c for c in df_fys.columns if any(x in c.upper() for x in ['DISTANCE', 'SPEED', 'SPRINT']) and 'UUID' not in c.upper() and 'SSIID' not in c.upper()]
