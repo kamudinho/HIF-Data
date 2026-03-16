@@ -18,7 +18,7 @@ def vis_side(conn, name_map=None):
         SELECT DATE, HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
-        """
+        """,
         
         # Henter relationen mellem kamp, hold og spillere (Din nye query)
         # Vi bruger denne til at filtrere modstandere fra i HIF-tabben
