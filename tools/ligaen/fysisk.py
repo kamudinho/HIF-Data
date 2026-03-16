@@ -22,31 +22,28 @@ def vis_side(dp):
     st.info(f"Valgt Opta UUID: `{match_uuid}`")
     
     # Gen-hent pakken med det specifikke match_uuid for at få fysisk data
-    if st.button("Hent fysisk data for kamp"):
-        with st.spinner("Henter data fra Second Spectrum..."):
-            # Her kalder vi din analyse_load funktion
-            full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
-            df_fys = full_dp["fysisk_data"]
+    if st.button("Kør Rå SQL check (Metadata mapping)"):
+        from data.data_load import _get_snowflake_conn
+        conn = _get_snowflake_conn()
+        
+        # TEST 1: Findes kampen overhovedet?
+        st.write(f"Søger efter: `{match_uuid}`")
+        check_sql = f'SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA WHERE "MATCH_OPTAUUID" = \'{match_uuid}\''
+        check_res = conn.query(check_sql)
+        
+        if check_res is not None and not check_res.empty:
+            st.success("✅ FUNDET! Metadata findes.")
+            st.write(check_res)
+        else:
+            st.error("❌ IKKE FUNDET i metadata.")
             
-            # DEBUG AF RESULTATET
-            if not df_fys.empty:
-                st.success(f"Succes! Hentede {len(df_fys)} rækker.")
-                
-                # Metadata check - findes koblingen?
-                st.write("### Smagsprøve på data")
-                st.dataframe(df_fys.head(10))
-                
-                # Mulighed for at se alle kolonner (Physical tabellen har mange!)
-                if st.checkbox("Vis alle kolonnenavne"):
-                    st.write(df_fys.columns.tolist())
-            else:
-                st.error("❌ Ingen data returneret.")
-                st.write("""
-                **Mulige årsager:**
-                1. `MATCH_OPTAUUID` findes ikke i `SECONDSPECTRUM_GAME_METADATA`.
-                2. `MATCH_SSIID` i metadata peger på et ID, der ikke findes i `SECONDSPECTRUM_F53A_GAME_PLAYER`.
-                3. Snowflake kolonnenavne kræver "gåseøjne" (Double Quotes).
-                """)
+            # TEST 2: Hvad findes der så? (De 5 nyeste rækker i metadata)
+            st.write("### De 5 første rækker i metadata-tabellen:")
+            raw_data = conn.query('SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA LIMIT 5')
+            st.dataframe(raw_data)
+            
+            if not raw_data.empty:
+                st.write("Sammenlign dit valgte UUID med dem i tabellen ovenfor. Er der forskel i formatet?")
                 
                 # Kør et direkte check hvis det fejler
                 if st.button("Kør rå SQL check (Metadata mapping)"):
