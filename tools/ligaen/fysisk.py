@@ -10,8 +10,6 @@ def vis_side(conn, teams_map=None, name_map=None):
     if teams_map is None:
         teams_map = {}
 
-    st.subheader("Fysisk Performance (Second Spectrum)")
-
     # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
     @st.cache_data(ttl=600)
     def get_matches():
