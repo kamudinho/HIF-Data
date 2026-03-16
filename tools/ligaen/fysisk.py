@@ -2,46 +2,60 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(dp):
-    st.title("⚽ Fysisk Data - 1. Division")
+    st.title("⚽ Fysisk Data - Hvidovre IF")
     
-    # Vi henter begge potentielle datakilder fra din pakke
-    df_fys = dp.get("fysisk_data", pd.DataFrame())  # Query 10 (F53A)
-    # Vi henter også Summary data fra pakken (Sørg for at den er i analyse_load.py)
-    df_sum = dp.get("opta", {}).get("team_linebreaks", pd.DataFrame()) # Midlertidig placeholder hvis ikke navngivet
-    
-    # 1. Tjek den primære tabel (F53A_GAME_PLAYER)
-    st.subheader("Primær Tracking (F53A)")
-    if not df_fys.empty:
-        st.success(f"✅ Succes! Fundet {len(df_fys)} rækker i GAME_PLAYER.")
-        
-        # Mulighed for at vælge kamp hvis data findes
-        kampe = df_fys['MATCH_SSIID'].unique()
-        valgt_ssiid = st.selectbox("Vælg kamp (SSIID):", kampe)
-        
-        filtered_df = df_fys[df_fys['MATCH_SSIID'] == valgt_ssiid]
-        st.dataframe(filtered_df)
+    # Hent data fra pakken
+    # Vi bruger 'fysisk_data' som vi definerede i Query 10
+    df = dp.get("fysisk_data", pd.DataFrame())
+    name_map = dp.get("name_map", {})
+
+    if df.empty:
+        st.warning("⚠️ Ingen fysisk data fundet for de valgte filtre.")
+        st.info("Søgningen er begrænset til NordicBet Liga 2025/26 via din SQL query.")
     else:
-        st.error("🚨 Ingen data i F53A_GAME_PLAYER for de valgte filtre.")
-        st.info("Dette betyder ofte, at de dybe tracking-data ikke er leveret for 1. division endnu.")
+        # 1. Konverter navne hvis muligt (valgfrit)
+        if name_map:
+            # Hvis vi har OptaUUID'er i dataen, kan vi mappe til de pæne navne
+            # Men Query 10 returnerer pt. PLAYER_NAME direkte fra Second Spectrum
+            pass
 
-    st.divider()
-
-    # 2. Diagnose: Findes forbindelsen overhovedet?
-    with st.expander("🔍 Teknisk Diagnose - Hvor knækker forbindelsen?"):
-        st.write("Dine indlæste tabeller:")
+        # 2. Key Metrics (Top Scorer af distance/speed)
+        col1, col2, col3 = st.columns(3)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            match_count = len(dp.get("matches", []))
-            st.metric("Kampe i OPTA_MATCHINFO", match_count)
-            
-        with col2:
-            # Vi tjekker her om 'fysisk_data' er None eller bare tom
-            if "fysisk_data" in dp:
-                st.write("Variablen 'fysisk_data' findes i datapakken.")
-            else:
-                st.write("⚠️ 'fysisk_data' blev aldrig tilføjet til datapakken i analyse_load.py")
+        top_dist = df.iloc[df['DISTANCE'].idxmax()]
+        top_speed = df.iloc[df['TOP_SPEED'].idxmax()]
+        
+        col1.metric("Mest løbende", f"{top_dist['PLAYER_NAME']}", f"{top_dist['DISTANCE']:.1f} m")
+        col2.metric("Højeste Topfart", f"{top_speed['PLAYER_NAME']}", f"{top_speed['TOP_SPEED']:.1f} km/h")
+        col3.metric("Antal spillere", len(df))
 
-        # Tjekker kolonne-navne hvis der er data
-        if not df_fys.empty:
-            st.write("Kolonner fundet:", list(df_fys.columns))
+        st.divider()
+
+        # 3. Interaktiv Tabel
+        st.subheader("Spillerstatistik")
+        
+        # Omdøb kolonner til noget mere læsbart for brugeren
+        display_df = df.copy()
+        display_df.columns = [c.replace('_', ' ').title() for c in display_df.columns]
+        
+        st.dataframe(
+            display_df, 
+            column_config={
+                "Distance": st.column_config.NumberColumn("Total Distance (m)", format="%.0f"),
+                "Top Speed": st.column_config.NumberColumn("Topfart (km/h)", format="%.1f"),
+                "Sprinting": st.column_config.NumberColumn("Sprint (m)", format="%.0f")
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+
+        # 4. En lille visualisering
+        st.subheader("Distance pr. Spiller")
+        st.bar_chart(df.set_index('PLAYER_NAME')['DISTANCE'])
+
+    # Diagnose-sektion gemt i en expander
+    with st.expander("🔍 Teknisk Diagnose"):
+        st.write("Dataform:", df.shape)
+        if not df.empty:
+            st.write("Kolonner i dataframe:", list(df.columns))
+        st.write("Config fra datapakke:", dp.get("config", {}))
