@@ -1,13 +1,14 @@
 import pandas as pd 
 
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
-    # --- DISSE ER NU KORREKT INDRYKKET ---
+    # --- KONFIGURATION ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
         "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
-        "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
+        "Superliga": "29actv1ohj8r10kd9hu0jnb0n",
+        "1. Division": "6ifaeunfdele" # Tilføjet jf. dine metadata
     }
 
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
@@ -170,6 +171,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SELECT e.*, m.CONTESTANTHOME_NAME AS HOME_TEAM, m.CONTESTANTAWAY_NAME AS AWAY_TEAM FROM SequenceWindow e LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
+        # 10. PHYSICAL MASTER QUERY - NU MED DE RIGTIGE NAVNE FRA DIT SKEMA
         "opta_physical_stats": f"""
             SELECT 
                 p.PLAYER_SSIID,
@@ -181,19 +183,16 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 p.SPRINTS,
                 m.MATCH_OPTAUUID,
                 m.HOME_SSIID,
-                m.AWAY_SSIID
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER p
-            JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
-            WHERE m.MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID 
-                FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = '6ifaeunfdele'
-            )
-            -- Vi filtrerer her på metadata-tabellen i stedet for matchinfo
-            AND (m.HOMEOPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy' 
-                 OR m.AWAYOPTA_UUID = '8gxd9ry2580pu1b1dd5ny9ymy')
+                m.AWAY_SSIID,
+                m.HOMEOPTA_UUID,
+                m.AWAYOPTA_UUID
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
+            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
+            WHERE m.MATCH_OPTAUUID IN ({match_id_subquery})
+            AND (m.HOMEOPTA_UUID = '{HIF_UUID}' OR m.AWAYOPTA_UUID = '{HIF_UUID}')
             AND p.DISTANCE > 0
         """,
+
         # 11. PHYSICAL METADATA
         "opta_physical_metadata": f"SELECT MATCH_OPTAUUID, HOME_PLAYERS, AWAY_PLAYERS FROM {DB}.SECONDSPECTRUM_GAME_METADATA WHERE MATCH_OPTAUUID IN ({match_id_subquery})"
     }
