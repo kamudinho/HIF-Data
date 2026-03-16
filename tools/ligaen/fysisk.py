@@ -11,7 +11,6 @@ def vis_side(conn, name_map=None):
     """
     if name_map is None: name_map = {}
 
-    st.title("🏃 Fysisk Rapport (Second Spectrum)")
     st.markdown("---")
 
     # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
@@ -74,9 +73,9 @@ def vis_side(conn, name_map=None):
     df_phys['Spiller'] = df_phys['PLAYER_NAME']
 
     # --- TRIN 3: VISNING ---
-    st.subheader(f"Statistik: {valgt_label}")
+    st.caption(f"Statistik: {valgt_label}")
     
-    t1, t2, t3 = st.tabs(["📊 Overblik", "⚡ Sprint & HI", "⚽ Spilfaser"])
+    t1, t2, t3 = st.tabs(["Overblik", "Sprint & HI", "Besiddelse"])
 
     with t1:
         st.dataframe(
