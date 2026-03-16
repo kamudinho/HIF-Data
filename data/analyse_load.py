@@ -41,6 +41,7 @@ def get_analysis_package(hif_only=False, match_uuid=None):
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
+    df_fys_sum = safe_query("opta_physical_summary")
     
     # 3. Fysisk Data (Nu uden separat meta-query!)
     # Vi henter den store tabel for hele ligaen/HIF via JOIN-query nr. 10
@@ -74,6 +75,7 @@ def get_analysis_package(hif_only=False, match_uuid=None):
         "matches": df_matches,
         "playerstats": df_shots,
         "fysisk_data": df_fys,
+        "fysisk_summary": df_fys_sum,
         "xg_agg": df_xg_agg,
         "assists": df_assists,
         "name_map": name_map,
