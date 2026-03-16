@@ -3,41 +3,29 @@ import pandas as pd
 import streamlit as st
 
 def check_physical_data_availability(match_uuid):
-    """Tjekker datadybden for en specifik kamp på tværs af tabeller"""
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     
-    # 1. Rens UUID
+    # Rens UUID (hvis der er et 'g' foran)
     clean_uuid = str(match_uuid).strip()
     if clean_uuid.startswith('g'):
         clean_uuid = clean_uuid[1:]
         
-    stats = {"opta_uuid": clean_uuid}
+    res = {"meta": False, "rows": 0, "ss_id": None}
     
-    try:
-        # Tjek Metadata
-        meta = conn.query(f"""
-            SELECT "MATCH_SSIID" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
-            WHERE "MATCH_OPTAUUID" = '{clean_uuid}'
-        """)
-        stats["metadata_found"] = not meta.empty
+    # Tjek metadata
+    meta_df = conn.query(f"SELECT \"MATCH_SSIID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA WHERE \"MATCH_OPTAUUID\" = '{clean_uuid}'")
+    
+    if not meta_df.empty:
+        ss_id = meta_df.iloc[0, 0]
+        res["meta"] = True
+        res["ss_id"] = ss_id
         
-        if not meta.empty:
-            ss_id = meta.iloc[0, 0]
-            stats["ss_id"] = ss_id
-            
-            # Tjek antal rækker i den fysiske tabel (F53A)
-            count_res = conn.query(f"""
-                SELECT COUNT(*) as RÆKKER FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
-                WHERE "MATCH_SSIID" = '{ss_id}'
-            """)
-            stats["physical_rows"] = count_res.iloc[0, 0]
-        else:
-            stats["physical_rows"] = 0
-            
-        return stats
-    except Exception as e:
-        return {"error": str(e)}
+        # Tjek fysiske rækker i F53A tabellen
+        count_df = conn.query(f"SELECT COUNT(*) as CNT FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER WHERE \"MATCH_SSIID\" = '{ss_id}'")
+        res["rows"] = count_df.iloc[0, 0]
+        
+    return res
 
 def debug_physical_data_dump():
     """Henter et råt udtræk af de første rækker for at verificere indholdet"""
