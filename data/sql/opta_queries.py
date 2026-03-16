@@ -266,22 +266,18 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
-        # 10. PHYSICAL MASTER QUERY (Second Spectrum - Filtreret på valgt kamp)
-        # I opta_queries.py - Sektion 10
+
+        # 10. PHYSICAL MASTER QUERY (Second Spectrum)
         "opta_physical_stats": f"""
-            SELECT 
-                * FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            -- Hvis MATCH_OPTAUUID fejler, så tjek om kolonnen hedder MATCH_ID eller MATCH_SSIID
-            WHERE MATCH_SSIID = '{{match_uuid}}' 
+            SELECT * FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE "MATCH_SSIID" = '{{ss_id}}' 
         """,
 
-        # 11. NY: PHYSICAL METADATA (Til at mappe spillere korrekt)
+        # 11. PHYSICAL METADATA (Mappen mellem Opta og SS)
         "opta_physical_metadata": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                HOME_PLAYERS,
-                AWAY_PLAYERS
-            FROM {DB}.SECONDSPECTRUM_METADATA -- Brug det korrekte tabelnavn her
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            SELECT "MATCH_SSIID", "MATCH_OPTAUUID"
+            FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+            WHERE "MATCH_OPTAUUID" = '{{match_uuid}}'
+            LIMIT 1
         """
         }
