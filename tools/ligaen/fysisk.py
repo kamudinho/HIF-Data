@@ -3,8 +3,6 @@ import data.analyse_load as analyse_load
 import pandas as pd
 
 def vis_side(dp):
-    st.title("Fysisk Data")
-
     matches = dp.get("matches", pd.DataFrame())
     name_map = dp.get("name_map", {}) 
     
