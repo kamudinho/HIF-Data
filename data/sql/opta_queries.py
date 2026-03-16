@@ -106,22 +106,37 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
         """,
 
-        # 10. DIAGNOSE QUERY
+        # 10. PHYSICAL MASTER QUERY - BYGGET PÅ DINE KOLONNE-DATA
         "opta_physical_stats": f"""
-            SELECT 
-                MATCH_SSIID,
-                PLAYER_NAME,
-                DISTANCE,
-                TOP_SPEED,
-                SPRINTS
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-            WHERE MATCH_SSIID IN (
-                SELECT MATCH_SSIID 
-                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-                WHERE SEASONLABEL = 2025
-                AND COMPETITIONLABEL = '1. Division'
+            WITH TargetMatches AS (
+                -- Her laver vi broen mellem Opta og Second Spectrum
+                -- Vi filtrerer specifikt på 1. division (NordicBet Liga) via Opta-logik
+                SELECT 
+                    MATCH_SSIID,
+                    MATCH_OPTAUUID,
+                    HOME_OPTAUUID,
+                    AWAY_OPTAUUID
+                FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+                WHERE MATCH_OPTAUUID IN (
+                    SELECT DISTINCT MATCH_OPTAUUID 
+                    FROM {DB}.OPTA_MATCHINFO
+                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- NordicBet Liga ID
+                )
+                {hif_filter_matchinfo.replace('CONTESTANTHOME_OPTAUUID', 'HOME_OPTAUUID').replace('CONTESTANTAWAY_OPTAUUID', 'AWAY_OPTAUUID')}
             )
-            LIMIT 500
+            SELECT 
+                m.MATCH_OPTAUUID,
+                p.PLAYER_NAME,
+                p.JERSEY,
+                p.DISTANCE,
+                p.TOP_SPEED,
+                p.SPRINTS,
+                p.AVERAGE_SPEED,
+                p.PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT,
+                p.MATCH_SSIID
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
+            INNER JOIN TargetMatches m ON p.MATCH_SSIID = m.MATCH_SSIID
+            ORDER BY p.DISTANCE DESC
         """,
         # 11. PHYSICAL SUMMARY
         "opta_physical_summary": f"""
