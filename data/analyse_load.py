@@ -49,16 +49,6 @@ def debug_physical_data_dump():
         st.error(f"Debug udtræk fejlede: {e}")
         return None
 
-# I din Streamlit main fil eller hvor du tester:
-if st.button("Kør Rå Data Debug"):
-    data = debug_physical_data_dump()
-    if data:
-        st.write("### Rå Metadata (Første 3 rækker)")
-        st.dataframe(data['metadata_sample'])
-        
-        st.write("### Rå Fysisk Data (Første 3 rækker)")
-        st.dataframe(data['physical_sample'])
-
 def get_analysis_package(hif_only=False, match_uuid=None):
     from data.data_load import _get_snowflake_conn, load_local_players
     from data.sql.opta_queries import get_opta_queries
