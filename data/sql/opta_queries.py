@@ -1,14 +1,14 @@
 import pandas as pd 
 
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
-    # --- KONFIGURATION ---
+
     DB = "KLUB_HVIDOVREIF.AXIS"
+    # HIF's unikke Opta ID
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
         "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
-        "Superliga": "29actv1ohj8r10kd9hu0jnb0n",
-        "1. Division": "6ifaeunfdele"
+        "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
     }
 
     current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
@@ -19,14 +19,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
     """
 
-    # --- FILTRE ---
+    # --- RETTEDE FILTRE ---
     hif_filter_matchinfo = f"AND (CONTESTANTHOME_OPTAUUID = '{HIF_UUID}' OR CONTESTANTAWAY_OPTAUUID = '{HIF_UUID}')" if hif_only else ""
     hif_filter_std = f"AND CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_event = f"AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'" if hif_only else ""
     hif_filter_lb = f"AND LINEUP_CONTESTANTUUID = '{HIF_UUID}'" if hif_only else ""
 
     return {
-        # 1. TEAM STATS MASTER QUERY
+        # 1. TEAM STATS MASTER QUERY (OPDATERET MED FORWARD PASSES)
         "opta_team_stats": f"""
             WITH MatchBase AS (
                 SELECT 
@@ -92,28 +92,44 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
 
         # 2. MATCH INFO
-        "opta_matches": f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_matchinfo}",
+        "opta_matches": f"""
+            SELECT * FROM {DB}.OPTA_MATCHINFO 
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            {hif_filter_matchinfo}
+        """,
 
         # 3. DETALJERET XG
-        "opta_expected_goals": f"SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS WHERE MATCH_ID IN ({match_id_subquery}) {hif_filter_std}",
+        "opta_expected_goals": f"""
+            SELECT * FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE MATCH_ID IN ({match_id_subquery})
+            {hif_filter_std}
+        """,
 
         # 4A. SKUD EVENTS
         "opta_shotevents": f"""
             SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
             FROM {DB}.OPTA_EVENTS e 
-            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
-            WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q 
+                ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID 
+                AND q.QUALIFIER_QID = 321
+            WHERE e.EVENT_TYPEID IN (13,14,15,16) 
+            AND e.MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_event}
         """,
 
-        # 4B. LEAGUE SHOTS
+        # 4B. SKUD EVENTS
         "opta_league_shotevents": f"""
             SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
             FROM {DB}.OPTA_EVENTS e 
-            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
-            WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) AND e.EVENT_CONTESTANT_OPTAUUID != '{HIF_UUID}'
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q 
+                ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID 
+                AND q.QUALIFIER_QID = 321
+            WHERE e.EVENT_TYPEID IN (13,14,15,16) 
+            AND e.MATCH_OPTAUUID IN ({match_id_subquery})
+            AND e.EVENT_CONTESTANT_OPTAUUID != '{HIF_UUID}'
         """,
 
-        # 5. ASSISTS
+        # 5. ASSISTS OG CHANCESKABELSE
         "opta_assists": f"""
             WITH OrderedEvents AS (
                 SELECT 
@@ -140,7 +156,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             LEFT JOIN {DB}.OPTA_QUALIFIERS Q ON OE.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
             WHERE OE.EVENT_OUTCOME = 1 AND OE.EVENT_TYPEID = 1
             GROUP BY 1,2,3,4,5,6,7,8,9,10
-            HAVING (MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) = 1) OR (OE.NEXT_EVENT_TYPE IN (13, 14, 15, 16))
+            HAVING (MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) = 1) 
+               OR (OE.NEXT_EVENT_TYPE IN (13, 14, 15, 16))
             ORDER BY OE.EVENT_TIMESTAMP DESC
         """,
 
@@ -158,41 +175,99 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
 
         # 7. HOLD LINEBREAKS
-        "opta_team_linebreaks": f"SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_lb}",
+        "opta_team_linebreaks": f"""
+            SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES 
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            {hif_filter_lb}
+        """,
 
         # 8. RAW EVENTS
-        "opta_events": f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) AND EVENT_TYPEID IN (1, 4, 5, 8, 49) LIMIT 6000",
+        "opta_events": f"""
+            SELECT 
+                EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                EVENT_TYPEID, EVENT_X AS LOCATIONX, EVENT_Y AS LOCATIONY,
+                CASE 
+                    WHEN EVENT_TYPEID = 1 THEN 'pass'
+                    WHEN EVENT_TYPEID IN (4, 5) THEN 'duel'
+                    WHEN EVENT_TYPEID IN (8, 49) THEN 'interception'
+                    ELSE 'other'
+                END AS PRIMARYTYPE
+            FROM {DB}.OPTA_EVENTS
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
+            ORDER BY EVENT_TIMESTAMP DESC
+            LIMIT 6000
+        """,
 
         # 9. SEQUENCE MAP
         "opta_sequence_map": f"""
-            WITH MatchIDs AS (SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'),
-            GoalEvents AS (SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_EVENTID, e.SEQUENCEID FROM {DB}.OPTA_EVENTS e WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs) AND e.EVENT_TYPEID = 16 {hif_filter_event}),
-            SequenceWindow AS (SELECT e.*, ge.EVENT_EVENTID as GOAL_REF_ID FROM {DB}.OPTA_EVENTS e JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds') AND e.EVENT_TIMESTAMP <= ge.EVENT_TIMESTAMP)
-            SELECT e.*, m.CONTESTANTHOME_NAME AS HOME_TEAM, m.CONTESTANTAWAY_NAME AS AWAY_TEAM FROM SequenceWindow e LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ASC
+            WITH MatchIDs AS (
+                SELECT DISTINCT MATCH_OPTAUUID 
+                FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+            ),
+            GoalEvents AS (
+                SELECT 
+                    e.MATCH_OPTAUUID, 
+                    e.EVENT_TIMESTAMP, 
+                    e.EVENT_EVENTID,
+                    e.SEQUENCEID
+                FROM {DB}.OPTA_EVENTS e
+                WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
+                AND e.EVENT_TYPEID = 16 
+                {hif_filter_event}
+            ),
+            SequenceWindow AS (
+                SELECT 
+                    e.*,
+                    ge.EVENT_EVENTID as GOAL_REF_ID
+                FROM {DB}.OPTA_EVENTS e
+                JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
+                WHERE e.EVENT_TIMESTAMP >= (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds')
+                  AND e.EVENT_TIMESTAMP <= ge.EVENT_TIMESTAMP
+            ),
+            EventQualifiers AS (
+                SELECT 
+                    EVENT_OPTAUUID,
+                    LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
+                FROM {DB}.OPTA_QUALIFIERS
+                GROUP BY EVENT_OPTAUUID
+            )
+            SELECT 
+                e.MATCH_OPTAUUID,
+                e.GOAL_REF_ID AS SEQUENCEID,
+                e.EVENT_TIMESTAMP,
+                e.EVENT_TIMEMIN,
+                e.PLAYER_NAME,
+                e.EVENT_TYPEID,
+                e.EVENT_CONTESTANT_OPTAUUID,
+                e.EVENT_X AS RAW_X,
+                e.EVENT_Y AS RAW_Y,
+                q.QUALIFIER_LIST,
+                m.CONTESTANTHOME_NAME AS HOME_TEAM,
+                m.CONTESTANTAWAY_NAME AS AWAY_TEAM,
+                m.TOTAL_HOME_SCORE AS HOME_SCORE,
+                m.TOTAL_AWAY_SCORE AS AWAY_SCORE
+            FROM SequenceWindow e
+            LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
         # 10. PHYSICAL MASTER QUERY
         "opta_physical_stats": f"""
             SELECT 
-                p.PLAYER_SSIID,
-                p.PLAYER_NAME as RAW_NAME,
-                p.TEAM_SSIID,
-                p.DISTANCE,
-                p.TOP_SPEED,
-                p.AVERAGE_SPEED,
-                p.SPRINTS,
-                m.MATCH_OPTAUUID,
-                m.HOME_SSIID,
-                m.AWAY_SSIID,
-                m.HOMEOPTA_UUID,
-                m.AWAYOPTA_UUID
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p
-            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
-            WHERE m.MATCH_OPTAUUID IN ({match_id_subquery})
-            AND (m.HOMEOPTA_UUID = '{HIF_UUID}' OR m.AWAYOPTA_UUID = '{HIF_UUID}')
-            AND p.DISTANCE > 0
+                * FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE MATCH_SSIID = '{{match_uuid}}' 
         """,
 
         # 11. PHYSICAL METADATA
-        "opta_physical_metadata": f"SELECT MATCH_OPTAUUID, HOME_PLAYERS, AWAY_PLAYERS FROM {DB}.SECONDSPECTRUM_GAME_METADATA WHERE MATCH_OPTAUUID IN ({match_id_subquery})"
+        "opta_physical_metadata": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                HOME_PLAYERS,
+                AWAY_PLAYERS
+            FROM {DB}.SECONDSPECTRUM_METADATA 
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+        """
     }
