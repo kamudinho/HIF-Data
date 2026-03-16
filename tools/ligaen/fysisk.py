@@ -54,19 +54,17 @@ def vis_side(conn, name_map=None):
         hif_match_ids = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)]['MATCH_SSIID'].unique()
         
         # 2. Hent data for de kampe
-        df_hif_raw = df_all_phys[df_all_phys['MATCH_SSIID'].isin(hif_match_ids)]
+        df_hif_raw = df_all_phys[df_all_phys['MATCH_SSIID'].isin(hif_match_ids)].copy()
 
-        # 3. FILTRERING: Her skal vi kun have HIF spillere. 
-        # Da vi ikke har en TEAM_SSIID i tabellen, filtrerer vi her på de spillere, 
-        # der optræder i din PLAYER_MAP eller en liste over HIF-navne.
-        # Hvis du ikke har en liste, kan vi filtrere på TEAM_SSIID hvis den findes i df_all_phys
-        
-        if 'TEAM_SSIID' in df_hif_raw.columns:
-            df_hif_only = df_hif_raw[df_hif_raw['TEAM_SSIID'] == HIF_SSIID]
+        # 3. FILTRERING: Vi bruger name_map til kun at beholde Hvidovre-spillere
+        # Hvis name_map er tom, prøver vi at matche på PLAYER_SSIID eller PLAYER_NAME
+        if name_map:
+            # Vi beholder kun rækker hvor spillerens navn (eller ID) findes i din HIF-mapping
+            df_hif_only = df_hif_raw[df_hif_raw['Spiller'].isin(name_map.values()) | df_hif_raw['PLAYER_NAME'].isin(name_map.keys())]
         else:
-            # Alternativ: Hvis vi ikke har TEAM_SSIID, viser vi alle, 
-            # men du kan tilføje en liste over efternavne her:
-            df_hif_only = df_hif_raw # Midlertidig indtil TEAM_SSIID bekræftes
+            # Fallback: Hvis ingen mapping findes, er vi nødt til at se på alle 
+            # (Her bør vi i stedet hente en spillerliste fra din database)
+            df_hif_only = df_hif_raw
 
         df_hif_season = df_hif_only.groupby('Spiller').agg({
             'MINUTES': 'sum',
