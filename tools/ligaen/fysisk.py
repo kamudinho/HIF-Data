@@ -4,42 +4,22 @@ import data.analyse_load as analyse_load
 import pandas as pd
 
 def vis_side(dp):
-    st.title("Fysisk Rapport (Second Spectrum)")
+    st.title("Fysisk Data")
     
-    # 1. Hent kampe fra den eksisterende pakke
-    df_m = dp.get('matches')
-    if df_m is None or df_m.empty:
-        st.error("Ingen kampe fundet i datapakken.")
-        return
-
-    # 2. Forbered kampvælger (Sikrer at MATCH_NAME findes)
-    if 'MATCH_NAME' not in df_m.columns:
-        df_m['MATCH_NAME'] = df_m['CONTESTANTHOME_NAME'] + " - " + df_m['CONTESTANTAWAY_NAME']
-
-    df_m = df_m.sort_values('MATCH_DATE_FULL', ascending=False)
-    match_options = df_m['MATCH_NAME'].unique().tolist()
+    # Lav en selector baseret på de kampe der findes i dp["matches"]
+    matches = dp["matches"]
+    match_list = matches['CONTESTANTHOME_NAME'] + " vs " + matches['CONTESTANTAWAY_NAME']
+    selected_idx = st.selectbox("Vælg kamp", range(len(match_list)), format_func=lambda x: match_list.iloc[x])
     
-    valgt_kamp = st.selectbox("Vælg kamp for analyse:", match_options)
+    match_uuid = matches.iloc[selected_idx]['MATCH_OPTAUUID']
     
-    # Hent Opta UUID for den valgte kamp
-    opta_uuid = df_m.loc[df_m['MATCH_NAME'] == valgt_kamp, 'MATCH_OPTAUUID'].iloc[0]
-
-    # 3. Kør knappen
-    if st.button(f"Hent fysiske stats for {valgt_kamp}"):
-        with st.spinner("Henter data fra Snowflake..."):
-            df_fys = analyse_load.get_single_match_physical(opta_uuid)
+    # Gen-hent pakken med det specifikke match_uuid for at få fysisk data
+    if st.button("Hent fysisk data for kamp"):
+        with st.spinner("Henter data fra Second Spectrum..."):
+            full_dp = analyse_load.get_analysis_package(hif_only=False, match_uuid=match_uuid)
+            df_fys = full_dp["fysisk_data"]
             
             if not df_fys.empty:
-                st.success(f"Data hentet for {valgt_kamp}")
-                
-                # Hurtig oversigt
-                col1, col2 = st.columns(2)
-                if 'TOTAL_DISTANCE' in df_fys.columns:
-                    col1.metric("Top Distance", f"{df_fys['TOTAL_DISTANCE'].max():.0f} m")
-                if 'MAX_SPEED' in df_fys.columns:
-                    col2.metric("Top Speed", f"{df_fys['MAX_SPEED'].max():.1f} km/h")
-
-                st.divider()
-                st.dataframe(df_fys, use_container_width=True)
+                st.dataframe(df_fys)
             else:
-                st.warning(f"Ingen fysisk data fundet for '{valgt_kamp}'. Tjek om kampen er mappet i METADATA tabellen.")
+                st.warning("Ingen fysisk data fundet for denne kamp.")
