@@ -1,40 +1,36 @@
-import streamlit as st
-import pandas as pd
-
 def vis_side(dp):
     st.title("⚽ Fysisk Data - Hvidovre IF")
     
     df_fys = dp.get("fysisk_data", pd.DataFrame())
-    df_matches = dp.get("matches", pd.DataFrame()) # Henter kamp-listen
-
+    
+    # 1. Sikrere filtrering
     if df_fys.empty:
-        st.warning("Ingen data fundet.")
+        st.warning("Ingen fysisk data fundet i databasen overhovedet.")
         return
 
-    # --- NY KAMP-VÆLGER ---
-    # Vi laver en liste over kampe, der findes i den fysiske data
-    available_uuids = df_fys['MATCH_OPTAUUID'].unique()
-    relevant_matches = df_matches[df_matches['MATCH_OPTAUUID'].isin(available_uuids)]
+    # Kamp-vælger (Sørg for at vi kun vælger blandt kampe der har data)
+    uuids = df_fys['MATCH_OPTAUUID'].unique()
+    # ... din kamp-vælger logik her ...
     
-    if not relevant_matches.empty:
-        # Lav en pæn label til dropdown: "Dato | Modstander"
-        relevant_matches['label'] = relevant_matches['MATCH_DATE_FULL'].astype(str) + " vs " + relevant_matches['CONTESTANTAWAY_NAME']
-        
-        selected_label = st.selectbox("Vælg kamp:", relevant_matches['label'].tolist())
-        selected_uuid = relevant_matches[relevant_matches['label'] == selected_label]['MATCH_OPTAUUID'].values[0]
-        
-        # Filtrer table og metrics til kun den valgte kamp
-        df = df_fys[df_fys['MATCH_OPTAUUID'] == selected_uuid]
+    # Lad os sige vi har filtreret til 'df' for den valgte kamp:
+    df = df_fys[df_fys['MATCH_OPTAUUID'] == selected_uuid] 
+
+    # 2. DETTE FIXER FEJLEN
+    if df.empty:
+        st.error(f"🚨 Der er ingen rækker for den valgte kamp i databasen.")
+        st.info("Dette sker ofte hvis kampen er lige spillet, og Second Spectrum ikke har uploadet tallene endnu.")
     else:
-        df = df_fys # Fallback hvis match-matching fejler
+        # Nu tør vi godt bruge .iloc[0] eller .idxmax()
+        col1, col2, col3 = st.columns(3)
+        
+        idx_dist = df['DISTANCE'].idxmax()
+        idx_speed = df['TOP_SPEED'].idxmax()
+        
+        top_dist = df.loc[idx_dist]
+        top_speed = df.loc[idx_speed]
+        
+        col1.metric("Mest løbende", f"{top_dist['PLAYER_NAME']}", f"{top_dist['DISTANCE']/1000:.2f} km")
+        col2.metric("Højeste Topfart", f"{top_speed['PLAYER_NAME']}", f"{top_speed['TOP_SPEED']:.1f} km/h")
+        col3.metric("Spillere", len(df))
 
-    # --- RESTEN AF DIN KODE (Metrics og Tabel) ---
-    col1, col2, col3 = st.columns(3)
-    top_dist = df.iloc[df['DISTANCE'].idxmax()]
-    top_speed = df.iloc[df['TOP_SPEED'].idxmax()]
-    
-    col1.metric("Mest løbende", f"{top_dist['PLAYER_NAME']}", f"{top_dist['DISTANCE'] / 1000:.2f} km")
-    col2.metric("Højeste Topfart", f"{top_speed['PLAYER_NAME']}", f"{top_speed['TOP_SPEED']:.1f} km/h")
-    col3.metric("Spillere i kampen", len(df))
-
-    st.dataframe(df[['PLAYER_NAME', 'DISTANCE', 'TOP_SPEED', 'SPRINTING', 'AVERAGE_SPEED']], use_container_width=True)
+        st.dataframe(df)
