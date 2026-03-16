@@ -6,23 +6,35 @@ def check_physical_data_availability(match_uuid):
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     
-    # Rens UUID (hvis der er et 'g' foran)
-    clean_uuid = str(match_uuid).strip().lower() # Tilføj .lower()
+    # 1. Normaliser UUID til søgning
+    clean_uuid = str(match_uuid).strip().lower()
     if clean_uuid.startswith('g'):
         clean_uuid = clean_uuid[1:]
         
     res = {"meta": False, "rows": 0, "ss_id": None}
     
-    # Tjek metadata
-    meta_df = conn.query(f"SELECT \"MATCH_SSIID\" FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA WHERE \"MATCH_OPTAUUID\" = '{clean_uuid}'")
+    # 2. Brug ILIKE for at være sikker på at ramme rigtigt i metadata
+    meta_sql = f"""
+        SELECT "MATCH_SSIID" 
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
+        WHERE "MATCH_OPTAUUID" ILIKE '{clean_uuid}'
+        LIMIT 1
+    """
+    
+    meta_df = conn.query(meta_sql)
     
     if not meta_df.empty:
         ss_id = meta_df.iloc[0, 0]
         res["meta"] = True
         res["ss_id"] = ss_id
         
-        # Tjek fysiske rækker i F53A tabellen
-        count_df = conn.query(f"SELECT COUNT(*) as CNT FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER WHERE \"MATCH_SSIID\" = '{ss_id}'")
+        # 3. Nu søger vi i den fysiske tabel med det RIGTIGE SSIID (UUID-formatet)
+        fys_sql = f"""
+            SELECT COUNT(*) as CNT 
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE "MATCH_SSIID" = '{ss_id}'
+        """
+        count_df = conn.query(fys_sql)
         res["rows"] = count_df.iloc[0, 0]
         
     return res
