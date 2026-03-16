@@ -13,20 +13,18 @@ def vis_side(conn, name_map=None):
     # --- TRIN 1: HENT METADATA OG HIF-SPILLER RELATION ---
     @st.cache_data(ttl=600)
     def get_base_data():
-        # Henter metadata for turnering og år
         query_meta = f"""
         SELECT DATE, HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
         """
         
-        # Henter relationen mellem kamp, hold og spillere
+        # Her bruger vi PLAYER_SSIID fra din F53A tabel
         query_hif_players = f"""
-        SELECT MATCH_SSIID, PLAYER_SSIID, PLAYER_NAME
+        SELECT MATCH_SSIID, PLAYER_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
         WHERE TEAM_SSIID = '{HIF_SSIID}'
         """
-        
         return conn.query(query_meta), conn.query(query_hif_players)
 
     # --- TRIN 2: HENT FYSISK DATA ---
@@ -34,19 +32,23 @@ def vis_side(conn, name_map=None):
     def get_phys_stats():
         query = "SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         df = conn.query(query)
+        # Vi sikrer, at tallene kan lægges sammen (MINUTES er TEXT i din tabel)
+        df['MINUTES'] = pd.to_numeric(df['MINUTES'], errors='coerce').fillna(0)
         df['HI_RUN'] = df['HIGH SPEED RUNNING'] + df['SPRINTING']
         df['Spiller'] = df['PLAYER_NAME']
+        
+        # Omdøber 'optaId' til 'PLAYER_SSIID' så vi kan merge med din relationstabel
+        df = df.rename(columns={'optaId': 'PLAYER_SSIID'})
         return df
 
     df_meta, df_hif_rel = get_base_data()
     df_all_phys = get_phys_stats()
 
-    # --- TABS ---
     t1, t2, t3 = st.tabs(["Saeson Oversigt (HIF)", "Top 5 Liga", "Kampoversigt"])
 
     # TAB 1: HVIDOVRE SÆSON-TOTALER
     with t1:
-        # Merger for at ramme kun HIF-spillere
+        # Merge på PLAYER_SSIID (som før var optaId) og MATCH_SSIID
         df_hif_only = pd.merge(
             df_all_phys, 
             df_hif_rel[['PLAYER_SSIID', 'MATCH_SSIID']], 
@@ -105,15 +107,13 @@ def vis_side(conn, name_map=None):
         row = df_hif_meta[df_hif_meta['MATCH_SSIID'] == m_id].iloc[0]
         hold_valg = st.selectbox("Vaelg hold:", ["Begge hold", get_team_name(row['HOME_SSIID']), get_team_name(row['AWAY_SSIID'])])
         
-        # Filtrering baseret på holdvalg
         df_match = df_all_phys[df_all_phys['MATCH_SSIID'].str.strip() == m_id.strip()]
         
         if hold_valg != "Begge hold":
             target_ssiid = row['HOME_SSIID'] if hold_valg == get_team_name(row['HOME_SSIID']) else row['AWAY_SSIID']
-            # Her bruger vi relationen til at filtrere spillere for det valgte hold
             query_players = f"SELECT PLAYER_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM WHERE TEAM_SSIID = '{target_ssiid}' AND MATCH_SSIID = '{m_id}'"
-            target_players = conn.query(query_players)['PLAYER_SSIID'].tolist()
-            df_match = df_match[df_match['PLAYER_SSIID'].isin(target_players)]
+            target_ids = conn.query(query_players)['PLAYER_SSIID'].tolist()
+            df_match = df_match[df_match['PLAYER_SSIID'].isin(target_ids)]
 
         st.dataframe(
             df_match[['Spiller', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
