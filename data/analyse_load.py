@@ -69,16 +69,37 @@ def get_analysis_package(hif_only=False, match_uuid=None):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
     
-    # --- NY LOGIK TIL FYSISK DATA ---
+    # --- ULTRA-ROBUST LOGIK TIL FYSISK DATA ---
     df_fys = pd.DataFrame()
     if match_uuid:
-        # 1. Find Second Spectrum ID ud fra Opta UUID
-        meta_df = safe_query("opta_physical_metadata", {"match_uuid": match_uuid})
+        # Vi vasker UUID'en så den matcher præcis (stripper whitespaces og prøver case-insensitivt)
+        clean_uuid = str(match_uuid).strip()
         
-        if not meta_df.empty:
-            ss_id = meta_df.iloc[0]["MATCH_SSIID"]
-            # 2. Hent de fysiske stats med SS ID'et
-            df_fys = safe_query("opta_physical_stats", {"ss_id": ss_id})
+        # 1. Find Second Spectrum ID (vi bruger ILIKE for at ignorere store/små bogstaver)
+        meta_sql = f"""
+            SELECT "MATCH_SSIID"
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
+            WHERE "MATCH_OPTAUUID" ILIKE '{clean_uuid}'
+            LIMIT 1
+        """
+        
+        try:
+            meta_res = conn.query(meta_sql)
+            if meta_res is not None and not meta_res.empty:
+                ss_id = meta_res.iloc[0, 0] # Hent SSIID uanset hvad kolonnen hedder
+                
+                # 2. Hent de fysiske stats med SS ID'et
+                # Her bruger vi igen gåseøjne for at være sikre på Snowflake-navngivning
+                fys_sql = f"""
+                    SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
+                    WHERE "MATCH_SSIID" = '{ss_id}'
+                """
+                df_fys = conn.query(fys_sql)
+            else:
+                # DEBUG: Hvis den ikke finder noget, så lad os se hvad den ledte efter
+                st.sidebar.warning(f"Ingen metadata fundet for UUID: {clean_uuid}")
+        except Exception as e:
+            st.error(f"Fysisk data fejl: {e}")
 
     # Resten af din eksisterende logik (name_map etc.)
     df_local = load_local_players()
