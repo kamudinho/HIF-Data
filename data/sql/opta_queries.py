@@ -106,12 +106,23 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
         """,
 
-        # 10. TEST QUERY - KUN DENNE LINJE NU
+        # 10. PHYSICAL MASTER QUERY (Nu med rigtige stats)
         "opta_physical_stats": f"""
-            SELECT *
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-            WHERE SEASONLABEL = 2025
-            AND COMPETITIONLABEL = '1. Division'
+            SELECT 
+                m.DESCRIPTION_FULL as MATCH_NAME,
+                p.PLAYER_NAME,
+                p.JERSEY,
+                p.DISTANCE,
+                p.TOP_SPEED,
+                p.SPRINTS,
+                p.MATCH_SSIID
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER p
+            JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m 
+                ON p.MATCH_SSIID = m.MATCH_SSIID
+            WHERE m.SEASONLABEL = 2025
+            AND m.COMPETITIONLABEL = '1. Division'
+            -- Vi kan filtrere på HIF her hvis nødvendigt, men lad os se alt først
+            ORDER BY p.DISTANCE DESC
         """,
 
         # 11. PHYSICAL SUMMARY
