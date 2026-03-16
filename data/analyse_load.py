@@ -3,39 +3,41 @@ import pandas as pd
 import streamlit as st
 
 def get_single_match_physical(match_uuid):
-    """Oversætter Opta UUID til SSIID og henter fysisk data korrekt"""
+    """Oversætter Opta UUID til SSIID og henter fysisk data uden dikkedarer"""
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     if not match_uuid: return pd.DataFrame()
 
-    # TRIN 1: Find SSIID baseret på Opta UUID
-    # Jeg har rettet tabellen til SECONDSPECTRUM_GAME_METADATA som i din sidste stump
-    meta_sql = f"""
-        SELECT MATCH_SSIID 
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
-        WHERE MATCH_OPTAUUID = '{match_uuid}'
-        LIMIT 1
-    """
-    
     try:
+        # TRIN 1: Find SSIID. Vi tjekker de to mest sandsynlige kolonner fra dit dump
+        meta_sql = f"""
+            SELECT MATCH_SSIID 
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
+            WHERE MATCH_OPTAUUID = '{match_uuid}' 
+               OR MATCH_OPTAID = '{match_uuid}'
+            LIMIT 1
+        """
         meta_res = conn.query(meta_sql)
         
-        # Hvis vi finder et SSIID, bruger vi det. Ellers prøver vi UUID (som fallback)
-        ss_id = meta_res.iloc[0]['MATCH_SSIID'] if not (meta_res is None or meta_res.empty) else match_uuid
+        # Hvis vi får bid, bruger vi SSIID'et. Ellers prøver vi råt med match_uuid
+        if meta_res is not None and not meta_res.empty:
+            ss_id = meta_res.iloc[0]['MATCH_SSIID']
+        else:
+            ss_id = match_uuid
 
-        # TRIN 2: Hent fysisk data
-        # Vi lader Snowflake fejlsøge ved at kigge efter alle tænkelige ID-kolonner
+        # TRIN 2: Hent data fra den fysiske tabel
+        # Vi tjekker både SSIID og OPTA ID direkte i den fysiske tabel også
         sql = f"""
             SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER 
             WHERE MATCH_SSIID = '{ss_id}' 
-               OR MATCH_OPTAUUID = '{ss_id}'
+               OR MATCH_ID = '{ss_id}'
         """
         res = conn.query(sql)
-        return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
+        return pd.DataFrame(res)
 
     except Exception as e:
-        # Hvis den fejler pga. manglende kolonne, prøver vi en "sikker" query uden specifikke ID-navne
-        st.warning(f"Søger efter data... (Teknisk info: {e})")
+        # Hvis den fejler her, er det fordi en af kolonnenavnene i TRIN 2 er forkerte
+        st.error(f"Data-gennembrud fejlede: {e}")
         return pd.DataFrame()
 
 def get_analysis_package(hif_only=False):
