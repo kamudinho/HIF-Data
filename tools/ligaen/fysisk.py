@@ -119,5 +119,5 @@ def vis_side(conn, name_map=None):
         
         st.dataframe(
             df_match[['Spiller', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
-            use_container_width=True, hide_index=True
+            use_container_width=True, height=content, hide_index=True
         )
