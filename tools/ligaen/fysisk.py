@@ -9,20 +9,22 @@ def vis_side(conn, name_map=None):
     st.title("🏃 Fysisk Data (Second Spectrum)")
 
     # 1. Hent alle tilgængelige kampe fra Metadata-tabellen
+    # 1. Hent alle tilgængelige kampe fra Metadata-tabellen
     @st.cache_data(ttl=600)
     def get_physical_matches():
+        # Vi bruger her de mest gængse kolonnenavne for SS metadata
         query = """
         SELECT 
             MATCH_OPTAUUID, 
             MATCH_SSIID, 
-            HOME_NAME, 
-            AWAY_NAME, 
-            DATE_TIME 
+            CONTESTANTHOME_NAME as HOME_NAME, 
+            CONTESTANTAWAY_NAME as AWAY_NAME, 
+            GAME_DATE as DATE_TIME 
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
-        ORDER BY DATE_TIME DESC
+        ORDER BY GAME_DATE DESC
         """
         return conn.query(query)
-
+        
     df_matches = get_physical_matches()
 
     if df_matches.empty:
