@@ -1,10 +1,8 @@
-# data/sql/opta_queries.py
 import pandas as pd 
 
 def get_opta_queries(liga_f, saeson_f, hif_only=False):
-    # --- DISSE SKAL VÆRE INDRYKKET ---
+    # --- DISSE ER NU KORREKT INDRYKKET ---
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # HIF's unikke Opta ID
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
@@ -106,57 +104,86 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) {hif_filter_event}
         """,
 
-        # 10. ULTRA-SIMPEL TEST
-        "opta_physical_stats": f"""
-            SELECT 
-                MATCH_SSIID, 
-                PLAYER_NAME, 
-                DISTANCE, 
-                SEASONLABEL, 
-                SECOND_SPECTRUM_COMPETITION_ID
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-            LIMIT 5
+        # 4B. LEAGUE SHOTS
+        "opta_league_shotevents": f"""
+            SELECT e.*, q.QUALIFIER_VALUE as XG_RAW 
+            FROM {DB}.OPTA_EVENTS e 
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
+            WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_subquery}) AND e.EVENT_CONTESTANT_OPTAUUID != '{HIF_UUID}'
         """,
-        
-        # 10. PHYSICAL MASTER QUERY - NU MED FILTRE DER RAMMER 2025
+
+        # 5. ASSISTS
+        "opta_assists": f"""
+            WITH OrderedEvents AS (
+                SELECT 
+                    EVENT_OPTAUUID, PLAYER_OPTAUUID, PLAYER_NAME, EVENT_X, EVENT_Y, 
+                    EVENT_TYPEID, EVENT_OUTCOME, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, 
+                    EVENT_TIMESTAMP, EVENT_EVENTID,
+                    LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_EVENT_TYPE,
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_X,
+                    LEAD(EVENT_Y) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as NEXT_Y,
+                    LEAD(PLAYER_NAME) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as SHOT_PLAYER
+                FROM {DB}.OPTA_EVENTS
+                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+                AND EVENT_CONTESTANT_OPTAUUID = '{HIF_UUID}'
+            )
+            SELECT 
+                OE.PLAYER_NAME AS ASSIST_PLAYER, OE.SHOT_PLAYER AS GOAL_SCORER,
+                OE.EVENT_X AS PASS_START_X, OE.EVENT_Y AS PASS_START_Y,
+                OE.NEXT_X AS SHOT_X, OE.NEXT_Y AS SHOT_Y,
+                OE.NEXT_EVENT_TYPE, OE.EVENT_OUTCOME, OE.EVENT_TYPEID, OE.EVENT_TIMESTAMP,
+                MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) AS IS_CORNER,
+                MAX(CASE WHEN Q.QUALIFIER_QID = 2 THEN 1 ELSE 0 END) AS IS_CROSS,
+                CASE WHEN OE.NEXT_X > (OE.EVENT_X + 25) AND OE.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END AS IS_PROGRESSIVE
+            FROM OrderedEvents OE
+            LEFT JOIN {DB}.OPTA_QUALIFIERS Q ON OE.EVENT_OPTAUUID = Q.EVENT_OPTAUUID
+            WHERE OE.EVENT_OUTCOME = 1 AND OE.EVENT_TYPEID = 1
+            GROUP BY 1,2,3,4,5,6,7,8,9,10
+            HAVING (MAX(CASE WHEN Q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) = 1) OR (OE.NEXT_EVENT_TYPE IN (13, 14, 15, 16))
+            ORDER BY OE.EVENT_TIMESTAMP DESC
+        """,
+
+        # 6. SPILLER LINEBREAKS
+        "opta_player_linebreaks": f"""
+            SELECT 
+                PLAYER_OPTAUUID, LINEUP_CONTESTANTUUID, TOURNAMENTCALENDAR_OPTAUUID,
+                MAX(CASE WHEN STAT_TYPE = 'total' THEN STAT_VALUE END) AS LB_TOTAL,
+                MAX(CASE WHEN STAT_TYPE = 'attackingLineBroken' THEN STAT_VALUE END) AS LB_ATTACK_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'midfieldLineBroken' THEN STAT_VALUE END) AS LB_MIDFIELD_LINE,
+                MAX(CASE WHEN STAT_TYPE = 'defenceLineBroken' THEN STAT_VALUE END) AS LB_DEFENCE_LINE
+            FROM {DB}.OPTA_PLAYERLINEBREAKINGPASSAGGREGATES
+            WHERE LINEUP_CONTESTANTUUID = '{HIF_UUID}'
+            GROUP BY 1, 2, 3
+        """,
+
+        # 7. HOLD LINEBREAKS
+        "opta_team_linebreaks": f"SELECT * FROM {DB}.OPTA_TEAMLINEBREAKINGPASSAGGREGATES WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_lb}",
+
+        # 8. RAW EVENTS
+        "opta_events": f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) AND EVENT_TYPEID IN (1, 4, 5, 8, 49) LIMIT 6000",
+
+        # 9. SEQUENCE MAP
+        "opta_sequence_map": f"""
+            WITH MatchIDs AS (SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'),
+            GoalEvents AS (SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_EVENTID, e.SEQUENCEID FROM {DB}.OPTA_EVENTS e WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs) AND e.EVENT_TYPEID = 16 {hif_filter_event}),
+            SequenceWindow AS (SELECT e.*, ge.EVENT_EVENTID as GOAL_REF_ID FROM {DB}.OPTA_EVENTS e JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds') AND e.EVENT_TIMESTAMP <= ge.EVENT_TIMESTAMP)
+            SELECT e.*, m.CONTESTANTHOME_NAME AS HOME_TEAM, m.CONTESTANTAWAY_NAME AS AWAY_TEAM FROM SequenceWindow e LEFT JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ASC
+        """,
+
+        # 10. PHYSICAL MASTER QUERY (RETTET TIL 2025 SUMMARY)
         "opta_physical_stats": f"""
             SELECT 
-                m.DESCRIPTION_FULL as MATCH_NAME,
-                p.PLAYER_NAME,
-                p.DISTANCE,
-                p.TOP_SPEED,
-                p.SPRINTING,
-                p.AVERAGE_SPEED,
-                m.MATCH_OPTAUUID
+                p.PLAYER_NAME, p.DISTANCE, p.TOP_SPEED, p.SPRINTING, p.AVERAGE_SPEED, m.MATCH_OPTAUUID
             FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
             JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON p.MATCH_SSIID = m.MATCH_SSIID
             WHERE m.MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID 
-                FROM {DB}.OPTA_MATCHINFO
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- NordicBet Liga
-                {hif_filter_matchinfo} -- Dette sikrer at vi kun ser HIF-kampe
+                SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_matchinfo}
             )
-            AND p.DISTANCE > 0 -- Filtrer spillere fra, der ikke har løbet (f.eks. bænken)
-            ORDER BY m.MATCH_DATE DESC, p.DISTANCE DESC
+            AND p.DISTANCE > 0
+            ORDER BY p.DISTANCE DESC
         """,
 
-        # 11. PHYSICAL SUMMARY - MED PRÆCISE KOLONNER FRA DIN LISTE
-        "opta_physical_summary": f"""
-            SELECT 
-                MATCH_DATE,
-                MATCH_TEAMS,
-                PLAYER_NAME,
-                DISTANCE,
-                "HIGH SPEED RUNNING" AS HSR, -- Bemærk gåseøjne pga. mellemrum i dit skema
-                SPRINTING,
-                TOP_SPEED,
-                AVERAGE_SPEED,
-                MATCH_SSIID
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-            WHERE MATCH_SSIID IN (
-                SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            )
-            ORDER BY MATCH_DATE DESC
-        """
+        # 11. PHYSICAL METADATA
+        "opta_physical_metadata": f"SELECT MATCH_OPTAUUID, HOME_PLAYERS, AWAY_PLAYERS FROM {DB}.SECONDSPECTRUM_GAME_METADATA WHERE MATCH_OPTAUUID IN ({match_id_subquery})"
     }
