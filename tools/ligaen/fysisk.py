@@ -1,30 +1,42 @@
 import streamlit as st
 import data.analyse_load as analyse_load
 import pandas as pd
+from datetime import datetime
 
 def vis_side(dp):
     st.title("Fysisk Data - Direkte Udtræk")
 
-    # 1. Forbered matches
+    # 1. Hent matches
     matches = dp.get("matches", pd.DataFrame())
     if matches.empty:
         st.warning("Ingen kampe fundet.")
         return
 
-    # Sorter (nyeste først)
+    # 2. Konvertér til datetime og filtrér (Kun kampe til og med i dag)
     if 'MATCH_DATE_FULL' in matches.columns:
         matches['MATCH_DATE_FULL'] = pd.to_datetime(matches['MATCH_DATE_FULL'])
+        
+        # --- NYT FILTER: Fjern fremtidige kampe ---
+        nu = datetime.now()
+        matches = matches[matches['MATCH_DATE_FULL'] <= nu]
+        
+        # Sorter så nyeste kamp er øverst
         matches = matches.sort_values('MATCH_DATE_FULL', ascending=False)
     
-    # Dropdown til valg af kamp
-    match_list = matches['CONTESTANTHOME_NAME'] + " vs " + matches['CONTESTANTAWAY_NAME']
-    selected_idx = st.selectbox("Vælg kamp for dataudtræk", range(len(match_list)), format_func=lambda x: match_list.iloc[x])
+    if matches.empty:
+        st.info("Der er ingen spillede kampe i oversigten endnu.")
+        return
+
+    # 3. Dropdown til valg af kamp
+    # Vi inkluderer datoen i labelen så det er nemt at navigere
+    match_labels = matches.apply(lambda row: f"{row['MATCH_DATE_FULL'].strftime('%d/%m')} - {row['CONTESTANTHOME_NAME']} vs {row['CONTESTANTAWAY_NAME']}", axis=1)
+    
+    selected_idx = st.selectbox("Vælg kamp for dataudtræk", range(len(match_labels)), format_func=lambda x: match_labels.iloc[x])
     
     match_uuid = matches.iloc[selected_idx]['MATCH_OPTAUUID']
     
-    # --- DIREKTE UDTRÆK ---
+    # --- RESTEN AF DIN KODE (SQL UDTRÆK) ---
     st.markdown("---")
-    
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
 
