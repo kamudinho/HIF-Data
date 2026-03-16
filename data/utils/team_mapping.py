@@ -24,7 +24,7 @@ COMPETITIONS = {
 
 # --- Hold ---
 TEAMS = {
-    "Hvidovre": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "ssid": "f2b45639-d8e6-4d9b-9371-6f9f1fe2a9d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"},
+    "Hvidovre": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"},
     "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "opta_id": 401, "ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/283_120x120.png"},
     "Horsens": {"team_wyid": 7465, "opta_uuid": "a9vw7ikerpr4cuweeeka5aneg", "opta_id": 2289, "ssid": "3a0f347e-1ebc-4a89-97dc-a12caaadeaf2", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/285_120x120.png"},
     "Lyngby": {"team_wyid": 7484, "opta_uuid": "anga7587r1zv4ey71ge9zxol3", "opta_id": 272, "ssid": "e0bb5b5f-2df2-4fc4-854a-e537bd65a280", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2527_120x120.png"},
