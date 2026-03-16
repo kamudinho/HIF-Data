@@ -267,17 +267,42 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
-        # 10. PHYSICAL MASTER QUERY (Second Spectrum)
+        # 10. PHYSICAL MASTER QUERY (Nu med liga-overblik og korrekte navne)
         "opta_physical_stats": f"""
-            SELECT * FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
-            WHERE "MATCH_SSIID" = '{{ss_id}}' 
+            SELECT 
+                m.STARTTIME::DATE as DATO,
+                m.MATCH_OPTAUUID,
+                p.PLAYER_NAME,
+                p.JERSEY,
+                p.TEAM_SSIID,
+                p.DISTANCE,
+                p.TOP_SPEED,
+                p.SPRINTS,
+                p.MATCH_SSIID
+            FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
+            JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER p 
+                ON m.MATCH_SSIID = p.MATCH_SSIID
+            WHERE m.MATCH_OPTAUUID IN ({match_id_subquery})
+            ORDER BY DATO DESC, p.DISTANCE DESC
         """,
 
-        # 11. PHYSICAL METADATA (Mappen mellem Opta og SS)
-        "opta_physical_metadata": f"""
-            SELECT "MATCH_SSIID", "MATCH_OPTAUUID"
-            FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-            WHERE "MATCH_OPTAUUID" = '{{match_uuid}}'
-            LIMIT 1
+        # 11. PHYSICAL SUMMARY (Til de dybe løbe-kategorier som HSR og Sprints)
+        "opta_physical_summary": f"""
+            SELECT 
+                MATCH_DATE,
+                optaId as PLAYER_OPTAUUID,
+                PLAYER_NAME,
+                MATCH_TEAMS,
+                DISTANCE,
+                "HIGH SPEED RUNNING" as HSR,
+                SPRINTING,
+                TOP_SPEED,
+                AVERAGE_SPEED
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            WHERE MATCH_SSIID IN (
+                SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+                WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            )
+            ORDER BY MATCH_DATE DESC, DISTANCE DESC
         """
         }
