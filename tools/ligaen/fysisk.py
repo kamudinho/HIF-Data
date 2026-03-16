@@ -8,83 +8,101 @@ def vis_side(conn, teams_map=None, name_map=None):
     if name_map is None: name_map = {}
     if teams_map is None: teams_map = {}
 
-    # --- TRIN 1: HENT KAMP-LISTE (METADATA) ---
+    st.title("🏃 Fysisk Rapport")
+    st.markdown("---")
+
+    # --- TRIN 1: HENT KAMP-LISTE ---
     @st.cache_data(ttl=600)
     def get_matches():
-        # Vi henter bredt fra metadata for at sikre vi har de rigtige ID'er
-        query = """
+        query = f"""
         SELECT *
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA
-        WHERE HOME_SSIID = '{0}' OR AWAY_SSIID = '{0}'
+        WHERE (HOME_SSIID = '{HIF_SSIID}' OR AWAY_SSIID = '{HIF_SSIID}')
         ORDER BY STARTTIME DESC
-        """.format(HIF_SSIID)
+        """
         return conn.query(query)
 
     df_meta = get_matches()
 
     if df_meta.empty:
-        st.warning("Ingen kampe fundet i metadata.")
+        st.warning("⚠️ Ingen kampe fundet i systemet.")
         return
 
-    # Dynamisk navngivning af modstander
+    # Oversæt modstander-ID til Navn
     def get_opp(row):
         opp_id = row['AWAY_SSIID'] if row['HOME_SSIID'] == HIF_SSIID else row['HOME_SSIID']
         for name, info in teams_map.items():
             if info.get('ssid') == opp_id: return name
         return f"Ukendt ({opp_id[:5]})"
 
-    df_meta['DATE_LABEL'] = pd.to_datetime(df_meta['STARTTIME']).dt.strftime('%d/%m-%Y')
-    df_meta['DISPLAY'] = df_meta['DATE_LABEL'] + " - " + df_meta.apply(get_opp, axis=1)
+    df_meta['DATO'] = pd.to_datetime(df_meta['STARTTIME']).dt.strftime('%d/%m-%Y')
+    df_meta['MODSTANDER'] = df_meta.apply(get_opp, axis=1)
+    df_meta['STED'] = df_meta.apply(lambda x: "Hjemme" if x['HOME_SSIID'] == HIF_SSIID else "Ude", axis=1)
+    df_meta['DISPLAY'] = df_meta['DATO'] + " - " + df_meta['MODSTANDER'] + " (" + df_meta['STED'] + ")"
 
-    valgt_kamp = st.selectbox("Vælg kamp:", df_meta['DISPLAY'])
+    valgt_kamp = st.selectbox("Vælg kamp til analyse:", df_meta['DISPLAY'])
     match_row = df_meta[df_meta['DISPLAY'] == valgt_kamp].iloc[0]
-    m_ssiid = match_row['MATCH_SSIID']
 
-    # --- TRIN 2: HENT DEN STORE PERFORMANCE TABEL (ALT!) ---
+    # --- TRIN 2: HENT OG OVERSÆT SPILLER-DATA ---
     @st.cache_data(ttl=600)
-    def get_all_physical_data(ssiid):
-        # Vi bruger den tabel der har de mest komplette tal jf. din oversigt
+    def get_physical_data(ssiid):
         query = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE TRIM(MATCH_SSIID) = '{ssiid}'
         """
         return conn.query(query)
 
-    df = get_all_physical_data(m_ssiid)
+    df = get_physical_data(match_row['MATCH_SSIID'])
 
     if df.empty:
-        st.info("Ingen fysiske detaljer fundet i Summary-tabellen for denne kamp.")
+        st.info("ℹ️ Der er endnu ikke indlæst fysiske data for denne kamp.")
         return
 
-    # Mapping af spillernavne
-    df['Spiller'] = df['PLAYER_NAME'] # Default fra tabel
-
-    # --- TRIN 3: VISNING AF ALT ---
-    st.write(f"### Data for kampen: {valgt_kamp}")
+    # Beregn 'Højintensitetsløb' (HSR + Sprint)
+    df['HI_RUN'] = df['HIGH SPEED RUNNING'] + df['SPRINTING']
     
-    # Formatering af kolonner så de er nemme at læse
-    st.dataframe(
-        df[[
-            'Spiller', 'MINUTES', 'DISTANCE', 'TOP_SPEED', 
-            'HIGH SPEED RUNNING', 'SPRINTING', 'AVERAGE_SPEED',
-            'NO_OF_HIGH_INTENSITY_RUNS'
-        ]].sort_values('DISTANCE', ascending=False),
-        column_config={
-            "DISTANCE": st.column_config.NumberColumn("Total (m)", format="%.0f"),
-            "HIGH SPEED RUNNING": st.column_config.NumberColumn("HSR (m)", format="%.0f"),
-            "SPRINTING": st.column_config.NumberColumn("Sprint (m)", format="%.0f"),
-            "TOP_SPEED": st.column_config.NumberColumn("Max (km/h)", format="%.1f"),
-            "MINUTES": "Min."
-        },
-        use_container_width=True,
-        hide_index=True
-    )
+    # Mapper spillernavne (hvis name_map findes)
+    df['Navn'] = df['PLAYER_NAME']
 
-    # Ekstra sektion for intensitets-data (TIP/OTIP/BOP)
-    with st.expander("Se avanceret intensitets-data (TIP/BOP/OTIP)"):
-        st.write("TIP = Team In Possession | OTIP = Opponent In Possession | BOP = Ball Out of Play")
+    # --- TRIN 3: VISNING (Oversat) ---
+    st.subheader(f"Statistik mod {match_row['MODSTANDER']}")
+    
+    # Faner til forskellige perspektiver
+    tab1, tab2, tab3 = st.tabs(["📊 Hovedtal", "⚡ Sprint Analyse", "⚽ Boldbesiddelse"])
+
+    with tab1:
+        # Oversat tabel-visning
         st.dataframe(
-            df[['Spiller', 'DISTANCE_TIP', 'DISTANCE_OTIP', 'DISTANCE_BOP']],
-            use_container_width=True,
-            hide_index=True
+            df[['Navn', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
+            column_config={
+                "Navn": "Spiller",
+                "MINUTES": "Minutter",
+                "DISTANCE": st.column_config.NumberColumn("Total Meter", format="%.0f m"),
+                "HI_RUN": st.column_config.NumberColumn("Højintenst (m)", format="%.0f m", help="HSR + Sprint"),
+                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/h")
+            },
+            use_container_width=True, hide_index=True
+        )
+
+    with tab2:
+        st.dataframe(
+            df[['Navn', 'SPRINTING', 'NO_OF_HIGH_INTENSITY_RUNS', 'TOP_SPEED']].sort_values('SPRINTING', ascending=False),
+            column_config={
+                "SPRINTING": "Sprint Meter",
+                "NO_OF_HIGH_INTENSITY_RUNS": "Antal HI-løb",
+                "TOP_SPEED": "Topfart (km/h)"
+            },
+            use_container_width=True, hide_index=True
+        )
+
+    with tab3:
+        st.info("Fordeling af distance baseret på hvem der har bolden")
+        st.dataframe(
+            df[['Navn', 'DISTANCE_TIP', 'DISTANCE_OTIP', 'DISTANCE_BOP']].sort_values('DISTANCE_TIP', ascending=False),
+            column_config={
+                "DISTANCE_TIP": "Med bold (m)",
+                "DISTANCE_OTIP": "Uden bold (m)",
+                "DISTANCE_BOP": "Bold ude (m)"
+            },
+            use_container_width=True, hide_index=True
         )
