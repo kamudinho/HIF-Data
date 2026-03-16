@@ -267,17 +267,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             ORDER BY e.EVENT_TIMESTAMP ASC
         """,
 
-        # 10. PHYSICAL MASTER QUERY (Nød-version)
+        # 10. TEST QUERY - Henter metadata direkte
         "opta_physical_stats": f"""
-            SELECT 
-                MATCH_SSIID AS MATCH_OPTAUUID, -- Vi lader som om SSIID er OptaID for at teste
-                PLAYER_NAME,
-                JERSEY,
-                DISTANCE,
-                TOP_SPEED,
-                SPRINTS
-            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
-            LIMIT 2000
+            SELECT *
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
+            WHERE SEASONLABEL = 2025
+            AND COMPETITIONLABEL = '1. Division'
         """,
         
         # 11. PHYSICAL SUMMARY (Til de dybe løbe-kategorier som HSR og Sprints)
