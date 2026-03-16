@@ -35,21 +35,17 @@ def vis_side(conn, name_map=None):
 
     # 3. Hent fysisk data (fra F53A tabellen som har de detaljerede tal)
     @st.cache_data(ttl=600)
-    def get_player_data(ssiid):
-        # Vi bruger kolonnenavne direkte fra dit schema
-        query = f"""
-        SELECT 
-            PLAYER_SSIID,
-            PLAYER_NAME,
-            TEAM_SSIID,
-            DISTANCE,
-            TOP_SPEED,
-            AVERAGE_SPEED,
-            SPRINTS,
-            MATCH_SSIID
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-        WHERE MATCH_SSIID = '{ssiid}'
-        AND DISTANCE > 0
+    def get_physical_matches():
+        # Vi henter alle kampe der findes i de fysiske tabeller
+        # uanset om det er Superliga eller NordicBet
+        query = """
+        SELECT DISTINCT
+            MATCH_SSIID, 
+            MATCH_TEAMS, 
+            MATCH_DATE as DATE_TIME
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE MATCH_DATE >= '2025-07-01'  -- Sikrer vi ser den nuværende sæson 25/26
+        ORDER BY MATCH_DATE DESC
         """
         return conn.query(query)
 
