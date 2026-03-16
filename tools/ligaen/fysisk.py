@@ -1,3 +1,6 @@
+import streamlit as st
+import pandas as pd
+
 def vis_side(dp):
     st.title("⚽ Fysisk Data - Hvidovre IF")
     
