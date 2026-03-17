@@ -85,10 +85,9 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    t1, t2, t3 = st.tabs(["📊 Hvidovre IF", "🏆 Liga Top 5", "⚽ Enkelte Kampe"])
+    t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Kampoversigt"])
 
     with t1:
-        st.subheader("Sæson-totaler for Hvidovre IF")
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
         
         summary = df_hif.groupby('PLAYER_NAME').agg({
@@ -113,7 +112,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        st.subheader("Top 5 præstationer i ligaen")
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
