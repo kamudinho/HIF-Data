@@ -11,7 +11,7 @@ def vis_side(conn, name_map=None):
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Hent metadata (Dato-ramme for 2025/2026)
+        # 1. Hent Metadata (Uændret - bruges til kampvælgeren)
         query_meta = f"""
         SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -25,15 +25,35 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
-        # 2. Hent Fysisk Data - vi bruger de sikre navne her
-        # Vi henter ALT for sæsonen i én omgang
+        # 2. Hent Fysisk Data med præcis Hold-identifikation via JSON Metadata
+        # Vi bruger en CTE (WITH) til at flade HOME_PLAYERS arrayet ud
         query_phys = f"""
+        WITH hvidovre_ids AS (
+            SELECT DISTINCT 
+                m.MATCH_SSIID,
+                f.value:"optaId"::string AS opta_id
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
+            LATERAL FLATTEN(input => m.HOME_PLAYERS) f
+            WHERE m.HOME_SSIID = '{HIF_SSIID}'
+        )
         SELECT 
-            MATCH_SSIID, PLAYER_NAME, MATCH_TEAMS,
-            MINUTES, DISTANCE, 
-            "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_SSIID IN (
+            p.MATCH_SSIID, 
+            p.PLAYER_NAME, 
+            p."optaId",
+            p.MINUTES, 
+            p.DISTANCE, 
+            p."HIGH SPEED RUNNING", 
+            p."SPRINTING", 
+            p."TOP_SPEED",
+            CASE 
+                WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF'
+                ELSE 'Modstander'
+            END AS "Hold"
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+        LEFT JOIN hvidovre_ids h 
+            ON p.MATCH_SSIID = h.MATCH_SSIID 
+            AND p."optaId" = h.opta_id
+        WHERE p.MATCH_SSIID IN (
             SELECT MATCH_SSIID 
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA 
             WHERE "DATE" >= '2025-07-01'
@@ -45,12 +65,10 @@ def vis_side(conn, name_map=None):
     df_meta, df_phys = get_safe_data()
 
     if df_phys.empty:
-        st.error("Kunne ikke hente fysisk data. Tjek venligst forbindelsen til Snowflake.")
+        st.error("Kunne ikke hente data. Tjek Snowflake-forbindelsen.")
         return
 
-    # --- DATABEHANDLING (I PYTHON FOR MAX STABILITET) ---
-    
-    # 1. Rens minutter
+    # --- DATABEHANDLING ---
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -63,14 +81,8 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    # 2. Identificer Hvidovre-spillere (Logik: Dem der optræder i flest kampe i jeres trup)
-    # Da modstandere skifter hver uge, er jeres spillere de eneste gengangere over tid.
-    appearance_count = df_phys.groupby('PLAYER_NAME')['MATCH_SSIID'].nunique()
-    hif_squad = appearance_count[appearance_count > 1].index.tolist()
-    
-    df_phys['Hold'] = df_phys['PLAYER_NAME'].apply(
-        lambda x: "Hvidovre IF" if x in hif_squad else "Modstander"
-    )
+    # Vi behøver ikke længere 'appearance_count' logikken, 
+    # da 'Hold' kolonnen kommer direkte og korrekt fra SQL!
 
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
@@ -96,8 +108,7 @@ def vis_side(conn, name_map=None):
                 "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
-            use_container_width=True, hide_index=True,
-            height=(len(summary) + 1) * 35 + 5
+            use_container_width=True, hide_index=True
         )
 
     with t2:
