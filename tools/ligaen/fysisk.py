@@ -25,7 +25,6 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
-        # Rettet SQL uden ACCELERATIONS, men med NO_OF_HIGH_INTENSITY_RUNS
         query_phys = f"""
         WITH hvidovre_ids AS (
             SELECT DISTINCT 
@@ -71,7 +70,7 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    t1, t2, t3, t4 = st.tabs(["📊 Hvidovre IF (P90)", "📈 Analyse & Grafer", "🏆 Liga Top 5", "⚽ Kampoversigt"])
+    t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Analyse & Grafer", "Liga Top 5", "Kampoversigt"])
 
     with t1:
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
@@ -110,11 +109,15 @@ def vis_side(conn, name_map=None):
         kat_valg = st.selectbox("Vælg kategori til graf", 
                                 ["Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"])
         
-        fig = px.bar(summary.sort_values(kat_valg, ascending=True), 
-                     x=kat_valg, y='PLAYER_NAME', orientation='h',
+        # Spillerne på X-aksen, værdierne på Y-aksen
+        fig = px.bar(summary.sort_values(kat_valg, ascending=False), 
+                     x='PLAYER_NAME', y=kat_valg,
                      title=f"Hvidovre IF: {kat_valg}",
                      labels={kat_valg: "Værdi", "PLAYER_NAME": "Spiller"},
                      color=kat_valg, color_continuous_scale='Blues')
+        
+        # Sørger for at navne på x-aksen er læsbare hvis der er mange spillere
+        fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
