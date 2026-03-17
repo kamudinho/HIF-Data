@@ -6,7 +6,6 @@ HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
 def vis_side(conn, name_map=None):
-    st.title("Hvidovre IF | Fysisk Data")
 
     @st.cache_data(ttl=600)
     def get_unified_data():
