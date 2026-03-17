@@ -10,7 +10,7 @@ def vis_side(conn, name_map=None):
     def get_data_v2():
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # TRIN 1: Find de korrekte kampe for sæsonen først
+        # TRIN 1: Find de korrekte kampe for sæsonen
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -20,16 +20,18 @@ def vis_side(conn, name_map=None):
         ORDER BY "DATE" DESC
         """
         df_meta = conn.query(query_meta)
+        
+        if df_meta.empty:
+            return df_meta, pd.DataFrame(), pd.DataFrame()
+            
         valid_ids = tuple(df_meta['MATCH_SSIID'].tolist())
 
-        if not valid_ids:
-            return df_meta, pd.DataFrame(), pd.DataFrame()
-
         # TRIN 2: Find kun de spillere og hold, der har deltaget i disse kampe
+        # Vi sikrer os mod single-item tuple formatet (id,) ved SQL-håndtering
         query_teams = f"""
         SELECT DISTINCT MATCH_SSIID, PLAYER_NAME, TEAM_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
-        WHERE MATCH_SSIID IN {valid_ids}
+        WHERE MATCH_SSIID IN ({','.join([f"'{i}'" for i in valid_ids])})
         """
         
         # TRIN 3: Hent kun fysisk data for disse kampe
@@ -39,16 +41,24 @@ def vis_side(conn, name_map=None):
             MINUTES, DISTANCE, 
             "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_SSIID IN {valid_ids}
+        WHERE MATCH_SSIID IN ({','.join([f"'{i}'" for i in valid_ids])})
         """
         
         return df_meta, conn.query(query_phys), conn.query(query_teams)
 
-    df_meta, df_phys, df_teams = get_data_v2()
+    try:
+        df_meta, df_phys, df_teams = get_data_v2()
+    except Exception as e:
+        st.error(f"Data kunne ikke hentes: {e}")
+        return
 
-    # Merge og klargør data
-    df_teams['MATCH_KEY'] = df_teams['MATCH_SSIID'].astype(str) + df_teams['PLAYER_NAME'].astype(str).str.lower().strip()
-    df_phys['MATCH_KEY'] = df_phys['MATCH_SSIID'].astype(str) + df_phys['PLAYER_NAME'].astype(str).str.lower().strip()
+    if df_phys.empty:
+        st.warning("Ingen fysisk data fundet for den valgte periode.")
+        return
+
+    # --- RETTET MATCH LOGIK (.str.strip() i stedet for .strip()) ---
+    df_teams['MATCH_KEY'] = df_teams['MATCH_SSIID'].astype(str) + df_teams['PLAYER_NAME'].astype(str).str.lower().str.strip()
+    df_phys['MATCH_KEY'] = df_phys['MATCH_SSIID'].astype(str) + df_phys['PLAYER_NAME'].astype(str).str.lower().str.strip()
     
     df_combined = pd.merge(df_phys, df_teams[['MATCH_KEY', 'TEAM_SSIID']], on='MATCH_KEY', how='left')
 
@@ -63,18 +73,19 @@ def vis_side(conn, name_map=None):
 
     df_combined['MINS_DECIMAL'] = df_combined['MINUTES'].apply(parse_minutes)
     df_combined['HI_RUN'] = df_combined['HIGH SPEED RUNNING'] + df_combined['SPRINTING']
-    df_combined['Hold'] = df_combined['TEAM_SSIID'].astype(str).str.lower().strip().apply(
-        lambda x: "Hvidovre IF" if x == HIF_SSIID.lower().strip() else "Modstander"
+    
+    # Robust Hold-tildeling
+    hif_id_clean = HIF_SSIID.lower().strip()
+    df_combined['Hold'] = df_combined['TEAM_SSIID'].astype(str).str.lower().str.strip().apply(
+        lambda x: "Hvidovre IF" if x == hif_id_clean else "Modstander"
     )
 
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # Sæson-total for HIF
         df_hif = df_combined[df_combined['Hold'] == "Hvidovre IF"].copy()
-        
         summary = df_hif.groupby('PLAYER_NAME').agg({
-            'MATCH_SSIID': 'nunique', # Antal kampe
+            'MATCH_SSIID': 'nunique',
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
             'HI_RUN': 'sum',
@@ -96,7 +107,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        # Liga Top 5 (Alle i 25/26)
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
