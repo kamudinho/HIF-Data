@@ -120,12 +120,18 @@ def vis_side(conn, name_map=None):
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
-            # Sorter: Hvidovre først, så distance
             df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
-            # Her er ændringen: MATCH_SSIID er tilføjet som første kolonne i listen
+            # Vi definerer de kolonner vi vil se, med MATCH_SSIID først
+            vis_kolonner = ['MATCH_SSIID', 'PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']
+            
             st.dataframe(
-                df_match[['MATCH_SSIID', 'PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
-                use_container_width=True, hide_index=True,
+                df_match[vis_kolonner], 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "MATCH_SSIID": st.column_config.TextColumn("Match ID", width="medium"),
+                    "PLAYER_NAME": "Spiller"
+                },
                 height=(len(df_match) + 1) * 35 + 5
             )
