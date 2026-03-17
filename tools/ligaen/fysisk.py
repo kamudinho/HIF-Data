@@ -8,27 +8,39 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
     def get_all_data():
-        # Metadata med dato-filter fra 1. juli 2025
+        # Dags dato for at filtrere fremtidige kampe fra
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # 1. Metadata: Kun fra 1. juli 2025 til og med i dag
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' 
           AND "DATE" >= '2025-07-01'
+          AND "DATE" <= '{today}'
         ORDER BY "DATE" DESC
         """
         
-        # Fysisk data - vi henter alt for de relevante kampe
+        # 2. Mapping: Find alle unikke OptaIDs der hører til HIF (via TEAM_SSIID)
+        query_hif_players = f"""
+        SELECT DISTINCT PLAYER_OPTAID
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
+        WHERE TEAM_SSIID = '{HIF_SSIID}'
+        """
+        
+        # 3. Fysisk data
         query_phys = """
         SELECT 
-            MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
+            MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, "optaId",
             MINUTES, DISTANCE, 
             "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
-        return conn.query(query_meta), conn.query(query_phys)
+        return conn.query(query_meta), conn.query(query_hif_players), conn.query(query_phys)
 
-    df_meta, df_phys = get_all_data()
+    df_meta, df_hif_map, df_phys = get_all_data()
 
+    # Rensning og beregning
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -40,29 +52,20 @@ def vis_side(conn, name_map=None):
 
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
+    
+    # Konverter optaId til streng for at sikre match med mapping-tabellen
+    df_phys['optaId'] = df_phys['optaId'].astype(str)
+    hif_player_ids = df_hif_map['PLAYER_OPTAID'].astype(str).unique()
 
-    # Filtrér fysisk data så vi kun ser på kampe fra den valgte periode
-    period_ids = df_meta['MATCH_SSIID'].unique()
-    df_phys_period = df_phys[df_phys['MATCH_SSIID'].isin(period_ids)].copy()
-
+    # Tabs
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # For at fjerne modstandere:
-        # Vi ved at MATCH_TEAMS i jeres tilfælde ofte starter med 'HVI' eller 'Hvidovre' for hjemmeholdet.
-        # Men den mest robuste måde er at kigge på de spillere, der optræder mest konsekvent 
-        # eller eksplicit filtrere modstandernes navne fra DESCRIPTION.
+        # HÅRD FILTRERING: Kun spillere hvis OptaID findes i HIF-mappingen
+        df_hif_only = df_phys[df_phys['optaId'].isin(hif_player_ids)].copy()
         
-        # Her bruger vi en 'contains' logik, men vi skal være skarpe:
-        # Vi antager her, at vi kun vil se spillere fra rækker hvor Hvidovre er nævnt.
-        # Hvis modstandere stadig vises, er det fordi de deler MATCH_SSIID.
-        
-        # LØSNING: Vi grupperer og viser kun spillere, der er knyttet til jeres klub-id
-        # Hvis tabellen mangler TEAM_ID, bruger vi denne tekst-rens:
-        df_hif_only = df_phys_period[df_phys_period['MATCH_TEAMS'].str.contains('Hvidovre|HVI', case=False, na=False)].copy()
-        
-        # Hvis en modstander stadig optræder (fordi de er i samme kamp), 
-        # skal vi bruge navne-mapping eller et specifikt hold-ID filter.
+        # Kun for kampe der er i vores metadata (efter 1/7 og før i dag)
+        df_hif_only = df_hif_only[df_hif_only['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'])]
         
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
@@ -85,15 +88,18 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
+        # Liga-top 5 for den valgte periode
+        df_liga = df_phys[df_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
-            st.table(df_phys_period.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
+            st.table(df_liga.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
         with c2:
             st.write("HI Distance (m)")
-            st.table(df_phys_period.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
+            st.table(df_liga.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
 
     with t3:
+        # Vælg kamp (kun HIF kampe fra perioden)
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
@@ -101,7 +107,7 @@ def vis_side(conn, name_map=None):
             valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique(), label_visibility="collapsed")
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
-            df_match = df_phys_period[df_phys_period['MATCH_SSIID'] == m_id].sort_values('DISTANCE', ascending=False)
+            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values('DISTANCE', ascending=False)
             st.dataframe(
                 df_match[['PLAYER_NAME', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
                 use_container_width=True, 
