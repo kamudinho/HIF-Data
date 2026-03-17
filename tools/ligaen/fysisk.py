@@ -20,7 +20,7 @@ def vis_side(conn, name_map=None):
         ORDER BY "DATE" DESC
         """
         
-        # 2. Fysisk data
+        # 2. Fysisk data - her bruger vi de sikre kolonner fra SUMMARY tabellen
         query_phys = """
         SELECT 
             MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
@@ -28,20 +28,23 @@ def vis_side(conn, name_map=None):
             "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
-        
-        # 3. Hvidovre Spiller-liste (Vi henter de unikke navne der er knyttet til jeres Team SSIID)
-        query_hif_players = f"""
-        SELECT DISTINCT PLAYER_NAME
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
-        WHERE TEAM_SSIID = '{HIF_SSIID}'
-        """
-        
-        return conn.query(query_meta), conn.query(query_phys), conn.query(query_hif_players)
+        return conn.query(query_meta), conn.query(query_phys)
 
-    df_meta, df_phys, df_hif_list = get_all_data()
+    try:
+        df_meta, df_phys = get_all_data()
+    except Exception as e:
+        st.error(f"SQL Fejl: {e}")
+        return
 
-    # Omdan HIF-spillerliste til et sæt for hurtig opslag
-    hif_names = set(df_hif_list['PLAYER_NAME'].tolist())
+    # --- LOGIK TIL AT SKILLE HOLDENE AD ---
+    # Vi identificerer HIF-spillere ved at se på dem, der optræder i flest Hvidovre-kampe
+    # Da vi ved, at modstanderne skifter hver uge, er HIF-spillerne de eneste gengangere.
+    hif_match_ids = df_meta['MATCH_SSIID'].unique()
+    df_period = df_phys[df_phys['MATCH_SSIID'].isin(hif_match_ids)].copy()
+
+    # Tæl hvor mange HIF-kampe hver spiller har spillet i denne periode
+    appearance_count = df_period.groupby('PLAYER_NAME')['MATCH_SSIID'].nunique()
+    hif_squad = appearance_count[appearance_count > 1].index.tolist()
 
     def parse_minutes(val):
         try:
@@ -52,14 +55,15 @@ def vis_side(conn, name_map=None):
             return float(val)
         except: return 0.0
 
-    df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
-    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
+    df_period['MINS_DECIMAL'] = df_period['MINUTES'].apply(parse_minutes)
+    df_period['HI_RUN'] = df_period['HIGH SPEED RUNNING'] + df_period['SPRINTING']
+    df_period['Hold'] = df_period['PLAYER_NAME'].apply(lambda x: "Hvidovre IF" if x in hif_squad else "Modstander")
 
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # Filtrér så vi KUN ser spillere fra jeres egen trup (baseret på query 3)
-        df_hif_only = df_phys[df_phys['PLAYER_NAME'].isin(hif_names)].copy()
+        # Samlet oversigt for HIF-truppen
+        df_hif_only = df_period[df_period['Hold'] == "Hvidovre IF"].copy()
         
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
@@ -83,16 +87,17 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        df_liga = df_phys[df_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
+        # Liga overblik
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
-            st.table(df_liga.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
+            st.table(df_period.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
         with c2:
             st.write("HI Distance (m)")
-            st.table(df_liga.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
+            st.table(df_period.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
 
     with t3:
+        # Kampvælger
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
@@ -100,11 +105,7 @@ def vis_side(conn, name_map=None):
             valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique(), label_visibility="collapsed")
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
-            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
-            
-            # Marker hvem der er fra HIF i oversigten
-            df_match['Hold'] = df_match['PLAYER_NAME'].apply(lambda x: "Hvidovre IF" if x in hif_names else "Modstander")
-            df_match = df_match.sort_values(['Hold', 'DISTANCE'], ascending=[False, False])
+            df_match = df_period[df_period['MATCH_SSIID'] == m_id].sort_values(['Hold', 'DISTANCE'], ascending=[False, False])
             
             st.dataframe(
                 df_match[['PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
