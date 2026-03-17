@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px # Vi bruger plotly til grafer
+import plotly.express as px
 from datetime import datetime
 
 # Konstanter
@@ -25,6 +25,7 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
+        # Rettet SQL uden ACCELERATIONS, men med NO_OF_HIGH_INTENSITY_RUNS
         query_phys = f"""
         WITH hvidovre_ids AS (
             SELECT DISTINCT 
@@ -42,7 +43,7 @@ def vis_side(conn, name_map=None):
         SELECT 
             p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, 
             p.DISTANCE, p."HIGH SPEED RUNNING", p."SPRINTING", p."TOP_SPEED",
-            p."ACCELERATIONS", p."DECELERATIONS",
+            p."NO_OF_HIGH_INTENSITY_RUNS",
             CASE WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF' ELSE 'Modstander' END AS "Hold"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
         LEFT JOIN hvidovre_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.opta_id
@@ -81,34 +82,33 @@ def vis_side(conn, name_map=None):
             'HI_RUN': 'sum',
             'SPRINTING': 'sum',
             'TOP_SPEED': 'max',
-            'ACCELERATIONS': 'sum'
+            'NO_OF_HIGH_INTENSITY_RUNS': 'sum'
         }).reset_index()
 
         summary = summary[summary['MINS_DECIMAL'] > 15].copy()
         summary['Dist_P90'] = (summary['DISTANCE'] / summary['MINS_DECIMAL']) * 90 / 1000
         summary['HI_P90'] = (summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90
         summary['Sprint_P90'] = (summary['SPRINTING'] / summary['MINS_DECIMAL']) * 90
-        summary['Acc_P90'] = (summary['ACCELERATIONS'] / summary['MINS_DECIMAL']) * 90
+        summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
 
         st.dataframe(
             summary.sort_values('Dist_P90', ascending=False), 
             column_config={
-                "PLAYER_NAME": "Spiller", "MATCH_SSIID": "Kampe",
-                "MINS_DECIMAL": st.column_config.NumberColumn("Total Min.", format="%d"),
+                "PLAYER_NAME": "Spiller",
                 "Dist_P90": st.column_config.NumberColumn("KM pr. 90", format="%.2f km"),
                 "HI_P90": st.column_config.NumberColumn("HI m pr. 90", format="%d m"),
                 "Sprint_P90": st.column_config.NumberColumn("Sprint pr. 90", format="%d m"),
-                "Acc_P90": st.column_config.NumberColumn("Acc pr. 90", format="%.1f"),
+                "HIR_Actions_P90": st.column_config.NumberColumn("HI Aktioner P90", format="%.1f"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
             use_container_width=True, hide_index=True,
-            height=(len(summary) + 1) * 35 + 38 # Beregner fuld højde
+            height=(len(summary) + 1) * 35 + 38
         )
 
     with t2:
         st.subheader("Visuel Sammenligning (Hvidovre IF)")
         kat_valg = st.selectbox("Vælg kategori til graf", 
-                                ["Dist_P90", "HI_P90", "Sprint_P90", "Acc_P90", "TOP_SPEED"])
+                                ["Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"])
         
         fig = px.bar(summary.sort_values(kat_valg, ascending=True), 
                      x=kat_valg, y='PLAYER_NAME', orientation='h',
@@ -124,11 +124,11 @@ def vis_side(conn, name_map=None):
             st.write("**Topfart (km/t)**")
             st.table(df_phys.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5).map(lambda x: f"{x:.1f} km/t"))
         with c2:
-            st.write("**HI pr. kamp (m)**") # Her ser vi på enkelte kamp-præstationer
+            st.write("**Mest HI løb i én kamp (m)**")
             st.table(df_phys.nlargest(5, 'HI_RUN')[['PLAYER_NAME', 'HI_RUN']].set_index('PLAYER_NAME'))
         with c3:
-            st.write("**Distance pr. kamp (km)**")
-            top_dist = df_phys.nlargest(5, 'DISTANCE')[['PLAYER_NAME', 'DISTANCE']]
+            st.write("**Mest distance i én kamp (km)**")
+            top_dist = df_phys.nlargest(5, 'DISTANCE')[['PLAYER_NAME', 'DISTANCE']].copy()
             top_dist['DISTANCE'] = top_dist['DISTANCE'].map(lambda x: f"{x/1000:.2f} km")
             st.table(top_dist.set_index('PLAYER_NAME'))
 
