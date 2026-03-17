@@ -123,8 +123,9 @@ def vis_side(conn, name_map=None):
             # Sorter: Hvidovre først, så distance
             df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
+            # Her er ændringen: MATCH_SSIID er tilføjet som første kolonne i listen
             st.dataframe(
-                df_match[['PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
+                df_match[['MATCH_SSIID', 'PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
                 use_container_width=True, hide_index=True,
                 height=(len(df_match) + 1) * 35 + 5
             )
