@@ -11,6 +11,7 @@ def vis_side(conn, name_map=None):
     def get_all_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
+        # 1. Metadata: Kun 2025/2026 sæsonen frem til i dag
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -28,7 +29,6 @@ def vis_side(conn, name_map=None):
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
 
-        # Vi henter TEAM_SSIID her. Vi bruger "AS", så vi er sikre på navnet.
         query_teams = """
         SELECT DISTINCT MATCH_SSIID, PLAYER_NAME, TEAM_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
@@ -38,19 +38,13 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys, df_teams = get_all_data()
 
-    # --- ROBUST MATCHING ---
-    # Vi gør alt til lowercase og fjerner spaces for at sikre match
+    # --- MATCHING & FILTRERING ---
     df_teams['MATCH_KEY'] = df_teams['MATCH_SSIID'].astype(str) + df_teams['PLAYER_NAME'].astype(str).str.lower().str.strip()
     df_phys['MATCH_KEY'] = df_phys['MATCH_SSIID'].astype(str) + df_phys['PLAYER_NAME'].astype(str).str.lower().str.strip()
     
-    # Merge hold-info på præstationerne
-    df_combined = pd.merge(
-        df_phys, 
-        df_teams[['MATCH_KEY', 'TEAM_SSIID']], 
-        on='MATCH_KEY', 
-        how='left'
-    )
+    df_combined = pd.merge(df_phys, df_teams[['MATCH_KEY', 'TEAM_SSIID']], on='MATCH_KEY', how='left')
 
+    # Beregningskolonner
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -63,26 +57,24 @@ def vis_side(conn, name_map=None):
     df_combined['MINS_DECIMAL'] = df_combined['MINUTES'].apply(parse_minutes)
     df_combined['HI_RUN'] = df_combined['HIGH SPEED RUNNING'] + df_combined['SPRINTING']
     
-    # "Blødt" tjek på ID
     target_id = HIF_SSIID.lower().strip()
     df_combined['Hold'] = df_combined['TEAM_SSIID'].astype(str).str.lower().str.strip().apply(
         lambda x: "Hvidovre IF" if x == target_id else "Modstander"
     )
 
+    # VIGTIGT: Her definerer vi præcis hvilke kampe der tæller (2025/2026 sæsonen)
+    valid_ids = df_meta['MATCH_SSIID'].unique()
+
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        valid_ids = df_meta['MATCH_SSIID'].unique()
-        # Fallback: Hvis hold-matching stadig driller, viser vi spillere med > 1 kamp
-        df_hif = df_combined[df_combined['Hold'] == "Hvidovre IF"].copy()
+        # Filtrér så vi KUN ser data fra de gyldige kampe OG kun Hvidovre spillere
+        df_hif_season = df_combined[
+            (df_combined['MATCH_SSIID'].isin(valid_ids)) & 
+            (df_combined['Hold'] == "Hvidovre IF")
+        ].copy()
         
-        if df_hif.empty:
-            # Hvis den er tom pga. ID-fejl, så tag spillere der optræder ofte (som før)
-            appearance_count = df_combined[df_combined['MATCH_SSIID'].isin(valid_ids)].groupby('PLAYER_NAME')['MATCH_SSIID'].nunique()
-            hif_squad = appearance_count[appearance_count > 1].index.tolist()
-            df_hif = df_combined[df_combined['PLAYER_NAME'].isin(hif_squad)].copy()
-
-        summary = df_hif.groupby('PLAYER_NAME').agg({
+        summary = df_hif_season.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
             'HI_RUN': 'sum',
@@ -103,7 +95,8 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        df_liga = df_combined[df_combined['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
+        # Liga Top 5 begrænset til 2025/2026 kampene
+        df_liga = df_combined[df_combined['MATCH_SSIID'].isin(valid_ids)]
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
