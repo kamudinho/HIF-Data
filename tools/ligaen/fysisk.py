@@ -105,7 +105,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        st.subheader("Visuel Sammenligning (Hvidovre IF)")
         kat_mapping = {
             "Dist_P90": "KM pr. 90",
             "HI_P90": "HI m pr. 90",
@@ -121,7 +120,7 @@ def vis_side(conn, name_map=None):
                      x='PLAYER_NAME', y=kat_valg,
                      text=kat_valg, # Her indsættes værdierne
                      title=f"Hvidovre IF: {kat_mapping[kat_valg]}",
-                     labels={kat_valg: "Værdi", "PLAYER_NAME": "Spiller"},
+                     labels={kat_valg: " ", "PLAYER_NAME": "Spiller"},
                      color=kat_valg, color_continuous_scale='Blues')
         
         fig.update_traces(textposition='outside') # Værdier over søjlerne
@@ -129,7 +128,6 @@ def vis_side(conn, name_map=None):
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        st.subheader("Liga Top 5 - Sæsonens bedste præstationer")
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
