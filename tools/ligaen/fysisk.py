@@ -8,10 +8,9 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
     def get_all_data():
-        # Dags dato (2026-03-17) for at filtrere fremtidige kampe fra
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Metadata: Kun fra 1. juli 2025 til og med i dag
+        # 1. Metadata: Fra 1. juli 2025 til og med i dag
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -21,7 +20,7 @@ def vis_side(conn, name_map=None):
         ORDER BY "DATE" DESC
         """
         
-        # 2. Fysisk data - vi henter kun de kolonner vi ved virker
+        # 2. Fysisk data
         query_phys = """
         SELECT 
             MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
@@ -31,13 +30,8 @@ def vis_side(conn, name_map=None):
         """
         return conn.query(query_meta), conn.query(query_phys)
 
-    try:
-        df_meta, df_phys = get_all_data()
-    except Exception as e:
-        st.error(f"SQL Fejl: {e}")
-        return
+    df_meta, df_phys = get_all_data()
 
-    # Rensning og beregning
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -53,19 +47,13 @@ def vis_side(conn, name_map=None):
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # Vi filtrerer på MATCH_TEAMS, men sørger for kun at tage rækker, 
-        # hvor Hvidovre er nævnt, og vi fjerner kendte modstander-navne hvis nødvendigt.
-        # Da vi ikke har en stabil PLAYER_ID mapping lige nu, bruger vi MATCH_TEAMS.
-        
-        # Strategi: Vi tager kun de kampe hvor HIF er med, og filtrerer spillere 
-        # der har spillet for 'Hvidovre' (typisk markeret i MATCH_TEAMS for den enkelte række)
         valid_ids = df_meta['MATCH_SSIID'].unique()
+        # Filtrering der kun tager Hvidovre-rækker
         df_hif_only = df_phys[
             (df_phys['MATCH_SSIID'].isin(valid_ids)) & 
             (df_phys['MATCH_TEAMS'].str.contains('Hvidovre|HVI', case=False, na=False))
         ].copy()
         
-        # Aggregering
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
@@ -73,6 +61,9 @@ def vis_side(conn, name_map=None):
             'TOP_SPEED': 'max'
         }).reset_index().sort_values('DISTANCE', ascending=False)
 
+        # Vi beregner højden dynamisk: (antal rækker * 35px) + 40px til header
+        calc_height = (len(summary) + 1) * 35 + 3
+        
         st.dataframe(
             summary, 
             column_config={
@@ -83,7 +74,8 @@ def vis_side(conn, name_map=None):
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
             use_container_width=True, 
-            hide_index=True
+            hide_index=True,
+            height=calc_height
         )
 
     with t2:
@@ -105,8 +97,13 @@ def vis_side(conn, name_map=None):
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values('DISTANCE', ascending=False)
+            
+            # Samme højde-logik her for at undgå scroll i den enkelte kamp
+            match_height = (len(df_match) + 1) * 35 + 3
+            
             st.dataframe(
                 df_match[['PLAYER_NAME', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
                 use_container_width=True, 
-                hide_index=True
+                hide_index=True,
+                height=match_height
             )
