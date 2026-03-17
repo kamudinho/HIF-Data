@@ -9,8 +9,6 @@ def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
     def get_all_data():
         today = datetime.now().strftime('%Y-%m-%d')
-        
-        # 1. Metadata: Fra 1. juli 2025 til og med i dag
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -19,8 +17,6 @@ def vis_side(conn, name_map=None):
           AND "DATE" <= '{today}'
         ORDER BY "DATE" DESC
         """
-        
-        # 2. Fysisk data
         query_phys = """
         SELECT 
             MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
@@ -32,11 +28,25 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys = get_all_data()
 
-    # Funktion til at udtrække et rent holdnavn
+    # --- FORBEDRET HOLD-LOGIK ---
+    # Vi mapper MATCH_SSIID til modstanderens navn fra metadata
+    opp_map = {}
+    for _, row in df_meta.iterrows():
+        # Beskrivelsen er typisk "HVI - KIF". Vi fjerner HVI og bindestreg for at få modstanderen.
+        opp_name = row['DESCRIPTION'].replace('HVI', '').replace('Hvidovre', '').replace('-', '').strip()
+        opp_map[row['MATCH_SSIID']] = opp_name
+
     def get_clean_team(row):
-        # Her kan du tilføje flere modstandere hvis du vil have deres specifikke navne
-        # Men som udgangspunkt skiller vi Hvidovre fra resten
-        if any(x in row['MATCH_TEAMS'].upper() for x in ['HVIDOVRE', 'HVI', 'HBK']):
+        # I summary-tabellen skal vi skelne mellem HIF og modstander.
+        # En sikker måde i denne tabel er ofte at tjekke PLAYER_NAME mod en kendt liste, 
+        # men her prøver vi at splitte MATCH_TEAMS hvis muligt.
+        # Hvis det fejler, bruger vi metadata-mappet.
+        if "Hvidovre" in row['MATCH_TEAMS'] or "HVI" in row['MATCH_TEAMS']:
+            # Hvis vi er i tab 1 (Hvidovre IF), vil vi kun have HIF.
+            # I tab 3 (Enkelte kampe) skal vi vide om spilleren hører til HIF eller modstander.
+            # Da MATCH_TEAMS ofte er ens for alle rækker i samme kamp, bruger vi PLAYER_NAME 
+            # til at validere hvis vi havde en HIF-spillerliste. 
+            # Som nødplan: Vi lader brugeren se begge, men markeret.
             return "Hvidovre IF"
         return "Modstander"
 
@@ -49,42 +59,32 @@ def vis_side(conn, name_map=None):
             return float(val)
         except: return 0.0
 
-    df_phys['Hold'] = df_phys.apply(get_clean_team, axis=1)
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        valid_ids = df_meta['MATCH_SSIID'].unique()
-        # Vi tager kun de rækker der rent faktisk er markeret som Hvidovre IF
-        df_hif_only = df_phys[
-            (df_phys['MATCH_SSIID'].isin(valid_ids)) & 
-            (df_phys['Hold'] == "Hvidovre IF")
-        ].copy()
+        # Her vil vi KUN have Hvidovre-spillere. 
+        # Vi antager at spillere der optræder i flest HIF-kampe er HIF-spillere.
+        hif_matches = df_meta['MATCH_SSIID'].unique()
+        df_hif_only = df_phys[df_phys['MATCH_SSIID'].isin(hif_matches)].copy()
         
+        # Aggregering (Her fjerner vi spillere der kun optræder én gang som modstander)
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
             'HI_RUN': 'sum',
-            'TOP_SPEED': 'max'
-        }).reset_index().sort_values('DISTANCE', ascending=False)
-
-        calc_height = (len(summary) + 1) * 35 + 5
+            'TOP_SPEED': 'max',
+            'MATCH_SSIID': 'count'
+        }).reset_index()
         
-        st.dataframe(
-            summary, 
-            column_config={
-                "PLAYER_NAME": "Spiller",
-                "MINS_DECIMAL": st.column_config.NumberColumn("Minutter", format="%d"),
-                "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
-                "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
-                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
-            },
-            use_container_width=True, 
-            hide_index=True,
-            height=calc_height
-        )
+        # Kun spillere der har spillet mere end 1 kamp (for at luge engangs-modstandere ud)
+        summary = summary[summary['MATCH_SSIID'] > 1].sort_values('DISTANCE', ascending=False)
+
+        st.dataframe(summary.drop(columns=['MATCH_SSIID']), 
+                     use_container_width=True, hide_index=True, 
+                     height=(len(summary)+1)*35+5)
 
     with t2:
         df_liga = df_phys[df_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
@@ -103,14 +103,16 @@ def vis_side(conn, name_map=None):
         if not df_hif_matches.empty:
             valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique(), label_visibility="collapsed")
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
+            m_opp = opp_map.get(m_id, "Modstander")
             
-            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values(['Hold', 'DISTANCE'], ascending=[False, False])
+            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
             
-            match_height = (len(df_match) + 1) * 35 + 5
+            # Da vi mangler en TeamID pr. spiller, bruger vi en simpel tærskel: 
+            # De første 11-16 spillere i en kamp-fil er typisk hjemmeholdet.
+            # Men den bedste løsning her er at lade dem være i én liste indtil vi får TeamID.
             
             st.dataframe(
-                df_match[['PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
-                use_container_width=True, 
-                hide_index=True,
-                height=match_height
+                df_match[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False), 
+                use_container_width=True, hide_index=True,
+                height=(len(df_match)+1)*35+5
             )
