@@ -88,7 +88,6 @@ def vis_side(conn, name_map=None):
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Kampoversigt"])
 
     with t1:
-        st.subheader("Hvidovre IF - Sæsonpræstationer pr. 90 min.")
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
         
         # Aggregering
@@ -123,7 +122,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        st.subheader("Ligaens Skarpeste (Top 5)")
         c1, c2, c3 = st.columns(3)
         
         with c1:
