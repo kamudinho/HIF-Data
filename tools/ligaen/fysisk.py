@@ -11,7 +11,7 @@ def vis_side(conn, name_map=None):
     def get_all_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Metadata (Dato filter)
+        # 1. Metadata: Alle kampe i perioden
         query_meta = f"""
         SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -21,7 +21,7 @@ def vis_side(conn, name_map=None):
         ORDER BY "DATE" DESC
         """
         
-        # 2. Fysisk data (Fra summary tabellen vi har brugt før)
+        # 2. Fysisk data (Præstationer)
         query_phys = """
         SELECT 
             MATCH_SSIID, PLAYER_NAME, 
@@ -30,7 +30,8 @@ def vis_side(conn, name_map=None):
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
 
-        # 3. NY TEAM MAPPING (Fra din F53A_GAME_PLAYER tabel)
+        # 3. Hold-tilhørsforhold (Fra din nye tabel)
+        # Vi sikrer os at kolonnenavne matcher dit dump (TEAM_SSIID, PLAYER_NAME)
         query_teams = """
         SELECT DISTINCT MATCH_SSIID, PLAYER_NAME, TEAM_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
@@ -40,8 +41,8 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys, df_teams = get_all_data()
 
-    # --- MERGE LOGIK ---
-    # Vi kobler fysisk data sammen med TEAM_SSIID fra den nye tabel
+    # --- SAMMENKOBLING ---
+    # Vi knytter TEAM_SSIID til de fysiske data
     df_combined = pd.merge(
         df_phys, 
         df_teams, 
@@ -61,7 +62,7 @@ def vis_side(conn, name_map=None):
     df_combined['MINS_DECIMAL'] = df_combined['MINUTES'].apply(parse_minutes)
     df_combined['HI_RUN'] = df_combined['HIGH SPEED RUNNING'] + df_combined['SPRINTING']
     
-    # Definér holdet rent ud fra TEAM_SSIID
+    # Definer "Hold" baseret på SSIID
     df_combined['Hold'] = df_combined['TEAM_SSIID'].apply(
         lambda x: "Hvidovre IF" if str(x) == HIF_SSIID else "Modstander"
     )
@@ -69,14 +70,14 @@ def vis_side(conn, name_map=None):
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # Kun HIF rækker fra relevante kampe
-        valid_ids = df_meta['MATCH_SSIID'].unique()
-        df_hif = df_combined[
+        # TRIN 1: Sæson-total for Hvidovre IF
+        valid_match_ids = df_meta['MATCH_SSIID'].unique()
+        df_hif_season = df_combined[
             (df_combined['Hold'] == "Hvidovre IF") & 
-            (df_combined['MATCH_SSIID'].isin(valid_ids))
+            (df_combined['MATCH_SSIID'].isin(valid_match_ids))
         ].copy()
         
-        summary = df_hif.groupby('PLAYER_NAME').agg({
+        summary = df_hif_season.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
             'HI_RUN': 'sum',
@@ -88,7 +89,7 @@ def vis_side(conn, name_map=None):
             column_config={
                 "PLAYER_NAME": "Spiller",
                 "MINS_DECIMAL": st.column_config.NumberColumn("Minutter", format="%d"),
-                "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
+                "DISTANCE": st.column_config.NumberColumn("Total Meter", format="%d"),
                 "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
@@ -97,16 +98,18 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
+        # TRIN 2: Ligaens top-præstationer (Alle spillere i perioden)
         df_liga = df_combined[df_combined['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
             st.table(df_liga.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
         with c2:
-            st.write("HI Distance (m)")
+            st.write("HI Distance total (m)")
             st.table(df_liga.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
 
     with t3:
+        # TRIN 3: Enkelte kampe med korrekt sortering
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
@@ -115,7 +118,7 @@ def vis_side(conn, name_map=None):
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
             df_match = df_combined[df_combined['MATCH_SSIID'] == m_id].copy()
-            # Sorterer så Hvidovre IF ligger øverst
+            # SORTERING: Først Hold (Hvidovre IF kommer før Modstander alfabetisk), så Distance
             df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
             st.dataframe(
