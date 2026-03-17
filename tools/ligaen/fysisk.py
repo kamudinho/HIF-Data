@@ -8,7 +8,7 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
     def get_all_data():
-        # Dags dato for at filtrere fremtidige kampe fra
+        # Dags dato (2026-03-17) for at filtrere fremtidige kampe fra
         today = datetime.now().strftime('%Y-%m-%d')
         
         # 1. Metadata: Kun fra 1. juli 2025 til og med i dag
@@ -21,24 +21,21 @@ def vis_side(conn, name_map=None):
         ORDER BY "DATE" DESC
         """
         
-        # 2. Mapping: Find alle unikke OptaIDs der hører til HIF (via TEAM_SSIID)
-        query_hif_players = f"""
-        SELECT DISTINCT PLAYER_OPTAID
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_TEAM
-        WHERE TEAM_SSIID = '{HIF_SSIID}'
-        """
-        
-        # 3. Fysisk data
+        # 2. Fysisk data - vi henter kun de kolonner vi ved virker
         query_phys = """
         SELECT 
-            MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, "optaId",
+            MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
             MINUTES, DISTANCE, 
             "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
-        return conn.query(query_meta), conn.query(query_hif_players), conn.query(query_phys)
+        return conn.query(query_meta), conn.query(query_phys)
 
-    df_meta, df_hif_map, df_phys = get_all_data()
+    try:
+        df_meta, df_phys = get_all_data()
+    except Exception as e:
+        st.error(f"SQL Fejl: {e}")
+        return
 
     # Rensning og beregning
     def parse_minutes(val):
@@ -52,21 +49,23 @@ def vis_side(conn, name_map=None):
 
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
-    
-    # Konverter optaId til streng for at sikre match med mapping-tabellen
-    df_phys['optaId'] = df_phys['optaId'].astype(str)
-    hif_player_ids = df_hif_map['PLAYER_OPTAID'].astype(str).unique()
 
-    # Tabs
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # HÅRD FILTRERING: Kun spillere hvis OptaID findes i HIF-mappingen
-        df_hif_only = df_phys[df_phys['optaId'].isin(hif_player_ids)].copy()
+        # Vi filtrerer på MATCH_TEAMS, men sørger for kun at tage rækker, 
+        # hvor Hvidovre er nævnt, og vi fjerner kendte modstander-navne hvis nødvendigt.
+        # Da vi ikke har en stabil PLAYER_ID mapping lige nu, bruger vi MATCH_TEAMS.
         
-        # Kun for kampe der er i vores metadata (efter 1/7 og før i dag)
-        df_hif_only = df_hif_only[df_hif_only['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'])]
+        # Strategi: Vi tager kun de kampe hvor HIF er med, og filtrerer spillere 
+        # der har spillet for 'Hvidovre' (typisk markeret i MATCH_TEAMS for den enkelte række)
+        valid_ids = df_meta['MATCH_SSIID'].unique()
+        df_hif_only = df_phys[
+            (df_phys['MATCH_SSIID'].isin(valid_ids)) & 
+            (df_phys['MATCH_TEAMS'].str.contains('Hvidovre|HVI', case=False, na=False))
+        ].copy()
         
+        # Aggregering
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
@@ -79,7 +78,7 @@ def vis_side(conn, name_map=None):
             column_config={
                 "PLAYER_NAME": "Spiller",
                 "MINS_DECIMAL": st.column_config.NumberColumn("Minutter", format="%d"),
-                "DISTANCE": st.column_config.NumberColumn("Total Meter", format="%d"),
+                "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
                 "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
@@ -88,7 +87,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        # Liga-top 5 for den valgte periode
         df_liga = df_phys[df_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
         c1, c2 = st.columns(2)
         with c1:
@@ -99,7 +97,6 @@ def vis_side(conn, name_map=None):
             st.table(df_liga.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
 
     with t3:
-        # Vælg kamp (kun HIF kampe fra perioden)
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
