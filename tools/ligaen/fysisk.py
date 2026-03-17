@@ -32,6 +32,14 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys = get_all_data()
 
+    # Funktion til at udtrække et rent holdnavn
+    def get_clean_team(row):
+        # Her kan du tilføje flere modstandere hvis du vil have deres specifikke navne
+        # Men som udgangspunkt skiller vi Hvidovre fra resten
+        if any(x in row['MATCH_TEAMS'].upper() for x in ['HVIDOVRE', 'HVI', 'HBK']):
+            return "Hvidovre IF"
+        return "Modstander"
+
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -41,6 +49,7 @@ def vis_side(conn, name_map=None):
             return float(val)
         except: return 0.0
 
+    df_phys['Hold'] = df_phys.apply(get_clean_team, axis=1)
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
@@ -48,10 +57,10 @@ def vis_side(conn, name_map=None):
 
     with t1:
         valid_ids = df_meta['MATCH_SSIID'].unique()
-        # Filtrering der kun tager Hvidovre-rækker
+        # Vi tager kun de rækker der rent faktisk er markeret som Hvidovre IF
         df_hif_only = df_phys[
             (df_phys['MATCH_SSIID'].isin(valid_ids)) & 
-            (df_phys['MATCH_TEAMS'].str.contains('Hvidovre|HVI', case=False, na=False))
+            (df_phys['Hold'] == "Hvidovre IF")
         ].copy()
         
         summary = df_hif_only.groupby('PLAYER_NAME').agg({
@@ -61,8 +70,7 @@ def vis_side(conn, name_map=None):
             'TOP_SPEED': 'max'
         }).reset_index().sort_values('DISTANCE', ascending=False)
 
-        # Vi beregner højden dynamisk: (antal rækker * 35px) + 40px til header
-        calc_height = (len(summary) + 1) * 35 + 3
+        calc_height = (len(summary) + 1) * 35 + 5
         
         st.dataframe(
             summary, 
@@ -96,13 +104,12 @@ def vis_side(conn, name_map=None):
             valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique(), label_visibility="collapsed")
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
-            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values('DISTANCE', ascending=False)
+            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values(['Hold', 'DISTANCE'], ascending=[False, False])
             
-            # Samme højde-logik her for at undgå scroll i den enkelte kamp
-            match_height = (len(df_match) + 1) * 35 + 3
+            match_height = (len(df_match) + 1) * 35 + 5
             
             st.dataframe(
-                df_match[['PLAYER_NAME', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
+                df_match[['PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
                 use_container_width=True, 
                 hide_index=True,
                 height=match_height
