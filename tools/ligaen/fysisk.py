@@ -85,7 +85,7 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    t1, t2, t3 = st.tabs(["Hvidovre IF (P90)", "Liga Top 5", "Kampoversigt"])
+    t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Kampoversigt"])
 
     with t1:
         st.subheader("Hvidovre IF - Sæsonpræstationer pr. 90 min.")
