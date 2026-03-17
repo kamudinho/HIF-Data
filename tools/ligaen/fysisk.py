@@ -85,10 +85,10 @@ def vis_side(conn, name_map=None):
         }).reset_index()
 
         summary = summary[summary['MINS_DECIMAL'] > 15].copy()
-        summary['Dist_P90'] = (summary['DISTANCE'] / summary['MINS_DECIMAL']) * 90 / 1000
-        summary['HI_P90'] = (summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90
-        summary['Sprint_P90'] = (summary['SPRINTING'] / summary['MINS_DECIMAL']) * 90
-        summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
+        summary['Dist_P90'] = round((summary['DISTANCE'] / summary['MINS_DECIMAL']) * 90 / 1000, 2)
+        summary['HI_P90'] = round((summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90, 0)
+        summary['Sprint_P90'] = round((summary['SPRINTING'] / summary['MINS_DECIMAL']) * 90, 0)
+        summary['HIR_Actions_P90'] = round((summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90, 1)
 
         st.dataframe(
             summary.sort_values('Dist_P90', ascending=False), 
@@ -106,34 +106,44 @@ def vis_side(conn, name_map=None):
 
     with t2:
         st.subheader("Visuel Sammenligning (Hvidovre IF)")
-        kat_valg = st.selectbox("Vælg kategori til graf", 
-                                ["Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"])
+        kat_mapping = {
+            "Dist_P90": "KM pr. 90",
+            "HI_P90": "HI m pr. 90",
+            "Sprint_P90": "Sprint pr. 90",
+            "HIR_Actions_P90": "HI Aktioner pr. 90",
+            "TOP_SPEED": "Topfart km/t"
+        }
+        kat_valg = st.selectbox("Vælg kategori til graf", list(kat_mapping.keys()), format_func=lambda x: kat_mapping[x])
         
-        # Spillerne på X-aksen, værdierne på Y-aksen
-        fig = px.bar(summary.sort_values(kat_valg, ascending=False), 
+        plot_df = summary.sort_values(kat_valg, ascending=False)
+        
+        fig = px.bar(plot_df, 
                      x='PLAYER_NAME', y=kat_valg,
-                     title=f"Hvidovre IF: {kat_valg}",
+                     text=kat_valg, # Her indsættes værdierne
+                     title=f"Hvidovre IF: {kat_mapping[kat_valg]}",
                      labels={kat_valg: "Værdi", "PLAYER_NAME": "Spiller"},
                      color=kat_valg, color_continuous_scale='Blues')
         
-        # Sørger for at navne på x-aksen er læsbare hvis der er mange spillere
-        fig.update_layout(xaxis_tickangle=-45)
+        fig.update_traces(textposition='outside') # Værdier over søjlerne
+        fig.update_layout(xaxis_tickangle=-45, yaxis_range=[0, plot_df[kat_valg].max() * 1.15])
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        st.subheader("Liga Top 5")
-        c1, c2, c3 = st.columns(3)
+        st.subheader("Liga Top 5 - Sæsonens bedste præstationer")
+        c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
             st.table(df_phys.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5).map(lambda x: f"{x:.1f} km/t"))
+            
+            st.write("**Mest Sprint i én kamp (m)**")
+            st.table(df_phys.nlargest(5, 'SPRINTING')[['PLAYER_NAME', 'SPRINTING']].set_index('PLAYER_NAME'))
+        
         with c2:
             st.write("**Mest HI løb i én kamp (m)**")
             st.table(df_phys.nlargest(5, 'HI_RUN')[['PLAYER_NAME', 'HI_RUN']].set_index('PLAYER_NAME'))
-        with c3:
-            st.write("**Mest distance i én kamp (km)**")
-            top_dist = df_phys.nlargest(5, 'DISTANCE')[['PLAYER_NAME', 'DISTANCE']].copy()
-            top_dist['DISTANCE'] = top_dist['DISTANCE'].map(lambda x: f"{x/1000:.2f} km")
-            st.table(top_dist.set_index('PLAYER_NAME'))
+            
+            st.write("**Flest HI Aktioner i én kamp**")
+            st.table(df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['PLAYER_NAME', 'NO_OF_HIGH_INTENSITY_RUNS']].set_index('PLAYER_NAME'))
 
     with t4:
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
@@ -144,7 +154,7 @@ def vis_side(conn, name_map=None):
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
-            df_match['KM'] = df_match['DISTANCE'] / 1000
+            df_match['KM'] = round(df_match['DISTANCE'] / 1000, 2)
             df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
             st.dataframe(
