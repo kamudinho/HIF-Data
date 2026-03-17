@@ -11,7 +11,7 @@ def vis_side(conn, name_map=None):
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Hent Metadata (Uændret - bruges til kampvælgeren)
+        # 1. Hent Metadata til kampvælgeren
         query_meta = f"""
         SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -25,16 +25,20 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
-        # 2. Hent Fysisk Data med præcis Hold-identifikation via JSON Metadata
-        # Vi bruger en CTE (WITH) til at flade HOME_PLAYERS arrayet ud
+        # 2. Hent Fysisk Data - Dynamisk tjek for Ude og Hjemme via JSON
         query_phys = f"""
         WITH hvidovre_ids AS (
             SELECT DISTINCT 
                 m.MATCH_SSIID,
                 f.value:"optaId"::string AS opta_id
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-            LATERAL FLATTEN(input => m.HOME_PLAYERS) f
-            WHERE m.HOME_SSIID = '{HIF_SSIID}'
+            LATERAL FLATTEN(input => 
+                CASE 
+                    WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS 
+                    ELSE m.AWAY_PLAYERS 
+                END
+            ) f
+            WHERE m.HOME_SSIID = '{HIF_SSIID}' OR m.AWAY_SSIID = '{HIF_SSIID}'
         )
         SELECT 
             p.MATCH_SSIID, 
@@ -65,7 +69,7 @@ def vis_side(conn, name_map=None):
     df_meta, df_phys = get_safe_data()
 
     if df_phys.empty:
-        st.error("Kunne ikke hente data. Tjek Snowflake-forbindelsen.")
+        st.error("Ingen data fundet for den valgte periode.")
         return
 
     # --- DATABEHANDLING ---
@@ -81,13 +85,10 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    # Vi behøver ikke længere 'appearance_count' logikken, 
-    # da 'Hold' kolonnen kommer direkte og korrekt fra SQL!
-
-    t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
+    t1, t2, t3 = st.tabs(["📊 Hvidovre IF", "🏆 Liga Top 5", "⚽ Enkelte Kampe"])
 
     with t1:
-        # Sæson-total (Kun HIF)
+        st.subheader("Sæson-totaler for Hvidovre IF")
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
         
         summary = df_hif.groupby('PLAYER_NAME').agg({
@@ -104,7 +105,7 @@ def vis_side(conn, name_map=None):
                 "PLAYER_NAME": "Spiller",
                 "MATCH_SSIID": "Kampe",
                 "MINS_DECIMAL": st.column_config.NumberColumn("Min.", format="%d"),
-                "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
+                "DISTANCE": st.column_config.NumberColumn("Total Meter", format="%d"),
                 "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
@@ -112,37 +113,40 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        # Liga Top 5 (Alle kampe efter 1/7)
+        st.subheader("Top 5 præstationer i ligaen")
         c1, c2 = st.columns(2)
         with c1:
-            st.write("Topfart (km/t)")
-            st.table(df_phys.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5))
+            st.write("**Topfart (km/t)**")
+            speed_top = df_phys.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5)
+            st.table(speed_top)
         with c2:
-            st.write("HI Distance (m)")
-            st.table(df_phys.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
+            st.write("**HI Distance (m)**")
+            hi_top = df_phys.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5)
+            st.table(hi_top)
 
     with t3:
-        # Kampvælger (Kun kampe hvor Hvidovre er med)
+        # Filtrer kun kampe hvor Hvidovre er med (Ude eller Hjemme)
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
         if not df_hif_matches.empty:
-            valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique(), label_visibility="collapsed")
+            valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique())
             m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
             
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
+            # Sorterer så Hvidovre altid ligger øverst
             df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
-            # Vi definerer de kolonner vi vil se, med MATCH_SSIID først
-            vis_kolonner = ['MATCH_SSIID', 'PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']
+            vis_kolonner = ['PLAYER_NAME', 'Hold', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']
             
             st.dataframe(
                 df_match[vis_kolonner], 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "MATCH_SSIID": st.column_config.TextColumn("Match ID", width="medium"),
-                    "PLAYER_NAME": "Spiller"
+                    "PLAYER_NAME": "Spiller",
+                    "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
+                    "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d")
                 },
                 height=(len(df_match) + 1) * 35 + 5
             )
