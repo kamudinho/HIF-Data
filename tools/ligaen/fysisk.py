@@ -8,9 +8,8 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 def vis_side(conn, name_map=None):
 
     @st.cache_data(ttl=600)
-    def get_data():
-        # Vi holder det ultra-simpelt for at undgå fejl
-        # Vi bruger kun SEASON_METADATA til at finde kampene
+    def get_clean_data():
+        # 1. Hent kampe fra Season Metadata
         query_meta = f"""
         SELECT MATCH_SSIID, DESCRIPTION, "DATE"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -23,17 +22,16 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return None, None
 
-        # Vi henter spillere fra SUMMARY_PLAYERS med de præcise navne fra dit dump
-        # Bemærk citationstegnene pga. mellemrum i navnene
+        # 2. Hent fysisk data med de præcise kolonnenavne i citationstegn
+        # Vi tager kun de mest basale for at sikre hul igennem
         query_phys = """
         SELECT 
             MATCH_SSIID, 
-            MATCH_TEAMS,
             PLAYER_NAME, 
             MINUTES, 
             DISTANCE, 
             "HIGH SPEED RUNNING", 
-            SPRINTING, 
+            "SPRINTING", 
             TOP_SPEED
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
@@ -41,45 +39,40 @@ def vis_side(conn, name_map=None):
         
         return df_meta, df_phys
 
-    df_meta, df_phys = get_data()
-
-    if df_meta is None:
-        st.warning("Ingen metadata fundet.")
+    try:
+        df_meta, df_phys = get_clean_data()
+    except Exception as e:
+        st.error(f"SQL Fejl: {e}")
         return
 
-    # --- DATABEHANDLING ---
-    # Vi finder Hvidovre-kampe i den fysiske tabel
-    # Da jeres holdnavn varierer i teksten (HBK-EFB osv.), 
-    # matcher vi på MATCH_SSIID fra vores filtrerede metadata
-    valid_ids = df_meta['MATCH_SSIID'].unique()
-    df_hif = df_phys[df_phys['MATCH_SSIID'].isin(valid_ids)].copy()
+    if df_meta is not None:
+        # --- LOGIK ---
+        # Vi bruger MATCH_SSIID til at filtrere spillere til de valgte kampe
+        match_ids = df_meta['MATCH_SSIID'].unique()
+        df_hif = df_phys[df_phys['MATCH_SSIID'].isin(match_ids)].copy()
 
-    # Beregn HI Distance (HSR + Sprint)
-    df_hif['HI_DIST'] = df_hif['HIGH SPEED RUNNING'] + df_hif['SPRINTING']
+        # Beregn HI Distance i Python (sikrere end i SQL lige nu)
+        df_hif['HI_DIST'] = df_hif['HIGH SPEED RUNNING'] + df_hif['SPRINTING']
 
-    # --- UI ---
-    st.subheader("Vælg Kamp")
-    valgt_label = st.selectbox("Kamp:", df_meta['DESCRIPTION'].unique())
-    selected_id = df_meta[df_meta['DESCRIPTION'] == valgt_label]['MATCH_SSIID'].iloc[0]
+        # --- UI ---
+        st.subheader("Vælg Kamp")
+        valgt_kamp = st.selectbox("Kamp:", df_meta['DESCRIPTION'].unique())
+        selected_id = df_meta[df_meta['DESCRIPTION'] == valgt_kamp]['MATCH_SSIID'].iloc[0]
 
-    # Vis spillere
-    kamp_stats = df_hif[df_hif['MATCH_SSIID'] == selected_id]
+        # Vis spillerne for den valgte kamp
+        kamp_stats = df_hif[df_hif['MATCH_SSIID'] == selected_id]
 
-    if not kamp_stats.empty:
-        st.write(f"### Spillerstatistik for {valgt_label}")
-        
-        # Sorter efter hvem der løber mest
-        st.dataframe(
-            kamp_stats[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
-            column_config={
-                "PLAYER_NAME": "Spiller",
-                "MINUTES": "Tid (MM:SS)",
-                "DISTANCE": st.column_config.NumberColumn("Total Meter", format="%d"),
-                "HI_DIST": st.column_config.NumberColumn("HI Meter", format="%d"),
-                "TOP_SPEED": "Topfart"
-            },
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("Ingen fysisk data fundet for denne specifikke kamp endnu.")
+        if not kamp_stats.empty:
+            st.dataframe(
+                kamp_stats[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']].sort_values('DISTANCE', ascending=False),
+                column_config={
+                    "PLAYER_NAME": "Spiller",
+                    "MINUTES": "Tid",
+                    "DISTANCE": st.column_config.NumberColumn("Meter", format="%d"),
+                    "HI_DIST": st.column_config.NumberColumn("HI Meter", format="%d")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("Ingen fysisk data fundet for denne kamp.")
