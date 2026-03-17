@@ -1,104 +1,91 @@
 import streamlit as st
 import pandas as pd
 
-# Konstanter
+# Konstanter baseret på din data
 HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
 def vis_side(conn, name_map=None):
+    st.title("Hvidovre IF | Fysisk Data")
 
+    # --- TRIN 1: HENT DATA (Med rettet SQL-syntaks) ---
     @st.cache_data(ttl=600)
-    def get_data():
-        # 1. Metadata
+    def get_all_data():
+        # Metadata
         query_meta = f"""
-        SELECT MATCH_SSIID, DESCRIPTION, "DATE", HOME_SSIID, AWAY_SSIID
+        SELECT "DATE", HOME_SSIID, AWAY_SSIID, DESCRIPTION, MATCH_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' 
-          AND (HOME_SSIID = '{HIF_SSIID}' OR AWAY_SSIID = '{HIF_SSIID}')
-        ORDER BY "DATE" DESC
+        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND YEAR = '2025'
         """
-        df_meta = conn.query(query_meta)
-        
-        if df_meta.empty:
-            return None, None
-
-        # 2. Fysisk data med ALLE de kolonner vi skal bruge til vores tabs
-        # Vi bruger dobbelte citationstegn for alle navne med mellemrum eller små bogstaver
+        # Fysisk data (Bemærk citationstegnene her - det er dem der fjerner fejlen)
         query_phys = """
         SELECT 
-            MATCH_SSIID, 
-            MATCH_TEAMS,
-            PLAYER_NAME, 
-            MINUTES, 
-            DISTANCE, 
-            "HIGH SPEED RUNNING", 
-            "SPRINTING", 
-            "TOP_SPEED",
-            "DISTANCE_TIP", 
-            "DISTANCE_OTIP", 
-            "DISTANCE_BOP",
-            "HSR_DISTANCE_TIP",
-            "SPRINT_DISTANCE_TIP"
+            MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, 
+            MINUTES, DISTANCE, 
+            "HIGH SPEED RUNNING", "SPRINTING", "TOP_SPEED"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         """
-        df_phys = conn.query(query_phys)
-        return df_meta, df_phys
+        return conn.query(query_meta), conn.query(query_phys)
 
-    df_meta, df_phys = get_data()
+    df_meta, df_phys = get_all_data()
 
-    if df_meta is not None:
-        # Filtrér til Hvidovre-kampe
-        valid_ids = df_meta['MATCH_SSIID'].unique()
-        df_hif = df_phys[df_phys['MATCH_SSIID'].isin(valid_ids)].copy()
+    # --- TRIN 2: RENSNING OG BEREGNING ---
+    def parse_minutes(val):
+        try:
+            if ':' in str(val):
+                m, s = map(int, str(val).split(':'))
+                return round(m + s/60, 1)
+            return float(val)
+        except: return 0.0
+
+    df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
+    # HI_RUN beregnes i Python for at undgå SQL-identifikationsfejl
+    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
+
+    # --- TRIN 3: TABS ---
+    t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
+
+    with t1:
+        # Filtrer via MATCH_TEAMS som vi ved virker for HIF
+        df_hif = df_phys[df_phys['MATCH_TEAMS'].str.contains('Hvidovre', case=False, na=False)].copy()
         
-        # Beregninger i Python (Sikkert og hurtigt)
-        df_hif['HI_DIST'] = df_hif['HIGH SPEED RUNNING'] + df_hif['SPRINTING']
-        df_hif['HI_DIST_TIP'] = df_hif['HSR_DISTANCE_TIP'] + df_hif['SPRINT_DISTANCE_TIP']
+        summary = df_hif.groupby('PLAYER_NAME').agg({
+            'MINS_DECIMAL': 'sum',
+            'DISTANCE': 'sum',
+            'HI_RUN': 'sum',
+            'TOP_SPEED': 'max'
+        }).reset_index().sort_values('DISTANCE', ascending=False)
 
-        # --- UI: KAMPVALG ---
-        st.subheader("Vælg Kamp")
-        valgt_kamp = st.selectbox("Kamp:", df_meta['DESCRIPTION'].unique())
-        selected_id = df_meta[df_meta['DESCRIPTION'] == valgt_kamp]['MATCH_SSIID'].iloc[0]
+        st.dataframe(summary, 
+                     column_config={"MINS_DECIMAL": "Minutter total"},
+                     use_container_width=True, hide_index=True)
 
-        # --- UI: TABS ---
-        tab1, tab2, tab3 = st.tabs(["Fysiske Totaler", "Besiddelse (TIP/OTIP)", "HI Aktiviteter"])
+    with t2:
+        # Liga overblik (kun kampe fra den valgte liga-uuid)
+        df_liga = df_phys[df_phys['MATCH_SSIID'].isin(df_meta['MATCH_SSIID'].unique())]
         
-        kamp_stats = df_hif[df_hif['MATCH_SSIID'] == selected_id].sort_values('DISTANCE', ascending=False)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("**Topfart (km/t)**")
+            top_speed = df_liga.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5)
+            st.table(top_speed)
+        with col2:
+            st.write("**HI Distance total (m)**")
+            top_hi = df_liga.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5)
+            st.table(top_hi)
 
-        with tab1:
-            st.write("### Samlet volumen")
-            st.dataframe(
-                kamp_stats[['PLAYER_NAME', 'MINUTES', 'DISTANCE', 'HI_DIST', 'TOP_SPEED']],
-                column_config={
-                    "DISTANCE": st.column_config.NumberColumn("Total (m)", format="%d"),
-                    "HI_DIST": "HI Meter",
-                    "TOP_SPEED": "km/t"
-                },
-                use_container_width=True, hide_index=True
-            )
-
-        with tab2:
-            st.write("### Distance ift. boldbesiddelse")
-            st.dataframe(
-                kamp_stats[['PLAYER_NAME', 'DISTANCE_TIP', 'DISTANCE_OTIP', 'DISTANCE_BOP']],
-                column_config={
-                    "DISTANCE_TIP": "Med bold (TIP)",
-                    "DISTANCE_OTIP": "Modstander har bold (OTIP)",
-                    "DISTANCE_BOP": "Bold ude (BOP)"
-                },
-                use_container_width=True, hide_index=True
-            )
-
-        with tab3:
-            st.write("### High Intensity fokus")
-            st.dataframe(
-                kamp_stats[['PLAYER_NAME', 'HI_DIST', 'HI_DIST_TIP', 'SPRINTING']],
-                column_config={
-                    "HI_DIST": "Total HI (m)",
-                    "HI_DIST_TIP": "HI med bold (m)",
-                    "SPRINTING": "Sprint (m)"
-                },
-                use_container_width=True, hide_index=True
-            )
-    else:
-        st.info("Kunne ikke finde data til de valgte tabs.")
+    with t3:
+        # Kampvælger (HIF kampe)
+        df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
+        df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
+        
+        if not df_hif_matches.empty:
+            valgt = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique())
+            m_id = df_hif_matches[df_hif_matches['LABEL'] == valgt]['MATCH_SSIID'].values[0]
+            
+            # Vis alle spillere i den kamp (både HIF og modstander)
+            df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].sort_values('DISTANCE', ascending=False)
+            st.dataframe(df_match[['PLAYER_NAME', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HI_RUN', 'TOP_SPEED']], 
+                         use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen kampe fundet i metadata.")
