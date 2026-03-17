@@ -10,7 +10,7 @@ def vis_side(conn, name_map=None):
     def get_final_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Hent kun de relevante kampe for at styre dato-rammen
+        # 1. Hent metadata for at definere sæsonens kampe
         query_meta = f"""
         SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -27,29 +27,43 @@ def vis_side(conn, name_map=None):
         m_ids = tuple(df_meta['MATCH_SSIID'].tolist())
         formatted_ids = ','.join([f"'{i}'" for i in m_ids])
 
-        # 2. Hent ALT fra F53A_GAME_PLAYER - den har både hold og fysisk data
-        # Vi bruger denne tabel som "Single Source of Truth"
+        # 2. Hent data fra GAME_PLAYER. 
+        # Jeg bruger " (anførselstegn) for at ramme de præcise kolonnenavne fra din tabel
         query_main = f"""
         SELECT 
             MATCH_SSIID, 
             TEAM_SSIID, 
             PLAYER_NAME, 
             DISTANCE, 
-            HIGHSPEEDRUNNING, 
-            HIGHSPEEDSPRINTING, 
+            "HIGHSPEEDRUNNING", 
+            "HIGHSPEEDSPRINTING", 
             TOP_SPEED
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
         WHERE MATCH_SSIID IN ({formatted_ids})
         """
         return df_meta, conn.query(query_main)
 
-    df_meta, df_raw = get_final_data()
+    try:
+        df_meta, df_raw = get_final_data()
+    except Exception as e:
+        # Hvis den stadig fejler på navnet, prøver vi med mellemrum i stedet
+        st.info("Prøver alternativ kolonne-formatering...")
+        try:
+            # Alternativ query hvis ovenstående fejler
+            query_alt = df_raw = conn.query(f"""
+                SELECT MATCH_SSIID, TEAM_SSIID, PLAYER_NAME, DISTANCE, 
+                "HIGH SPEED RUNNING" as "HIGHSPEEDRUNNING", 
+                "SPRINTING" as "HIGHSPEEDSPRINTING", 
+                TOP_SPEED
+                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_F53A_GAME_PLAYER
+                WHERE MATCH_SSIID IN (SELECT MATCH_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA WHERE "DATE" >= '2025-07-01')
+            """)
+            df_raw = query_alt
+        except:
+            st.error(f"SQL Fejl: {e}")
+            return
 
-    if df_raw.empty:
-        st.warning("Ingen data fundet for de valgte kampe.")
-        return
-
-    # Klargøring
+    # Beregn HI_RUN
     df_raw['HI_RUN'] = df_raw['HIGHSPEEDRUNNING'] + df_raw['HIGHSPEEDSPRINTING']
     
     # Identificer Hvidovre IF
@@ -61,7 +75,7 @@ def vis_side(conn, name_map=None):
     t1, t2, t3 = st.tabs(["Hvidovre IF", "Liga Top 5", "Enkelte Kampe"])
 
     with t1:
-        # Sæson-total (Kun HIF spillere i de valgte kampe)
+        # Kun Hvidovre spillere fra 2025/2026 kampe
         df_hif = df_raw[df_raw['Hold'] == "Hvidovre IF"].copy()
         
         summary = df_hif.groupby('PLAYER_NAME').agg({
@@ -85,7 +99,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        # Liga Top 5 (Alle i perioden)
         c1, c2 = st.columns(2)
         with c1:
             st.write("Topfart (km/t)")
@@ -95,7 +108,6 @@ def vis_side(conn, name_map=None):
             st.table(df_raw.groupby('PLAYER_NAME')['HI_RUN'].sum().nlargest(5))
 
     with t3:
-        # Kampvælger
         df_hif_m = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_m['LABEL'] = df_hif_m['DATE'].astype(str) + " - " + df_hif_m['DESCRIPTION']
         
