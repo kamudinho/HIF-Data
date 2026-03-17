@@ -39,7 +39,7 @@ def vis_side(conn, name_map=None):
         query_player = f"""
         SELECT 
             MATCH_SSIID, MATCH_TEAMS, PLAYER_NAME, "optaId", 
-            MINUTES, DISTANCE, "HIGH SPEED RUNNING", SPRINTING, TOP_SPEED
+            MINUTES, DISTANCE, SPRINTING, TOP_SPEED
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE MATCH_SSIID IN {ids}
         """
