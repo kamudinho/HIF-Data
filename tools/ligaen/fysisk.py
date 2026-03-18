@@ -67,7 +67,7 @@ def vis_side(conn, name_map=None):
     df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
     df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_mapping.get(str(r['optaId']).strip(), r['PLAYER_NAME']), axis=1)
 
-    t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Graf", "Top 5-oversigt", "Kampoversigt"])
+    t1, t2, t3, t4 = st.tabs(["Hvidovre IF", "Graf", "Top 5-oversigt", "Kampoversigt"])
 
     with t1:
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
@@ -83,18 +83,17 @@ def vis_side(conn, name_map=None):
         summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
         
         plot_df = summary.sort_values('Dist_P90', ascending=False)
-        # Øget buffer til højden for at undgå scroll
         calc_height = (len(plot_df) + 1) * 35 + 40
 
         st.dataframe(
             plot_df, 
             column_config={
                 "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
-                "Dist_P90": st.column_config.NumberColumn("KM/90", format="%.2f", width="small"),
-                "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d", width="small"),
-                "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d", width="small"),
+                "Dist_P90": st.column_config.NumberColumn("KM/90", format="%.2f km", width="small"),
+                "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d m", width="small"),
+                "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d m", width="small"),
                 "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt.", format="%.1f", width="small"),
-                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f", width="small")
+                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t", width="small")
             },
             column_order=("DISPLAY_NAME", "Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"),
             use_container_width=True, 
@@ -103,11 +102,11 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        kat_map = {"Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90", "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner P90", "TOP_SPEED": "Topfart km/t"}
-        valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
-        fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='Blues', title=f"Hvidovre IF: {kat_map[valg]}")
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+            kat_map = {"Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90", "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner P90", "TOP_SPEED": "Topfart km/t"}
+            valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
+            fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='Blues', title=f"Hvidovre IF: {kat_map[valg]}")
+            fig.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
 
     with t3:
         c1, c2 = st.columns(2)
@@ -137,10 +136,10 @@ def vis_side(conn, name_map=None):
                     "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
                     "Hold": st.column_config.TextColumn("Hold", width="small"),
                     "MINUTES": st.column_config.NumberColumn("Min", format="%d", width="small"),
-                    "KM": st.column_config.NumberColumn("KM", format="%.2f", width="small"),
-                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d", width="small"),
-                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d", width="small"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f", width="small")
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f km", width="small"),
+                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m", width="small"),
+                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m", width="small"),
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t", width="small")
                 },
                 column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
                 use_container_width=True, 
