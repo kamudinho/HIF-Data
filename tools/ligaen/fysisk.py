@@ -110,7 +110,6 @@ def vis_side(conn, name_map=None):
 
     # --- TAB 3: Top 5-oversigt ---
     with t3:
-        st.subheader("Fysiske Top-præstationer (Alle spillere)")
         c1, c2 = st.columns(2)
         
         with c1:
