@@ -2,16 +2,27 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+from data.data_load import load_local_players 
 
 # Konstanter
 HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
-# HER KAN DU TILFØJE optaId PÅ DE SPILLERE, DER SKAL EXCLUDERES
-# Eksempel: EXCLUDE_LIST = ["12345", "67890"]
+# Spillere der skal udelukkes (optaId)
 EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
 def vis_side(conn, name_map=None):
+    # --- 1. HENT LOKAL MAPPING (players.csv) ---
+    df_local = load_local_players()
+    player_mapping = {}
+    
+    if df_local is not None and not df_local.empty:
+        df_local.columns = [c.strip() for c in df_local.columns]
+        if 'optaId' in df_local.columns and 'NAVN' in df_local.columns:
+            # Rens ID for .0 og lav til string
+            df_local['optaId'] = df_local['optaId'].astype(str).str.split('.').str[0].str.strip()
+            player_mapping = df_local.set_index('optaId')['NAVN'].to_dict()
+
     @st.cache_data(ttl=600)
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
@@ -29,33 +40,13 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
-        # Konverter exclude-listen til SQL format
-        exclude_str = ", ".join([f"'{i}'" for i in EXCLUDE_LIST])
-        exclude_clause = f"AND p.\"optaId\" NOT IN ({exclude_str})" if EXCLUDE_LIST else ""
-
         query_phys = f"""
-        WITH hvidovre_ids AS (
-            SELECT DISTINCT 
-                m.MATCH_SSIID,
-                f.value:"optaId"::string AS opta_id
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-            LATERAL FLATTEN(input => 
-                CASE 
-                    WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS 
-                    ELSE m.AWAY_PLAYERS 
-                END
-            ) f
-            WHERE m.HOME_SSIID = '{HIF_SSIID}' OR m.AWAY_SSIID = '{HIF_SSIID}'
-        )
         SELECT 
             p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, 
             p.DISTANCE, p."HIGH SPEED RUNNING", p."SPRINTING", p."TOP_SPEED",
-            p."NO_OF_HIGH_INTENSITY_RUNS",
-            CASE WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF' ELSE 'Modstander' END AS "Hold"
+            p."NO_OF_HIGH_INTENSITY_RUNS"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        LEFT JOIN hvidovre_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.opta_id
         WHERE p.MATCH_SSIID IN (SELECT MATCH_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA WHERE "DATE" >= '2025-07-01')
-        {exclude_clause}
         """
         df_phys = conn.query(query_phys)
         return df_meta, df_phys
@@ -66,7 +57,7 @@ def vis_side(conn, name_map=None):
         st.error("Ingen data fundet.")
         return
 
-    # --- DATABEHANDLING ---
+    # --- 2. DATABEHANDLING & MAPPING ---
     def parse_minutes(val):
         try:
             val_str = str(val)
@@ -79,12 +70,26 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    t1, t2, t3, t4 = st.tabs(["Hvidovre IF", "Graf", "Top 5-oversigt", "Kampoversigt"])
+    # Filtrer ekskluderede spillere
+    df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
+
+    # Map navne og hold
+    def map_info(row):
+        oid = str(row['optaId']).strip()
+        if oid in player_mapping:
+            return player_mapping[oid], 'Hvidovre IF'
+        return row['PLAYER_NAME'], 'Modstander'
+
+    df_phys[['DISPLAY_NAME', 'Hold']] = df_phys.apply(
+        lambda x: pd.Series(map_info(x)), axis=1
+    )
+
+    t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Graf", "Top 5-oversigt", "Kampoversigt"])
 
     with t1:
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
         
-        summary = df_hif.groupby('PLAYER_NAME').agg({
+        summary = df_hif.groupby('DISPLAY_NAME').agg({
             'MATCH_SSIID': 'nunique',
             'MINS_DECIMAL': 'sum',
             'DISTANCE': 'sum',
@@ -103,7 +108,7 @@ def vis_side(conn, name_map=None):
         st.dataframe(
             summary.sort_values('Dist_P90', ascending=False), 
             column_config={
-                "PLAYER_NAME": "Spiller",
+                "DISPLAY_NAME": "Spiller",
                 "Dist_P90": st.column_config.NumberColumn("KM pr. 90", format="%.2f km"),
                 "HI_P90": st.column_config.NumberColumn("HI m pr. 90", format="%d m"),
                 "Sprint_P90": st.column_config.NumberColumn("Sprint pr. 90", format="%d m"),
@@ -116,42 +121,33 @@ def vis_side(conn, name_map=None):
 
     with t2:
         kat_mapping = {
-            "Dist_P90": "KM pr. 90",
-            "HI_P90": "HI m pr. 90",
-            "Sprint_P90": "Sprint pr. 90",
-            "HIR_Actions_P90": "HI Aktioner pr. 90",
+            "Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90",
+            "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner pr. 90",
             "TOP_SPEED": "Topfart km/t"
         }
         kat_valg = st.selectbox("Vælg kategori til graf", list(kat_mapping.keys()), format_func=lambda x: kat_mapping[x])
         
         plot_df = summary.sort_values(kat_valg, ascending=False)
-        
-        fig = px.bar(plot_df, 
-                     x='PLAYER_NAME', y=kat_valg,
-                     text=kat_valg,
+        fig = px.bar(plot_df, x='DISPLAY_NAME', y=kat_valg, text=kat_valg,
                      title=f"Hvidovre IF: {kat_mapping[kat_valg]}",
-                     labels={kat_valg: "Værdi", "PLAYER_NAME": "Spiller"},
+                     labels={kat_valg: "Værdi", "DISPLAY_NAME": "Spiller"},
                      color=kat_valg, color_continuous_scale='Blues')
-        
         fig.update_traces(textposition='outside')
-        fig.update_layout(xaxis_tickangle=-45, yaxis_range=[0, plot_df[kat_valg].max() * 1.15])
+        fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
-            st.table(df_phys.groupby('PLAYER_NAME')['TOP_SPEED'].max().nlargest(5).map(lambda x: f"{x:.1f} km/t"))
-            
+            st.table(df_phys.groupby('DISPLAY_NAME')['TOP_SPEED'].max().nlargest(5).map(lambda x: f"{x:.1f} km/t"))
             st.write("**Mest Sprint i én kamp (m)**")
-            st.table(df_phys.nlargest(5, 'SPRINTING')[['PLAYER_NAME', 'SPRINTING']].set_index('PLAYER_NAME'))
-        
+            st.table(df_phys.nlargest(5, 'SPRINTING')[['DISPLAY_NAME', 'SPRINTING']].set_index('DISPLAY_NAME'))
         with c2:
             st.write("**Mest HI løb i én kamp (m)**")
-            st.table(df_phys.nlargest(5, 'HI_RUN')[['PLAYER_NAME', 'HI_RUN']].set_index('PLAYER_NAME'))
-            
+            st.table(df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'HI_RUN']].set_index('DISPLAY_NAME'))
             st.write("**Flest HI Aktioner i én kamp**")
-            st.table(df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['PLAYER_NAME', 'NO_OF_HIGH_INTENSITY_RUNS']].set_index('PLAYER_NAME'))
+            st.table(df_phys.nlargest(5, 'NO_OF_HIGH_INTENSITY_RUNS')[['DISPLAY_NAME', 'NO_OF_HIGH_INTENSITY_RUNS']].set_index('DISPLAY_NAME'))
 
     with t4:
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
@@ -163,10 +159,12 @@ def vis_side(conn, name_map=None):
             
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
             df_match['KM'] = round(df_match['DISTANCE'] / 1000, 2)
-            df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
+            
+            # --- NY SORTERING: Kun Distance (Højeste øverst) ---
+            df_match = df_match.sort_values(by='DISTANCE', ascending=False)
             
             st.dataframe(
-                df_match[['PLAYER_NAME', 'Hold', 'MINUTES', 'KM', 'HI_RUN', 'SPRINTING', 'TOP_SPEED']], 
+                df_match[['DISPLAY_NAME', 'Hold', 'MINUTES', 'KM', 'HI_RUN', 'SPRINTING', 'TOP_SPEED']], 
                 use_container_width=True, hide_index=True,
                 column_config={
                     "KM": st.column_config.NumberColumn("Distance", format="%.2f km"),
