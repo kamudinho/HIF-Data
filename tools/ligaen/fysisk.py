@@ -79,7 +79,7 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Analyse & Grafer", "Liga Top 5", "Kampoversigt"])
+    t1, t2, t3, t4 = st.tabs(["Hvidovre IF", "Graf", "Top 5-oversigt", "Kampoversigt"])
 
     with t1:
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
@@ -115,7 +115,6 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-        st.subheader("Visuel Sammenligning (Hvidovre IF)")
         kat_mapping = {
             "Dist_P90": "KM pr. 90",
             "HI_P90": "HI m pr. 90",
@@ -139,7 +138,6 @@ def vis_side(conn, name_map=None):
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        st.subheader("Liga Top 5 - Sæsonens bedste præstationer")
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
