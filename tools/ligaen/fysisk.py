@@ -108,31 +108,42 @@ def vis_side(conn, name_map=None):
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
+    # --- TAB 3: Top 5-oversigt ---
     with t3:
+        st.subheader("Fysiske Top-præstationer (Alle spillere)")
         c1, c2 = st.columns(2)
+        
         with c1:
             st.write("**Topfart (km/t)**")
-            top_speed_df = df_phys.groupby('DISPLAY_NAME')['TOP_SPEED'].max().nlargest(5).reset_index()
+            # Finder de 5 højeste topfarter på tværs af alle kampe og spillere
+            top_speed_df = df_phys.nlargest(5, 'TOP_SPEED')[['DISPLAY_NAME', 'Hold', 'TOP_SPEED']]
+            
             st.dataframe(
                 top_speed_df,
                 column_config={
-                    "DISPLAY_NAME": "Spiller",
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
+                    "Hold": st.column_config.TextColumn("Klub", width="small"),
                     "TOP_SPEED": st.column_config.NumberColumn("Km/t", format="%.1f km/t")
                 },
-                use_container_width=True, hide_index=True
+                use_container_width=True, 
+                hide_index=True
             )
+            
         with c2:
-            st.write("**HI løb i kamp (m)**")
-            # Vi runder HI_RUN af til nærmeste heltal for at slippe for .9000
-            hi_run_df = df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'HI_RUN']].copy()
-            hi_run_df['HI_RUN'] = hi_run_df['HI_RUN'].round(0) 
+            st.write("**HI løb i én kamp (m)**")
+            # Finder de 5 bedste enkelte kamp-præstationer for HI løb
+            hi_run_df = df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'Hold', 'HI_RUN']].copy()
+            hi_run_df['HI_RUN'] = hi_run_df['HI_RUN'].round(0) # Fjerner decimalerne (.9000 osv)
+            
             st.dataframe(
                 hi_run_df,
                 column_config={
-                    "DISPLAY_NAME": "Spiller",
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
+                    "Hold": st.column_config.TextColumn("Klub", width="small"),
                     "HI_RUN": st.column_config.NumberColumn("Meter", format="%d m")
                 },
-                use_container_width=True, hide_index=True
+                use_container_width=True, 
+                hide_index=True
             )
 
     with t4:
