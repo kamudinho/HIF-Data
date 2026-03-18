@@ -9,7 +9,7 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
 # HER KAN DU TILFØJE optaId PÅ DE SPILLERE, DER SKAL EXCLUDERES
 # Eksempel: EXCLUDE_LIST = ["12345", "67890"]
-EXCLUDE_LIST = ["114516", "570705"] 
+EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
 def vis_side(conn, name_map=None):
     @st.cache_data(ttl=600)
