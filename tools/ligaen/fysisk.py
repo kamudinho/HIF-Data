@@ -129,20 +129,18 @@ def vis_side(conn, name_map=None):
             
             match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
             calc_height_m = (len(match_plot) + 1) * 35 + 45
-    
+
             st.dataframe(
                 match_plot, 
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
                     "Hold": st.column_config.TextColumn("Hold", width="small"),
-                    "MINUTES": st.column_config.NumberColumn("Min", format="%d", width="small"),
-                    "KM": st.column_config.NumberColumn("Distance", format="%.2f km", width="small"),
-                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m", width="small"),
-                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m", width="small"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t", width="small")
+                    "MINUTES": st.column_config.TextColumn("Min"), # Ændret til TextColumn for at håndtere "96:11"
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
+                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
+                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m"),
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
                 },
                 column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
-                use_container_width=True, 
-                hide_index=True,
-                height=calc_height_m
+                use_container_width=True, hide_index=True, height=calc_height_m
             )
