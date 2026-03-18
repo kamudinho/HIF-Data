@@ -85,18 +85,26 @@ def vis_side(conn, name_map=None):
         summary['HI_P90'] = (summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90
         summary['Sprint_P90'] = (summary['SPRINTING'] / summary['MINS_DECIMAL']) * 90
         summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
+        
+        plot_df = summary.sort_values('Dist_P90', ascending=False)
+
+        # Vi beregner højden dynamisk for at undgå scroll (35px pr række + header)
+        calc_height = (len(plot_df) + 1) * 35 + 3
 
         st.dataframe(
-            summary.sort_values('Dist_P90', ascending=False), 
+            plot_df, 
             column_config={
-                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
+                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
                 "Dist_P90": st.column_config.NumberColumn("KM pr. 90", format="%.2f km", width="small"),
                 "HI_P90": st.column_config.NumberColumn("HI m pr. 90", format="%d m", width="small"),
                 "Sprint_P90": st.column_config.NumberColumn("Sprint pr. 90", format="%d m", width="small"),
                 "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt. P90", format="%.1f", width="small"),
                 "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t", width="small")
             },
-            use_container_width=True, hide_index=True
+            column_order=("DISPLAY_NAME", "Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"),
+            use_container_width=True, 
+            hide_index=True,
+            height=calc_height
         )
 
     with t2:
@@ -125,15 +133,22 @@ def vis_side(conn, name_map=None):
             df_m = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
             df_m['KM'] = df_m['DISTANCE'] / 1000
             
-            # Sortering udelukkende efter distance
+            match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
+            calc_height_m = (len(match_plot) + 1) * 35 + 3
+
             st.dataframe(
-                df_m.sort_values(by='DISTANCE', ascending=False)[['DISPLAY_NAME', 'Hold', 'MINUTES', 'KM', 'HI_RUN', 'SPRINTING', 'TOP_SPEED']], 
-                use_container_width=True, hide_index=True,
+                match_plot, 
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
-                    "KM": st.column_config.NumberColumn("Distance", format="%.2f km"),
-                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
-                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
-                }
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
+                    "Hold": st.column_config.TextColumn("Hold", width="small"),
+                    "MINUTES": st.column_config.TextColumn("Min", width="small"),
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f", width="small"),
+                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d", width="small"),
+                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d", width="small"),
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f", width="small")
+                },
+                column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
+                use_container_width=True, 
+                hide_index=True,
+                height=calc_height_m
             )
