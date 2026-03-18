@@ -18,7 +18,7 @@ def vis_side(conn, name_map=None):
         # Sikrer at vi kan ramme kolonnerne uanset casing
         df_local.columns = [c.upper().strip() for c in df_local.columns]
         # Vi laver mappingen her, så den er defineret lokalt i funktionen
-        player_mapping = df_local.set_index('OPTAID')['NAVN'].to_dict()
+        player_mapping = df_local.set_index('optaId')['NAVN'].to_dict()
     else:
         player_mapping = {}
 
