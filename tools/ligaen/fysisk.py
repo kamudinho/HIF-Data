@@ -83,12 +83,12 @@ def vis_side(conn, name_map=None):
         summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
         
         plot_df = summary.sort_values('Dist_P90', ascending=False)
-        calc_height = (len(plot_df) + 1) * 35 + 40
+        calc_height = (len(plot_df) + 1) * 35 + 45 # Lidt mere buffer
 
         st.dataframe(
             plot_df, 
             column_config={
-                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
+                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
                 "Dist_P90": st.column_config.NumberColumn("KM/90", format="%.2f km", width="small"),
                 "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d m", width="small"),
                 "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d m", width="small"),
@@ -128,15 +128,15 @@ def vis_side(conn, name_map=None):
             df_m['KM'] = df_m['DISTANCE'] / 1000
             
             match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
-            calc_height_m = (len(match_plot) + 1) * 35 + 40
-
+            calc_height_m = (len(match_plot) + 1) * 35 + 45
+    
             st.dataframe(
                 match_plot, 
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
                     "Hold": st.column_config.TextColumn("Hold", width="small"),
                     "MINUTES": st.column_config.NumberColumn("Min", format="%d", width="small"),
-                    "KM": st.column_config.NumberColumn("KM", format="%.2f km", width="small"),
+                    "KM": st.column_config.NumberColumn("Distance", format="%.2f km", width="small"),
                     "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m", width="small"),
                     "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m", width="small"),
                     "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t", width="small")
