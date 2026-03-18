@@ -10,10 +10,9 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
 def vis_side(conn, name_map=None):
-    # --- 1. HENT LOKAL MAPPING (players.csv) ---
+    # --- 1. HENT LOKAL MAPPING ---
     df_local = load_local_players()
     player_mapping = {}
-    
     if df_local is not None and not df_local.empty:
         df_local.columns = [c.strip() for c in df_local.columns]
         if 'optaId' in df_local.columns and 'NAVN' in df_local.columns:
@@ -27,9 +26,7 @@ def vis_side(conn, name_map=None):
         query_meta = f"""
         SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
-        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' 
-          AND "DATE" >= '2025-07-01'
-          AND "DATE" <= '{today}'
+        WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND "DATE" >= '2025-07-01' AND "DATE" <= '{today}'
         ORDER BY "DATE" DESC
         """
         df_meta = conn.query(query_meta)
@@ -70,7 +67,6 @@ def vis_side(conn, name_map=None):
     df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
     df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_mapping.get(str(r['optaId']).strip(), r['PLAYER_NAME']), axis=1)
 
-    # --- 4. TABS ---
     t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Graf", "Top 5-oversigt", "Kampoversigt"])
 
     with t1:
@@ -87,19 +83,18 @@ def vis_side(conn, name_map=None):
         summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
         
         plot_df = summary.sort_values('Dist_P90', ascending=False)
-
-        # Vi beregner højden dynamisk for at undgå scroll (35px pr række + header)
-        calc_height = (len(plot_df) + 1) * 35 + 3
+        # Øget buffer til højden for at undgå scroll
+        calc_height = (len(plot_df) + 1) * 35 + 40
 
         st.dataframe(
             plot_df, 
             column_config={
-                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
-                "Dist_P90": st.column_config.NumberColumn("KM pr. 90", format="%.2f km", width="small"),
-                "HI_P90": st.column_config.NumberColumn("HI m pr. 90", format="%d m", width="small"),
-                "Sprint_P90": st.column_config.NumberColumn("Sprint pr. 90", format="%d m", width="small"),
-                "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt. P90", format="%.1f", width="small"),
-                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t", width="small")
+                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
+                "Dist_P90": st.column_config.NumberColumn("KM/90", format="%.2f", width="small"),
+                "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d", width="small"),
+                "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d", width="small"),
+                "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt.", format="%.1f", width="small"),
+                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f", width="small")
             },
             column_order=("DISPLAY_NAME", "Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"),
             use_container_width=True, 
@@ -134,14 +129,14 @@ def vis_side(conn, name_map=None):
             df_m['KM'] = df_m['DISTANCE'] / 1000
             
             match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
-            calc_height_m = (len(match_plot) + 1) * 35 + 3
+            calc_height_m = (len(match_plot) + 1) * 35 + 40
 
             st.dataframe(
                 match_plot, 
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="large"),
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="max"),
                     "Hold": st.column_config.TextColumn("Hold", width="small"),
-                    "MINUTES": st.column_config.TextColumn("Min", width="small"),
+                    "MINUTES": st.column_config.NumberColumn("Min", format="%d", width="small"),
                     "KM": st.column_config.NumberColumn("KM", format="%.2f", width="small"),
                     "HI_RUN": st.column_config.NumberColumn("HI m", format="%d", width="small"),
                     "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d", width="small"),
