@@ -2,32 +2,28 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+# Vi importerer din eksisterende indlæser
+from data.data_load import load_local_players 
 
 # Konstanter
 HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 
 def vis_side(conn, name_map=None):
-    # --- INDLÆS SPILLERDATA FRA CSV ---
-    @st.cache_data
-    def load_player_mapping():
-        try:
-            # Vi prøver at detektere om der bruges ; eller ,
-            df_map = pd.read_csv("data/players.csv", sep=None, engine='python')
-            
-            # Rens kolonnenavne for eventuelle usynlige mellemrum
-            df_map.columns = df_map.columns.str.strip()
-            
-            # Sikr at optaId er tekst og fjern dubletter
-            df_map['optaId'] = df_map['optaId'].astype(str).str.strip()
-            
-            return df_map.set_index('optaId')['NAVN'].to_dict()
-        except Exception as e:
-            st.error(f"Fejl ved indlæsning af CSV: {e}")
-            return {}
-            
+    # 1. Hent din lokale trup præcis som i HIF_load.py
+    df_local = load_local_players()
+    
+    # Lav mappingen ud fra din CSV (optaId -> NAVN)
+    if not df_local.empty:
+        # Sikrer at vi kan ramme kolonnerne uanset casing
+        df_local.columns = [c.upper().strip() for c in df_local.columns]
+        # Vi laver mappingen her, så den er defineret lokalt i funktionen
+        player_mapping = df_local.set_index('OPTAID')['NAVN'].to_dict()
+    else:
+        player_mapping = {}
+
     @st.cache_data(ttl=600)
-    def get_safe_data():
+    def get_physical_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
         query_meta = f"""
@@ -40,9 +36,6 @@ def vis_side(conn, name_map=None):
         """
         df_meta = conn.query(query_meta)
         
-        if df_meta.empty:
-            return pd.DataFrame(), pd.DataFrame()
-
         query_phys = f"""
         SELECT 
             p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, 
@@ -54,10 +47,10 @@ def vis_side(conn, name_map=None):
         df_phys = conn.query(query_phys)
         return df_meta, df_phys
 
-    df_meta, df_phys = get_safe_data()
+    df_meta, df_phys = get_physical_data()
 
     if df_phys.empty:
-        st.error("Ingen data fundet.")
+        st.error("Ingen fysisk data fundet.")
         return
 
     # --- DATABEHANDLING ---
@@ -73,17 +66,19 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    # Mapper DISPLAY_NAME og Hold baseret på players.csv
+    # Her bruger vi 'player_mapping', som nu er defineret ovenfor
     def map_info(row):
-        oid = str(row['optaId'])
+        oid = str(row['optaId']).strip()
         if oid in player_mapping:
             return player_mapping[oid], 'Hvidovre IF'
         return row['PLAYER_NAME'], 'Modstander'
 
+    # Map navne og hold
     df_phys[['DISPLAY_NAME', 'Hold']] = df_phys.apply(
         lambda x: pd.Series(map_info(x)), axis=1
     )
 
+    # --- HERFRA FORTSÆTTER TABS SOM FØR ---
     t1, t2, t3, t4 = st.tabs(["Hvidovre IF (P90)", "Analyse & Grafer", "Liga Top 5", "Kampoversigt"])
 
     with t1:
