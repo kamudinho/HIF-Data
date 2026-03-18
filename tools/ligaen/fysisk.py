@@ -17,6 +17,7 @@ def vis_side(conn, name_map=None):
     player_mapping = {}
     
     if df_local is not None and not df_local.empty:
+        # Vi fjerner eventuelle mellemrum i kolonnenavnene
         df_local.columns = [c.strip() for c in df_local.columns]
         if 'optaId' in df_local.columns and 'NAVN' in df_local.columns:
             # Rens ID for .0 og lav til string
@@ -27,6 +28,7 @@ def vis_side(conn, name_map=None):
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
         
+        # Hent metadata for kampe
         query_meta = f"""
         SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA
@@ -40,6 +42,7 @@ def vis_side(conn, name_map=None):
         if df_meta.empty:
             return pd.DataFrame(), pd.DataFrame()
 
+        # Hent fysisk data
         query_phys = f"""
         SELECT 
             p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, 
@@ -70,10 +73,10 @@ def vis_side(conn, name_map=None):
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
 
-    # Filtrer ekskluderede spillere
+    # Filtrer ekskluderede spillere fra
     df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
 
-    # Map navne og hold
+    # Map navne og hold baseret på din CSV
     def map_info(row):
         oid = str(row['optaId']).strip()
         if oid in player_mapping:
@@ -160,8 +163,8 @@ def vis_side(conn, name_map=None):
             df_match = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
             df_match['KM'] = round(df_match['DISTANCE'] / 1000, 2)
             
-            # --- NY SORTERING: Kun Distance (Højeste øverst) ---
-            df_match = df_match.sort_values(by='DISTANCE', ascending=False)
+            # --- SORTERING: Hold (Hvidovre først) og derefter Distance ---
+            df_match = df_match.sort_values(by=['Hold', 'DISTANCE'], ascending=[False, False])
             
             st.dataframe(
                 df_match[['DISPLAY_NAME', 'Hold', 'MINUTES', 'KM', 'HI_RUN', 'SPRINTING', 'TOP_SPEED']], 
