@@ -110,7 +110,7 @@ def vis_side(conn, name_map=None):
 
     # --- TAB 3: Top 5-oversigt ---
     with t3:
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         
         with c1:
             st.write("**Topfart (km/t)**")
@@ -144,6 +144,24 @@ def vis_side(conn, name_map=None):
                 use_container_width=True, 
                 hide_index=True
             )
+
+        with c3:
+            st.write("**HI løb i én kamp (m)**")
+            # Finder de 5 bedste enkelte kamp-præstationer for HI løb
+            hi_run_df = df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'Hold', 'HI_RUN']].copy()
+            hi_run_df['HI_RUN'] = hi_run_df['HI_RUN'].round(0) # Fjerner decimalerne (.9000 osv)
+            
+            st.dataframe(
+                hi_run_df,
+                column_config={
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
+                    "Hold": st.column_config.TextColumn("Klub", width="small"),
+                    "HI_RUN": st.column_config.NumberColumn("Meter", format="%d m")
+                },
+                use_container_width=True, 
+                hide_index=True
+            )
+
 
     with t4:
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
