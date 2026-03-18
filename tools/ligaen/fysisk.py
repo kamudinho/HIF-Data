@@ -112,10 +112,28 @@ def vis_side(conn, name_map=None):
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (km/t)**")
-            st.table(df_phys.groupby('DISPLAY_NAME')['TOP_SPEED'].max().nlargest(5).map(lambda x: f"{x:.1f} km/t"))
+            top_speed_df = df_phys.groupby('DISPLAY_NAME')['TOP_SPEED'].max().nlargest(5).reset_index()
+            st.dataframe(
+                top_speed_df,
+                column_config={
+                    "DISPLAY_NAME": "Spiller",
+                    "TOP_SPEED": st.column_config.NumberColumn("Km/t", format="%.1f km/t")
+                },
+                use_container_width=True, hide_index=True
+            )
         with c2:
             st.write("**HI løb i kamp (m)**")
-            st.table(df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'HI_RUN']].set_index('DISPLAY_NAME'))
+            # Vi runder HI_RUN af til nærmeste heltal for at slippe for .9000
+            hi_run_df = df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'HI_RUN']].copy()
+            hi_run_df['HI_RUN'] = hi_run_df['HI_RUN'].round(0) 
+            st.dataframe(
+                hi_run_df,
+                column_config={
+                    "DISPLAY_NAME": "Spiller",
+                    "HI_RUN": st.column_config.NumberColumn("Meter", format="%d m")
+                },
+                use_container_width=True, hide_index=True
+            )
 
     with t4:
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
