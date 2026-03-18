@@ -12,17 +12,20 @@ def vis_side(conn, name_map=None):
     @st.cache_data
     def load_player_mapping():
         try:
-            # Vi indlæser csv og sikrer at optaId læses som string for at matche databasen
-            df_map = pd.read_csv("data/players.csv")
-            df_map['optaId'] = df_map['optaId'].astype(str)
-            # Laver et dictionary: { "id": "Navn" }
+            # Vi prøver at detektere om der bruges ; eller ,
+            df_map = pd.read_csv("data/players.csv", sep=None, engine='python')
+            
+            # Rens kolonnenavne for eventuelle usynlige mellemrum
+            df_map.columns = df_map.columns.str.strip()
+            
+            # Sikr at optaId er tekst og fjern dubletter
+            df_map['optaId'] = df_map['optaId'].astype(str).str.strip()
+            
             return df_map.set_index('optaId')['NAVN'].to_dict()
         except Exception as e:
-            st.error(f"Fejl ved indlæsning af data/players.csv: {e}")
+            st.error(f"Fejl ved indlæsning af CSV: {e}")
             return {}
-
-    player_mapping = load_player_mapping()
-
+            
     @st.cache_data(ttl=600)
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
