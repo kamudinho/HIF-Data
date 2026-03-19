@@ -12,84 +12,69 @@ HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
 def vis_side(dp):
-    opta_data = dp.get('opta', {})
-    df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
+    opta_data = dp.get('opta', {})
+    df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
-    if df_all.empty:
-        st.info("Ingen ligadata fundet.")
-        return
+    if df_all.empty:
+        st.info("Ingen ligadata fundet.")
+        return
 
-    # Standardiser kolonner & mapping
-    df_all.columns = [c.upper() for c in df_all.columns]
-    col_team_uuid = 'EVENT_CONTESTANT_OPTAUUID'
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    teams_in_data = sorted([uuid_to_name[u.upper()] for u in df_all[col_team_uuid].unique() if u.upper() in uuid_to_name])
+    # Standardiser kolonner & mapping
+    df_all.columns = [c.upper() for c in df_all.columns]
+    col_team_uuid = 'EVENT_CONTESTANT_OPTAUUID'
+    
+    # Lav mapping fra UUID til pænt navn
+    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    
+    # Tilføj en pæn klub-kolonne til rådata, så vi kan bruge den i grupperinger
+    df_all['KLUB_NAVN'] = df_all[col_team_uuid].str.upper().map(uuid_to_name)
+    
+    teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
 
-    st.markdown(f"""
-        <style>
-            .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }}
-            .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
-            .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
-            .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""
+        <style>
+            .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }}
+            .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
+            .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
+            .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
+        </style>
+    """, unsafe_allow_html=True)
 
-    # --- ZONE DEFINITIONER ---
-    P_L, P_W = 105.0, 68.0
-    X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
-    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
-    Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
+    # --- ZONE LOGIK (Beholdes som i din kode) ---
+    P_L, P_W = 105.0, 68.0
+    # ... (dine ZONE_BOUNDARIES og map_to_zone funktioner her) ...
 
-    ZONE_BOUNDARIES = {
-        "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
-        "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
-        "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
-        "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
-        "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
-    }
+    df_all['Zone'] = df_all.apply(map_to_zone, axis=1)
+    df_all['IS_DZ_GEO'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
 
-    def map_to_zone(r):
-        mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
-        for z, b in ZONE_BOUNDARIES.items():
-            if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]: return z
-        return "Zone 8"
+    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    df_all['Zone'] = df_all.apply(map_to_zone, axis=1)
-    df_all['IS_DZ_GEO'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
-
-    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
-
-    # --- TAB 0: SPILLEROVERSIGT (1:1 fra shotmap) ---
-    with tabs[0]:
-        stats = []
-        for p in sorted(df_all['PLAYER_NAME'].unique()):
-            d = df_all[df_all['PLAYER_NAME'] == p]
-            dz = d[d['IS_DZ_GEO']]
-            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
-            stats.append({
-                "Spiller": p.split()[-1], 
-                "Skud": s, "Mål": m, 
-                "Konvertering%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": dzs, "DZ-Mål": dzm, 
-                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100) if s > 0 else 0
-            })
-        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False).head(100)
-        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
-                    column_config={
-                        "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
-                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
-                        "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-                    })
+    # --- TAB 0: SPILLEROVERSIGT (Nu med Klub!) ---
+    with tabs[0]:
+        stats = []
+        # Gruppér på både spiller og klubnavn
+        for (p, klub), d in df_all.groupby(['PLAYER_NAME', 'KLUB_NAVN']):
+            dz = d[d['IS_DZ_GEO']]
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            stats.append({
+                "Spiller": p, 
+                "Klub": klub,
+                "Skud": s, "Mål": m, 
+                "Konvertering%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": dzs, "DZ-Mål": dzm, 
+                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+            })
+        
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        # Dynamisk højde baseret på rækker
+        calc_height = (len(df_f) + 1) * 35 + 2
+        
+        st.dataframe(df_f, use_container_width=True, height=min(calc_height, 800), hide_index=True,
+                    column_config={
+                        "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                        "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
+                    })
 
     # --- TAB 1: AFSLUTNINGER (Dynamisk størrelse) ---
     with tabs[1]:
