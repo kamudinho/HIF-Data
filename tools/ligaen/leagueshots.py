@@ -145,8 +145,8 @@ def vis_side(dp):
         c1, c2 = st.columns([2, 1])
         with c2:
             df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
-            p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
-            d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
+            p_sel = st.selectbox("Vælg spiller", [{t_sel}] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
+            d_v = df_t if p_sel == {t_sel} else df_t[df_t['PLAYER_NAME'] == p_sel]
             st.markdown(f'''<div style="background-color:#f8f9fa; padding:10px; border-radius:8px; border-left:5px solid {t_color}">
                         <div style="font-size:0.8rem; color:#666">Skud ({t_sel})</div>
                         <div style="font-size:1.5rem; font-weight:800">{len(d_v)}</div>
