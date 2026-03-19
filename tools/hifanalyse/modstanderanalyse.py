@@ -100,7 +100,7 @@ def vis_side(analysis_package=None):
     with tabs[2]: # MOD BOLD
         st.markdown('<p class="pitch-label">DEFENSIV INTENSITET</p>', unsafe_allow_html=True)
         pitch_f = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#333333')
-        fig, ax = pitch_f.draw(figsize=(4, 6))
+        fig, ax = pitch_f.draw(figsize=(2, 3))
         # 4=Tackle, 5=Duel, 8=Interception, 49=Recovery
         df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
         if not df_d.empty: sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap='Blues', ax=ax)
