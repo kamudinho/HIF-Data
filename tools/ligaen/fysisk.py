@@ -33,16 +33,20 @@ def vis_side(conn, name_map=None):
         
         query_phys = f"""
         WITH hvidovre_ids AS (
-            SELECT DISTINCT m.MATCH_SSIID, f.value:"optaId"::string AS opta_id
+            SELECT DISTINCT f.value:"optaId"::string AS opta_id
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
             LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
             WHERE m.HOME_SSIID = '{HIF_SSIID}' OR m.AWAY_SSIID = '{HIF_SSIID}'
         )
         SELECT p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, p.DISTANCE, 
                p."HIGH SPEED RUNNING", p."SPRINTING", p."TOP_SPEED", p."NO_OF_HIGH_INTENSITY_RUNS",
-               CASE WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF' ELSE 'Modstander' END AS "Hold"
+               -- Vi renser optaId for at sikre match (fjerner .0)
+               CASE 
+                WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF' 
+                ELSE 'Modstander' 
+               END AS "Hold"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        LEFT JOIN hvidovre_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.opta_id
+        LEFT JOIN hvidovre_ids h ON TRIM(SPLIT_PART(p."optaId"::string, '.', 1)) = TRIM(SPLIT_PART(h.opta_id, '.', 1))
         WHERE p.MATCH_SSIID IN (SELECT MATCH_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA WHERE "DATE" >= '2025-07-01')
         """
         return df_meta, conn.query(query_phys)
@@ -66,6 +70,7 @@ def vis_side(conn, name_map=None):
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
     df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
     df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_mapping.get(str(r['optaId']).strip(), r['PLAYER_NAME']), axis=1)
+    df_phys.loc[df_phys['optaId'].astype(str).str.split('.').str[0].isin(player_mapping.keys()), 'Hold'] = 'Hvidovre IF'
 
     t1, t2, t3, t4 = st.tabs(["Hvidovre IF", "Graf", "Top 5-oversigt", "Kampoversigt"])
 
