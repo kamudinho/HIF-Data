@@ -104,7 +104,7 @@ def vis_side(conn, name_map=None):
     with t2:
             kat_map = {"Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90", "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner P90", "TOP_SPEED": "Topfart km/t"}
             valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
-            fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='Blues', title=f"Hvidovre IF: {kat_map[valg]}")
+            fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='Red', title=f"Hvidovre IF: {kat_map[valg]}")
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
