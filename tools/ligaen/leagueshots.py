@@ -123,21 +123,46 @@ def vis_side(dp):
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
     
     # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
         for (p, klub), d in df_all.groupby(['PLAYER_NAME', 'KLUB_NAVN']):
+            # DZ-filtrering
             dz = d[d['IS_DZ_GEO']]
+            
+            # Generelle stats
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            
+            # DZ stats
+            dz_s = len(dz)
+            dz_m = len(dz[dz['EVENT_TYPEID'] == 16])
+            
             stats.append({
-                "Spiller": p, "Klub": klub, "Skud": s, "Mål": m, 
+                "Spiller": p, 
+                "Klub": klub, 
+                "Skud": s, 
+                "Mål": m, 
                 "Konv.%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": len(dz), "DZ-Andel": (len(dz)/s*100) if s > 0 else 0
+                "DZ-Skud": dz_s, 
+                "DZ-Mål": dz_m,
+                "DZ-Konv.%": (dz_m/dz_s*100) if dz_s > 0 else 0,
+                "DZ-Andel": (dz_s/s*100) if s > 0 else 0
             })
+            
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        
         st.dataframe(df_f, use_container_width=True, height=700, hide_index=True,
                     column_config={
                         "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
-                        "DZ-Andel": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%")
+                        "DZ-Mål": st.column_config.NumberColumn(help="Mål scoret indenfor Danger Zone"),
+                        "DZ-Konv.%": st.column_config.NumberColumn(format="%.1f%%", help="Konverteringsrate for skud i Danger Zone"),
+                        "DZ-Andel": st.column_config.ProgressColumn(
+                            "DZ-Andel af skud",
+                            min_value=0, 
+                            max_value=100, 
+                            format="%.0f%%",
+                            help="Hvor stor en procentdel af spillerens samlede skud er foretaget i Danger Zone"
+                        )
                     })
 
     # --- TAB 1: AFSLUTNINGER ---
