@@ -12,7 +12,6 @@ HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
 def vis_side(dp):
-    # 1. DATA SETUP
     opta_data = dp.get('opta', {})
     df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
