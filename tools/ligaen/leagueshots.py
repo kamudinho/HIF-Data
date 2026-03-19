@@ -9,20 +9,17 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-# HIF Design & Standarder
+# --- KONFIGURATION & DESIGN ---
 HIF_RED = '#cc0000'
-HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
-# --- UTILS ---
-
+# --- LOGO & FARVE UTILS ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content))
-    except:
-        return None
+    except: return None
 
 def get_text_color(hex_color):
     hex_color = hex_color.lstrip('#')
@@ -43,24 +40,19 @@ def get_team_style(team_name):
     return color, logo_img
 
 def draw_logo_adjusted(ax, logo_img):
-    """Placerer logoet lidt nede og lidt ind mod midten (Top-Venstre kvadrant)."""
     if logo_img:
-        # x=0.08 (lidt ind), y=0.80 (lidt ned fra toppen)
         ax_image = ax.inset_axes([0.08, 0.80, 0.12, 0.12], transform=ax.transAxes)
         ax_image.imshow(logo_img)
         ax_image.axis('off')
 
-# --- CALLBACK TIL UNIVERSAL HOLDVALG ---
-def update_global_team():
-    # Denne funktion kører hver gang en selectbox ændres
-    # Vi henter den nøgle, der lige er blevet ændret (t1, t2, tz_skud eller tz_maal)
-    # og gemmer den i vores universelle 'selected_team' state.
+# --- SYNCHRONIZATION LOGIC ---
+def sync_team():
+    # Find ud af hvilken widget der blev trykket på
     for key in ["t1", "t2", "tz_skud", "tz_maal"]:
         if key in st.session_state:
             st.session_state.selected_team = st.session_state[key]
 
-# --- HOVEDFUNKTION ---
-
+# --- MAIN APP ---
 def vis_side(dp):
     opta_data = dp.get('opta', {})
     df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
@@ -69,21 +61,21 @@ def vis_side(dp):
         st.info("Ingen ligadata fundet.")
         return
 
+    # Data Prep
     df_all.columns = [c.upper() for c in df_all.columns]
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
 
-    # Sikr at session_state er initialiseret
+    # Initialize session state
     if 'selected_team' not in st.session_state:
         st.session_state.selected_team = teams_in_data[0] if teams_in_data else "Hvidovre"
 
-    # Zone definitioner
+    # Zone definitioner (samme som før)
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
     Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
-
     ZONE_BOUNDARIES = {
         "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
         "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
@@ -112,24 +104,33 @@ def vis_side(dp):
     st.markdown("""<style>.stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }</style>""", unsafe_allow_html=True)
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # Aktuelt hold index til selectboxes
+    # Current Team for index tracking
     current_team = st.session_state.selected_team
-    idx = teams_in_data.index(current_team) if current_team in teams_in_data else 0
+    t_idx = teams_in_data.index(current_team) if current_team in teams_in_data else 0
 
-    # --- TAB 0 ---
+    # --- TAB 0: SPILLEROVERSIGT (RESTORATION) ---
     with tabs[0]:
         stats = []
         for (p, klub), d in df_all.groupby(['PLAYER_NAME', 'KLUB_NAVN']):
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            stats.append({"Spiller": p, "Klub": klub, "Skud": s, "Mål": m, "Konv.%": (m/s*100) if s > 0 else 0, "DZ-Skud": len(dz), "DZ-Andel": (len(dz)/s*100) if s > 0 else 0})
-        st.dataframe(pd.DataFrame(stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
+            stats.append({
+                "Spiller": p, "Klub": klub, "Skud": s, "Mål": m, 
+                "Konv.%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": len(dz), "DZ-Andel": (len(dz)/s*100) if s > 0 else 0
+            })
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        st.dataframe(df_f, use_container_width=True, height=700, hide_index=True,
+                    column_config={
+                        "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
+                        "DZ-Andel": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%")
+                    })
 
-    # --- TAB 1 ---
+    # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            t_sel = st.selectbox("Vælg Hold", teams_in_data, index=idx, key="t1", on_change=update_global_team)
+            t_sel = st.selectbox("Vælg Hold", teams_in_data, index=t_idx, key="t1", on_change=sync_team)
             t_color, t_logo = get_team_style(t_sel)
             df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
             p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
@@ -143,14 +144,14 @@ def vis_side(dp):
             draw_logo_adjusted(ax, t_logo)
             st.pyplot(fig)
 
-    # --- TAB 2 ---
+    # --- TAB 2: DZ-AFSLUTNINGER ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            t_sel2 = st.selectbox("Vælg Hold", teams_in_data, index=idx, key="t2", on_change=update_global_team)
+            t_sel2 = st.selectbox("Vælg Hold", teams_in_data, index=t_idx, key="t2", on_change=sync_team)
             t_color2, t_logo2 = get_team_style(t_sel2)
             df_dz = df_all[(df_all['KLUB_NAVN'] == t_sel2) & (df_all['IS_DZ_GEO'])]
-            st.metric("DZ Skud", len(df_dz))
+            st.markdown(f'<div class="stat-box" style="border-left-color:{t_color2}"><div style="font-size:0.8rem">DZ Skud ({t_sel2})</div><div style="font-size:1.5rem;font-weight:800">{len(df_dz)}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -160,11 +161,11 @@ def vis_side(dp):
             draw_logo_adjusted(ax, t_logo2)
             st.pyplot(fig)
 
-    # --- TAB 3 & 4 ---
+    # --- TAB 3 & 4: ZONER ---
     def zone_tab(is_goal, k):
         c1, c2 = st.columns([1.8, 1])
         with c2:
-            t_selz = st.selectbox("Vælg Hold", teams_in_data, index=idx, key=f"tz_{k}", on_change=update_global_team)
+            t_selz = st.selectbox("Vælg Hold", teams_in_data, index=t_idx, key=f"tz_{k}", on_change=sync_team)
             t_colorz, t_logoz = get_team_style(t_selz)
             txt_color = get_text_color(t_colorz)
             df_t = df_all[df_all['KLUB_NAVN'] == t_selz]
