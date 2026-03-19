@@ -27,7 +27,6 @@ def vis_side(analysis_package=None):
             try:
                 from data.data_load import _get_snowflake_conn
                 conn = _get_snowflake_conn()
-                
                 query = """
                 SELECT 
                     HOMECONTESTANT_NAME, HOMECONTESTANT_OPTAUUID,
@@ -49,15 +48,15 @@ def vis_side(analysis_package=None):
     # --- 3. FILTRERING ---
     hold_liste = sorted(df_events['HOMECONTESTANT_NAME'].unique())
     
-    col_sel, col_halv, col_spiller = st.columns([1.5, 1, 1.5])
+    col_sel, col_fase, col_spiller = st.columns([1.5, 1.2, 1.3])
     with col_sel:
-        valgt_hold = st.selectbox("Vælg modstander:", hold_liste, key="opp_team_sel")
-    with col_halv:
-        halvdel = st.radio("Fokus:", ["Offensiv", "Defensiv"], horizontal=True)
+        valgt_hold = st.selectbox("Vælg hold:", hold_liste, key="opp_team_sel")
+    with col_fase:
+        fase = st.radio("Spilfase:", ["Med bold", "Mod bold"], horizontal=True)
     
     hold_info = df_events[df_events['HOMECONTESTANT_NAME'] == valgt_hold]
     if hold_info.empty:
-        st.warning("Ingen data fundet for det valgte hold.")
+        st.warning("Ingen data fundet.")
         return
     
     hold_uuid = hold_info['HOMECONTESTANT_OPTAUUID'].iloc[0]
@@ -70,6 +69,7 @@ def vis_side(analysis_package=None):
     if valgt_spiller != "Alle spillere":
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
+    # Mapping af typer
     def map_type(tid):
         if tid == 1: return 'pass'
         if tid in [4, 5]: return 'duel'
@@ -77,70 +77,77 @@ def vis_side(analysis_package=None):
         return 'other'
     df_hold['type'] = df_hold['EVENT_TYPEID'].apply(map_type)
 
-    # --- 4. POSITIONERING & SPEJLING ---
-    if halvdel == "Offensiv":
-        # Standard Opta: 50-100 er modstanderens mål.
-        df_plot = df_hold[df_hold['EVENT_X'] >= 50].copy()
-        # Her lader vi EVENT_X og EVENT_Y være, da målet er i top (100)
+    # --- 4. FASE-LOGIK ---
+    is_half = True
+    if fase == "Med bold":
+        sub_fase = st.segmented_control("Område:", ["Opbygning (Egen)", "Gennembrud (Modstander)"], default="Gennembrud (Modstander)")
+        
+        if sub_fase == "Opbygning (Egen)":
+            # Egen halvdel (0-50). Vi gør 0 til bund og 50 til top.
+            df_plot = df_hold[(df_hold['type'] == 'pass') & (df_hold['EVENT_X'] < 50)].copy()
+            # Ved VerticalPitch er bunden 0 og toppen 100. Så vi behøver ikke spejle X her, 
+            # hvis vi bare viser den nederste halvdel.
+            is_half_bottom = True 
+        else:
+            # Modstanders halvdel (50-100).
+            df_plot = df_hold[(df_hold['type'] == 'pass') & (df_hold['EVENT_X'] >= 50)].copy()
+            is_half_bottom = False
     else:
-        # Egen halvdel: 0-50.
-        df_plot = df_hold[df_hold['EVENT_X'] < 50].copy()
-        # For at kigge "fremad" fra eget mål, spejler vi koordinaterne
-        # så 0 bliver til 100 (toppen af banen i visningen)
-        df_plot['EVENT_X'] = 100 - df_plot['EVENT_X']
-        df_plot['EVENT_Y'] = 100 - df_plot['EVENT_Y']
+        # Mod bold: Fuld bane, kun dueller og erobringer
+        df_plot = df_hold[df_hold['type'].isin(['duel', 'erobring'])].copy()
+        is_half = False
 
-    # --- 5. TABS ---
-    tabs = st.tabs(["INTENSITET (HEATMAP)", "TOP PROFILER", "ZONE ANALYSE"])
+    # --- 5. VISUALISERING ---
+    tabs = st.tabs(["INTENSITET (HEATMAP)", "TOP PROFILER"])
 
     with tabs[0]:
-        # Vi bruger altid half=True. Da vi har spejlet de defensive data til 50-100, 
-        # vil VerticalPitch altid vise målet i toppen af billedet.
-        pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
+        # Konfigurer banevisning
+        if is_half:
+            pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
+            # Hvis vi er i opbygning, skal vi justere synsfeltet til 0-50
+            if fase == "Med bold" and sub_fase == "Opbygning (Egen)":
+                # Vi bruger stadig VerticalPitch(half=True), men vi fortæller ax at den skal vise 0-50
+                ylim_pitch = (0, 50)
+            else:
+                ylim_pitch = (50, 100)
+        else:
+            pitch = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#333333')
+            ylim_pitch = (0, 100)
+
         cols = st.columns(3)
-        kategorier = [
-            ('pass', 'Afleveringer', 'Reds'),
-            ('duel', 'Dueller', 'Blues'),
-            ('erobring', 'Erobringer', 'Greens')
-        ]
+        # Relevante kategorier baseret på fase
+        if fase == "Med bold":
+            kategorier = [('pass', 'Afleveringer', 'Reds')]
+        else:
+            kategorier = [('duel', 'Dueller', 'Blues'), ('erobring', 'Erobringer', 'Greens')]
 
         for i, (kat_id, kat_navn, kat_cmap) in enumerate(kategorier):
-            with cols[i]:
+            with cols[i if fase == "Mod bold" else 1]: # Centrer hvis kun én
                 st.markdown(f"<p style='text-align:center; font-weight:bold;'>{kat_navn}</p>", unsafe_allow_html=True)
                 fig, ax = pitch.draw(figsize=(4, 6))
+                ax.set_ylim(ylim_pitch) # Her styres hvilken halvdel der ses
+                
                 df_subset = df_plot[df_plot['type'] == kat_id]
-
                 if not df_subset.empty:
                     sns.kdeplot(
                         x=df_subset['EVENT_Y'], y=df_subset['EVENT_X'], 
                         fill=True, cmap=kat_cmap, alpha=0.6, 
-                        levels=10, thresh=0.05, ax=ax, clip=((0, 100), (50, 100))
+                        levels=10, thresh=0.05, ax=ax
                     )
                 else:
-                    ax.text(50, 75, "Ingen hændelser", ha='center', color='gray')
+                    ax.text(50, (ylim_pitch[0]+ylim_pitch[1])/2, "Ingen data", ha='center', color='gray')
                 st.pyplot(fig)
                 plt.close(fig)
 
     with tabs[1]:
         st.markdown(f"#### Statistisk overblik: {valgt_hold}")
-        stat_cols = st.columns(3)
+        stat_cols = st.columns(len(kategorier))
         for i, (kat_id, kat_navn, _) in enumerate(kategorier):
             with stat_cols[i]:
-                top_spillere = df_plot[df_plot['type'] == kat_id]['PLAYER_NAME'].value_counts().head(8)
+                top_spillere = df_plot[df_plot['type'] == kat_id]['PLAYER_NAME'].value_counts().head(10)
                 st.markdown(f"**Top {kat_navn}**")
                 for navn, count in top_spillere.items():
                     st.markdown(f'<div class="stat-box"><b>{count}</b> {navn}</div>', unsafe_allow_html=True)
-
-    with tabs[2]:
-        st.markdown("#### Zonefordeling")
-        st.info(f"Oversigt over involveringer fordelt på banens zoner ({halvdel}).")
-        
-        # Zonerne følger nu den spejlede logik (50-100)
-        df_plot['Afstand'] = pd.cut(df_plot['EVENT_X'], bins=[50, 65, 80, 100], labels=['Bagerst', 'Midt', 'Forrest'])
-        df_plot['Side'] = pd.cut(df_plot['EVENT_Y'], bins=[0, 25, 75, 100], labels=['Venstre', 'Centrum', 'Højre'])
-        
-        zone_summary = df_plot.groupby(['Afstand', 'Side']).size().unstack().fillna(0)
-        st.table(zone_summary)
 
 if __name__ == "__main__":
     vis_side()
