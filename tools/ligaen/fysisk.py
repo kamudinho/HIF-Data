@@ -185,5 +185,5 @@ def vis_side(conn, name_map=None):
                     "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.2f km/t")
                 },
                 column_order=("DISPLAY_NAME", "Klub", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
-                use_container_width=True, hide_index=True
+                use_container_width=True, hide_index=True, height=calc_height_m  # Fjerner scrollbar ved at tvinge højden ud
             )
