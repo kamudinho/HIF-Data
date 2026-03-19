@@ -99,12 +99,33 @@ def vis_side(analysis_package=None):
 
     with tabs[2]: # MOD BOLD
         st.markdown('<p class="pitch-label">DEFENSIV INTENSITET</p>', unsafe_allow_html=True)
-        pitch_f = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#333333')
-        fig, ax = pitch_f.draw(figsize=(2, 3))
-        # 4=Tackle, 5=Duel, 8=Interception, 49=Recovery
-        df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
-        if not df_d.empty: sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap='Blues', ax=ax)
-        st.pyplot(fig, use_container_width=True); plt.close(fig)
+        
+        # Opret en kolonne-struktur for at centrere banen, så den ikke fylder HELE skærmen
+        col1, mid, col2 = st.columns([1, 2, 1])
+        
+        with mid:
+            # Sæt figsize til noget mere naturligt (f.eks. 7x10 for en fuld bane)
+            pitch_f = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
+            fig, ax = pitch_f.draw(figsize=(7, 10))
+            
+            df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
+            
+            if not df_d.empty:
+                # Vi tilføjer 'zorder=1' så heatmappet ligger UNDER banelinjerne
+                sns.kdeplot(
+                    x=df_d['LOCATIONY'], 
+                    y=df_d['LOCATIONX'], 
+                    fill=True, 
+                    cmap='Blues', 
+                    alpha=0.8, 
+                    ax=ax, 
+                    zorder=1,
+                    thresh=0.05
+                )
+            
+            # use_container_width=True sørger for at den fylder 'mid' kolonnen ud
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
     with tabs[3]: # TOP 5
         cols = st.columns(3)
