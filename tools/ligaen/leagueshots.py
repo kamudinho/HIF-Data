@@ -203,6 +203,7 @@ def vis_side(dp):
             st.pyplot(fig)
 
     # --- TAB 3 & 4: ZONER ---
+    # --- TAB 3 & 4: ZONER ---
     def zone_tab(is_goal):
         c1, c2 = st.columns([1.8, 1])
         with c2:
@@ -210,18 +211,50 @@ def vis_side(dp):
             plot_data = df_t[df_t['EVENT_TYPEID'] == 16] if is_goal else df_t
             z_counts = plot_data.groupby('Zone').size()
             st.write(f"Zonestatistik for {t_sel}")
+            
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
             fig, ax = pitch.draw(figsize=(8, 10))
             ax.set_ylim(55, 105)
+            
             max_v = z_counts.max() if not z_counts.empty else 1
+            
             for name, b in ZONE_BOUNDARIES.items():
                 if b["y_max"] <= 55: continue
                 cnt = z_counts.get(name, 0)
+                
+                # Beregn alpha (0.05 til 0.85)
                 alpha = (cnt/max_v) * 0.85 if cnt > 0 else 0.05
-                ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
+                
+                # Tegn zonen
+                ax.add_patch(patches.Rectangle(
+                    (b["x_min"], max(b["y_min"], 55)), 
+                    b["x_max"]-b["x_min"], 
+                    b["y_max"]-max(b["y_min"], 55), 
+                    facecolor=t_color, 
+                    alpha=alpha, 
+                    edgecolor='black', 
+                    ls='--', 
+                    lw=0.5
+                ))
+                
                 if cnt > 0:
-                    ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontsize=10, fontweight='bold', color=txt_color)
+                    # DYNAMISK TEKSTFARVE LOGIK:
+                    # Hvis alpha er lav (lys baggrund), brug sort. 
+                    # Hvis alpha er høj (mørk baggrund), brug holdets tekstfarve (typisk hvid).
+                    display_text_color = 'black' if alpha < 0.4 else txt_color
+                    
+                    ax.text(
+                        b["x_min"]+(b["x_max"]-b["x_min"])/2, 
+                        max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, 
+                        f"{cnt}", 
+                        ha='center', 
+                        va='center', 
+                        fontsize=12, 
+                        fontweight='bold', 
+                        color=display_text_color
+                    )
+            
             draw_logo_adjusted(ax, t_logo)
             st.pyplot(fig)
 
