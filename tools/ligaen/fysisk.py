@@ -102,11 +102,44 @@ def vis_side(conn, name_map=None):
         )
 
     with t2:
-            kat_map = {"Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90", "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner P90", "TOP_SPEED": "Topfart km/t"}
-            valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
-            fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='reds', title=f"Hvidovre IF: {kat_map[valg]}")
-            fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+        kat_map = {
+            "Dist_P90": "KM pr. 90", 
+            "HI_P90": "HI m pr. 90", 
+            "Sprint_P90": "Sprint pr. 90", 
+            "HIR_Actions_P90": "HI Aktioner P90", 
+            "TOP_SPEED": "Topfart km/t"
+        }
+        valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
+        
+        # Sorter data så de højeste står først
+        plot_df_sorted = summary.sort_values(valg, ascending=False)
+        
+        # Dynamisk startpunkt for y-aksen: 
+        # Hvis det er KM/90, starter vi ved 3. Ved de andre starter vi ved 0 (eller en %-del af min)
+        y_min = 3 if valg == "Dist_P90" else 0
+        
+        fig = px.bar(
+            plot_df_sorted, 
+            x='DISPLAY_NAME', 
+            y=valg, 
+            text_auto='.1f', 
+            color=valg, 
+            color_continuous_scale='reds', 
+            title=f"Hvidovre IF: {kat_map[valg]}"
+        )
+        
+        fig.update_layout(
+            xaxis_tickangle=-45,
+            yaxis={
+                'range': [y_min, plot_df_sorted[valg].max() * 1.1], # Start ved 3, slut 10% over max
+                'visible': False, # Skjuler y-aksen helt (linje, tal og labels)
+                'showgrid': False # Fjerner de horisontale linjer
+            },
+            plot_bgcolor='rgba(0,0,0,0)', # Gennemsigtig baggrund
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
 
     # --- TAB 3: Top 5-oversigt ---
     with t3:
