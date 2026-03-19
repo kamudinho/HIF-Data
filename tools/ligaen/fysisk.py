@@ -19,12 +19,8 @@ KLUB_NAVNE = {
     "ARF": "Aarhus Fremad",
     "ACH": "Horsens",
     "HBK": "HB Køge",
-    "ESB": "Esbjerg fB",
+    "EFB": "Esbjerg fB",
     "HIL": "Hillerød",
-    "OB": "OB",
-    "SIL": "Silkeborg IF",
-    "VEN": "Vendsyssel FF",
-    "HIK": "Hillerød Fodbold"
 }
 
 def get_opponent_name(description):
