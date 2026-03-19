@@ -77,22 +77,25 @@ def vis_side(analysis_package=None):
         return 'other'
     df_hold['type'] = df_hold['EVENT_TYPEID'].apply(map_type)
 
-    # --- 4. POSITIONERINGS-LOGIK (ALTID FREMADRETTET) ---
+    # --- 4. POSITIONERING & SPEJLING ---
     if halvdel == "Offensiv":
-        # Fra midten (50) mod modstanderens mål (100)
+        # Standard Opta: 50-100 er modstanderens mål.
         df_plot = df_hold[df_hold['EVENT_X'] >= 50].copy()
+        # Her lader vi EVENT_X og EVENT_Y være, da målet er i top (100)
     else:
-        # Fra eget mål (0) mod midten (50)
-        # Vi spejler X, så eget mål (0) vises øverst (100) i 'half=True' visningen
+        # Egen halvdel: 0-50.
         df_plot = df_hold[df_hold['EVENT_X'] < 50].copy()
+        # For at kigge "fremad" fra eget mål, spejler vi koordinaterne
+        # så 0 bliver til 100 (toppen af banen i visningen)
         df_plot['EVENT_X'] = 100 - df_plot['EVENT_X']
-        # Vi spejler også Y, så venstre side forbliver venstre side i spilleretningen
         df_plot['EVENT_Y'] = 100 - df_plot['EVENT_Y']
 
     # --- 5. TABS ---
     tabs = st.tabs(["INTENSITET (HEATMAP)", "TOP PROFILER", "ZONE ANALYSE"])
 
     with tabs[0]:
+        # Vi bruger altid half=True. Da vi har spejlet de defensive data til 50-100, 
+        # vil VerticalPitch altid vise målet i toppen af billedet.
         pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
         cols = st.columns(3)
         kategorier = [
@@ -132,7 +135,7 @@ def vis_side(analysis_package=None):
         st.markdown("#### Zonefordeling")
         st.info(f"Oversigt over involveringer fordelt på banens zoner ({halvdel}).")
         
-        # Opretter zoner baseret på den valgte halvdel (altid set i spilleretningen)
+        # Zonerne følger nu den spejlede logik (50-100)
         df_plot['Afstand'] = pd.cut(df_plot['EVENT_X'], bins=[50, 65, 80, 100], labels=['Bagerst', 'Midt', 'Forrest'])
         df_plot['Side'] = pd.cut(df_plot['EVENT_Y'], bins=[0, 25, 75, 100], labels=['Venstre', 'Centrum', 'Højre'])
         
