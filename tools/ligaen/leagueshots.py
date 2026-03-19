@@ -1,5 +1,5 @@
 import streamlit as st
-import pd
+import pandas as pd
 import numpy as np
 from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
