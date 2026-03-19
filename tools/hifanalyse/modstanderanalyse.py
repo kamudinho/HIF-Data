@@ -43,7 +43,6 @@ def vis_side(analysis_package=None):
     col_titel, col_h1, col_h2 = st.columns([2, 1, 1])
     
     with col_titel:
-        st.subheader("MODSTANDERANALYSE")
 
     with col_h1:
         # Vi bruger CONTESTANTHOME_NAME fra matches i stedet for at gætte fra events
@@ -63,7 +62,7 @@ def vis_side(analysis_package=None):
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
     # --- 4. TABS ---
-    tabs = st.tabs(["📊 GRUNDSTRUKTUR", "⚽ MED BOLD", "🛡️ MOD BOLD", "🏆 TOP 5"])
+    tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # GRUNDSTRUKTUR
         st.write(f"**Taktisk analyse: {valgt_hold}**")
