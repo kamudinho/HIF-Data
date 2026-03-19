@@ -62,14 +62,17 @@ def vis_side(dp):
     teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
 
     # 2. UNIVERSAL HOLDVALG (Placeret OVER tabs)
+    # 2. UNIVERSAL HOLDVALG (Placeret OVER tabs)
     col_header1, col_header2 = st.columns([2, 1])
     with col_header2:
         # Denne dropdown styrer ALT indhold i alle faner
         t_sel = st.selectbox("Vælg hold", teams_in_data, key="global_team_sel")
     
     with col_header1:
+        # Her tilføjer vi indholdet, så blokken ikke er tom
+        st.subheader(f"Analyse: {t_sel}")
 
-    # Hent stil for det valgte hold én gang
+    # Hent stil for det valgte hold én gang (Rykket ud af 'with' blokkene)
     t_color, t_logo = get_team_style(t_sel)
     txt_color = get_text_color(t_color)
 
