@@ -36,8 +36,9 @@ def vis_side(analysis_package=None):
         st.session_state["shape_data"] = conn.query(q_shape)
 
     df_events = st.session_state["events_data"].copy()
-    df_shapes = st.session_state["shape_data"].copy()
-
+    df_shapes = analysis_package.get("shapes", pd.DataFrame())
+    df_shape_pos = analysis_package.get("shape_positions", pd.DataFrame())
+    
     # --- 3. FILTER-RÆKKE ---
     col_h1, col_h2, _ = st.columns([1, 1, 2])
     with col_h1:
@@ -54,20 +55,25 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     # NY GRUNDSTRUKTUR LOGIK
-    with tabs[0]:
-        st.markdown(f"#### Taktisk udgangspunkt: {valgt_hold}")
-        if not df_shape_hold.empty:
-            meste_brugte_formation = df_shape_hold['SHAPE_FORMATION'].value_counts().idxmax()
-            avg_xg = df_shape_hold['SHAPEOUTCOME_XG'].mean()
+    with tabs[0]: # GRUNDSTRUKTUR
+        st.subheader(f"Taktisk Struktur: {valgt_hold}")
+        
+        # Filtrér shape-data på det valgte hold
+        df_h_shape = df_shapes[df_shapes['CONTESTANT_OPTAUUID'] == hold_uuid]
+        
+        if not df_h_shape.empty:
+            meste_brugte = df_h_shape['SHAPE_FORMATION'].value_counts().idxmax()
+            avg_xg_shape = df_h_shape['SHAPEOUTCOME_XG'].mean()
             
             c1, c2 = st.columns(2)
-            c1.metric("Foretrukken formation", meste_brugte_formation)
-            c2.metric("Gns. xG pr. kamp", f"{avg_xg:.2f}")
-            
-            st.write("Seneste benyttede formationer:")
-            st.dataframe(df_shape_hold[['SHAPE_LABEL', 'SHAPE_FORMATION', 'SHAPEOUTCOME_XG']].tail(5), use_container_width=True)
+            c1.metric("Foretrukken Formation", meste_brugte)
+            c2.metric("Gns. xG i denne struktur", f"{avg_xg_shape:.2f}")
+
+            # Vis de seneste 5 formationer i en tabel
+            st.write("**Seneste taktik-logs:**")
+            st.table(df_h_shape[['SHAPE_LABEL', 'SHAPE_FORMATION', 'SHAPEOUTCOME_XG']].tail(5))
         else:
-            st.info("Ingen shape-data fundet for dette hold.")
+            st.info("Ingen taktisk shape-data fundet for dette hold.")
 
     # MED BOLD (Som før)
     with tabs[1]:
