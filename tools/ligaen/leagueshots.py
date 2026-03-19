@@ -4,7 +4,6 @@ import numpy as np
 from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from data.utils.team_mapping import TEAMS
 
 # HIF Identitet & Design
 HIF_RED = '#cc0000'
@@ -20,11 +19,16 @@ def vis_side(dp):
         st.info("Ingen ligadata fundet.")
         return
 
-    # Standardiser kolonner & mapping
+    # Standardiser kolonner
     df_all.columns = [c.upper() for c in df_all.columns]
-    col_team_uuid = 'EVENT_CONTESTANT_OPTAUUID'
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    teams_in_data = sorted([uuid_to_name[u.upper()] for u in df_all[col_team_uuid].unique() if u.upper() in uuid_to_name])
+    
+    # --- AUTOMATISK KLUB-MAPPING ---
+    # Vi antager at 'EVENT_CONTESTANT_NAME' findes i Opta-data. 
+    # Hvis ikke, bruger vi UUID'en som backup.
+    col_team_name = 'EVENT_CONTESTANT_NAME' if 'EVENT_CONTESTANT_NAME' in df_all.columns else 'EVENT_CONTESTANT_OPTAUUID'
+    
+    # Vi sikrer os en ren liste over hold
+    teams_in_data = sorted(df_all[col_team_name].unique())
 
     st.markdown(f"""
         <style>
@@ -68,46 +72,49 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT (1:1 fra shotmap) ---
+    # --- TAB 0: SPILLEROVERSIGT (Nu med Klub-kolonne) ---
     with tabs[0]:
         stats = []
-        for p in sorted(df_all['PLAYER_NAME'].unique()):
-            d = df_all[df_all['PLAYER_NAME'] == p]
+        # Gruppér på både spiller og holdnavn
+        for (p, t), d in df_all.groupby(['PLAYER_NAME', col_team_name]):
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
             stats.append({
-                "Spiller": p.split()[-1], 
+                "Spiller": p, 
+                "Klub": t,
                 "Skud": s, "Mål": m, 
                 "Konvertering%": (m/s*100) if s > 0 else 0,
                 "DZ-Skud": dzs, "DZ-Mål": dzm, 
                 "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
                 "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
-        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False).head(100)
-        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
+        
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        # Dynamisk højde for at undgå scroll
+        calc_height = (len(df_f) + 1) * 36 + 2
+        
+        st.dataframe(df_f, use_container_width=True, height=min(calc_height, 800), hide_index=True,
                     column_config={
-                        "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
-                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
+                        "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%"),
                         "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
                     })
 
-    # --- TAB 1: AFSLUTNINGER (Dynamisk størrelse) ---
+    # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_afsl")
-            u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
-            df_t = df_all[df_all[col_team_uuid].str.upper() == u]
+            df_t = df_all[df_all[col_team_name] == t_sel]
             
             sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_afsl")
             d_v = df_t if sel_p == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_p]
             
-            # --- DYNAMISK STØRRELSE LOGIK ---
             dot_size = 25 if sel_p != "Hele Holdet" else 20
-            
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
+            
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
@@ -118,19 +125,15 @@ def vis_side(dp):
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=dot_size, c=colors, edgecolors=HIF_RED, linewidth=0.8, ax=ax)
             st.pyplot(fig)
 
-    # --- TAB 2: DZ-AFSLUTNINGER (Dynamisk størrelse) ---
+    # --- TAB 2: DZ-AFSLUTNINGER ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_dz")
-            u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
-            df_t = df_all[df_all[col_team_uuid].str.upper() == u]
+            df_t = df_all[df_all[col_team_name] == t_sel]
             
             sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_dz")
             d_v = df_t if sel_dz == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_dz]
-            
-            # --- DYNAMISK STØRRELSE LOGIK ---
-            dot_size_dz = 25 if sel_dz != "Hele Holdet" else 20
             
             dz_d = d_v[d_v['IS_DZ_GEO']]
             m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
@@ -141,7 +144,7 @@ def vis_side(dp):
             fig, ax = pitch.draw(figsize=(5, 7))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
             colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=dot_size_dz, c=colors, edgecolors=HIF_RED, ax=ax)
+            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=25, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
     # --- ZONER FUNKTION ---
@@ -149,8 +152,7 @@ def vis_side(dp):
         col_viz, col_ctrl = st.columns([1.8, 1])
         with col_ctrl:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key=f"t_z_{key_suffix}")
-            u = next(v['opta_uuid'].upper() for k, v in TEAMS.items() if k == t_sel)
-            df_t = data_all[data_all[col_team_uuid].str.upper() == u]
+            df_t = data_all[data_all[col_team_name] == t_sel]
             
             p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key=f"p_z_{key_suffix}")
             d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
