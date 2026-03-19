@@ -100,30 +100,39 @@ def vis_side(analysis_package=None):
     with tabs[2]: # MOD BOLD
         st.markdown('<p class="pitch-label">DEFENSIV INTENSITET</p>', unsafe_allow_html=True)
         
-        # Opret en kolonne-struktur for at centrere banen, så den ikke fylder HELE skærmen
-        col1, mid, col2 = st.columns([1, 2, 1])
+        # Centrer banen ved at bruge tomme kolonner som 'padding'
+        _, center_col, _ = st.columns([0.5, 1, 0.5])
         
-        with mid:
-            # Sæt figsize til noget mere naturligt (f.eks. 7x10 for en fuld bane)
-            pitch_f = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
-            fig, ax = pitch_f.draw(figsize=(4, 7))
+        with center_col:
+            # Vi definerer banen
+            pitch_f = VerticalPitch(
+                pitch_type='opta', 
+                pitch_color='#ffffff', 
+                line_color='#333333', 
+                line_zorder=3  # Sørg for at linjer ligger ØVERST
+            )
             
+            # Figurstørrelsen her styrer proportionerne (7 bred, 10 høj)
+            fig, ax = pitch_f.draw(figsize=(7, 10))
+            
+            # Data: Tackles (4), Duels (5), Interceptions (8), Recoveries (49)
             df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
             
             if not df_d.empty:
-                # Vi tilføjer 'zorder=1' så heatmappet ligger UNDER banelinjerne
                 sns.kdeplot(
                     x=df_d['LOCATIONY'], 
                     y=df_d['LOCATIONX'], 
                     fill=True, 
                     cmap='Blues', 
-                    alpha=0.6, 
+                    alpha=0.7, 
                     ax=ax, 
-                    zorder=1,
-                    thresh=0.05
+                    zorder=2, # Under linjer (zorder 3)
+                    levels=10, # Gør overgangene blødere
+                    thresh=0.05, # Fjerner de helt svage farver i kanten
+                    clip=((0, 100), (0, 100)) # STRENG GRÆNSE: Stopper ved linjerne
                 )
             
-            # use_container_width=True sørger for at den fylder 'mid' kolonnen ud
+            # use_container_width=True sørger for den fylder center_col ud
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
