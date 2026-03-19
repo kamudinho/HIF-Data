@@ -21,6 +21,7 @@ KLUB_NAVNE = {
     "HBK": "HB Køge",
     "EFB": "Esbjerg fB",
     "HIL": "Hillerød",
+    "AAB": "AaB"
 }
 
 def get_opponent_name(description):
@@ -173,17 +174,23 @@ def vis_side(conn, name_map=None):
             df_m['KM'] = df_m['DISTANCE'] / 1000
             df_m['Klub'] = df_m['Hold'].apply(lambda x: 'Hvidovre IF' if x == 'Hvidovre IF' else opp_name)
             
+            match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
+            # DYNAMISK HØJDE: Antal spillere * 35px + header
+            calc_height_m = (len(match_plot) + 1) * 35 + 45
+
             st.dataframe(
-                df_m.sort_values(by='DISTANCE', ascending=False), 
+                match_plot, 
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
-                    "Klub": st.column_config.TextColumn("Klub", width="small"),
-                    "MINUTES": st.column_config.TextColumn("Min"), 
-                    "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
-                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
-                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.2f km/t")
+                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width=200),
+                    "Klub": st.column_config.TextColumn("Klub", width=100),
+                    "MINUTES": st.column_config.TextColumn("Min", width=60), 
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f km", width=80),
+                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m", width=80),
+                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m", width=80),
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.2f km/t", width=80)
                 },
                 column_order=("DISPLAY_NAME", "Klub", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
-                use_container_width=True, hide_index=True, height=calc_height_m  # Fjerner scrollbar ved at tvinge højden ud
+                use_container_width=True, 
+                hide_index=True, 
+                height=calc_height_m  # Fjerner scrollbar ved at tvinge højden ud
             )
