@@ -40,10 +40,8 @@ def vis_side(analysis_package=None):
     df_events.columns = [c.upper() for c in df_events.columns]
 
     # --- 3. FILTER-RÆKKE (Layout rettelse) ---
-    col_titel, col_h1, col_h2 = st.columns([2, 1, 1])
+    col_h1, col_h2 = st.columns([1, 1])
     
-    with col_titel:
-
     with col_h1:
         # Vi bruger CONTESTANTHOME_NAME fra matches i stedet for at gætte fra events
         hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else sorted(df_events['PLAYER_NAME'].unique())
