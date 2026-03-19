@@ -111,11 +111,8 @@ def vis_side(conn, name_map=None):
         }
         valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
         
-        # Sorter data
         plot_df_sorted = summary.sort_values(valg, ascending=False)
         
-        # Beregn et dynamisk minimum for at "zoome" ind (f.eks. 80% af den laveste værdi)
-        # Dette gør afstandene mellem søjlerne meget tydeligere
         min_val = plot_df_sorted[valg].min()
         max_val = plot_df_sorted[valg].max()
         dynamic_min = min_val * 0.8
@@ -126,15 +123,20 @@ def vis_side(conn, name_map=None):
             y=valg, 
             text_auto='.1f', 
             color=valg, 
-            color_continuous_scale='reds', # Hvidovre rød
+            color_continuous_scale='reds',
             title=f"Hvidovre IF: {kat_map[valg]}"
         )
         
-        # Vi bruger update_yaxes direkte for at sikre, at den lytter efter
+        # --- HOVER SETUP ---
+        # <b> gør navnet fedt. :.2f sikrer max 2 decimaler. <extra></extra> fjerner "trace"-teksten i siden.
+        fig.update_traces(
+            hovertemplate=f"<b>%{{x}}</b><br>{kat_map[valg]}: %{{y:.2f}}<extra></extra>"
+        )
+        
         fig.update_yaxes(
-            range=[dynamic_min, max_val * 1.05], # Zoom ind
-            visible=False,                       # Skjul aksen
-            showgrid=False                       # Fjern linjer
+            range=[dynamic_min, max_val * 1.05],
+            visible=False,
+            showgrid=False
         )
         
         fig.update_layout(
@@ -142,7 +144,12 @@ def vis_side(conn, name_map=None):
             xaxis_title=None,
             yaxis_title=None,
             plot_bgcolor='rgba(0,0,0,0)',
-            coloraxis_showscale=False # Skjul farve-skalaen til højre for mere plads
+            coloraxis_showscale=False,
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=14,
+                font_family="Arial"
+            )
         )
         
         st.plotly_chart(fig, use_container_width=True)
