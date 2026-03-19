@@ -269,5 +269,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 AWAY_PLAYERS
             FROM {DB}.SECONDSPECTRUM_METADATA 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+        """,
+        "opta_shapes": f"""
+            SELECT * FROM {DB}.OPTA_SHAPES 
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+        """,
+
+        "opta_shape_positions": f"""
+            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """
     }
