@@ -42,13 +42,15 @@ def get_analysis_package(hif_only=False, match_uuid=None):
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
     
-    # 3. Fysisk Data (Nu uden separat meta-query!)
-    # Vi henter den store tabel for hele ligaen/HIF via JOIN-query nr. 10
+    # --- TILFØJ DENNE LINJE HERUNDER ---
+    df_all_events = safe_query("opta_events") 
+    # -----------------------------------
+
     df_fys = safe_query("opta_physical_stats")
     df_fys_sum = safe_query("opta_physical_summary")
     df_shapes = safe_query("opta_shapes")
     df_shape_positions = safe_query("opta_shape_positions")
-
+    
     # Hvis der er valgt en specifik kamp (f.eks. i dropdown), filtrerer vi i hukommelsen
     if match_uuid and not df_fys.empty:
         # Rens UUID (fjern 'g' hvis det findes)
@@ -91,7 +93,8 @@ def get_analysis_package(hif_only=False, match_uuid=None):
             "team_linebreaks": df_team_linebreaks,
             "opta_sequence_map": df_sequence,
             "player_linebreaks": df_player_linebreaks,
-            "league_shotevents": df_league_shots
+            "league_shotevents": df_league_shots,
+            "opta_events": df_all_events
         },
         "config": {
             "liga_navn": comp_f, 
