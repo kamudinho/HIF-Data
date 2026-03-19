@@ -121,14 +121,15 @@ def vis_side(conn, name_map=None):
             plot_df_sorted, 
             x='DISPLAY_NAME', 
             y=valg, 
-            text_auto='.1f', 
+            # Ændret fra .1f til .2f for at undgå afrunding af f.eks. 36.96 til 37.0
+            text_auto='.2f', 
             color=valg, 
             color_continuous_scale='reds',
             title=f"Hvidovre IF: {kat_map[valg]}"
         )
         
         # --- HOVER SETUP ---
-        # <b> gør navnet fedt. :.2f sikrer max 2 decimaler. <extra></extra> fjerner "trace"-teksten i siden.
+        # Her sikrer vi også 2 decimaler, så hover og label stemmer overens
         fig.update_traces(
             hovertemplate=f"<b>%{{x}}</b><br>{kat_map[valg]}: %{{y:.2f}}<extra></extra>"
         )
