@@ -106,7 +106,7 @@ def vis_side(analysis_package=None):
         with mid:
             # Sæt figsize til noget mere naturligt (f.eks. 7x10 for en fuld bane)
             pitch_f = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
-            fig, ax = pitch_f.draw(figsize=(7, 10))
+            fig, ax = pitch_f.draw(figsize=(4, 7))
             
             df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
             
