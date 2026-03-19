@@ -70,7 +70,7 @@ def vis_side(dp):
     
     with col_header1:
         # Her tilføjer vi indholdet, så blokken ikke er tom
-        st.subheader(f"Analyse: {t_sel}")
+        st.caption(f"Analyse: {t_sel}")
 
     # Hent stil for det valgte hold én gang (Rykket ud af 'with' blokkene)
     t_color, t_logo = get_team_style(t_sel)
