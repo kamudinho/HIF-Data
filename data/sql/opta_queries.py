@@ -271,12 +271,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """,
         "opta_shapes": f"""
-            SELECT * FROM {DB}.OPTA_SHAPES 
+            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """,
 
         "opta_shape_positions": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
+            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """
     }
