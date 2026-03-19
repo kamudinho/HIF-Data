@@ -28,11 +28,26 @@ def vis_side(analysis_package=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. DATA-LOAD ---
-    if "events_data" not in st.session_state:
-        # Her antages det at data hentes via din eksisterende logik
-        st.error("Data ikke fundet. Venligst indlæs data fra hovedmenuen.")
-        return
+    # --- 2. FORBEDRET DATA-LOAD (Fallback hvis session_state er tom) ---
+    if "events_data" not in st.session_state or st.session_state["events_data"] is None:
+        with st.spinner("Henter data direkte fra Snowflake..."):
+            try:
+                from data.data_load import _get_snowflake_conn
+                conn = _get_snowflake_conn()
+                query = """
+                SELECT 
+                    HOMECONTESTANT_NAME, HOMECONTESTANT_OPTAUUID,
+                    EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, 
+                    EVENT_X, EVENT_Y, PLAYER_NAME
+                FROM KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS
+                WHERE COMPETITION_OPTAUUID = '6ifaeunfdelecgticvxanikzu'
+                AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
+                AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
+                """
+                st.session_state["events_data"] = conn.query(query)
+            except Exception as e:
+                st.error(f"Kunne ikke hente data: {e}")
+                return
 
     df_events = st.session_state["events_data"].copy()
 
@@ -52,7 +67,7 @@ def vis_side(analysis_package=None):
     if valgt_spiller != "Alle spillere":
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
-    # Mapping
+    # Type mapping
     def map_type(tid):
         if tid == 1: return 'pass'
         if tid in [4, 5]: return 'duel'
@@ -62,6 +77,10 @@ def vis_side(analysis_package=None):
 
     # --- 4. TABS ---
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
+
+    # FANEN: GRUNDSTRUKTUR
+    with tabs[0]:
+        st.write(f"Modstanderanalyse for {valgt_hold}")
 
     # FANEN: MED BOLD (Store baner)
     with tabs[1]:
@@ -90,17 +109,15 @@ def vis_side(analysis_package=None):
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-    # FANEN: MOD BOLD (Kompakt og med dueller)
+    # FANEN: MOD BOLD (Kompakt og med dueller + erobringer)
     with tabs[2]:
-        # Vi bruger smallere kolonner [1, 1, 1] for at gøre banen mindre
         c_left, c_mid, c_right = st.columns([1, 1, 1])
-        
         with c_mid:
             st.markdown('<p class="pitch-label">DEFENSIV INTENSITET</p>', unsafe_allow_html=True)
             pitch_full = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#333333')
-            fig, ax = pitch_full.draw(figsize=(4, 6)) # Mindre figsize
+            fig, ax = pitch_full.draw(figsize=(4, 6))
             
-            # Vi filtrerer for både dueller og erobringer
+            # Her kombinerer vi dueller og erobringer
             df_def = df_hold[df_hold['type'].isin(['duel', 'erobring'])]
             
             if not df_def.empty:
