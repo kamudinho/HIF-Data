@@ -75,9 +75,8 @@ def vis_side(dp):
                         "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
                         "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
                     })
-
-    # --- TAB 1: AFSLUTNINGER (Dynamisk størrelse) ---
-    with tabs[1]:
+    #TAB1
+    with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_afsl")
