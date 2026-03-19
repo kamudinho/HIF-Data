@@ -6,7 +6,7 @@ from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package=None):
 # --- 1. UI & CSS ---
-    st.markdown("""
+   st.markdown("""
         <style>
             .block-container { padding-top: 1rem; }
             .stat-box { 
