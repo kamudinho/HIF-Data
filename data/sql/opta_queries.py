@@ -182,23 +182,22 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
 
         # 8. RAW EVENTS
+        # 8. RAW EVENTS - SØRG FOR AT DISSE KOLONNER ER MED!
         "opta_events": f"""
             SELECT 
-                EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
-                EVENT_TYPEID, EVENT_X AS LOCATIONX, EVENT_Y AS LOCATIONY,
-                CASE 
-                    WHEN EVENT_TYPEID = 1 THEN 'pass'
-                    WHEN EVENT_TYPEID IN (4, 5) THEN 'duel'
-                    WHEN EVENT_TYPEID IN (8, 49) THEN 'interception'
-                    ELSE 'other'
-                END AS PRIMARYTYPE
+                EVENT_OPTAUUID, 
+                MATCH_OPTAUUID, 
+                EVENT_CONTESTANT_OPTAUUID,  -- DENNE SKAL VÆRE HER
+                EVENT_TYPEID, 
+                PLAYER_NAME,                -- DENNE SKAL VÆRE HER
+                EVENT_X AS LOCATIONX, 
+                EVENT_Y AS LOCATIONY
             FROM {DB}.OPTA_EVENTS
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            AND EVENT_TYPEID IN (1, 4, 5, 8, 49)
+            AND EVENT_TYPEID IN (1, 4, 5, 8, 49, 13, 14, 15, 16)
             ORDER BY EVENT_TIMESTAMP DESC
-            LIMIT 6000
         """,
-
+        
         # 9. SEQUENCE MAP
         "opta_sequence_map": f"""
             WITH MatchIDs AS (
