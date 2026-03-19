@@ -65,10 +65,9 @@ def vis_side(dp):
     col_header1, col_header2 = st.columns([2, 1])
     with col_header2:
         # Denne dropdown styrer ALT indhold i alle faner
-        t_sel = st.selectbox("Vælg Globalt Hold", teams_in_data, key="global_team_sel")
+        t_sel = st.selectbox("Vælg hold", teams_in_data, key="global_team_sel")
     
     with col_header1:
-        st.subheader(f"Analyse: {t_sel}")
 
     # Hent stil for det valgte hold én gang
     t_color, t_logo = get_team_style(t_sel)
