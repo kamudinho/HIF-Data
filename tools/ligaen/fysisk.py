@@ -93,7 +93,7 @@ def vis_side(conn, name_map=None):
                 "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d m", width="small"),
                 "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d m", width="small"),
                 "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt.", format="%.1f", width="small"),
-                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t", width="small")
+                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.2f km/t", width="small")
             },
             column_order=("DISPLAY_NAME", "Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"),
             use_container_width=True, 
@@ -169,7 +169,7 @@ def vis_side(conn, name_map=None):
                 column_config={
                     "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
                     "Hold": st.column_config.TextColumn("Klub", width="small"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Km/t", format="%.1f km/t")
+                    "TOP_SPEED": st.column_config.NumberColumn("Km/t", format="%.2f km/t")
                 },
                 use_container_width=True, 
                 hide_index=True
@@ -232,7 +232,7 @@ def vis_side(conn, name_map=None):
                     "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
                     "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
                     "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m"),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.2f km/t")
                 },
                 column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
                 use_container_width=True, hide_index=True, height=calc_height_m
