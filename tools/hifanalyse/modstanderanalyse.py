@@ -84,29 +84,34 @@ def vis_side(analysis_package=None):
         st.write(f"Analyse af {valgt_hold}")
 
     with tabs[1]:
-        c1, c2 = st.columns(2)
+        # Vi bruger et 5-kolonne layout for at få bedre kontrol over midterpladsen
+        # [side-buffer, bane1, center-gap, bane2, side-buffer]
+        _, b1, gap, b2, _ = st.columns([0.1, 1.5, 0.1, 1.5, 0.1])
+        
         pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
         
-        with c1:
+        with b1:
             st.markdown('<p class="pitch-label">OPBYGNING</p>', unsafe_allow_html=True)
-            fig, ax = pitch.draw(figsize=(4, 5))
+            # Vi øger figsize for at gøre billedet fysisk større
+            fig, ax = pitch.draw(figsize=(6, 8)) 
             ax.set_ylim(0, 50) 
             df_opbyg = df_hold[(df_hold['type'] == 'pass') & (df_hold['EVENT_X'] < 50)]
             if not df_opbyg.empty:
                 sns.kdeplot(x=df_opbyg['EVENT_Y'], y=df_opbyg['EVENT_X'], fill=True, cmap='Reds', 
                             alpha=0.6, levels=10, thresh=0.05, ax=ax, clip=((0, 100), (0, 50)))
-            st.pyplot(fig)
+            # use_container_width=True sørger for at billedet udfylder kolonnen helt
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        with c2:
+        with b2:
             st.markdown('<p class="pitch-label">GENNEMBRUD</p>', unsafe_allow_html=True)
-            fig, ax = pitch.draw(figsize=(4, 5))
+            fig, ax = pitch.draw(figsize=(6, 8))
             ax.set_ylim(50, 100)
             df_gen = df_hold[(df_hold['type'] == 'pass') & (df_hold['EVENT_X'] >= 50)]
             if not df_gen.empty:
                 sns.kdeplot(x=df_gen['EVENT_Y'], y=df_gen['EVENT_X'], fill=True, cmap='Reds', 
                             alpha=0.6, levels=10, thresh=0.05, ax=ax, clip=((0, 100), (50, 100)))
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
     with tabs[2]:
