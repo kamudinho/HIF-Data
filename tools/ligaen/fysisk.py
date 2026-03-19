@@ -111,12 +111,14 @@ def vis_side(conn, name_map=None):
         }
         valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
         
-        # Sorter data så de højeste står først
+        # Sorter data
         plot_df_sorted = summary.sort_values(valg, ascending=False)
         
-        # Dynamisk startpunkt for y-aksen: 
-        # Hvis det er KM/90, starter vi ved 3. Ved de andre starter vi ved 0 (eller en %-del af min)
-        y_min = 3 if valg == "Dist_P90" else 0
+        # Beregn et dynamisk minimum for at "zoome" ind (f.eks. 80% af den laveste værdi)
+        # Dette gør afstandene mellem søjlerne meget tydeligere
+        min_val = plot_df_sorted[valg].min()
+        max_val = plot_df_sorted[valg].max()
+        dynamic_min = min_val * 0.8
         
         fig = px.bar(
             plot_df_sorted, 
@@ -124,19 +126,23 @@ def vis_side(conn, name_map=None):
             y=valg, 
             text_auto='.1f', 
             color=valg, 
-            color_continuous_scale='reds', 
+            color_continuous_scale='reds', # Hvidovre rød
             title=f"Hvidovre IF: {kat_map[valg]}"
+        )
+        
+        # Vi bruger update_yaxes direkte for at sikre, at den lytter efter
+        fig.update_yaxes(
+            range=[dynamic_min, max_val * 1.05], # Zoom ind
+            visible=False,                       # Skjul aksen
+            showgrid=False                       # Fjern linjer
         )
         
         fig.update_layout(
             xaxis_tickangle=-45,
-            yaxis={
-                'range': [y_min, plot_df_sorted[valg].max() * 1.1], # Start ved 3, slut 10% over max
-                'visible': False, # Skjuler y-aksen helt (linje, tal og labels)
-                'showgrid': False # Fjerner de horisontale linjer
-            },
-            plot_bgcolor='rgba(0,0,0,0)', # Gennemsigtig baggrund
-            margin=dict(l=20, r=20, t=40, b=20)
+            xaxis_title=None,
+            yaxis_title=None,
+            plot_bgcolor='rgba(0,0,0,0)',
+            coloraxis_showscale=False # Skjul farve-skalaen til højre for mere plads
         )
         
         st.plotly_chart(fig, use_container_width=True)
