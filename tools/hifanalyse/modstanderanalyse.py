@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package=None):
-    st.title("MODSTANDERANALYSE")
 
     if not analysis_package:
         st.error("Fejl: Ingen datapakke modtaget fra analyse_load.py")
