@@ -21,14 +21,13 @@ def vis_side(analysis_package=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. DATA-LOAD (Med automatisk fallback) ---
+    # --- 2. DATA-LOAD ---
     if "events_data" not in st.session_state:
         with st.spinner("Henter modstander-data fra Snowflake..."):
             try:
                 from data.data_load import _get_snowflake_conn
                 conn = _get_snowflake_conn()
                 
-                # Din specifikke query til Betinia/NordicBet Ligaen
                 query = """
                 SELECT 
                     HOMECONTESTANT_NAME, HOMECONTESTANT_OPTAUUID,
@@ -56,7 +55,6 @@ def vis_side(analysis_package=None):
     with col_halv:
         halvdel = st.radio("Fokus:", ["Offensiv", "Defensiv"], horizontal=True)
     
-    # UUID match
     hold_info = df_events[df_events['HOMECONTESTANT_NAME'] == valgt_hold]
     if hold_info.empty:
         st.warning("Ingen data fundet for det valgte hold.")
@@ -72,7 +70,6 @@ def vis_side(analysis_package=None):
     if valgt_spiller != "Alle spillere":
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
-    # Mapping
     def map_type(tid):
         if tid == 1: return 'pass'
         if tid in [4, 5]: return 'duel'
@@ -80,17 +77,20 @@ def vis_side(analysis_package=None):
         return 'other'
     df_hold['type'] = df_hold['EVENT_TYPEID'].apply(map_type)
 
-    # Positionering (Spejling ved defensiv analyse)
+    # --- 4. POSITIONERINGS-LOGIK (ALTID FREMADRETTET) ---
     if halvdel == "Offensiv":
+        # Fra midten (50) mod modstanderens mål (100)
         df_plot = df_hold[df_hold['EVENT_X'] >= 50].copy()
     else:
-        # Defensiv: Spejlvend banen så vi ser deres egen halvdel øverst
+        # Fra eget mål (0) mod midten (50)
+        # Vi spejler X, så eget mål (0) vises øverst (100) i 'half=True' visningen
         df_plot = df_hold[df_hold['EVENT_X'] < 50].copy()
         df_plot['EVENT_X'] = 100 - df_plot['EVENT_X']
+        # Vi spejler også Y, så venstre side forbliver venstre side i spilleretningen
         df_plot['EVENT_Y'] = 100 - df_plot['EVENT_Y']
 
-    # --- 4. TABS ---
-    tabs = st.tabs(["📊 INTENSITET (HEATMAP)", "🏆 TOP PROFILER", "📍 ZONE ANALYSE"])
+    # --- 5. TABS ---
+    tabs = st.tabs(["INTENSITET (HEATMAP)", "TOP PROFILER", "ZONE ANALYSE"])
 
     with tabs[0]:
         pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
@@ -119,7 +119,7 @@ def vis_side(analysis_package=None):
                 plt.close(fig)
 
     with tabs[1]:
-        st.markdown(f"#### Statistisk Overblik: {valgt_hold}")
+        st.markdown(f"#### Statistisk overblik: {valgt_hold}")
         stat_cols = st.columns(3)
         for i, (kat_id, kat_navn, _) in enumerate(kategorier):
             with stat_cols[i]:
@@ -129,16 +129,14 @@ def vis_side(analysis_package=None):
                     st.markdown(f'<div class="stat-box"><b>{count}</b> {navn}</div>', unsafe_allow_html=True)
 
     with tabs[2]:
-        st.markdown("#### Hvor mister de bolden? (Boldtab)")
-        # Her simulerer vi boldtab ved at se på mislykkede afleveringer/tabte dueller
-        # (Kræver at du har 'outcome' kolonnen i din SQL query for optimal brug)
-        st.info(f"Denne sektion viser koncentrationen af {valgt_hold}'s involveringer i forskellige zoner.")
+        st.markdown("#### Zonefordeling")
+        st.info(f"Oversigt over involveringer fordelt på banens zoner ({halvdel}).")
         
-        # En simpel zone-opdeling af deres aktioner
-        df_plot['zone_x'] = pd.cut(df_plot['EVENT_X'], bins=[50, 65, 80, 100], labels=['Midt', 'Forfelt', 'Felt'])
-        df_plot['zone_y'] = pd.cut(df_plot['EVENT_Y'], bins=[0, 25, 75, 100], labels=['Venstre', 'Centrum', 'Højre'])
+        # Opretter zoner baseret på den valgte halvdel (altid set i spilleretningen)
+        df_plot['Afstand'] = pd.cut(df_plot['EVENT_X'], bins=[50, 65, 80, 100], labels=['Bagerst', 'Midt', 'Forrest'])
+        df_plot['Side'] = pd.cut(df_plot['EVENT_Y'], bins=[0, 25, 75, 100], labels=['Venstre', 'Centrum', 'Højre'])
         
-        zone_summary = df_plot.groupby(['zone_x', 'zone_y']).size().unstack().fillna(0)
+        zone_summary = df_plot.groupby(['Afstand', 'Side']).size().unstack().fillna(0)
         st.table(zone_summary)
 
 if __name__ == "__main__":
