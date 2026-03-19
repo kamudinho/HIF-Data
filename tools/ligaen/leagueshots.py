@@ -47,7 +47,22 @@ def draw_logo_adjusted(ax, logo_img):
         ax_image.axis('off')
 
 # --- MAIN APP ---
+# --- MAIN APP ---
 def vis_side(dp):
+    # CSS til at reducere afstand mellem widgets og faner
+    st.markdown("""
+        <style>
+            /* Reducer afstand over tabs-linjen */
+            .stTabs {
+                margin-top: -30px;
+            }
+            /* Reducer afstanden mellem kolonne-rækker */
+            [data-testid="stVerticalBlock"] > div:has(div.stColumns) {
+                margin-bottom: -15px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     opta_data = dp.get('opta', {})
     df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
@@ -61,22 +76,20 @@ def vis_side(dp):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
 
-    # 2. UNIVERSAL HOLDVALG (Placeret OVER tabs)
-    # 2. UNIVERSAL HOLDVALG (Placeret OVER tabs)
+    # 2. UNIVERSAL HOLDVALG
     col_header1, col_header2 = st.columns([2, 1])
     with col_header2:
-        # Denne dropdown styrer ALT indhold i alle faner
         t_sel = st.selectbox("Vælg hold", teams_in_data, key="global_team_sel")
     
     with col_header1:
-        # Her tilføjer vi indholdet, så blokken ikke er tom
-        st.caption(f"Analyse: {t_sel}")
+        # Brug en tom overskrift eller lille caption for at holde balancen uden at fylde
+        st.caption(f"Aktuel visning: **{t_sel}**")
 
-    # Hent stil for det valgte hold én gang (Rykket ud af 'with' blokkene)
+    # Hent stil
     t_color, t_logo = get_team_style(t_sel)
     txt_color = get_text_color(t_color)
 
-    # 3. ZONE LOGIK (Samme som før)
+    # 3. ZONE LOGIK (uændret)
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -108,7 +121,7 @@ def vis_side(dp):
 
     # 4. TABS
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
-
+    
     # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
