@@ -119,10 +119,10 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Modstanderanalyse", "Sekvenser"], # Tilføj denne
+        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
+        sel = option_menu(None, options=["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
@@ -191,21 +191,21 @@ try:
         
         # I din rendering-sektion i main.py:
         if hoved_omraade == "HIF ANALYSE":
-            if sel == "Afslutninger":
-                import tools.hifanalyse.shotmap as sm
-                sm.vis_side(dp)
-            elif sel == "Spillerperformance": # Tilføj denne blok
+            if sel == "Spillerperformance": # Tilføj denne blok
                 import tools.hifanalyse.player_analysis as pa
                 pa.vis_side(dp)
+            elif sel == "Afslutninger":
+                import tools.hifanalyse.shotmap as sm
+                sm.vis_side(dp)
             elif sel == "Assistmap": # Tilføj denne blok
                 import tools.hifanalyse.assistmap as am
                 am.vis_side(dp)
-            elif sel == "Modstanderanalyse": # Tilføj denne blok
-                import tools.hifanalyse.modstanderanalyse as ma
-                ma.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
-            if sel == "Holdoversigt":
+            if sel == "Modstanderanalyse": # Tilføj denne blok
+                import tools.hifanalyse.modstanderanalyse as ma
+                ma.vis_side(dp)    
+            elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
                 tt.vis_side(dp)
             elif sel == "Kampe":
