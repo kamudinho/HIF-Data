@@ -5,114 +5,109 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package=None):
-    # --- 1. Layout: Titel og Dropdowns på samme linje ---
-    col_titel, col_h1, col_h2 = st.columns([2, 1, 1])
+    # --- 1. TOP BAR (Titel og Dropdowns på én linje) ---
+    st.markdown("<style>div[data-testid='stHorizontalBlock'] { align-items: center; }</style>", unsafe_allow_html=True)
     
-    with col_titel:
-        st.subheader("MODSTANDERANALYSE")
+    hdr_col1, hdr_col2, hdr_col3 = st.columns([2, 1, 1])
+    
+    with hdr_col1:
+        st.subheader("BETINIA LIGAEN | ANALYSE")
 
     if not analysis_package:
-        st.error("Fejl: Ingen datapakke fundet.")
+        st.error("Ingen datapakke fundet.")
         return
 
-    # Hent data
+    # Hent grunddata
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_shapes = analysis_package.get("shapes", pd.DataFrame())
-    df_all_events = analysis_package.get("opta", {}).get("opta_events", pd.DataFrame())
+    # Hent events fra 'opta' sub-dict
+    opta_data = analysis_package.get("opta", {})
+    df_all_events = opta_data.get("opta_events", pd.DataFrame())
 
-    if df_all_events.empty:
-        st.error("Data-fejl: 'opta_events' er tom. Tjek din analyse_load.py")
-        return
-
-    # --- 2. Dropdowns i kolonnerne til højre ---
-    with col_h1:
-        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique())
+    # Dropdowns i de to små kolonner til højre
+    with hdr_col2:
+        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else []
         valgt_hold = st.selectbox("Vælg hold", hold_navne, label_visibility="collapsed")
     
-    # Find UUID
-    hold_uuid = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]['CONTESTANTHOME_OPTAUUID'].iloc[0]
-    
-    # Forbered event-data (Upper case kolonner for sikkerhed)
-    df_all_events.columns = [c.upper() for c in df_all_events.columns]
-    col_team = 'EVENT_CONTESTANT_OPTAUUID'
-    col_player = 'PLAYER_NAME'
-    
-    # Filtrér primært på holdet med det samme
-    df_hold = df_all_events[df_all_events[col_team] == hold_uuid].copy()
+    # Find UUID for det valgte hold
+    hold_uuid = ""
+    if not df_matches.empty and valgt_hold:
+        match_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
+        if not match_row.empty:
+            hold_uuid = match_row['CONTESTANTHOME_OPTAUUID'].iloc[0]
 
-    with col_h2:
-        spillere = ["Alle spillere"] + sorted(df_hold[col_player].dropna().unique().tolist())
-        valgt_spiller = st.selectbox("Vælg spiller", spillere, label_visibility="collapsed")
+    # Præ-filtrér events for det valgte hold
+    df_hold = pd.DataFrame()
+    if not df_all_events.empty and hold_uuid:
+        df_all_events.columns = [c.upper() for c in df_all_events.columns]
+        df_hold = df_all_events[df_all_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy()
+
+    with hdr_col3:
+        spiller_liste = ["Alle spillere"]
+        if not df_hold.empty:
+            spiller_liste += sorted(df_hold['PLAYER_NAME'].dropna().unique().tolist())
+        valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, label_visibility="collapsed")
 
     if valgt_spiller != "Alle spillere":
-        df_hold = df_hold[df_hold[col_player] == valgt_spiller]
+        df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
-    # --- 3. Tabs ---
-    tabs = st.tabs(["📊 GRUNDSTRUKTUR", "⚽ MED BOLD", "🛡️ MOD BOLD", "🏆 TOP 5"])
+    # --- 2. TABS ---
+    tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    # TAB 0: GRUNDSTRUKTUR
+    # TAB 0: SHAPES (GRUNDSTRUKTUR)
     with tabs[0]:
-        df_shape_hold = df_shapes[df_shapes['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_shapes.empty else pd.DataFrame()
-        if not df_shape_hold.empty:
-            c1, c2 = st.columns(2)
-            with c1:
-                st.metric("Primær Formation", df_shape_hold['SHAPE_FORMATION'].value_counts().idxmax())
-            with c2:
-                avg_xg = df_shape_hold['SHAPEOUTCOME_XG'].mean()
-                st.metric("Gns. xG", f"{avg_xg:.2f}")
-            
-            st.write("**Seneste kampe (Formationer)**")
-            st.dataframe(df_shape_hold[['SHAPE_LABEL', 'SHAPE_FORMATION', 'SHAPEOUTCOME_XG']].tail(5), use_container_width=True)
+        if not df_shapes.empty and hold_uuid:
+            # Vi filtrerer shapes på holdets UUID
+            df_s = df_shapes[df_shapes['CONTESTANT_OPTAUUID'] == hold_uuid].copy()
+            if not df_s.empty:
+                c1, c2 = st.columns(2)
+                c1.metric("Mest brugte formation", df_s['SHAPE_FORMATION'].value_counts().idxmax())
+                c2.metric("Gns. xG (Open Play)", f"{df_s['SHAPEOUTCOME_XG'].mean():.2f}")
+                
+                st.write("**Seneste taktikker:**")
+                st.dataframe(df_s[['SHAPE_LABEL', 'SHAPE_FORMATION', 'SHAPEOUTCOME_XG']].tail(5), use_container_width=True)
+            else:
+                st.info(f"Ingen taktisk data fundet for {valgt_hold} i denne turnering.")
         else:
-            st.info("Ingen shape-data fundet for dette hold.")
+            st.warning("Shape-data er ikke indlæst korrekt i analyse_load.py")
 
     # TAB 1: MED BOLD
     with tabs[1]:
-        pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
-        c1, c2 = st.columns(2)
-        
-        # Opbygning
-        with c1:
-            st.markdown("<center><b>Opbygning (Egen Halvdel)</b></center>", unsafe_allow_html=True)
-            fig, ax = pitch.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            d = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
-            if not d.empty: 
-                sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Reds', ax=ax, alpha=0.7, thresh=0.1)
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
-            
-        # Gennembrud
-        with c2:
-            st.markdown("<center><b>Gennembrud (Modstanders Halvdel)</b></center>", unsafe_allow_html=True)
-            fig, ax = pitch.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            d = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
-            if not d.empty: 
-                sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Reds', ax=ax, alpha=0.7, thresh=0.1)
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+        if df_hold.empty:
+            st.info("Ingen event-data tilgængelig for dette hold.")
+        else:
+            pitch = VerticalPitch(pitch_type='opta', half=True, line_color='#333333')
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write("**Opbygning (0-50m)**")
+                fig, ax = pitch.draw(); ax.set_ylim(0, 50)
+                d = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
+                if not d.empty: sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Reds', ax=ax)
+                st.pyplot(fig); plt.close(fig)
+            with c2:
+                st.write("**Gennembrud (50-100m)**")
+                fig, ax = pitch.draw(); ax.set_ylim(50, 100)
+                d = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
+                if not d.empty: sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Reds', ax=ax)
+                st.pyplot(fig); plt.close(fig)
 
     # TAB 2: MOD BOLD
     with tabs[2]:
-        st.markdown("<center><b>Defensiv Struktur (Tacklinger, Erobringer, Dueller)</b></center>", unsafe_allow_html=True)
-        pitch_f = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#333333')
-        fig, ax = pitch_f.draw(figsize=(6, 10))
-        
-        # Typer: 4=Tackle, 5=Duel, 8=Interception, 49=Recovery
-        d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
-        if not d.empty: 
-            sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Blues', ax=ax, alpha=0.7, thresh=0.1)
-        st.pyplot(fig, use_container_width=True); plt.close(fig)
+        if not df_hold.empty:
+            pitch_f = VerticalPitch(pitch_type='opta', line_color='#333333')
+            fig, ax = pitch_f.draw()
+            # 4=Tackle, 5=Duel, 8=Interception, 49=Recovery
+            d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
+            if not d.empty: sns.kdeplot(x=d['LOCATIONY'], y=d['LOCATIONX'], fill=True, cmap='Blues', ax=ax)
+            st.pyplot(fig); plt.close(fig)
 
     # TAB 3: TOP 5
     with tabs[3]:
-        st.write("**Top-præstationer (Valgt hold/spiller)**")
-        c = st.columns(3)
-        stats = [([1], 'Afleveringer'), ([4, 5], 'Dueller'), ([8, 49], 'Erobringer')]
-        
-        for i, (ids, txt) in enumerate(stats):
-            with c[i]:
-                st.subheader(txt)
-                t = df_hold[df_hold['EVENT_TYPEID'].isin(ids)][col_player].value_counts().head(5)
-                if not t.empty:
-                    for n, v in t.items():
-                        st.markdown(f"**{v}** {n}")
-                else:
-                    st.write("Ingen data")
+        if not df_hold.empty:
+            c = st.columns(3)
+            cats = [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]
+            for i, (ids, txt) in enumerate(cats):
+                with c[i]:
+                    st.write(f"**{txt}**")
+                    t = df_hold[df_hold['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
+                    for n, v in t.items(): st.markdown(f"**{v}** {n}")
