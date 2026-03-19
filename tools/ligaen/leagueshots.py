@@ -10,6 +10,33 @@ HIF_RED = '#cc0000'
 HIF_GOLD = '#b8860b'
 DZ_COLOR = '#1f77b4'
 
+# --- KLUB MAPPING ---
+KLUB_NAVNE = {
+    "HVI": "Hvidovre IF",
+    "KIF": "Kolding IF",
+    "MID": "Middelfart",
+    "HOB": "Hobro IK",
+    "VFF": "Viborg FF",
+    "B93": "B.93",
+    "FRE": "FC Fredericia",
+    "ROS": "FC Roskilde",
+    "HBK": "HB Køge",
+    "ESB": "Esbjerg fB",
+    "OB": "OB",
+    "ODN": "OB",
+    "SIL": "Silkeborg IF",
+    "VEN": "Vendsyssel FF",
+    "HIK": "Hillerød Fodbold"
+}
+
+def get_opponent_name(description):
+    """Finder modstanderen ud fra DESCRIPTION (f.eks. 'HVI - KIF')"""
+    if not description or ' - ' not in description:
+        return "Ukendt"
+    teams = [t.strip() for t in description.split(' - ')]
+    opp_code = teams[1] if teams[0] == 'HVI' else teams[0]
+    return KLUB_NAVNE.get(opp_code, opp_code)
+
 def vis_side(dp):
     # 1. DATA SETUP
     opta_data = dp.get('opta', {})
@@ -22,43 +49,41 @@ def vis_side(dp):
     # Standardiser kolonner
     df_all.columns = [c.upper() for c in df_all.columns]
     
-    # --- AUTOMATISK KLUB-MAPPING ---
-    # Vi antager at 'EVENT_CONTESTANT_NAME' findes i Opta-data. 
-    # Hvis ikke, bruger vi UUID'en som backup.
-    col_team_name = 'EVENT_CONTESTANT_NAME' if 'EVENT_CONTESTANT_NAME' in df_all.columns else 'EVENT_CONTESTANT_OPTAUUID'
-    
-    # Vi sikrer os en ren liste over hold
-    teams_in_data = sorted(df_all[col_team_name].unique())
+    # --- LOGIK: OVERSÆT HOLD TIL RIGTIGE NAVNE ---
+    # Vi bruger DESCRIPTION til at finde ud af hvem modstanderen er i hver kamp
+    def map_team_name(row):
+        if row['EVENT_CONTESTANT_NAME'] == 'HVI':
+            return "Hvidovre IF"
+        # Hvis det ikke er HVI, er det modstanderen fra kampens beskrivelse
+        return get_opponent_name(row['DESCRIPTION'])
+
+    df_all['KLUB_DISPLAY'] = df_all.apply(map_team_name, axis=1)
+    teams_in_data = sorted(df_all['KLUB_DISPLAY'].unique())
 
     st.markdown(f"""
         <style>
             .stat-box {{ background-color: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 5px solid #cc0000; margin-bottom: 10px; }}
             .stat-label {{ font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; display: flex; align-items: center; gap: 8px; }}
             .stat-value {{ font-size: 1.5rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
-            .legend-dot {{ height: 12px; width: 12px; border-radius: 50%; display: inline-block; vertical-align: middle; }}
         </style>
     """, unsafe_allow_html=True)
 
     # --- ZONE DEFINITIONER ---
     P_L, P_W = 105.0, 68.0
-    X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
-    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
-    Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
-
     ZONE_BOUNDARIES = {
-        "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
-        "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
-        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
-        "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
-        "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
-        "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
-        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
-        "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
+        "Zone 1": {"y_min": 99.5, "y_max": 105.0, "x_min": 24.84, "x_max": 43.16},
+        "Zone 2": {"y_min": 94.0, "y_max": 99.5, "x_min": 24.84, "x_max": 43.16},
+        "Zone 3": {"y_min": 88.5, "y_max": 94.0, "x_min": 24.84, "x_max": 43.16},
+        "Zone 4A": {"y_min": 99.5, "y_max": 105.0, "x_min": 43.16, "x_max": 54.1},
+        "Zone 4B": {"y_min": 99.5, "y_max": 105.0, "x_min": 13.9, "x_max": 24.84},
+        "Zone 5A": {"y_min": 88.5, "y_max": 99.5, "x_min": 43.16, "x_max": 54.1},
+        "Zone 5B": {"y_min": 88.5, "y_max": 99.5, "x_min": 13.9, "x_max": 24.84},
+        "Zone 6A": {"y_min": 88.5, "y_max": 105.0, "x_min": 54.1, "x_max": 68.0},
+        "Zone 6B": {"y_min": 88.5, "y_max": 105.0, "x_min": 0.0, "x_max": 13.9},
+        "Zone 7C": {"y_min": 75.0, "y_max": 88.5, "x_min": 0.0, "x_max": 24.84},
+        "Zone 7B": {"y_min": 75.0, "y_max": 88.5, "x_min": 24.84, "x_max": 43.16},
+        "Zone 7A": {"y_min": 75.0, "y_max": 88.5, "x_min": 43.16, "x_max": 68.0},
+        "Zone 8":  {"y_min": 0, "y_max": 75.0, "x_min": 0, "x_max": 68.0}
     }
 
     def map_to_zone(r):
@@ -72,32 +97,22 @@ def vis_side(dp):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT (Nu med Klub-kolonne) ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
-        # Gruppér på både spiller og holdnavn
-        for (p, t), d in df_all.groupby(['PLAYER_NAME', col_team_name]):
+        for (p, klub), d in df_all.groupby(['PLAYER_NAME', 'KLUB_DISPLAY']):
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
             dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
             stats.append({
-                "Spiller": p, 
-                "Klub": t,
-                "Skud": s, "Mål": m, 
+                "Spiller": p, "Klub": klub, "Skud": s, "Mål": m, 
                 "Konvertering%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": dzs, "DZ-Mål": dzm, 
-                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+                "DZ-Skud": dzs, "DZ-Mål": dzm, "DZ-Andel": (dzs/s*100) if s > 0 else 0
             })
-        
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
-        # Dynamisk højde for at undgå scroll
-        calc_height = (len(df_f) + 1) * 36 + 2
-        
-        st.dataframe(df_f, use_container_width=True, height=min(calc_height, 800), hide_index=True,
+        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
                     column_config={
                         "Konvertering%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%"),
                         "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
                     })
 
@@ -106,45 +121,18 @@ def vis_side(dp):
         c1, c2 = st.columns([2, 1])
         with c2:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_afsl")
-            df_t = df_all[df_all[col_team_name] == t_sel]
-            
+            df_t = df_all[df_all['KLUB_DISPLAY'] == t_sel]
             sel_p = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_afsl")
             d_v = df_t if sel_p == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_p]
             
-            dot_size = 25 if sel_p != "Hele Holdet" else 20
             s_cnt, m_cnt = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
-            konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
-            
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=dot_size, c=colors, edgecolors=HIF_RED, linewidth=0.8, ax=ax)
-            st.pyplot(fig)
-
-    # --- TAB 2: DZ-AFSLUTNINGER ---
-    with tabs[2]:
-        c1, c2 = st.columns([2, 1])
-        with c2:
-            t_sel = st.selectbox("Vælg Hold", teams_in_data, key="t_dz")
-            df_t = df_all[df_all[col_team_name] == t_sel]
-            
-            sel_dz = st.selectbox("Vælg spiller (DZ)", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key="p_dz")
-            d_v = df_t if sel_dz == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == sel_dz]
-            
-            dz_d = d_v[d_v['IS_DZ_GEO']]
-            m_dz = len(dz_d[dz_d["EVENT_TYPEID"]==16])
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{DZ_COLOR}"></span>DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label"><span class="legend-dot" style="background:{HIF_RED}"></span>DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-        with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(5, 7))
-            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
-            colors = (dz_d['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=25, c=colors, edgecolors=HIF_RED, ax=ax)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=25, c=colors, edgecolors=HIF_RED, ax=ax)
             st.pyplot(fig)
 
     # --- ZONER FUNKTION ---
@@ -152,16 +140,13 @@ def vis_side(dp):
         col_viz, col_ctrl = st.columns([1.8, 1])
         with col_ctrl:
             t_sel = st.selectbox("Vælg Hold", teams_in_data, key=f"t_z_{key_suffix}")
-            df_t = data_all[data_all[col_team_name] == t_sel]
-            
+            df_t = data_all[data_all['KLUB_DISPLAY'] == t_sel]
             p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_t['PLAYER_NAME'].unique()), key=f"p_z_{key_suffix}")
             d_v = df_t if p_sel == "Hele Holdet" else df_t[df_t['PLAYER_NAME'] == p_sel]
-            
             plot_data = d_v[d_v['EVENT_TYPEID'] == 16] if is_m else d_v
-            label = "Mål" if is_m else "Skud"
-            
             z_counts = plot_data.groupby('Zone').size()
-            z_df = pd.DataFrame([{'Zone': k, label: z_counts.get(k, 0)} for k in ZONE_BOUNDARIES.keys() if z_counts.get(k, 0) > 0 and k != "Zone 8"]).sort_values(label, ascending=False)
+            
+            z_df = pd.DataFrame([{'Zone': k, 'Antal': z_counts.get(k, 0)} for k in ZONE_BOUNDARIES.keys() if z_counts.get(k,0) > 0]).sort_values('Antal', ascending=False)
             st.dataframe(z_df, hide_index=True, use_container_width=True)
 
         with col_viz:
