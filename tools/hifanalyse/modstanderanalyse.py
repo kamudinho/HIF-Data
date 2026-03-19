@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
 
 def vis_side(analysis_package=None):
-    # --- 1. UI & CSS ---
+# --- 1. UI & CSS ---
     st.markdown("""
         <style>
             .block-container { padding-top: 1rem; }
