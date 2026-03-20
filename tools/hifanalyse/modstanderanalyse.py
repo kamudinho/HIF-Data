@@ -99,27 +99,50 @@ def vis_side(analysis_package=None):
         df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'].astype(str).str.upper() == hold_uuid.upper()].copy() if not df_out.empty else pd.DataFrame()
 
         def draw_shape_pitch(df_shape, title, color, logo):
+            # Vi bruger 'opta' pitch, men vi skal transformere dataene
             pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
             fig, ax = pitch.draw(figsize=(6, 8))
             st.markdown(f'<p class="pitch-label">{title}</p>', unsafe_allow_html=True)
             
             if not df_shape.empty:
-                top_row = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
-                roles_raw = top_row.get('SHAPE_ROLE', [])
-                roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
-
-                if isinstance(roles, list) and len(roles) > 0:
-                    for r in roles:
-                        x, y = float(r.get('averageX', 50)), float(r.get('averageY', 50))
-                        ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.5, zorder=3)
-                        ax.text(y, x, r.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
-                    draw_logo_custom(ax, logo, position='top_left')
-                else: ax.text(50, 50, "Ingen positionsdata", ha='center', va='center', transform=ax.transAxes)
-            else: ax.text(50, 50, "Ingen data fundet", ha='center', va='center', transform=ax.transAxes)
+                try:
+                    # 1. Hent den primære formation
+                    top_row = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
+                    roles_raw = top_row.get('SHAPE_ROLE', [])
+                    
+                    # 2. Håndter JSON (Opta Remote-format)
+                    roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
+        
+                    if isinstance(roles, list) and len(roles) > 0:
+                        for r in roles:
+                            # Opta Remote Shapes bruger ofte centreret X/Y. 
+                            # Vi bruger 'averageRolePositionXNonCentered' eller transformerer:
+                            # Typisk formel for Remote -> Opta (0-100):
+                            raw_x = float(r.get('averageRolePositionX', 0))
+                            raw_y = float(r.get('averageRolePositionY', 0))
+                            
+                            # Simpel transformation fra centreret til 0-100 (Estimat baseret på Opta Remote standard)
+                            # Hvis dine data er NonCentered, så brug dem direkte.
+                            x = float(r.get('averageRolePositionXNonCentered', raw_x + 50))
+                            y = float(r.get('averageRolePositionYNonCentered', raw_y + 50))
+        
+                            # Tegn spilleren
+                            ax.scatter(y, x, s=450, color=color, edgecolors='black', linewidth=1.2, zorder=3)
+                            
+                            # Brug 'roleDescription' som label (f.eks. CB.R, CM.L)
+                            label = r.get('roleDescription', '')
+                            ax.text(y, x, label, color='white', ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
+                        
+                        draw_logo_custom(ax, logo, position='top_left')
+                    else:
+                        ax.text(50, 50, "Ingen roller fundet i JSON", ha='center', va='center', transform=ax.transAxes)
+                except Exception as e:
+                    ax.text(50, 50, f"Fejl i data: {str(e)}", ha='center', va='center', transform=ax.transAxes)
+            else:
+                ax.text(50, 50, "Ingen data tilgængelig", ha='center', va='center', transform=ax.transAxes)
             
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
-
         c1, c2 = st.columns(2)
         with c1:
             if not df_in_h.empty:
