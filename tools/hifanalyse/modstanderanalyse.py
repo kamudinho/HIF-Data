@@ -114,12 +114,12 @@ def vis_side(analysis_package=None):
 
         # BANE 1: Erobringer (Interceptions, Recoveries, Tackles)
         with c1:
-            st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER (Tackles, Int, Rec)</p>', unsafe_allow_html=True)
+            st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER (Tackles, Int)</p>', unsafe_allow_html=True)
             pitch = VerticalPitch(**pitch_config)
             fig, ax = pitch.draw(figsize=(5, 7))
             
             # 4=Tackle, 8=Interception, 49=Recovery
-            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 49])]
+            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8])]
             
             if not df_ero.empty:
                 sns.kdeplot(
@@ -140,7 +140,7 @@ def vis_side(analysis_package=None):
             fig, ax = pitch.draw(figsize=(5, 7))
             
             # 5=Duel
-            df_duel = df_hold[df_hold['EVENT_TYPEID'].isin([5, 8])]
+            df_duel = df_hold[df_hold['EVENT_TYPEID'].isin([5, 49])]
             
             if not df_duel.empty:
                 sns.kdeplot(
