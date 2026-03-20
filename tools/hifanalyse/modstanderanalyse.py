@@ -125,7 +125,7 @@ def vis_side(analysis_package=None):
                 sns.kdeplot(
                     x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'],
                     fill=True, cmap='Blues', 
-                    alpha=0.3,          # Meget lavere opacity som ønsket
+                    alpha=0.4,          # Meget lavere opacity som ønsket
                     thresh=0.1,         # Fjerner de helt svage yderkanter for et "renere" look
                     ax=ax, zorder=2,
                     clip=((0, 100), (0, 100))
@@ -146,7 +146,7 @@ def vis_side(analysis_package=None):
                 sns.kdeplot(
                     x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'],
                     fill=True, cmap='Greens', # Bruger grøn for at adskille dem visuelt
-                    alpha=0.3,          # Lav opacity
+                    alpha=0.4,          # Lav opacity
                     thresh=0.1,
                     ax=ax, zorder=2,
                     clip=((0, 100), (0, 100))
