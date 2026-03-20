@@ -280,7 +280,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
         # Tilføj disse til din return-dictionary i get_opta_queries:
 
-        # 12. SHAPES IN POSSESSION (Med Bold)
+        # 12. SHAPES IN POSSESSION (Fjern hif_filter_std og brug tournament_uuid)
         "opta_shapes_in": f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -291,13 +291,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SHAPE_TIMEINSHAPE,
                 SHAPEOUTCOME_XG,
                 SHAPEOUTCOME_ATTEMPTS,
-                SHAPE_ROLE -- Denne indeholder JSON-strengen med spillerpositioner
+                SHAPE_ROLE 
             FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_std}
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """,
-    
-        # 13. SHAPES OUT OF POSSESSION (Mod Bold)
+        
+        # 13. SHAPES OUT OF POSSESSION
         "opta_shapes_out": f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -308,9 +307,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 SHAPE_TIMEINSHAPE,
                 SHAPEOUTCOME_XGCONCEDED,
                 SHAPEOUTCOME_ATTEMPTSCONCEDED,
-                SHAPE_ROLE -- Indeholder JSON-strengen for defensiv positionering
+                SHAPE_ROLE 
             FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_std}
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """
     }
