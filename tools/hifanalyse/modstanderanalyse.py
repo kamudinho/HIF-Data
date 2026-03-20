@@ -80,23 +80,59 @@ def vis_side(analysis_package=None):
             st.info("Ingen taktisk shape-data fundet for dette hold.")
 
     with tabs[1]: # MED BOLD
-        pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
+        pitch_h = VerticalPitch(
+            pitch_type='opta', 
+            half=True, 
+            pitch_color='#ffffff', 
+            line_color='#333333',
+            line_zorder=3 # Sikrer linjer øverst
+        )
         c1, c2 = st.columns(2)
-        # Opbygning
+        
+        # Opbygning (Egen Halvdel: 0-50m)
         with c1:
             st.markdown('<p class="pitch-label">OPBYGNING (0-50m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
+            fig, ax = pitch_h.draw(figsize=(6, 8))
+            ax.set_ylim(0, 50) # Beskær visningen til halv bane
+            
             df_p = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
-            if not df_p.empty: sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', ax=ax)
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
-        # Gennembrud
+            if not df_p.empty:
+                sns.kdeplot(
+                    x=df_p['LOCATIONY'], 
+                    y=df_p['LOCATIONX'], 
+                    fill=True, 
+                    cmap='Reds', 
+                    alpha=0.4,          # Som ønsket: lavere opacity
+                    thresh=0.1,         # Fjerner "støj" i kanterne
+                    ax=ax, 
+                    zorder=2,
+                    clip=((0, 100), (0, 50)) # KLIP: Kun bunden af banen op til midten
+                )
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+            
+        # Gennembrud (Modstanders Halvdel: 50-100m)
         with c2:
             st.markdown('<p class="pitch-label">GENNEMBRUD (50-100m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
+            fig, ax = pitch_h.draw(figsize=(6, 8))
+            ax.set_ylim(50, 100) # Beskær visningen til modstanders halvdel
+            
             df_g = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
-            if not df_g.empty: sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', ax=ax)
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
-
+            if not df_g.empty:
+                sns.kdeplot(
+                    x=df_g['LOCATIONY'], 
+                    y=df_g['LOCATIONX'], 
+                    fill=True, 
+                    cmap='Reds', 
+                    alpha=0.4,          # Som ønsket: lavere opacity
+                    thresh=0.1,         # Fjerner "støj" i kanterne
+                    ax=ax, 
+                    zorder=2,
+                    clip=((0, 100), (50, 100)) # KLIP: Kun fra midten og op til mållinjen
+                )
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+            
     with tabs[2]: # MOD BOLD
         st.markdown('<p class="pitch-label">DEFENSIV STRUKTUR</p>', unsafe_allow_html=True)
         
