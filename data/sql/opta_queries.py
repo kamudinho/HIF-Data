@@ -280,35 +280,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
         # Tilføj disse til din return-dictionary i get_opta_queries:
 
-        # 12. SHAPES IN POSSESSION (Fjern hif_filter_std og brug tournament_uuid)
+        # RETTELSE i get_opta_queries (punkt 12 og 13)
         "opta_shapes_in": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                CONTESTANT_OPTAUUID,
-                SHAPE_LABEL,
-                SHAPE_FORMATION,
-                SHAPE_PERCENTAGEINSHAPE,
-                SHAPE_TIMEINSHAPE,
-                SHAPEOUTCOME_XG,
-                SHAPEOUTCOME_ATTEMPTS,
-                SHAPE_ROLE 
-            FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION
+            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """,
         
-        # 13. SHAPES OUT OF POSSESSION
         "opta_shapes_out": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                CONTESTANT_OPTAUUID,
-                SHAPE_LABEL,
-                SHAPE_FORMATION,
-                SHAPE_PERCENTAGEINSHAPE,
-                SHAPE_TIMEINSHAPE,
-                SHAPEOUTCOME_XGCONCEDED,
-                SHAPEOUTCOME_ATTEMPTSCONCEDED,
-                SHAPE_ROLE 
-            FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION
+            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
         """
     }
