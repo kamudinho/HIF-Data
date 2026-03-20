@@ -277,5 +277,40 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         "opta_shape_positions": f"""
             SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+        """,
+        # Tilføj disse til din return-dictionary i get_opta_queries:
+
+        # 12. SHAPES IN POSSESSION (Med Bold)
+        "opta_shapes_in": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                CONTESTANT_OPTAUUID,
+                SHAPE_LABEL,
+                SHAPE_FORMATION,
+                SHAPE_PERCENTAGEINSHAPE,
+                SHAPE_TIMEINSHAPE,
+                SHAPEOUTCOME_XG,
+                SHAPEOUTCOME_ATTEMPTS,
+                SHAPE_ROLE -- Denne indeholder JSON-strengen med spillerpositioner
+            FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_std}
+        """,
+    
+        # 13. SHAPES OUT OF POSSESSION (Mod Bold)
+        "opta_shapes_out": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                CONTESTANT_OPTAUUID,
+                SHAPE_LABEL,
+                SHAPE_FORMATION,
+                SHAPE_PERCENTAGEINSHAPE,
+                SHAPE_TIMEINSHAPE,
+                SHAPEOUTCOME_XGCONCEDED,
+                SHAPEOUTCOME_ATTEMPTSCONCEDED,
+                SHAPE_ROLE -- Indeholder JSON-strengen for defensiv positionering
+            FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_std}
         """
     }
