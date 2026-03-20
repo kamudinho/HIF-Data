@@ -1,4 +1,4 @@
-import pd
+import pandas as pd
 import streamlit as st
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.opta_queries import get_opta_queries
