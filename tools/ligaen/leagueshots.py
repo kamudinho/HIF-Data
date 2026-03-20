@@ -3,12 +3,12 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
-from PIL import Image
 import requests
 from io import BytesIO
+from PIL import Image
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-# --- LOGO & FARVE UTILS (Genbrugt fra din ligafil) ---
+# --- 1. LOGO & FARVE HJÆLPEFUNKTIONER (Fra din fungerende ligafil) ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
     try:
@@ -22,7 +22,7 @@ def get_team_style(team_name):
     if team_name in TEAM_COLORS:
         c = TEAM_COLORS[team_name]
         prim = c['primary'].lower()
-        # Undgå hvid som primær farve på hvid bane
+        # Undgå hvid farve på hvid bane
         color = c.get('secondary', '#cc0000') if prim in ["#ffffff", "white", "#f9f9f9"] else c['primary']
     if team_name in TEAMS:
         url = TEAMS[team_name].get('logo')
@@ -31,7 +31,7 @@ def get_team_style(team_name):
 
 def draw_logo_custom(ax, logo_img, position='top_left'):
     if logo_img:
-        # Juster placering baseret på dit ønske
+        # Juster placering baseret på axes-koordinater (0 til 1)
         if position == 'bottom_left':
             pos = [0.05, 0.05, 0.12, 0.12] # x, y, bredde, højde
         else: # top_left
@@ -42,7 +42,7 @@ def draw_logo_custom(ax, logo_img, position='top_left'):
         ax_image.axis('off')
 
 def vis_side(analysis_package=None):
-    # --- 1. UI & CSS ---
+    # --- 2. UI & CSS ---
     st.markdown("""
         <style>
             .block-container { padding-top: 1rem; }
@@ -59,7 +59,7 @@ def vis_side(analysis_package=None):
         st.error("Ingen datapakke modtaget.")
         return
 
-    # --- 2. DATA PREP ---
+    # --- 3. DATA HÅNDTERING ---
     df_matches = analysis_package.get("matches", pd.DataFrame())
     opta_dict = analysis_package.get("opta", {})
     df_events = opta_dict.get("opta_events", pd.DataFrame())
@@ -70,13 +70,13 @@ def vis_side(analysis_package=None):
 
     df_events.columns = [c.upper() for c in df_events.columns]
 
-    # --- 3. FILTRE & STIL ---
+    # --- 4. FILTRE ---
     col_h1, col_h2 = st.columns([1, 1])
     with col_h1:
         hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else sorted(df_events['PLAYER_NAME'].unique())
         valgt_hold = st.selectbox("Vælg hold:", hold_navne, key="target_team_select")
     
-    # Hent stil og logo dynamisk
+    # HENT LOGO OG FARVE
     t_color, t_logo = get_team_style(valgt_hold)
     
     hold_uuid = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]['CONTESTANTHOME_OPTAUUID'].iloc[0] if not df_matches.empty else ""
@@ -88,10 +88,8 @@ def vis_side(analysis_package=None):
     if valgt_spiller != "Alle spillere":
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
-    # --- 4. TABS ---
+    # --- 5. TABS ---
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
-
-    # ... (Tab 0: Grundstruktur uændret) ...
 
     with tabs[1]: # MED BOLD
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
@@ -100,7 +98,7 @@ def vis_side(analysis_package=None):
         with c1: # Opbygning
             st.markdown('<p class="pitch-label">OPBYGNING (0-50m)</p>', unsafe_allow_html=True)
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            draw_logo_custom(ax, t_logo, position='bottom_left') # Logo nede til venstre
+            draw_logo_custom(ax, t_logo, position='bottom_left') # LOGO HER
             
             df_p = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
             if not df_p.empty:
@@ -110,7 +108,7 @@ def vis_side(analysis_package=None):
         with c2: # Gennembrud
             st.markdown('<p class="pitch-label">GENNEMBRUD (50-100m)</p>', unsafe_allow_html=True)
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            draw_logo_custom(ax, t_logo, position='top_left') # Logo oppe til venstre
+            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
             
             df_g = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
             if not df_g.empty:
@@ -126,7 +124,7 @@ def vis_side(analysis_package=None):
             st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER</p>', unsafe_allow_html=True)
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left')
+            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
             
             df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
             if not df_ero.empty:
@@ -137,11 +135,9 @@ def vis_side(analysis_package=None):
             st.markdown('<p style="text-align:center; font-size:12px;">DUELLER</p>', unsafe_allow_html=True)
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left')
+            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
             
             df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
             if not df_duel.empty:
                 sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
             st.pyplot(fig, use_container_width=True); plt.close(fig)
-
-    # ... (Tab 3: Top 5 uændret) ...
