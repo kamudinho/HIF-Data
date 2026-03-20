@@ -9,7 +9,7 @@ from PIL import Image
 import json
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-# --- 1. HJÆLPEFUNKTIONER ---
+# --- 1. LOGO & FARVE HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
     try:
@@ -51,44 +51,41 @@ def vis_side(analysis_package=None):
     """, unsafe_allow_html=True)
 
     if not analysis_package:
-        st.error("Ingen datapakke (analysis_package) modtaget fra hoved-appen.")
+        st.error("Ingen datapakke modtaget.")
         return
 
-    # --- 3. DATA PREPARATION ---
+    # --- 3. DATA HÅNDTERING ---
     df_matches = analysis_package.get("matches", pd.DataFrame())
     opta_dict = analysis_package.get("opta", {})
     df_events = opta_dict.get("opta_events", pd.DataFrame())
     df_in = analysis_package.get("shapes_in", pd.DataFrame())
     df_out = analysis_package.get("shapes_out", pd.DataFrame())
 
-    # Sørg for UPPERCASE kolonner i alt
-    for df in [df_events, df_in, df_out, df_matches]:
-        if not df.empty:
-            df.columns = [c.upper() for c in df.columns]
+    if df_events.empty:
+        st.warning("Ingen event-data fundet.")
+        return
+
+    df_events.columns = [c.upper() for c in df_events.columns]
+    if not df_in.empty: df_in.columns = [c.upper() for c in df_in.columns]
+    if not df_out.empty: df_out.columns = [c.upper() for c in df_out.columns]
 
     # --- 4. FILTRE ---
     col_h1, col_h2 = st.columns([1, 1])
     with col_h1:
-        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else []
-        if not hold_navne and not df_events.empty:
-            hold_navne = sorted(df_events['PLAYER_NAME'].unique()) # Fallback
-        
-        valgt_hold = st.selectbox("Vælg hold:", hold_navne if hold_navne else ["Ingen hold fundet"], key="target_team_select")
+        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else sorted(df_events['PLAYER_NAME'].unique())
+        valgt_hold = st.selectbox("Vælg hold:", hold_navne, key="target_team_select")
     
     t_color, t_logo = get_team_style(valgt_hold)
     
-    # Hent UUID
     hold_uuid = ""
     if not df_matches.empty:
         m_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
-        if not m_row.empty:
-            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0])
+        if not m_row.empty: hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0])
 
     df_hold = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy() if hold_uuid else df_events.copy()
 
     with col_h2:
-        spiller_liste = ["Alle spillere"] + sorted(df_hold['PLAYER_NAME'].dropna().unique().tolist()) if not df_hold.empty else ["Alle spillere"]
-        valgt_spiller = st.selectbox("Filter spiller:", spiller_liste, key="player_select")
+        valgt_spiller = st.selectbox("Filter spiller:", ["Alle spillere"] + sorted(df_hold['PLAYER_NAME'].dropna().unique().tolist()), key="player_select")
 
     if valgt_spiller != "Alle spillere":
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
@@ -97,14 +94,7 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # GRUNDSTRUKTUR
-        # --- TVUNGEN DEBUG INFO ---
-        st.write(f"**DEBUG INFO:**")
-        st.write(f"- Valgt hold: {valgt_hold}")
-        st.write(f"- UUID fundet: `{hold_uuid}`")
-        st.write(f"- Rækker i 'shapes_in': {len(df_in)}")
-        st.write(f"- Rækker i 'shapes_out': {len(df_out)}")
-
-        # Filtrering
+        # Robust filtering på UUID (uafhængig af case)
         df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'].astype(str).str.upper() == hold_uuid.upper()].copy() if not df_in.empty else pd.DataFrame()
         df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'].astype(str).str.upper() == hold_uuid.upper()].copy() if not df_out.empty else pd.DataFrame()
 
@@ -114,23 +104,18 @@ def vis_side(analysis_package=None):
             st.markdown(f'<p class="pitch-label">{title}</p>', unsafe_allow_html=True)
             
             if not df_shape.empty:
-                try:
-                    top_row = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
-                    roles_raw = top_row.get('SHAPE_ROLE', [])
-                    roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
+                top_row = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
+                roles_raw = top_row.get('SHAPE_ROLE', [])
+                roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
 
-                    if roles and isinstance(roles, list):
-                        for r in roles:
-                            x, y = float(r.get('averageX', 50)), float(r.get('averageY', 50))
-                            ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.5, zorder=3)
-                            ax.text(y, x, r.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
-                        draw_logo_custom(ax, logo, position='top_left')
-                    else:
-                        ax.text(50, 50, "Ingen JSON-positioner i rækken", ha='center', va='center', transform=ax.transAxes)
-                except Exception as e:
-                    ax.text(50, 50, f"Fejl i tegning: {e}", ha='center', va='center', transform=ax.transAxes)
-            else:
-                ax.text(50, 50, "Ingen match på UUID", ha='center', va='center', transform=ax.transAxes)
+                if isinstance(roles, list) and len(roles) > 0:
+                    for r in roles:
+                        x, y = float(r.get('averageX', 50)), float(r.get('averageY', 50))
+                        ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.5, zorder=3)
+                        ax.text(y, x, r.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
+                    draw_logo_custom(ax, logo, position='top_left')
+                else: ax.text(50, 50, "Ingen positionsdata", ha='center', va='center', transform=ax.transAxes)
+            else: ax.text(50, 50, "Ingen data fundet", ha='center', va='center', transform=ax.transAxes)
             
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
@@ -139,17 +124,67 @@ def vis_side(analysis_package=None):
         with c1:
             if not df_in_h.empty:
                 prim_in = df_in_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
-                st.metric("Formation", prim_in)
-                draw_shape_pitch(df_in_h, "OFFENSIV POSITION", "#2ecc71", t_logo)
-            else:
-                st.warning("Data findes i tabellen, men ikke for dette UUID.")
+                st.metric("Primær Offensiv", prim_in)
+                draw_shape_pitch(df_in_h, "POSITIONS (MED BOLD)", "#2ecc71", t_logo)
+                st.dataframe(df_in_h[['SHAPE_FORMATION', 'SHAPE_TIMEINSHAPE', 'SHAPEOUTCOME_XG']].head(3), hide_index=True)
+            else: st.info("Ingen offensiv data")
 
         with c2:
             if not df_out_h.empty:
                 prim_out = df_out_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
-                st.metric("Formation", prim_out)
-                draw_shape_pitch(df_out_h, "DEFENSIV POSITION", "#e74c3c", t_logo)
-            else:
-                st.warning("Ingen defensiv data fundet for holdet.")
+                st.metric("Primær Defensiv", prim_out)
+                draw_shape_pitch(df_out_h, "POSITIONS (MOD BOLD)", "#e74c3c", t_logo)
+                st.dataframe(df_out_h[['SHAPE_FORMATION', 'SHAPE_TIMEINSHAPE', 'SHAPEOUTCOME_XGCONCEDED']].head(3), hide_index=True)
+            else: st.info("Ingen defensiv data")
 
-    # (De resterende tabs 1, 2 og 3 bibeholdes som før...)
+    with tabs[1]: # MED BOLD
+        pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<p class="pitch-label">OPBYGNING (0-50m)</p>', unsafe_allow_html=True)
+            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
+            draw_logo_custom(ax, t_logo, position='bottom_left')
+            df_p = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
+            if not df_p.empty:
+                sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 50)))
+            st.pyplot(fig, use_container_width=True); plt.close(fig)
+        with c2:
+            st.markdown('<p class="pitch-label">GENNEMBRUD (50-100m)</p>', unsafe_allow_html=True)
+            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
+            draw_logo_custom(ax, t_logo, position='top_left')
+            df_g = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
+            if not df_g.empty:
+                sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (50, 100)))
+            st.pyplot(fig, use_container_width=True); plt.close(fig)
+
+    with tabs[2]: # MOD BOLD
+        st.markdown('<p class="pitch-label">DEFENSIV STRUKTUR</p>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        pitch_cfg = {"pitch_type": 'opta', "pitch_color": '#ffffff', "line_color": '#333333', "line_zorder": 4}
+        with c1:
+            st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER</p>', unsafe_allow_html=True)
+            pitch = VerticalPitch(**pitch_cfg)
+            fig, ax = pitch.draw(figsize=(5, 7))
+            draw_logo_custom(ax, t_logo, position='top_left')
+            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
+            if not df_ero.empty:
+                sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
+            st.pyplot(fig, use_container_width=True); plt.close(fig)
+        with c2:
+            st.markdown('<p style="text-align:center; font-size:12px;">DUELLER</p>', unsafe_allow_html=True)
+            pitch = VerticalPitch(**pitch_cfg)
+            fig, ax = pitch.draw(figsize=(5, 7))
+            draw_logo_custom(ax, t_logo, position='top_left')
+            df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
+            if not df_duel.empty:
+                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
+            st.pyplot(fig, use_container_width=True); plt.close(fig)
+
+    with tabs[3]: # TOP 5
+        cols = st.columns(3)
+        for i, (tid, nav) in enumerate([([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]):
+            with cols[i]:
+                st.markdown(f"**Top {nav}**")
+                top = df_hold[df_hold['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
+                for n, count in top.items(): 
+                    st.markdown(f'<div class="stat-box"><b>{count}</b> {n}</div>', unsafe_allow_html=True)
