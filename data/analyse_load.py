@@ -1,5 +1,4 @@
-#data/analyse_load.py
-import pandas as pd
+import pd
 import streamlit as st
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.opta_queries import get_opta_queries
@@ -8,7 +7,7 @@ from data.utils.team_mapping import COMPETITION_NAME, TOURNAMENTCALENDAR_NAME, T
 def get_analysis_package(hif_only=False, match_uuid=None):
     """
     Henter den samlede datapakke til analyse- og ligasider.
-    Bruger centraliserede queries fra opta_queries.py.
+    Inkluderer nu taktiske shapes (In/Out of possession).
     """
     conn = _get_snowflake_conn()
     if not conn:
@@ -24,14 +23,13 @@ def get_analysis_package(hif_only=False, match_uuid=None):
         if not q:
             return pd.DataFrame()
         try:
-            # Snowflake query via Streamlit connection
             res = conn.query(q)
             return pd.DataFrame(res) if not isinstance(res, pd.DataFrame) else res
         except Exception as e:
             st.error(f"Fejl i Snowflake query '{query_key}': {e}")
             return pd.DataFrame()
 
-    # 2. Hent standard data (Hold, Kampe, XG, etc.)
+    # 2. Hent standard data
     df_matches = safe_query("opta_matches")
     df_opta_stats = safe_query("opta_team_stats")
     df_sequence = safe_query("opta_sequence_map")
@@ -41,28 +39,29 @@ def get_analysis_package(hif_only=False, match_uuid=None):
     df_xg_agg = safe_query("opta_expected_goals")
     df_team_linebreaks = safe_query("opta_team_linebreaks")
     df_player_linebreaks = safe_query("opta_player_linebreaks")
-    
-    # --- TILFØJ DENNE LINJE HERUNDER ---
     df_all_events = safe_query("opta_events") 
-    # -----------------------------------
 
     df_fys = safe_query("opta_physical_stats")
     df_fys_sum = safe_query("opta_physical_summary")
+    
+    # --- NYE SHAPE QUERIES ---
+    df_shapes_in = safe_query("opta_shapes_in")    # Taktik MED bold
+    df_shapes_out = safe_query("opta_shapes_out")  # Taktik UDEN bold
+    # -------------------------
+    
     df_shapes = safe_query("opta_shapes")
     df_shape_positions = safe_query("opta_shape_positions")
     
-    # Hvis der er valgt en specifik kamp (f.eks. i dropdown), filtrerer vi i hukommelsen
+    # 3. Filtrering af fysisk data
     if match_uuid and not df_fys.empty:
-        # Rens UUID (fjern 'g' hvis det findes)
         clean_uuid = str(match_uuid).strip()
         if clean_uuid.startswith('g') and len(clean_uuid) > 20:
             clean_uuid = clean_uuid[1:]
         
-        # Filtrér den hentede data lokalt
         if 'MATCH_OPTAUUID' in df_fys.columns:
             df_fys = df_fys[df_fys['MATCH_OPTAUUID'].str.contains(clean_uuid, na=False, case=False)]
 
-    # 4. Spiller-navne mapping (Hvidovre-specifik)
+    # 4. Spiller-navne mapping
     df_local = load_local_players()
     name_map = {}
     if df_local is not None and not df_local.empty:
@@ -79,6 +78,8 @@ def get_analysis_package(hif_only=False, match_uuid=None):
         "matches": df_matches,
         "playerstats": df_shots,
         "shapes": df_shapes,
+        "shapes_in": df_shapes_in,   # Tilføjet
+        "shapes_out": df_shapes_out, # Tilføjet
         "shape_positions": df_shape_positions,
         "fysisk_data": df_fys,
         "fysisk_summary": df_fys_sum,
@@ -94,7 +95,9 @@ def get_analysis_package(hif_only=False, match_uuid=None):
             "opta_sequence_map": df_sequence,
             "player_linebreaks": df_player_linebreaks,
             "league_shotevents": df_league_shots,
-            "opta_events": df_all_events
+            "opta_events": df_all_events,
+            "shapes_in": df_shapes_in,   # Tilføjet til opta-undermappen
+            "shapes_out": df_shapes_out  # Tilføjet til opta-undermappen
         },
         "config": {
             "liga_navn": comp_f, 
