@@ -141,3 +141,12 @@ def vis_side(analysis_package=None):
             if not df_duel.empty:
                 sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
             st.pyplot(fig, use_container_width=True); plt.close(fig)
+
+    with tabs[3]: # TOP 5
+        cols = st.columns(3)
+        for i, (tid, nav) in enumerate([([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]):
+            with cols[i]:
+                st.markdown(f"**Top {nav}**")
+                top = df_hold[df_hold['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
+                for n, count in top.items(): 
+                    st.markdown(f'<div class="stat-box"><b>{count}</b> {n}</div>', unsafe_allow_html=True)
