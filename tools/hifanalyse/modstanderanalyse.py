@@ -101,8 +101,6 @@ def vis_side(analysis_package=None):
 
         df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_in.empty else pd.DataFrame()
         df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_out.empty else pd.DataFrame()
-
-        st.markdown(f"### Taktisk Grundstruktur: {valgt_hold}")
         
         c1, c2 = st.columns(2)
 
