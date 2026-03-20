@@ -138,7 +138,6 @@ def vis_side(analysis_package=None):
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        st.markdown(f"### Taktisk Grundstruktur: {valgt_hold}")
         c1, c2 = st.columns(2)
 
         with c1:
