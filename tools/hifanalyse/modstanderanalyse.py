@@ -6,7 +6,7 @@ from mplsoccer import VerticalPitch
 import requests
 from io import BytesIO
 from PIL import Image
-import json  # Vigtigt til parsing af positions-data
+import json
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 # --- 1. LOGO & FARVE HJÆLPEFUNKTIONER ---
@@ -18,7 +18,7 @@ def get_logo_img(url):
     except: return None
 
 def get_team_style(team_name):
-    color = '#cc0000' # Default rød
+    color = '#cc0000'
     logo_img = None
     if team_name in TEAM_COLORS:
         c = TEAM_COLORS[team_name]
@@ -31,10 +31,7 @@ def get_team_style(team_name):
 
 def draw_logo_custom(ax, logo_img, position='top_left'):
     if logo_img:
-        if position == 'bottom_left':
-            pos = [0.05, 0.05, 0.12, 0.12]
-        else: # top_left
-            pos = [0.05, 0.83, 0.12, 0.12]
+        pos = [0.05, 0.05, 0.12, 0.12] if position == 'bottom_left' else [0.05, 0.83, 0.12, 0.12]
         ax_image = ax.inset_axes(pos, transform=ax.transAxes)
         ax_image.imshow(logo_img)
         ax_image.axis('off')
@@ -61,12 +58,16 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
     opta_dict = analysis_package.get("opta", {})
     df_events = opta_dict.get("opta_events", pd.DataFrame())
+    df_in = analysis_package.get("shapes_in", pd.DataFrame())
+    df_out = analysis_package.get("shapes_out", pd.DataFrame())
 
     if df_events.empty:
         st.warning("Ingen event-data fundet.")
         return
 
     df_events.columns = [c.upper() for c in df_events.columns]
+    if not df_in.empty: df_in.columns = [c.upper() for c in df_in.columns]
+    if not df_out.empty: df_out.columns = [c.upper() for c in df_out.columns]
 
     # --- 4. FILTRE ---
     col_h1, col_h2 = st.columns([1, 1])
@@ -76,12 +77,10 @@ def vis_side(analysis_package=None):
     
     t_color, t_logo = get_team_style(valgt_hold)
     
-    # Hent hold UUID
     hold_uuid = ""
     if not df_matches.empty:
-        match_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
-        if not match_row.empty:
-            hold_uuid = match_row['CONTESTANTHOME_OPTAUUID'].iloc[0]
+        m_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
+        if not m_row.empty: hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0])
 
     df_hold = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy() if hold_uuid else df_events.copy()
 
@@ -95,16 +94,10 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # GRUNDSTRUKTUR
-        df_in = analysis_package.get("shapes_in", pd.DataFrame())
-        df_out = analysis_package.get("shapes_out", pd.DataFrame())
+        # Robust filtering på UUID (uafhængig af case)
+        df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'].astype(str).str.upper() == hold_uuid.upper()].copy() if not df_in.empty else pd.DataFrame()
+        df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'].astype(str).str.upper() == hold_uuid.upper()].copy() if not df_out.empty else pd.DataFrame()
 
-        if not df_in.empty: df_in.columns = [c.upper() for c in df_in.columns]
-        if not df_out.empty: df_out.columns = [c.upper() for c in df_out.columns]
-
-        df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_in.empty else pd.DataFrame()
-        df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_out.empty else pd.DataFrame()
-        
-        # Intern hjælpefunktion til at tegne banen
         def draw_shape_pitch(df_shape, title, color, logo):
             pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
             fig, ax = pitch.draw(figsize=(6, 8))
@@ -113,33 +106,21 @@ def vis_side(analysis_package=None):
             if not df_shape.empty:
                 top_row = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
                 roles_raw = top_row.get('SHAPE_ROLE', [])
-                
-                # Konverter JSON-streng til liste hvis nødvendigt
-                roles = []
-                try:
-                    if isinstance(roles_raw, str):
-                        roles = json.loads(roles_raw)
-                    else:
-                        roles = roles_raw
-                except: roles = []
+                roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
 
                 if isinstance(roles, list) and len(roles) > 0:
-                    for role in roles:
-                        x = float(role.get('averageX', 50))
-                        y = float(role.get('averageY', 50))
-                        ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.5, zorder=3, alpha=0.9)
-                        ax.text(y, x, role.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
+                    for r in roles:
+                        x, y = float(r.get('averageX', 50)), float(r.get('averageY', 50))
+                        ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.5, zorder=3)
+                        ax.text(y, x, r.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
                     draw_logo_custom(ax, logo, position='top_left')
-                else:
-                    ax.text(50, 50, "Ingen positionsdata", ha='center', va='center', transform=ax.transAxes)
-            else:
-                ax.text(50, 50, "Ingen data", ha='center', va='center', transform=ax.transAxes)
+                else: ax.text(50, 50, "Ingen positionsdata", ha='center', va='center', transform=ax.transAxes)
+            else: ax.text(50, 50, "Ingen data fundet", ha='center', va='center', transform=ax.transAxes)
             
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
         c1, c2 = st.columns(2)
-
         with c1:
             if not df_in_h.empty:
                 prim_in = df_in_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
