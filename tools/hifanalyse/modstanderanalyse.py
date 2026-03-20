@@ -89,90 +89,69 @@ def vis_side(analysis_package=None):
         df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
 
     # --- 5. TABS ---
+    # --- 5. TABS ---
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # GRUNDSTRUKTUR
         df_in = analysis_package.get("shapes_in", pd.DataFrame())
         df_out = analysis_package.get("shapes_out", pd.DataFrame())
 
-        # Sørg for kolonnenavne er konsistente (Upper)
         if not df_in.empty: df_in.columns = [c.upper() for c in df_in.columns]
         if not df_out.empty: df_out.columns = [c.upper() for c in df_out.columns]
 
-        # Filtrering på valgt hold
         df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_in.empty else pd.DataFrame()
         df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_out.empty else pd.DataFrame()
 
         st.markdown(f"### Taktisk Grundstruktur: {valgt_hold}")
         
         c1, c2 = st.columns(2)
-
         with c1:
             st.markdown('<p class="pitch-label" style="color:#2ecc71;">IN POSSESSION (MED BOLD)</p>', unsafe_allow_html=True)
             if not df_in_h.empty:
-                # Find primær formation
                 prim_in = df_in_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
                 pct_in = (df_in_h[df_in_h['SHAPE_FORMATION'] == prim_in]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
-                total_xg = df_in_h['SHAPEOUTCOME_XG'].sum()
-
-                st.metric("Primær Shape", prim_in, f"{pct_in:.1f}% af tiden")
-                st.write(f"**xG skabt i alt:** {total_xg:.2f}")
+                st.metric("Primær Shape", prim_in, f"{pct_in:.1f}%")
                 
-                # Tabel over shapes
-                df_disp_in = df_in_h.groupby('SHAPE_FORMATION').agg({
-                    'SHAPE_TIMEINSHAPE': 'sum',
-                    'SHAPEOUTCOME_XG': 'mean'
-                }).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XG': 'Gns. xG'}).sort_values('Minutter', ascending=False)
+                df_disp_in = df_in_h.groupby('SHAPE_FORMATION').agg({'SHAPE_TIMEINSHAPE': 'sum', 'SHAPEOUTCOME_XG': 'mean'}).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XG': 'Gns. xG'}).sort_values('Minutter', ascending=False)
                 st.dataframe(df_disp_in, use_container_width=True)
-            else:
-                st.info("Ingen 'In Possession' data tilgængelig.")
 
         with c2:
             st.markdown('<p class="pitch-label" style="color:#e74c3c;">OUT OF POSSESSION (MOD BOLD)</p>', unsafe_allow_html=True)
             if not df_out_h.empty:
-                # Find primær formation
                 prim_out = df_out_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
                 pct_out = (df_out_h[df_out_h['SHAPE_FORMATION'] == prim_out]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
-                total_xg_con = df_out_h['SHAPEOUTCOME_XGCONCEDED'].sum()
+                st.metric("Primær Shape", prim_out, f"{pct_out:.1f}%")
 
-                st.metric("Primær Shape", prim_out, f"{pct_out:.1f}% af tiden")
-                st.write(f"**xG tilladt i alt:** {total_xg_con:.2f}")
-
-                # Tabel over shapes
-                df_disp_out = df_out_h.groupby('SHAPE_FORMATION').agg({
-                    'SHAPE_TIMEINSHAPE': 'sum',
-                    'SHAPEOUTCOME_XGCONCEDED': 'mean'
-                }).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XGCONCEDED': 'Gns. xG Imod'}).sort_values('Minutter', ascending=False)
+                df_disp_out = df_out_h.groupby('SHAPE_FORMATION').agg({'SHAPE_TIMEINSHAPE': 'sum', 'SHAPEOUTCOME_XGCONCEDED': 'mean'}).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XGCONCEDED': 'Gns. xG Imod'}).sort_values('Minutter', ascending=False)
                 st.dataframe(df_disp_out, use_container_width=True)
-            else:
-                st.info("Ingen 'Out of Possession' data tilgængelig.")
 
-        st.divider()
-        st.caption("Data er baseret på Opta Remote Shape Summary. Minutter er summeret på tværs af de valgte kampe.")
-        
-        with tabs[1]: # MED BOLD
+    with tabs[1]: # MED BOLD (Rettelse af indrykning her)
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
         c1, c2 = st.columns(2)
         
         with c1: # Opbygning
             st.markdown('<p class="pitch-label">OPBYGNING (0-50m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            draw_logo_custom(ax, t_logo, position='bottom_left') # LOGO HER
+            fig, ax = pitch_h.draw(figsize=(6, 8))
+            ax.set_ylim(0, 50)
+            draw_logo_custom(ax, t_logo, position='bottom_left')
             
             df_p = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
             if not df_p.empty:
                 sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 50)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
         with c2: # Gennembrud
             st.markdown('<p class="pitch-label">GENNEMBRUD (50-100m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
+            fig, ax = pitch_h.draw(figsize=(6, 8))
+            ax.set_ylim(50, 100)
+            draw_logo_custom(ax, t_logo, position='top_left')
             
             df_g = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
             if not df_g.empty:
                 sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (50, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
     with tabs[2]: # MOD BOLD
         st.markdown('<p class="pitch-label">DEFENSIV STRUKTUR</p>', unsafe_allow_html=True)
@@ -183,23 +162,25 @@ def vis_side(analysis_package=None):
             st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER</p>', unsafe_allow_html=True)
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
+            draw_logo_custom(ax, t_logo, position='top_left')
             
             df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
             if not df_ero.empty:
                 sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
         with c2: # Dueller
             st.markdown('<p style="text-align:center; font-size:12px;">DUELLER</p>', unsafe_allow_html=True)
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
+            draw_logo_custom(ax, t_logo, position='top_left')
             
             df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
             if not df_duel.empty:
                 sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
     with tabs[3]: # TOP 5
         cols = st.columns(3)
