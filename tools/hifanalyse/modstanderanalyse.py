@@ -98,41 +98,59 @@ def vis_side(analysis_package=None):
             st.pyplot(fig, use_container_width=True); plt.close(fig)
 
     with tabs[2]: # MOD BOLD
-        st.markdown('<p class="pitch-label">DEFENSIV INTENSITET</p>', unsafe_allow_html=True)
+        st.markdown('<p class="pitch-label">DEFENSIV STRUKTUR</p>', unsafe_allow_html=True)
         
-        # Centrer banen ved at bruge tomme kolonner som 'padding'
-        _, center_col, _ = st.columns([0.5, 1, 0.5])
+        # Vi laver to kolonner til de to mindre baner
+        c1, c2 = st.columns(2)
         
-        with center_col:
-            # Vi definerer banen
-            pitch_f = VerticalPitch(
-                pitch_type='opta', 
-                pitch_color='#ffffff', 
-                line_color='#333333', 
-                line_zorder=3  # Sørg for at linjer ligger ØVERST
-            )
+        # Fælles indstillinger for banerne
+        pitch_config = {
+            "pitch_type": 'opta',
+            "pitch_color": '#ffffff',
+            "line_color": '#333333',
+            "line_zorder": 3,
+            "linewidth": 1
+        }
+
+        # BANE 1: Erobringer (Interceptions, Recoveries, Tackles)
+        with c1:
+            st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER (Tackles, Int, Rec)</p>', unsafe_allow_html=True)
+            pitch = VerticalPitch(**pitch_config)
+            fig, ax = pitch.draw(figsize=(5, 7))
             
-            # Figurstørrelsen her styrer proportionerne (7 bred, 10 høj)
-            fig, ax = pitch_f.draw(figsize=(7, 10))
+            # 4=Tackle, 8=Interception, 49=Recovery
+            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
             
-            # Data: Tackles (4), Duels (5), Interceptions (8), Recoveries (49)
-            df_d = df_hold[df_hold['EVENT_TYPEID'].isin([4, 5, 8, 49])]
-            
-            if not df_d.empty:
+            if not df_ero.empty:
                 sns.kdeplot(
-                    x=df_d['LOCATIONY'], 
-                    y=df_d['LOCATIONX'], 
-                    fill=True, 
-                    cmap='Blues', 
-                    alpha=0.7, 
-                    ax=ax, 
-                    zorder=2, # Under linjer (zorder 3)
-                    levels=10, # Gør overgangene blødere
-                    thresh=0.05, # Fjerner de helt svage farver i kanten
-                    clip=((0, 100), (0, 100)) # STRENG GRÆNSE: Stopper ved linjerne
+                    x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'],
+                    fill=True, cmap='Blues', 
+                    alpha=0.4,          # Meget lavere opacity som ønsket
+                    thresh=0.1,         # Fjerner de helt svage yderkanter for et "renere" look
+                    ax=ax, zorder=2,
+                    clip=((0, 100), (0, 100))
                 )
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+
+        # BANE 2: Dueller
+        with c2:
+            st.markdown('<p style="text-align:center; font-size:12px;">DUELLER</p>', unsafe_allow_html=True)
+            pitch = VerticalPitch(**pitch_config)
+            fig, ax = pitch.draw(figsize=(5, 7))
             
-            # use_container_width=True sørger for den fylder center_col ud
+            # 5=Duel
+            df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
+            
+            if not df_duel.empty:
+                sns.kdeplot(
+                    x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'],
+                    fill=True, cmap='Greens', # Bruger grøn for at adskille dem visuelt
+                    alpha=0.4,          # Lav opacity
+                    thresh=0.1,
+                    ax=ax, zorder=2,
+                    clip=((0, 100), (0, 100))
+                )
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
