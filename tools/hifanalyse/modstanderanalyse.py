@@ -91,7 +91,66 @@ def vis_side(analysis_package=None):
     # --- 5. TABS ---
     tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    with tabs[1]: # MED BOLD
+    with tabs[0]: # GRUNDSTRUKTUR
+        df_in = analysis_package.get("shapes_in", pd.DataFrame())
+        df_out = analysis_package.get("shapes_out", pd.DataFrame())
+
+        # Sørg for kolonnenavne er konsistente (Upper)
+        if not df_in.empty: df_in.columns = [c.upper() for c in df_in.columns]
+        if not df_out.empty: df_out.columns = [c.upper() for c in df_out.columns]
+
+        # Filtrering på valgt hold
+        df_in_h = df_in[df_in['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_in.empty else pd.DataFrame()
+        df_out_h = df_out[df_out['CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_out.empty else pd.DataFrame()
+
+        st.markdown(f"### Taktisk Grundstruktur: {valgt_hold}")
+        
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown('<p class="pitch-label" style="color:#2ecc71;">IN POSSESSION (MED BOLD)</p>', unsafe_allow_html=True)
+            if not df_in_h.empty:
+                # Find primær formation
+                prim_in = df_in_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
+                pct_in = (df_in_h[df_in_h['SHAPE_FORMATION'] == prim_in]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
+                total_xg = df_in_h['SHAPEOUTCOME_XG'].sum()
+
+                st.metric("Primær Shape", prim_in, f"{pct_in:.1f}% af tiden")
+                st.write(f"**xG skabt i alt:** {total_xg:.2f}")
+                
+                # Tabel over shapes
+                df_disp_in = df_in_h.groupby('SHAPE_FORMATION').agg({
+                    'SHAPE_TIMEINSHAPE': 'sum',
+                    'SHAPEOUTCOME_XG': 'mean'
+                }).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XG': 'Gns. xG'}).sort_values('Minutter', ascending=False)
+                st.dataframe(df_disp_in, use_container_width=True)
+            else:
+                st.info("Ingen 'In Possession' data tilgængelig.")
+
+        with c2:
+            st.markdown('<p class="pitch-label" style="color:#e74c3c;">OUT OF POSSESSION (MOD BOLD)</p>', unsafe_allow_html=True)
+            if not df_out_h.empty:
+                # Find primær formation
+                prim_out = df_out_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
+                pct_out = (df_out_h[df_out_h['SHAPE_FORMATION'] == prim_out]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
+                total_xg_con = df_out_h['SHAPEOUTCOME_XGCONCEDED'].sum()
+
+                st.metric("Primær Shape", prim_out, f"{pct_out:.1f}% af tiden")
+                st.write(f"**xG tilladt i alt:** {total_xg_con:.2f}")
+
+                # Tabel over shapes
+                df_disp_out = df_out_h.groupby('SHAPE_FORMATION').agg({
+                    'SHAPE_TIMEINSHAPE': 'sum',
+                    'SHAPEOUTCOME_XGCONCEDED': 'mean'
+                }).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XGCONCEDED': 'Gns. xG Imod'}).sort_values('Minutter', ascending=False)
+                st.dataframe(df_disp_out, use_container_width=True)
+            else:
+                st.info("Ingen 'Out of Possession' data tilgængelig.")
+
+        st.divider()
+        st.caption("Data er baseret på Opta Remote Shape Summary. Minutter er summeret på tværs af de valgte kampe.")
+        
+        with tabs[1]: # MED BOLD
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
         c1, c2 = st.columns(2)
         
