@@ -119,7 +119,7 @@ def vis_side(analysis_package=None):
             fig, ax = pitch.draw(figsize=(5, 7))
             
             # 4=Tackle, 8=Interception, 49=Recovery
-            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
+            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 49])]
             
             if not df_ero.empty:
                 sns.kdeplot(
@@ -140,7 +140,7 @@ def vis_side(analysis_package=None):
             fig, ax = pitch.draw(figsize=(5, 7))
             
             # 5=Duel
-            df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
+            df_duel = df_hold[df_hold['EVENT_TYPEID'].isin([5, 8])]
             
             if not df_duel.empty:
                 sns.kdeplot(
