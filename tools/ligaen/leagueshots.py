@@ -1,143 +1,262 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+import numpy as np
 from mplsoccer import VerticalPitch
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from PIL import Image
 import requests
 from io import BytesIO
-from PIL import Image
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-# --- 1. LOGO & FARVE HJÆLPEFUNKTIONER (Fra din fungerende ligafil) ---
+# --- KONFIGURATION & DESIGN ---
+HIF_RED = '#cc0000'
+DZ_COLOR = '#1f77b4'
+
+# --- LOGO & FARVE UTILS ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
-    try:
-        response = requests.get(url, timeout=5)
-        return Image.open(BytesIO(response.content))
-    except: return None
+    try:
+        response = requests.get(url, timeout=5)
+        return Image.open(BytesIO(response.content))
+    except: return None
+
+def get_text_color(hex_color):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return 'white' if luminance < 0.5 else 'black'
 
 def get_team_style(team_name):
-    color = '#cc0000' # Default rød
-    logo_img = None
-    if team_name in TEAM_COLORS:
-        c = TEAM_COLORS[team_name]
-        prim = c['primary'].lower()
-        # Undgå hvid farve på hvid bane
-        color = c.get('secondary', '#cc0000') if prim in ["#ffffff", "white", "#f9f9f9"] else c['primary']
-    if team_name in TEAMS:
-        url = TEAMS[team_name].get('logo')
-        if url: logo_img = get_logo_img(url)
-    return color, logo_img
+    color = HIF_RED
+    logo_img = None
+    if team_name in TEAM_COLORS:
+        c = TEAM_COLORS[team_name]
+        prim = c['primary'].lower()
+        color = c.get('secondary', HIF_RED) if prim in ["#ffffff", "white", "#f9f9f9"] else c['primary']
+    if team_name in TEAMS:
+        url = TEAMS[team_name].get('logo')
+        if url: logo_img = get_logo_img(url)
+    return color, logo_img
 
-def draw_logo_custom(ax, logo_img, position='top_left'):
-    if logo_img:
-        # Juster placering baseret på axes-koordinater (0 til 1)
-        if position == 'bottom_left':
-            pos = [0.05, 0.05, 0.12, 0.12] # x, y, bredde, højde
-        else: # top_left
-            pos = [0.05, 0.83, 0.12, 0.12]
-            
-        ax_image = ax.inset_axes(pos, transform=ax.transAxes)
-        ax_image.imshow(logo_img)
-        ax_image.axis('off')
+def draw_logo_adjusted(ax, logo_img):
+    if logo_img:
+        # Placeret nede og lidt ind mod midten (Top-Venstre kvadrant)
+        ax_image = ax.inset_axes([0.08, 0.80, 0.12, 0.12], transform=ax.transAxes)
+        ax_image.imshow(logo_img)
+        ax_image.axis('off')
 
-def vis_side(analysis_package=None):
-    # --- 2. UI & CSS ---
-    st.markdown("""
-        <style>
-            .block-container { padding-top: 1rem; }
-            .stat-box { 
-                background-color: #f8f9fa; padding: 8px; border-radius: 6px; 
-                border-left: 4px solid #df003b; margin-bottom: 5px; font-size: 0.85rem;
-            }
-            .pitch-label { text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 5px; }
-            div[data-testid="stSelectbox"] label { display: none; }
-        </style>
-    """, unsafe_allow_html=True)
+# --- MAIN APP ---
+# --- MAIN APP ---
+def vis_side(dp):
+    # CSS til at reducere afstand mellem widgets og faner
+    st.markdown("""
+        <style>
+            /* Reducer afstand over tabs-linjen */
+            .stTabs {
+                margin-top: -30px;
+            }
+            /* Reducer afstanden mellem kolonne-rækker */
+            [data-testid="stVerticalBlock"] > div:has(div.stColumns) {
+                margin-bottom: -15px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
-    if not analysis_package:
-        st.error("Ingen datapakke modtaget.")
-        return
+    opta_data = dp.get('opta', {})
+    df_all = opta_data.get('league_shotevents', pd.DataFrame()).copy()
 
-    # --- 3. DATA HÅNDTERING ---
-    df_matches = analysis_package.get("matches", pd.DataFrame())
-    opta_dict = analysis_package.get("opta", {})
-    df_events = opta_dict.get("opta_events", pd.DataFrame())
+    if df_all.empty:
+        st.info("Ingen ligadata fundet.")
+        return
 
-    if df_events.empty:
-        st.warning("Ingen event-data fundet.")
-        return
+    # 1. DATA PREP
+    df_all.columns = [c.upper() for c in df_all.columns]
+    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
+    teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
 
-    df_events.columns = [c.upper() for c in df_events.columns]
+    # 2. UNIVERSAL HOLDVALG
+    col_header1, col_header2 = st.columns([2, 1])
+    with col_header2:
+        t_sel = st.selectbox("Vælg hold", teams_in_data, key="global_team_sel")
+    
+    with col_header1:
+        # Brug en tom overskrift eller lille caption for at holde balancen uden at fylde
+        st.caption(f"Aktuel visning: **{t_sel}**")
 
-    # --- 4. FILTRE ---
-    col_h1, col_h2 = st.columns([1, 1])
-    with col_h1:
-        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else sorted(df_events['PLAYER_NAME'].unique())
-        valgt_hold = st.selectbox("Vælg hold:", hold_navne, key="target_team_select")
-    
-    # HENT LOGO OG FARVE
-    t_color, t_logo = get_team_style(valgt_hold)
-    
-    hold_uuid = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]['CONTESTANTHOME_OPTAUUID'].iloc[0] if not df_matches.empty else ""
-    df_hold = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy() if hold_uuid else df_events.copy()
+    # Hent stil
+    t_color, t_logo = get_team_style(t_sel)
+    txt_color = get_text_color(t_color)
 
-    with col_h2:
-        valgt_spiller = st.selectbox("Filter spiller:", ["Alle spillere"] + sorted(df_hold['PLAYER_NAME'].dropna().unique().tolist()), key="player_select")
+    # 3. ZONE LOGIK (uændret)
+    P_L, P_W = 105.0, 68.0
+    X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
+    X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
+    Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
+    ZONE_BOUNDARIES = {
+        "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
+        "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
+        "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
+        "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
+        "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
+        "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
+        "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
+        "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
+        "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
+        "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
+    }
 
-    if valgt_spiller != "Alle spillere":
-        df_hold = df_hold[df_hold['PLAYER_NAME'] == valgt_spiller]
+    def map_to_zone(r):
+        mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
+        for z, b in ZONE_BOUNDARIES.items():
+            if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]: return z
+        return "Zone 8"
 
-    # --- 5. TABS ---
-    tabs = st.tabs(["GRUNDSTRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
+    df_all['Zone'] = df_all.apply(map_to_zone, axis=1)
+    df_all['IS_DZ_GEO'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
 
-    with tabs[1]: # MED BOLD
-        pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
-        c1, c2 = st.columns(2)
-        
-        with c1: # Opbygning
-            st.markdown('<p class="pitch-label">OPBYGNING (0-50m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            draw_logo_custom(ax, t_logo, position='bottom_left') # LOGO HER
-            
-            df_p = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] < 50)]
-            if not df_p.empty:
-                sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 50)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+    # 4. TABS
+    tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
+    
+    # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT ---
+    with tabs[0]:
+        stats = []
+        for (p, klub), d in df_all.groupby(['PLAYER_NAME', 'KLUB_NAVN']):
+            # DZ-filtrering
+            dz = d[d['IS_DZ_GEO']]
+            
+            # Generelle stats
+            s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
+            
+            # DZ stats
+            dz_s = len(dz)
+            dz_m = len(dz[dz['EVENT_TYPEID'] == 16])
+            
+            stats.append({
+                "Spiller": p, 
+                "Klub": klub, 
+                "Skud": s, 
+                "Mål": m, 
+                "Konv.%": (m/s*100) if s > 0 else 0,
+                "DZ-Skud": dz_s, 
+                "DZ-Mål": dz_m,
+                "DZ-Konv.%": (dz_m/dz_s*100) if dz_s > 0 else 0,
+                "DZ-Andel": (dz_s/s*100) if s > 0 else 0
+            })
+            
+        df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
+        
+        st.dataframe(df_f, use_container_width=True, height=700, hide_index=True,
+                    column_config={
+                        "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
+                        "DZ-Mål": st.column_config.NumberColumn(help="Mål scoret indenfor Danger Zone"),
+                        "DZ-Konv.%": st.column_config.NumberColumn(format="%.1f%%", help="Konverteringsrate for skud i Danger Zone"),
+                        "DZ-Andel": st.column_config.ProgressColumn(
+                            "DZ-Andel af skud",
+                            min_value=0, 
+                            max_value=100, 
+                            format="%.0f%%",
+                            help="Hvor stor en procentdel af spillerens samlede skud er foretaget i Danger Zone"
+                        )
+                    })
 
-        with c2: # Gennembrud
-            st.markdown('<p class="pitch-label">GENNEMBRUD (50-100m)</p>', unsafe_allow_html=True)
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
-            
-            df_g = df_hold[(df_hold['EVENT_TYPEID'] == 1) & (df_hold['LOCATIONX'] >= 50)]
-            if not df_g.empty:
-                sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (50, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+    # --- TAB 1: AFSLUTNINGER ---
+    with tabs[1]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
+            p_sel = st.selectbox("Vælg spiller", [t_sel] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
+            d_v = df_t if p_sel == t_sel else df_t[df_t['PLAYER_NAME'] == p_sel]
+            st.markdown(f'''<div style="background-color:#f8f9fa; padding:10px; border-radius:8px; border-left:5px solid {t_color}">
+                        <div style="font-size:0.8rem; color:#666">Skud ({t_sel})</div>
+                        <div style="font-size:1.5rem; font-weight:800">{len(d_v)}</div>
+                        </div>''', unsafe_allow_html=True)
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            colors = (d_v['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=35, c=colors, edgecolors=t_color, ax=ax)
+            draw_logo_adjusted(ax, t_logo)
+            st.pyplot(fig)
 
-    with tabs[2]: # MOD BOLD
-        st.markdown('<p class="pitch-label">DEFENSIV STRUKTUR</p>', unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        pitch_cfg = {"pitch_type": 'opta', "pitch_color": '#ffffff', "line_color": '#333333', "line_zorder": 4}
+    # --- TAB 2: DZ-AFSLUTNINGER ---
+    with tabs[2]:
+        c1, c2 = st.columns([2, 1])
+        with c2:
+            df_dz = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['IS_DZ_GEO'])]
+            st.markdown(f'''<div style="background-color:#f8f9fa; padding:10px; border-radius:8px; border-left:5px solid {t_color}">
+                        <div style="font-size:0.8rem; color:#666">DZ Skud ({t_sel})</div>
+                        <div style="font-size:1.5rem; font-weight:800">{len(df_dz)}</div>
+                        </div>''', unsafe_allow_html=True)
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
+            colors = (df_dz['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
+            pitch.scatter(df_dz['EVENT_X'], df_dz['EVENT_Y'], s=40, c=colors, edgecolors=t_color, ax=ax)
+            draw_logo_adjusted(ax, t_logo)
+            st.pyplot(fig)
 
-        with c1: # Erobringer
-            st.markdown('<p style="text-align:center; font-size:12px;">EROBRINGER</p>', unsafe_allow_html=True)
-            pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
-            
-            df_ero = df_hold[df_hold['EVENT_TYPEID'].isin([4, 8, 49])]
-            if not df_ero.empty:
-                sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+    # --- TAB 3 & 4: ZONER ---
+    # --- TAB 3 & 4: ZONER ---
+    def zone_tab(is_goal):
+        c1, c2 = st.columns([1.8, 1])
+        with c2:
+            df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
+            plot_data = df_t[df_t['EVENT_TYPEID'] == 16] if is_goal else df_t
+            z_counts = plot_data.groupby('Zone').size()
+            st.write(f"Zonestatistik for {t_sel}")
+            
+        with c1:
+            pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
+            fig, ax = pitch.draw(figsize=(8, 10))
+            ax.set_ylim(55, 105)
+            
+            max_v = z_counts.max() if not z_counts.empty else 1
+            
+            for name, b in ZONE_BOUNDARIES.items():
+                if b["y_max"] <= 55: continue
+                cnt = z_counts.get(name, 0)
+                
+                # Beregn alpha (0.05 til 0.85)
+                alpha = (cnt/max_v) * 0.85 if cnt > 0 else 0.05
+                
+                # Tegn zonen
+                ax.add_patch(patches.Rectangle(
+                    (b["x_min"], max(b["y_min"], 55)), 
+                    b["x_max"]-b["x_min"], 
+                    b["y_max"]-max(b["y_min"], 55), 
+                    facecolor=t_color, 
+                    alpha=alpha, 
+                    edgecolor='black', 
+                    ls='--', 
+                    lw=0.5
+                ))
+                
+                if cnt > 0:
+                    # DYNAMISK TEKSTFARVE LOGIK:
+                    # Hvis alpha er lav (lys baggrund), brug sort. 
+                    # Hvis alpha er høj (mørk baggrund), brug holdets tekstfarve (typisk hvid).
+                    display_text_color = 'black' if alpha < 0.4 else txt_color
+                    
+                    ax.text(
+                        b["x_min"]+(b["x_max"]-b["x_min"])/2, 
+                        max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, 
+                        f"{cnt}", 
+                        ha='center', 
+                        va='center', 
+                        fontsize=12, 
+                        fontweight='bold', 
+                        color=display_text_color
+                    )
+            
+            draw_logo_adjusted(ax, t_logo)
+            st.pyplot(fig)
 
-        with c2: # Dueller
-            st.markdown('<p style="text-align:center; font-size:12px;">DUELLER</p>', unsafe_allow_html=True)
-            pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left') # LOGO HER
-            
-            df_duel = df_hold[df_hold['EVENT_TYPEID'] == 5]
-            if not df_duel.empty:
-                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.4, thresh=0.1, ax=ax, zorder=2, clip=((0, 100), (0, 100)))
-            st.pyplot(fig, use_container_width=True); plt.close(fig)
+    with tabs[3]: zone_tab(False)
+    with tabs[4]: zone_tab(True)
