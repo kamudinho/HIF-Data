@@ -105,25 +105,56 @@ def vis_side(analysis_package=None):
         st.markdown(f"### Taktisk Grundstruktur: {valgt_hold}")
         
         c1, c2 = st.columns(2)
+
+        # Funktion til at tegne gennemsnitspositioner baseret på SHAPE_ROLE
+        def draw_shape_pitch(df_shape, title, color, logo):
+            pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+            fig, ax = pitch.draw(figsize=(6, 8))
+            st.markdown(f'<p class="pitch-label">{title}</p>', unsafe_allow_html=True)
+            
+            if not df_shape.empty:
+                # Vi tager den mest brugte formation (første række efter sortering)
+                top_shape = df_shape.sort_values('SHAPE_TIMEINSHAPE', ascending=False).iloc[0]
+                roles = top_shape.get('SHAPE_ROLE', [])
+                
+                if isinstance(roles, list):
+                    for role in roles:
+                        # Opta koordinater er 0-100. 
+                        # Vi plotter cirkler for hver position i formationen
+                        x = role.get('averageX', 50)
+                        y = role.get('averageY', 50)
+                        ax.scatter(y, x, s=300, color=color, edgecolors='black', linewidth=1, zorder=3, alpha=0.8)
+                        # Tilføj forkortelse på rollen (f.ShortName)
+                        ax.text(y, x, role.get('roleShortName', ''), color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
+
+                draw_logo_custom(ax, logo, position='top_left')
+            else:
+                ax.text(50, 50, "Ingen data", ha='center', va='center')
+            
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+
         with c1:
-            st.markdown('<p class="pitch-label" style="color:#2ecc71;">IN POSSESSION (MED BOLD)</p>', unsafe_allow_html=True)
             if not df_in_h.empty:
                 prim_in = df_in_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
-                pct_in = (df_in_h[df_in_h['SHAPE_FORMATION'] == prim_in]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
-                st.metric("Primær Shape", prim_in, f"{pct_in:.1f}%")
+                st.metric("Primær Offensiv", prim_in)
+                draw_shape_pitch(df_in_h, "POSITIONS (MED BOLD)", "#2ecc71", t_logo)
                 
-                df_disp_in = df_in_h.groupby('SHAPE_FORMATION').agg({'SHAPE_TIMEINSHAPE': 'sum', 'SHAPEOUTCOME_XG': 'mean'}).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XG': 'Gns. xG'}).sort_values('Minutter', ascending=False)
-                st.dataframe(df_disp_in, use_container_width=True)
+                # Kompakt tabel under banen
+                st.dataframe(df_in_h[['SHAPE_FORMATION', 'SHAPE_TIMEINSHAPE', 'SHAPEOUTCOME_XG']].head(3), hide_index=True)
+            else:
+                st.info("Ingen offensiv data")
 
         with c2:
-            st.markdown('<p class="pitch-label" style="color:#e74c3c;">OUT OF POSSESSION (MOD BOLD)</p>', unsafe_allow_html=True)
             if not df_out_h.empty:
                 prim_out = df_out_h.groupby('SHAPE_FORMATION')['SHAPE_TIMEINSHAPE'].sum().idxmax()
-                pct_out = (df_out_h[df_out_h['SHAPE_FORMATION'] == prim_out]['SHAPE_PERCENTAGEINSHAPE'].mean()) * 100
-                st.metric("Primær Shape", prim_out, f"{pct_out:.1f}%")
+                st.metric("Primær Defensiv", prim_out)
+                draw_shape_pitch(df_out_h, "POSITIONS (MOD BOLD)", "#e74c3c", t_logo)
 
-                df_disp_out = df_out_h.groupby('SHAPE_FORMATION').agg({'SHAPE_TIMEINSHAPE': 'sum', 'SHAPEOUTCOME_XGCONCEDED': 'mean'}).rename(columns={'SHAPE_TIMEINSHAPE': 'Minutter', 'SHAPEOUTCOME_XGCONCEDED': 'Gns. xG Imod'}).sort_values('Minutter', ascending=False)
-                st.dataframe(df_disp_out, use_container_width=True)
+                # Kompakt tabel under banen
+                st.dataframe(df_out_h[['SHAPE_FORMATION', 'SHAPE_TIMEINSHAPE', 'SHAPEOUTCOME_XGCONCEDED']].head(3), hide_index=True)
+            else:
+                st.info("Ingen defensiv data")
 
     with tabs[1]: # MED BOLD (Rettelse af indrykning her)
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', line_zorder=4)
