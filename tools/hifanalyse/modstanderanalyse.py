@@ -140,19 +140,23 @@ def vis_side(analysis_package=None):
         c1, c2 = st.columns(2)
         with c1:
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            draw_logo_custom(ax, t_logo, position='bottom_left') # Logo her også!
+            draw_logo_custom(ax, t_logo, position='bottom_left')
             df_p = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] < 50)]
             if not df_p.empty:
-                sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
+                # TILFØJET clip=((0, 100), (0, 50)) for at holde det indenfor banen/halvdelen
+                sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', 
+                            alpha=0.5, ax=ax, clip=((0, 100), (0, 50)), thresh=0.05, levels=50)
             st.pyplot(fig); plt.close(fig)
         with c2:
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            draw_logo_custom(ax, t_logo, position='top_left') # Og her!
+            draw_logo_custom(ax, t_logo, position='top_left')
             df_g = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] >= 50)]
             if not df_g.empty:
-                sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
+                # TILFØJET clip=((0, 100), (50, 100))
+                sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', 
+                            alpha=0.5, ax=ax, clip=((0, 100), (50, 100)), thresh=0.05, levels=50)
             st.pyplot(fig); plt.close(fig)
-
+            
     with tabs[2]: # MOD BOLD
         c1, c2 = st.columns(2)
         with c1:
@@ -162,7 +166,9 @@ def vis_side(analysis_package=None):
             draw_logo_custom(ax, t_logo, position='top_left')
             df_ero = df_hold_events[df_hold_events['EVENT_TYPEID'].isin([4, 8, 49])]
             if not df_ero.empty:
-                sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.5, ax=ax)
+                # TILFØJET clip=((0, 100), (0, 100))
+                sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', 
+                            alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
             st.pyplot(fig); plt.close(fig)
         with c2:
             st.write("DUELLER")
@@ -171,7 +177,9 @@ def vis_side(analysis_package=None):
             draw_logo_custom(ax, t_logo, position='top_left')
             df_duel = df_hold_events[df_hold_events['EVENT_TYPEID'] == 5]
             if not df_duel.empty:
-                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.5, ax=ax)
+                # TILFØJET clip=((0, 100), (0, 100))
+                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', 
+                            alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
             st.pyplot(fig); plt.close(fig)
 
     with tabs[3]: # TOP 5
