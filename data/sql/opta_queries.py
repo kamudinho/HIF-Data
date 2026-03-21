@@ -272,16 +272,16 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_remote_shapes": f"""
             SELECT 
-                TRIM(MATCH_OPTAUUID)::STRING as MATCH_OPTAUUID,
-                SHAPES_PERIODID,
-                TRIM(CONTESTANT_OPTAUUID)::STRING as CONTESTANT_OPTAUUID,
-                TRIM(SHAPE_FORMATION)::STRING as SHAPE_FORMATION,
-                TRIM(POSSESSION_TYPE)::STRING as POSSESSION_TYPE,
-                SHAPE_TIMEELAPSEDSTART,
-                SHAPE_ROLE
+                CAST(MATCH_OPTAUUID AS STRING) as MATCH_OPTAUUID,
+                CAST(SHAPES_PERIODID AS INT) as SHAPES_PERIODID,
+                CAST(CONTESTANT_OPTAUUID AS STRING) as CONTESTANT_OPTAUUID,
+                CAST(SHAPE_FORMATION AS STRING) as SHAPE_FORMATION,
+                CAST(POSSESSION_TYPE AS STRING) as POSSESSION_TYPE,
+                CAST(SHAPE_TIMEELAPSEDSTART AS INT) as SHAPE_TIMEELAPSEDSTART,
+                SHAPE_ROLE -- Lad denne være som den er, da det er JSON
             FROM {DB}.OPTA_REMOTESHAPES
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            {hif_filter_std}
+            -- FJERN hif_filter_std HER, hvis du vil se modstanderens (AaB) struktur!
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID, SHAPE_TIMEELAPSEDSTART, POSSESSION_TYPE 
                 ORDER BY SHAPE_TIMEELAPSEDSTART
