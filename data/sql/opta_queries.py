@@ -273,9 +273,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         "opta_remote_shapes": f"""
             SELECT 
                 MATCH_OPTAUUID,
-                SHAPE_PERIODID,
+                SHAPES_PERIODID,
                 CONTESTANT_OPTAUUID,
-                SHAPE_FORMATION,
+                SHAPES_FORMATION,
                 POSSESSION_TYPE,
                 SHAPE_TIMEELAPSEDSTART,
                 SHAPE_TIMEELAPSEDEND,
