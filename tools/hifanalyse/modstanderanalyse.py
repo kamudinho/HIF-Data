@@ -90,24 +90,32 @@ def vis_side(analysis_package=None):
     df_events = opta_dict.get("events", pd.DataFrame())
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame()).copy()
 
-    # --- 4. DATA CLEANING (Håndtering af fladt format) ---
+    # --- 4. DATA CLEANING (Robust Regex til sammenklistret data) ---
     if not df_remote.empty:
-        # Hvis data er mast i én kolonne, splitter vi den
+        # Hvis Snowflake sender det hele som én kolonne
         if len(df_remote.columns) == 1:
             raw_col = df_remote.columns[0]
-            # Opta UUIDs er altid 25 tegn
-            df_remote['CONTESTANT_OPTAUUID'] = df_remote[raw_col].astype(str).str.slice(51, 76)
-            df_remote['SHAPE_FORMATION'] = df_remote[raw_col].astype(str).str.extract(r'(\d-\d-\d-\d)')
-            df_remote['POSSESSION_TYPE'] = df_remote[raw_col].astype(str).apply(
-                lambda x: 'inPossession' if 'inPossession' in x else 'outOfPossession'
-            )
-            df_remote['SHAPE_ROLE'] = df_remote[raw_col].astype(str).str.extract(r'(\[.*\])')
-            # Forsøg at finde tidsstempel (typisk efter formationen)
-            df_remote['SHAPE_TIMEELAPSEDSTART'] = df_remote[raw_col].astype(str).str.extract(r'(\d{2,})').astype(float).fillna(0)
-        
-        # Standard rensning af UUID for at sikre match
-        df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].astype(str).str.strip().str.slice(0, 25)
+            series = df_remote[raw_col].astype(str)
+            
+            # 1. Find alle Opta UUIDs (de er altid 24-25 tegn og ligner hex/base64)
+            # Vi leder efter strenge på 25 tegn med tal og bogstaver
+            uuids = series.str.findall(r'[a-z0-9]{25}')
+            
+            # 2. Find Formationer (mønster: tal-tal-tal)
+            formations = series.str.findall(r'\d-\d-\d(?:-\d)?')
 
+            # Vi mapper dem ind (vi ved fra din rækkefølge hvad der er hvad)
+            df_remote['MATCH_OPTAUUID'] = uuids.apply(lambda x: x[2] if len(x) > 2 else None)
+            df_remote['CONTESTANT_OPTAUUID'] = uuids.apply(lambda x: x[3] if len(x) > 3 else None)
+            df_remote['SHAPE_FORMATION'] = formations.apply(lambda x: x[0] if len(x) > 0 else "N/A")
+            
+            # Possession og Roller (da disse er i slutningen af de store rækker)
+            df_remote['POSSESSION_TYPE'] = series.apply(lambda x: 'inPossession' if 'inPossession' in x else 'outOfPossession')
+            df_remote['SHAPE_ROLE'] = series.str.extract(r'(\[.*\])')
+        
+        # Sørg for at UUID er renset for whitespaces
+        df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].str.strip()
+        
     # --- 5. FILTRE & UUID SETUP ---
     hold_uuid = ""
     col_h1, col_h2 = st.columns([1, 1])
