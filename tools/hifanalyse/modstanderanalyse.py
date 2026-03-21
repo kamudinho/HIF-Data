@@ -66,7 +66,7 @@ def draw_remote_pitch(df_row, title, color, logo):
 # --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
     if not df_remote_raw.empty:
-    st.write("Hold fundet i Remote Data (fra SQL):", df_remote_raw['CONTESTANT_OPTAUUID'].unique())
+        st.write("Hold fundet i Remote Data (fra SQL):", df_remote_raw['CONTESTANT_OPTAUUID'].unique())
     
     st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
 
