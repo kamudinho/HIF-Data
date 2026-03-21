@@ -260,15 +260,9 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             WHERE MATCH_SSIID = '{{match_uuid}}' 
         """,
 
-        # 11. PHYSICAL METADATA
-        # Tving SQL til at hente ALLE shapes for den valgte kamp, uanset hold
+        # 11. PHYSICAL METADATA - Nu baseret på turneringens kampe i stedet for en løs variabel
         "opta_remote_shapes": f"""
             SELECT * FROM {DB}.OPTA_REMOTESHAPES
-            WHERE MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID 
-                FROM {DB}.OPTA_MATCHES 
-                WHERE SEASON_ID = '2025/2026' 
-                AND (CONTESTANTHOME_NAME = '{valgt_hold}' OR CONTESTANTAWAY_NAME = '{valgt_hold}')
-            )
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """
     }
