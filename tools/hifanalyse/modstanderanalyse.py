@@ -38,19 +38,18 @@ def get_team_style(team_name):
 def draw_logo_custom(ax, logo_img):
     if logo_img:
         try:
-            # Placerer logoet øverst til venstre (x=0.02, y=0.88)
+            # Placerer logoet i øverste venstre hjørne af aksen [x, y, bredde, højde]
             ax_image = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
             ax_image.imshow(logo_img)
             ax_image.axis('off')
-        except Exception as e:
-            st.write(f"Fejl ved tegning af logo: {e}")
+        except:
+            pass
 
-# --- 2. TEGNEFUNKTIONER ---
+# --- 2. TEGNEFUNKTION TIL STRUKTUR ---
 def draw_remote_pitch(df_row, title, color, logo):
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
     fig, ax = pitch.draw(figsize=(6, 8))
     
-    # Titel
     ax.text(50, 103, title, color='black', va='center', ha='center', fontsize=14, fontweight='bold')
     
     if not df_row.empty:
@@ -58,34 +57,26 @@ def draw_remote_pitch(df_row, title, color, logo):
         roles_raw = df_row.get('SHAPE_ROLE', [])
         
         try:
-            # Håndterer både streng og liste-input
             roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
-            
             if isinstance(roles, list):
                 for r in roles:
-                    # Vi bruger 'averageRolePositionX' og 'averageRolePositionY'
                     x = float(r.get('averageRolePositionX', 50))
                     y = float(r.get('averageRolePositionY', 50))
                     num = r.get('shirtNumber', '')
                     
-                    # Tegn spiller
                     ax.scatter(y, x, s=700, color=color, edgecolors='black', linewidth=1.5, zorder=3)
                     ax.text(y, x, str(num), color='white', ha='center', va='center', fontsize=11, fontweight='bold', zorder=4)
                 
-                # Formation i bunden
                 ax.text(50, 2, f"Formation: {formation}", color='gray', ha='center', fontsize=10, fontweight='bold')
-        except Exception as e:
-            st.error(f"Fejl i JSON parsing: {e}")
+        except:
+            pass
             
-    # TEGN LOGOET SIDST SÅ DET LIGGER ØVERST
     draw_logo_custom(ax, logo)
-    
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
-    # Styling
     st.markdown("""
         <style>
             .block-container { padding-top: 1rem; }
@@ -94,14 +85,14 @@ def vis_side(analysis_package=None):
     """, unsafe_allow_html=True)
 
     if not analysis_package:
-        st.error("Ingen datapakke modtaget.")
+        st.error("Ingen data fundet.")
         return
 
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
 
-    # Parsing af Snowflake data
+    # --- PARSING AF REMOTE SHAPES ---
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
@@ -124,17 +115,17 @@ def vis_side(analysis_package=None):
             })
     df_remote = pd.DataFrame(processed_rows)
 
-    # Holdvalg
+    # --- VALG AF HOLD ---
     all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
-    valgt_hold = st.selectbox("Vælg hold:", all_teams, key="team_selector")
+    valgt_hold = st.selectbox("Vælg hold:", all_teams)
     
     t_color, t_logo = get_team_style(valgt_hold)
     
-    # Debug info til dig (kan fjernes senere)
+    # Debug: Fortæller dig om logoet overhovedet er fundet
     if t_logo:
-        st.success(f"Logo fundet for {valgt_hold}")
+        st.success(f"✅ Logo fundet for {valgt_hold}")
     else:
-        st.warning(f"Logo IKKE fundet for {valgt_hold}. Tjek TEAMS i team_mapping.py")
+        st.warning(f"⚠️ Intet logo fundet for {valgt_hold}. Tjek TEAMS i team_mapping.py")
 
     # Find UUID for holdet
     hold_uuid = ""
@@ -143,7 +134,7 @@ def vis_side(analysis_package=None):
         if not m_row.empty:
             hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0] if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else m_row['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
-    # Tabs
+    # --- TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # STRUKTUR
@@ -162,26 +153,42 @@ def vis_side(analysis_package=None):
                     df_out = df_s[df_s['POSSESSION_TYPE'] == 'outOfPossession']
                     draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
 
-    with tabs[1]: # MED BOLD (Heatmaps som på dit screenshot)
+    with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:15], na=False)]
             pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
             c1, c2 = st.columns(2)
-            with c1:
-                st.write("OPBYGNING")
-                fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-                df_p = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 50)]
-                if not df_p.empty:
-                    sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
-                draw_logo_custom(ax, t_logo)
-                st.pyplot(fig); plt.close(fig)
-            with c2:
-                st.write("AFSLUTNING")
-                fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-                df_g = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] >= 50)]
-                if not df_g.empty:
-                    sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
-                draw_logo_custom(ax, t_logo)
-                st.pyplot(fig); plt.close(fig)
-                
-    # ... Resten af tabs 2 og 3 (Mod bold / Top 5) følger samme mønster med draw_logo_custom(ax, t_logo)
+            for i, (col, title, x_range) in enumerate(zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0, 50), (50, 100)])):
+                with col:
+                    fig, ax = pitch_h.draw(figsize=(6, 8))
+                    ax.set_ylim(x_range[0], x_range[1])
+                    df_z = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] >= x_range[0]) & (df_h_ev['LOCATIONX'] < x_range[1])]
+                    if not df_z.empty:
+                        sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
+                    draw_logo_custom(ax, t_logo)
+                    st.pyplot(fig); plt.close(fig)
+
+    with tabs[2]: # MOD BOLD
+        if not df_events.empty and hold_uuid:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:15], na=False)]
+            pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+            c1, c2 = st.columns(2)
+            for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
+                with col:
+                    fig, ax = pitch.draw(figsize=(5, 7))
+                    df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
+                    if not df_d.empty:
+                        sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax)
+                    draw_logo_custom(ax, t_logo)
+                    st.pyplot(fig); plt.close(fig)
+
+    with tabs[3]: # TOP 5
+        if not df_events.empty and hold_uuid:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:15], na=False)]
+            cols = st.columns(3)
+            for i, (tid, nav) in enumerate([([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]):
+                with cols[i]:
+                    st.subheader(nav)
+                    top = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
+                    for name, val in top.items():
+                        st.markdown(f'<div class="stat-box"><b>{val}</b> {name}</div>', unsafe_allow_html=True)
