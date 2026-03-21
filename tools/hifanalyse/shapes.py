@@ -3,16 +3,12 @@ import pandas as pd
 import json
 
 def vis_side(analysis_package):
-    st.write("DEBUG: Hvilke nøgler findes i pakken?", list(analysis_package.keys()))
-    df_test = analysis_package.get("opta_remote_shapes", pd.DataFrame())
-    st.write(f"DEBUG: Antal rækker fundet: {len(df_test)}")
-    
-    # 1. Hent data ud af pakken
-    # Vi bruger 'opta_remote_shapes', som vi ved indeholder data fra din tidligere test
-    df_shapes = analysis_package.get("opta_remote_shapes", pd.DataFrame())
+    # RET HER: Fjern "opta_" så den matcher din debug-liste
+    df_shapes = analysis_package.get("remote_shapes", pd.DataFrame())
     
     if df_shapes.empty:
-        st.warning("Ingen positionsdata fundet i analysepakken.")
+        st.warning("Ingen positionsdata fundet i 'remote_shapes'.")
+        # Lad os se hvad der faktisk er i 'remote_shapes' hvis den er tom
         return
 
     # 2. Forberedelse af data (Håndtering af manglende navne)
