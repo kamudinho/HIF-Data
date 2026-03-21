@@ -114,38 +114,57 @@ def vis_side(analysis_package=None):
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    with tabs[0]:
-        st.info("🛠 **Debug Information**")
-        col_db1, col_db2 = st.columns(2)
-        with col_db1:
-            st.write(f"**Valgt hold UUID:** `{hold_uuid}`")
-            st.write(f"**Søger efter (15 tegn):** `{hold_uuid[:15]}`")
-        with col_db2:
-            st.write(f"**UUIDs i Remote Data:** `{unique_uuids_in_sql[:3]}`")
-            st.write(f"**Antal rækker i Remote:** `{len(df_remote)}`")
+    # --- NY HJÆLPEFUNKTION TIL GENNEMSNIT ---
+    def get_average_shape(df_hold, possession_type):
+        # Filtrer på fase (inPossession / outOfPossession)
+        df_fase = df_hold[df_hold['POSSESSION_TYPE'].str.contains(possession_type, case=False)]
         
-        st.divider()
-
+        all_players = []
+        for _, row in df_fase.iterrows():
+            roles_raw = row.get('SHAPE_ROLE', [])
+            roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
+            if isinstance(roles, list):
+                for r in roles:
+                    all_players.append(r)
+        
+        if not all_players:
+            return pd.DataFrame()
+            
+        df_p = pd.DataFrame(all_players)
+        # Grupper på spillernummer og beregn gennemsnit af X og Y
+        df_avg = df_p.groupby('shirtNumber').agg({
+            'averageRolePositionX': 'mean',
+            'averageRolePositionY': 'mean',
+            'roleDescription': 'first'
+        }).reset_index()
+        
+        return df_avg
+    
+    # --- OPDATERET DEL AF tabs[0] ---
+    with tabs[0]:
         if not df_remote.empty and hold_uuid:
+            # 1. Find alle rækker for holdet
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             
             if not df_h.empty:
-                t_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                t_step = st.select_slider("Vælg spilfase (sekunder):", options=t_options)
-                
-                df_s = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
+                st.subheader(f"Gennemsnitlig struktur: {valgt_hold}")
                 
                 c1, c2 = st.columns(2)
+                
+                # Beregn gennemsnit for de to faser
+                avg_in = get_average_shape(df_h, 'inPossession')
+                avg_out = get_average_shape(df_h, 'outOfPossession')
+                
                 with c1:
-                    row_in = df_s[df_s['POSSESSION_TYPE'].str.contains('inPossession', case=False)]
-                    draw_remote_pitch(row_in.iloc[0] if not row_in.empty else pd.Series(), "OFFENSIV", t_color, t_logo)
+                    # Vi skal tilrette draw_remote_pitch til at modtage en DataFrame i stedet for en Row
+                    st.write("**MED BOLD (In Possession)**")
+                    draw_average_pitch(avg_in, t_color, t_logo)
+                    
                 with c2:
-                    row_out = df_s[df_s['POSSESSION_TYPE'].str.contains('outOfPossession', case=False)]
-                    draw_remote_pitch(row_out.iloc[0] if not row_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
+                    st.write("**UDEN BOLD (Out of Possession)**")
+                    draw_average_pitch(avg_out, "#333333", t_logo)
             else:
-                st.error(f"Ingen match fundet for {valgt_hold}. Tjek om SQL filteret fjerner modstanderen.")
-        else:
-            st.warning("Data mangler for Remote Shapes (0 rækker fundet).")
+                st.error("Ingen data fundet for dette hold.")
             
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
