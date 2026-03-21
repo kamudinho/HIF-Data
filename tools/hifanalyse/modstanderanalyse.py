@@ -41,25 +41,25 @@ def draw_logo_on_ax(ax, logo_img):
 
 # --- 2. TEGNEFUNKTION TIL STRUKTUR ---
 def draw_average_pitch(df_avg, color, logo):
-    # Vi bruger VerticalPitch fra mplsoccer
+    # Mindre figsize (bredde, højde) for at undgå scrolling
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
-    fig, ax = pitch.draw(figsize=(6, 8))
+    fig, ax = pitch.draw(figsize=(4, 5)) 
     
     if not df_avg.empty:
         for _, row in df_avg.iterrows():
-            # Opta VerticalPitch bruger (y, x) for at plotte korrekt vertikalt
             x = row['averageRolePositionX']
             y = row['averageRolePositionY']
             num = row['shirtNumber']
             
-            # Tegn spiller-cirkel
-            ax.scatter(y, x, s=700, color=color, edgecolors='black', linewidth=1.5, alpha=0.9, zorder=3)
-            # Tilføj nummer
+            # Lidt mindre prikker (s=400) passer bedre til en mindre bane
+            ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.2, alpha=0.9, zorder=3)
             ax.text(y, x, str(int(num)), color='white', ha='center', va='center', 
-                    fontsize=10, fontweight='bold', zorder=4)
+                    fontsize=8, fontweight='bold', zorder=4)
             
     draw_logo_on_ax(ax, logo)
-    st.pyplot(fig, use_container_width=True)
+    
+    # use_container_width=False gør at de ikke strækker sig til at fylde alt
+    st.pyplot(fig, use_container_width=False)
     plt.close(fig)
 
 # --- 3. HOVEDFUNKTION ---
