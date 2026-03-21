@@ -200,6 +200,9 @@ try:
             elif sel == "Assistmap": # Tilføj denne blok
                 import tools.hifanalyse.assistmap as am
                 am.vis_side(dp)
+            elif sel == "Shapes": # Tilføj denne blok
+                import tools.hifanalyse.shapes as shapes
+                shapes.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Modstanderanalyse": # Tilføj denne blok
