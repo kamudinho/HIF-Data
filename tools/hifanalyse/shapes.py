@@ -3,84 +3,73 @@ import pandas as pd
 import json
 
 def vis_side(analysis_package):
-    # RET HER: Fjern "opta_" så den matcher din debug-liste
+    st.title("⚽ Opta Shapes & Formationer")
+    
+    # 1. Hent data
     df_shapes = analysis_package.get("remote_shapes", pd.DataFrame())
     
     if df_shapes.empty:
-        st.warning("Ingen positionsdata fundet i 'remote_shapes'.")
-        # Lad os se hvad der faktisk er i 'remote_shapes' hvis den er tom
+        st.warning("Ingen positionsdata fundet.")
         return
 
-    # 2. Forberedelse af data (Håndtering af manglende navne)
-    # Da vi ikke joiner her, tjekker vi om kolonnerne findes, ellers bruger vi ID'er
-    if 'MATCH_DATE' not in df_shapes.columns:
-        df_shapes['MATCH_LABEL'] = df_shapes['MATCH_OPTAUUID']
-    else:
-        df_shapes['MATCH_LABEL'] = df_shapes['MATCH_DATE'].astype(str) + ": " + df_shapes['MATCH_OPTAUUID']
-
-    # 3. Vælg kamp (hvis der er flere i pakken)
-    kampe = df_shapes['MATCH_LABEL'].unique()
-    if len(kampe) > 1:
-        valgt_kamp = st.selectbox("Vælg en kamp at analysere:", kampe)
-        df_valgt = df_shapes[df_shapes['MATCH_LABEL'] == valgt_kamp]
-    else:
-        df_valgt = df_shapes
-
-    # 4. Vis overordnede stats (Formationer) i kolonner
-    st.subheader("Holdformationer")
-    cols = st.columns(len(df_valgt))
+    # 2. Fix Kamp-vælger (Vi skal bruge UUID'en som label, hvis navne mangler)
+    # Vi bruger drop_duplicates så vi kun ser hver kamp én gang i listen
+    kampe = df_shapes['MATCH_OPTAUUID'].unique()
+    valgt_uuid = st.selectbox("Vælg en kamp (UUID):", kampe)
     
-    for idx, (_, row) in enumerate(df_valgt.iterrows()):
-        with cols[idx]:
-            label = row.get('SHAPE_LABEL', f"Hold {idx+1}")
-            formation = row.get('SHAPE_FORMATION', 'Ukendt')
-            fit_score = row.get('SHAPE_AVGFITSCORE', 'N/A')
-            
-            st.metric(label=f"Formation ({label})", value=formation)
-            st.caption(f"**Fit Score:** {fit_score}")
+    # Filtrer til den valgte kamp
+    df_valgt = df_shapes[df_shapes['MATCH_OPTAUUID'] == valgt_uuid]
 
-    # 5. Parsing af Spillernes Positioner (JSON)
+    # 3. Vis formationer for de to hold i kampen
+    st.subheader("Holdformationer")
+    # Vi tager kun de unikke hold i den valgte kamp
+    df_teams = df_valgt.drop_duplicates(subset=['SHAPE_LABEL'])
+    cols = st.columns(len(df_teams))
+    
+    for idx, (_, row) in enumerate(df_teams.iterrows()):
+        with cols[idx]:
+            st.metric(label=f"Hold: {row['SHAPE_LABEL']}", value=row['SHAPE_FORMATION'])
+            st.caption(f"Type: {row['SHAPE_TYPE']}")
+
+    # 4. Parsing af spillere
     st.divider()
     st.subheader("Spillernes gennemsnitlige positioner")
     
     all_players = []
-    try:
-        for _, row in df_valgt.iterrows():
-            raw_roles = row['SHAPE_ROLE']
-            
-            # Konverter JSON-streng til liste hvis nødvendigt
-            if isinstance(raw_roles, str):
+    for _, row in df_valgt.iterrows():
+        raw_roles = row['SHAPE_ROLE']
+        
+        # Håndter JSON-formatet (Opta sender det ofte som string i Snowflake)
+        if isinstance(raw_roles, str):
+            try:
                 roles_list = json.loads(raw_roles)
-            else:
-                roles_list = raw_roles
-                
-            if roles_list:
-                for p in roles_list:
-                    p['Hold'] = row.get('SHAPE_LABEL', 'Ukendt')
-                    all_players.append(p)
-
-        if all_players:
-            df_players = pd.DataFrame(all_players)
-            
-            # Konverter koordinater til tal og afrund
-            df_players['X'] = pd.to_numeric(df_players['averageRolePositionX']).round(2)
-            df_players['Y'] = pd.to_numeric(df_players['averageRolePositionY']).round(2)
-            
-            # Omdøb kolonner for pænere visning
-            vis_df = df_players.rename(columns={
-                'shirtNumber': 'Nr.',
-                'roleDescription': 'Rolle',
-                'totalTimeInRole': 'Minutter'
-            })
-
-            st.dataframe(
-                vis_df[['Hold', 'Nr.', 'Rolle', 'X', 'Y', 'Minutter']],
-                use_container_width=True,
-                hide_index=True
-            )
+            except:
+                continue
         else:
-            st.info("Ingen spiller-detaljer fundet i JSON-dataene.")
+            roles_list = raw_roles
             
-    except Exception as e:
-        st.error(f"Fejl ved behandling af spiller-positioner: {e}")
-        st.write("Rå data format:", type(df_valgt['SHAPE_ROLE'].iloc[0]))
+        for p in roles_list:
+            p['Hold'] = row['SHAPE_LABEL']
+            all_players.append(p)
+
+    if all_players:
+        df_p = pd.DataFrame(all_players)
+        
+        # Vi tjekker hvilke kolonner der rent faktisk findes for at undgå "not in index" fejl
+        # Opta bruger ofte 'totalTimeInRole' eller 'timeInRole'
+        possible_cols = {
+            'shirtNumber': 'Nr.',
+            'roleDescription': 'Rolle',
+            'averageRolePositionX': 'X',
+            'averageRolePositionY': 'Y',
+            'totalTimeInRole': 'Minutter'
+        }
+        
+        # Find kun de kolonner der rent faktisk findes i dataen
+        existing_cols = {k: v for k, v in possible_cols.items() if k in df_p.columns}
+        
+        df_display = df_p[['Hold'] + list(existing_cols.keys())].rename(columns=existing_cols)
+        
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Kunne ikke udpakke spillerpositioner.")
