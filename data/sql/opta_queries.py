@@ -269,25 +269,20 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             FROM {DB}.SECONDSPECTRUM_METADATA 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """,
-        "opta_shapes": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-        """,
-
-        "opta_shape_positions": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-        """,
-        # Tilføj disse til din return-dictionary i get_opta_queries:
-
-        # RETTELSE i get_opta_queries (punkt 12 og 13)
-        "opta_shapes_in": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_INPOSSESSION 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-        """,
         
-        "opta_shapes_out": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPESUMMARY_OUTOFPOSSESSION 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
+        "opta_remote_shapes": f"""
+            SELECT 
+                MATCH_OPTAUUID,
+                SHAPE_PERIODID,
+                CONTESTANT_OPTAUUID,
+                SHAPE_FORMATION,
+                POSSESSION_TYPE,
+                SHAPE_TIMEELAPSEDSTART,
+                SHAPE_TIMEELAPSEDEND,
+                SHAPE_ROLE -- Her ligger koordinaterne
+            FROM {DB}.OPTA_REMOTESHAPES
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
+            {hif_filter_std}
+            ORDER BY SHAPE_TIMEELAPSEDSTART ASC
         """
     }
