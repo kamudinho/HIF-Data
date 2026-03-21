@@ -35,17 +35,17 @@ def get_team_style(team_name):
             logo_img = get_logo_img(url)
     return color, logo_img
 
-def draw_logo_custom(ax, logo_img):
+def draw_logo_on_ax(ax, logo_img):
+    """Universal funktion til at placere logoet korrekt på enhver akse"""
     if logo_img:
         try:
-            # Placerer logoet i øverste venstre hjørne af aksen [x, y, bredde, højde]
             ax_image = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
             ax_image.imshow(logo_img)
             ax_image.axis('off')
         except:
             pass
 
-# --- 2. TEGNEFUNKTION TIL STRUKTUR ---
+# --- 2. TEGNEFUNKTION TIL STRUKTUR (TAB 0) ---
 def draw_remote_pitch(df_row, title, color, logo):
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
     fig, ax = pitch.draw(figsize=(6, 8))
@@ -71,7 +71,7 @@ def draw_remote_pitch(df_row, title, color, logo):
         except:
             pass
             
-    draw_logo_custom(ax, logo)
+    draw_logo_on_ax(ax, logo)
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
@@ -92,7 +92,7 @@ def vis_side(analysis_package=None):
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
 
-    # --- PARSING AF REMOTE SHAPES ---
+    # --- PARSING AF REMOTE SHAPES (Snowflake "pølsen") ---
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
@@ -121,11 +121,9 @@ def vis_side(analysis_package=None):
     
     t_color, t_logo = get_team_style(valgt_hold)
     
-    # Debug: Fortæller dig om logoet overhovedet er fundet
-    if t_logo:
-        st.success(f"✅ Logo fundet for {valgt_hold}")
-    else:
-        st.warning(f"⚠️ Intet logo fundet for {valgt_hold}. Tjek TEAMS i team_mapping.py")
+    # Status på logo
+    if not t_logo:
+        st.warning(f"⚠️ Intet logo fundet for {valgt_hold}. Tjek team_mapping.py")
 
     # Find UUID for holdet
     hold_uuid = ""
@@ -134,15 +132,15 @@ def vis_side(analysis_package=None):
         if not m_row.empty:
             hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0] if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else m_row['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
-    # --- TABS ---
+    # --- TABS (Beholdes for at bevare navigation uden reload) ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    with tabs[0]: # STRUKTUR
+    with tabs[0]: # STRUKTUR (Data fra opta_remote_shapes)
         if not df_remote.empty and hold_uuid:
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             if not df_h.empty:
                 t_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                t_step = st.select_slider("Vælg sekvens:", options=t_options)
+                t_step = st.select_slider("Vælg sekvens (timestamp):", options=t_options)
                 df_s = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
                 
                 c1, c2 = st.columns(2)
@@ -152,6 +150,8 @@ def vis_side(analysis_package=None):
                 with c2:
                     df_out = df_s[df_s['POSSESSION_TYPE'] == 'outOfPossession']
                     draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
+            else:
+                st.warning(f"Ingen taktiske shapes fundet for {valgt_hold}.")
 
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
@@ -160,12 +160,13 @@ def vis_side(analysis_package=None):
             c1, c2 = st.columns(2)
             for i, (col, title, x_range) in enumerate(zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0, 50), (50, 100)])):
                 with col:
+                    st.write(f"**{title}**")
                     fig, ax = pitch_h.draw(figsize=(6, 8))
                     ax.set_ylim(x_range[0], x_range[1])
                     df_z = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] >= x_range[0]) & (df_h_ev['LOCATIONX'] < x_range[1])]
                     if not df_z.empty:
                         sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
-                    draw_logo_custom(ax, t_logo)
+                    draw_logo_on_ax(ax, t_logo)
                     st.pyplot(fig); plt.close(fig)
 
     with tabs[2]: # MOD BOLD
@@ -175,11 +176,12 @@ def vis_side(analysis_package=None):
             c1, c2 = st.columns(2)
             for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
                 with col:
+                    st.write(f"**{title}**")
                     fig, ax = pitch.draw(figsize=(5, 7))
                     df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                     if not df_d.empty:
                         sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax)
-                    draw_logo_custom(ax, t_logo)
+                    draw_logo_on_ax(ax, t_logo)
                     st.pyplot(fig); plt.close(fig)
 
     with tabs[3]: # TOP 5
