@@ -87,6 +87,13 @@ def vis_side(analysis_package=None):
     df_events = opta_dict.get("events", pd.DataFrame())
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame())
 
+    # DIAGNOSE-VÆRKTØJ
+    with st.expander("Debug Data-status"):
+        st.write(f"Valgt Hold UUID: {hold_uuid}")
+        st.write(f"Antal rækker i df_remote: {len(df_remote)}")
+        if not df_remote.empty:
+            st.write("UUIDs i data:", df_remote['CONTESTANT_OPTAUUID'].unique())
+
     # --- 4. FILTRE ---
     col_h1, col_h2 = st.columns([1, 1])
     with col_h1:
