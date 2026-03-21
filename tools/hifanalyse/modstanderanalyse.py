@@ -22,7 +22,7 @@ def get_team_style(team_name):
     logo_img = None
     if team_name in TEAM_COLORS:
         c = TEAM_COLORS[team_name]
-        prim = c['primary'].lower()
+        prim = str(c['primary']).lower()
         color = c.get('secondary', '#cc0000') if prim in ["#ffffff", "white", "#f9f9f9"] else c['primary']
     if team_name in TEAMS:
         url = TEAMS[team_name].get('logo')
@@ -46,7 +46,7 @@ def draw_remote_pitch(df_row, title, color, logo):
         formation = df_row.get('SHAPE_FORMATION', 'N/A')
         roles_raw = df_row.get('SHAPE_ROLE', [])
         
-        # Håndtering af JSON-parsing af roller
+        # Robust JSON-parsing
         try:
             roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
         except:
@@ -57,13 +57,15 @@ def draw_remote_pitch(df_row, title, color, logo):
                 x = float(r.get('averageRolePositionX', 50))
                 y = float(r.get('averageRolePositionY', 50))
                 num = r.get('shirtNumber', '')
+                # Opta Pitch: X er længde (0-100), Y er bredde (0-100)
+                # VerticalPitch bytter dem internt, så vi plotter (y, x)
                 ax.scatter(y, x, s=550, color=color, edgecolors='black', linewidth=1.5, zorder=3)
                 ax.text(y, x, str(num), color='white', ha='center', va='center', fontsize=10, fontweight='bold', zorder=4)
             
             ax.text(50, 4, f"Formation: {formation}", color='black', ha='center', fontsize=12, fontweight='bold')
             draw_logo_custom(ax, logo, position='top_left')
     else:
-        ax.text(50, 50, "Ingen data fundet", ha='center', va='center')
+        ax.text(50, 50, "Ingen taktisk data for dette tidspunkt", ha='center', va='center')
         
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
@@ -90,39 +92,14 @@ def vis_side(analysis_package=None):
     df_events = opta_dict.get("events", pd.DataFrame())
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame()).copy()
 
-    # --- 4. DATA CLEANING (Robust Regex til sammenklistret data) ---
-    if not df_remote.empty and hold_uuid:
-        # Rens hold_uuid for sikkerheds skyld
-        target_uuid = str(hold_uuid).strip()
-        
-        # Filtrer med contains for at undgå mismatch på 24 vs 25 tegn
-        df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(target_uuid, na=False)].copy()
-        # Hvis Snowflake sender det hele som én kolonne
-        if len(df_remote.columns) == 1:
-            raw_col = df_remote.columns[0]
-            series = df_remote[raw_col].astype(str)
-            
-            # 1. Find alle Opta UUIDs (de er altid 24-25 tegn og ligner hex/base64)
-            # Vi leder efter strenge på 25 tegn med tal og bogstaver
-            uuids = series.str.findall(r'[a-z0-9]{25}')
-            
-            # 2. Find Formationer (mønster: tal-tal-tal)
-            formations = series.str.findall(r'\d-\d-\d(?:-\d)?')
-
-            # Vi mapper dem ind (vi ved fra din rækkefølge hvad der er hvad)
-            df_remote['MATCH_OPTAUUID'] = uuids.apply(lambda x: x[2] if len(x) > 2 else None)
-            df_remote['CONTESTANT_OPTAUUID'] = uuids.apply(lambda x: x[3] if len(x) > 3 else None)
-            df_remote['SHAPE_FORMATION'] = formations.apply(lambda x: x[0] if len(x) > 0 else "N/A")
-            
-            # Possession og Roller (da disse er i slutningen af de store rækker)
-            df_remote['POSSESSION_TYPE'] = series.apply(lambda x: 'inPossession' if 'inPossession' in x else 'outOfPossession')
-            df_remote['SHAPE_ROLE'] = series.str.extract(r'(\[.*\])')
-        
-        # Sørg for at UUID er renset for whitespaces
-        df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].str.strip()
+    # --- 4. DATA CLEANING (Fjernet Regex - vi bruger nu rene SQL kolonner) ---
+    if not df_remote.empty:
+        # Tving kolonnenavne til upper og fjern whitespace fra UUIDs
+        df_remote.columns = [c.upper() for c in df_remote.columns]
+        if 'CONTESTANT_OPTAUUID' in df_remote.columns:
+            df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].astype(str).str.strip().str.lower()
         
     # --- 5. FILTRE & UUID SETUP ---
-    hold_uuid = ""
     col_h1, col_h2 = st.columns([1, 1])
     
     with col_h1:
@@ -131,89 +108,97 @@ def vis_side(analysis_package=None):
     
     t_color, t_logo = get_team_style(valgt_hold)
     
+    hold_uuid = ""
     if not df_matches.empty:
         m_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
         if not m_row.empty: 
-            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip()[:25]
+            # Vi tager den rå UUID fra MatchInfo og renser den
+            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
 
     with col_h2:
-        df_hold_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_events.empty else pd.DataFrame()
+        # Event filter baseret på UUID
+        df_hold_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.strip().str.lower().str.contains(hold_uuid[:20], na=False)].copy() if not df_events.empty and hold_uuid else pd.DataFrame()
         valgt_spiller = st.selectbox("Filter spiller:", ["Alle spillere"] + sorted(df_hold_events['PLAYER_NAME'].dropna().unique().tolist()))
 
     if valgt_spiller != "Alle spillere":
         df_hold_events = df_hold_events[df_hold_events['PLAYER_NAME'] == valgt_spiller]
 
     # Debug 
-    with st.expander("Debug Data-status"):
-        st.write(f"Valgt Hold: {valgt_hold} (UUID: {hold_uuid})")
-        st.write(f"Antal rækker i df_remote: {len(df_remote)}")
+    with st.expander("System Status"):
+        st.write(f"Søger efter UUID: `{hold_uuid}`")
         if not df_remote.empty:
-            st.write("Eksisterende UUIDs i remote data:", df_remote['CONTESTANT_OPTAUUID'].unique())
+            st.write(f"Rækker i taktisk data: {len(df_remote)}")
+            st.write("UUIDs fundet i data:", df_remote['CONTESTANT_OPTAUUID'].unique().tolist())
 
     # --- 6. TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
-            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == hold_uuid].copy()
+            # Vi bruger .str.contains for at være sikker på at fange match på tværs af 24/25 tegn
+            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:24], na=False)].copy()
             
             if not df_h.empty:
                 time_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                time_step = st.select_slider("Vælg tidsinterval (sekunder):", options=time_options)
+                time_step = st.select_slider("Vælg spilminut (sekunder):", options=time_options)
                 df_step = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == time_step]
 
                 c1, c2 = st.columns(2)
                 with c1:
-                    df_in = df_step[df_step['POSSESSION_TYPE'].str.contains('inPossession', na=False)]
-                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.DataFrame(), "OFFENSIV", "#2ecc71", t_logo)
+                    df_in = df_step[df_step['POSSESSION_TYPE'].str.contains('inPossession', na=False, case=False)]
+                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.DataFrame(), "OFFENSIV (MED BOLD)", "#2ecc71", t_logo)
                 with c2:
-                    df_out = df_step[df_step['POSSESSION_TYPE'].str.contains('outOfPossession', na=False)]
-                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.DataFrame(), "DEFENSIV", "#e74c3c", t_logo)
+                    df_out = df_step[df_step['POSSESSION_TYPE'].str.contains('outOfPossession', na=False, case=False)]
+                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.DataFrame(), "DEFENSIV (MOD BOLD)", "#e74c3c", t_logo)
             else:
-                st.info(f"Ingen shape-data fundet for UUID: {hold_uuid}")
+                st.warning(f"Ingen taktisk data fundet for {valgt_hold}. Tjek om 'hif_only' er slået fra i data-hentningen.")
         else:
-            st.info("Ingen taktisk data indlæst (df_remote er tom).")
+            st.info("Vent venligst... Indlæser taktisk data.")
 
     with tabs[1]: # MED BOLD
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
         c1, c2 = st.columns(2)
-        with c1:
-            st.write("OPBYGNING")
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
-            draw_logo_custom(ax, t_logo, position='bottom_left')
-            df_p = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] < 50)]
-            if not df_p.empty:
-                sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, clip=((0, 100), (0, 50)), thresh=0.05)
-            st.pyplot(fig); plt.close(fig)
-        with c2:
-            st.write("AFSLUTNINGSSPIL")
-            fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
-            draw_logo_custom(ax, t_logo, position='top_left')
-            df_g = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] >= 50)]
-            if not df_g.empty:
-                sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, clip=((0, 100), (50, 100)), thresh=0.05)
-            st.pyplot(fig); plt.close(fig)
+        if not df_hold_events.empty:
+            with c1:
+                st.write("OPBYGNING")
+                fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
+                draw_logo_custom(ax, t_logo, position='bottom_left')
+                df_p = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] < 50)]
+                if not df_p.empty:
+                    sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, clip=((0, 100), (0, 50)), thresh=0.05)
+                st.pyplot(fig); plt.close(fig)
+            with c2:
+                st.write("AFSLUTNINGSSPIL")
+                fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
+                draw_logo_custom(ax, t_logo, position='top_left')
+                df_g = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] >= 50)]
+                if not df_g.empty:
+                    sns.kdeplot(x=df_g['LOCATIONY'], y=df_g['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, clip=((0, 100), (50, 100)), thresh=0.05)
+                st.pyplot(fig); plt.close(fig)
+        else:
+            st.write("Ingen hændelser fundet.")
 
     with tabs[2]: # MOD BOLD
         c1, c2 = st.columns(2)
-        with c1:
-            st.write("EROBRINGER")
-            pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
-            fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left')
-            df_ero = df_hold_events[df_hold_events['EVENT_TYPEID'].isin([4, 8, 49])]
-            if not df_ero.empty:
-                sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
-            st.pyplot(fig); plt.close(fig)
-        with c2:
-            st.write("DUELLER")
-            pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
-            fig, ax = pitch.draw(figsize=(5, 7))
-            draw_logo_custom(ax, t_logo, position='top_left')
-            df_duel = df_hold_events[df_hold_events['EVENT_TYPEID'] == 5]
-            if not df_duel.empty:
-                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
-            st.pyplot(fig); plt.close(fig)
+        if not df_hold_events.empty:
+            with c1:
+                st.write("EROBRINGER")
+                pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+                fig, ax = pitch.draw(figsize=(5, 7))
+                draw_logo_custom(ax, t_logo, position='top_left')
+                df_ero = df_hold_events[df_hold_events['EVENT_TYPEID'].isin([4, 8, 49])]
+                if not df_ero.empty:
+                    sns.kdeplot(x=df_ero['LOCATIONY'], y=df_ero['LOCATIONX'], fill=True, cmap='Blues', alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
+                st.pyplot(fig); plt.close(fig)
+            with c2:
+                st.write("DUELLER")
+                pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+                fig, ax = pitch.draw(figsize=(5, 7))
+                draw_logo_custom(ax, t_logo, position='top_left')
+                df_duel = df_hold_events[df_hold_events['EVENT_TYPEID'] == 5]
+                if not df_duel.empty:
+                    sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.5, ax=ax, clip=((0, 100), (0, 100)), thresh=0.05)
+                st.pyplot(fig); plt.close(fig)
 
     with tabs[3]: # TOP 5
         cols = st.columns(3)
