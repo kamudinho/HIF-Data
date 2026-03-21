@@ -3,7 +3,9 @@ import pandas as pd
 import json
 
 def vis_side(analysis_package):
-    st.title("⚽ Opta Shapes & Formationer")
+    st.write("DEBUG: Hvilke nøgler findes i pakken?", list(analysis_package.keys()))
+    df_test = analysis_package.get("opta_remote_shapes", pd.DataFrame())
+    st.write(f"DEBUG: Antal rækker fundet: {len(df_test)}")
     
     # 1. Hent data ud af pakken
     # Vi bruger 'opta_remote_shapes', som vi ved indeholder data fra din tidligere test
