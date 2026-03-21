@@ -117,8 +117,10 @@ def vis_side(analysis_package=None):
 
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
-                df_remote['CONTESTANT_OPTAUUID_CLEAN'] = df_remote['CONTESTANT_OPTAUUID'].str.slice(0, 25)
-                df_h = df_remote[df_remote['CONTESTANT_OPTAUUID_CLEAN'] == hold_uuid].copy()            
+            # Vi renser UUID og filtrerer
+            df_remote['CONTESTANT_OPTAUUID_CLEAN'] = df_remote['CONTESTANT_OPTAUUID'].str.slice(0, 25)
+            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID_CLEAN'] == hold_uuid].copy()
+            
             if not df_h.empty:
                 time_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
                 time_step = st.select_slider("Vælg tidsinterval:", options=time_options)
