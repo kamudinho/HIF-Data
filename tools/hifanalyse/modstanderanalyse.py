@@ -65,21 +65,25 @@ def draw_remote_pitch(df_row, title, color, logo):
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
-    if not df_remote_raw.empty:
-        st.write("Hold fundet i Remote Data (fra SQL):", df_remote_raw['CONTESTANT_OPTAUUID'].unique())
-    
     st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
 
     if not analysis_package:
         st.error("Ingen data fundet i analysis_package.")
         return
 
-    # 1. HENT DATA
+    # 1. HENT DATA (Dette skal ske FØR du bruger variablerne)
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
 
-    # 2. PARSING (Vi tvinger data frem)
+    # Nu kan du lave dit tjek uden fejl
+    if not df_remote_raw.empty:
+        # Vi printer det kun i konsollen/debug for ikke at forstyrre UI for meget
+        unique_uuids_in_sql = df_remote_raw['CONTESTANT_OPTAUUID'].unique()
+    else:
+        unique_uuids_in_sql = []
+
+    # 2. PARSING
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
@@ -111,21 +115,18 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]:
-        # --- DEBUG SEKTION (Altid synlig mens vi fejlsøger) ---
         st.info("🛠 **Debug Information**")
         col_db1, col_db2 = st.columns(2)
         with col_db1:
             st.write(f"**Valgt hold UUID:** `{hold_uuid}`")
             st.write(f"**Søger efter (15 tegn):** `{hold_uuid[:15]}`")
         with col_db2:
-            unique_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist() if not df_remote.empty else []
-            st.write(f"**UUIDs i Remote Data:** `{unique_uuids[:3]}`")
+            st.write(f"**UUIDs i Remote Data:** `{unique_uuids_in_sql[:3]}`")
             st.write(f"**Antal rækker i Remote:** `{len(df_remote)}`")
         
         st.divider()
 
         if not df_remote.empty and hold_uuid:
-            # Matcher på de første 15 tegn
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             
             if not df_h.empty:
@@ -142,12 +143,10 @@ def vis_side(analysis_package=None):
                     row_out = df_s[df_s['POSSESSION_TYPE'].str.contains('outOfPossession', case=False)]
                     draw_remote_pitch(row_out.iloc[0] if not row_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
             else:
-                st.error(f"Ingen match fundet mellem {valgt_hold}'s UUID og dataen i remote_shapes.")
-                if st.checkbox("Vis rå data fra remote_shapes"):
-                    st.dataframe(df_remote)
+                st.error(f"Ingen match fundet for {valgt_hold}. Tjek om SQL filteret fjerner modstanderen.")
         else:
-            st.warning("Data mangler: Enten er remote_shapes tom eller UUID kunne ikke findes.")
-
+            st.warning("Data mangler for Remote Shapes (0 rækker fundet).")
+            
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:15], na=False)]
