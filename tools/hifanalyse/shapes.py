@@ -5,79 +5,84 @@ import json
 def vis_side(analysis_package):
     st.title("⚽ Opta Shapes & Formationer")
     
-    # Hent data ud af pakken (husk 'opta_' præfikset hvis det er det du bruger)
+    # 1. Hent data ud af pakken
+    # Vi bruger 'opta_remote_shapes', som vi ved indeholder data fra din tidligere test
     df_shapes = analysis_package.get("opta_remote_shapes", pd.DataFrame())
     
     if df_shapes.empty:
-        st.warning("Ingen positionsdata fundet for denne kamp.")
+        st.warning("Ingen positionsdata fundet i analysepakken.")
         return
 
-    # Resten af din kode her...
-    st.write(f"Viser data for formation: {df_shapes['SHAPE_FORMATION'].iloc[0]}")
-    # 1. SQL Query - Henter rådata for den valgte turnering
-    # Vi joiner med MATCHINFO for at få holdnavne og datoer med
-    query = f"""
-        SELECT 
-            *
-            
-        FROM {db_name}.OPTA_REMOTESHAPES
-    """
-    
-    try:
-        df_shapes = conn.query(query)
-        
-        if df_shapes.empty:
-            st.warning("Ingen Shape-data fundet for denne turnering.")
-            return
+    # 2. Forberedelse af data (Håndtering af manglende navne)
+    # Da vi ikke joiner her, tjekker vi om kolonnerne findes, ellers bruger vi ID'er
+    if 'MATCH_DATE' not in df_shapes.columns:
+        df_shapes['MATCH_LABEL'] = df_shapes['MATCH_OPTAUUID']
+    else:
+        df_shapes['MATCH_LABEL'] = df_shapes['MATCH_DATE'].astype(str) + ": " + df_shapes['MATCH_OPTAUUID']
 
-        # 2. Vælg kamp (Selectbox)
-        df_shapes['MATCH_LABEL'] = df_shapes['MATCH_DATE'].astype(str) + ": " + df_shapes['HOME_CONTESTANT_NAME'] + " vs " + df_shapes['AWAY_CONTESTANT_NAME']
-        valgt_kamp = st.selectbox("Vælg en kamp at analysere:", df_shapes['MATCH_LABEL'].unique())
-        
-        # Filtrer data til den valgte kamp
+    # 3. Vælg kamp (hvis der er flere i pakken)
+    kampe = df_shapes['MATCH_LABEL'].unique()
+    if len(kampe) > 1:
+        valgt_kamp = st.selectbox("Vælg en kamp at analysere:", kampe)
         df_valgt = df_shapes[df_shapes['MATCH_LABEL'] == valgt_kamp]
+    else:
+        df_valgt = df_shapes
 
-        # 3. Vis overordnede stats (Formationer)
-        cols = st.columns(len(df_valgt))
-        for idx, (_, row) in enumerate(df_valgt.iterrows()):
-            with cols[idx]:
-                st.metric(label=f"Formation ({row['SHAPE_LABEL']})", value=row['SHAPE_FORMATION'])
-                st.write(f"**Fit Score:** {row['SHAPE_AVGFITSCORE']}")
+    # 4. Vis overordnede stats (Formationer) i kolonner
+    st.subheader("Holdformationer")
+    cols = st.columns(len(df_valgt))
+    
+    for idx, (_, row) in enumerate(df_valgt.iterrows()):
+        with cols[idx]:
+            label = row.get('SHAPE_LABEL', f"Hold {idx+1}")
+            formation = row.get('SHAPE_FORMATION', 'Ukendt')
+            fit_score = row.get('SHAPE_AVGFITSCORE', 'N/A')
+            
+            st.metric(label=f"Formation ({label})", value=formation)
+            st.caption(f"**Fit Score:** {fit_score}")
 
-        # 4. Parsing af Spillernes Positioner (JSON)
-        st.divider()
-        st.subheader("Spillernes gennemsnitlige positioner")
-        
-        all_players = []
+    # 5. Parsing af Spillernes Positioner (JSON)
+    st.divider()
+    st.subheader("Spillernes gennemsnitlige positioner")
+    
+    all_players = []
+    try:
         for _, row in df_valgt.iterrows():
-            # Opta gemmer spillere i kolonnen SHAPE_ROLE som en JSON-streng eller liste
             raw_roles = row['SHAPE_ROLE']
             
-            # Håndtering hvis det er en streng (nogle gange returnerer Snowflake JSON som str)
+            # Konverter JSON-streng til liste hvis nødvendigt
             if isinstance(raw_roles, str):
                 roles_list = json.loads(raw_roles)
             else:
                 roles_list = raw_roles
                 
-            for p in roles_list:
-                p['team'] = row['SHAPE_LABEL'] # Tilføj holdnavn (Home/Away label)
-                all_players.append(p)
+            if roles_list:
+                for p in roles_list:
+                    p['Hold'] = row.get('SHAPE_LABEL', 'Ukendt')
+                    all_players.append(p)
 
-        df_players = pd.DataFrame(all_players)
-
-        # 5. Vis tabel med de rå positions-data
-        if not df_players.empty:
-            # Vi runder koordinaterne for læsbarhed
-            df_players['X'] = df_players['averageRolePositionX'].astype(float).round(2)
-            df_players['Y'] = df_players['averageRolePositionY'].astype(float).round(2)
+        if all_players:
+            df_players = pd.DataFrame(all_players)
             
+            # Konverter koordinater til tal og afrund
+            df_players['X'] = pd.to_numeric(df_players['averageRolePositionX']).round(2)
+            df_players['Y'] = pd.to_numeric(df_players['averageRolePositionY']).round(2)
+            
+            # Omdøb kolonner for pænere visning
+            vis_df = df_players.rename(columns={
+                'shirtNumber': 'Nr.',
+                'roleDescription': 'Rolle',
+                'totalTimeInRole': 'Minutter'
+            })
+
             st.dataframe(
-                df_players[['team', 'shirtNumber', 'roleDescription', 'X', 'Y', 'totalTimeInRole']],
-                use_container_width=True
+                vis_df[['Hold', 'Nr.', 'Rolle', 'X', 'Y', 'Minutter']],
+                use_container_width=True,
+                hide_index=True
             )
+        else:
+            st.info("Ingen spiller-detaljer fundet i JSON-dataene.")
             
     except Exception as e:
-        st.error(f"Der skete en fejl ved hentning af data: {e}")
-
-# Husk at kalde funktionen med din Snowflake connection
-# vis_shapes_side(st.connection("snowflake"), "DIN_DB", "29actv1o...")
+        st.error(f"Fejl ved behandling af spiller-positioner: {e}")
+        st.write("Rå data format:", type(df_valgt['SHAPE_ROLE'].iloc[0]))
