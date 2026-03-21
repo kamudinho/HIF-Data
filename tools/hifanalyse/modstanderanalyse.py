@@ -71,68 +71,64 @@ def vis_side(analysis_package=None):
         st.error("Ingen data fundet.")
         return
 
-    # --- DATA UDPAKNING (Her løses fejlen!) ---
+    # 1. HENT DATA (Husk store bogstaver pga. din SQL helper)
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
-    # Vi skal hente events fra 'opta' sub-dictionary
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
 
-    # --- 1. PARSING AF REMOTE SHAPES ---
+    # 2. PARSING (Robust håndtering af de 3 linjer)
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
-            line = str(row.to_dict()) # Snowflake rækker kan variere, dict er sikrere
-            # Parsing logik (vi bruger kolonne-navne hvis de findes, ellers regex)
-            c_uuid = str(row.get('CONTESTANT_OPTAUUID', '')).strip().lower()
-            formation = str(row.get('SHAPE_FORMATION', 'N/A'))
-            roles = row.get('SHAPE_ROLE', '[]')
-            p_type = str(row.get('POSSESSION_TYPE', ''))
-            t_start = row.get('SHAPE_TIMEELAPSEDSTART', 0)
-            
+            # Vi bruger .get() med store bogstaver, da din loader tvinger UPPERCASE
             processed_rows.append({
-                'CONTESTANT_OPTAUUID': c_uuid,
-                'SHAPE_FORMATION': formation,
-                'SHAPE_ROLE': roles,
-                'POSSESSION_TYPE': p_type,
-                'SHAPE_TIMEELAPSEDSTART': t_start
+                'CONTESTANT_OPTAUUID': str(row.get('CONTESTANT_OPTAUUID', '')).strip().lower(),
+                'SHAPE_FORMATION': str(row.get('SHAPE_FORMATION', 'N/A')),
+                'SHAPE_ROLE': row.get('SHAPE_ROLE', '[]'),
+                'POSSESSION_TYPE': str(row.get('POSSESSION_TYPE', '')),
+                'SHAPE_TIMEELAPSEDSTART': int(row.get('SHAPE_TIMEELAPSEDSTART', 0))
             })
     df_remote = pd.DataFrame(processed_rows)
 
-    # --- 2. HOLDVALG ---
+    # 3. HOLDVALG
     all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
-    if not all_teams:
-        st.warning("Ingen hold fundet i data.")
-        return
-
+    if not all_teams: return
+    
     valgt_hold = st.selectbox("Vælg hold:", all_teams)
     t_color, t_logo = get_team_style(valgt_hold)
 
-    # Find UUID for det valgte hold
+    # Find UUID (Vi bruger de første 15 tegn for at matche Remote Shapes)
     hold_uuid = ""
     m_row = df_matches[(df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold)]
     if not m_row.empty:
-        hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0] if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else m_row['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
+        h_col = 'CONTESTANTHOME_OPTAUUID' if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else 'CONTESTANTAWAY_OPTAUUID'
+        hold_uuid = str(m_row[h_col].iloc[0]).strip().lower()
 
-    # --- 3. TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
+            # Matcher på de første 15 tegn af UUID
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
+            
             if not df_h.empty:
                 t_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                t_step = st.select_slider("Vælg tidspunkt (sekunder):", options=t_options)
-                df_current = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
+                t_step = st.select_slider("Vælg spilfase (sekunder):", options=t_options)
+                
+                df_s = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
                 
                 c1, c2 = st.columns(2)
                 with c1:
-                    df_in = df_current[df_current['POSSESSION_TYPE'] == 'inPossession']
-                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.Series(), "OFFENSIV", t_color, t_logo)
+                    # 'inPossession' filter
+                    row_in = df_s[df_s['POSSESSION_TYPE'].str.contains('inPossession', case=False)]
+                    draw_remote_pitch(row_in.iloc[0] if not row_in.empty else pd.Series(), "OFFENSIV", t_color, t_logo)
+                
                 with c2:
-                    df_out = df_current[df_current['POSSESSION_TYPE'] == 'outOfPossession']
-                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
+                    # 'outOfPossession' filter
+                    row_out = df_s[df_s['POSSESSION_TYPE'].str.contains('outOfPossession', case=False)]
+                    draw_remote_pitch(row_out.iloc[0] if not row_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
             else:
-                st.info("Ingen taktiske shapes fundet for dette hold.")
+                st.info(f"Ingen taktiske shapes fundet for {valgt_hold} i denne kamp.")
 
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
