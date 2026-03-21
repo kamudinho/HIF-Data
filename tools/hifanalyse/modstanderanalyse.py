@@ -52,9 +52,9 @@ def draw_average_pitch(df_avg, color, logo):
             num = row['shirtNumber']
             
             # Lidt mindre prikker (s=400) passer bedre til en mindre bane
-            ax.scatter(y, x, s=400, color=color, edgecolors='black', linewidth=1.2, alpha=0.9, zorder=3)
+            ax.scatter(y, x, s=200, color=color, edgecolors='black', linewidth=0.7, alpha=0.9, zorder=3)
             ax.text(y, x, str(int(num)), color='white', ha='center', va='center', 
-                    fontsize=8, fontweight='bold', zorder=4)
+                    fontsize=6, fontweight='bold', zorder=4)
             
     draw_logo_on_ax(ax, logo)
     
@@ -151,7 +151,6 @@ def vis_side(analysis_package=None):
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             
             if not df_h.empty:
-                st.subheader(f"Gennemsnitlig struktur: {valgt_hold}")
                 
                 c1, c2 = st.columns(2)
                 
