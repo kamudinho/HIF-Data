@@ -261,37 +261,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
 
         # 11. PHYSICAL METADATA
-        "opta_physical_metadata": f"""
-            SELECT 
-                MATCH_OPTAUUID,
-                HOME_PLAYERS,
-                AWAY_PLAYERS
-            FROM {DB}.SECONDSPECTRUM_METADATA 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-        """,
-        
+        # Tving SQL til at hente ALLE shapes for den valgte kamp, uanset hold
         "opta_remote_shapes": f"""
-            WITH target_match AS (
-                -- Her finder vi selve kamp-ID'et for den valgte kamp
+            SELECT * FROM {DB}.OPTA_REMOTESHAPES
+            WHERE MATCH_OPTAUUID IN (
                 SELECT DISTINCT MATCH_OPTAUUID 
-                FROM {DB}.OPTA_MATCHES
-                WHERE (CONTESTANTHOME_NAME = '{valgt_hold_fra_sidebar}' 
-                   OR CONTESTANTAWAY_NAME = '{valgt_hold_fra_sidebar}')
-                -- Tilføj evt. dato-filter her hvis nødvendigt
+                FROM {DB}.OPTA_MATCHES 
+                WHERE SEASON_ID = '2025/2026' 
+                AND (CONTESTANTHOME_NAME = '{valgt_hold}' OR CONTESTANTAWAY_NAME = '{valgt_hold}')
             )
-            SELECT 
-                CAST(MATCH_OPTAUUID AS STRING) as MATCH_OPTAUUID,
-                CAST(CONTESTANT_OPTAUUID AS STRING) as CONTESTANT_OPTAUUID,
-                CAST(SHAPE_FORMATION AS STRING) as SHAPE_FORMATION,
-                CAST(POSSESSION_TYPE AS STRING) as POSSESSION_TYPE,
-                CAST(SHAPE_TIMEELAPSEDSTART AS INT) as SHAPE_TIMEELAPSEDSTART,
-                SHAPE_ROLE 
-            FROM {DB}.OPTA_REMOTESHAPES
-            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM target_match)
-            
-            QUALIFY ROW_NUMBER() OVER (
-                PARTITION BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID, SHAPE_TIMEELAPSEDSTART, POSSESSION_TYPE 
-                ORDER BY SHAPE_TIMEELAPSEDSTART ASC
-            ) = 1
         """
     }
