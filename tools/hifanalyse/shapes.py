@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 
-def vis_shapes_side(conn, db_name, current_tournament_uuid):
+def vis_side(conn, db_name, current_tournament_uuid):
     st.title("⚽ Opta Team Shapes & Positions")
     st.info("Her analyseres holdenes gennemsnitlige positioner og formationer baseret på Opta Remote Shapes.")
 
