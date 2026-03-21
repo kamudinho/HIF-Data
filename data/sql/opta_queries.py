@@ -271,18 +271,23 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         """,
         
         "opta_remote_shapes": f"""
+            WITH target_match AS (
+                -- Her finder vi selve kamp-ID'et for den valgte kamp
+                SELECT DISTINCT MATCH_OPTAUUID 
+                FROM {DB}.OPTA_MATCHES
+                WHERE (CONTESTANTHOME_NAME = '{valgt_hold_fra_sidebar}' 
+                   OR CONTESTANTAWAY_NAME = '{valgt_hold_fra_sidebar}')
+                -- Tilføj evt. dato-filter her hvis nødvendigt
+            )
             SELECT 
                 CAST(MATCH_OPTAUUID AS STRING) as MATCH_OPTAUUID,
-                CAST(SHAPES_PERIODID AS INT) as SHAPES_PERIODID,
                 CAST(CONTESTANT_OPTAUUID AS STRING) as CONTESTANT_OPTAUUID,
                 CAST(SHAPE_FORMATION AS STRING) as SHAPE_FORMATION,
                 CAST(POSSESSION_TYPE AS STRING) as POSSESSION_TYPE,
                 CAST(SHAPE_TIMEELAPSEDSTART AS INT) as SHAPE_TIMEELAPSEDSTART,
-                SHAPE_ROLE
+                SHAPE_ROLE 
             FROM {DB}.OPTA_REMOTESHAPES
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
-            -- VIKTIGT: Sørg for at match_id_subquery returnerer den korrekte kamp-ID,
-            -- og at der IKKE er et "AND CONTESTANT_OPTAUUID = '...'" filter her.
+            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM target_match)
             
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID, SHAPE_TIMEELAPSEDSTART, POSSESSION_TYPE 
