@@ -45,7 +45,12 @@ def draw_remote_pitch(df_row, title, color, logo):
     if not df_row.empty:
         formation = df_row.get('SHAPE_FORMATION', 'N/A')
         roles_raw = df_row.get('SHAPE_ROLE', [])
-        roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
+        
+        # Håndtering af JSON-parsing af roller
+        try:
+            roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
+        except:
+            roles = []
 
         if isinstance(roles, list):
             for r in roles:
@@ -83,9 +88,27 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
     opta_dict = analysis_package.get("opta", {})
     df_events = opta_dict.get("events", pd.DataFrame())
-    df_remote = analysis_package.get("remote_shapes", pd.DataFrame())
+    df_remote = analysis_package.get("remote_shapes", pd.DataFrame()).copy()
 
-    # --- 4. FILTRE & UUID SETUP ---
+    # --- 4. DATA CLEANING (Håndtering af fladt format) ---
+    if not df_remote.empty:
+        # Hvis data er mast i én kolonne, splitter vi den
+        if len(df_remote.columns) == 1:
+            raw_col = df_remote.columns[0]
+            # Opta UUIDs er altid 25 tegn
+            df_remote['CONTESTANT_OPTAUUID'] = df_remote[raw_col].astype(str).str.slice(51, 76)
+            df_remote['SHAPE_FORMATION'] = df_remote[raw_col].astype(str).str.extract(r'(\d-\d-\d-\d)')
+            df_remote['POSSESSION_TYPE'] = df_remote[raw_col].astype(str).apply(
+                lambda x: 'inPossession' if 'inPossession' in x else 'outOfPossession'
+            )
+            df_remote['SHAPE_ROLE'] = df_remote[raw_col].astype(str).str.extract(r'(\[.*\])')
+            # Forsøg at finde tidsstempel (typisk efter formationen)
+            df_remote['SHAPE_TIMEELAPSEDSTART'] = df_remote[raw_col].astype(str).str.extract(r'(\d{2,})').astype(float).fillna(0)
+        
+        # Standard rensning af UUID for at sikre match
+        df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].astype(str).str.strip().str.slice(0, 25)
+
+    # --- 5. FILTRE & UUID SETUP ---
     hold_uuid = ""
     col_h1, col_h2 = st.columns([1, 1])
     
@@ -98,7 +121,7 @@ def vis_side(analysis_package=None):
     if not df_matches.empty:
         m_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
         if not m_row.empty: 
-            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0])
+            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip()[:25]
 
     with col_h2:
         df_hold_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == hold_uuid].copy() if not df_events.empty else pd.DataFrame()
@@ -107,41 +130,42 @@ def vis_side(analysis_package=None):
     if valgt_spiller != "Alle spillere":
         df_hold_events = df_hold_events[df_hold_events['PLAYER_NAME'] == valgt_spiller]
 
-    # Debug (Skjul denne når det virker)
+    # Debug 
     with st.expander("Debug Data-status"):
-        st.write(f"Valgt Hold UUID: {hold_uuid}")
+        st.write(f"Valgt Hold: {valgt_hold} (UUID: {hold_uuid})")
         st.write(f"Antal rækker i df_remote: {len(df_remote)}")
+        if not df_remote.empty:
+            st.write("Eksisterende UUIDs i remote data:", df_remote['CONTESTANT_OPTAUUID'].unique())
 
-    # --- 5. TABS ---
+    # --- 6. TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
-            # Vi renser UUID og filtrerer
-            df_remote['CONTESTANT_OPTAUUID_CLEAN'] = df_remote['CONTESTANT_OPTAUUID'].str.slice(0, 25)
-            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID_CLEAN'] == hold_uuid].copy()
+            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == hold_uuid].copy()
             
             if not df_h.empty:
                 time_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                time_step = st.select_slider("Vælg tidsinterval:", options=time_options)
+                time_step = st.select_slider("Vælg tidsinterval (sekunder):", options=time_options)
                 df_step = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == time_step]
 
                 c1, c2 = st.columns(2)
                 with c1:
-                    df_in = df_step[df_step['POSSESSION_TYPE'] == 'inPossession']
+                    df_in = df_step[df_step['POSSESSION_TYPE'].str.contains('inPossession', na=False)]
                     draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.DataFrame(), "OFFENSIV", "#2ecc71", t_logo)
                 with c2:
-                    df_out = df_step[df_step['POSSESSION_TYPE'] == 'outOfPossession']
+                    df_out = df_step[df_step['POSSESSION_TYPE'].str.contains('outOfPossession', na=False)]
                     draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.DataFrame(), "DEFENSIV", "#e74c3c", t_logo)
             else:
-                st.info(f"Ingen shape-data for {valgt_hold} i tabellen.")
+                st.info(f"Ingen shape-data fundet for UUID: {hold_uuid}")
         else:
-            st.info("Ingen taktisk data fundet i systemet (df_remote er tom).")
+            st.info("Ingen taktisk data indlæst (df_remote er tom).")
 
-    with tabs[1]: # MED BOLD (Klippet til stregerne)
+    with tabs[1]: # MED BOLD
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
         c1, c2 = st.columns(2)
         with c1:
+            st.write("OPBYGNING")
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(0, 50)
             draw_logo_custom(ax, t_logo, position='bottom_left')
             df_p = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] < 50)]
@@ -149,6 +173,7 @@ def vis_side(analysis_package=None):
                 sns.kdeplot(x=df_p['LOCATIONY'], y=df_p['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, clip=((0, 100), (0, 50)), thresh=0.05)
             st.pyplot(fig); plt.close(fig)
         with c2:
+            st.write("AFSLUTNINGSSPIL")
             fig, ax = pitch_h.draw(figsize=(6, 8)); ax.set_ylim(50, 100)
             draw_logo_custom(ax, t_logo, position='top_left')
             df_g = df_hold_events[(df_hold_events['EVENT_TYPEID'] == 1) & (df_hold_events['LOCATIONX'] >= 50)]
@@ -183,6 +208,9 @@ def vis_side(analysis_package=None):
         for i, (tid, nav) in enumerate(stats_config):
             with cols[i]:
                 st.markdown(f"**Top {nav}**")
-                top = df_hold_events[df_hold_events['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
-                for n, count in top.items(): 
-                    st.markdown(f'<div class="stat-box"><b>{count}</b> {n}</div>', unsafe_allow_html=True)
+                if not df_hold_events.empty:
+                    top = df_hold_events[df_hold_events['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
+                    for n, count in top.items(): 
+                        st.markdown(f'<div class="stat-box"><b>{count}</b> {n}</div>', unsafe_allow_html=True)
+                else:
+                    st.write("Ingen data")
