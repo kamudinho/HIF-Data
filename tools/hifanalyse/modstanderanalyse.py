@@ -68,36 +68,37 @@ def vis_side(analysis_package=None):
     st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
 
     if not analysis_package:
-        st.error("Ingen data fundet.")
+        st.error("Ingen data fundet i analysis_package.")
         return
 
-    # 1. HENT DATA (Husk store bogstaver pga. din SQL helper)
+    # 1. HENT DATA
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
 
-    # 2. PARSING (Robust håndtering af de 3 linjer)
+    # 2. PARSING (Vi tvinger data frem)
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
-            # Vi bruger .get() med store bogstaver, da din loader tvinger UPPERCASE
             processed_rows.append({
                 'CONTESTANT_OPTAUUID': str(row.get('CONTESTANT_OPTAUUID', '')).strip().lower(),
                 'SHAPE_FORMATION': str(row.get('SHAPE_FORMATION', 'N/A')),
                 'SHAPE_ROLE': row.get('SHAPE_ROLE', '[]'),
                 'POSSESSION_TYPE': str(row.get('POSSESSION_TYPE', '')),
-                'SHAPE_TIMEELAPSEDSTART': int(row.get('SHAPE_TIMEELAPSEDSTART', 0))
+                'SHAPE_TIMEELAPSEDSTART': int(row.get('SHAPE_TIMEELAPSEDSTART', 0)) if str(row.get('SHAPE_TIMEELAPSEDSTART')) != 'nan' else 0
             })
     df_remote = pd.DataFrame(processed_rows)
 
     # 3. HOLDVALG
     all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
-    if not all_teams: return
+    if not all_teams: 
+        st.warning("Ingen hold fundet i matches data.")
+        return
     
     valgt_hold = st.selectbox("Vælg hold:", all_teams)
     t_color, t_logo = get_team_style(valgt_hold)
 
-    # Find UUID (Vi bruger de første 15 tegn for at matche Remote Shapes)
+    # Find UUID
     hold_uuid = ""
     m_row = df_matches[(df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold)]
     if not m_row.empty:
@@ -107,11 +108,21 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]:
-            st.write(f"Søger efter UUID: {hold_uuid[:15]}") # Debug
-            st.write(f"UUIDs i data: {df_remote['CONTESTANT_OPTAUUID'].unique()[:3]}") # Debug
-            
-            if not df_remote.empty and hold_uuid:
-            # Matcher på de første 15 tegn af UUID
+        # --- DEBUG SEKTION (Altid synlig mens vi fejlsøger) ---
+        st.info("🛠 **Debug Information**")
+        col_db1, col_db2 = st.columns(2)
+        with col_db1:
+            st.write(f"**Valgt hold UUID:** `{hold_uuid}`")
+            st.write(f"**Søger efter (15 tegn):** `{hold_uuid[:15]}`")
+        with col_db2:
+            unique_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist() if not df_remote.empty else []
+            st.write(f"**UUIDs i Remote Data:** `{unique_uuids[:3]}`")
+            st.write(f"**Antal rækker i Remote:** `{len(df_remote)}`")
+        
+        st.divider()
+
+        if not df_remote.empty and hold_uuid:
+            # Matcher på de første 15 tegn
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             
             if not df_h.empty:
@@ -122,16 +133,17 @@ def vis_side(analysis_package=None):
                 
                 c1, c2 = st.columns(2)
                 with c1:
-                    # 'inPossession' filter
                     row_in = df_s[df_s['POSSESSION_TYPE'].str.contains('inPossession', case=False)]
                     draw_remote_pitch(row_in.iloc[0] if not row_in.empty else pd.Series(), "OFFENSIV", t_color, t_logo)
-                
                 with c2:
-                    # 'outOfPossession' filter
                     row_out = df_s[df_s['POSSESSION_TYPE'].str.contains('outOfPossession', case=False)]
                     draw_remote_pitch(row_out.iloc[0] if not row_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
             else:
-                st.info(f"Ingen taktiske shapes fundet for {valgt_hold} i denne kamp.")
+                st.error(f"Ingen match fundet mellem {valgt_hold}'s UUID og dataen i remote_shapes.")
+                if st.checkbox("Vis rå data fra remote_shapes"):
+                    st.dataframe(df_remote)
+        else:
+            st.warning("Data mangler: Enten er remote_shapes tom eller UUID kunne ikke findes.")
 
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
