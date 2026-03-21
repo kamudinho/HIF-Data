@@ -91,7 +91,12 @@ def vis_side(analysis_package=None):
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame()).copy()
 
     # --- 4. DATA CLEANING (Robust Regex til sammenklistret data) ---
-    if not df_remote.empty:
+    if not df_remote.empty and hold_uuid:
+        # Rens hold_uuid for sikkerheds skyld
+        target_uuid = str(hold_uuid).strip()
+        
+        # Filtrer med contains for at undgå mismatch på 24 vs 25 tegn
+        df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(target_uuid, na=False)].copy()
         # Hvis Snowflake sender det hele som én kolonne
         if len(df_remote.columns) == 1:
             raw_col = df_remote.columns[0]
