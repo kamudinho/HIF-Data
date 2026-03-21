@@ -106,8 +106,11 @@ def vis_side(analysis_package=None):
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    with tabs[0]: # STRUKTUR
-        if not df_remote.empty and hold_uuid:
+    with tabs[0]:
+            st.write(f"Søger efter UUID: {hold_uuid[:15]}") # Debug
+            st.write(f"UUIDs i data: {df_remote['CONTESTANT_OPTAUUID'].unique()[:3]}") # Debug
+            
+            if not df_remote.empty and hold_uuid:
             # Matcher på de første 15 tegn af UUID
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
             
