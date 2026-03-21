@@ -18,14 +18,9 @@ def vis_side(analysis_package):
     # Vi joiner med MATCHINFO for at få holdnavne og datoer med
     query = f"""
         SELECT 
-            s.*,
-            m.MATCH_DATE,
-            m.HOME_CONTESTANT_NAME,
-            m.AWAY_CONTESTANT_NAME
-        FROM {db_name}.OPTA_REMOTESHAPES s
-        JOIN {db_name}.OPTA_MATCHINFO m ON s.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        WHERE s.TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-        ORDER BY m.MATCH_DATE DESC
+            *
+            
+        FROM {db_name}.OPTA_REMOTESHAPES
     """
     
     try:
