@@ -40,24 +40,23 @@ def draw_logo_on_ax(ax, logo_img):
         except: pass
 
 # --- 2. TEGNEFUNKTION TIL STRUKTUR ---
-def draw_remote_pitch(df_row, title, color, logo):
+def draw_average_pitch(df_avg, color, logo):
+    # Vi bruger VerticalPitch fra mplsoccer
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
     fig, ax = pitch.draw(figsize=(6, 8))
-    ax.text(50, 103, title, color='black', va='center', ha='center', fontsize=14, fontweight='bold')
     
-    if not df_row.empty:
-        formation = df_row.get('SHAPE_FORMATION', 'N/A')
-        roles_raw = df_row.get('SHAPE_ROLE', [])
-        try:
-            roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
-            if isinstance(roles, list):
-                for r in roles:
-                    x, y = float(r.get('averageRolePositionX', 50)), float(r.get('averageRolePositionY', 50))
-                    num = r.get('shirtNumber', '')
-                    ax.scatter(y, x, s=700, color=color, edgecolors='black', linewidth=1.5, zorder=3)
-                    ax.text(y, x, str(num), color='white', ha='center', va='center', fontsize=11, fontweight='bold', zorder=4)
-                ax.text(50, 2, f"Formation: {formation}", color='gray', ha='center', fontsize=10, fontweight='bold')
-        except: pass
+    if not df_avg.empty:
+        for _, row in df_avg.iterrows():
+            # Opta VerticalPitch bruger (y, x) for at plotte korrekt vertikalt
+            x = row['averageRolePositionX']
+            y = row['averageRolePositionY']
+            num = row['shirtNumber']
+            
+            # Tegn spiller-cirkel
+            ax.scatter(y, x, s=700, color=color, edgecolors='black', linewidth=1.5, alpha=0.9, zorder=3)
+            # Tilføj nummer
+            ax.text(y, x, str(int(num)), color='white', ha='center', va='center', 
+                    fontsize=10, fontweight='bold', zorder=4)
             
     draw_logo_on_ax(ax, logo)
     st.pyplot(fig, use_container_width=True)
@@ -116,7 +115,7 @@ def vis_side(analysis_package=None):
 
     # --- NY HJÆLPEFUNKTION TIL GENNEMSNIT ---
     def get_average_shape(df_hold, possession_type):
-        # Filtrer på fase (inPossession / outOfPossession)
+        # Filtrer på fase
         df_fase = df_hold[df_hold['POSSESSION_TYPE'].str.contains(possession_type, case=False)]
         
         all_players = []
@@ -131,7 +130,12 @@ def vis_side(analysis_package=None):
             return pd.DataFrame()
             
         df_p = pd.DataFrame(all_players)
-        # Grupper på spillernummer og beregn gennemsnit af X og Y
+        
+        # --- FIX: Konverter koordinater til tal før aggregering ---
+        df_p['averageRolePositionX'] = pd.to_numeric(df_p['averageRolePositionX'], errors='coerce')
+        df_p['averageRolePositionY'] = pd.to_numeric(df_p['averageRolePositionY'], errors='coerce')
+        
+        # Grupper på spillernummer
         df_avg = df_p.groupby('shirtNumber').agg({
             'averageRolePositionX': 'mean',
             'averageRolePositionY': 'mean',
