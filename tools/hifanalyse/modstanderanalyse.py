@@ -76,23 +76,18 @@ def draw_remote_pitch(df_row, title, color, logo):
     plt.close(fig)
 
 # --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (OPDATERET TIL AT HÅNDTERE DINE 3 LINJER) ---
 def vis_side(analysis_package=None):
-    st.markdown("""
-        <style>
-            .block-container { padding-top: 1rem; }
-            .stat-box { background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 5px solid #df003b; }
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
 
     if not analysis_package:
         st.error("Ingen data fundet.")
         return
 
     df_matches = analysis_package.get("matches", pd.DataFrame())
-    df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
 
-    # --- PARSING AF REMOTE SHAPES (Snowflake "pølsen") ---
+    # --- 1. PARSING AF REMOTE SHAPES ---
     processed_rows = []
     if not df_remote_raw.empty:
         for _, row in df_remote_raw.iterrows():
@@ -115,44 +110,48 @@ def vis_side(analysis_package=None):
             })
     df_remote = pd.DataFrame(processed_rows)
 
-    # --- VALG AF HOLD ---
+    # --- 2. HOLDVALG & UUID ---
     all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
     valgt_hold = st.selectbox("Vælg hold:", all_teams)
-    
     t_color, t_logo = get_team_style(valgt_hold)
-    
-    # Status på logo
-    if not t_logo:
-        st.warning(f"⚠️ Intet logo fundet for {valgt_hold}. Tjek team_mapping.py")
 
-    # Find UUID for holdet
     hold_uuid = ""
     if not df_matches.empty:
         m_row = df_matches[(df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold)]
         if not m_row.empty:
             hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0] if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else m_row['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
-    # --- TABS (Beholdes for at bevare navigation uden reload) ---
+    # --- 3. TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    with tabs[0]: # STRUKTUR (Data fra opta_remote_shapes)
+    with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
+            # Filtrer på holdet
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
+            
             if not df_h.empty:
+                # Vi laver to sliders eller én fælles - her bruger vi én fælles tidsslider
                 t_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
-                t_step = st.select_slider("Vælg sekvens (timestamp):", options=t_options)
-                df_s = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
+                t_step = st.select_slider("Vælg sekvens:", options=t_options)
+                
+                # Hent data for det valgte tidspunkt
+                df_current = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == t_step]
                 
                 c1, c2 = st.columns(2)
                 with c1:
-                    df_in = df_s[df_s['POSSESSION_TYPE'] == 'inPossession']
-                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.Series(), "OFFENSIV", t_color, t_logo)
+                    # Finder den nyeste 'inPossession' for dette tidspunkt (eller før)
+                    df_in = df_h[(df_h['POSSESSION_TYPE'] == 'inPossession') & (df_h['SHAPE_TIMEELAPSEDSTART'] <= t_step)].last('1s') # Simpelt fallback
+                    # Men for at være præcis med dine 3 linjer:
+                    df_in_exact = df_current[df_current['POSSESSION_TYPE'] == 'inPossession']
+                    draw_remote_pitch(df_in_exact.iloc[0] if not df_in_exact.empty else pd.Series(), "OFFENSIV (MED BOLD)", t_color, t_logo)
+                
                 with c2:
-                    df_out = df_s[df_s['POSSESSION_TYPE'] == 'outOfPossession']
-                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.Series(), "DEFENSIV", "#333333", t_logo)
+                    # Finder den nyeste 'outOfPossession'
+                    df_out_exact = df_current[df_current['POSSESSION_TYPE'] == 'outOfPossession']
+                    draw_remote_pitch(df_out_exact.iloc[0] if not df_out_exact.empty else pd.Series(), "DEFENSIV (MOD BOLD)", "#333333", t_logo)
             else:
-                st.warning(f"Ingen taktiske shapes fundet for {valgt_hold}.")
-
+                st.warning("Ingen taktiske data fundet for dette hold.")
+                
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:15], na=False)]
