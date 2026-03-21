@@ -264,10 +264,5 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         query_remote_shapes = f"""
             SELECT * FROM {DB}.OPTA_REMOTESHAPES 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-            AND MATCH_OPTAUUID IN (
-                SELECT DISTINCT MATCH_OPTAUUID 
-                FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'
-            )
         """
     }
