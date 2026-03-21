@@ -2,10 +2,18 @@ import streamlit as st
 import pandas as pd
 import json
 
-def vis_side():
-    st.title("⚽ Opta Team Shapes & Positions")
-    st.info("Her analyseres holdenes gennemsnitlige positioner og formationer baseret på Opta Remote Shapes.")
+def vis_side(analysis_package):
+    st.title("⚽ Opta Shapes & Formationer")
+    
+    # Hent data ud af pakken (husk 'opta_' præfikset hvis det er det du bruger)
+    df_shapes = analysis_package.get("opta_remote_shapes", pd.DataFrame())
+    
+    if df_shapes.empty:
+        st.warning("Ingen positionsdata fundet for denne kamp.")
+        return
 
+    # Resten af din kode her...
+    st.write(f"Viser data for formation: {df_shapes['SHAPE_FORMATION'].iloc[0]}")
     # 1. SQL Query - Henter rådata for den valgte turnering
     # Vi joiner med MATCHINFO for at få holdnavne og datoer med
     query = f"""
