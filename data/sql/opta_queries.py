@@ -262,6 +262,6 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
         # 11. PHYSICAL METADATA - Nu baseret på turneringens kampe i stedet for en løs variabel
         "opta_remote_shapes": f"""
-            SELECT * FROM {DB}.OPTA_REMOTESHAPES 
+            SELECT DISTINCT TOP 1000 * FROM {DB}.OPTA_REMOTESHAPES 
         """
     }
