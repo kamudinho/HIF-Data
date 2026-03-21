@@ -275,7 +275,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                 MATCH_OPTAUUID,
                 SHAPES_PERIODID,
                 CONTESTANT_OPTAUUID,
-                SHAPES_FORMATION,
+                SHAPE_FORMATION,
                 POSSESSION_TYPE,
                 SHAPE_TIMEELAPSEDSTART,
                 SHAPE_TIMEELAPSEDEND,
