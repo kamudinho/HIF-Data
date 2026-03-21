@@ -272,17 +272,23 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         
         "opta_remote_shapes": f"""
             SELECT 
-                MATCH_OPTAUUID,
+                TRIM(MATCH_OPTAUUID)::STRING as MATCH_OPTAUUID,
                 SHAPES_PERIODID,
-                CONTESTANT_OPTAUUID,
-                SHAPE_FORMATION,
-                POSSESSION_TYPE,
+                -- Vi tager kun de første 25 tegn for at undgå 'clumping' fejlen
+                LEFT(TRIM(CONTESTANT_OPTAUUID), 25)::STRING as CONTESTANT_OPTAUUID,
+                TRIM(SHAPE_FORMATION)::STRING as SHAPE_FORMATION,
+                TRIM(POSSESSION_TYPE)::STRING as POSSESSION_TYPE,
                 SHAPE_TIMEELAPSEDSTART,
                 SHAPE_TIMEELAPSEDEND,
-                SHAPE_ROLE -- Her ligger koordinaterne
+                SHAPE_ROLE -- Vi lader denne være, da Python parser den som JSON
             FROM {DB}.OPTA_REMOTESHAPES
             WHERE MATCH_OPTAUUID IN ({match_id_subquery})
             {hif_filter_std}
+            -- Vi tilføjer en DISTINCT for at fjerne de dubletter, der skabte den lange streng
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID, SHAPE_TIMEELAPSEDSTART, POSSESSION_TYPE 
+                ORDER BY SHAPE_TIMEELAPSEDSTART
+            ) = 1
             ORDER BY SHAPE_TIMEELAPSEDSTART ASC
         """
     }
