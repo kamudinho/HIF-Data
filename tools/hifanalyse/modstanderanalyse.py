@@ -114,7 +114,6 @@ def vis_side(analysis_package=None):
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
             df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == hold_uuid].copy()
-            st.write("### Kampforløb & Taktik")
             time_step = st.select_slider("Vælg tidsinterval (minutter):", options=sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist()))
             df_step = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == time_step]
 
