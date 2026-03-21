@@ -119,7 +119,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap"], # Tilføj denne
+        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Shapes"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
