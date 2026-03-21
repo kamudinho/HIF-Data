@@ -92,68 +92,90 @@ def vis_side(analysis_package=None):
     df_events = opta_dict.get("events", pd.DataFrame())
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame()).copy()
 
-    # --- 4. DATA CLEANING (Fjernet Regex - vi bruger nu rene SQL kolonner) ---
+    # --- 1. AUTO-FIX AF DATASTRUKTUR ---
     if not df_remote.empty:
-        # Tving kolonnenavne til upper og fjern whitespace fra UUIDs
+        # Hvis Snowflake har sendt alt i én kolonne (sker ofte ved forældede queries)
+        if len(df_remote.columns) == 1:
+            raw_col = df_remote.columns[0]
+            # Vi splitter kolonnen op ved komma eller mellemrum
+            split_df = df_remote[raw_col].astype(str).str.split(expand=True)
+            # Vi mapper de vigtigste felter (index baseret på standard Opta eksport)
+            df_remote['MATCH_OPTAUUID'] = split_df[0]
+            df_remote['SHAPE_PERIODID'] = split_df[1]
+            df_remote['CONTESTANT_OPTAUUID'] = split_df[2]
+            df_remote['SHAPE_FORMATION'] = split_df[3]
+            df_remote['POSSESSION_TYPE'] = split_df[4]
+            df_remote['SHAPE_TIMEELAPSEDSTART'] = split_df[5]
+            # Rollen er ofte resten af rækken (JSON)
+            df_remote['SHAPE_ROLE'] = df_remote[raw_col].str.extract(r'(\[.*\])')
+
+        # Standardisering af navne og UUIDs
         df_remote.columns = [c.upper() for c in df_remote.columns]
-        if 'CONTESTANT_OPTAUUID' in df_remote.columns:
-            df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].astype(str).str.strip().str.lower()
+        df_remote['CONTESTANT_OPTAUUID'] = df_remote['CONTESTANT_OPTAUUID'].astype(str).str.strip().str.lower()
         
-    # --- 5. FILTRE & UUID SETUP ---
+    # --- 2. SETUP AF HOLD & UUID ---
     col_h1, col_h2 = st.columns([1, 1])
-    
     with col_h1:
-        hold_navne = sorted(df_matches['CONTESTANTHOME_NAME'].unique()) if not df_matches.empty else []
+        # Her henter vi alle holdnavne fra både hjemme- og udehold for at sikre AaB er der
+        home_teams = df_matches['CONTESTANTHOME_NAME'].unique() if not df_matches.empty else []
+        away_teams = df_matches['CONTESTANTAWAY_NAME'].unique() if not df_matches.empty else []
+        hold_navne = sorted(list(set(home_teams) | set(away_teams)))
         valgt_hold = st.selectbox("Vælg hold:", hold_navne, key="target_team_select")
     
     t_color, t_logo = get_team_style(valgt_hold)
     
+    # Find det korrekte UUID for det valgte hold
     hold_uuid = ""
     if not df_matches.empty:
-        m_row = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
-        if not m_row.empty: 
-            # Vi tager den rå UUID fra MatchInfo og renser den
-            hold_uuid = str(m_row['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
+        # Tjek både hjemme- og udebane rækker
+        match_row_h = df_matches[df_matches['CONTESTANTHOME_NAME'] == valgt_hold]
+        match_row_a = df_matches[df_matches['CONTESTANTAWAY_NAME'] == valgt_hold]
+        
+        if not match_row_h.empty:
+            hold_uuid = str(match_row_h['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
+        elif not match_row_a.empty:
+            hold_uuid = str(match_row_a['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
     with col_h2:
-        # Event filter baseret på UUID
-        df_hold_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.strip().str.lower().str.contains(hold_uuid[:20], na=False)].copy() if not df_events.empty and hold_uuid else pd.DataFrame()
+        # Filtrer hændelser (events) - vi bruger de første 15 tegn for at være 100% sikre på match
+        df_hold_events = pd.DataFrame()
+        if not df_events.empty and hold_uuid:
+            match_key = hold_uuid[:15]
+            df_hold_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(match_key, na=False)].copy()
+        
         valgt_spiller = st.selectbox("Filter spiller:", ["Alle spillere"] + sorted(df_hold_events['PLAYER_NAME'].dropna().unique().tolist()))
 
     if valgt_spiller != "Alle spillere":
         df_hold_events = df_hold_events[df_hold_events['PLAYER_NAME'] == valgt_spiller]
 
-    # Debug 
-    with st.expander("System Status"):
-        st.write(f"Søger efter UUID: `{hold_uuid}`")
-        if not df_remote.empty:
-            st.write(f"Rækker i taktisk data: {len(df_remote)}")
-            st.write("UUIDs fundet i data:", df_remote['CONTESTANT_OPTAUUID'].unique().tolist())
-
-    # --- 6. TABS ---
+    # --- 3. TABS ---
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
     with tabs[0]: # STRUKTUR
         if not df_remote.empty and hold_uuid:
-            # Vi bruger .str.contains for at være sikker på at fange match på tværs af 24/25 tegn
-            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:24], na=False)].copy()
+            # FLEXIBEL MATCH: Vi søger på tværs af UUID længder
+            match_key = hold_uuid[:20] 
+            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(match_key, na=False)].copy()
             
             if not df_h.empty:
+                # Konverter tidsstempler til int for at kunne sortere dem
+                df_h['SHAPE_TIMEELAPSEDSTART'] = pd.to_numeric(df_h['SHAPE_TIMEELAPSEDSTART'], errors='coerce').fillna(0).astype(int)
                 time_options = sorted(df_h['SHAPE_TIMEELAPSEDSTART'].unique().tolist())
+                
                 time_step = st.select_slider("Vælg spilminut (sekunder):", options=time_options)
                 df_step = df_h[df_h['SHAPE_TIMEELAPSEDSTART'] == time_step]
 
                 c1, c2 = st.columns(2)
                 with c1:
-                    df_in = df_step[df_step['POSSESSION_TYPE'].str.contains('inPossession', na=False, case=False)]
-                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.DataFrame(), "OFFENSIV (MED BOLD)", "#2ecc71", t_logo)
+                    df_in = df_step[df_step['POSSESSION_TYPE'].str.contains('in', na=False, case=False)]
+                    draw_remote_pitch(df_in.iloc[0] if not df_in.empty else pd.DataFrame(), "OFFENSIV", "#2ecc71", t_logo)
                 with c2:
-                    df_out = df_step[df_step['POSSESSION_TYPE'].str.contains('outOfPossession', na=False, case=False)]
-                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.DataFrame(), "DEFENSIV (MOD BOLD)", "#e74c3c", t_logo)
+                    df_out = df_step[df_step['POSSESSION_TYPE'].str.contains('out', na=False, case=False)]
+                    draw_remote_pitch(df_out.iloc[0] if not df_out.empty else pd.DataFrame(), "DEFENSIV", "#e74c3c", t_logo)
             else:
-                st.warning(f"Ingen taktisk data fundet for {valgt_hold}. Tjek om 'hif_only' er slået fra i data-hentningen.")
+                st.warning(f"Ingen taktisk data fundet for UUID: {hold_uuid}. Tjek 'hif_only' filteret.")
         else:
-            st.info("Vent venligst... Indlæser taktisk data.")
+            st.info("Indlæser taktisk data eller ingen data tilgængelig for dette valg.")
 
     with tabs[1]: # MED BOLD
         pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
