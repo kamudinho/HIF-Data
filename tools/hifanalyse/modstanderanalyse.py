@@ -9,7 +9,7 @@ from PIL import Image
 import json
 from data.utils.team_mapping import TEAMS, TEAM_COLORS, COMPETITIONS, COMPETITION_NAME
 
-# --- 1. HJÆLPEFUNKTIONER ---
+# --- 1. HJÆLPEFUNKTIONER (LOGO & FARVER) ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
     if not url: return None
@@ -48,13 +48,19 @@ def get_avg(df, phase):
         except: continue
     if not all_p: return pd.DataFrame()
     res = pd.DataFrame(all_p)
-    # Opta: X er længden, Y er bredden
+    # Opta koordinater: X er længden (0-100), Y er bredden (0-100)
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
-    return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
+    
+    # KRITISK KOORDINAT-FIX FOR OPTA -> VERTICALPITCH
+    # For at undgå at spillerne maser i bunden, skal vi vende X-aksen
+    res['x_plot'] = res['averageRolePositionX'] 
+    res['y_plot'] = res['averageRolePositionY'] # Y er bredden, skal plottes direkte
+    
+    return res.groupby('shirtNumber').agg({'x_plot':'mean', 'y_plot':'mean'}).reset_index()
 
-# --- 2. MASTER MATCHER (NU MED TURNERINGS-FILTER) ---
+# --- 2. MASTER MATCHER (TURNERINGS-FILTER) ---
 def build_team_map(df_remote, df_matches):
-    # Hent det korrekte UUID fra din mapping-fil
+    # Hent det korrekte UUID fra din mapping-fil (f.eks. 1. Division: "6ifaeunfdele")
     target_comp_uuid = COMPETITIONS.get(COMPETITION_NAME, {}).get("COMPETITION_OPTAUUID")
     
     # Filtrer matches så vi kun har den valgte turnering
@@ -74,7 +80,7 @@ def build_team_map(df_remote, df_matches):
     for u_raw in raw_uuids:
         u_clean = str(u_raw).lower().strip()
         
-        # Tjek om dette hold overhovedet findes i vores filtrerede matches
+        # Tjek om dette hold overhovedet findes i vores filtrerede 1. Division matches
         if not db_teams.empty and u_clean not in db_teams['id'].str.lower().tolist():
             continue # Spring over hvis holdet ikke hører til 1. Division
             
@@ -102,84 +108,96 @@ def vis_side(analysis_package=None):
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
-    # Byg hold-oversigten (nu filtreret på 1. Division UUID)
+    if df_remote.empty:
+        st.warning(f"Ingen positionsdata fundet for {COMPETITION_NAME}.")
+        return
+
+    # Byg hold-oversigten (nu filtreret på turneringens UUID)
     team_map = build_team_map(df_remote, df_matches)
     
     if not team_map:
         st.warning(f"Ingen hold fundet for {COMPETITION_NAME} i denne pakke.")
         return
 
+    # UI - Vælg hold (Kompakt format uden label)
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
+    
+    # ID reference til hændelser (Top 5 fanen)
     event_uuid_ref = str(valgt_uuid_data).lower()[:8]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
-    # --- TAB 0: STRUKTUR ---
+    # Pitch definition (Fælles indstillinger for alle baner)
+    # Vi bruger 'opta' koordinater (0-100)
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=2)
+
+    # --- TAB 0: STRUKTUR (LAYOUT-RETTET SÅ ALT KAN SES) ---
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
         formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.caption(f"**{valgt_hold}** | Formation: {formation}")
         
-        avg_in, avg_out = get_avg(df_h, 'inPossession'), get_avg(df_h, 'outOfPossession')
-        c1, c2 = st.columns(2)
-        for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
-            with col:
-                st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                fig, ax = pitch.draw(figsize=(3, 3.8))
-                if not data.empty:
-                    # Plot koordinater (Y er vandret, X er lodret i VerticalPitch)
-                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], 
-                               s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
-                    for _, row in data.iterrows():
-                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], 
-                                str(int(row['shirtNumber'])), color='white', ha='center', 
-                                va='center', fontsize=6, fontweight='bold', zorder=4)
-                draw_logo_on_ax(ax, t_logo); st.pyplot(fig, use_container_width=True); plt.close(fig)
+        # --- NY LOGIK FOR AT UNDGÅ SCROLLING ---
+        # I stedet for st.columns(2), viser vi nu kun én bane ad gangen.
+        # En lille radioknap lader brugeren skifte fase.
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.caption(f"**{valgt_hold}** | Formation: {formation}")
+        with c2:
+            fase = st.radio("Vis fase:", ["Offensiv", "Defensiv"], horizontal=True, label_visibility="collapsed")
+        
+        # Sæt data og titel baseret på radioknappen
+        if fase == "Offensiv":
+            data = get_avg(df_h, 'inPossession')
+            dot_color = t_color
+            titel = "STRUKTUR - MED BOLD"
+        else:
+            data = get_avg(df_h, 'outOfPossession')
+            dot_color = "#333333"
+            titel = "STRUKTUR - MOD BOLD"
+        
+        # Nu tegner vi banen i fuld bredde (én bane), så den kan folde sig ud uden scroll
+        if not data.empty:
+            st.write(f"<p style='text-align:center; font-size:14px;'>{titel}</p>", unsafe_allow_html=True)
+            # Figsize (6, 8) giver en stor, tydelig bane uden scrolling når use_container_width=True
+            fig, ax = pitch.draw(figsize=(6, 8))
+            
+            # Plot koordinater (Y er bredden, X er længden)
+            ax.scatter(data['y_plot'], data['x_plot'], s=350, color=dot_color, edgecolors='black', linewidth=1.5, zorder=3)
+            for _, row in data.iterrows():
+                ax.text(row['y_plot'], row['x_plot'], str(int(row['shirtNumber'])), 
+                        color='white', ha='center', va='center', fontsize=8, fontweight='bold', zorder=4)
+            
+            draw_logo_on_ax(ax, t_logo)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+        else:
+            st.warning(f"Ingen positionsdata fundet for {fase} fase.")
 
-    # --- TAB 1: MED BOLD ---
-    with tabs[1]:
+    # De andre tabs forbliver side-om-side, da de er halve baner eller fylder minimalt...
+    with tabs[1]: # MED BOLD (Half pitches)
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
-                half_pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1)
+                half_pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1.5)
                 c1, c2 = st.columns(2)
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
-                        st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = half_pitch.draw(figsize=(3, 3))
-                        ax.set_ylim(x_lim[0], x_lim[1])
+                        st.write(f"<p style='text-align:center; font-size:12px;'>{title}</p>", unsafe_allow_html=True)
+                        fig, ax = half_pitch.draw(figsize=(4, 4))
                         df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
                         if not df_z.empty:
                             sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo); st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-    # --- TAB 2: MOD BOLD ---
-    with tabs[2]:
+    with tabs[3]: # TOP 5
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
-            if not df_h_ev.empty:
-                c1, c2 = st.columns(2)
-                for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
-                    with col:
-                        st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = pitch.draw(figsize=(3, 4))
-                        df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
-                        if not df_d.empty:
-                            sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
-                        draw_logo_on_ax(ax, t_logo); st.pyplot(fig, use_container_width=True); plt.close(fig)
-
-    # --- TAB 3: TOP 5 ---
-    with tabs[3]:
-        if not df_events.empty:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
-            if not df_h_ev.empty:
-                c1, c2, c3 = st.columns(3)
-                metrics = [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]
-                for col, (ids, label) in zip([c1, c2, c3], metrics):
-                    with col:
-                        st.write(f"**{label}**")
-                        stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
-                        for n, v in stats.items(): st.write(f"{v} {n}")
+            c1, c2, c3 = st.columns(3)
+            metrics = [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]
+            for col, (ids, label) in zip([c1, c2, c3], metrics):
+                with col:
+                    st.write(f"**{label}**")
+                    stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
+                    for n, v in stats.items(): st.write(f"{v} {n}")
