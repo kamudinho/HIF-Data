@@ -79,26 +79,39 @@ def vis_side(analysis_package=None):
         st.warning("Ingen positions-data (remote_shapes) fundet.")
         return
 
-    # 2. FIND DE TO HOLD I DATAEN (Mapping logik)
+    # 2. FIND DE TO HOLD I DATAEN (Forbedret Matching)
     uuids_i_data = df_remote_raw['CONTESTANT_OPTAUUID'].unique().tolist()
-    team_map = {}
-    for _, m in df_matches.iterrows():
-        team_map[str(m['CONTESTANTHOME_OPTAUUID']).strip().lower()] = m['CONTESTANTHOME_NAME']
-        team_map[str(m['CONTESTANTAWAY_OPTAUUID']).strip().lower()] = m['CONTESTANTAWAY_NAME']
+    
+    # Hent hjemme- og udehold fra matches
+    h_name = df_matches['CONTESTANTHOME_NAME'].iloc[0]
+    a_name = df_matches['CONTESTANTAWAY_NAME'].iloc[0]
+    h_uuid_match = str(df_matches['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
+    a_uuid_match = str(df_matches['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
     holds_navne = []
     uuid_to_name = {}
+
     for u in uuids_i_data:
         u_clean = str(u).strip().lower()
-        for m_uuid, m_name in team_map.items():
-            if u_clean[:10] in m_uuid or m_uuid[:10] in u_clean:
-                holds_navne.append(m_name)
-                uuid_to_name[m_name] = u
-                break
+        
+        # Strategi A: Findes de første 8 tegn i hjemmeholdets UUID?
+        if u_clean[:8] in h_uuid_match or h_uuid_match[:8] in u_clean:
+            holds_navne.append(h_name)
+            uuid_to_name[h_name] = u
+        # Strategi B: Findes de første 8 tegn i udeholdets UUID?
+        elif u_clean[:8] in a_uuid_match or a_uuid_match[:8] in u_clean:
+            holds_navne.append(a_name)
+            uuid_to_name[a_name] = u
+        # Strategi C: Nødbremse - hvis der kun er to UUIDs i data, og vi har fundet den ene
+        # (Dette sikrer at det andet hold altid kommer med)
     
-    if not holds_navne:
-        st.error("Kunne ikke matche holdnavne med UUIDs i data.")
-        return
+    # Hvis den stadig kun finder ét hold, så tildel den anden UUID til det manglende hold
+    if len(uuids_i_data) == 2 and len(holds_navne) == 1:
+        fundet_navn = holds_navne[0]
+        mangler_navn = a_name if fundet_navn == h_name else h_name
+        anden_uuid = [u for u in uuids_i_data if u != uuid_to_name[fundet_navn]][0]
+        holds_navne.append(mangler_navn)
+        uuid_to_name[mangler_navn] = anden_uuid
 
     # 3. BRUGERVALG
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(set(holds_navne))))
