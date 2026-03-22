@@ -79,11 +79,11 @@ def vis_side(analysis_package=None):
         return
 
     team_map = build_team_map(df_remote, df_matches)
-    valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())))
+    
+    # Gør selectboxen mere kompakt
+    valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
-    
-    # ID reference til hændelser - vi matcher på det fulde ID eller de første 8 tegn
     event_uuid_ref = str(valgt_uuid_data).lower()[:8]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
@@ -92,32 +92,25 @@ def vis_side(analysis_package=None):
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
         formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.caption(f"{valgt_hold} - Formation: {formation}")
+        st.caption(f"**{valgt_hold}** | Formation: {formation}")
         
-        def get_avg(df, phase):
-            df_f = df[df['POSSESSION_TYPE'].str.contains(phase, case=False, na=False)]
-            all_p = []
-            for r in df_f['SHAPE_ROLE']:
-                try:
-                    roles = json.loads(r) if isinstance(r, str) else r
-                    if isinstance(roles, list): all_p.extend(roles)
-                except: continue
-            if not all_p: return pd.DataFrame()
-            res = pd.DataFrame(all_p)
-            res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
-            return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
-
         avg_in, avg_out = get_avg(df_h, 'inPossession'), get_avg(df_h, 'outOfPossession')
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+        
+        # Reducer figsize fra (4, 5) til (3, 4) for at spare vertikal plads
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_width=1)
+        
         c1, c2 = st.columns(2)
         for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
             with col:
-                fig, ax = pitch.draw(figsize=(4, 5))
+                st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
+                fig, ax = pitch.draw(figsize=(3, 4)) # Mindre bane
                 if not data.empty:
                     for _, row in data.iterrows():
-                        ax.scatter(row['averageRolePositionY'], row['averageRolePositionX'], s=250, color=dot_c, edgecolors='black', zorder=3)
-                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
-                draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
+                        ax.scatter(row['averageRolePositionY'], row['averageRolePositionX'], s=180, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
+                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig, use_container_width=True)
+                plt.close(fig)
 
     # --- TAB 1: MED BOLD ---
     with tabs[1]:
@@ -128,33 +121,35 @@ def vis_side(analysis_package=None):
                 c1, c2 = st.columns(2)
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
-                        st.write(f"**{title}**")
-                        fig, ax = pitch_h.draw(figsize=(4, 5))
+                        st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
+                        fig, ax = pitch_h.draw(figsize=(3, 3.5)) # Halv bane kræver mindre højde
                         ax.set_ylim(x_lim[0], x_lim[1])
                         df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
                         if not df_z.empty:
                             sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
-                        draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-    # --- TAB 2: MOD BOLD (RETTET) ---
+    # --- TAB 2: MOD BOLD ---
     with tabs[2]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
                 pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
                 c1, c2 = st.columns(2)
-                # 4=Tackle, 8=Interception, 49=Recovery | 5=Dueller
                 for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
                     with col:
-                        st.write(f"**{title}**")
-                        fig, ax = pitch.draw(figsize=(4, 5))
+                        st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
+                        fig, ax = pitch.draw(figsize=(3, 4))
                         df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                         if not df_d.empty:
                             sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
-                        draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
-            else: st.info("Ingen defensive hændelser fundet.")
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-    # --- TAB 3: TOP 5 (RETTET) ---
+    # --- TAB 3: TOP 5 ---
     with tabs[3]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
