@@ -106,7 +106,8 @@ def vis_side(analysis_package=None):
         st.caption(f"**{valgt_hold}** | Formation: {formation}")
         
         avg_in, avg_out = get_avg(df_h, 'inPossession'), get_avg(df_h, 'outOfPossession')
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_width=1)
+        # RETTET: line_width -> linewidth
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
         
         c1, c2 = st.columns(2)
         for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
@@ -126,7 +127,8 @@ def vis_side(analysis_package=None):
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
-                pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
+                # RETTET: line_width -> linewidth (hvis det var der)
+                pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1)
                 c1, c2 = st.columns(2)
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
@@ -145,7 +147,7 @@ def vis_side(analysis_package=None):
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
-                pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
+                pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
                 c1, c2 = st.columns(2)
                 for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
                     with col:
