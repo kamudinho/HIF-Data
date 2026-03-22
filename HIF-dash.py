@@ -119,7 +119,7 @@ with st.sidebar:
         sel = option_menu(None, options=["Oversigt", "Forecast"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap", "Shapes"], # Tilføj denne
+        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap"], # Tilføj denne
                      styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
@@ -162,7 +162,7 @@ try:
             elif sel == "Database":
                 import tools.scouting.scout_db as sdb
                 # Vi sender dp["scout_reports"] som det første argument
-                sdb.scouting.vis_side(
+                sdb.vis_side(
                     dp["scout_reports"], 
                     dp["players"], 
                     dp["sql_players"], 
