@@ -38,6 +38,19 @@ def draw_logo_on_ax(ax, logo_img):
             ax_image.axis('off')
         except: pass
 
+def get_avg(df, phase):
+    df_f = df[df['POSSESSION_TYPE'].str.contains(phase, case=False, na=False)]
+    all_p = []
+    for r in df_f['SHAPE_ROLE']:
+        try:
+            roles = json.loads(r) if isinstance(r, str) else r
+            if isinstance(roles, list): all_p.extend(roles)
+        except: continue
+    if not all_p: return pd.DataFrame()
+    res = pd.DataFrame(all_p)
+    res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
+    return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
+
 # --- 2. MASTER MATCHER ---
 def build_team_map(df_remote, df_matches):
     raw_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
@@ -79,8 +92,6 @@ def vis_side(analysis_package=None):
         return
 
     team_map = build_team_map(df_remote, df_matches)
-    
-    # Gør selectboxen mere kompakt
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
@@ -95,18 +106,16 @@ def vis_side(analysis_package=None):
         st.caption(f"**{valgt_hold}** | Formation: {formation}")
         
         avg_in, avg_out = get_avg(df_h, 'inPossession'), get_avg(df_h, 'outOfPossession')
-        
-        # Reducer figsize fra (4, 5) til (3, 4) for at spare vertikal plads
         pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_width=1)
         
         c1, c2 = st.columns(2)
         for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
             with col:
                 st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
-                fig, ax = pitch.draw(figsize=(3, 4)) # Mindre bane
+                fig, ax = pitch.draw(figsize=(3, 3.8))
                 if not data.empty:
                     for _, row in data.iterrows():
-                        ax.scatter(row['averageRolePositionY'], row['averageRolePositionX'], s=180, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
+                        ax.scatter(row['averageRolePositionY'], row['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
                         ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
@@ -122,7 +131,7 @@ def vis_side(analysis_package=None):
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = pitch_h.draw(figsize=(3, 3.5)) # Halv bane kræver mindre højde
+                        fig, ax = pitch_h.draw(figsize=(3, 3))
                         ax.set_ylim(x_lim[0], x_lim[1])
                         df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
                         if not df_z.empty:
@@ -141,7 +150,7 @@ def vis_side(analysis_package=None):
                 for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = pitch.draw(figsize=(3, 4))
+                        fig, ax = pitch.draw(figsize=(3, 3.8))
                         df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                         if not df_d.empty:
                             sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
@@ -160,6 +169,4 @@ def vis_side(analysis_package=None):
                     with col:
                         st.subheader(label)
                         stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
-                        if stats.empty: st.write("Ingen data")
                         for n, v in stats.items(): st.markdown(f"**{v}** {n}")
-            else: st.warning("Ingen hændelses-statistik fundet for dette hold.")
