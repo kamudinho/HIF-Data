@@ -64,54 +64,85 @@ def draw_average_pitch(df_avg, color, logo):
 
 # --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
-    st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
-
-    if not analysis_package:
-        st.error("Ingen data fundet i analysis_package.")
-        return
-
-    # 1. HENT DATA (Dette skal ske FØR du bruger variablerne)
+    # 1. HENT DATA
     df_matches = analysis_package.get("matches", pd.DataFrame())
     df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
-    df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
 
-    # Nu kan du lave dit tjek uden fejl
-    if not df_remote_raw.empty:
-        # Vi printer det kun i konsollen/debug for ikke at forstyrre UI for meget
-        unique_uuids_in_sql = df_remote_raw['CONTESTANT_OPTAUUID'].unique()
-    else:
-        unique_uuids_in_sql = []
-
-    # 2. PARSING
-    processed_rows = []
-    if not df_remote_raw.empty:
-        for _, row in df_remote_raw.iterrows():
-            processed_rows.append({
-                'CONTESTANT_OPTAUUID': str(row.get('CONTESTANT_OPTAUUID', '')).strip().lower(),
-                'SHAPE_FORMATION': str(row.get('SHAPE_FORMATION', 'N/A')),
-                'SHAPE_ROLE': row.get('SHAPE_ROLE', '[]'),
-                'POSSESSION_TYPE': str(row.get('POSSESSION_TYPE', '')),
-                'SHAPE_TIMEELAPSEDSTART': int(row.get('SHAPE_TIMEELAPSEDSTART', 0)) if str(row.get('SHAPE_TIMEELAPSEDSTART')) != 'nan' else 0
-            })
-    df_remote = pd.DataFrame(processed_rows)
-
-    st.write("Kolonner i Remote Shapes:", df_remote_raw.columns.tolist())
-
-    # 3. HOLDVALG
-    all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
-    if not all_teams: 
-        st.warning("Ingen hold fundet i matches data.")
+    if df_remote_raw.empty:
+        st.warning("Ingen positions-data (remote_shapes) fundet.")
         return
-    
-    valgt_hold = st.selectbox("Vælg hold:", all_teams)
-    t_color, t_logo = get_team_style(valgt_hold)
 
-    # Find UUID
-    hold_uuid = ""
-    m_row = df_matches[(df_matches['CONTESTANTHOME_NAME'] == valgt_hold) | (df_matches['CONTESTANTAWAY_NAME'] == valgt_hold)]
-    if not m_row.empty:
-        h_col = 'CONTESTANTHOME_OPTAUUID' if m_row['CONTESTANTHOME_NAME'].iloc[0] == valgt_hold else 'CONTESTANTAWAY_OPTAUUID'
-        hold_uuid = str(m_row[h_col].iloc[0]).strip().lower()
+    # 2. FIND DE TO HOLD I DATAEN
+    # Vi finder de unikke UUIDs der er i denne kamps shapes
+    uuids_i_data = df_remote_raw['CONTESTANT_OPTAUUID'].unique().tolist()
+    
+    # Lav en ordbog der mapper UUID -> Navn baseret på matches-tabellen
+    team_map = {}
+    for _, m in df_matches.iterrows():
+        team_map[str(m['CONTESTANTHOME_OPTAUUID']).strip().lower()] = m['CONTESTANTHOME_NAME']
+        team_map[str(m['CONTESTANTAWAY_OPTAUUID']).strip().lower()] = m['CONTESTANTAWAY_NAME']
+
+    # Lav en liste over holdnavne vi rent faktisk har data på
+    holds_navne = []
+    uuid_to_name = {}
+    for u in uuids_i_data:
+        u_clean = str(u).strip().lower()
+        # Vi tjekker om de første 10 tegn matcher (for at undgå UUID-format fejl)
+        found = False
+        for m_uuid, m_name in team_map.items():
+            if u_clean[:10] in m_uuid or m_uuid[:10] in u_clean:
+                holds_navne.append(m_name)
+                uuid_to_name[m_name] = u
+                found = True
+                break
+    
+    if not holds_navne:
+        st.error("Kunne ikke matche holdnavne med UUIDs i data.")
+        st.write("UUIDs i data:", uuids_i_data)
+        return
+
+    def vis_side(analysis_package=None):
+    # 1. HENT DATA
+    df_matches = analysis_package.get("matches", pd.DataFrame())
+    df_remote_raw = analysis_package.get("remote_shapes", pd.DataFrame())
+
+    if df_remote_raw.empty:
+        st.warning("Ingen positions-data (remote_shapes) fundet.")
+        return
+
+    # 2. FIND DE TO HOLD I DATAEN
+    # Vi finder de unikke UUIDs der er i denne kamps shapes
+    uuids_i_data = df_remote_raw['CONTESTANT_OPTAUUID'].unique().tolist()
+    
+    # Lav en ordbog der mapper UUID -> Navn baseret på matches-tabellen
+    team_map = {}
+    for _, m in df_matches.iterrows():
+        team_map[str(m['CONTESTANTHOME_OPTAUUID']).strip().lower()] = m['CONTESTANTHOME_NAME']
+        team_map[str(m['CONTESTANTAWAY_OPTAUUID']).strip().lower()] = m['CONTESTANTAWAY_NAME']
+
+    # Lav en liste over holdnavne vi rent faktisk har data på
+    holds_navne = []
+    uuid_to_name = {}
+    for u in uuids_i_data:
+        u_clean = str(u).strip().lower()
+        # Vi tjekker om de første 10 tegn matcher (for at undgå UUID-format fejl)
+        found = False
+        for m_uuid, m_name in team_map.items():
+            if u_clean[:10] in m_uuid or m_uuid[:10] in u_clean:
+                holds_navne.append(m_name)
+                uuid_to_name[m_name] = u
+                found = True
+                break
+    
+    if not holds_navne:
+        st.error("Kunne ikke matche holdnavne med UUIDs i data.")
+        st.write("UUIDs i data:", uuids_i_data)
+        return
+
+    # 3. BRUGERVALG
+    valgt_hold = st.selectbox("Vælg hold fra kampen:", sorted(list(set(holds_navne))))
+    t_color, t_logo = get_team_style(valgt_hold)
+    valgt_uuid = uuid_to_name[valgt_hold]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
@@ -148,26 +179,20 @@ def vis_side(analysis_package=None):
     
     # --- OPDATERET DEL AF tabs[0] ---
     with tabs[0]:
-        if not df_remote.empty and hold_uuid:
-            # SIKKER SØGNING: Vi trimmer og tvinger til lower både i søgning og data
-            target_uuid = hold_uuid[:15].strip().lower()
-            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(target_uuid, na=False)]
+        # Filtrer data baseret på den UUID vi VED findes
+        df_h = df_remote_raw[df_remote_raw['CONTESTANT_OPTAUUID'] == valgt_uuid]
+        
+        if not df_h.empty:
+            avg_in = get_average_shape(df_h, 'inPossession')
+            avg_out = get_average_shape(df_h, 'outOfPossession')
             
-            if not df_h.empty:
-                # Beregn gennemsnit
-                avg_in = get_average_shape(df_h, 'inPossession')
-                avg_out = get_average_shape(df_h, 'outOfPossession')
-                
-                if avg_in.empty and avg_out.empty:
-                    st.warning("Fandt rækker for holdet, men kunne ikke udpakke spiller-positioner.")
-                else:
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.caption("🔴 **OFFENSIV (Med bold)**")
-                        draw_average_pitch(avg_in, t_color, t_logo)
-                    with c2:
-                        st.caption("⚪ **DEFENSIV (Uden bold)**")
-                        draw_average_pitch(avg_out, "#333333", t_logo)
+            c1, c2 = st.columns(2)
+            with c1:
+                st.caption(f"🔴 **{valgt_hold} OFFENSIV**")
+                draw_average_pitch(avg_in, t_color, t_logo)
+            with c2:
+                st.caption(f"⚪ **{valgt_hold} DEFENSIV**")
+                draw_average_pitch(avg_out, "#333333", t_logo)
             else:
                 # --- DEBUG HJÆLP ---
                 st.error(f"Ingen data fundet i Remote Shapes for {valgt_hold}")
