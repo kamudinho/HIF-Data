@@ -92,7 +92,7 @@ def vis_side(analysis_package=None):
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
         formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.subheader(f"{valgt_hold} - Formation: {formation}")
+        st.caption(f"{valgt_hold} - Formation: {formation}")
         
         def get_avg(df, phase):
             df_f = df[df['POSSESSION_TYPE'].str.contains(phase, case=False, na=False)]
@@ -112,7 +112,6 @@ def vis_side(analysis_package=None):
         c1, c2 = st.columns(2)
         for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
             with col:
-                st.caption(f"● {title}")
                 fig, ax = pitch.draw(figsize=(4, 5))
                 if not data.empty:
                     for _, row in data.iterrows():
