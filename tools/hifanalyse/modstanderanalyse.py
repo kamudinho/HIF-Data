@@ -147,27 +147,34 @@ def vis_side(analysis_package=None):
     # --- OPDATERET DEL AF tabs[0] ---
     with tabs[0]:
         if not df_remote.empty and hold_uuid:
-            # 1. Find alle rækker for holdet
-            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(hold_uuid[:15], na=False)]
+            # SIKKER SØGNING: Vi trimmer og tvinger til lower både i søgning og data
+            target_uuid = hold_uuid[:15].strip().lower()
+            df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'].str.contains(target_uuid, na=False)]
             
             if not df_h.empty:
-                
-                c1, c2 = st.columns(2)
-                
-                # Beregn gennemsnit for de to faser
+                # Beregn gennemsnit
                 avg_in = get_average_shape(df_h, 'inPossession')
                 avg_out = get_average_shape(df_h, 'outOfPossession')
                 
-                with c1:
-                    # Vi skal tilrette draw_remote_pitch til at modtage en DataFrame i stedet for en Row
-                    st.write("**MED BOLD (In Possession)**")
-                    draw_average_pitch(avg_in, t_color, t_logo)
-                    
-                with c2:
-                    st.write("**UDEN BOLD (Out of Possession)**")
-                    draw_average_pitch(avg_out, "#333333", t_logo)
+                if avg_in.empty and avg_out.empty:
+                    st.warning("Fandt rækker for holdet, men kunne ikke udpakke spiller-positioner.")
+                else:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.caption("🔴 **OFFENSIV (Med bold)**")
+                        draw_average_pitch(avg_in, t_color, t_logo)
+                    with c2:
+                        st.caption("⚪ **DEFENSIV (Uden bold)**")
+                        draw_average_pitch(avg_out, "#333333", t_logo)
             else:
-                st.error("Ingen data fundet for dette hold.")
+                # --- DEBUG HJÆLP ---
+                st.error(f"Ingen data fundet i Remote Shapes for {valgt_hold}")
+                with st.expander("Klik for at se hvorfor (Debug)"):
+                    st.write(f"Søger efter UUID: `{target_uuid}`")
+                    st.write("UUIDs der findes i databasen:")
+                    st.write(df_remote['CONTESTANT_OPTAUUID'].unique()[:5])
+        else:
+            st.warning("Data mangler eller hold UUID kunne ikke findes.")
             
     with tabs[1]: # MED BOLD (Heatmaps)
         if not df_events.empty and hold_uuid:
