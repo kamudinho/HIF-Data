@@ -51,7 +51,7 @@ def get_avg(df, phase):
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
     return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
 
-# --- 2. MASTER MATCHER (Filtreret på COMPETITION_OPTAUUID) ---
+# --- 2. MASTER MATCHER ---
 def build_team_map(df_remote, df_matches):
     target_comp_uuid = COMPETITIONS.get(COMPETITION_NAME, {}).get("COMPETITION_OPTAUUID")
     if target_comp_uuid and 'COMPETITION_OPTAUUID' in df_matches.columns:
@@ -73,7 +73,7 @@ def build_team_map(df_remote, df_matches):
             continue
         matched_name = next((name for m_id, name in mapping_lookup.items() if m_id and u_clean.startswith(m_id)), None)
         if not matched_name and not db_teams.empty:
-            match_row = db_teams[db_teams['id'].str.lower() == u_clean]
+            match_row = db_teams[df_teams['id'].str.lower() == u_clean]
             if not match_row.empty: matched_name = match_row['name'].iloc[0]
         if matched_name: team_map[matched_name] = u_raw
     return team_map
@@ -100,7 +100,7 @@ def vis_side(analysis_package=None):
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
     
-    # FIGSIZE=(3, 3.8) gør banerne små nok til at undgå scroll i 2 kolonner
+    # Kompakt størrelse for hele baner
     pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
     # --- TAB 0: STRUKTUR ---
@@ -111,29 +111,34 @@ def vis_side(analysis_package=None):
             data = get_avg(df_h, phase)
             with col:
                 st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
-                fig, ax = pitch.draw(figsize=(3, 3.8))
+                fig, ax = pitch.draw(figsize=(2.5, 3.5))
                 if not data.empty:
-                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.6, zorder=3)
+                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=120, color=dot_c, edgecolors='black', linewidth=0.6, zorder=3)
                     for _, row in data.iterrows():
-                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=5, fontweight='bold', zorder=4)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
-    # --- TAB 1: MED BOLD ---
+    # --- TAB 1: MED BOLD (Opbygning 0-50 / Gennembrud 50-100) ---
     with tabs[1]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
                 c1, c2 = st.columns(2)
-                for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
+                # Opbygning: 0-50 (Egen banehalvdel) | Gennembrud: 50-100 (Modstanders banehalvdel)
+                for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "GENNEMBRUD"], [(0,50), (50,100)]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
                         p_half = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1)
-                        fig, ax = p_half.draw(figsize=(3, 3))
+                        fig, ax = p_half.draw(figsize=(2.5, 2.5))
+                        
+                        # Filtrer events baseret på x_lim
                         df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
+                        
                         if not df_z.empty:
                             sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
+                        
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
@@ -147,7 +152,7 @@ def vis_side(analysis_package=None):
                 for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = pitch.draw(figsize=(3, 3.8))
+                        fig, ax = pitch.draw(figsize=(2.5, 3.5))
                         df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                         if not df_d.empty:
                             sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
