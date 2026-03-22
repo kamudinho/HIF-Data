@@ -48,20 +48,15 @@ def get_avg(df, phase):
         except: continue
     if not all_p: return pd.DataFrame()
     res = pd.DataFrame(all_p)
-    # Opta koordinater: X er længden (0-100), Y er bredden (0-100)
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
     return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
 
-# --- 2. MASTER MATCHER (Uden hårdt sæson-filter for at undgå tom liste) ---
+# --- 2. MASTER MATCHER (FIXET: Viser nu alle hold fra dataen) ---
 def build_team_map(df_remote, df_matches):
-    # Vi henter ALLE unikke hold-ID'er fra positionsdataen
     raw_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
     team_map = {}
-    
-    # Din eksisterende mapping fra TEAMS filen
     mapping_lookup = {str(info.get('opta_uuid', '')).lower()[:8]: name for name, info in TEAMS.items()}
     
-    # Saml alle holdnavne fra kamp-listen (hvis den findes)
     db_teams = pd.DataFrame()
     if not df_matches.empty:
         home = df_matches[['CONTESTANTHOME_OPTAUUID', 'CONTESTANTHOME_NAME']].rename(columns={'CONTESTANTHOME_OPTAUUID': 'id', 'CONTESTANTHOME_NAME': 'name'})
@@ -72,24 +67,21 @@ def build_team_map(df_remote, df_matches):
         u_clean = str(u_raw).lower().strip()
         matched_name = None
         
-        # 1. Prøv først din manuelle mapping (den er mest præcis)
+        # Tjekker mapping_lookup
         for m_id, name in mapping_lookup.items():
             if m_id and (m_id in u_clean or u_clean.startswith(m_id)):
                 matched_name = name
                 break
         
-        # 2. Hvis ikke fundet, så kig i kamp-databasen
+        # Hvis ikke i mapping, tjek db_teams
         if not matched_name and not db_teams.empty:
             match_row = db_teams[db_teams['id'].str.lower() == u_clean]
-            if not match_row.empty:
-                matched_name = match_row['name'].iloc[0]
+            if not match_row.empty: matched_name = match_row['name'].iloc[0]
         
-        # 3. Hvis stadig ikke fundet, så vis den bare som "Ukendt" i stedet for at slette den
-        if not matched_name:
-            matched_name = f"Ukendt ({u_clean[:6]})"
-            
+        # Fallback så holdet ikke forsvinder
+        if not matched_name: matched_name = f"Ukendt ({u_clean[:6]})"
+        
         team_map[matched_name] = u_raw
-        
     return team_map
 
 # --- 3. HOVEDFUNKTION ---
@@ -107,17 +99,12 @@ def vis_side(analysis_package=None):
         return
 
     team_map = build_team_map(df_remote, df_matches)
-    
-    # Valg af hold
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
     event_uuid_ref = str(valgt_uuid_data).lower()[:8]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
-
-    # Pitch definition (Delte indstillinger)
-    # Vi bruger 'opta' pitch_type så VerticalPitch ved at X er vertikal og Y er horisontal
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
     # --- TAB 0: STRUKTUR ---
@@ -135,14 +122,9 @@ def vis_side(analysis_package=None):
                 st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
                 fig, ax = pitch.draw(figsize=(3, 4))
                 if not data.empty:
-                    # scatter bruger (x, y) men i VerticalPitch med pitch_type='opta'
-                    # skal vi plotte (x, y) direkte
-                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], 
-                               s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
+                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
                     for _, row in data.iterrows():
-                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], 
-                                str(int(row['shirtNumber'])), color='white', ha='center', 
-                                va='center', fontsize=6, fontweight='bold', zorder=4)
+                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
@@ -154,7 +136,6 @@ def vis_side(analysis_package=None):
             if not df_h_ev.empty:
                 half_pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1)
                 c1, c2 = st.columns(2)
-                # Opbygning: 0-50, Afslutning: 50-100
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
