@@ -126,22 +126,15 @@ def vis_side(analysis_package=None):
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
                 c1, c2 = st.columns(2)
-                # Opbygning: 0-50 (Egen banehalvdel) | Gennembrud: 50-100 (Modstanders banehalvdel)
-                for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "GENNEMBRUD"], [(0,50), (50,100)]):
+                for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
                         st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
                         p_half = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1)
-                        fig, ax = p_half.draw(figsize=(2.5, 2.5))
-                        
-                        # Filtrer events baseret på x_lim
+                        fig, ax = p_half.draw(figsize=(3, 3))
                         df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
-                        
                         if not df_z.empty:
                             sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
-                        
-                        draw_logo_on_ax(ax, t_logo)
-                        st.pyplot(fig, use_container_width=True)
-                        plt.close(fig)
+                        st.pyplot(fig, use_container_width=True); plt.close(fig)
 
     # --- TAB 2: MOD BOLD ---
     with tabs[2]:
