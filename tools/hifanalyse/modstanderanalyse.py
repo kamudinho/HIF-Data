@@ -41,7 +41,6 @@ def draw_logo_on_ax(ax, logo_img):
 
 # --- 2. TEGNEFUNKTION TIL STRUKTUR ---
 def draw_average_pitch(df_avg, color, logo):
-    # Mindre figsize (bredde, højde) for at undgå scrolling
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
     fig, ax = pitch.draw(figsize=(4, 5)) 
     
@@ -51,14 +50,11 @@ def draw_average_pitch(df_avg, color, logo):
             y = row['averageRolePositionY']
             num = row['shirtNumber']
             
-            # Lidt mindre prikker (s=400) passer bedre til en mindre bane
             ax.scatter(y, x, s=200, color=color, edgecolors='black', linewidth=0.7, alpha=0.9, zorder=3)
             ax.text(y, x, str(int(num)), color='white', ha='center', va='center', 
                     fontsize=6, fontweight='bold', zorder=4)
             
     draw_logo_on_ax(ax, logo)
-    
-    # use_container_width=False gør at de ikke strækker sig til at fylde alt
     st.pyplot(fig, use_container_width=False)
     plt.close(fig)
 
@@ -79,53 +75,42 @@ def vis_side(analysis_package=None):
         st.warning("Ingen positions-data (remote_shapes) fundet.")
         return
 
-    # 2. FIND DE TO HOLD I DATAEN (Forbedret Matching)
+    # 2. FIND DE TO HOLD I DATAEN (Robust Matching)
     uuids_i_data = df_remote_raw['CONTESTANT_OPTAUUID'].unique().tolist()
-    
-    # Hent hjemme- og udehold fra matches
     h_name = df_matches['CONTESTANTHOME_NAME'].iloc[0]
     a_name = df_matches['CONTESTANTAWAY_NAME'].iloc[0]
-    h_uuid_match = str(df_matches['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
-    a_uuid_match = str(df_matches['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
+    h_uuid_ref = str(df_matches['CONTESTANTHOME_OPTAUUID'].iloc[0]).strip().lower()
+    a_uuid_ref = str(df_matches['CONTESTANTAWAY_OPTAUUID'].iloc[0]).strip().lower()
 
-    holds_navne = []
     uuid_to_name = {}
+    holds_navne = []
 
     for u in uuids_i_data:
         u_clean = str(u).strip().lower()
-        
-        # Strategi A: Findes de første 8 tegn i hjemmeholdets UUID?
-        if u_clean[:8] in h_uuid_match or h_uuid_match[:8] in u_clean:
-            holds_navne.append(h_name)
+        # Strategi: Match på de første 8 tegn
+        if u_clean[:8] in h_uuid_ref or h_uuid_ref[:8] in u_clean:
             uuid_to_name[h_name] = u
-        # Strategi B: Findes de første 8 tegn i udeholdets UUID?
-        elif u_clean[:8] in a_uuid_match or a_uuid_match[:8] in u_clean:
-            holds_navne.append(a_name)
+            holds_navne.append(h_name)
+        elif u_clean[:8] in a_uuid_ref or a_uuid_ref[:8] in u_clean:
             uuid_to_name[a_name] = u
-        # Strategi C: Nødbremse - hvis der kun er to UUIDs i data, og vi har fundet den ene
-        # (Dette sikrer at det andet hold altid kommer med)
-    
-    # Hvis den stadig kun finder ét hold, så tildel den anden UUID til det manglende hold
+            holds_navne.append(a_name)
+
+    # NØDBREMSE: Hvis vi kun fandt ét hold, men der er to ID'er i dataen
     if len(uuids_i_data) == 2 and len(holds_navne) == 1:
         fundet_navn = holds_navne[0]
         mangler_navn = a_name if fundet_navn == h_name else h_name
-        anden_uuid = [u for u in uuids_i_data if u != uuid_to_name[fundet_navn]][0]
+        rest_uuid = [u for u in uuids_i_data if u != uuid_to_name[fundet_navn]][0]
+        uuid_to_name[mangler_navn] = rest_uuid
         holds_navne.append(mangler_navn)
-        uuid_to_name[mangler_navn] = anden_uuid
 
     # 3. BRUGERVALG
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(set(holds_navne))))
     t_color, t_logo = get_team_style(valgt_hold)
-    
-    # Denne UUID bruges til TAB 0 (Remote Shapes)
-    valgt_uuid_remote = uuid_to_name[valgt_hold]
-    
-    # Denne UUID bruges til de andre tabs (Events/Opta) - vi finder den korte version
-    hold_uuid = str(valgt_uuid_remote).strip().lower()
+    valgt_uuid = uuid_to_name[valgt_hold]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    # --- HJÆLPEFUNKTION TIL GENNEMSNIT (Ligger nu sikkert her) ---
+    # Hjælpefunktion til gennemsnit
     def get_average_shape(df_hold, possession_type):
         df_fase = df_hold[df_hold['POSSESSION_TYPE'].str.contains(possession_type, case=False)]
         all_players = []
@@ -133,8 +118,7 @@ def vis_side(analysis_package=None):
             roles_raw = row.get('SHAPE_ROLE', [])
             roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw
             if isinstance(roles, list):
-                for r in roles:
-                    all_players.append(r)
+                for r in roles: all_players.append(r)
         if not all_players: return pd.DataFrame()
         df_p = pd.DataFrame(all_players)
         df_p['averageRolePositionX'] = pd.to_numeric(df_p['averageRolePositionX'], errors='coerce')
@@ -145,7 +129,7 @@ def vis_side(analysis_package=None):
 
     # --- TAB 0: STRUKTUR ---
     with tabs[0]:
-        df_h = df_remote_raw[df_remote_raw['CONTESTANT_OPTAUUID'] == valgt_uuid_remote]
+        df_h = df_remote_raw[df_remote_raw['CONTESTANT_OPTAUUID'] == valgt_uuid]
         if not df_h.empty:
             avg_in = get_average_shape(df_h, 'inPossession')
             avg_out = get_average_shape(df_h, 'outOfPossession')
@@ -157,12 +141,15 @@ def vis_side(analysis_package=None):
                 st.caption(f"⚪ **{valgt_hold} DEFENSIV**")
                 draw_average_pitch(avg_out, "#333333", t_logo)
         else:
-            st.warning("Ingen positionsdata fundet for det valgte hold.")
+            st.warning("Ingen positionsdata fundet.")
 
-    # --- TAB 1: MED BOLD (Heatmaps) ---
+    # --- TAB 1, 2, 3: EVENTS (Bruger samme valgte UUID) ---
+    # Vi bruger en kortere version til event-matching da Opta Events tit bruger kortere ID'er
+    event_uuid_match = str(valgt_uuid)[:10]
+
     with tabs[1]:
-        if not df_events.empty and hold_uuid:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:10], na=False)]
+        if not df_events.empty:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_match, na=False)]
             pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
             c1, c2 = st.columns(2)
             for col, title, x_range in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0, 50), (50, 100)]):
@@ -175,12 +162,10 @@ def vis_side(analysis_package=None):
                         sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax)
                     draw_logo_on_ax(ax, t_logo)
                     st.pyplot(fig); plt.close(fig)
-        else: st.info("Ingen hændelsesdata fundet.")
 
-    # --- TAB 2: MOD BOLD ---
     with tabs[2]:
-        if not df_events.empty and hold_uuid:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:10], na=False)]
+        if not df_events.empty:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_match, na=False)]
             pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
             c1, c2 = st.columns(2)
             for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
@@ -192,10 +177,9 @@ def vis_side(analysis_package=None):
                         sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax)
                     draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
 
-    # --- TAB 3: TOP 5 ---
     with tabs[3]:
-        if not df_events.empty and hold_uuid:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(hold_uuid[:10], na=False)]
+        if not df_events.empty:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_match, na=False)]
             cols = st.columns(3)
             metrics = [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]
             for i, (tid, nav) in enumerate(metrics):
