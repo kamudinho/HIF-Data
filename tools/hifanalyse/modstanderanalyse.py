@@ -54,10 +54,14 @@ def get_avg(df, phase):
 
 # --- 2. MASTER MATCHER (Uden hårdt sæson-filter for at undgå tom liste) ---
 def build_team_map(df_remote, df_matches):
+    # Vi henter ALLE unikke hold-ID'er fra positionsdataen
     raw_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
     team_map = {}
+    
+    # Din eksisterende mapping fra TEAMS filen
     mapping_lookup = {str(info.get('opta_uuid', '')).lower()[:8]: name for name, info in TEAMS.items()}
     
+    # Saml alle holdnavne fra kamp-listen (hvis den findes)
     db_teams = pd.DataFrame()
     if not df_matches.empty:
         home = df_matches[['CONTESTANTHOME_OPTAUUID', 'CONTESTANTHOME_NAME']].rename(columns={'CONTESTANTHOME_OPTAUUID': 'id', 'CONTESTANTHOME_NAME': 'name'})
@@ -67,15 +71,25 @@ def build_team_map(df_remote, df_matches):
     for u_raw in raw_uuids:
         u_clean = str(u_raw).lower().strip()
         matched_name = None
+        
+        # 1. Prøv først din manuelle mapping (den er mest præcis)
         for m_id, name in mapping_lookup.items():
             if m_id and (m_id in u_clean or u_clean.startswith(m_id)):
                 matched_name = name
                 break
+        
+        # 2. Hvis ikke fundet, så kig i kamp-databasen
         if not matched_name and not db_teams.empty:
             match_row = db_teams[db_teams['id'].str.lower() == u_clean]
-            if not match_row.empty: matched_name = match_row['name'].iloc[0]
-        if not matched_name: matched_name = f"Ukendt ({u_clean[:6]})"
+            if not match_row.empty:
+                matched_name = match_row['name'].iloc[0]
+        
+        # 3. Hvis stadig ikke fundet, så vis den bare som "Ukendt" i stedet for at slette den
+        if not matched_name:
+            matched_name = f"Ukendt ({u_clean[:6]})"
+            
         team_map[matched_name] = u_raw
+        
     return team_map
 
 # --- 3. HOVEDFUNKTION ---
