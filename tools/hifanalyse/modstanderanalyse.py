@@ -9,6 +9,9 @@ from PIL import Image
 import json
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
+# --- KONSTANTER FRA DIN KONFIGURATION ---
+CURRENT_SEASON = "2025/2026"
+
 # --- 1. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
@@ -53,6 +56,10 @@ def get_avg(df, phase):
 
 # --- 2. MASTER MATCHER ---
 def build_team_map(df_remote, df_matches):
+    # Vi filtrerer kun hold, der optræder i den nuværende sæson, hvis kolonnen findes
+    if 'SEASONNAME' in df_matches.columns:
+        df_matches = df_matches[df_matches['SEASONNAME'] == CURRENT_SEASON]
+    
     raw_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
     team_map = {}
     mapping_lookup = {str(info.get('opta_uuid', '')).lower()[:8]: name for name, info in TEAMS.items()}
@@ -87,15 +94,21 @@ def vis_side(analysis_package=None):
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
-    if df_remote.empty:
-        st.warning("Ingen positionsdata fundet.")
+    # --- TJEK SÆSON ---
+    # Hvis OB er i listen, er det sandsynligvis fordi din data-query henter alt fra databasen.
+    # Vi tvinger den her til kun at vise hold fra 2025/2026 hvis muligt.
+    team_map = build_team_map(df_remote, df_matches)
+    
+    if not team_map:
+        st.warning(f"Ingen data fundet for sæsonen {CURRENT_SEASON}.")
         return
 
-    team_map = build_team_map(df_remote, df_matches)
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
     event_uuid_ref = str(valgt_uuid_data).lower()[:8]
+
+    st.caption(f"Viser data for: **{valgt_hold}** | Sæson: {CURRENT_SEASON}")
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
@@ -103,16 +116,14 @@ def vis_side(analysis_package=None):
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
         formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.caption(f"**{valgt_hold}** | Formation: {formation}")
         
         avg_in, avg_out = get_avg(df_h, 'inPossession'), get_avg(df_h, 'outOfPossession')
-        # RETTET: line_width -> linewidth
         pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
         
         c1, c2 = st.columns(2)
         for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
             with col:
-                st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title}</p>", unsafe_allow_html=True)
+                st.write(f"<p style='text-align:center; font-size:12px; margin-bottom:-10px;'>{title} ({formation})</p>", unsafe_allow_html=True)
                 fig, ax = pitch.draw(figsize=(3, 3.8))
                 if not data.empty:
                     for _, row in data.iterrows():
@@ -127,7 +138,6 @@ def vis_side(analysis_package=None):
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
-                # RETTET: line_width -> linewidth (hvis det var der)
                 pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1)
                 c1, c2 = st.columns(2)
                 for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
