@@ -7,9 +7,15 @@ import requests
 from io import BytesIO
 from PIL import Image
 import json
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-# --- 1. HJÆLPEFUNKTIONER (LOGO & FARVER) ---
+# Vi importerer dine mappings
+try:
+    from data.utils.team_mapping import TEAMS, TEAM_COLORS
+except ImportError:
+    TEAMS = {}
+    TEAM_COLORS = {}
+
+# --- 1. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
     if not url: return None
@@ -30,44 +36,7 @@ def get_team_style(team_name):
         if url: logo_img = get_logo_img(url)
     return color, logo_img
 
-def draw_logo_on_ax(ax, logo_img):
-    if logo_img:
-        try:
-            ax_image = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
-            ax_image.imshow(logo_img)
-            ax_image.axis('off')
-        except: pass
-
-# --- 2. DEN NYE "MASTER MATCHER" LOGIK ---
-def get_clean_team_map(df_remote, df_matches):
-    """Matcher UUIDs fra data med navne fra team_mapping og matches-tabellen."""
-    uuids_i_data = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
-    final_map = {} 
-    
-    # Hent officielle navne fra kamp-dataen som backup
-    h_name_db = df_matches['CONTESTANTHOME_NAME'].iloc[0] if not df_matches.empty else "Hjemmehold"
-    a_name_db = df_matches['CONTESTANTAWAY_NAME'].iloc[0] if not df_matches.empty else "Udehold"
-    
-    for i, u_raw in enumerate(uuids_i_data):
-        u_clean = str(u_raw).strip().lower()
-        found_name = None
-        
-        # PRIORITET 1: Tjek opta_uuid i din mapping (Fuzzy match på de første 8 tegn)
-        for t_name, t_info in TEAMS.items():
-            mapped_uuid = str(t_info.get('opta_uuid', '')).strip().lower()
-            if mapped_uuid and (mapped_uuid[:8] in u_clean or u_clean[:8] in mapped_uuid):
-                found_name = t_name
-                break
-        
-        # PRIORITET 2: Hvis ikke fundet i mapping, brug navnet fra kamp-tabellen (Home/Away rækkefølge)
-        if not found_name:
-            found_name = h_name_db if i == 0 else a_name_db
-            
-        final_map[found_name] = u_raw
-        
-    return final_map
-
-# --- 3. TEGNEFUNKTIONER ---
+# --- 2. TEGNEFUNKTION TIL STRUKTUR ---
 def draw_average_pitch(df_avg, color, logo):
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', line_zorder=2)
     fig, ax = pitch.draw(figsize=(4, 5)) 
@@ -77,33 +46,17 @@ def draw_average_pitch(df_avg, color, logo):
             num = row['shirtNumber']
             ax.scatter(y, x, s=250, color=color, edgecolors='black', linewidth=1, alpha=0.9, zorder=3)
             ax.text(y, x, str(int(num)), color='white', ha='center', va='center', fontsize=7, fontweight='bold', zorder=4)
-    draw_logo_on_ax(ax, logo)
+    if logo:
+        ax_image = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
+        ax_image.imshow(logo)
+        ax_image.axis('off')
     st.pyplot(fig, use_container_width=False)
     plt.close(fig)
 
-def get_average_shape(df_hold, possession_type):
-    df_fase = df_hold[df_hold['POSSESSION_TYPE'].str.contains(possession_type, case=False, na=False)]
-    all_players = []
-    for _, row in df_fase.iterrows():
-        roles = row.get('SHAPE_ROLE', [])
-        if isinstance(roles, str):
-            try: roles = json.loads(roles)
-            except: roles = []
-        if isinstance(roles, list):
-            for r in roles: all_players.append(r)
-    
-    if not all_players: return pd.DataFrame()
-    df_p = pd.DataFrame(all_players)
-    df_p['averageRolePositionX'] = pd.to_numeric(df_p['averageRolePositionX'], errors='coerce')
-    df_p['averageRolePositionY'] = pd.to_numeric(df_p['averageRolePositionY'], errors='coerce')
-    return df_p.groupby('shirtNumber').agg({'averageRolePositionX': 'mean', 'averageRolePositionY': 'mean'}).reset_index()
-
-# --- 4. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
-    st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
-    
     if not analysis_package:
-        st.error("Ingen data fundet i pakken.")
+        st.error("Ingen data modtaget.")
         return
 
     df_remote = analysis_package.get("remote_shapes", pd.DataFrame())
@@ -111,82 +64,104 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
     if df_remote.empty:
-        st.warning("Ingen positionsdata tilgængelig i databasen.")
+        st.warning("Ingen positionsdata fundet.")
         return
 
-    # Kør den forbedrede matching
-    team_map = get_clean_team_map(df_remote, df_matches)
-    
-    # UI - Vælg hold
+    # --- DEBUG SECTION (FJERN NÅR DET VIRKER) ---
+    # st.write("UUIDs i data:", df_remote['CONTESTANT_OPTAUUID'].unique().tolist())
+
+    # --- DEN ULTIMATIVE MATCHER ---
+    uuids_i_data = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
+    team_map = {} 
+
+    # Vi løber igennem alle UUIDs fundet i databasen
+    for i, u_raw in enumerate(uuids_i_data):
+        u_clean = str(u_raw).strip().lower()
+        match_found = False
+        
+        # Tjek mod din team_mapping.py
+        for t_name, t_info in TEAMS.items():
+            # Vi tjekker både 'opta_uuid' og 'opta_id'
+            m_uuid = str(t_info.get('opta_uuid', '')).strip().lower()
+            if m_uuid and (m_uuid[:8] in u_clean or u_clean[:8] in m_uuid):
+                team_map[t_name] = u_raw
+                match_found = True
+                break
+        
+        # Hvis intet match i mapping, kig i matches-tabellen
+        if not match_found and not df_matches.empty:
+            if i == 0:
+                name = df_matches['CONTESTANTHOME_NAME'].iloc[0]
+                team_map[name] = u_raw
+            else:
+                name = df_matches['CONTESTANTAWAY_NAME'].iloc[0]
+                team_map[name] = u_raw
+
+    # Hvis menuen stadig er tom, så vis rå ID'er så vi ikke dør helt
+    if not team_map:
+        team_map = {str(u): u for u in uuids_i_data}
+
+    # UI
     valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())))
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
     
-    # Unikt ID til filtrering af events (kigger på de første 8 tegn af det fundne ID)
+    # ID til events
     event_uuid_ref = str(valgt_uuid_data).lower()[:8]
 
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
 
-    # --- TAB 0: STRUKTUR ---
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
         formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.subheader(f"{valgt_hold} - Formation: {formation}")
+        st.subheader(f"{valgt_hold} ({formation})")
         
-        avg_in = get_average_shape(df_h, 'inPossession')
-        avg_out = get_average_shape(df_h, 'outOfPossession')
-        
+        # Beregn gennemsnit
+        def get_avg(df, phase):
+            df_f = df[df['POSSESSION_TYPE'].str.contains(phase, case=False, na=False)]
+            all_p = []
+            for r in df_f['SHAPE_ROLE']:
+                try:
+                    roles = json.loads(r) if isinstance(r, str) else r
+                    if isinstance(roles, list): all_p.extend(roles)
+                except: continue
+            if not all_p: return pd.DataFrame()
+            res = pd.DataFrame(all_p)
+            res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
+            return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
+
         c1, c2 = st.columns(2)
         with c1:
-            st.caption("🔴 **OFFENSIV STRUKTUR**")
-            draw_average_pitch(avg_in, t_color, t_logo)
+            st.caption("🔴 **OFFENSIV**")
+            draw_average_pitch(get_avg(df_h, 'inPossession'), t_color, t_logo)
         with c2:
-            st.caption("⚪ **DEFENSIV STRUKTUR**")
-            draw_average_pitch(avg_out, "#333333", t_logo)
+            st.caption("⚪ **DEFENSIV**")
+            draw_average_pitch(get_avg(df_h, 'outOfPossession'), "#333333", t_logo)
 
-    # --- TAB 1: MED BOLD (Heatmaps) ---
-    with tabs[1]:
+    # --- TABS FOR HEATMAPS & TOP 5 ---
+    with tabs[1]: # MED BOLD
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
-                pitch_h = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
-                c1, c2 = st.columns(2)
-                for col, title, x_range in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0, 50), (50, 100)]):
+                pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333')
+                cols = st.columns(2)
+                for col, title, x_lim in zip(cols, ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
                     with col:
                         st.write(f"**{title}**")
-                        fig, ax = pitch_h.draw(figsize=(4, 5))
-                        ax.set_ylim(x_range[0], x_range[1])
-                        df_z = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] >= x_range[0]) & (df_h_ev['LOCATIONX'] < x_range[1])]
+                        fig, ax = pitch.draw(figsize=(4,5))
+                        ax.set_ylim(x_lim[0], x_lim[1])
+                        df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
                         if not df_z.empty:
                             sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
-                        draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
-            else: st.info("Ingen hændelser fundet for dette hold.")
+                        st.pyplot(fig); plt.close(fig)
+            else: st.info("Ingen hændelses-data fundet.")
 
-    # --- TAB 2: MOD BOLD ---
-    with tabs[2]:
+    with tabs[3]: # TOP 5
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
-            pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333')
-            c1, c2 = st.columns(2)
-            # 4=Tackle, 8=Interception, 49=Recovery | 5=Dueller
-            for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
+            c1, c2, c3 = st.columns(3)
+            for col, (ids, label) in zip([c1, c2, c3], [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]):
                 with col:
-                    st.write(f"**{title}**")
-                    fig, ax = pitch.draw(figsize=(4, 5))
-                    df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
-                    if not df_d.empty:
-                        sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
-                    draw_logo_on_ax(ax, t_logo); st.pyplot(fig); plt.close(fig)
-
-    # --- TAB 3: TOP 5 ---
-    with tabs[3]:
-        if not df_events.empty:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
-            cols = st.columns(3)
-            metrics = [([1], 'Afleveringer'), ([4,5], 'Dueller'), ([8,49], 'Erobringer')]
-            for i, (tid, nav) in enumerate(metrics):
-                with cols[i]:
-                    st.subheader(nav)
-                    top = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(tid)]['PLAYER_NAME'].value_counts().head(5)
-                    for name, val in top.items():
-                        st.markdown(f"**{val}** {name}")
+                    st.subheader(label)
+                    stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
+                    for n, v in stats.items(): st.write(f"**{v}** {n}")
