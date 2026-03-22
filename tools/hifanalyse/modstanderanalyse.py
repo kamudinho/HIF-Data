@@ -95,6 +95,8 @@ def vis_side(analysis_package=None):
             })
     df_remote = pd.DataFrame(processed_rows)
 
+    st.write("Kolonner i Remote Shapes:", df_remote_raw.columns.tolist())
+
     # 3. HOLDVALG
     all_teams = sorted(list(set(df_matches['CONTESTANTHOME_NAME']) | set(df_matches['CONTESTANTAWAY_NAME']))) if not df_matches.empty else []
     if not all_teams: 
