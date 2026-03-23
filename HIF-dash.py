@@ -281,10 +281,11 @@ try:
                 shapes.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
-            if sel == "Modstanderanalyse": # Tilføj denne blok
-                import tools.ligaen.modstanderanalyse as ma
-                importlib.reload(ma)
-                ma.vis_side(dp)    
+            if sel == "Modstanderanalyse": 
+                import tools.ligaen.modstanderanalyse as ma  # RETTET FRA hifanalyse TIL ligaen
+                import importlib
+                importlib.reload(ma) # Tvinger den til at se dine nyeste ændringer
+                ma.vis_side(dp)
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
                 tt.vis_side(dp)
