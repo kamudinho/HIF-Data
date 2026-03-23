@@ -57,7 +57,7 @@ TEAM_COLORS = {
     "Hillerød": {"primary": "#ff6600", "secondary": "#000000"},
     "Esbjerg": {"primary": "#003399", "secondary": "#ffffff"},
     "Lyngby": {"primary": "#003366", "secondary": "#ffffff"},
-    "Horsens": {"primary": "#FCDB00", "secondary": "#000000"},
+    "Horsens": {"primary": "#E3C91A", "secondary": "#000000"},
     "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
     "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
     "Kolding": {"primary": "#ffffff", "secondary": "#0000ff"},
