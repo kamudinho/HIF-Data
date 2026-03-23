@@ -141,6 +141,7 @@ def vis_side(df_raw=None):
 
         fig = make_subplots(rows=1, cols=len(metrics))
 
+        # Dynamisk logo-størrelse for ensartet look
         logo_size = 0.45 if len(metrics) > 3 else 0.3
 
         for i, m in enumerate(metrics):
@@ -148,8 +149,9 @@ def vis_side(df_raw=None):
             v2 = d2.iloc[0].get(m, 0)
             col = i + 1
             
-            # Korrekt navngivning af akser: 'x', 'x2', 'x3' osv.
-            axis_name = f"x{col}" if col > 1 else "x"
+            # FIXED: Plotly navngivning (x1 -> x, y1 -> y)
+            x_axis_name = f"x{col}" if col > 1 else "x"
+            y_axis_name = f"y{col}" if col > 1 else "y"
 
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
@@ -172,11 +174,12 @@ def vis_side(df_raw=None):
             fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
             fig.update_xaxes(showticklabels=False, row=1, col=col)
 
-            # Labels under hver boks
+            # Labels under hver boks med de korrekte akse-navne
             fig.add_annotation(
                 dict(
                     x=0.5, y=-0.25, 
-                    xref=f"{axis_name} domain", yref=f"y{col} domain",
+                    xref=f"{x_axis_name} domain", 
+                    yref=f"{y_axis_name} domain",
                     text=labels[i],
                     showarrow=False,
                     font=dict(size=11, color="#333", weight="bold"),
@@ -184,15 +187,16 @@ def vis_side(df_raw=None):
                 )
             )
 
+            # Logoer placeret relativt til den korrekte x-akse
             if l1:
                 fig.add_layout_image(dict(
-                    source=l1, xref=axis_name, yref="paper",
+                    source=l1, xref=x_axis_name, yref="paper",
                     x=0.28, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
             if l2:
                 fig.add_layout_image(dict(
-                    source=l2, xref=axis_name, yref="paper",
+                    source=l2, xref=x_axis_name, yref="paper",
                     x=0.72, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
