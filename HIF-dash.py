@@ -21,42 +21,48 @@ from datetime import datetime
 from io import StringIO
 
 def log_event_to_github(user, handling, maal):
-    """Skriver en ny række til action_log.csv på GitHub."""
     try:
-        # Hent TOKEN fra st.secrets (skal opsættes på Streamlit Cloud)
         token = st.secrets["GITHUB_TOKEN"]
         repo = "Kamudinho/HIF-data"
         path = "data/action_log.csv"
         url = f"https://api.github.com/repos/{repo}/contents/{path}"
-        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {token}"}
 
-        # 1. Hent den nuværende fil (for at få SHA og indhold)
+        # 1. Hent den nuværende fil
         r = requests.get(url, headers=headers)
-        if r.status_code != 200: return
+        if r.status_code == 200:
+            file_json = r.json()
+            sha = file_json['sha']
+            # Læs ALT indhold fra GitHub
+            old_content = base64.b64decode(file_json['content']).decode('utf-8')
+            df_log = pd.read_csv(StringIO(old_content))
+        else:
+            # Hvis filen ikke findes, opret en tom en med kolonner
+            sha = None
+            df_log = pd.DataFrame(columns=["Dato", "Bruger", "Handling", "Mål"])
 
-        file_json = r.json()
-        sha = file_json['sha']
-        old_content = base64.b64decode(file_json['content']).decode('utf-8')
-        
-        # 2. Tilføj den nye linje
-        df_log = pd.read_csv(StringIO(old_content))
-        ny_række = {
+        # 2. Opret den nye række
+        ny_række = pd.DataFrame([{
             "Dato": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Bruger": user,
             "Handling": handling,
             "Mål": maal
-        }
-        df_log = pd.concat([df_log, pd.DataFrame([ny_række])], ignore_index=True)
+        }])
+
+        # 3. Sæt dem sammen (vigtigt: vi beholder df_log her)
+        df_updated = pd.concat([df_log, ny_række], ignore_index=True)
         
-        # 3. Konverter tilbage og push
-        new_csv = df_log.to_csv(index=False)
+        # 4. Push til GitHub
+        new_csv = df_updated.to_csv(index=False)
         encoded = base64.b64encode(new_csv.encode('utf-8')).decode('utf-8')
         
         payload = {
             "message": f"Log: {user} -> {handling}",
-            "content": encoded,
-            "sha": sha
+            "content": encoded
         }
+        if sha:
+            payload["sha"] = sha # SHA er nødvendig for at opdatere eksisterende fil
+
         requests.put(url, headers=headers, json=payload)
     except Exception as e:
         print(f"Log-fejl: {e}")
