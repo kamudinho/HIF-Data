@@ -4,7 +4,7 @@ import plotly.express as px
 from datetime import datetime
 from data.data_load import load_local_players 
 
-# --- KONSTANTER & MAPPING ---
+# --- KONFIGURATION ---
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
@@ -24,39 +24,44 @@ TEAMS = {
 }
 
 def vis_side(conn, name_map=None):
-    # --- 1. LAYOUT & DROPDOWN ---
+    # --- 1. LAYOUT & DYNAMISK DROPDOWN ---
     header_col, select_col = st.columns([3, 1])
     with header_col:
         st.title("Betinia Ligaen | Fysisk Data")
+    
     with select_col:
         alle_hold = sorted(list(TEAMS.keys()))
-        valgt_hold = st.selectbox("Vælg hold", alle_hold, index=alle_hold.index("Hvidovre"))
+        # Finder index for Hvidovre som standard, ellers 0
+        hvi_idx = alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0
+        valgt_hold = st.selectbox("Vælg hold", alle_hold, index=hvi_idx)
         valgt_ssid = TEAMS[valgt_hold]["ssid"]
 
-    # --- 2. HENT DATA ---
+    # --- 2. DATA INDLÆSNING ---
     @st.cache_data(ttl=600)
     def get_data():
         today = datetime.now().strftime('%Y-%m-%d')
+        # Metadata til kampvalg
         q_meta = f"""SELECT "DATE", DESCRIPTION, MATCH_SSIID, HOME_SSIID, AWAY_SSIID 
                     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA 
                     WHERE "DATE" >= '2025-07-01' AND "DATE" <= '{today}'"""
+        # Fysisk data for alle spillere
         q_phys = """SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS 
                     WHERE MATCH_DATE >= '2025-07-01'"""
         return conn.query(q_meta), conn.query(q_phys)
 
     df_meta, df_phys = get_data()
 
+    if df_phys.empty:
+        st.warning("Ingen data fundet i databasen.")
+        return
+
     # --- 3. ROBUST DATABEHANDLING ---
-    # Case-insensitive kolonne tjek
+    # Case-insensitive kolonne-identifikation (Snowflake UPPERCASE fix)
     cols = {c.lower(): c for c in df_phys.columns}
     opta_col = cols.get('optaid', 'optaId')
     team_ssiid_col = cols.get('teamssiid', 'teamSsiId')
 
-    def clean_id(x):
-        if pd.isna(x) or x == "": return "0"
-        try: return str(int(float(x)))
-        except: return str(x).strip()
-
+    # Fix for minut-format og float-fejl
     def parse_mins(v):
         if pd.isna(v) or v == "": return 0.0
         try:
@@ -67,35 +72,44 @@ def vis_side(conn, name_map=None):
             return float(v_s)
         except: return 0.0
 
-    df_phys['optaId_str'] = df_phys[opta_col].apply(clean_id)
     df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_mins)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
     
-    # Lokale navne mapping
+    # Navne-mapping fra lokal Excel (hvis den findes)
     df_local = load_local_players()
     p_map = {}
-    if df_local is not None:
+    if df_local is not None and not df_local.empty:
         loc_col = {c.lower(): c for c in df_local.columns}.get('optaid', 'optaId')
-        df_local['c_oid'] = df_local[loc_col].apply(clean_id)
-        p_map = df_local.set_index('c_oid')['NAVN'].to_dict()
+        df_local['clean_oid'] = df_local[loc_col].apply(lambda x: str(int(float(x))) if pd.notnull(x) else "0")
+        p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
 
-    df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(r['optaId_str'], r['PLAYER_NAME']), axis=1)
-    df_phys = df_phys[~df_phys['optaId_str'].isin(EXCLUDE_LIST)].copy()
+    # Funktion til at hente pænt navn eller fallback til PLAYER_NAME
+    def get_display_name(row):
+        try:
+            oid = str(int(float(row[opta_col]))) if pd.notnull(row[opta_col]) else "0"
+            return p_map.get(oid, row['PLAYER_NAME'])
+        except:
+            return row['PLAYER_NAME']
+
+    df_phys['DISPLAY_NAME'] = df_phys.apply(get_display_name, axis=1)
+    
+    # Ekskluder test-id'er eller uønskede rækker
+    df_phys = df_phys[~df_phys[opta_col].astype(str).isin(EXCLUDE_LIST)].copy()
 
     # --- 4. TABS ---
-    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
+    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk Visning", "Top 5 (Liga)", "Kampanalyse"])
 
-    # TAB 1: FIND ALLE SPILLERE FOR VALGT SSID
+    # TAB 1: SÆSON-OVERSIGT FOR VALGTE HOLD (Baseret på TEAM_SSIID)
     with t1:
-        st.subheader(f"Sæsongennemsnit for {valgt_hold}")
-        # Vi filtrerer på teamSsiId kolonnen fra Snowflake
-        df_valgt = df_phys[df_phys[team_ssiid_col] == valgt_ssid].copy()
+        st.subheader(f"Sæsongennemsnit pr. 90 min: {valgt_hold}")
+        # Filtrerer alt data så vi kun ser spillere for det valgte holds SSID
+        df_team = df_phys[df_phys[team_ssiid_col] == valgt_ssid].copy()
         
-        summary = df_valgt.groupby('DISPLAY_NAME').agg({
+        summary = df_team.groupby('DISPLAY_NAME').agg({
             'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 'TOP_SPEED': 'max'
         }).reset_index()
 
-        summary = summary[summary['MINS_DEC'] > 15].copy()
+        summary = summary[summary['MINS_DEC'] > 15].copy() # Kun spillere med minutter
         summary['KM/90'] = (summary['DISTANCE'] / summary['MINS_DEC']) * 90 / 1000
         summary['HI m/90'] = (summary['HI_RUN'] / summary['MINS_DEC']) * 90
 
@@ -111,42 +125,51 @@ def vis_side(conn, name_map=None):
             use_container_width=True, hide_index=True
         )
 
+    # TAB 2: GRAFISK VISNING
     with t2:
-        valg = st.selectbox("Vælg parameter", ["KM/90", "HI m/90", "TOP_SPEED"])
+        valg = st.selectbox("Vælg parameter til graf", ["KM/90", "HI m/90", "TOP_SPEED"])
         fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, 
                      color=valg, color_continuous_scale='Reds', text_auto='.1f')
-        fig.update_layout(xaxis_title=None, plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        fig.update_layout(xaxis_title=None, yaxis_title=valg, plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
 
+    # TAB 3: TOP 5 I LIGAEN
     with t3:
-        st.subheader("Sæsonens Top 5 (Alle hold)")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("Topfart (km/t)")
+        st.subheader("Sæsonens højeste præstationer (Hele ligaen)")
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.write("**Højeste Topfart (km/t)**")
             st.dataframe(df_phys.nlargest(5, 'TOP_SPEED')[['DISPLAY_NAME', 'PLAYER_NAME', 'TOP_SPEED']], hide_index=True)
-        with c2:
-            st.write("HI løb (m)")
+        with col_r:
+            st.write("**Mest Højintenst Løb (meter)**")
             st.dataframe(df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'PLAYER_NAME', 'HI_RUN']], hide_index=True)
 
-    # TAB 4: KAMPANALYSE
+    # TAB 4: KAMPANALYSE (VISER BEGGE HOLD)
     with t4:
-        df_kampe = df_meta[(df_meta['HOME_SSIID'] == valgt_ssid) | (df_meta['AWAY_SSIID'] == valgt_ssid)].copy()
-        df_kampe['LABEL'] = df_kampe['DATE'].astype(str) + " - " + df_kampe['DESCRIPTION']
+        # Find kampe hvor det valgte hold deltog (uanset ude/hjemme)
+        df_kampe_valgt = df_meta[(df_meta['HOME_SSIID'] == valgt_ssid) | (df_meta['AWAY_SSIID'] == valgt_ssid)].copy()
+        df_kampe_valgt['LABEL'] = df_kampe_valgt['DATE'].astype(str) + " - " + df_kampe_valgt['DESCRIPTION']
         
-        if not df_kampe.empty:
-            v_label = st.selectbox("Vælg kamp", df_kampe['LABEL'].unique())
-            kamp_meta = df_kampe[df_kampe['LABEL'] == v_label].iloc[0]
-            m_id = kamp_meta['MATCH_SSIID']
+        if not df_kampe_valgt.empty:
+            valgt_kamp = st.selectbox("Vælg kamp fra listen", df_kampe_valgt['LABEL'].unique())
+            m_id = df_kampe_valgt[df_kampe_valgt['LABEL'] == valgt_kamp].iloc[0]['MATCH_SSIID']
             
             df_m = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
             df_m['KM'] = df_m['DISTANCE'] / 1000
             
-            # Identificer hvem der er på det valgte hold
-            df_m['Hold_Navn'] = df_m[team_ssiid_col].apply(lambda x: valgt_hold if x == valgt_ssid else "Modstander")
+            # Identificer hvem der spiller for dit valgte hold via teamSsiId
+            df_m['Hold'] = df_m[team_ssiid_col].apply(lambda x: valgt_hold if x == valgt_ssid else "Modstander")
+            
+            # Sorterer så dit hold står øverst, og derefter på løbet distance
+            df_m['Sort_Order'] = df_m['Hold'].apply(lambda x: 0 if x == valgt_hold else 1)
             
             st.dataframe(
-                df_m.sort_values(['Hold_Navn', 'DISTANCE'], ascending=[False, False]),
-                column_config={"DISPLAY_NAME": "Spiller", "Hold_Navn": "Klub", "KM": st.column_config.NumberColumn("KM", format="%.2f")},
-                column_order=("DISPLAY_NAME", "Hold_Navn", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                df_m.sort_values(['Sort_Order', 'DISTANCE'], ascending=[True, False]),
+                column_config={
+                    "DISPLAY_NAME": "Spiller",
+                    "Hold": "Klub",
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f")
+                },
+                column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
                 use_container_width=True, hide_index=True, height=600
             )
