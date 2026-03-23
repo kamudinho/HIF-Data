@@ -158,7 +158,7 @@ def vis_side(df_raw=None):
             # Søjler med fast bredde (width=0.4) sikrer de ikke bliver for tykke
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
-                marker_color=c1["primary"], width=0.4,
+                marker_color=c1["primary"], width=0.7,
                 text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c1["primary"]), size=10), 
@@ -167,7 +167,7 @@ def vis_side(df_raw=None):
             
             fig.add_trace(go.Bar(
                 x=[team2], y=[v2], 
-                marker_color=c2["primary"], width=0.4,
+                marker_color=c2["primary"], width=0.7,
                 text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c2["primary"]), size=10), 
