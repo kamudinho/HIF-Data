@@ -21,11 +21,9 @@ TEAMS = {
 def vis_side(conn, name_map=None):
     # --- 1. DROPDOWN ---
     header_col, select_col = st.columns([3, 1])
-    with header_col:
-        st.title("Betinia Ligaen | Fysisk Data")
     with select_col:
         alle_hold = sorted(list(TEAMS.keys()))
-        valgt_hold = st.selectbox("Vælg hold", alle_hold, index=alle_hold.index("Hvidovre"))
+        valgt_hold = st.selectbox(" ", alle_hold, index=alle_hold.index("Hvidovre"))
         v_ssid = TEAMS[valgt_hold]["ssid"]
 
     # --- 2. DYNAMISK SQL (Bruger dit SSID-opslag) ---
