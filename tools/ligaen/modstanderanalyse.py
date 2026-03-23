@@ -51,55 +51,7 @@ def get_avg(df, phase):
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
     return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
 
-# --- 2. MASTER MATCHER (OPDATERET) ---
-def build_team_map(df_remote, df_matches):
-    # 1. Filtrér matches til kun at indeholde 1. division (328)
-    # Vi antager df_matches har en kolonne for konkurrence ID
-    if 'COMPETITION_WYID' in df_matches.columns:
-        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
-    
-    # Find alle unikke hold-ID'er der faktisk har spillet kampe i denne turnering
-    ids_i_ligaen = pd.concat([
-        df_matches['CONTESTANTHOME_OPTAUUID'], 
-        df_matches['CONTESTANTAWAY_OPTAUUID']
-    ]).unique()
-    
-    team_map = {}
-    # Lav et hurtigt opslagsværk fra din TEAMS mapping
-    # Vi renser UUID'er for at sikre hits (f.eks. fjerner 't' præfiks hvis det findes)
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
-    
-    for u_raw in ids_i_ligaen:
-        if pd.isna(u_raw): continue
-        
-        u_clean = str(u_raw).lower().strip().replace('t', '')
-        matched_name = None
-        
-        # PRIORITET 1: Tjek din manuelle TEAMS mapping
-        for m_id, name in mapping_lookup.items():
-            if m_id and (m_id in u_clean or u_clean in m_id):
-                matched_name = name
-                break
-        
-        # PRIORITET 2: Hvis ikke fundet, brug navnet direkte fra kamp-data
-        if not matched_name:
-            match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
-            if not match_row.empty:
-                matched_name = match_row['CONTESTANTHOME_NAME'].iloc[0]
-            else:
-                match_away = df_matches[df_matches['CONTESTANTAWAY_OPTAUUID'] == u_raw]
-                if not match_away.empty:
-                    matched_name = match_away['CONTESTANTAWAY_NAME'].iloc[0]
-
-        # FALLBACK
-        if not matched_name:
-            matched_name = f"Ukendt ({u_clean[:5]})"
-            
-        team_map[matched_name] = u_raw
-        
-    return team_map
-
-# --- 3. HOVEDFUNKTION (TILFØJET FILTRERING) ---
+# --- 3. HOVEDFUNKTION (RETTET: Definitioner af tabs og variabler) ---
 def vis_side(analysis_package=None):
     if not analysis_package:
         st.error("Ingen data fundet.")
@@ -113,40 +65,52 @@ def vis_side(analysis_package=None):
         st.warning("Ingen kampdata fundet - kan ikke begrænse til 1. division.")
         return
 
-    # Byg mappet baseret på de filtrerede kampe
+    # 1. Byg team_map og vælg hold
     team_map = build_team_map(df_remote, df_matches)
-    
-    # Sortér listen så HIF eller de mest relevante er nemme at finde
     valgte_hold_liste = sorted(list(team_map.keys()))
     
     valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
     
+    # 2. DEFINER VARIABLER BASERET PÅ VALG (Vigtigt for at undgå NameError)
+    valgt_uuid_data = team_map[valgt_hold]
+    t_color, t_logo = get_team_style(valgt_hold)
+    
+    # Rens UUID til event-opslag (fjerner 't' og tager de første 8 tegn)
+    event_uuid_ref = str(valgt_uuid_data).lower().replace('t', '')[:8]
+
+    # 3. DEFINER TABS OG PITCH (Dette manglede i din kode)
+    tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
+
     # --- TAB 0: STRUKTUR ---
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
-        formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-        st.caption(f"**{valgt_hold}** | Formation: {formation}")
-        
-        avg_in = get_avg(df_h, 'inPossession')
-        avg_out = get_avg(df_h, 'outOfPossession')
-        
-        c1, c2 = st.columns(2)
-        for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
-            with col:
-                st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                fig, ax = pitch.draw(figsize=(3, 4))
-                if not data.empty:
-                    ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
-                    for _, row in data.iterrows():
-                        ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        if not df_h.empty:
+            formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
+            st.caption(f"**{valgt_hold}** | Formation: {formation}")
+            
+            avg_in = get_avg(df_h, 'inPossession')
+            avg_out = get_avg(df_h, 'outOfPossession')
+            
+            c1, c2 = st.columns(2)
+            for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
+                with col:
+                    st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
+                    fig, ax = pitch.draw(figsize=(3, 4))
+                    if not data.empty:
+                        ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
+                        for _, row in data.iterrows():
+                            ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
+        else:
+            st.warning("Ingen positionsdata (shapes) fundet for dette hold.")
 
-    # --- TAB 1: MED BOLD ---
     # --- TAB 1: MED BOLD ---
     with tabs[1]:
         if not df_events.empty:
+            # Vi bruger event_uuid_ref til at finde holdets events
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
             
             if not df_h_ev.empty:
@@ -154,62 +118,48 @@ def vis_side(analysis_package=None):
                 c1, c2 = st.columns(2)
 
                 if fokus == "Opbygning":
-                    # --- MÅLSPARK (Zoom: 0-35) ---
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                         df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
                         fig, ax = pitch.draw(figsize=(4, 5))
-                        # ZOOM: Viser kun de nederste 35 meter (defensiv zone)
                         ax.set_ylim(0, 35) 
-                        
                         if not df_kick.empty:
                             sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
-                    # --- OPBYGNING (Zoom: 0-60) ---
                     with c2:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING (NEDRE HALVDEL)</p>", unsafe_allow_html=True)
                         df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
                         fig, ax = pitch.draw(figsize=(4, 5))
-                        # ZOOM: Viser fra bunden til lidt over midten
                         ax.set_ylim(0, 60)
-                        
                         if not df_build.empty:
                             sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
-
-                else: # Offensivt gennembrud
-                    # --- GENNEMBRUD (Zoom: 60-100) ---
+                else:
+                    # Gennembrud logic...
                     with c1:
-                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD (SIDSTE 1/3)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
                         df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
                         fig, ax = pitch.draw(figsize=(4, 5))
-                        # ZOOM: Viser kun den øverste halvdel (modstanderens banehalvdel)
                         ax.set_ylim(60, 100)
-                        
                         if not df_final.empty:
                             sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
-
-                    # --- PROGRESSIVE PASSES (Zoom: 40-100) ---
+                    
                     with c2:
-                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE (OFFENSIV ZONE)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
                         df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
                         df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['dist'] > 20) & (df_h_ev['ENDLOCATIONX'] > df_h_ev['LOCATIONX'])]
-                        
                         fig, ax = pitch.draw(figsize=(4, 5))
-                        # ZOOM: Viser fra midten og op
                         ax.set_ylim(40, 100)
-                        
                         if not df_prog.empty:
-                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
-                                         width=1.5, headwidth=3, headlength=3, color=t_color, ax=ax, alpha=0.5)
+                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, width=1.5, color=t_color, ax=ax, alpha=0.5)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
