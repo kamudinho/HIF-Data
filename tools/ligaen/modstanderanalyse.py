@@ -130,31 +130,38 @@ def vis_side(analysis_package=None):
                 plt.close(fig)
 
     # --- TAB 1: MED BOLD ---
+    # --- TAB 1: MED BOLD ---
     with tabs[1]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
             
             if not df_h_ev.empty:
-                # Vælg mellem de to overordnede faser
                 fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
-                
                 c1, c2 = st.columns(2)
 
                 if fokus == "Opbygning":
+                    # --- MÅLSPARK (Zoom: 0-35) ---
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                         df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
                         fig, ax = pitch.draw(figsize=(4, 5))
+                        # ZOOM: Viser kun de nederste 35 meter (defensiv zone)
+                        ax.set_ylim(0, 35) 
+                        
                         if not df_kick.empty:
                             sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
+                    # --- OPBYGNING (Zoom: 0-60) ---
                     with c2:
-                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING (UDEN FOR FELT)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING (NEDRE HALVDEL)</p>", unsafe_allow_html=True)
                         df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
                         fig, ax = pitch.draw(figsize=(4, 5))
+                        # ZOOM: Viser fra bunden til lidt over midten
+                        ax.set_ylim(0, 60)
+                        
                         if not df_build.empty:
                             sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
@@ -162,23 +169,30 @@ def vis_side(analysis_package=None):
                         plt.close(fig)
 
                 else: # Offensivt gennembrud
+                    # --- GENNEMBRUD (Zoom: 60-100) ---
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD (SIDSTE 1/3)</p>", unsafe_allow_html=True)
                         df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
                         fig, ax = pitch.draw(figsize=(4, 5))
+                        # ZOOM: Viser kun den øverste halvdel (modstanderens banehalvdel)
+                        ax.set_ylim(60, 100)
+                        
                         if not df_final.empty:
                             sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
+                    # --- PROGRESSIVE PASSES (Zoom: 40-100) ---
                     with c2:
-                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE PASSES (>20m)</p>", unsafe_allow_html=True)
-                        # Beregn distance
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE (OFFENSIV ZONE)</p>", unsafe_allow_html=True)
                         df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
                         df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['dist'] > 20) & (df_h_ev['ENDLOCATIONX'] > df_h_ev['LOCATIONX'])]
                         
                         fig, ax = pitch.draw(figsize=(4, 5))
+                        # ZOOM: Viser fra midten og op
+                        ax.set_ylim(40, 100)
+                        
                         if not df_prog.empty:
                             pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
                                          width=1.5, headwidth=3, headlength=3, color=t_color, ax=ax, alpha=0.5)
