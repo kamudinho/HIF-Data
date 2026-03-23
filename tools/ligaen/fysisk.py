@@ -59,7 +59,7 @@ def vis_side(conn, name_map=None):
     # Case-insensitive kolonne-identifikation (Snowflake UPPERCASE fix)
     cols = {c.lower(): c for c in df_phys.columns}
     opta_col = cols.get('optaid', 'optaId')
-    team_ssiid_col = cols.get('teamssiid', 'teamSsiId')
+    team_ssiid_col = cols.get('teamssiid', 'TEAM_SSID')
 
     # Fix for minut-format og float-fejl
     def parse_mins(v):
