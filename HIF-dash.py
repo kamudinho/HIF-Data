@@ -283,6 +283,7 @@ try:
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Modstanderanalyse": # Tilføj denne blok
                 import tools.ligaen.modstanderanalyse as ma
+                importlib.reload(ma)
                 ma.vis_side(dp)    
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
@@ -306,6 +307,7 @@ try:
         
         if sel == "System Log":
             import tools.admin_page.admin as admin
+            importlib.reload(admin)
             admin.vis_log()
         elif sel == "Profil":
             import tools.admin_page.profil as profil
