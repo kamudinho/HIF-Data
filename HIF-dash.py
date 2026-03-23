@@ -244,12 +244,12 @@ try:
                 
         elif hoved_omraade == "ADMIN":
         # Import fra den nye placering
-            import tools.admin.profil as admin_profil
-            
-            if sel == "System Log":
-                admin_profil.vis_log()
-            else:
-                st.info("Vælg en funktion i menuen til venstre.")
+            if sel == "System Log": # Tilføj denne blok
+                import tools.admin as admin
+                admin.vis_log()    
+            elif sel == "Profil":
+                import tools.admin.profil as profil
+                profil.vis_side(dp)
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
