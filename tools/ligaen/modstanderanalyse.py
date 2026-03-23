@@ -51,40 +51,55 @@ def get_avg(df, phase):
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
     return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
 
-# --- 2. MASTER MATCHER (FIXET: Viser nu alle hold fra dataen) ---
+# --- 2. MASTER MATCHER (OPDATERET) ---
 def build_team_map(df_remote, df_matches):
-    raw_uuids = df_remote['CONTESTANT_OPTAUUID'].unique().tolist()
-    team_map = {}
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower()[:8]: name for name, info in TEAMS.items()}
+    # 1. Filtrér matches til kun at indeholde 1. division (328)
+    # Vi antager df_matches har en kolonne for konkurrence ID
+    if 'COMPETITION_WYID' in df_matches.columns:
+        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
     
-    db_teams = pd.DataFrame()
-    if not df_matches.empty:
-        home = df_matches[['CONTESTANTHOME_OPTAUUID', 'CONTESTANTHOME_NAME']].rename(columns={'CONTESTANTHOME_OPTAUUID': 'id', 'CONTESTANTHOME_NAME': 'name'})
-        away = df_matches[['CONTESTANTAWAY_OPTAUUID', 'CONTESTANTAWAY_NAME']].rename(columns={'CONTESTANTAWAY_OPTAUUID': 'id', 'CONTESTANTAWAY_NAME': 'name'})
-        db_teams = pd.concat([home, away]).drop_duplicates()
-
-    for u_raw in raw_uuids:
-        u_clean = str(u_raw).lower().strip()
+    # Find alle unikke hold-ID'er der faktisk har spillet kampe i denne turnering
+    ids_i_ligaen = pd.concat([
+        df_matches['CONTESTANTHOME_OPTAUUID'], 
+        df_matches['CONTESTANTAWAY_OPTAUUID']
+    ]).unique()
+    
+    team_map = {}
+    # Lav et hurtigt opslagsværk fra din TEAMS mapping
+    # Vi renser UUID'er for at sikre hits (f.eks. fjerner 't' præfiks hvis det findes)
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    
+    for u_raw in ids_i_ligaen:
+        if pd.isna(u_raw): continue
+        
+        u_clean = str(u_raw).lower().strip().replace('t', '')
         matched_name = None
         
-        # Tjekker mapping_lookup
+        # PRIORITET 1: Tjek din manuelle TEAMS mapping
         for m_id, name in mapping_lookup.items():
-            if m_id and (m_id in u_clean or u_clean.startswith(m_id)):
+            if m_id and (m_id in u_clean or u_clean in m_id):
                 matched_name = name
                 break
         
-        # Hvis ikke i mapping, tjek db_teams
-        if not matched_name and not db_teams.empty:
-            match_row = db_teams[db_teams['id'].str.lower() == u_clean]
-            if not match_row.empty: matched_name = match_row['name'].iloc[0]
-        
-        # Fallback så holdet ikke forsvinder
-        if not matched_name: matched_name = f"Ukendt ({u_clean[:6]})"
-        
+        # PRIORITET 2: Hvis ikke fundet, brug navnet direkte fra kamp-data
+        if not matched_name:
+            match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
+            if not match_row.empty:
+                matched_name = match_row['CONTESTANTHOME_NAME'].iloc[0]
+            else:
+                match_away = df_matches[df_matches['CONTESTANTAWAY_OPTAUUID'] == u_raw]
+                if not match_away.empty:
+                    matched_name = match_away['CONTESTANTAWAY_NAME'].iloc[0]
+
+        # FALLBACK
+        if not matched_name:
+            matched_name = f"Ukendt ({u_clean[:5]})"
+            
         team_map[matched_name] = u_raw
+        
     return team_map
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (TILFØJET FILTRERING) ---
 def vis_side(analysis_package=None):
     if not analysis_package:
         st.error("Ingen data fundet.")
@@ -94,19 +109,18 @@ def vis_side(analysis_package=None):
     df_events = analysis_package.get("opta", {}).get("events", pd.DataFrame())
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
-    if df_remote.empty:
-        st.warning("Ingen positionsdata fundet i remote_shapes.")
+    if df_matches.empty:
+        st.warning("Ingen kampdata fundet - kan ikke begrænse til 1. division.")
         return
 
+    # Byg mappet baseret på de filtrerede kampe
     team_map = build_team_map(df_remote, df_matches)
-    valgt_hold = st.selectbox("Vælg hold:", sorted(list(team_map.keys())), label_visibility="collapsed")
-    valgt_uuid_data = team_map[valgt_hold]
-    t_color, t_logo = get_team_style(valgt_hold)
-    event_uuid_ref = str(valgt_uuid_data).lower()[:8]
-
-    tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
-
+    
+    # Sortér listen så HIF eller de mest relevante er nemme at finde
+    valgte_hold_liste = sorted(list(team_map.keys()))
+    
+    valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
+    
     # --- TAB 0: STRUKTUR ---
     with tabs[0]:
         df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
