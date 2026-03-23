@@ -243,12 +243,15 @@ try:
                 )
                 
         elif hoved_omraade == "ADMIN":
-            import tools.admin as admin  # Antager din fil ligger i tools/admin.py
-            
+            import tools.admin as admin
             if sel == "System Log":
                 admin.vis_log()
             else:
-                admin.vis_side() # Viser brugeroversigten som default
+                # Hvis du har en vis_side() funktion til brugeroversigt
+                try:
+                    admin.vis_side()
+                except:
+                    st.write("Vælg en undermenu i siden")
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
