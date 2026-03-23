@@ -127,37 +127,87 @@ def vis_side(df_raw=None):
     
     # H2H FUNKTION MED INDIVIDUELLE SKALAER
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
-        d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
-        d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
-        if d1.empty or d2.empty:
-            st.info("Ingen data fundet.")
-            return
+    d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
+    d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
+    
+    if d1.empty or d2.empty:
+        st.info("Ingen data fundet.")
+        return
 
-        c1 = colors_dict.get(team1, {"primary": "#df003b"})
-        c2 = colors_dict.get(team2, {"primary": "#0056a3"})
-        u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0] if team1 in df_liga['HOLD'].values else None
-        u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
-        l1, l2 = get_logo_url(u1), get_logo_url(u2)
+    c1 = colors_dict.get(team1, {"primary": "#df003b"})
+    c2 = colors_dict.get(team2, {"primary": "#0056a3"})
+    u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0] if team1 in df_liga['HOLD'].values else None
+    u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
+    l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
-        fig = make_subplots(rows=1, cols=len(metrics), subplot_titles=labels)
+    # Vi opretter subplots UDEN titler i toppen
+    fig = make_subplots(rows=1, cols=len(metrics))
 
-        for i, m in enumerate(metrics):
-            v1 = d1.iloc[0].get(m, 0)
-            v2 = d2.iloc[0].get(m, 0)
-            col = i + 1
-            
-            fig.add_trace(go.Bar(x=[team1], y=[v1], marker_color=c1["primary"], text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], textposition='inside', insidetextfont=dict(color=get_text_color(c1["primary"]), size=11), showlegend=False), row=1, col=col)
-            fig.add_trace(go.Bar(x=[team2], y=[v2], marker_color=c2["primary"], text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], textposition='inside', insidetextfont=dict(color=get_text_color(c2["primary"]), size=11), showlegend=False), row=1, col=col)
+    for i, m in enumerate(metrics):
+        v1 = d1.iloc[0].get(m, 0)
+        v2 = d2.iloc[0].get(m, 0)
+        col = i + 1
+        
+        # Søjler
+        fig.add_trace(go.Bar(
+            x=[team1], y=[v1], 
+            marker_color=c1["primary"], 
+            text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
+            textposition='inside', 
+            insidetextfont=dict(color=get_text_color(c1["primary"]), size=11), 
+            showlegend=False
+        ), row=1, col=col)
+        
+        fig.add_trace(go.Bar(
+            x=[team2], y=[v2], 
+            marker_color=c2["primary"], 
+            text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
+            textposition='inside', 
+            insidetextfont=dict(color=get_text_color(c2["primary"]), size=11), 
+            showlegend=False
+        ), row=1, col=col)
 
-            fig.update_yaxes(visible=False, showgrid=False, row=1, col=col, range=[0, max(v1, v2) * 1.4])
-            fig.update_xaxes(showticklabels=False, row=1, col=col)
+        # Akse-indstillinger
+        fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.5])
+        fig.update_xaxes(showticklabels=False, row=1, col=col)
 
-            if l1: fig.add_layout_image(dict(source=l1, xref=f"x{col}", yref="paper", x=0.25, y=1.02, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"))
-            if l2: fig.add_layout_image(dict(source=l2, xref=f"x{col}", yref="paper", x=0.75, y=1.02, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"))
+        # TEKST UNDER GRAFEN (Annotation)
+        fig.add_annotation(
+            dict(
+                x=0.5, y=-0.15, # Placeret under x-aksen
+                xref=f"x{col} domain", yref=f"y{col} domain",
+                text=labels[i],
+                showarrow=False,
+                font=dict(size=12, color="#333", weight="bold"),
+                align="center"
+            )
+        )
 
-        fig.update_layout(height=350, margin=dict(t=80, b=40, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        for annot in fig['layout']['annotations']: annot['font'] = dict(size=12, color='#333')
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
+        # LOGOER (Justeret størrelse for at ensarte uanset antal)
+        logo_size = 0.4 if len(metrics) > 3 else 0.25 # Dynamisk størrelse baseret på antal metrics
+        
+        if l1:
+            fig.add_layout_image(dict(
+                source=l1, xref=f"x{col}", yref="paper",
+                x=0.28, y=1.02, sizex=logo_size, sizey=logo_size,
+                xanchor="center", yanchor="bottom"
+            ))
+        if l2:
+            fig.add_layout_image(dict(
+                source=l2, xref=f"x{col}", yref="paper",
+                x=0.72, y=1.02, sizex=logo_size, sizey=logo_size,
+                xanchor="center", yanchor="bottom"
+            ))
+
+    fig.update_layout(
+        height=320, # Lidt lavere højde da titler er i bunden
+        margin=dict(t=60, b=60, l=10, r=10),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15 # Mindre gap mellem de to holds søjler
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
