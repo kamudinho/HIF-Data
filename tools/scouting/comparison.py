@@ -129,20 +129,34 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
             if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
         
-        # D: Karriere Stats (Kampe, Mål osv.)
+        # D: Karriere & Kamp Stats (Kampe, Mål, Assists, Minutter)
         stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
+        
+        # FØRST: Tjek karriere_df for grundlæggende kamptal
         if career_df is not None and not career_df.empty:
             c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
             curr = c_m[c_m['SEASONNAME'].astype(str).str.contains("2025/2026", na=False)]
             target = curr.iloc[0] if not curr.empty else (c_m.iloc[0] if not c_m.empty else None)
             
             if target is not None:
-                stats = {
-                    "K": int(target.get('MATCHES', 0)),
-                    "M": int(target.get('GOALS', 0)),
-                    "A": int(target.get('ASSISTS', 0)),
-                    "MIN": int(target.get('MINUTES', 0))
-                }
+                stats["K"] = int(target.get('MATCHES', 0))
+                stats["MIN"] = int(target.get('MINUTES', 0))
+                stats["M"] = int(target.get('GOALS', 0))
+                stats["A"] = int(target.get('ASSISTS', 0))
+
+        # SECONDARY OVERRIDE: Brug Advanced Stats (df_adv) til Mål og Assists
+        # Det er her Andreas Smeds assists gemmer sig!
+        if advanced_stats_df is not None and not advanced_stats_df.empty:
+            adv_df_upper = advanced_stats_df.copy()
+            adv_df_upper.columns = [c.upper() for c in adv_df_upper.columns]
+            
+            p_adv = adv_df_upper[adv_df_upper['PLAYER_WYID'].apply(rens_id) == pid]
+            if not p_adv.empty:
+                r_adv = p_adv.iloc[0]
+                # Vi opdaterer kun hvis værdien findes (Wyscout bruger ofte GOALS og ASSISTS i adv stats)
+                if 'ASSISTS' in r_adv: stats["A"] = int(r_adv['ASSISTS'])
+                if 'GOALS' in r_adv: stats["M"] = int(r_adv['GOALS'])
+                if 'MINUTESONFIELD' in r_adv: stats["MIN"] = int(r_adv['MINUTESONFIELD'])
         
         lbls = ['TEKNIK', 'AGGRESIVITET', 'BESLUTSOMHED', 'SPILINTELLIGENS', 'FART', 'ATTITUDE', 'LEDEREGENSKABER', 'UDHOLDENHED']
         return {
