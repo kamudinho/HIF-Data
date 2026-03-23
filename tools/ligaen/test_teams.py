@@ -51,25 +51,43 @@ def vis_side(df_raw=None):
 
     # --- 2. DATABEREGNING (OPTA LIGATABEL) ---
     stats = {}
+    
+    # Sikr at kolonnenavne er store bogstaver for at undgå KeyError
+    df_opta.columns = [c.upper() for c in df_opta.columns]
+
     for _, row in df_opta.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+        
+        # Initialisér hold hvis de ikke findes
         for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
             if uuid not in stats:
                 stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
         
-        if row['MATCH_STATUS'] == 'Played':
+        # Tjek status (robust over for store/små bogstaver)
+        if str(row['MATCH_STATUS']).strip().capitalize() == 'Played':
             h_g = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_g = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             
-            # BEREGN VINDER HER (I stedet for row['WINNER'])
-            if h_g > a_g:
-                winner = 'home'
-            elif a_g > h_g:
-                winner = 'away'
-            else:
-                winner = 'draw'
-
             s_h, s_a = stats[h_uuid], stats[a_uuid]
+            
+            # Opdater grundlæggende stats
+            s_h['K'] += 1; s_a['K'] += 1
+            s_h['M+'] += h_g; s_h['M-'] += a_g
+            s_a['M+'] += a_g; s_a['M-'] += h_g
+            
+            # BEREGN OG TILDEL POINT (Dette manglede i din kode)
+            if h_g > a_g:
+                # Hjemmesejr
+                s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
+                s_a['T'] += 1; s_a['P'] += 0; s_a['FORM'] = update_form(s_a['FORM'], 'T')
+            elif a_g > h_g:
+                # Udesejr
+                s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V')
+                s_h['T'] += 1; s_h['P'] += 0; s_h['FORM'] = update_form(s_h['FORM'], 'T')
+            else:
+                # Uafgjort
+                s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
+                s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
     next_opponents = {}
     df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
