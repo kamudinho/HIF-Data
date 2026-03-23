@@ -243,19 +243,16 @@ try:
                 )
                 
         elif hoved_omraade == "ADMIN":
-        # Vi sikrer os at dp eksisterer, selvom vi er i Admin
-            dp = st.session_state.get("dp", {}) 
-            
-            if sel == "System Log":
-                # Her importerer vi specifikt fra din admin-fil
-                import tools.admin as admin_module
-                admin_module.vis_log()
-                
-            elif sel == "Profil":
-                # Her importerer vi fra din nye profil-fil
-                import tools.admin.profil as profil_module
-                # Tjek om din vis_side i profil.py rent faktisk forventer (dp)
-                profil_module.vis_side(dp)
+        # Definer en tom dp så appen ikke crasher, når den sendes til Profil
+        dp = st.session_state.get("dp", {})
+        
+        if sel == "System Log":
+            import tools.admin as admin
+            admin.vis_log()
+        elif sel == "Profil":
+            import tools.admin.profil as profil
+            # Vi sikrer os at vi kalder den rigtige funktion
+            profil.vis_side(dp)
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
