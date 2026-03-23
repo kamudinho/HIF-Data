@@ -51,7 +51,48 @@ def get_avg(df, phase):
     res[['averageRolePositionX', 'averageRolePositionY']] = res[['averageRolePositionX', 'averageRolePositionY']].apply(pd.to_numeric)
     return res.groupby('shirtNumber').agg({'averageRolePositionX':'mean', 'averageRolePositionY':'mean'}).reset_index()
 
-# --- 3. HOVEDFUNKTION (RETTET: Definitioner af tabs og variabler) ---
+# --- 2. MASTER MATCHER (Logikken der manglede) ---
+def build_team_map(df_remote, df_matches):
+    # Filtrér til 1. division (NordicBet Liga = 328)
+    if 'COMPETITION_WYID' in df_matches.columns:
+        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
+    
+    ids_i_ligaen = pd.concat([
+        df_matches['CONTESTANTHOME_OPTAUUID'], 
+        df_matches['CONTESTANTAWAY_OPTAUUID']
+    ]).unique()
+    
+    team_map = {}
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    
+    for u_raw in ids_i_ligaen:
+        if pd.isna(u_raw): continue
+        u_clean = str(u_raw).lower().strip().replace('t', '')
+        matched_name = None
+        
+        # Tjek TEAMS mapping
+        for m_id, name in mapping_lookup.items():
+            if m_id and (m_id in u_clean or u_clean in m_id):
+                matched_name = name
+                break
+        
+        # Hvis ikke i TEAMS, tjek df_matches for navn
+        if not matched_name:
+            match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
+            if not match_row.empty:
+                matched_name = match_row['CONTESTANTHOME_NAME'].iloc[0]
+            else:
+                match_away = df_matches[df_matches['CONTESTANTAWAY_OPTAUUID'] == u_raw]
+                if not match_away.empty:
+                    matched_name = match_away['CONTESTANTAWAY_NAME'].iloc[0]
+
+        if not matched_name:
+            matched_name = f"Ukendt ({u_clean[:5]})"
+            
+        team_map[matched_name] = u_raw
+    return team_map
+
+# --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
     if not analysis_package:
         st.error("Ingen data fundet.")
@@ -62,23 +103,25 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet - kan ikke begrænse til 1. division.")
+        st.warning("Ingen kampdata fundet.")
         return
 
-    # 1. Byg team_map og vælg hold
+    # 1. Byg mappet og vælg hold
     team_map = build_team_map(df_remote, df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
+    if not valgte_hold_liste:
+        st.warning("Ingen hold fundet for den valgte turnering.")
+        return
+
     valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
     
-    # 2. DEFINER VARIABLER BASERET PÅ VALG (Vigtigt for at undgå NameError)
+    # 2. Definer variabler
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
-    
-    # Rens UUID til event-opslag (fjerner 't' og tager de første 8 tegn)
     event_uuid_ref = str(valgt_uuid_data).lower().replace('t', '')[:8]
 
-    # 3. DEFINER TABS OG PITCH (Dette manglede i din kode)
+    # 3. Definer tabs og pitch
     tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
@@ -105,19 +148,17 @@ def vis_side(analysis_package=None):
                     st.pyplot(fig, use_container_width=True)
                     plt.close(fig)
         else:
-            st.warning("Ingen positionsdata (shapes) fundet for dette hold.")
+            st.warning("Ingen positionsdata (shapes) fundet.")
 
     # --- TAB 1: MED BOLD ---
     with tabs[1]:
         if not df_events.empty:
-            # Vi bruger event_uuid_ref til at finde holdets events
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
-            
             if not df_h_ev.empty:
                 fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
                 c1, c2 = st.columns(2)
-
                 if fokus == "Opbygning":
+                    # Målspark
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                         df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
@@ -128,9 +169,9 @@ def vis_side(analysis_package=None):
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
-
+                    # Opbygning
                     with c2:
-                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING (NEDRE HALVDEL)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
                         df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
                         fig, ax = pitch.draw(figsize=(4, 5))
                         ax.set_ylim(0, 60)
@@ -140,7 +181,7 @@ def vis_side(analysis_package=None):
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
                 else:
-                    # Gennembrud logic...
+                    # Gennembrud
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
                         df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
@@ -151,7 +192,7 @@ def vis_side(analysis_package=None):
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
-                    
+                    # Progressive
                     with c2:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
                         df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
@@ -163,7 +204,7 @@ def vis_side(analysis_package=None):
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
-                        
+
     # --- TAB 2: MOD BOLD ---
     with tabs[2]:
         if not df_events.empty:
