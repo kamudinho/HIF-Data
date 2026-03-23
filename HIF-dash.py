@@ -246,7 +246,7 @@ try:
             import tools.admin as admin
             admin.vis_log()
         elif sel == "Profil":
-            import tools.admin.profil as profil
+            import tools.admin_page.profil as profil
             profil.vis_side(dp)
             
 except Exception as e:
