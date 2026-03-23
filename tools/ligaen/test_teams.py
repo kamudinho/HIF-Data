@@ -163,7 +163,7 @@ def vis_side(df_raw=None):
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
                 marker_color=c1["primary"],
-                width=0.4, # Fast bredde på selve søjlen indeni grafen
+                width=0.6, # Fast bredde på selve søjlen indeni grafen
                 text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c1["primary"]), size=10), 
@@ -173,7 +173,7 @@ def vis_side(df_raw=None):
             fig.add_trace(go.Bar(
                 x=[team2], y=[v2], 
                 marker_color=c2["primary"],
-                width=0.4,
+                width=0.6,
                 text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c2["primary"]), size=10), 
@@ -208,18 +208,18 @@ def vis_side(df_raw=None):
             if l1:
                 fig.add_layout_image(dict(
                     source=l1, xref=x_axis_name, yref="paper",
-                    x=0.30, y=1.02, sizex=logo_size, sizey=logo_size,
+                    x=0.40, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
             if l2:
                 fig.add_layout_image(dict(
                     source=l2, xref=x_axis_name, yref="paper",
-                    x=0.70, y=1.02, sizex=logo_size, sizey=logo_size,
+                    x=0.60, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
 
         fig.update_layout(
-            height=280,
+            height=380,
             margin=dict(t=50, b=50, l=0, r=0), # l=0 rykker det helt til venstre
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
