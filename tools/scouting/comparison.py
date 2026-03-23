@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import os
 
 # HIF Identitet
-HIF_RED = '#cc0000'
+HIF_RED = '#df003b'
 HIF_BLUE = '#0056a3'
 
 def rens_id(val):
-    if pd.isna(val) or str(val).strip() == "": return ""
+    if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0", "0.0"]: return ""
     return str(val).split('.')[0].strip()
 
 def map_position(pos_code):
@@ -28,13 +29,21 @@ def vis_spiller_billede(img_url, pid):
 def beregn_p90_stats(pid, adv_df):
     clean_pid = rens_id(pid)
     if adv_df is None or adv_df.empty: return None
+    
+    # Tving kolonnenavne til upper for match
+    adv_df.columns = [c.upper() for c in adv_df.columns]
     p_row = adv_df[adv_df['PLAYER_WYID'].apply(rens_id) == clean_pid]
+    
     if p_row.empty: return None
     r = p_row.iloc[0]
     mins = float(r.get('MINUTESONFIELD', 0))
-    if mins < 45: return {k: "-" for k in ["XG P90", "XA P90", "DRIBLINGER", "PASS %", "KEY PASSES", "INTERCEPTIONS", "DUELLER %"]}
+    
+    if mins < 45: 
+        return {k: "-" for k in ["XG P90", "XA P90", "DRIBLINGER", "PASS %", "KEY PASSES", "INTERCEPTIONS", "DUELLER %"]}
+    
     p90 = lambda val: round((float(r.get(val, 0)) / mins) * 90, 2)
     pct = lambda suc, tot: round((float(r.get(suc, 0)) / float(r.get(tot, 1))) * 100, 1) if float(r.get(tot, 0)) > 0 else 0.0
+    
     return {
         "XG P90": p90('XGSHOT'), "XA P90": p90('XGASSIST'), "DRIBLINGER": p90('DRIBBLES'),
         "PASS %": pct('SUCCESSFULPASSES', 'PASSES'), "KEY PASSES": p90('KEYPASSES'),
@@ -65,46 +74,67 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
             .note-box {{ padding: 18px; border-radius: 12px; border: 1px solid #eee; font-size: 1.05rem; line-height: 1.6; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-bottom: 15px; }}
             .note-hif {{ border-left: 8px solid {HIF_RED}; }}
             .note-mod {{ border-right: 8px solid {HIF_BLUE}; text-align: right; }}
-            .center-analysis {{ margin-top: 15px; padding: 10px; background: #fcfcfc; border: 1px solid #eee; border-radius: 10px; text-align: center; font-size: 0.9rem; font-weight: 700; }}
+            .center-analysis {{ margin-top: 15px; padding: 15px; background: #fcfcfc; border: 1px solid #eee; border-radius: 10px; }}
         </style>
     """, unsafe_allow_html=True)
 
+    # 1. Indlæs Scouting DB (Grundlaget for sammenligning)
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
-        df_s['PID_CLEAN'] = df_s['PLAYER_WYID'].apply(rens_id)
+        df_s.columns = [c.upper().strip() for c in df_s.columns]
+        # Omdøb tilbage til display-navne for nemhed
+        df_s = df_s.rename(columns={'NAVN': 'Navn', 'DATO': 'Dato', 'STYRKER': 'Styrker', 'UDVIKLING': 'Udvikling', 'VURDERING': 'Vurdering'})
     except:
         st.error("Kunne ikke indlæse scouting_db.csv")
         return
 
     navne_liste = sorted(df_s['Navn'].unique().tolist())
+    if not navne_liste:
+        st.info("Ingen spillere fundet i scouting-databasen.")
+        return
+
     c1, c2 = st.columns(2)
-    s1_navn = c1.selectbox("P1", navne_liste, index=0, label_visibility="collapsed")
-    s2_navn = c2.selectbox("P2", navne_liste, index=min(1, len(navne_liste)-1), label_visibility="collapsed")
+    s1_navn = c1.selectbox("Vælg Spiller 1 (Rød)", navne_liste, index=0)
+    s2_navn = c2.selectbox("Vælg Spiller 2 (Blå)", navne_liste, index=min(1, len(navne_liste)-1))
 
     def hent_data(navn):
-        match = df_s[df_s['Navn'] == navn].sort_values('Dato').iloc[-1:]
+        # Nyeste rapport
+        match = df_s[df_s['Navn'] == navn].sort_values('Dato', ascending=False).iloc[:1]
         if match.empty: return None
         n = match.iloc[0]
-        pid = rens_id(n['PID_CLEAN'])
+        pid = rens_id(n.get('PLAYER_WYID'))
         
-        pos, klub = "-", "Hvidovre IF"
+        # Find stamdata (Klub og Position)
+        pos, klub = "Ukendt", "Ukendt"
+        
+        # A: Tjek lokal trup (df_spillere)
         if df_spillere is not None and not df_spillere.empty:
             m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
             if not m.empty:
                 pos = map_position(m.iloc[0].get('ROLECODE3', ''))
-                klub = m.iloc[0].get('TEAMNAME', 'Hvidovre IF')
+                klub = "Hvidovre IF"
         
+        # B: Tjek Snowflake search-liste (d3/sql_players)
+        if (klub == "Ukendt" or pos == "Ukendt") and d3 is not None and not d3.empty:
+            m_wy = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
+            if not m_wy.empty:
+                klub = m_wy.iloc[0].get('TEAMNAME', klub)
+                # Hvis position ikke er sat endnu
+                if pos == "Ukendt":
+                    pos = m_wy.iloc[0].get('POSITION', pos)
+
+        # C: Billede (fra sql_players/d3)
         img_url = ""
         if d3 is not None and not d3.empty:
             img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
             if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
         
+        # D: Karriere Stats (Kampe, Mål osv.)
         stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
         if career_df is not None and not career_df.empty:
             c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
-            current_season = c_m[c_m['SEASONNAME'].str.contains("2025/2026", na=False, case=False)]
-            
-            target = current_season.iloc[0] if not current_season.empty else (c_m.iloc[0] if not c_m.empty else None)
+            curr = c_m[c_m['SEASONNAME'].astype(str).str.contains("2025/2026", na=False)]
+            target = curr.iloc[0] if not curr.empty else (c_m.iloc[0] if not c_m.empty else None)
             
             if target is not None:
                 stats = {
@@ -114,11 +144,11 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                     "MIN": int(target.get('MINUTES', 0))
                 }
         
-        lbls = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        lbls = ['TEKNIK', 'AGGRESIVITET', 'BESLUTSOMHED', 'SPILINTELLIGENS', 'FART', 'ATTITUDE', 'LEDEREGENSKABER', 'UDHOLDENHED']
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
             "adv": beregn_p90_stats(pid, advanced_stats_df),
-            "r": [n.get(k, 0.1) for k in lbls],
+            "r": [float(str(n.get(k, 0.1)).replace(',', '.')) for k in lbls],
             "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
             "scout_scores": {k: n.get(k, 0) for k in lbls}
         }
@@ -127,9 +157,10 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
     p2 = hent_data(s2_navn)
     if not p1 or not p2: return
 
-    # --- TOP LAYOUT: [SPILLER VENSTRE] [RADAR] [SPILLER HØJRE] ---
+    # --- RENDER LAYOUT ---
     col_left, col_center, col_right = st.columns([4.2, 3.6, 4.2])
 
+    # SPILLER 1 (VENSTRE)
     with col_left:
         st.markdown(f"""<div class='player-card card-hif'>
             <div style='display: flex; gap: 15px; align-items: start;'>
@@ -150,72 +181,20 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 st.markdown(f"<div class='stat-row'><span class='stat-label'>{k}</span><span class='stat-val' style='color:{HIF_RED}'>{v}</span></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # RADAR (CENTER)
+    # RADAR (MIDTEN)
     with col_center:
-        labels = ['Teknik', 'Aggresivitet', 'Beslutsomhed', 'Spilintelligens', 'Fart', 'Attitude', 'Lederegenskaber', 'Udholdenhed']
+        labels = ['Teknik', 'Aggressiv', 'Beslut.', 'Intelligens', 'Fart', 'Attitude', 'Leder', 'Udhold.']
         fig = go.Figure()
-        
-        # P1 Data
-        fig.add_trace(go.Scatterpolar(
-            r=p1['r']+[p1['r'][0]], 
-            theta=labels+[labels[0]], 
-            fill='toself', 
-            line_color=HIF_RED, 
-            opacity=0.4,
-            name=p1['navn']
-        ))
-        
-        # P2 Data
-        fig.add_trace(go.Scatterpolar(
-            r=p2['r']+[p2['r'][0]], 
-            theta=labels+[labels[0]], 
-            fill='toself', 
-            line_color=HIF_BLUE, 
-            opacity=0.4,
-            name=p2['navn']
-        ))
+        fig.add_trace(go.Scatterpolar(r=p1['r']+[p1['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_RED, name=p1['navn'], opacity=0.4))
+        fig.add_trace(go.Scatterpolar(r=p2['r']+[p2['r'][0]], theta=labels+[labels[0]], fill='toself', line_color=HIF_BLUE, name=p2['navn'], opacity=0.4))
         
         fig.update_layout(
-            polar=dict(
-                gridshape='linear', # DENNE LINJE gør det til en 8-kant/polygon i stedet for en cirkel
-                radialaxis=dict(visible=False, range=[0, 6]),
-                angularaxis=dict(gridcolor="#eee", linecolor="#eee", tickfont=dict(size=11))
-            ),
-            height=350, 
-            margin=dict(l=40, r=50, t=20, b=20), 
-            showlegend=False
+            polar=dict(gridshape='linear', radialaxis=dict(visible=False, range=[0, 6])),
+            height=350, margin=dict(l=40, r=40, t=20, b=20), showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        
-        # --- ANALYSE-TEKST (VENSTRESTILLET & SAMLET) ---
-        # 1. Scouting-beregning
-        diffs = {k: p1['scout_scores'][k] - p2['scout_scores'][k] for k in labels}
-        max_p1_attr = max(diffs, key=diffs.get)
-        max_p2_attr = min(diffs, key=diffs.get)
-        
-        # 2. Wyscout-beregning (Duel-eksempel)
-        p1_duel = p1['adv'].get('DUELLER %', 0) if p1['adv'] and p1['adv']['DUELLER %'] != '-' else 0
-        p2_duel = p2['adv'].get('DUELLER %', 0) if p2['adv'] and p2['adv']['DUELLER %'] != '-' else 0
-        
-        if max(p1_duel, p2_duel) != 0:
-            duel_vinder = p1['navn'] if float(p1_duel) > float(p2_duel) else p2['navn']
-            wyscout_del = f"hvor {duel_vinder} statistisk set er stærkest i duellerne ({max(p1_duel, p2_duel)}%)."
-        else:
-            wyscout_del = "der er pt. ingen sammenlignelig duel-data fra Wyscout."
 
-        # Samlet visning
-        st.markdown(f"""
-            <div class='center-analysis' style='text-align: left; padding: 15px;'>
-                <div style='font-weight: 800; text-transform: uppercase; font-size: 0.75rem; color: #999; margin-bottom: 8px;'>
-                    DATA- & SCOUTINGANALYSE
-                </div>
-                <div style='font-weight: 400; color: #444; line-height: 1.5;'>
-                    Analysen peger på {p1['navn']} (+{max_p1_attr.lower()}) overfor {p2['navn']} (+{max_p2_attr.lower()}), 
-                    {wyscout_del}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
+    # SPILLER 2 (HØJRE)
     with col_right:
         st.markdown(f"""<div class='player-card card-mod'>
             <div style='display: flex; gap: 15px; align-items: start; flex-direction: row-reverse;'>
@@ -236,12 +215,14 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 st.markdown(f"<div class='stat-row'><span class='stat-val' style='color:{HIF_BLUE}'>{v}</span><span class='stat-label'>{k}</span></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # --- SCOUTING NOTER ---
     st.markdown("<hr style='margin: 20px 0 10px 0; border: 0; border-top: 2px solid #eee;'>", unsafe_allow_html=True)
+    
     def scouting_row(label, text1, text2):
         st.markdown(f"<div class='scouting-header'>{label}</div>", unsafe_allow_html=True)
-        s_col1, s_col2 = st.columns(2)
-        s_col1.markdown(f"<div class='note-box note-hif'>{text1}</div>", unsafe_allow_html=True)
-        s_col2.markdown(f"<div class='note-box note-mod'>{text2}</div>", unsafe_allow_html=True)
+        sc1, sc2 = st.columns(2)
+        sc1.markdown(f"<div class='note-box note-hif'>{text1}</div>", unsafe_allow_html=True)
+        sc2.markdown(f"<div class='note-box note-mod'>{text2}</div>", unsafe_allow_html=True)
 
     scouting_row("Styrker", p1["styrker"], p2["styrker"])
     scouting_row("Udviklingspotentiale", p1["udvikling"], p2["udvikling"])
