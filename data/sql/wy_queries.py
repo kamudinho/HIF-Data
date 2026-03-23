@@ -45,7 +45,6 @@ def get_wy_queries(comp_filter, season_filter):
                 pc.APPEARANCES AS MATCHES, 
                 pc.MINUTESPLAYED AS MINUTES, 
                 pc.GOAL AS GOALS, 
-                pc.ASSIST AS ASSISTS,
                 pc.YELLOWCARD, 
                 pc.REDCARDS
             FROM {DB}.WYSCOUT_PLAYERCAREER pc
