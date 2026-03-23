@@ -23,7 +23,7 @@ def vis_side(conn, name_map=None):
     header_col, select_col = st.columns([3, 1])
     with select_col:
         alle_hold = sorted(list(TEAMS.keys()))
-        valgt_hold = st.selectbox(alle_hold, index=alle_hold.index("Hvidovre"))
+        valgt_hold = st.selectbox(" ", alle_hold, index=alle_hold.index("Hvidovre"))
         v_ssid = TEAMS[valgt_hold]["ssid"]
 
     # --- 2. DYNAMISK SQL (Bruger dit SSID-opslag) ---
@@ -92,7 +92,6 @@ def vis_side(conn, name_map=None):
     t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
 
     with t1:
-        st.subheader(f"Sæsongennemsnit for {valgt_hold}")
         summary = df_phys.groupby('DISPLAY_NAME').agg({
             'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 'TOP_SPEED': 'max'
         }).reset_index()
@@ -117,7 +116,6 @@ def vis_side(conn, name_map=None):
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        st.subheader("Ligaens Top 5 (Løb i enkeltkampe)")
         # Vi henter en frisk top 5 direkte fra den store tabel
         df_top = conn.query('SELECT PLAYER_NAME, TOP_SPEED, "HIGH SPEED RUNNING" + SPRINTING as HI_RUN FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS')
         c1, c2 = st.columns(2)
