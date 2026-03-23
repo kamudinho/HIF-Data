@@ -68,8 +68,9 @@ def vis_side(conn, name_map=None):
         st.error("Ingen fysisk data fundet for denne saeson.")
         return
 
-    # --- 3. DATABEHANDLING (FEJLSIKRET) ---
+    # --- 3. DATABEHANDLING (ROBUST & MAP-FØRST VERSION) ---
     def parse_minutes(val):
+        if pd.isna(val) or val == "": return 0.0
         try:
             v = str(val)
             if ':' in v:
@@ -79,21 +80,59 @@ def vis_side(conn, name_map=None):
         except: return 0.0
 
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
-    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
+    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
     
-    # Robust konvertering af optaId til streng før ekskludering og mapping
-    df_phys['optaId_str'] = df_phys['optaId'].apply(
-        lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','',1).isdigit() else str(x).strip()
-    )
+    # Robust rensning af optaId (løser float-fejlen)
+    def clean_id(x):
+        if pd.isna(x) or x == "": return "UKENDT"
+        try:
+            # Fjerner .0 hvis det er en float gemt som string
+            return str(int(float(x)))
+        except:
+            return str(x).strip()
 
-    # Filtrering ved brug af den nye streng-kolonne
+    df_phys['optaId_str'] = df_phys['optaId'].apply(clean_id)
+
+    # Filtrer ekskluderede spillere ved hjælp af den nye streng-kolonne
     df_phys = df_phys[~df_phys['optaId_str'].isin(EXCLUDE_LIST)].copy()
     
-    # Mapping af navne uden at crashe på floats
+    # --- NAVNE & KLUB-MAPPING ---
+    # Vi henter din lokale map ind igen, men denne gang tager vi KLUBBEN med også
+    def get_display_name_and_club(row):
+        oid = row['optaId_str']
+        raw_name = row['PLAYER_NAME']
+        
+        # 1. Tjek din lokale mapping (df_local) for NAVN og KLUB
+        # Vi antager at df_local har kolonnerne 'optaId', 'NAVN', og f.eks. 'KLUB_MAP'
+        # Hvis du ikke har en 'KLUB_MAP' kolonne i din Excel, skal du tilføje den.
+        if oid in player_mapping:
+            name = player_mapping[oid]
+            # Her skal du bruge kolonnenavnet for klub fra din Excel (f.eks. 'KLUB_MAP')
+            # For nu, antager jeg den hedder 'KLUB_MAP' og du gemmer klubkoder som 'LBK', 'ACH' osv.
+            # Men vi skal tilføje en mapping fra kode til fuldt navn
+            return name, oid # For nu, returnerer vi bare ID'et som fallback
+            
+        # 2. Hvis ingen mapping findes, brug de rå data fra Second Spectrum
+        if pd.notnull(raw_name) and raw_name != "":
+            return raw_name, "NULL"
+        return f"Ukendt ({oid})", "NULL"
+
+    # Vi opdaterer din local_players map til også at hente klub-koden
+    # (Kræver du opdaterer load_local_players funktionen til at hente den kolonne)
+    
+    # FOR IMPLENENTERING UDEN AT OPDATERE EXCEL:
+    # Vi må lave en "overrule_klub" funktion:
+    # (Dette er en midlertidig løsning indtil Excel opdateres)
+    def overrule_klub(row):
+        p_name = row['DISPLAY_NAME']
+        if p_name == 'Lauge Sandgrav': return 'Lyngby BK'
+        if p_name == 'Ole Kolskogen': return 'Horsens'
+        # ... tilføj flere her
+        return row['Klub'] # Fallback til den rå klubregistrering
+    
     df_phys['DISPLAY_NAME'] = df_phys.apply(
         lambda r: player_mapping.get(r['optaId_str'], r['PLAYER_NAME']), axis=1
     )
-
     # --- 4. TABS ---
     t1, t2, t3, t4 = st.tabs(["Hvidovre IF P90", "Udvikling", "Top 5", "Kampanalyse"])
     
