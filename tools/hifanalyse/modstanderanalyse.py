@@ -130,24 +130,72 @@ def vis_side(analysis_package=None):
                 plt.close(fig)
 
     # --- TAB 1: MED BOLD ---
+    # --- TAB 1: MED BOLD ---
     with tabs[1]:
         if not df_events.empty:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
+            # Filtrer events for det valgte hold
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
+            
             if not df_h_ev.empty:
-                half_pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#333333', linewidth=1)
-                c1, c2 = st.columns(2)
-                for col, title, x_lim in zip([c1, c2], ["OPBYGNING", "AFSLUTNING"], [(0,50), (50,100)]):
-                    with col:
-                        st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                        fig, ax = half_pitch.draw(figsize=(3, 3))
-                        ax.set_ylim(x_lim[0], x_lim[1])
-                        df_z = df_h_ev[(df_h_ev['EVENT_TYPEID']==1) & (df_h_ev['LOCATIONX'].between(x_lim[0], x_lim[1]))]
-                        if not df_z.empty:
-                            sns.kdeplot(x=df_z['LOCATIONY'], y=df_z['LOCATIONX'], fill=True, cmap='Reds', alpha=0.5, ax=ax, bw_adjust=0.8)
-                        draw_logo_on_ax(ax, t_logo)
-                        st.pyplot(fig, use_container_width=True)
-                        plt.close(fig)
+                # 1. Fase-valg via dropdown
+                fase = st.selectbox("Vælg fase:", [
+                    "Egen halvdel: Målspark", 
+                    "Egen halvdel: Opbygning (åbent spil)", 
+                    "Offensiv: Gennembrud (Siddende)", 
+                    "Offensiv: Progressive afleveringer (>20m)"
+                ])
 
+                # 2. Logik for filtrering af data baseret på valg
+                df_plot = pd.DataFrame()
+                title_text = ""
+                show_arrows = False # Skal vi vise pile (for progressive passes) eller heatmap?
+
+                if fase == "Egen halvdel: Målspark":
+                    # TypeID 1 = Aflevering, Qualifier 124 plejer at indikere Goal Kick i Opta
+                    # Her bruger vi en simpel LOCATION-logik: Start helt nede i feltet
+                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
+                    title_text = "MÅLSPARK & START-OPBYGNING"
+                
+                elif fase == "Egen halvdel: Opbygning (åbent spil)":
+                    # Afleveringer mellem feltet og midterlinjen
+                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
+                    title_text = "OPBYGNING UDEN FOR FELTET"
+
+                elif fase == "Offensiv: Gennembrud (Siddende)":
+                    # Alle aktioner på modstanderens sidste tredjedel (>66)
+                    df_plot = df_h_ev[df_h_ev['LOCATIONX'] > 66]
+                    title_text = "GENNEMBRUDSSPIL (SIDSTE 1/3)"
+
+                elif fase == "Offensiv: Progressive afleveringer (>20m)":
+                    # Beregn distance (simpel Pytagoras) og tjek om de flytter bolden fremad
+                    # Progressive: x2 skal være større end x1, og distance > 20
+                    df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + 
+                                       (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
+                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & 
+                                      (df_h_ev['dist'] > 20) & 
+                                      (df_h_ev['ENDLOCATIONX'] > df_h_ev['LOCATIONX'])]
+                    title_text = "PROGRESSIVE AFLEVERINGER (>20m)"
+                    show_arrows = True
+
+                # 3. Tegning af banen
+                st.write(f"### {title_text}")
+                fig, ax = pitch.draw(figsize=(8, 10))
+                
+                if not df_plot.empty:
+                    if show_arrows:
+                        # Tegn pile for progressive afleveringer
+                        pitch.arrows(df_plot.LOCATIONX, df_plot.LOCATIONY,
+                                     df_plot.ENDLOCATIONX, df_plot.ENDLOCATIONY, 
+                                     width=2, headwidth=3, headlength=3, 
+                                     color=t_color, ax=ax, alpha=0.6)
+                    else:
+                        # Tegn heatmap for de andre faser
+                        sns.kdeplot(x=df_plot['LOCATIONY'], y=df_plot['LOCATIONX'], 
+                                    fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig)
+                plt.close(fig)
     # --- TAB 2: MOD BOLD ---
     with tabs[2]:
         if not df_events.empty:
