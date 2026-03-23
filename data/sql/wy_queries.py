@@ -91,6 +91,8 @@ def get_wy_queries(comp_filter, season_filter):
                 pt.PLAYER_WYID,
                 s.SEASONNAME,
                 pt.MINUTESONFIELD,
+                pt.GOALS,          -- Tilføj denne hvis du vil have totaler herfra
+                pt.ASSISTS,        -- <--- NY: Her ligger de faktiske assists!
                 pt.XGSHOT,
                 pt.XGASSIST,
                 pt.DRIBBLES,
