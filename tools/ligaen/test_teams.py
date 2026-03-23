@@ -139,100 +139,54 @@ def vis_side(df_raw=None):
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
-        # --- PRÆCISIONS-INSTILLINGER ---
         num_metrics = len(metrics)
         col_width_pct = 0.14  
-        logo_size = 0.30      # Lidt mindre for at undgå overlap
-        bar_width = 0.40      # Bredden på selve søjlen
+        logo_size = 0.28
+        bar_width = 0.42
 
-        fig = make_subplots(
-            rows=1, cols=num_metrics,
-            horizontal_spacing=0.02, 
-            specs=[[{"type": "bar"}] * num_metrics]
-        )
+        fig = make_subplots(rows=1, cols=num_metrics, horizontal_spacing=0.02)
 
         for i, m in enumerate(metrics):
-            v1 = d1.iloc[0].get(m, 0)
-            v2 = d2.iloc[0].get(m, 0)
+            v1 = d1.iloc[0].get(m, 0); v2 = d2.iloc[0].get(m, 0)
             col = i + 1
-            
-            x_axis_name = f"x{col}" if col > 1 else "x"
-            y_axis_name = f"y{col}" if col > 1 else "y"
+            x_ax = f"xaxis{col if col>1 else ''}"
+            y_ax = f"yaxis{col if col>1 else ''}"
+            x_ref = f"x{col if col>1 else ''}"
 
-            # Søjlerne tvinges til at være tætte ved at fjerne al unødig luft
             fig.add_trace(go.Bar(
-                x=[team1], y=[v1], 
-                marker_color=c1["primary"],
-                width=bar_width,
-                text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
-                textposition='inside', 
-                insidetextfont=dict(color=get_text_color(c1["primary"]), size=10), 
-                showlegend=False,
-                offsetgroup=1
+                x=[team1], y=[v1], marker_color=c1["primary"], width=bar_width,
+                text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], textposition='inside',
+                insidetextfont=dict(color=get_text_color(c1["primary"]), size=10),
+                showlegend=False, offsetgroup=1
             ), row=1, col=col)
             
             fig.add_trace(go.Bar(
-                x=[team2], y=[v2], 
-                marker_color=c2["primary"],
-                width=bar_width,
-                text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
-                textposition='inside', 
-                insidetextfont=dict(color=get_text_color(c2["primary"]), size=10), 
-                showlegend=False,
-                offsetgroup=2
+                x=[team2], y=[v2], marker_color=c2["primary"], width=bar_width,
+                text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], textposition='inside',
+                insidetextfont=dict(color=get_text_color(c2["primary"]), size=10),
+                showlegend=False, offsetgroup=2
             ), row=1, col=col)
 
-            # Domæne-styring for at holde dem i venstre side
             start_pos = i * (col_width_pct + 0.01)
-            end_pos = start_pos + col_width_pct
-            
             fig.update_layout({
-                f'xaxis{col if col>1 else ""}': dict(
-                    domain=[start_pos, end_pos],
-                    showticklabels=False,
-                    fixedrange=True,
-                    # Dette fjerner luften mellem søjlerne i hver gruppe
-                    padding=0 
-                )
+                x_ax: dict(domain=[start_pos, start_pos + col_width_pct], showticklabels=False, fixedrange=True, range=[-0.6, 1.6])
             })
-
             fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
 
-            # Label under boks
-            fig.add_annotation(
-                dict(
-                    x=0.5, y=-0.2, 
-                    xref=f"{x_axis_name} domain", yref=f"{y_axis_name} domain",
-                    text=labels[i], showarrow=False,
-                    font=dict(size=10, color="#333", weight="bold")
-                )
-            )
+            fig.add_annotation(dict(
+                x=0.5, y=-0.22, xref=f"{x_ref} domain", yref=f"{x_ref.replace('x','y')} domain",
+                text=labels[i], showarrow=False, font=dict(size=10, color="#333", weight="bold")
+            ))
 
-            # LOGO-PLACERING: Her finjusterer vi de vandrette positioner
-            # x=0.25 (venstre søjle) og x=0.75 (højre søjle) placerer dem centreret over søjlerne
             if l1:
-                fig.add_layout_image(dict(
-                    source=l1, xref=x_axis_name, yref="paper",
-                    x=0.25, y=1.02, sizex=logo_size, sizey=logo_size,
-                    xanchor="center", yanchor="bottom"
-                ))
+                fig.add_layout_image(dict(source=l1, xref=x_ref, yref="paper", x=0.22, y=1.02, 
+                                          sizex=logo_size, sizey=logo_size, xanchor="center", yanchor="bottom"))
             if l2:
-                fig.add_layout_image(dict(
-                    source=l2, xref=x_axis_name, yref="paper",
-                    x=0.75, y=1.02, sizex=logo_size, sizey=logo_size,
-                    xanchor="center", yanchor="bottom"
-                ))
+                fig.add_layout_image(dict(source=l2, xref=x_ref, yref="paper", x=0.78, y=1.02, 
+                                          sizex=logo_size, sizey=logo_size, xanchor="center", yanchor="bottom"))
 
-        fig.update_layout(
-            height=280,
-            margin=dict(t=60, b=40, l=0, r=0),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            # barmode='group' kombineret med bargap styrer afstanden mellem de to søjler
-            barmode='group',
-            bargap=0.15,
-            bargroupgap=0.0
-        )
+        fig.update_layout(height=280, margin=dict(t=60, b=40, l=0, r=0), barmode='group', bargap=0.05, 
+                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
 
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
         
