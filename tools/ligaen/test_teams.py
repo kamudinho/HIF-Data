@@ -60,21 +60,16 @@ def vis_side(df_raw=None):
         if row['MATCH_STATUS'] == 'Played':
             h_g = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_g = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
-            winner = str(row['WINNER']).lower()
-            s_h, s_a = stats[h_uuid], stats[a_uuid]
             
-            s_h['K'] += 1; s_a['K'] += 1
-            s_h['M+'] += h_g; s_h['M-'] += a_g; s_a['M+'] += a_g; s_a['M-'] += h_g
-            
-            if winner == 'home':
-                s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
-                s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
-            elif winner == 'away':
-                s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V')
-                s_h['T'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'T')
+            # BEREGN VINDER HER (I stedet for row['WINNER'])
+            if h_g > a_g:
+                winner = 'home'
+            elif a_g > h_g:
+                winner = 'away'
             else:
-                s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
-                s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
+                winner = 'draw'
+
+            s_h, s_a = stats[h_uuid], stats[a_uuid]
 
     next_opponents = {}
     df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
