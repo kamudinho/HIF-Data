@@ -3,6 +3,7 @@ import pandas as pd
 import uuid
 
 def vis_log():
+    st.write("DEBUG: Admin-modulet er indlæst!") # <--- Hvis du ser dette, virker importen
     """Viser systemets aktivitetslog med filtre placeret over tabellen."""
     aktuel_rolle = str(st.session_state.get("role", "")).lower()
     
