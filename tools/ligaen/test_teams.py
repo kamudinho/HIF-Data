@@ -12,13 +12,15 @@ def vis_side(df_raw=None):
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
+    
+    # Hent fra team_stats da den indeholder de nødvendige kolonner
     df_opta = dp.get("opta", {}).get("team_stats", pd.DataFrame())
     
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
     if df_opta.empty:
-        st.warning("Ingen kampdata fundet.")
+        st.warning("Ingen kampdata fundet i 'team_stats'.")
         return
 
     # --- 1. HJÆLPEFUNKTIONER ---
@@ -33,6 +35,7 @@ def vis_side(df_raw=None):
         return f'<img src="{url}" width="20">' if url else ""
 
     def update_form(current_form, result):
+        # Sikrer at vi kun gemmer de sidste 5 kampe
         return "".join((list(current_form) + [result])[-5:])
 
     def style_form(f):
@@ -50,49 +53,48 @@ def vis_side(df_raw=None):
         return "black" if luminance > 165 else "white"
 
     # --- 2. DATABEREGNING (OPTA LIGATABEL) ---
-    stats = {}
-    
-    # Sikr at kolonnenavne er store bogstaver for at undgå KeyError
+    # Sørg for store bogstaver i kolonner
     df_opta.columns = [c.upper() for c in df_opta.columns]
+    
+    # VIGTIGT: Sorter efter dato for korrekt FORM-rækkefølge
+    df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
+    df_opta = df_opta.sort_values('MATCH_DATE_FULL', ascending=True)
 
+    stats = {}
     for _, row in df_opta.iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
         
-        # Initialisér hold hvis de ikke findes
+        # Initialisér hold
         for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
             if uuid not in stats:
                 stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
         
-        # Tjek status (robust over for store/små bogstaver)
+        # Behandl kun spillede kampe
         if str(row['MATCH_STATUS']).strip().capitalize() == 'Played':
             h_g = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_g = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             
             s_h, s_a = stats[h_uuid], stats[a_uuid]
             
-            # Opdater grundlæggende stats
             s_h['K'] += 1; s_a['K'] += 1
             s_h['M+'] += h_g; s_h['M-'] += a_g
             s_a['M+'] += a_g; s_a['M-'] += h_g
             
-            # BEREGN OG TILDEL POINT (Dette manglede i din kode)
+            # Point og Form logik
             if h_g > a_g:
-                # Hjemmesejr
                 s_h['V'] += 1; s_h['P'] += 3; s_h['FORM'] = update_form(s_h['FORM'], 'V')
-                s_a['T'] += 1; s_a['P'] += 0; s_a['FORM'] = update_form(s_a['FORM'], 'T')
+                s_a['T'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'T')
             elif a_g > h_g:
-                # Udesejr
                 s_a['V'] += 1; s_a['P'] += 3; s_a['FORM'] = update_form(s_a['FORM'], 'V')
-                s_h['T'] += 1; s_h['P'] += 0; s_h['FORM'] = update_form(s_h['FORM'], 'T')
+                s_h['T'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'T')
             else:
-                # Uafgjort
                 s_h['U'] += 1; s_h['P'] += 1; s_h['FORM'] = update_form(s_h['FORM'], 'U')
                 s_a['U'] += 1; s_a['P'] += 1; s_a['FORM'] = update_form(s_a['FORM'], 'U')
 
+    # Næste modstander logik
     next_opponents = {}
-    df_upcoming = df_opta[df_opta['MATCH_STATUS'] != 'Played'].copy()
+    df_upcoming = df_opta[df_opta['MATCH_STATUS'].str.strip().str.capitalize() != 'Played'].copy()
     if not df_upcoming.empty:
-        df_upcoming['MATCH_DATE_FULL'] = pd.to_datetime(df_upcoming['MATCH_DATE_FULL'])
         df_upcoming = df_upcoming.sort_values('MATCH_DATE_FULL')
         for uuid in stats.keys():
             future_m = df_upcoming[(df_upcoming['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_upcoming['CONTESTANTAWAY_OPTAUUID'] == uuid)]
@@ -108,10 +110,11 @@ def vis_side(df_raw=None):
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     df_liga['NÆSTE'] = df_liga['UUID'].map(next_opponents).fillna("-")
+    # Sorter tabel efter Point, Måldifference og Scorede mål
     df_liga = df_liga.sort_values(by=['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
-    # --- 3. WYSCOUT DATA ---
+    # --- 3. WYSCOUT DATA (TIL H2H) ---
     @st.cache_data(ttl=600)
     def get_wyscout_direct():
         if not conn: return pd.DataFrame()
@@ -135,99 +138,46 @@ def vis_side(df_raw=None):
 
     df_wy_raw = get_wyscout_direct()
     
+    # H2H Chart Funktion (Samme som før, men bruger df_liga for UUID opslag)
     def draw_h2h_chart_combined(team1, team2, metrics, labels, df_source, chart_key):
         d1 = df_source[df_source['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_source[df_source['TEAMNAME'].str.contains(team2, case=False, na=False)]
         
         if d1.empty or d2.empty:
-            st.info("Ingen data fundet.")
+            st.info("Ingen data fundet for de valgte hold.")
             return
 
-        # Definer x_indices med det samme baseret på labels
         x_indices = list(range(len(labels)))
         v1 = [d1.iloc[0].get(m, 0) for m in metrics]
         v2 = [d2.iloc[0].get(m, 0) for m in metrics]
         
-        # Logo URL logik
         u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0] if team1 in df_liga['HOLD'].values else None
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
         
-        # Farve logik
         c1 = colors_dict.get(team1, {"primary": "#df003b", "secondary": "#df003b"})
         c2 = colors_dict.get(team2, {"primary": "#0056a3", "secondary": "#0056a3"})
 
-        def is_white(color):
-            c = str(color).lower().strip()
-            return c in ['#ffffff', 'white', '#fff', '#fcfcfc']
-
-        h1_line_color = c1.get("secondary", c1["primary"]) if is_white(c1["primary"]) else c1["primary"]
-        h1_line_width = 2 if is_white(c1["primary"]) else 0
-        h2_line_color = c2.get("secondary", c2["primary"]) if is_white(c2["primary"]) else c2["primary"]
-        h2_line_width = 2 if is_white(c2["primary"]) else 0
-
         fig = go.Figure()
-        
-        # Tilføj Bar traces
-        fig.add_trace(go.Bar(
-            name=team1, x=x_indices, y=v1, 
-            marker_color=c1["primary"], 
-            marker_line_color=h1_line_color, marker_line_width=h1_line_width,
-            text=[f"{x:.2f}" for x in v1], textposition='inside', 
-            insidetextfont=dict(size=14, family="Arial", color=get_text_color(c1["primary"])),
-            offsetgroup=1
-        ))
-        
-        fig.add_trace(go.Bar(
-            name=team2, x=x_indices, y=v2, 
-            marker_color=c2["primary"], 
-            marker_line_color=h2_line_color, marker_line_width=h2_line_width,
-            text=[f"{x:.2f}" for x in v2], textposition='inside', 
-            insidetextfont=dict(size=12, family="Arial", color=get_text_color(c2["primary"])),
-            offsetgroup=2
-        ))
+        fig.add_trace(go.Bar(name=team1, x=x_indices, y=v1, marker_color=c1["primary"], offsetgroup=1, text=[f"{x:.2f}" for x in v1], textposition='inside', insidetextfont=dict(color=get_text_color(c1["primary"]))))
+        fig.add_trace(go.Bar(name=team2, x=x_indices, y=v2, marker_color=c2["primary"], offsetgroup=2, text=[f"{x:.2f}" for x in v2], textposition='inside', insidetextfont=dict(color=get_text_color(c2["primary"]))))
 
-        # Logo løkke (bruger nu x_indices korrekt)
+        # Logoer over søjlerne
         for i in x_indices:
-            if l1:
-                fig.add_layout_image(dict(
-                    source=l1, xref="x", yref="paper",
-                    x=i - 0.20, y=1.05, sizex=0.18, sizey=0.18,
-                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
-                ))
-            if l2:
-                fig.add_layout_image(dict(
-                    source=l2, xref="x", yref="paper",
-                    x=i + 0.20, y=1.05, sizex=0.18, sizey=0.18,
-                    xanchor="center", yanchor="bottom", opacity=1, layer="above"
-                ))
+            if l1: fig.add_layout_image(dict(source=l1, xref="x", yref="paper", x=i - 0.20, y=1.05, sizex=0.15, sizey=0.15, xanchor="center", yanchor="bottom"))
+            if l2: fig.add_layout_image(dict(source=l2, xref="x", yref="paper", x=i + 0.20, y=1.05, sizex=0.15, sizey=0.15, xanchor="center", yanchor="bottom"))
 
-        fig.update_layout(
-            barmode='group',
-            bargap=0.30,
-            bargroupgap=0.12, # Mellemrum mellem de to hold
-            height=500,
-            margin=dict(t=100, b=150, l=20, r=20),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            showlegend=False,
-            yaxis=dict(visible=False, fixedrange=True, range=[0, max(max(v1 or [0]), max(v2 or [0])) * 1.4]),
-            xaxis=dict(
-                type='category', showgrid=False, tickmode='array', tickvals=x_indices, ticktext=labels,
-                tickfont=dict(size=16, family="Arial", color="#333333"), 
-                tickangle=0, automargin=True, fixedrange=True, anchor="y", side="bottom"
-            )
-        )
+        fig.update_layout(barmode='group', height=400, margin=dict(t=80, b=50), plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(tickvals=x_indices, ticktext=labels))
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
-    # --- 5. LAYOUT ---
+    # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
         st.markdown("""<style>
             .league-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-            .league-table th { background-color: rgba(128,128,128,0.1); padding: 8px; text-align: center !important; }
-            .league-table td { padding: 8px; border-bottom: 1px solid rgba(128,128,128,0.2); text-align: center !important; }
+            .league-table th { background-color: rgba(128,128,128,0.1); padding: 8px; text-align: center; }
+            .league-table td { padding: 8px; border-bottom: 1px solid rgba(128,128,128,0.2); text-align: center; }
             .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
         </style>""", unsafe_allow_html=True)
         
@@ -248,14 +198,8 @@ def vis_side(df_raw=None):
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
             sub_tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
-            
-            with sub_tabs[0]:
-                draw_h2h_chart_combined(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_agg, "gen_chart")
-            with sub_tabs[1]:
-                draw_h2h_chart_combined(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_agg, "xg_chart")
-            with sub_tabs[2]:
-                draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'Udenfor felt', 'I feltet', 'I felt på mål', 'Danger Zone'], df_agg, "shot_chart")
-            with sub_tabs[3]:
-                draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interceptions', 'Tacklinger', 'Clearinger'], df_agg, "def_chart")
-            with sub_tabs[4]:
-                draw_h2h_chart_combined(team1, team2, ['PASSES', 'CROSSESTOTAL', 'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Afleveringer', 'Indlæg', 'Fremadrettede', 'Progressive', 'Til sidste 1/3'], df_agg, "pass_chart")
+            with sub_tabs[0]: draw_h2h_chart_combined(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_agg, "gen_chart")
+            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_agg, "xg_chart")
+            with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'SHOTSFROMBOX'], ['På mål', 'I feltet'], df_agg, "shot_chart")
+            with sub_tabs[3]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS', 'TACKLES'], ['Interceptions', 'Tacklinger'], df_agg, "def_chart")
+            with sub_tabs[4]: draw_h2h_chart_combined(team1, team2, ['PASSES', 'FORWARDPASSES'], ['Afleveringer', 'Fremadrettede'], df_agg, "pass_chart")
