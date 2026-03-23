@@ -141,7 +141,6 @@ def vis_side(df_raw=None):
 
         fig = make_subplots(rows=1, cols=len(metrics))
 
-        # Dynamisk logo-størrelse baseret på antal kolonner for at ensarte udtrykket
         logo_size = 0.45 if len(metrics) > 3 else 0.3
 
         for i, m in enumerate(metrics):
@@ -149,6 +148,9 @@ def vis_side(df_raw=None):
             v2 = d2.iloc[0].get(m, 0)
             col = i + 1
             
+            # Korrekt navngivning af akser: 'x', 'x2', 'x3' osv.
+            axis_name = f"x{col}" if col > 1 else "x"
+
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
                 marker_color=c1["primary"], 
@@ -170,11 +172,11 @@ def vis_side(df_raw=None):
             fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
             fig.update_xaxes(showticklabels=False, row=1, col=col)
 
-            # Labels placeret under hver boks
+            # Labels under hver boks
             fig.add_annotation(
                 dict(
-                    x=0.5, y=-0.2, 
-                    xref=f"x{col} domain", yref=f"y{col} domain",
+                    x=0.5, y=-0.25, 
+                    xref=f"{axis_name} domain", yref=f"y{col} domain",
                     text=labels[i],
                     showarrow=False,
                     font=dict(size=11, color="#333", weight="bold"),
@@ -184,20 +186,20 @@ def vis_side(df_raw=None):
 
             if l1:
                 fig.add_layout_image(dict(
-                    source=l1, xref=f"x{col}", yref="paper",
+                    source=l1, xref=axis_name, yref="paper",
                     x=0.28, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
             if l2:
                 fig.add_layout_image(dict(
-                    source=l2, xref=f"x{col}", yref="paper",
+                    source=l2, xref=axis_name, yref="paper",
                     x=0.72, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
 
         fig.update_layout(
             height=300,
-            margin=dict(t=50, b=50, l=10, r=10),
+            margin=dict(t=50, b=60, l=10, r=10),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             bargap=0.2
