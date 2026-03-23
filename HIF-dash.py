@@ -15,6 +15,52 @@ import data.analyse_load as analyse_load
 import data.fys_load as fys_loader
 from data.users import get_users
 
+import requests
+import base64
+from datetime import datetime
+from io import StringIO
+
+def log_event_to_github(user, handling, maal):
+    """Skriver en ny række til action_log.csv på GitHub."""
+    try:
+        # Hent TOKEN fra st.secrets (skal opsættes på Streamlit Cloud)
+        token = st.secrets["GITHUB_TOKEN"]
+        repo = "Kamudinho/HIF-data"
+        path = "data/action_log.csv"
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+
+        # 1. Hent den nuværende fil (for at få SHA og indhold)
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200: return
+
+        file_json = r.json()
+        sha = file_json['sha']
+        old_content = base64.b64decode(file_json['content']).decode('utf-8')
+        
+        # 2. Tilføj den nye linje
+        df_log = pd.read_csv(StringIO(old_content))
+        ny_række = {
+            "Dato": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Bruger": user,
+            "Handling": handling,
+            "Mål": maal
+        }
+        df_log = pd.concat([df_log, pd.DataFrame([ny_række])], ignore_index=True)
+        
+        # 3. Konverter tilbage og push
+        new_csv = df_log.to_csv(index=False)
+        encoded = base64.b64encode(new_csv.encode('utf-8')).decode('utf-8')
+        
+        payload = {
+            "message": f"Log: {user} -> {handling}",
+            "content": encoded,
+            "sha": sha
+        }
+        requests.put(url, headers=headers, json=payload)
+    except Exception as e:
+        print(f"Log-fejl: {e}")
+        
 
 # --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
@@ -102,11 +148,15 @@ if not st.session_state["logged_in"]:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
                     st.session_state["role"] = USER_DB[u]["role"]
+                    
+                    # Log hændelsen til GitHub
+                    log_event_to_github(u, "Login", "HIF Data Hub")
+                    
                     st.rerun()
                 else:
                     st.error("Ugyldig bruger eller kode")
     st.stop()
-
+                    
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='30'></div>", unsafe_allow_html=True)
@@ -148,6 +198,12 @@ with st.sidebar:
 
 if not sel:
     sel = "Oversigt"
+
+# LOGNING AF FANESKIFT:
+# Dette tjekker om den nuværende fane er forskellig fra den sidst gemte i session_state
+if "last_sel" not in st.session_state or st.session_state["last_sel"] != sel:
+    log_event_to_github(st.session_state["user"], "Skiftede fane", f"{hoved_omraade} -> {sel}")
+    st.session_state["last_sel"] = sel
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
