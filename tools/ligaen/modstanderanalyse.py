@@ -136,11 +136,11 @@ def vis_side(analysis_package=None):
             
             if not df_h_ev.empty:
                 # Vælg mellem de to overordnede faser
-                fokus = st.radio("Vælg fokusområde:", ["Defensiv opbygning", "Offensivt gennembrud"], horizontal=True)
+                fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
                 
                 c1, c2 = st.columns(2)
 
-                if fokus == "Defensiv opbygning":
+                if fokus == "Opbygning":
                     with c1:
                         st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                         df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
