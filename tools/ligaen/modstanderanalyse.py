@@ -135,63 +135,53 @@ def vis_side(analysis_package=None):
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
             
             if not df_h_ev.empty:
-                # 1. Overordnet zone-valg
-                zone = st.radio("Vælg fokusområde:", ["Egen Banehalvdel (Opbygning)", "Offensiv Banehalvdel (Gennembrud)"], horizontal=True)
-                st.markdown("---")
-
+                # Vælg mellem de to overordnede faser
+                fokus = st.radio("Vælg fokusområde:", ["Defensiv opbygning", "Offensivt gennembrud"], horizontal=True)
+                
                 c1, c2 = st.columns(2)
 
-                if zone == "Egen Banehalvdel (Opbygning)":
-                    # --- VENSTRE: MÅLSPARK ---
+                if fokus == "Defensiv opbygning":
                     with c1:
-                        st.write("<p style='text-align:center; font-weight:bold;'>MÅLSPARK & DYB OPBYGNING</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                         df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
-                        fig, ax = pitch.draw(figsize=(4, 6))
+                        fig, ax = pitch.draw(figsize=(4, 5))
                         if not df_kick.empty:
                             sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
-                    # --- HØJRE: ÅBENT SPIL OPBYGNING ---
                     with c2:
-                        st.write("<p style='text-align:center; font-weight:bold;'>OPBYGNING (15m - 50m)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING (UDEN FOR FELT)</p>", unsafe_allow_html=True)
                         df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
-                        fig, ax = pitch.draw(figsize=(4, 6))
+                        fig, ax = pitch.draw(figsize=(4, 5))
                         if not df_build.empty:
                             sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
-                else: # Offensiv Banehalvdel
-                    # --- VENSTRE: GENNEMBRUD ---
+                else: # Offensivt gennembrud
                     with c1:
-                        st.write("<p style='text-align:center; font-weight:bold;'>GENNEMBRUD (SIDSTE 1/3)</p>", unsafe_allow_html=True)
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD (SIDSTE 1/3)</p>", unsafe_allow_html=True)
                         df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
-                        fig, ax = pitch.draw(figsize=(4, 6))
+                        fig, ax = pitch.draw(figsize=(4, 5))
                         if not df_final.empty:
                             sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
 
-                    # --- HØJRE: PROGRESSIVE PASSES ---
                     with c2:
-                        st.write("<p style='text-align:center; font-weight:bold;'>PROGRESSIVE AFLEVERINGER (>20m)</p>", unsafe_allow_html=True)
-                        df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + 
-                                           (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
-                        # Filter: længde > 20 og flytter bolden mindst 10m fremad vertikalt
-                        df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & 
-                                          (df_h_ev['dist'] > 20) & 
-                                          (df_h_ev['ENDLOCATIONX'] > (df_h_ev['LOCATIONX'] + 10))]
+                        st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE PASSES (>20m)</p>", unsafe_allow_html=True)
+                        # Beregn distance
+                        df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
+                        df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['dist'] > 20) & (df_h_ev['ENDLOCATIONX'] > df_h_ev['LOCATIONX'])]
                         
-                        fig, ax = pitch.draw(figsize=(4, 6))
+                        fig, ax = pitch.draw(figsize=(4, 5))
                         if not df_prog.empty:
-                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY,
-                                         df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
-                                         width=1.5, headwidth=3, headlength=3, 
-                                         color=t_color, ax=ax, alpha=0.4)
+                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
+                                         width=1.5, headwidth=3, headlength=3, color=t_color, ax=ax, alpha=0.5)
                         draw_logo_on_ax(ax, t_logo)
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
