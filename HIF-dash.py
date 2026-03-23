@@ -24,7 +24,8 @@ HIF_GULD = "#b8860b"
 st.set_page_config(
     page_title="HIF Dataanalyse",
     layout="wide",
-    page_icon=HIF_LOGO_URL
+    page_icon=HIF_LOGO_URL,
+    initial_sidebar_state="auto"  # <--- Sørg for at denne ikke tvinger den lukket
 )
 
 # Centraliseret CSS
