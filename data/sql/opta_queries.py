@@ -262,6 +262,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
         # 11. PHYSICAL METADATA - Nu baseret på turneringens kampe i stedet for en løs variabel
         "opta_remote_shapes": f"""
-            SELECT DISTINCT * FROM {DB}.OPTA_REMOTESHAPES 
+            SELECT * FROM {DB}.OPTA_REMOTESHAPES 
+            WHERE MATCH_OPTAUUID IN ({match_id_subquery})
         """
     }
