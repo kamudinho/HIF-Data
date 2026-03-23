@@ -10,31 +10,22 @@ COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
 KLUB_NAVNE = {
-    "HVI": "Hvidovre IF",
-    "KIF": "Kolding IF",
-    "MID": "Middelfart",
-    "HIK": "Hobro IK",
-    "LBK": "Lyngby BK",
-    "B93": "B.93",
-    "ARF": "Aarhus Fremad",
-    "ACH": "Horsens",
-    "HBK": "HB Køge",
-    "EFB": "Esbjerg fB",
-    "HIL": "Hillerød",
-    "AAB": "AaB"
+    "HVI": "Hvidovre IF", "KIF": "Kolding IF", "MID": "Middelfart",
+    "HIK": "Hobro IK", "LBK": "Lyngby BK", "B93": "B.93",
+    "ARF": "Aarhus Fremad", "ACH": "Horsens", "HBK": "HB Køge",
+    "EFB": "Esbjerg fB", "HIL": "Hillerød", "AAB": "AaB"
 }
 
 def get_opponent_name(description):
-    """Udtrækker modstandernavn fra 'HVI - MOD' eller 'MOD - HVI'."""
+    """Udtrækker modstandernavn fra kampbeskrivelsen."""
     if not description or ' - ' not in description:
         return "Ukendt"
     teams = [t.strip() for t in description.split(' - ')]
-    # Find den kode der ikke er HVI
     opp_code = teams[1] if teams[0] == 'HVI' else teams[0]
     return KLUB_NAVNE.get(opp_code, opp_code)
 
 def vis_side(conn, name_map=None):
-    # --- 1. HENT LOKAL MAPPING ---
+    # --- 1. HENT LOKAL SPILLER-MAPPING ---
     df_local = load_local_players()
     player_mapping = {}
     if df_local is not None and not df_local.empty:
@@ -43,7 +34,7 @@ def vis_side(conn, name_map=None):
             df_local['optaId'] = df_local['optaId'].astype(str).split('.').str[0].str.strip()
             player_mapping = df_local.set_index('optaId')['NAVN'].to_dict()
 
-    # --- 2. HENT DATA ---
+    # --- 2. HENT DATA (SQL MED ALLE KOLONNER) ---
     @st.cache_data(ttl=600)
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
@@ -53,7 +44,6 @@ def vis_side(conn, name_map=None):
         WHERE COMPETITION_OPTAUUID = '{COMP_UUID}' AND "DATE" >= '2025-07-01' AND "DATE" <= '{today}'
         ORDER BY "DATE" DESC
         """
-        df_meta = conn.query(query_meta)
         
         query_phys = f"""
         WITH hvidovre_ids AS (
@@ -62,18 +52,17 @@ def vis_side(conn, name_map=None):
             LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
             WHERE m.HOME_SSIID = '{HIF_SSIID}' OR m.AWAY_SSIID = '{HIF_SSIID}'
         )
-        SELECT p.MATCH_SSIID, p.PLAYER_NAME, p."optaId", p.MINUTES, p.DISTANCE, 
-               p."HIGH SPEED RUNNING", p."SPRINTING", p."TOP_SPEED", p."NO_OF_HIGH_INTENSITY_RUNS",
+        SELECT p.*, 
                CASE WHEN h.opta_id IS NOT NULL THEN 'Hvidovre IF' ELSE 'Modstander' END AS "Hold"
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
         LEFT JOIN hvidovre_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.opta_id
-        WHERE p.MATCH_SSIID IN (SELECT MATCH_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA WHERE "DATE" >= '2025-07-01')
+        WHERE p.MATCH_DATE >= '2025-07-01'
         """
-        return df_meta, conn.query(query_phys)
+        return conn.query(query_meta), conn.query(query_phys)
 
     df_meta, df_phys = get_safe_data()
     if df_phys.empty:
-        st.error("Ingen data fundet.")
+        st.error("Ingen fysisk data fundet for denne sæson.")
         return
 
     # --- 3. DATABEHANDLING ---
@@ -91,82 +80,82 @@ def vis_side(conn, name_map=None):
     df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
     df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_mapping.get(str(r['optaId']).strip(), r['PLAYER_NAME']), axis=1)
 
-    t1, t2, t3, t4 = st.tabs(["Hvidovre IF", "Graf", "Top 5-oversigt", "Kampoversigt"])
+    # --- 4. TABS STRUKTUR (UDEN IKONER) ---
+    t1, t2, t3, t4 = st.tabs(["Hvidovre IF P90", "Udvikling", "Top 5", "Kampanalyse"])
 
-    # --- TAB 1: P90 ---
+    # --- TAB 1: P90 OVERSIGT FOR HVIDOVRE ---
     with t1:
+        st.subheader("Saesongennemsnit pr. 90 minutter")
         df_hif = df_phys[df_phys['Hold'] == "Hvidovre IF"].copy()
         summary = df_hif.groupby('DISPLAY_NAME').agg({
             'MINS_DECIMAL': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 
-            'SPRINTING': 'sum', 'TOP_SPEED': 'max', 'NO_OF_HIGH_INTENSITY_RUNS': 'sum'
+            'DISTANCE_TIP': 'sum', 'DISTANCE_OTIP': 'sum', 'TOP_SPEED': 'max'
         }).reset_index()
 
         summary = summary[summary['MINS_DECIMAL'] > 15].copy()
-        summary['Dist_P90'] = (summary['DISTANCE'] / summary['MINS_DECIMAL']) * 90 / 1000
-        summary['HI_P90'] = (summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90
-        summary['Sprint_P90'] = (summary['SPRINTING'] / summary['MINS_DECIMAL']) * 90
-        summary['HIR_Actions_P90'] = (summary['NO_OF_HIGH_INTENSITY_RUNS'] / summary['MINS_DECIMAL']) * 90
-        
-        plot_df = summary.sort_values('Dist_P90', ascending=False)
+        summary['KM/90'] = (summary['DISTANCE'] / summary['MINS_DECIMAL']) * 90 / 1000
+        summary['HI m/90'] = (summary['HI_RUN'] / summary['MINS_DECIMAL']) * 90
+        summary['TIP m/90'] = (summary['DISTANCE_TIP'] / summary['MINS_DECIMAL']) * 90
+        summary['OTIP m/90'] = (summary['DISTANCE_OTIP'] / summary['MINS_DECIMAL']) * 90
+
         st.dataframe(
-            plot_df, 
+            summary.sort_values('KM/90', ascending=False),
             column_config={
-                "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width="medium"),
-                "Dist_P90": st.column_config.NumberColumn("KM/90", format="%.2f km"),
-                "HI_P90": st.column_config.NumberColumn("HI m/90", format="%d m"),
-                "Sprint_P90": st.column_config.NumberColumn("Sprint/90", format="%d m"),
-                "HIR_Actions_P90": st.column_config.NumberColumn("HI Akt.", format="%.2f"),
-                "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.2f km/t")
+                "DISPLAY_NAME": "Spiller",
+                "KM/90": st.column_config.NumberColumn("KM/90", format="%.2f"),
+                "HI m/90": st.column_config.NumberColumn("HI m/90", format="%d"),
+                "TIP m/90": st.column_config.NumberColumn("TIP m/90", format="%d"),
+                "OTIP m/90": st.column_config.NumberColumn("OTIP m/90", format="%d"),
+                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
-            column_order=("DISPLAY_NAME", "Dist_P90", "HI_P90", "Sprint_P90", "HIR_Actions_P90", "TOP_SPEED"),
-            use_container_width=True, hide_index=True, height=(len(plot_df)+1)*35+45
+            column_order=("DISPLAY_NAME", "KM/90", "HI m/90", "TIP m/90", "OTIP m/90", "TOP_SPEED"),
+            use_container_width=True, hide_index=True
         )
 
-    # --- TAB 2: GRAF ---
+    # --- TAB 2: GRAFISK SAMMENLIGNING ---
     with t2:
-        kat_map = {"Dist_P90": "KM pr. 90", "HI_P90": "HI m pr. 90", "Sprint_P90": "Sprint pr. 90", "HIR_Actions_P90": "HI Aktioner P90", "TOP_SPEED": "Topfart km/t"}
-        valg = st.selectbox("Vælg kategori", list(kat_map.keys()), format_func=lambda x: kat_map[x])
-        plot_df_sorted = summary.sort_values(valg, ascending=False)
+        kat_map = {
+            "KM/90": "Total Distance (KM/90)", 
+            "HI m/90": "Høj Intensitetsloeb (m/90)", 
+            "TIP m/90": "Offensivt loeb (TIP m/90)",
+            "OTIP m/90": "Defensivt pres (OTIP m/90)",
+            "TOP_SPEED": "Topfart (km/t)"
+        }
+        valg = st.selectbox("Vaely parameter", list(kat_map.keys()), format_func=lambda x: kat_map[x])
         
-        fig = px.bar(plot_df_sorted, x='DISPLAY_NAME', y=valg, text_auto='.2f', color=valg, color_continuous_scale='reds', title=f"Hvidovre IF: {kat_map[valg]}")
-        fig.update_traces(hovertemplate=f"<b>%{{x}}</b><br>{kat_map[valg]}: %{{y:.2f}}<extra></extra>")
-        fig.update_yaxes(range=[plot_df_sorted[valg].min()*0.8, plot_df_sorted[valg].max()*1.05], visible=False, showgrid=False)
-        fig.update_layout(xaxis_tickangle=-45, xaxis_title=None, plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        plot_df = summary.sort_values(valg, ascending=False)
+        fig = px.bar(plot_df, x='DISPLAY_NAME', y=valg, text_auto='.1f', color=valg, color_continuous_scale='reds')
+        fig.update_layout(xaxis_title=None, yaxis_visible=False, plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- TAB 3: TOP 5 ---
+    # --- TAB 3: TOP 5 PRESTATIONER ---
     with t3:
-        st.subheader("Fysiske Top-præstationer (Alle spillere)")
+        st.subheader("Saesonens højeste tal i enkeltkampe")
         c1, c2, c3 = st.columns(3)
         
-        def process_top5(metric, ascending=False):
+        def get_top5(metric):
             df = df_phys.nlargest(5, metric)[['DISPLAY_NAME', 'MATCH_SSIID', 'Hold', metric]].copy()
             df = df.merge(df_meta[['MATCH_SSIID', 'DESCRIPTION']], on='MATCH_SSIID', how='left')
             df['Klub'] = df.apply(lambda r: 'Hvidovre IF' if r['Hold'] == 'Hvidovre IF' else get_opponent_name(r['DESCRIPTION']), axis=1)
-            return df
+            return df[['DISPLAY_NAME', 'Klub', metric]]
 
         with c1:
-            st.write("**Topfart (km/t)**")
-            df1 = process_top5('TOP_SPEED')
-            st.dataframe(df1[['DISPLAY_NAME', 'Klub', 'TOP_SPEED']], column_config={"TOP_SPEED": st.column_config.NumberColumn("Km/t", format="%.2f km/t")}, use_container_width=True, hide_index=True)
-            
+            st.write("Topfart (km/t)")
+            st.dataframe(get_top5('TOP_SPEED'), use_container_width=True, hide_index=True)
         with c2:
-            st.write("**HI løb i én kamp (m)**")
-            df2 = process_top5('HI_RUN')
-            st.dataframe(df2[['DISPLAY_NAME', 'Klub', 'HI_RUN']], column_config={"HI_RUN": st.column_config.NumberColumn("Meter", format="%d m")}, use_container_width=True, hide_index=True)
-
+            st.write("HI loeb (m)")
+            st.dataframe(get_top5('HI_RUN'), use_container_width=True, hide_index=True)
         with c3:
-            st.write("**Sprint i én kamp (m)**")
-            df3 = process_top5('SPRINTING')
-            st.dataframe(df3[['DISPLAY_NAME', 'Klub', 'SPRINTING']], column_config={"SPRINTING": st.column_config.NumberColumn("Meter", format="%d m")}, use_container_width=True, hide_index=True)
+            st.write("Distance med bold (TIP)")
+            st.dataframe(get_top5('DISTANCE_TIP'), use_container_width=True, hide_index=True)
 
-    # --- TAB 4: KAMPOVERSIGT ---
+    # --- TAB 4: KAMPANALYSE (BEGGE HOLD) ---
     with t4:
         df_hif_matches = df_meta[(df_meta['HOME_SSIID'] == HIF_SSIID) | (df_meta['AWAY_SSIID'] == HIF_SSIID)].copy()
         df_hif_matches['LABEL'] = df_hif_matches['DATE'].astype(str) + " - " + df_hif_matches['DESCRIPTION']
         
         if not df_hif_matches.empty:
-            valgt_kamp = st.selectbox("Vælg kamp", df_hif_matches['LABEL'].unique())
+            valgt_kamp = st.selectbox("Vaely kamp", df_hif_matches['LABEL'].unique())
             kamp_info = df_hif_matches[df_hif_matches['LABEL'] == valgt_kamp].iloc[0]
             opp_name = get_opponent_name(kamp_info['DESCRIPTION'])
             
@@ -174,23 +163,19 @@ def vis_side(conn, name_map=None):
             df_m['KM'] = df_m['DISTANCE'] / 1000
             df_m['Klub'] = df_m['Hold'].apply(lambda x: 'Hvidovre IF' if x == 'Hvidovre IF' else opp_name)
             
-            match_plot = df_m.sort_values(by='DISTANCE', ascending=False)
-            # DYNAMISK HØJDE: Antal spillere * 35px + header
-            calc_height_m = (len(match_plot) + 1) * 35 + 45
-
             st.dataframe(
-                match_plot, 
+                df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
                 column_config={
-                    "DISPLAY_NAME": st.column_config.TextColumn("Spiller", width=200),
-                    "Klub": st.column_config.TextColumn("Klub", width=100),
-                    "MINUTES": st.column_config.TextColumn("Min", width=60), 
-                    "KM": st.column_config.NumberColumn("KM", format="%.2f km", width=80),
-                    "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m", width=80),
-                    "SPRINTING": st.column_config.NumberColumn("Sprint m", format="%d m", width=80),
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.2f km/t", width=80)
+                    "DISPLAY_NAME": "Spiller",
+                    "Klub": "Klub",
+                    "MINUTES": "Min",
+                    "KM": st.column_config.NumberColumn("KM", format="%.2f"),
+                    "HI_RUN": "HI m",
+                    "DISTANCE_TIP": "TIP (m)",
+                    "DISTANCE_OTIP": "OTIP (m)",
+                    "DISTANCE_BOP": "BOP (m)",
+                    "TOP_SPEED": "Top"
                 },
-                column_order=("DISPLAY_NAME", "Klub", "MINUTES", "KM", "HI_RUN", "SPRINTING", "TOP_SPEED"),
-                use_container_width=True, 
-                hide_index=True, 
-                height=calc_height_m  # Fjerner scrollbar ved at tvinge højden ud
+                column_order=("DISPLAY_NAME", "Klub", "MINUTES", "KM", "HI_RUN", "DISTANCE_TIP", "DISTANCE_OTIP", "DISTANCE_BOP", "TOP_SPEED"),
+                use_container_width=True, hide_index=True, height=800
             )
