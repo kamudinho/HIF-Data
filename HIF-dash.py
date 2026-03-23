@@ -20,6 +20,9 @@ import base64
 from datetime import datetime
 from io import StringIO
 
+if "watchdog" not in st.session_state:
+    st.session_state["watchdog"] = True
+
 def log_event_to_github(user, handling, maal):
     try:
         token = st.secrets["GITHUB_TOKEN"]
