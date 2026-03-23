@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import datetime
 
 def vis_log():
-    st.caption("### Log")
+    st.markdown("### System Action Log")
     
     try:
         # 1. Hent data fra GitHub
