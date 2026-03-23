@@ -139,15 +139,14 @@ def vis_side(df_raw=None):
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
-        # --- KONFIGURATION FOR FAST STØRRELSE ---
+        # --- KONFIGURATION ---
         num_metrics = len(metrics)
-        col_width_pct = 0.14  # Hver graf fylder præcis 14% af containerens bredde
-        logo_size = 0.35      # Låst størrelse på logoer
+        col_width_pct = 0.14  
+        logo_size = 0.32      # En anelse mindre logo for at passe til de tætte søjler
 
-        # Vi laver subplots, men manuelt styrer vi deres bredde via 'specs'
         fig = make_subplots(
             rows=1, cols=num_metrics,
-            horizontal_spacing=0.02, # Fast lille afstand mellem graferne
+            horizontal_spacing=0.02, 
             specs=[[{"type": "bar"}] * num_metrics]
         )
 
@@ -159,11 +158,12 @@ def vis_side(df_raw=None):
             x_axis_name = f"x{col}" if col > 1 else "x"
             y_axis_name = f"y{col}" if col > 1 else "y"
 
-            # Tilføj søjler
+            # Ved at sætte width højere (f.eks. 0.45) og fjerne bargap i layout, 
+            # rykker de to hold tættere på hinanden.
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
                 marker_color=c1["primary"],
-                width=0.6, # Fast bredde på selve søjlen indeni grafen
+                width=0.45, 
                 text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c1["primary"]), size=10), 
@@ -173,14 +173,13 @@ def vis_side(df_raw=None):
             fig.add_trace(go.Bar(
                 x=[team2], y=[v2], 
                 marker_color=c2["primary"],
-                width=0.6,
+                width=0.45,
                 text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c2["primary"]), size=10), 
                 showlegend=False
             ), row=1, col=col)
 
-            # Lås x-aksens domæne for at tvinge fast bredde fra venstre
             start_pos = i * (col_width_pct + 0.01)
             end_pos = start_pos + col_width_pct
             
@@ -204,26 +203,27 @@ def vis_side(df_raw=None):
                 )
             )
 
-            # Logoer med fast størrelse
+            # Logoer rykket ind mod midten (0.38 og 0.62 i stedet for 0.15/0.85)
+            # så de flugter med de nu tættere søjler.
             if l1:
                 fig.add_layout_image(dict(
                     source=l1, xref=x_axis_name, yref="paper",
-                    x=0.15, y=1.02, sizex=logo_size, sizey=logo_size,
+                    x=0.38, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
             if l2:
                 fig.add_layout_image(dict(
                     source=l2, xref=x_axis_name, yref="paper",
-                    x=0.85, y=1.02, sizex=logo_size, sizey=logo_size,
+                    x=0.62, y=1.02, sizex=logo_size, sizey=logo_size,
                     xanchor="center", yanchor="bottom"
                 ))
 
         fig.update_layout(
-            height=380,
-            margin=dict(t=50, b=50, l=0, r=0), # l=0 rykker det helt til venstre
+            height=300, # Justeret højde lidt ned for skarpere look
+            margin=dict(t=50, b=50, l=0, r=0),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
-            bargap=0.1
+            bargap=0.05, # Dette gør afstanden mellem de to hold meget lille
         )
 
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
