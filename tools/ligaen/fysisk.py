@@ -31,10 +31,13 @@ def vis_side(conn, name_map=None):
     if df_local is not None and not df_local.empty:
         df_local.columns = [c.strip() for c in df_local.columns]
         if 'optaId' in df_local.columns and 'NAVN' in df_local.columns:
-            df_local['optaId'] = df_local['optaId'].astype(str).split('.').str[0].str.strip()
-            player_mapping = df_local.set_index('optaId')['NAVN'].to_dict()
+            # Sikrer at optaId er en ren streng uden decimaler (fx '12345' i stedet for '12345.0')
+            df_local['optaId_clean'] = df_local['optaId'].apply(
+                lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','',1).isdigit() else str(x)
+            )
+            player_mapping = df_local.set_index('optaId_clean')['NAVN'].to_dict()
 
-    # --- 2. HENT DATA (SQL MED ALLE KOLONNER) ---
+    # --- 2. HENT DATA ---
     @st.cache_data(ttl=600)
     def get_safe_data():
         today = datetime.now().strftime('%Y-%m-%d')
@@ -62,10 +65,10 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys = get_safe_data()
     if df_phys.empty:
-        st.error("Ingen fysisk data fundet for denne sæson.")
+        st.error("Ingen fysisk data fundet for denne saeson.")
         return
 
-    # --- 3. DATABEHANDLING ---
+    # --- 3. DATABEHANDLING (FEJLSIKRET) ---
     def parse_minutes(val):
         try:
             v = str(val)
@@ -77,12 +80,23 @@ def vis_side(conn, name_map=None):
 
     df_phys['MINS_DECIMAL'] = df_phys['MINUTES'].apply(parse_minutes)
     df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
-    df_phys = df_phys[~df_phys['optaId'].astype(str).str.split('.').str[0].isin(EXCLUDE_LIST)].copy()
-    df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_mapping.get(str(r['optaId']).strip(), r['PLAYER_NAME']), axis=1)
+    
+    # Robust konvertering af optaId til streng før ekskludering og mapping
+    df_phys['optaId_str'] = df_phys['optaId'].apply(
+        lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','',1).isdigit() else str(x).strip()
+    )
 
-    # --- 4. TABS STRUKTUR (UDEN IKONER) ---
+    # Filtrering ved brug af den nye streng-kolonne
+    df_phys = df_phys[~df_phys['optaId_str'].isin(EXCLUDE_LIST)].copy()
+    
+    # Mapping af navne uden at crashe på floats
+    df_phys['DISPLAY_NAME'] = df_phys.apply(
+        lambda r: player_mapping.get(r['optaId_str'], r['PLAYER_NAME']), axis=1
+    )
+
+    # --- 4. TABS ---
     t1, t2, t3, t4 = st.tabs(["Hvidovre IF P90", "Udvikling", "Top 5", "Kampanalyse"])
-
+    
     # --- TAB 1: P90 OVERSIGT FOR HVIDOVRE ---
     with t1:
         st.subheader("Saesongennemsnit pr. 90 minutter")
