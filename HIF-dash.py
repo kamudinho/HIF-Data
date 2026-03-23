@@ -29,10 +29,23 @@ st.set_page_config(
 )
 
 # Centraliseret CSS
+# --- Opdater denne del i din st.markdown blok ---
 st.markdown(f"""
     <style>
         .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
-        header {{ visibility: hidden; height: 0px; }}
+        
+        /* RETTELSE HER: Skjul kun pynten, ikke funktionaliteten */
+        [data-testid="stHeader"] {{
+            background: rgba(0,0,0,0);
+            color: rgba(0,0,0,0);
+        }}
+        
+        /* Dette sikrer at menu-knappen (pilen) stadig er synlig og trykbar */
+        [data-testid="stSidebarNav"] {{
+            padding-top: 2rem;
+        }}
+        
+        /* Din eksisterende header-container herunder... */
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
@@ -42,7 +55,7 @@ st.markdown(f"""
             border-radius: 4px;
             margin-bottom: 15px;
             width: 100%;
-            border-bottom: 3px solid {HIF_GULD};
+            border-bottom: 1px solid {HIF_ROD};
         }}
         .hif-header-text {{
             color: white !important;
