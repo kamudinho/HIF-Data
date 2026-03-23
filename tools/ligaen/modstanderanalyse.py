@@ -130,72 +130,72 @@ def vis_side(analysis_package=None):
                 plt.close(fig)
 
     # --- TAB 1: MED BOLD ---
-    # --- TAB 1: MED BOLD ---
     with tabs[1]:
         if not df_events.empty:
-            # Filtrer events for det valgte hold
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
             
             if not df_h_ev.empty:
-                # 1. Fase-valg via dropdown
-                fase = st.selectbox("Vælg fase:", [
-                    "Egen halvdel: Målspark", 
-                    "Egen halvdel: Opbygning (åbent spil)", 
-                    "Offensiv: Gennembrud (Siddende)", 
-                    "Offensiv: Progressive afleveringer (>20m)"
-                ])
+                # 1. Overordnet zone-valg
+                zone = st.radio("Vælg fokusområde:", ["Egen Banehalvdel (Opbygning)", "Offensiv Banehalvdel (Gennembrud)"], horizontal=True)
+                st.markdown("---")
 
-                # 2. Logik for filtrering af data baseret på valg
-                df_plot = pd.DataFrame()
-                title_text = ""
-                show_arrows = False # Skal vi vise pile (for progressive passes) eller heatmap?
+                c1, c2 = st.columns(2)
 
-                if fase == "Egen halvdel: Målspark":
-                    # TypeID 1 = Aflevering, Qualifier 124 plejer at indikere Goal Kick i Opta
-                    # Her bruger vi en simpel LOCATION-logik: Start helt nede i feltet
-                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
-                    title_text = "MÅLSPARK & START-OPBYGNING"
-                
-                elif fase == "Egen halvdel: Opbygning (åbent spil)":
-                    # Afleveringer mellem feltet og midterlinjen
-                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
-                    title_text = "OPBYGNING UDEN FOR FELTET"
+                if zone == "Egen Banehalvdel (Opbygning)":
+                    # --- VENSTRE: MÅLSPARK ---
+                    with c1:
+                        st.write("<p style='text-align:center; font-weight:bold;'>MÅLSPARK & DYB OPBYGNING</p>", unsafe_allow_html=True)
+                        df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
+                        fig, ax = pitch.draw(figsize=(4, 6))
+                        if not df_kick.empty:
+                            sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-                elif fase == "Offensiv: Gennembrud (Siddende)":
-                    # Alle aktioner på modstanderens sidste tredjedel (>66)
-                    df_plot = df_h_ev[df_h_ev['LOCATIONX'] > 66]
-                    title_text = "GENNEMBRUDSSPIL (SIDSTE 1/3)"
+                    # --- HØJRE: ÅBENT SPIL OPBYGNING ---
+                    with c2:
+                        st.write("<p style='text-align:center; font-weight:bold;'>OPBYGNING (15m - 50m)</p>", unsafe_allow_html=True)
+                        df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
+                        fig, ax = pitch.draw(figsize=(4, 6))
+                        if not df_build.empty:
+                            sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-                elif fase == "Offensiv: Progressive afleveringer (>20m)":
-                    # Beregn distance (simpel Pytagoras) og tjek om de flytter bolden fremad
-                    # Progressive: x2 skal være større end x1, og distance > 20
-                    df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + 
-                                       (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
-                    df_plot = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & 
-                                      (df_h_ev['dist'] > 20) & 
-                                      (df_h_ev['ENDLOCATIONX'] > df_h_ev['LOCATIONX'])]
-                    title_text = "PROGRESSIVE AFLEVERINGER (>20m)"
-                    show_arrows = True
+                else: # Offensiv Banehalvdel
+                    # --- VENSTRE: GENNEMBRUD ---
+                    with c1:
+                        st.write("<p style='text-align:center; font-weight:bold;'>GENNEMBRUD (SIDSTE 1/3)</p>", unsafe_allow_html=True)
+                        df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
+                        fig, ax = pitch.draw(figsize=(4, 6))
+                        if not df_final.empty:
+                            sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-                # 3. Tegning af banen
-                st.write(f"### {title_text}")
-                fig, ax = pitch.draw(figsize=(8, 10))
-                
-                if not df_plot.empty:
-                    if show_arrows:
-                        # Tegn pile for progressive afleveringer
-                        pitch.arrows(df_plot.LOCATIONX, df_plot.LOCATIONY,
-                                     df_plot.ENDLOCATIONX, df_plot.ENDLOCATIONY, 
-                                     width=2, headwidth=3, headlength=3, 
-                                     color=t_color, ax=ax, alpha=0.6)
-                    else:
-                        # Tegn heatmap for de andre faser
-                        sns.kdeplot(x=df_plot['LOCATIONY'], y=df_plot['LOCATIONX'], 
-                                    fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
-                
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig)
-                plt.close(fig)
+                    # --- HØJRE: PROGRESSIVE PASSES ---
+                    with c2:
+                        st.write("<p style='text-align:center; font-weight:bold;'>PROGRESSIVE AFLEVERINGER (>20m)</p>", unsafe_allow_html=True)
+                        df_h_ev['dist'] = ((df_h_ev['ENDLOCATIONX'] - df_h_ev['LOCATIONX'])**2 + 
+                                           (df_h_ev['ENDLOCATIONY'] - df_h_ev['LOCATIONY'])**2)**0.5
+                        # Filter: længde > 20 og flytter bolden mindst 10m fremad vertikalt
+                        df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & 
+                                          (df_h_ev['dist'] > 20) & 
+                                          (df_h_ev['ENDLOCATIONX'] > (df_h_ev['LOCATIONX'] + 10))]
+                        
+                        fig, ax = pitch.draw(figsize=(4, 6))
+                        if not df_prog.empty:
+                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY,
+                                         df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
+                                         width=1.5, headwidth=3, headlength=3, 
+                                         color=t_color, ax=ax, alpha=0.4)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
+                        
     # --- TAB 2: MOD BOLD ---
     with tabs[2]:
         if not df_events.empty:
