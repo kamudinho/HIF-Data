@@ -234,16 +234,12 @@ try:
             elif sel == "Afslutninger - liga":
                 import tools.ligaen.leagueshots as ls
                 ls.vis_side(dp)
+            # ... (efter BETINIA LIGAEN blokken) ...
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                # Vi kalder vis_side VIA modulet fd_page
-                fd_page.vis_side(
-                    _get_snowflake_conn(), 
-                    st.session_state.get('name_map', {})
-                )
+                fd_page.vis_side(_get_snowflake_conn(), st.session_state.get('name_map', {}))
                 
-        elif hoved_omraade == "ADMIN":
-        # Definer en tom dp så appen ikke crasher, når den sendes til Profil
+    elif hoved_omraade == "ADMIN":
         dp = st.session_state.get("dp", {})
         
         if sel == "System Log":
@@ -251,7 +247,6 @@ try:
             admin.vis_log()
         elif sel == "Profil":
             import tools.admin.profil as profil
-            # Vi sikrer os at vi kalder den rigtige funktion
             profil.vis_side(dp)
             
 except Exception as e:
