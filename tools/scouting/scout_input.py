@@ -108,7 +108,7 @@ def vis_side(dp):
         vurder = v3.text_area("Samlet vurdering", height=150)
 
         # GEM KNAP
-        submitted = st.form_submit_button("Gem rapport på GitHub", use_container_width=True)
+        submitted = st.form_submit_button("Gem rapport i databasen", use_container_width=True)
         
         if submitted:
             if not data["n"] or (data['pos'] == "" and pos_final == ""):
@@ -150,7 +150,7 @@ def vis_side(dp):
                     res = push_to_github(FILE_PATH, f"Scout rapport: {data['n']} (Rating: {beregnet_rating})", new_csv_content, sha)
 
                     if res in [200, 201]:
-                        st.success(f"✅ Rapport for {data['n']} er gemt på GitHub! (Rating: {beregnet_rating})")
+                        st.success(f"✅ Rapport for {data['n']} er gemt i databasen! (Rating: {beregnet_rating})")
                         st.balloons()
                     else:
-                        st.error(f"❌ Fejl ved gem på GitHub. Statuskode: {res}")
+                        st.error(f"❌ Fejl ved rapportering til database. Statuskode: {res}")
