@@ -36,37 +36,41 @@ def get_scouting_package():
     all_relevant_ids = list(set([str(x) for x in all_relevant_ids if x and str(x) != 'nan']))
     # ----------------------------
 
+    # ... inde i get_scouting_package() ...
+
     df_sql_p = pd.DataFrame()
     df_career = pd.DataFrame()
     df_wyscout_search = pd.DataFrame()
-    df_adv = pd.DataFrame() # <--- 1. Initialisér den her!
+    df_adv = pd.DataFrame()
 
     if conn and all_relevant_ids:
         try:
-            # A: Billeder
+            # 1. DEFINÉR id_str FØRST
+            # Dette sikrer at variablen findes til alle efterfølgende queries
+            id_str = f"({all_relevant_ids[0]})" if len(all_relevant_ids) == 1 else str(tuple(all_relevant_ids))
+            
+            # 2. HENT BILLEDER
             img_query = f"SELECT PLAYER_WYID, IMAGEDATAURL FROM {DB}.WYSCOUT_PLAYERS WHERE PLAYER_WYID IN {id_str}"
             df_sql_p = conn.query(img_query)
 
-            # B: Karriere
+            # 3. HENT KARRIERE
             career_q = queries["player_career"]
             if "ORDER BY" in career_q:
                 career_q = career_q.replace("ORDER BY", f"WHERE pc.PLAYER_WYID IN {id_str} ORDER BY")
+            else:
+                career_q = career_q + f" WHERE pc.PLAYER_WYID IN {id_str}"
             df_career = conn.query(career_q)
             
-            # C: Søgeliste
+            # 4. HENT SØGELISTE (Wyscout spillere)
             df_wyscout_search = conn.query(queries["wyscout_players"])
 
-            # D: HER HENTER VI AVANCERET DATA (P90 stats)
-            # Vi bruger navnet fra din wy_queries.py: "player_stats_total"
+            # 5. HENT AVANCEREDE STATS (Fixer din tomme radar)
             adv_q = queries["player_stats_total"]
-            
-            # Vi tilføjer filteret for de relevante spillere (HIF + Scoutede)
-            # Da din query slutter med "WHERE s.SEASONNAME {s_f}", tilføjer vi bare AND til sidst
+            # Vi tilføjer filteret til sidst i din eksisterende query
             adv_q = adv_q + f" AND pt.PLAYER_WYID IN {id_str}"
-            
-            df_adv = conn.query(adv_q) # <--- 2. Kør queryen!
+            df_adv = conn.query(adv_q)
 
-            # Rens kolonner i ALLE dataframes
+            # RENS DATA
             for df in [df_sql_p, df_career, df_wyscout_search, df_adv]:
                 if df is not None and not df.empty:
                     df.columns = [str(c).upper().strip() for c in df.columns]
@@ -76,12 +80,12 @@ def get_scouting_package():
         except Exception as e:
             st.error(f"SQL Fejl i Scouting Load: {e}")
 
-    # 3. Returnér pakken med nøglen "advanced_stats"
+    # RETURNER PAKKEN
     return {
         "scout_reports": scout_df,
         "wyscout_players": df_wyscout_search,
         "players": df_local,
         "sql_players": df_sql_p,
         "career": df_career,
-        "advanced_stats": df_adv  # <--- Dette navn forventer HIF-dash.py
+        "advanced_stats": df_adv # <--- Vigtigt: Nu er denne med!
     }
