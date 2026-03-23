@@ -219,7 +219,7 @@ def vis_side(df_raw=None):
                 ))
 
         fig.update_layout(
-            height=300, # Justeret højde lidt ned for skarpere look
+            height=400, # Justeret højde lidt ned for skarpere look
             margin=dict(t=50, b=50, l=0, r=0),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
