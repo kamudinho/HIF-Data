@@ -282,7 +282,7 @@ try:
         
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Modstanderanalyse": # Tilføj denne blok
-                import tools.hifanalyse.modstanderanalyse as ma
+                import tools.ligaen.modstanderanalyse as ma
                 ma.vis_side(dp)    
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
