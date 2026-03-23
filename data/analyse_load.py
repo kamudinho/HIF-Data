@@ -70,7 +70,8 @@ def get_analysis_package(hif_only=False, match_uuid=None):
 
     # 6. Returner den færdige pakke
     return {
-        "matches": df_matches,
+        "matches": df_opta_stats, # BRUG DENNE TIL TABELLEN (den har xG og scores)
+        "matches_info": df_matches, # Gem den rå info her
         "playerstats": df_shots,
         "remote_shapes": df_remote_shapes, # Den nye hovedkilde til taktik
         "fysisk_data": df_fys,
