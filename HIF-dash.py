@@ -243,12 +243,13 @@ try:
                 )
                 
         elif hoved_omraade == "ADMIN":
-            import tools.admin as admin  # <-- Sørg for at stien passer til din filstruktur
+        # Import fra den nye placering
+            import tools.admin.profil as admin_profil
             
             if sel == "System Log":
-                admin.vis_log()   # Her kalder vi den funktion, du lige har sendt
+                admin_profil.vis_log()
             else:
-                admin.vis_side()  # Her kalder vi brugeroversigten
+                st.info("Vælg en funktion i menuen til venstre.")
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
