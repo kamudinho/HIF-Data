@@ -243,15 +243,12 @@ try:
                 )
                 
         elif hoved_omraade == "ADMIN":
-            import tools.admin as admin
+            import tools.admin as admin  # <-- Sørg for at stien passer til din filstruktur
+            
             if sel == "System Log":
-                admin.vis_log()
+                admin.vis_log()   # Her kalder vi den funktion, du lige har sendt
             else:
-                # Hvis du har en vis_side() funktion til brugeroversigt
-                try:
-                    admin.vis_side()
-                except:
-                    st.write("Vælg en undermenu i siden")
+                admin.vis_side()  # Her kalder vi brugeroversigten
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
