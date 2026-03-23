@@ -143,7 +143,7 @@ with st.sidebar:
                          options=["Scoutrapport", "Database", "Sammenligning"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["System Log"],
+        sel = option_menu(None, options=["System Log", "Profil"],
                          styles={"nav-link-selected": {"background-color": "#333333"}})
 
 if not sel:
@@ -243,13 +243,19 @@ try:
                 )
                 
         elif hoved_omraade == "ADMIN":
-        # Import fra den nye placering
-            if sel == "System Log": # Tilføj denne blok
-                import tools.admin as admin
-                admin.vis_log()    
+        # Vi sikrer os at dp eksisterer, selvom vi er i Admin
+            dp = st.session_state.get("dp", {}) 
+            
+            if sel == "System Log":
+                # Her importerer vi specifikt fra din admin-fil
+                import tools.admin as admin_module
+                admin_module.vis_log()
+                
             elif sel == "Profil":
-                import tools.admin.profil as profil
-                profil.vis_side(dp)
+                # Her importerer vi fra din nye profil-fil
+                import tools.admin.profil as profil_module
+                # Tjek om din vis_side i profil.py rent faktisk forventer (dp)
+                profil_module.vis_side(dp)
             
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
