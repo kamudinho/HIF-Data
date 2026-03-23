@@ -305,7 +305,7 @@ try:
         dp = st.session_state.get("dp", {})
         
         if sel == "System Log":
-            import tools.admin as admin
+            import tools.admin_page.admin as admin
             admin.vis_log()
         elif sel == "Profil":
             import tools.admin_page.profil as profil
