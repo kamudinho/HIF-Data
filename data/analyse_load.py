@@ -83,7 +83,7 @@ def get_analysis_package(hif_only=False, match_uuid=None):
             "team_stats": df_opta_stats,
             "team_linebreaks": df_team_linebreaks,
             "player_linebreaks": df_player_linebreaks,
-            "sequence_map": df_sequence,
+            "opta_sequence_map": df_sequence,
             "league_shotevents": df_league_shots,
             "events": df_all_events
         },
