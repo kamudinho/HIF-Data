@@ -141,8 +141,8 @@ def vis_side(df_raw=None):
 
         num_metrics = len(metrics)
         col_width_pct = 0.14  
-        logo_size = 0.28
-        bar_width = 0.42
+        logo_size = 0.35      # Størrelsen på logoet
+        bar_width = 0.8       # Gør søjlerne brede i deres eget koordinatsystem
 
         fig = make_subplots(rows=1, cols=num_metrics, horizontal_spacing=0.02)
 
@@ -150,43 +150,56 @@ def vis_side(df_raw=None):
             v1 = d1.iloc[0].get(m, 0); v2 = d2.iloc[0].get(m, 0)
             col = i + 1
             x_ax = f"xaxis{col if col>1 else ''}"
-            y_ax = f"yaxis{col if col>1 else ''}"
             x_ref = f"x{col if col>1 else ''}"
 
+            # Vi bruger numeriske x-værdier (0 og 1) for at have fuld kontrol over afstanden
             fig.add_trace(go.Bar(
-                x=[team1], y=[v1], marker_color=c1["primary"], width=bar_width,
+                x=[0], y=[v1], marker_color=c1["primary"], width=bar_width,
                 text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], textposition='inside',
                 insidetextfont=dict(color=get_text_color(c1["primary"]), size=10),
-                showlegend=False, offsetgroup=1
+                showlegend=False
             ), row=1, col=col)
             
             fig.add_trace(go.Bar(
-                x=[team2], y=[v2], marker_color=c2["primary"], width=bar_width,
+                x=[1], y=[v2], marker_color=c2["primary"], width=bar_width,
                 text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], textposition='inside',
                 insidetextfont=dict(color=get_text_color(c2["primary"]), size=10),
-                showlegend=False, offsetgroup=2
+                showlegend=False
             ), row=1, col=col)
 
+            # Domæne og akse-setup
             start_pos = i * (col_width_pct + 0.01)
             fig.update_layout({
-                x_ax: dict(domain=[start_pos, start_pos + col_width_pct], showticklabels=False, fixedrange=True, range=[-0.6, 1.6])
+                x_ax: dict(
+                    domain=[start_pos, start_pos + col_width_pct], 
+                    showticklabels=False, 
+                    fixedrange=True, 
+                    range=[-0.8, 1.8] # Dette styrer afstanden mellem de to søjler i boksen
+                )
             })
             fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
 
+            # Label under boks
             fig.add_annotation(dict(
-                x=0.5, y=-0.22, xref=f"{x_ref} domain", yref=f"{x_ref.replace('x','y')} domain",
-                text=labels[i], showarrow=False, font=dict(size=10, color="#333", weight="bold")
+                x=0.5, y=-0.2, xref=f"{x_ref} domain", yref=f"{x_ref.replace('x','y')} domain",
+                text=labels[i], showarrow=False, font=dict(size=11, color="#333", weight="bold")
             ))
 
+            # Logoer centreret over x=0 og x=1
             if l1:
-                fig.add_layout_image(dict(source=l1, xref=x_ref, yref="paper", x=0.22, y=1.02, 
+                fig.add_layout_image(dict(source=l1, xref=x_ref, yref="paper", x=0, y=1.02, 
                                           sizex=logo_size, sizey=logo_size, xanchor="center", yanchor="bottom"))
             if l2:
-                fig.add_layout_image(dict(source=l2, xref=x_ref, yref="paper", x=0.78, y=1.02, 
+                fig.add_layout_image(dict(source=l2, xref=x_ref, yref="paper", x=1, y=1.02, 
                                           sizex=logo_size, sizey=logo_size, xanchor="center", yanchor="bottom"))
 
-        fig.update_layout(height=280, margin=dict(t=60, b=40, l=0, r=0), barmode='group', bargap=0.05, 
-                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(
+            height=320, 
+            margin=dict(t=60, b=40, l=10, r=10), 
+            barmode='stack', # 'stack' bruges her kun fordi vi har givet dem hver deres x-position (0 og 1)
+            plot_bgcolor='rgba(0,0,0,0)', 
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
 
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
         
