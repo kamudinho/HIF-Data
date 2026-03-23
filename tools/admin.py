@@ -5,7 +5,7 @@ import base64
 from io import StringIO
 
 def vis_log():
-    st.title("📊 System Action Log")
+    st.caption("System Log")
     
     try:
         # 1. Hent data fra GitHub
