@@ -1,3 +1,4 @@
+# data/data_load.py
 import streamlit as st
 import pandas as pd
 import os
@@ -5,7 +6,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 def _get_snowflake_conn():
-    """Opretter forbindelse til Snowflake ved hjælp af secrets."""
     try:
         s = st.secrets["connections"]["snowflake"]
         p_key_raw = s["private_key"]
@@ -18,45 +18,27 @@ def _get_snowflake_conn():
         return None
 
 def rens_id_altid(val):
-    """
-    Tvinger alle typer ID (float, int, str med .0) til en ren streng.
-    Dette er nøglen til at få din scouting_db til at matche Snowflake.
-    """
-    if pd.isna(val) or str(val).strip() in ["", "nan", "None"]: 
-        return ""
-    # Fjern .0 hvis det er en float gemt som string, og fjern whitespace
+    if pd.isna(val) or str(val).strip() in ["", "nan", "None"]: return ""
     return str(val).split('.')[0].strip()
+
+def parse_xg(val_str):
+    """Denne manglede sikkert i din forrige version!"""
+    try:
+        if not val_str or pd.isna(val_str): return 0.05
+        return float(str(val_str).replace(',', '.').split(' ')[0])
+    except: return 0.05
 
 @st.cache_data
 def load_local_players():
-    """Indlæser spillere fra den lokale CSV fil og renser ID'er."""
     try:
         path = os.path.join(os.getcwd(), "data", "players.csv")
         if os.path.exists(path):
             df = pd.read_csv(path)
             df.columns = [str(c).upper().strip() for c in df.columns]
-            
-            # KRITISK: Rens ID'er med det samme ved indlæsning
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id_altid)
-            
             return df
-        else:
-            return pd.DataFrame()
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"❌ Fejl ved CSV indlæsning: {e}")
-        return pd.DataFrame()
-
-def load_scouting_db():
-    """Hjælpefunktion til at hente scouting_db centralt og renset."""
-    try:
-        path = os.path.join(os.getcwd(), 'data', 'scouting_db.csv')
-        if os.path.exists(path):
-            df = pd.read_csv(path)
-            df.columns = [str(c).upper().strip() for c in df.columns]
-            if 'PLAYER_WYID' in df.columns:
-                df['PLAYER_WYID'] = df['PLAYER_WYID'].apply(rens_id_altid)
-            return df
-        return pd.DataFrame()
-    except:
         return pd.DataFrame()
