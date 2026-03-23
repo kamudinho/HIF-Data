@@ -127,7 +127,7 @@ def vis_side(conn, name_map=None):
             st.dataframe(df_top.nlargest(5, 'HI_RUN')[['PLAYER_NAME', 'HI_RUN']], hide_index=True)
 
     with t4:
-        # 1. Hent metadata (Husk "DATE" i anførselstegn for at undgå Snowflake-fejl)
+        # 1. Hent metadata (Sørg for "DATE" er i anførselstegn)
         df_meta = conn.query(f"""
             SELECT TO_VARCHAR("DATE", 'YYYY-MM-DD') as MATCH_DATE_STR, DESCRIPTION, MATCH_SSIID 
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA 
@@ -137,55 +137,53 @@ def vis_side(conn, name_map=None):
         """)
         
         if not df_meta.empty:
-            # Layout: Overskrift til venstre, lille dropdown til højre
             col_t4_title, col_t4_select = st.columns([3, 1])
-            
             with col_t4_title:
                 st.subheader("Kampanalyse")
-                
             with col_t4_select:
                 df_meta['LABEL'] = df_meta['MATCH_DATE_STR'] + " - " + df_meta['DESCRIPTION']
-                v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique(), key="sb_t4_right", label_visibility="collapsed")
+                v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique(), key="sb_t4_final_fix", label_visibility="collapsed")
             
             m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
             
-            # 2. Hent data for kampen
-            df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
-            
-            if not df_m.empty:
-                # Beregninger
-                df_m['KM'] = (df_m['DISTANCE'] / 1000).round(2)
-                df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                
-                # LOGIK: Find hvem der er på det valgte hold i denne specifikke kamp
-                # Vi henter de optaId'er, der hører til v_ssid i denne kamp via metadata
+            # 2. Hent de korrekte spillere for det valgte hold (Rettet LATERAL logik)
+            try:
                 valid_ids_sql = f"""
                     SELECT f.value:"optaId"::string AS tid
-                    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA 
+                    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
                     LATERAL FLATTEN(input => CASE 
-                        WHEN HOME_SSIID = '{v_ssid}' THEN HOME_PLAYERS ELSE AWAY_PLAYERS 
+                        WHEN m.HOME_SSIID = '{v_ssid}' THEN m.HOME_PLAYERS 
+                        ELSE m.AWAY_PLAYERS 
                     END) f
-                    WHERE MATCH_SSIID = '{m_id}'
+                    WHERE m.MATCH_SSIID = '{m_id}'
                 """
                 list_valid_ids = conn.query(valid_ids_sql)['TID'].tolist()
                 
-                # Marker: Hvis de ikke er i listen, er de modstandere
-                df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
+                # 3. Hent de fysiske stats for kampen
+                df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
+                
+                if not df_m.empty:
+                    df_m['KM'] = (df_m['DISTANCE'] / 1000).round(2)
+                    df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
+                    
+                    # Marker hvem der er hvem
+                    df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
 
-                # 3. Visning med begrænsede kolonner
-                st.dataframe(
-                    df_m.sort_values(['Hold', 'DISTANCE'], ascending=[False, False]),
-                    column_order=("PLAYER_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                    column_config={
-                        "PLAYER_NAME": "Spiller",
-                        "KM": st.column_config.NumberColumn("Km", format="%.2f"),
-                        "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
-                        "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f")
-                    },
-                    use_container_width=True, 
-                    hide_index=True
-                )
-            else:
-                st.info("Ingen fysisk data fundet for denne kamp.")
+                    st.dataframe(
+                        df_m.sort_values(['Hold', 'DISTANCE'], ascending=[False, False]),
+                        column_order=("PLAYER_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                        column_config={
+                            "PLAYER_NAME": "Spiller",
+                            "KM": st.column_config.NumberColumn("Km", format="%.2f"),
+                            "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
+                            "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f")
+                        },
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+                else:
+                    st.info(f"Ingen fysisk data fundet for kampen: {v_kamp}")
+            except Exception as e:
+                st.error(f"Fejl ved hentning af spillerdata: {e}")
         else:
-            st.info("Ingen kampe fundet for den valgte periode.")
+            st.info("Ingen kampe fundet.")
