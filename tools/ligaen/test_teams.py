@@ -197,9 +197,36 @@ def vis_side(df_raw=None):
             df_wy_raw.columns = [col.upper() for col in df_wy_raw.columns]
             df_agg = df_wy_raw.groupby('TEAMNAME').mean(numeric_only=True).reset_index()
             
+            # --- OPDATERET H2H TABS MED ALLE PARAMETRE ---
             sub_tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
-            with sub_tabs[0]: draw_h2h_chart_combined(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_agg, "gen_chart")
-            with sub_tabs[1]: draw_h2h_chart_combined(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_agg, "xg_chart")
-            with sub_tabs[2]: draw_h2h_chart_combined(team1, team2, ['SHOTSONTARGET', 'SHOTSFROMBOX'], ['På mål', 'I feltet'], df_agg, "shot_chart")
-            with sub_tabs[3]: draw_h2h_chart_combined(team1, team2, ['INTERCEPTIONS', 'TACKLES'], ['Interceptions', 'Tacklinger'], df_agg, "def_chart")
-            with sub_tabs[4]: draw_h2h_chart_combined(team1, team2, ['PASSES', 'FORWARDPASSES'], ['Afleveringer', 'Fremadrettede'], df_agg, "pass_chart")
+            
+            with sub_tabs[0]: 
+                draw_h2h_chart_combined(team1, team2, 
+                    ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], 
+                    ['Skud', 'Mål', 'PPDA', 'Tempo'], 
+                    df_agg, "gen_chart")
+            
+            with sub_tabs[1]: 
+                draw_h2h_chart_combined(team1, team2, 
+                    ['XG', 'XGPERSHOT'], 
+                    ['Total xG', 'xG pr. skud'], 
+                    df_agg, "xg_chart")
+            
+            with sub_tabs[2]: 
+                draw_h2h_chart_combined(team1, team2, 
+                    ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSOUTSIDEBOX', 'SHOTSFROMBOX', 'SHOTSFROMBOXONTARGET', 'SHOTSFROMDANGERZONE'], 
+                    ['På mål', 'Blokeret', 'Udenfor felt', 'I feltet', 'I felt på mål', 'Danger Zone'], 
+                    df_agg, "shot_chart")
+            
+            with sub_tabs[3]: 
+                draw_h2h_chart_combined(team1, team2, 
+                    ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], 
+                    ['Interceptions', 'Tacklinger', 'Clearinger'], 
+                    df_agg, "def_chart")
+            
+            with sub_tabs[4]: 
+                # HER ER DE MANGLENDE PASNINGS-METRICS
+                draw_h2h_chart_combined(team1, team2, 
+                    ['PASSES', 'CROSSESTOTAL', 'FORWARDPASSES', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], 
+                    ['Afleveringer', 'Indlæg', 'Fremadrettede', 'Progressive', 'Til sidste 1/3'], 
+                    df_agg, "pass_chart")
