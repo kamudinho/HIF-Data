@@ -139,13 +139,17 @@ def vis_side(df_raw=None):
         u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0] if team2 in df_liga['HOLD'].values else None
         l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
-        # --- KONFIGURATION FOR ENSARTETHED ---
+        # --- KONFIGURATION FOR FAST STØRRELSE ---
         num_metrics = len(metrics)
-        fixed_col_width = 150  # Fast bredde pr. graf-enhed
-        total_width = num_metrics * fixed_col_width
-        logo_size = 0.35       # Låst størrelse
+        col_width_pct = 0.14  # Hver graf fylder præcis 14% af containerens bredde
+        logo_size = 0.35      # Låst størrelse på logoer
 
-        fig = make_subplots(rows=1, cols=num_metrics)
+        # Vi laver subplots, men manuelt styrer vi deres bredde via 'specs'
+        fig = make_subplots(
+            rows=1, cols=num_metrics,
+            horizontal_spacing=0.02, # Fast lille afstand mellem graferne
+            specs=[[{"type": "bar"}] * num_metrics]
+        )
 
         for i, m in enumerate(metrics):
             v1 = d1.iloc[0].get(m, 0)
@@ -155,10 +159,11 @@ def vis_side(df_raw=None):
             x_axis_name = f"x{col}" if col > 1 else "x"
             y_axis_name = f"y{col}" if col > 1 else "y"
 
-            # Søjler med fast bredde (width=0.4) sikrer de ikke bliver for tykke
+            # Tilføj søjler
             fig.add_trace(go.Bar(
                 x=[team1], y=[v1], 
-                marker_color=c1["primary"], width=0.7,
+                marker_color=c1["primary"],
+                width=0.4, # Fast bredde på selve søjlen indeni grafen
                 text=[f"{v1:.1f}" if v1 > 5 else f"{v1:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c1["primary"]), size=10), 
@@ -167,26 +172,39 @@ def vis_side(df_raw=None):
             
             fig.add_trace(go.Bar(
                 x=[team2], y=[v2], 
-                marker_color=c2["primary"], width=0.7,
+                marker_color=c2["primary"],
+                width=0.4,
                 text=[f"{v2:.1f}" if v2 > 5 else f"{v2:.2f}"], 
                 textposition='inside', 
                 insidetextfont=dict(color=get_text_color(c2["primary"]), size=10), 
                 showlegend=False
             ), row=1, col=col)
 
-            fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
-            fig.update_xaxes(showticklabels=False, row=1, col=col)
+            # Lås x-aksens domæne for at tvinge fast bredde fra venstre
+            start_pos = i * (col_width_pct + 0.01)
+            end_pos = start_pos + col_width_pct
+            
+            fig.update_layout({
+                f'xaxis{col if col>1 else ""}': dict(
+                    domain=[start_pos, end_pos],
+                    showticklabels=False,
+                    fixedrange=True
+                )
+            })
 
+            fig.update_yaxes(visible=False, row=1, col=col, range=[0, max(v1, v2) * 1.6])
+
+            # Label under boks
             fig.add_annotation(
                 dict(
-                    x=0.5, y=-0.2, 
+                    x=0.5, y=-0.25, 
                     xref=f"{x_axis_name} domain", yref=f"{y_axis_name} domain",
                     text=labels[i], showarrow=False,
-                    font=dict(size=11, color="#333", weight="bold")
+                    font=dict(size=10, color="#333", weight="bold")
                 )
             )
 
-            # Logoerne placeres nu med samme 'sizex' uanset hvad
+            # Logoer med fast størrelse
             if l1:
                 fig.add_layout_image(dict(
                     source=l1, xref=x_axis_name, yref="paper",
@@ -201,18 +219,15 @@ def vis_side(df_raw=None):
                 ))
 
         fig.update_layout(
-            height=300,
-            width=total_width, # Her tvinger vi figuren til at fylde det nødvendige
-            margin=dict(t=50, b=50, l=10, r=10),
+            height=280,
+            margin=dict(t=50, b=50, l=0, r=0), # l=0 rykker det helt til venstre
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             bargap=0.1
         )
 
-        # Centrer chartet ved at pakke det ind i en container eller bruge Streamlit columns
-        _, mid, _ = st.columns([(1000-total_width)/2, total_width, (1000-total_width)/2], gap="small")
-        with mid:
-            st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False}, key=chart_key)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
+        
     # --- 4. LAYOUT ---
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
