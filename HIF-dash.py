@@ -283,8 +283,6 @@ try:
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Modstanderanalyse": 
                 import tools.ligaen.modstanderanalyse as ma  # RETTET FRA hifanalyse TIL ligaen
-                import importlib
-                importlib.reload(ma) # Tvinger den til at se dine nyeste ændringer
                 ma.vis_side(dp)
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
@@ -298,7 +296,6 @@ try:
             elif sel == "Afslutninger - liga":
                 import tools.ligaen.leagueshots as ls
                 ls.vis_side(dp)
-            # ... (efter BETINIA LIGAEN blokken) ...
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
                 fd_page.vis_side(_get_snowflake_conn(), st.session_state.get('name_map', {}))
@@ -308,7 +305,6 @@ try:
         
         if sel == "System Log":
             import tools.admin_page.admin as admin
-            importlib.reload(admin)
             admin.vis_log()
         elif sel == "Profil":
             import tools.admin_page.profil as profil
