@@ -242,8 +242,13 @@ try:
                     st.session_state.get('name_map', {})
                 )
                 
-    elif hoved_omraade == "ADMIN":
-        st.info("Systemet kører i modulariseret tilstand.")
-
+        elif hoved_omraade == "ADMIN":
+            import tools.admin as admin  # Antager din fil ligger i tools/admin.py
+            
+            if sel == "System Log":
+                admin.vis_log()
+            else:
+                admin.vis_side() # Viser brugeroversigten som default
+            
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
