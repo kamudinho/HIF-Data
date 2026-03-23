@@ -5,7 +5,6 @@ from datetime import datetime
 from data.data_load import load_local_players 
 
 # --- KONSTANTER & MAPPING ---
-HIF_SSIID = "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"
 COMP_UUID = "6ifaeunfdelecgticvxanikzu"
 EXCLUDE_LIST = ["114516", "570705", "624707", "523647", "39664"] 
 
@@ -25,18 +24,16 @@ TEAMS = {
 }
 
 def vis_side(conn, name_map=None):
-    # --- 1. OVERORDNET LAYOUT ---
+    # --- 1. LAYOUT & DROPDOWN ---
     header_col, select_col = st.columns([3, 1])
-    
     with header_col:
-        st.caption("Betinia Ligaen | Fysisk Data")
-    
+        st.title("Betinia Ligaen | Fysisk Data")
     with select_col:
         alle_hold = sorted(list(TEAMS.keys()))
         valgt_hold = st.selectbox("Vælg hold", alle_hold, index=alle_hold.index("Hvidovre"))
         valgt_ssid = TEAMS[valgt_hold]["ssid"]
 
-    # --- 2. DATA INDLÆSNING ---
+    # --- 2. HENT DATA ---
     @st.cache_data(ttl=600)
     def get_data():
         today = datetime.now().strftime('%Y-%m-%d')
@@ -49,53 +46,70 @@ def vis_side(conn, name_map=None):
 
     df_meta, df_phys = get_data()
 
-    # --- 3. DATABEHANDLING (FEJLSIKRING AF optaId) ---
-    col_map = {c.lower(): c for c in df_phys.columns}
-    opta_col = col_map.get('optaid', 'optaId')
+    # --- 3. ROBUST DATABEHANDLING ---
+    # Case-insensitive kolonne tjek
+    cols = {c.lower(): c for c in df_phys.columns}
+    opta_col = cols.get('optaid', 'optaId')
+    team_ssiid_col = cols.get('teamssiid', 'teamSsiId')
 
     def clean_id(x):
         if pd.isna(x) or x == "": return "0"
         try: return str(int(float(x)))
         except: return str(x).strip()
 
-    df_phys['optaId_str'] = df_phys[opta_col].apply(clean_id)
-    opta_to_club = {str(v['opta_id']): k for k, v in TEAMS.items()}
-    
-    # Map Klubnavn og Spiller-navn
-    df_phys['KLUB_FIX'] = df_phys['optaId_str'].map(opta_to_club).fillna("Modstander")
-    
-    df_local = load_local_players()
-    player_map = {}
-    if df_local is not None:
-        l_col = {c.lower(): c for c in df_local.columns}.get('optaid', 'optaId')
-        df_local['clean_oid'] = df_local[l_col].apply(clean_id)
-        player_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
+    def parse_mins(v):
+        if pd.isna(v) or v == "": return 0.0
+        try:
+            v_s = str(v)
+            if ':' in v_s:
+                m, s = map(int, v_s.split(':'))
+                return round(m + s/60, 2)
+            return float(v_s)
+        except: return 0.0
 
-    df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: player_map.get(r['optaId_str'], r['PLAYER_NAME']), axis=1)
+    df_phys['optaId_str'] = df_phys[opta_col].apply(clean_id)
+    df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_mins)
+    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
+    
+    # Lokale navne mapping
+    df_local = load_local_players()
+    p_map = {}
+    if df_local is not None:
+        loc_col = {c.lower(): c for c in df_local.columns}.get('optaid', 'optaId')
+        df_local['c_oid'] = df_local[loc_col].apply(clean_id)
+        p_map = df_local.set_index('c_oid')['NAVN'].to_dict()
+
+    df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(r['optaId_str'], r['PLAYER_NAME']), axis=1)
     df_phys = df_phys[~df_phys['optaId_str'].isin(EXCLUDE_LIST)].copy()
 
-    # Beregninger
-    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
-    def to_m(v):
-        try: return round(int(str(v).split(':')[0]) + int(str(v).split(':')[1])/60, 2) if ':' in str(v) else float(v or 0)
-        except: return 0.0
-    df_phys['MINS'] = df_phys['MINUTES'].apply(to_m)
-
     # --- 4. TABS ---
-    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} P90", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
+    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
 
+    # TAB 1: FIND ALLE SPILLERE FOR VALGT SSID
     with t1:
         st.subheader(f"Sæsongennemsnit for {valgt_hold}")
-        df_h = df_phys[df_phys['KLUB_FIX'] == valgt_hold].copy()
-        summary = df_h.groupby('DISPLAY_NAME').agg({
-            'MINS': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 'TOP_SPEED': 'max'
+        # Vi filtrerer på teamSsiId kolonnen fra Snowflake
+        df_valgt = df_phys[df_phys[team_ssiid_col] == valgt_ssid].copy()
+        
+        summary = df_valgt.groupby('DISPLAY_NAME').agg({
+            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 'TOP_SPEED': 'max'
         }).reset_index()
-        
-        summary = summary[summary['MINS'] > 15].copy()
-        summary['KM/90'] = (summary['DISTANCE'] / summary['MINS']) * 90 / 1000
-        summary['HI m/90'] = (summary['HI_RUN'] / summary['MINS']) * 90
-        
-        st.dataframe(summary.sort_values('KM/90', ascending=False), use_container_width=True, hide_index=True)
+
+        summary = summary[summary['MINS_DEC'] > 15].copy()
+        summary['KM/90'] = (summary['DISTANCE'] / summary['MINS_DEC']) * 90 / 1000
+        summary['HI m/90'] = (summary['HI_RUN'] / summary['MINS_DEC']) * 90
+
+        st.dataframe(
+            summary.sort_values('KM/90', ascending=False),
+            column_config={
+                "DISPLAY_NAME": "Spiller",
+                "KM/90": st.column_config.NumberColumn("KM/90", format="%.2f"),
+                "HI m/90": st.column_config.NumberColumn("HI m/90", format="%d"),
+                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
+            },
+            column_order=("DISPLAY_NAME", "KM/90", "HI m/90", "TOP_SPEED"),
+            use_container_width=True, hide_index=True
+        )
 
     with t2:
         valg = st.selectbox("Vælg parameter", ["KM/90", "HI m/90", "TOP_SPEED"])
@@ -106,32 +120,33 @@ def vis_side(conn, name_map=None):
 
     with t3:
         st.subheader("Sæsonens Top 5 (Alle hold)")
-        col_a, col_b = st.columns(2)
-        with col_a:
+        c1, c2 = st.columns(2)
+        with c1:
             st.write("Topfart (km/t)")
-            st.dataframe(df_phys.nlargest(5, 'TOP_SPEED')[['DISPLAY_NAME', 'KLUB_FIX', 'TOP_SPEED']], hide_index=True)
-        with col_b:
+            st.dataframe(df_phys.nlargest(5, 'TOP_SPEED')[['DISPLAY_NAME', 'PLAYER_NAME', 'TOP_SPEED']], hide_index=True)
+        with c2:
             st.write("HI løb (m)")
-            st.dataframe(df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'KLUB_FIX', 'HI_RUN']], hide_index=True)
+            st.dataframe(df_phys.nlargest(5, 'HI_RUN')[['DISPLAY_NAME', 'PLAYER_NAME', 'HI_RUN']], hide_index=True)
 
+    # TAB 4: KAMPANALYSE
     with t4:
-        # Find kampe specifikt for det valgte hold i dropdown
         df_kampe = df_meta[(df_meta['HOME_SSIID'] == valgt_ssid) | (df_meta['AWAY_SSIID'] == valgt_ssid)].copy()
         df_kampe['LABEL'] = df_kampe['DATE'].astype(str) + " - " + df_kampe['DESCRIPTION']
         
         if not df_kampe.empty:
-            v_kamp_label = st.selectbox("Vælg kamp", df_kampe['LABEL'].unique())
-            kamp_id = df_kampe[df_kampe['LABEL'] == v_kamp_label].iloc[0]['MATCH_SSIID']
+            v_label = st.selectbox("Vælg kamp", df_kampe['LABEL'].unique())
+            kamp_meta = df_kampe[df_kampe['LABEL'] == v_label].iloc[0]
+            m_id = kamp_meta['MATCH_SSIID']
             
-            df_match = df_phys[df_phys['MATCH_SSIID'] == kamp_id].copy()
-            df_match['KM'] = df_match['DISTANCE'] / 1000
+            df_m = df_phys[df_phys['MATCH_SSIID'] == m_id].copy()
+            df_m['KM'] = df_m['DISTANCE'] / 1000
             
-            # Sortering: Valgte hold øverst, derefter på distance
-            df_match['Sort'] = df_match['KLUB_FIX'].apply(lambda x: 0 if x == valgt_hold else 1)
+            # Identificer hvem der er på det valgte hold
+            df_m['Hold_Navn'] = df_m[team_ssiid_col].apply(lambda x: valgt_hold if x == valgt_ssid else "Modstander")
             
             st.dataframe(
-                df_match.sort_values(['Sort', 'DISTANCE'], ascending=[True, False]),
-                column_config={"DISPLAY_NAME": "Spiller", "KLUB_FIX": "Klub", "KM": st.column_config.NumberColumn("KM", format="%.2f")},
-                column_order=("DISPLAY_NAME", "KLUB_FIX", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                df_m.sort_values(['Hold_Navn', 'DISTANCE'], ascending=[False, False]),
+                column_config={"DISPLAY_NAME": "Spiller", "Hold_Navn": "Klub", "KM": st.column_config.NumberColumn("KM", format="%.2f")},
+                column_order=("DISPLAY_NAME", "Hold_Navn", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
                 use_container_width=True, hide_index=True, height=600
             )
