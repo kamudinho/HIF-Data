@@ -12,7 +12,7 @@ def vis_side(df_raw=None):
     dp = st.session_state["dp"]
     colors_dict = dp.get("config", {}).get("colors", TEAM_COLORS)
     logo_map = dp.get("logo_map", {})
-    df_opta = dp.get("opta", {}).get("matches", pd.DataFrame())
+    df_opta = dp.get("opta", {}).get("team_stats", pd.DataFrame())
     
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
