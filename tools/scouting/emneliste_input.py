@@ -3,109 +3,136 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# --- KONFIGURATION ---
+# --- FIL-STIER OG KONFIGURATION ---
 CSV_PATH = 'data/emneliste.csv'
-EXPECTED_COLUMNS = ["Dato", "Navn", "Position", "Klub", "Prioritet", "Forventning", "Kontrakt", "Bemaerkning", "Oprettet_af"]
+COLUMNS = ["Dato", "Navn", "Position", "Klub", "Prioritet", "Forventning", "Kontrakt", "Bemaerkning", "Oprettet_af"]
 
-def tjek_og_initialiser_csv():
+def init_csv():
+    """Sikrer at CSV-filen findes med de korrekte kolonner"""
     if not os.path.exists('data'):
         os.makedirs('data')
     if not os.path.isfile(CSV_PATH):
-        pd.DataFrame(columns=EXPECTED_COLUMNS).to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
-
-def gem_til_emneliste(data_dict):
-    df_ny = pd.DataFrame([data_dict])[EXPECTED_COLUMNS]
-    df_ny.to_csv(CSV_PATH, mode='a', index=False, header=False, encoding='utf-8-sig')
+        pd.DataFrame(columns=COLUMNS).to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
 
 def vis_side(dp):
-    tjek_og_initialiser_csv()
+    """Hovedfunktion for Emneliste-siden"""
+    init_csv()
     current_user = st.session_state.get('user', 'Gæst')
 
-    if not isinstance(dp, dict):
-        st.error("Data-pakken (dp) er ikke tilgængelig.")
-        return
-
-    # Hent spillere fra alle kilder (Robust check)
+    # 1. HENT DATA FRA PAKKEN (Uden at fejle hvis nøgler mangler)
+    # Vi tjekker alle tænkelige steder hvor spillere kan gemme sig i din dp
     df_sql = dp.get("sql_players", dp.get("wyscout_players", pd.DataFrame()))
     df_local = dp.get("players", pd.DataFrame())
     
-    unique_players = {}
+    player_options = {}
 
-    def parse_df(df):
+    def ekstraher_spillere(df):
         if not isinstance(df, pd.DataFrame) or df.empty:
             return
-        temp_df = df.copy()
-        temp_df.columns = [str(c).upper().strip() for c in temp_df.columns]
         
-        for _, r in temp_df.iterrows():
-            p_id = str(r.get('PLAYER_WYID', r.get('WYID', ''))).split('.')[0].strip()
-            if not p_id or p_id in ['nan', 'None', '']: continue
+        # Lav en kopi og tving alle kolonnenavne til STORE bogstaver internt
+        d = df.copy()
+        d.columns = [str(c).upper().strip() for c in d.columns]
+        
+        for _, r in d.iterrows():
+            # Find et ID (Wyid eller lignende)
+            pid = str(r.get('PLAYER_WYID', r.get('WYID', ''))).split('.')[0].strip()
+            if not pid or pid in ['nan', 'None', '']:
+                continue
             
-            # Brug .get() for at undgå 'KeyError'
-            fuldt_navn = r.get('PLAYER_NAME', r.get('SHORTNAME', r.get('NAVN', '')))
-            if pd.isna(fuldt_navn) or str(fuldt_navn).strip() == "":
+            # Find Navn - vi prøver alle muligheder uden at kaste en fejl
+            navn = r.get('PLAYER_NAME', r.get('SHORTNAME', r.get('NAVN', '')))
+            if pd.isna(navn) or str(navn).strip() == "":
+                # Fallback til fornavn + efternavn
                 f = str(r.get('FIRSTNAME', '')).replace('nan', '').strip()
                 l = str(r.get('LASTNAME', '')).replace('nan', '').strip()
-                fuldt_navn = f"{f} {l}".strip() or f"ID: {p_id}"
-
+                navn = f"{f} {l}".strip() or f"ID: {pid}"
+            
+            # Find Klub og Position
             klub = r.get('TEAMNAME', r.get('TEAM', r.get('KLUB', 'Ukendt Klub')))
             pos = r.get('ROLECODE3', r.get('POSITION', ''))
             
-            label = f"{fuldt_navn} ({klub})"
-            if p_id not in unique_players:
-                unique_players[p_id] = {
-                    "label": label, 
-                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
+            label = f"{navn} ({klub})"
+            if pid not in player_options:
+                player_options[pid] = {
+                    "label": label,
+                    "navn": navn,
+                    "pos": pos,
+                    "klub": klub
                 }
 
-    parse_df(df_sql)
-    parse_df(df_local)
+    # Kør processen på dine datakilder
+    ekstraher_spillere(df_sql)
+    ekstraher_spillere(df_local)
     
-    options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
+    # Sorter listen alfabetisk efter label
+    sorted_ids = sorted(player_options.keys(), key=lambda x: player_options[x]['label'])
 
+    # --- UI: OPRET EMNELISTE ---
     with st.expander("➕ Tilføj ny spiller til emnelisten", expanded=True):
-        # Rettet: label er nu "Vælg spiller" i stedet for ""
         sel_id = st.selectbox(
-            label="Vælg spiller",
-            options=[""] + options_list, 
-            format_func=lambda x: unique_players[x]["label"] if x else "Søg i databasen...",
-            label_visibility="collapsed"
+            "Søg efter spiller i databasen:",
+            options=[""] + sorted_ids,
+            format_func=lambda x: player_options[x]['label'] if x else "Skriv navn her...",
+            key="emne_search_box"
         )
         
-        active_data = unique_players[sel_id]["data"] if sel_id else {"n": "", "pos": "", "klub": ""}
+        # Hent valgt data eller lav tomme felter
+        active = player_options.get(sel_id, {"navn": "", "pos": "", "klub": ""})
 
         c1, c2, c3 = st.columns(3)
-        pos_final = c1.text_input("Position", value=active_data['pos'])
-        klub_final = c2.text_input("Klub", value=active_data['klub'])
-        st.text_input("Oprettet af", value=current_user.upper(), disabled=True)
+        final_pos = c1.text_input("Position", value=active['pos'])
+        final_klub = c2.text_input("Klub", value=active['klub'])
+        st.text_input("Scout", value=current_user.upper(), disabled=True)
 
+        st.divider()
         col_a, col_b = st.columns(2)
         with col_a:
             prioritet = st.select_slider("Prioritet", options=["Lav", "Medium", "Høj", "A-Kandidat"], value="Medium")
             forventning = st.text_input("Forventning (Pris / Løn / Type)")
         with col_b:
             kontrakt = st.text_input("Kontraktstatus (Udløbsdato)")
-            bemaerkning = st.text_area("Noter", placeholder="Beskrivelse...")
+            noter = st.text_area("Hvorfor er han interessant?", placeholder="Skriv bemærkninger her...")
 
-        # Rettet: width='stretch' i stedet for use_container_width
-        if st.button("Gem på emnelisten", width='stretch', type="primary"):
-            if sel_id:
-                gem_til_emneliste({
-                    "Dato": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "Navn": active_data["n"],
-                    "Position": pos_final,
-                    "Klub": klub_final,
+        if st.button("GEM PÅ EMNELISTEN", type="primary", width='stretch'):
+            if not sel_id and not active['navn']:
+                st.error("Du skal vælge en spiller først.")
+            else:
+                ny_række = {
+                    "Dato": datetime.now().strftime("%d/%m-%Y"),
+                    "Navn": active['navn'],
+                    "Position": final_pos,
+                    "Klub": final_klub,
                     "Prioritet": prioritet,
                     "Forventning": forventning,
                     "Kontrakt": kontrakt,
-                    "Bemaerkning": bemaerkning.replace('\n', ' '),
+                    "Bemaerkning": noter.replace('\n', ' '),
                     "Oprettet_af": current_user
-                })
-                st.success("Tilføjet!")
+                }
+                # Gem til CSV
+                df_to_save = pd.DataFrame([ny_række])
+                df_to_save.to_csv(CSV_PATH, mode='a', index=False, header=False, encoding='utf-8-sig')
+                st.success(f"✅ {active['navn']} er tilføjet!")
                 st.rerun()
 
-    # Visning af tabellen
+    # --- UI: VIS EMNELISTEN ---
+    st.divider()
     if os.path.exists(CSV_PATH):
-        df_l = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
-        if not df_l.empty:
-            st.dataframe(df_l.iloc[::-1], width='stretch', hide_index=True)
+        try:
+            df_vis = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
+            if not df_vis.empty:
+                st.subheader("📋 Aktuel Emneliste")
+                # Vis nyeste først (iloc[::-1]) og brug den nye width standard
+                st.dataframe(df_vis.iloc[::-1], width='stretch', hide_index=True)
+                
+                # Slet-funktion
+                if st.checkbox("Vis slet-funktion"):
+                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", [""] + list(df_vis['Navn'].unique()))
+                    if slet_navn and st.button(f"Slet {slet_navn}"):
+                        df_opdateret = df_vis[df_vis['Navn'] != slet_navn]
+                        df_opdateret.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
+                        st.rerun()
+            else:
+                st.info("Emnelisten er tom.")
+        except Exception as e:
+            st.error(f"Fejl ved visning af liste: {e}")
