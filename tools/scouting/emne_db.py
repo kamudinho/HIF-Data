@@ -118,7 +118,7 @@ def vis_side(dp):
     with t_liste:
         if not df_samlet.empty:
             # Vælg de bedste kolonner til den samlede oversigt
-            vis_cols = ['Navn', 'Klub', 'Pos_Tal', 'Kontrakt']
+            vis_cols = ['Navn', 'ROLECODE3', 'POS', 'PRIOR', 'CONTRACT']
             if 'CONTRACT' in df_samlet.columns: # Hvis HIF kontraktnavn findes
                 df_samlet['Kontrakt'] = df_samlet['Kontrakt'].fillna(df_samlet['CONTRACT'])
             
