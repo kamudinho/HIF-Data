@@ -29,7 +29,6 @@ def push_to_github(path, message, content, sha=None):
     return r.status_code
 
 def vis_side(unique_players, options_list, current_user):
-    st.header("Opret nyt emne")
 
     # --- UI: INDTASTNING (INGEN EXPANDER) ---
     l1_c1, l1_c2, l1_c3, l1_c4 = st.columns([2, 1, 1, 1])
