@@ -92,8 +92,8 @@ def vis_side(analysis_package=None):
         st.warning("Ingen kampdata fundet.")
         return
 
-    # 1. Byg mappet (Vi fjerner COMP-filteret for at sikre, at vi ser alle hold i pakken)
-    team_map = build_team_map(df_matches)  # Kun ét argument her!
+    # 1. Byg mappet og vælg hold
+    team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
     if not valgte_hold_liste:
@@ -102,119 +102,95 @@ def vis_side(analysis_package=None):
 
     valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
     
-    # 2. Definer variabler med den "tilgivende" logik
+    # 2. Definer variabler
     valgt_uuid_data = team_map[valgt_hold]
     t_color, t_logo = get_team_style(valgt_hold)
-    
-    # Denne linje er nøglen: Vi renser UUID'et fuldstændigt
-    event_uuid_ref = str(valgt_uuid_data).lower().replace('t', '').strip()
-    # Vi tager de første 8 karakterer for at matche på tværs af kilder
-    match_ref = event_uuid_ref[:8] 
+    match_ref = str(valgt_uuid_data).lower().replace('t', '').strip()[:8] 
 
     # 3. Definer tabs og pitch
     tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
-    # Filtrering - Vi tjekker om den rensede ref findes i data
-    if not df_events.empty:
-        df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(match_ref, na=False)].copy()
-        
-        if df_h_ev.empty:
-            st.info(f"Ingen data fundet for {valgt_hold} i denne periode.")
-            return
+    # Filtrering
+    if df_events.empty:
+        st.warning("Ingen hændelsesdata fundet.")
+        return
 
-        # --- TAB 1 (index 0): MED BOLD ---
+    df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(match_ref, na=False)].copy()
+    
+    if df_h_ev.empty:
+        st.info(f"Ingen data fundet for {valgt_hold}.")
+        return
+
+    # --- TAB 1: MED BOLD ---
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Afslutninger"], horizontal=True)
         c1, c2 = st.columns(2)
         
-        # Vi definerer pitch-objektet her
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
-
         if fokus == "Opbygning":
-            # --- MÅLSPARK ---
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'] < 15)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
-                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                # Vi tvinger banens rammer på plads
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
+                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-            # --- OPBYGNING ---
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(15, 50))]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
-                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
+                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
-        
         else:
-            # --- GENNEMBRUD (HEATMAP) ---
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[df_h_ev['EVENT_X'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Oranges', 
-                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
+                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-            # --- AFSLUTNINGSMAP ---
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
-                # Opta Type IDs for skud: 13, 14, 15, 16
                 df_shots = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_shots.empty:
-                    # Mål (Type 16) vises som store stjerner/cirkler, resten som små prikker
                     goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
-                    
-                    # Tegn skud der ikke gik ind
-                    pitch.scatter(non_goals.EVENT_X, non_goals.EVENT_Y, s=100, 
-                                  edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
-                    # Tegn mål
-                    pitch.scatter(goals.EVENT_X, goals.EVENT_Y, s=250, 
-                                  c=t_color, marker='star', edgecolors='black', ax=ax)
-                
-                # Fokus på den sidste tredjedel af banen for skud
-                ax.set_xlim(0, 100)
-                ax.set_ylim(60, 100)
+                    pitch.scatter(non_goals.EVENT_X, non_goals.EVENT_Y, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
+                    pitch.scatter(goals.EVENT_X, goals.EVENT_Y, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
+                ax.set_xlim(0, 100); ax.set_ylim(60, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
-                    
-        # --- TAB 2: MOD BOLD ---
-        with tabs[1]:
-            c1, c2 = st.columns(2)
-            for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
-                with col:
-                    st.write(f"<p style='text-align:center; font-size:11px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
-                    fig, ax = pitch.draw(figsize=(3, 4))
-                    df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
-                    if not df_d.empty:
-                        sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
-                    draw_logo_on_ax(ax, t_logo)
-                    st.pyplot(fig, use_container_width=True)
-                    plt.close(fig)
 
-        # --- TAB 3: TOP 5 ---
-        with tabs[2]:
-            c1, c2, c3 = st.columns(3)
-            metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([8, 49], 'Erobringer')]
-            for col, (ids, label) in zip([c1, c2, c3], metrics):
-                with col:
-                    st.write(f"**{label}**")
-                    stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
-                    for n, v in stats.items(): st.write(f"{v} {n}")
+    # --- TAB 2: MOD BOLD ---
+    with tabs[1]:
+        c1, c2 = st.columns(2)
+        for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
+            with col:
+                st.write(f"<p style='text-align:center; font-size:11px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+                fig, ax = pitch.draw(figsize=(3, 4))
+                df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
+                if not df_d.empty:
+                    sns.kdeplot(x=df_d['EVENT_Y'], y=df_d['EVENT_X'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig, use_container_width=True); plt.close(fig)
+
+    # --- TAB 3: TOP 5 ---
+    with tabs[2]:
+        c1, c2, c3 = st.columns(3)
+        metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([8, 49], 'Erobringer')]
+        for col, (ids, label) in zip([c1, c2, c3], metrics):
+            with col:
+                st.write(f"**{label}**")
+                stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
+                for n, v in stats.items(): st.write(f"{v} {n}")
