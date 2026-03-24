@@ -6,8 +6,6 @@ from mplsoccer import VerticalPitch
 import requests
 from io import BytesIO
 from PIL import Image
-import json
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 # --- 1. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
@@ -19,6 +17,7 @@ def get_logo_img(url):
     except: return None
 
 def get_team_style(team_name):
+    from data.utils.team_mapping import TEAMS, TEAM_COLORS
     color = '#df003b' 
     logo_img = None
     if team_name in TEAM_COLORS:
@@ -40,32 +39,23 @@ def draw_logo_on_ax(ax, logo_img):
 
 # --- 2. FORBEDRET MAPPING AF HOLD ---
 def build_team_map(df_matches):
-    # Filtrér til 1. division (NordicBet Liga = 328)
-    if 'COMPETITION_WYID' in df_matches.columns:
-        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
-    
+    from data.utils.team_mapping import TEAMS
+    # Vi kigger på alle unikke hold i de hentede kampe (allerede filtreret på sæson i din SQL)
     ids_i_ligaen = pd.concat([
         df_matches['CONTESTANTHOME_OPTAUUID'], 
         df_matches['CONTESTANTAWAY_OPTAUUID']
     ]).unique()
     
     team_map = {}
-    # Lookup fra din centrale TEAMS fil
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().strip(): name for name, info in TEAMS.items()}
     
     for u_raw in ids_i_ligaen:
         if pd.isna(u_raw): continue
-        u_clean = str(u_raw).lower().strip().replace('t', '')
-        matched_name = None
+        u_clean = str(u_raw).lower().strip()
+        matched_name = mapping_lookup.get(u_clean)
         
-        # 1. Tjek TEAMS mapping
-        for m_id, name in mapping_lookup.items():
-            if m_id and (m_id in u_clean or u_clean in m_id):
-                matched_name = name
-                break
-        
-        # 2. Hvis ikke i TEAMS, find navnet i df_matches
         if not matched_name:
+            # Fallback til navnet direkte fra databasen hvis ikke i TEAMS mapping
             match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
             if not match_row.empty:
                 matched_name = match_row['CONTESTANTHOME_NAME'].iloc[0]
@@ -74,10 +64,9 @@ def build_team_map(df_matches):
                 if not match_away.empty:
                     matched_name = match_away['CONTESTANTAWAY_NAME'].iloc[0]
 
-        if not matched_name:
-            matched_name = f"Ukendt ({u_clean[:5]})"
+        if matched_name:
+            team_map[matched_name] = u_raw
             
-        team_map[matched_name] = u_raw
     return team_map
 
 def vis_side(analysis_package=None):
@@ -96,31 +85,36 @@ def vis_side(analysis_package=None):
     team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
-    if not valgte_hold_liste:
-        st.warning("Ingen hold fundet.")
-        return
-
-    valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
+    col_header1, col_header2 = st.columns([2, 2])
+    with col_header1:
+        valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste)
     
-    # 2. Definer variabler
-    valgt_uuid_data = team_map[valgt_hold]
+    valgt_uuid = str(team_map[valgt_hold]).lower().strip()
     t_color, t_logo = get_team_style(valgt_hold)
-    match_ref = str(valgt_uuid_data).lower().replace('t', '').strip()[:8] 
 
-    # 3. Definer tabs og pitch
-    tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
-
-    # Filtrering - Vi bruger EVENT_CONTESTANT_OPTAUUID som defineret i din SQL
-    if df_events.empty:
-        st.warning("Ingen hændelsesdata fundet.")
-        return
-
-    df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(match_ref, na=False)].copy()
+    # 2. Mulighed for at vælge specifik kamp eller hele sæsonen
+    holdets_kampe = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.lower() == valgt_uuid) | 
+                               (df_matches['CONTESTANTAWAY_OPTAUUID'].str.lower() == valgt_uuid)].copy()
     
+    with col_header2:
+        kamp_optioner = ["Hele sæsonen"] + holdets_kampe['MATCH_DESCRIPTION'].tolist()
+        valgt_kamp = st.selectbox("Vælg kamp (Scope):", kamp_optioner)
+
+    # 3. Filtrering af data
+    if valgt_kamp == "Hele sæsonen":
+        df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower() == valgt_uuid].copy()
+    else:
+        m_uuid = holdets_kampe[holdets_kampe['MATCH_DESCRIPTION'] == valgt_kamp]['MATCH_OPTAUUID'].iloc[0]
+        df_h_ev = df_events[(df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower() == valgt_uuid) & 
+                            (df_events['MATCH_OPTAUUID'] == m_uuid)].copy()
+
     if df_h_ev.empty:
-        st.info(f"Ingen data fundet for {valgt_hold}.")
+        st.info(f"Ingen hændelsesdata fundet for {valgt_hold} i den valgte periode.")
         return
+
+    # 4. Definer tabs og pitch
+    tabs = st.tabs(["🎯 MED BOLD", "🛡️ MOD BOLD", "📊 TOP 5"])
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
     # --- TAB 1: MED BOLD ---
     with tabs[0]:
@@ -129,70 +123,70 @@ def vis_side(analysis_package=None):
         
         if fokus == "Opbygning":
             with c1:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                # Bruger LOCATIONX jf. din SQL
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
+                st.markdown("<p style='text-align:center; font-weight:bold;'>MÅLSPARK / DYBT</p>", unsafe_allow_html=True)
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 20)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True); plt.close(fig)
+                st.pyplot(fig); plt.close(fig)
 
             with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
+                st.markdown("<p style='text-align:center; font-weight:bold;'>MIDTBANE OPBYGNING</p>", unsafe_allow_html=True)
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(20, 60))]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True); plt.close(fig)
+                st.pyplot(fig); plt.close(fig)
         else:
             with c1:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>GENNEMBRUDSZONER</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[df_h_ev['LOCATIONX'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True); plt.close(fig)
+                st.pyplot(fig); plt.close(fig)
 
             with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
                 df_shots = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_shots.empty:
                     goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
-                    pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
-                    pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
-                ax.set_xlim(0, 100); ax.set_ylim(60, 100); ax.axis('off')
+                    pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=80, edgecolors=t_color, c='white', alpha=0.6, ax=ax)
+                    pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=200, c=t_color, marker='star', edgecolors='black', ax=ax, zorder=3)
+                ax.set_ylim(60, 101) # Zoom ind på modstanderens banehalvdel
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True); plt.close(fig)
+                st.pyplot(fig); plt.close(fig)
 
     # --- TAB 2: MOD BOLD ---
     with tabs[1]:
         c1, c2 = st.columns(2)
-        for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
+        # Type 4: Tackle, 8: Interception, 49: Recovery, 12: Clearance
+        for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 12, 49], "DEFENSIVE AKTIONER", "Blues"), ([5], "DUELLER", "Greens")]):
             with col:
-                st.write(f"<p style='text-align:center; font-size:11px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
-                fig, ax = pitch.draw(figsize=(3, 4))
+                st.markdown(f"<p style='text-align:center; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+                fig, ax = pitch.draw(figsize=(4, 6))
                 df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                 if not df_d.empty:
-                    sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+                    sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True); plt.close(fig)
+                st.pyplot(fig); plt.close(fig)
 
     # --- TAB 3: TOP 5 ---
     with tabs[2]:
+        st.subheader(f"Top 5 Spillere - {valgt_kamp}")
         c1, c2, c3 = st.columns(3)
-        metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([8, 49], 'Erobringer')]
+        metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([4, 8, 49], 'Erobringer')]
         for col, (ids, label) in zip([c1, c2, c3], metrics):
             with col:
                 st.write(f"**{label}**")
-                # Bruger PLAYER_NAME som i SQL
                 stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
-                for n, v in stats.items(): st.write(f"{v} {n}")
+                if stats.empty:
+                    st.write("Ingen data")
+                else:
+                    for n, v in stats.items(): 
+                        st.write(f"**{v}** {n}")
