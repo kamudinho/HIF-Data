@@ -40,22 +40,44 @@ def draw_logo_on_ax(ax, logo_img):
 
 # --- 2. FORBEDRET MAPPING AF HOLD ---
 def build_team_map(df_matches):
-    # Vi fjerner COMP-filteret midlertidigt for at se om data overhovedet findes
+    # Filtrér til 1. division (NordicBet Liga = 328)
+    if 'COMPETITION_WYID' in df_matches.columns:
+        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
+    
+    ids_i_ligaen = pd.concat([
+        df_matches['CONTESTANTHOME_OPTAUUID'], 
+        df_matches['CONTESTANTAWAY_OPTAUUID']
+    ]).unique()
+    
     team_map = {}
-    if df_matches.empty:
-        return team_map
+    # Lookup fra din centrale TEAMS fil
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    
+    for u_raw in ids_i_ligaen:
+        if pd.isna(u_raw): continue
+        u_clean = str(u_raw).lower().strip().replace('t', '')
+        matched_name = None
         
-    for _, row in df_matches.iterrows():
-        # Home
-        h_name = row['CONTESTANTHOME_NAME']
-        h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).lower().strip()
-        if h_name: team_map[h_name] = h_uuid
+        # 1. Tjek TEAMS mapping
+        for m_id, name in mapping_lookup.items():
+            if m_id and (m_id in u_clean or u_clean in m_id):
+                matched_name = name
+                break
         
-        # Away
-        a_name = row['CONTESTANTAWAY_NAME']
-        a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).lower().strip()
-        if a_name: team_map[a_name] = a_uuid
+        # 2. Hvis ikke i TEAMS, find navnet i df_matches
+        if not matched_name:
+            match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
+            if not match_row.empty:
+                matched_name = match_row['CONTESTANTHOME_NAME'].iloc[0]
+            else:
+                match_away = df_matches[df_matches['CONTESTANTAWAY_OPTAUUID'] == u_raw]
+                if not match_away.empty:
+                    matched_name = match_away['CONTESTANTAWAY_NAME'].iloc[0]
+
+        if not matched_name:
+            matched_name = f"Ukendt ({u_clean[:5]})"
             
+        team_map[matched_name] = u_raw
     return team_map
 
 def vis_side(analysis_package=None):
