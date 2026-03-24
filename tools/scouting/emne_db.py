@@ -76,8 +76,6 @@ def vis_emne_modal(valgt_navn, emne_data, alle_scout_rapporter, career_df, bille
         # (Samme career_df logik som i din original kan indsættes her)
 
 def vis_side(dp):
-    st.subheader("📋 Strategisk Emneliste (Database)")
-
     # 1. HENT DATA FRA GITHUB
     content = get_github_file(FILE_PATH)
     if not content:
