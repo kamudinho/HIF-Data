@@ -106,8 +106,8 @@ def vis_side(dp):
             "ℹ️": st.column_config.CheckboxColumn("Profil", help="Profil", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skyggehold", help="Skyggehold", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", help="Slet", width="small"),
-            "Pos_Tal": "POS",
-            "Pos_Prioritet": "Kat.",
+            "Pos_Tal": "Position",
+            "Pos_Prioritet": "Prioritet",
             "Lon": "Løn"
         },
         disabled=data_cols,
