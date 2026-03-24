@@ -111,7 +111,7 @@ def vis_side(analysis_package=None):
     tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
-    # Filtrering
+    # Filtrering - Vi bruger EVENT_CONTESTANT_OPTAUUID som defineret i din SQL
     if df_events.empty:
         st.warning("Ingen hændelsesdata fundet.")
         return
@@ -122,7 +122,7 @@ def vis_side(analysis_package=None):
         st.info(f"Ingen data fundet for {valgt_hold}.")
         return
 
-    # --- TAB 1 (index 0): MED BOLD ---
+    # --- TAB 1: MED BOLD ---
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Afslutninger"], horizontal=True)
         c1, c2 = st.columns(2)
@@ -130,30 +130,31 @@ def vis_side(analysis_package=None):
         if fokus == "Opbygning":
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATION_X'] < 15)]
+                # Bruger LOCATIONX jf. din SQL
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATION_X'].between(15, 50))]
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
         else:
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[df_h_ev['LOCATION_X'] > 66]
+                df_f = df_h_ev[df_h_ev['LOCATIONX'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
@@ -165,13 +166,13 @@ def vis_side(analysis_package=None):
                 if not df_shots.empty:
                     goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
-                    pitch.scatter(non_goals.LOCATION_X, non_goals.LOCATION_Y, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
-                    pitch.scatter(goals.LOCATION_X, goals.LOCATION_Y, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
+                    pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
+                    pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
                 ax.set_xlim(0, 100); ax.set_ylim(60, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-    # --- TAB 2 (index 1): MOD BOLD ---
+    # --- TAB 2: MOD BOLD ---
     with tabs[1]:
         c1, c2 = st.columns(2)
         for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
@@ -180,12 +181,11 @@ def vis_side(analysis_package=None):
                 fig, ax = pitch.draw(figsize=(3, 4))
                 df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                 if not df_d.empty:
-                    # RETTET FRA LOCATION TIL EVENT
-                    sns.kdeplot(x=df_d['LOCATION_Y'], y=df_d['LOCATION_X'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
-                
+
     # --- TAB 3: TOP 5 ---
     with tabs[2]:
         c1, c2, c3 = st.columns(3)
@@ -193,5 +193,6 @@ def vis_side(analysis_package=None):
         for col, (ids, label) in zip([c1, c2, c3], metrics):
             with col:
                 st.write(f"**{label}**")
+                # Bruger PLAYER_NAME som i SQL
                 stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
                 for n, v in stats.items(): st.write(f"{v} {n}")
