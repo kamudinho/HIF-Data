@@ -74,7 +74,7 @@ def vis_side(dp):
     df['Skyggehold'] = df['Skyggehold'].fillna(False).astype(bool)
 
     # 2. TABS
-    tab_emner, tab_skygge = st.tabs(["📋 Emner", "🛡️ Skyggehold"])
+    tab_emner, tab_skygge = st.tabs(["Emner", "Skyggehold"])
 
     # --- TAB: EMNER (TABELLEN) ---
     with tab_emner:
