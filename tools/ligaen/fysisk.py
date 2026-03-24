@@ -169,18 +169,16 @@ def vis_side(conn, name_map=None):
                     # Marker hvem der er hvem
                     df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
 
-                    st.dataframe(
-                        df_m.sort_values(['Hold', 'DISTANCE'], ascending=[False, False]),
-                        column_order=("PLAYER_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                        column_config={
-                            "PLAYER_NAME": "Spiller",
-                            "KM": st.column_config.NumberColumn("Km", format="%.2f"),
-                            "HI_RUN": st.column_config.NumberColumn("HI Meter", format="%d"),
-                            "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f")
-                        },
-                        use_container_width=True, 
-                        hide_index=True
-                    )
+                        st.dataframe(
+                    df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
+                    column_config={
+                        "DISPLAY_NAME": "Spiller", "Klub_Korrekt": "Klub", "MINUTES": "Min",
+                        "KM": st.column_config.NumberColumn("KM", format="%.2f"),
+                        "HI_RUN": "HI m", "DISTANCE_TIP": "TIP (m)", "DISTANCE_OTIP": "OTIP (m)",
+                        "DISTANCE_BOP": "BOP (m)", "TOP_SPEED": "Top"
+                    },
+                    column_order=("DISPLAY_NAME", "Klub_Korrekt", "MINUTES", "KM", "HI_RUN", "DISTANCE_TIP", "DISTANCE_OTIP", "DISTANCE_BOP", "TOP_SPEED"),
+                    use_container_width=True, hide_index=True, height=800
                 else:
                     st.info(f"Ingen fysisk data fundet for kampen: {v_kamp}")
             except Exception as e:
