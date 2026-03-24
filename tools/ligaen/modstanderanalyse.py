@@ -40,26 +40,24 @@ def draw_logo_on_ax(ax, logo_img):
 
 # --- 2. FORBEDRET MAPPING AF HOLD ---
 def build_team_map(df_matches):
-    # Filtrér til NordicBet Liga (328)
-    if 'COMPETITION_WYID' in df_matches.columns:
-        df_matches = df_matches[df_matches['COMPETITION_WYID'] == 328]
-    
+    # Vi fjerner COMP-filteret midlertidigt for at se om data overhovedet findes
     team_map = {}
-    # Vi bruger navnene direkte fra kampsættet for at sikre 1:1 match med data
-    for _, row in df_matches.iterrows():
-        # Home team
-        h_name = row['CONTESTANTHOME_NAME']
-        h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).lower().replace('t', '')
-        if h_name not in team_map: team_map[h_name] = h_uuid
+    if df_matches.empty:
+        return team_map
         
-        # Away team
+    for _, row in df_matches.iterrows():
+        # Home
+        h_name = row['CONTESTANTHOME_NAME']
+        h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).lower().strip()
+        if h_name: team_map[h_name] = h_uuid
+        
+        # Away
         a_name = row['CONTESTANTAWAY_NAME']
-        a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).lower().replace('t', '')
-        if a_name not in team_map: team_map[a_name] = a_uuid
+        a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).lower().strip()
+        if a_name: team_map[a_name] = a_uuid
             
     return team_map
 
-# --- 3. HOVEDFUNKTION ---
 def vis_side(analysis_package=None):
     if not analysis_package:
         st.error("Ingen data fundet.")
@@ -69,25 +67,36 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet.")
+        st.warning("Ingen kampdata fundet i matches-tabellen.")
         return
 
-    # Byg mappet og sorter listen
     team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
-    if not valgte_hold_liste:
-        st.warning("Ingen hold fundet for NordicBet Ligaen.")
-        return
-
-    # Dropdown menu
     valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
     
-    # Hent stil og reference-ID (clean uuid uden 't')
-    target_uuid = team_map[valgt_hold]
+    # Hent UUID og rens det for både 't' og eventuelle mellemrum
+    raw_uuid = team_map[valgt_hold]
+    clean_uuid = raw_uuid.replace('t', '')
+    
     t_color, t_logo = get_team_style(valgt_hold)
 
-    # Tabs og banekonfiguration
+    # --- KRITISK FILTRERING ---
+    # Vi søger efter både med og uden 't' præfiks for at være sikre
+    mask = (
+        df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(clean_uuid, na=False) |
+        df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(raw_uuid, na=False)
+    )
+    df_h_ev = df_events[mask].copy()
+
+    if df_h_ev.empty:
+        st.info(f"Ingen kamp-events fundet for {valgt_hold}.")
+        # Debug hjælp (kan fjernes senere)
+        if not df_events.empty:
+            st.write("Tilgængelige UUIDs i event-data:", df_events['EVENT_CONTESTANT_OPTAUUID'].unique()[:5])
+        return
+
+    # --- TABS (Herfra kører din visning som før) ---
     tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
