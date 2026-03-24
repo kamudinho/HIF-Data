@@ -123,5 +123,5 @@ def vis_side(dp):
     if os.path.exists(CSV_PATH):
         df_l = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
         if not df_l.empty:
-            st.subheader("📋 Aktuel Emneliste")
+            st.subheader("Aktuel Emneliste")
             st.dataframe(df_l.iloc[::-1], use_container_width=True, hide_index=True)
