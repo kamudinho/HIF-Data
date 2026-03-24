@@ -250,7 +250,13 @@ try:
 
             elif sel == "Opret emne":
                 import tools.scouting.emneliste_input as el
-                el.vis_side(dp)
+                
+                u_players = dp.get("sql_players", {})
+                # 2. Lav options_list (navnene til dropdown)
+                o_list = sorted(u_players.keys(), key=lambda x: u_players[x].get("n", ""))
+                # 3. Hent den nuværende bruger fra session_state
+                c_user = st.session_state.get("user", "UKENDT")
+                el.vis_side(u_players, o_list, c_user)
 
             # --- DIN NYE SIDE HER ---
             elif sel == "Emnedatabase":
