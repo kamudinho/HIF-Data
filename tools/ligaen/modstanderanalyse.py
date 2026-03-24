@@ -125,72 +125,75 @@ def vis_side(analysis_package=None):
 
         # --- TAB 1 (index 0): MED BOLD ---
     with tabs[0]:
-        fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
+        fokus = st.radio("Fokus:", ["Opbygning", "Afslutninger"], horizontal=True)
         c1, c2 = st.columns(2)
         
-        # Sortering er afgørende for shift()
-        df_h_ev = df_h_ev.sort_values(['EVENT_TIMEMIN', 'EVENT_TIMESEC'])
-
-        # Vi definerer pitch her én gang
+        # Vi definerer pitch-objektet her
         pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
         if fokus == "Opbygning":
-            for col, title, x_range in zip([c1, c2], ["MÅLSPARK", "OPBYGNING"], [(0, 15), (15, 50)]):
-                with col:
-                    st.write(f"<p style='text-align:center; font-size:12px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
-                    df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(*x_range))]
-                    
-                    fig, ax = pitch.draw(figsize=(4, 6))
-                    if not df_f.empty:
-                        # Vi tegner KDE direkte på ax
-                        sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
-                                    alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                    
-                    # Tving banen til at holde sine dimensioner
-                    ax.set_xlim(0, 100)
-                    ax.set_ylim(0, 100)
-                    draw_logo_on_ax(ax, t_logo)
-                    st.pyplot(fig, use_container_width=True)
-                    plt.close(fig)
+            # --- MÅLSPARK ---
+            with c1:
+                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'] < 15)]
+                fig, ax = pitch.draw(figsize=(4, 6))
+                if not df_f.empty:
+                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
+                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
+                # Vi tvinger banens rammer på plads
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig, use_container_width=True); plt.close(fig)
+
+            # --- OPBYGNING ---
+            with c2:
+                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(15, 50))]
+                fig, ax = pitch.draw(figsize=(4, 6))
+                if not df_f.empty:
+                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
+                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig, use_container_width=True); plt.close(fig)
+        
         else:
-            # GENNEMBRUD
+            # --- GENNEMBRUD (HEATMAP) ---
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[df_h_ev['EVENT_X'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
                     sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Oranges', 
-                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
-                ax.set_xlim(0, 100)
-                ax.set_ylim(0, 100)
+                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
+                ax.set_xlim(0, 100); ax.set_ylim(0, 100)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+                st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-            # PROGRESSIVE (Nødløsningen med shift)
+            # --- AFSLUTNINGSMAP ---
             with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
-                df_prog_calc = df_h_ev.copy()
-                df_prog_calc['NEXT_X'] = df_prog_calc['EVENT_X'].shift(-1)
-                df_prog_calc['NEXT_Y'] = df_prog_calc['EVENT_Y'].shift(-1)
-                
-                df_prog = df_prog_calc[
-                    (df_prog_calc['EVENT_TYPEID'] == 1) & 
-                    (df_prog_calc['NEXT_X'] > (df_prog_calc['EVENT_X'] + 15))
-                ].dropna(subset=['NEXT_X', 'NEXT_Y'])
+                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
+                # Opta Type IDs for skud: 13, 14, 15, 16
+                df_shots = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                 
                 fig, ax = pitch.draw(figsize=(4, 6))
-                if not df_prog.empty:
-                    # Arrows skal have zorder for at ligge øverst
-                    pitch.arrows(df_prog.EVENT_X, df_prog.EVENT_Y, 
-                                 df_prog.NEXT_X, df_prog.NEXT_Y, 
-                                 width=2, color=t_color, ax=ax, alpha=0.7, zorder=3)
+                if not df_shots.empty:
+                    # Mål (Type 16) vises som store stjerner/cirkler, resten som små prikker
+                    goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
+                    non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
+                    
+                    # Tegn skud der ikke gik ind
+                    pitch.scatter(non_goals.EVENT_X, non_goals.EVENT_Y, s=100, 
+                                  edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
+                    # Tegn mål
+                    pitch.scatter(goals.EVENT_X, goals.EVENT_Y, s=250, 
+                                  c=t_color, marker='star', edgecolors='black', ax=ax)
                 
+                # Fokus på den sidste tredjedel af banen for skud
                 ax.set_xlim(0, 100)
-                ax.set_ylim(0, 100)
+                ax.set_ylim(60, 100)
                 draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+                st.pyplot(fig, use_container_width=True); plt.close(fig)
                     
         # --- TAB 2: MOD BOLD ---
         with tabs[1]:
