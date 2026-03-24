@@ -198,8 +198,12 @@ with st.sidebar:
         sel = option_menu(None, options=["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
+        scout_options = ["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]
+        # Filtrer undermenuen ligesom du gjorde med hovedmenuen:
+        synlige_scout_options = [o for o in scout_options if o not in restriktioner]
+        
         sel = option_menu(None, 
-                         options=["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"],
+                         options=synlige_scout_options,
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["System Log", "Profil"],
