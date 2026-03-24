@@ -95,7 +95,7 @@ def vis_side(dp):
     df_display = df_display.rename(columns={'Skyggehold': '🛡️'})
 
     # Kolonne-rækkefølge: Info først, Data i midten, Skygge & Slet bagerst
-    data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
+    data_cols = ['Navn', 'Pos_Tal', 'Klub', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
     cols_order = ['ℹ️'] + data_cols + ['🛡️', '🗑️']
     
     dynamic_height = (len(df_display) + 1) * 35 + 20
