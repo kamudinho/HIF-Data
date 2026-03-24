@@ -130,30 +130,30 @@ def vis_side(analysis_package=None):
         if fokus == "Opbygning":
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'] < 15)]
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATION_X'] < 15)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(15, 50))]
+                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATION_X'].between(15, 50))]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
         else:
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[df_h_ev['EVENT_X'] > 66]
+                df_f = df_h_ev[df_h_ev['LOCATION_X'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_f['LOCATION_Y'], y=df_f['LOCATION_X'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
@@ -165,8 +165,8 @@ def vis_side(analysis_package=None):
                 if not df_shots.empty:
                     goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
-                    pitch.scatter(non_goals.EVENT_X, non_goals.EVENT_Y, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
-                    pitch.scatter(goals.EVENT_X, goals.EVENT_Y, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
+                    pitch.scatter(non_goals.LOCATION_X, non_goals.LOCATION_Y, s=100, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
+                    pitch.scatter(goals.LOCATION_X, goals.LOCATION_Y, s=250, c=t_color, marker='star', edgecolors='black', ax=ax)
                 ax.set_xlim(0, 100); ax.set_ylim(60, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
@@ -181,7 +181,7 @@ def vis_side(analysis_package=None):
                 df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                 if not df_d.empty:
                     # RETTET FRA LOCATION TIL EVENT
-                    sns.kdeplot(x=df_d['EVENT_Y'], y=df_d['EVENT_X'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_d['LOCATION_Y'], y=df_d['LOCATION_X'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
