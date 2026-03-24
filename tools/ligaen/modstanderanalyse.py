@@ -133,7 +133,7 @@ def vis_side(analysis_package=None):
         c1, c2 = st.columns(2)
         if fokus == "Opbygning":
             with c1:
-                st.markdown("<p style='text-align:center; font-weight:bold;'>MAALSPARK / DYBT</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>FASE 1: MÅLSPARK / LAV OPBYGNING</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 20)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
@@ -142,7 +142,7 @@ def vis_side(analysis_package=None):
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
             with c2:
-                st.markdown("<p style='text-align:center; font-weight:bold;'>MIDTBANE OPBYGNING</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>FASE 2: OPBYGNING</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(20, 60))]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
@@ -152,7 +152,7 @@ def vis_side(analysis_package=None):
                 st.pyplot(fig); plt.close(fig)
         else:
             with c1:
-                st.markdown("<p style='text-align:center; font-weight:bold;'>GENNEMBRUDSZONER</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>FASE 3: GENNEMBRUDSZONER</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[df_h_ev['LOCATIONX'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
@@ -161,7 +161,7 @@ def vis_side(analysis_package=None):
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
             with c2:
-                st.markdown("<p style='text-align:center; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>FASE 4: AFSLUTNINGER</p>", unsafe_allow_html=True)
                 df_shots = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_shots.empty:
