@@ -5,35 +5,18 @@ from datetime import datetime
 
 # --- 1. CONFIG OG STI ---
 CSV_PATH = 'data/emneliste.csv'
-# Vi definerer præcis hvilke kolonner vi forventer
 EXPECTED_COLUMNS = ["Dato", "Navn", "Position", "Klub", "Prioritet", "Forventning", "Kontrakt", "Bemaerkning", "Oprettet_af"]
 
 def tjek_og_initialiser_csv():
-    """Sikrer at CSV-filen findes og har de rigtige kolonner."""
     if not os.path.exists('data'):
         os.makedirs('data')
-        
     if not os.path.isfile(CSV_PATH):
         df = pd.DataFrame(columns=EXPECTED_COLUMNS)
         df.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
-    else:
-        # Hvis filen findes, tjek om den er tom eller mangler kolonner
-        try:
-            df = pd.read_csv(CSV_PATH)
-            if list(df.columns) != EXPECTED_COLUMNS:
-                # Hvis kolonnerne er forkerte, tvinger vi en ny (ADVARSEL: Dette overskriver gammel struktur)
-                st.warning("CSV-struktur var forældet. Opdaterer til ny struktur.")
-                # Vi prøver at bevare data hvis muligt, ellers starter vi forfra
-                df_ny = pd.DataFrame(columns=EXPECTED_COLUMNS)
-                df_ny.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
-        except:
-            df = pd.DataFrame(columns=EXPECTED_COLUMNS)
-            df.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
 
 def gem_til_emneliste(data_dict):
-    """Gemmer data og sikrer rækkefølgen af kolonner."""
     df_ny = pd.DataFrame([data_dict])
-    df_ny = df_ny[EXPECTED_COLUMNS] # Gennemtving rækkefølge
+    df_ny = df_ny[EXPECTED_COLUMNS]
     df_ny.to_csv(CSV_PATH, mode='a', index=False, header=False, encoding='utf-8-sig')
 
 def slet_fra_emneliste(navn_til_slet):
@@ -45,27 +28,36 @@ def slet_fra_emneliste(navn_til_slet):
     return False
 
 def vis_side(analysis_package=None):
-    # 0. Initialiser filen med det samme
     tjek_og_initialiser_csv()
 
-    # --- SIKKERHEDS-TJEK ---
-    user_info = st.session_state.get('user_info', {})
-    if "EMNELISTE" in user_info.get('restricted', []):
+    # --- 2. OPDATERET SIKKERHEDS-TJEK (Matcher HIF-dash.py) ---
+    current_user = st.session_state.get('user', 'Gæst')
+    
+    # Hent brugerens restriktioner fra session_state eller en database
+    # Da vi er i HIF-dash, kan vi tjekke direkte på den loggede bruger
+    from data.users import get_users
+    all_users = get_users()
+    user_data = all_users.get(current_user, {})
+    restriktioner = user_data.get('restricted', [])
+
+    if "EMNELISTE" in restriktioner:
         st.error("Du har ikke adgang til denne side.")
         return
 
     st.header("OPRET EMNELISTE")
 
     if not analysis_package:
-        st.error("Ingen data tilgængelig.")
+        st.error("Ingen data tilgængelig fra databasen.")
         return
 
-    # Hent spillere
+    # Hent spillere - tjekker både Wyscout (players) og SQL data
     df_players = analysis_package.get("players", pd.DataFrame())
+    
+    # Prøv at finde navne-kolonnen
     p_col = next((c for c in ['PLAYER_NAME', 'player_name', 'Name'] if c in df_players.columns), None)
 
     if p_col is None or df_players.empty:
-        st.warning("Ingen spiller-data fundet i databasen.")
+        st.warning("Kunne ikke indlæse spillere. Tjek database-forbindelsen.")
         return
 
     # --- INPUT ---
@@ -80,7 +72,8 @@ def vis_side(analysis_package=None):
         c1, c2, c3 = st.columns(3)
         c1.text_input("Position", valgt_pos, disabled=True)
         c2.text_input("Klub", valgt_klub, disabled=True)
-        c3.text_input("Oprettet af", st.session_state.get('user_name', 'Ukendt'), disabled=True)
+        # Bruger 'current_user' i stedet for 'user_name'
+        c3.text_input("Oprettet af", current_user.upper(), disabled=True)
 
         st.divider()
         col_a, col_b = st.columns(2)
@@ -101,9 +94,17 @@ def vis_side(analysis_package=None):
                 "Forventning": forventning,
                 "Kontrakt": kontrakt,
                 "Bemaerkning": bemaerkning.replace('\n', ' '),
-                "Oprettet_af": st.session_state.get('user_name', 'Ukendt')
+                "Oprettet_af": current_user
             }
             gem_til_emneliste(ny_entry)
+            
+            # Valgfri: Log til GitHub hvis funktionen er importeret
+            try:
+                from HIF_dash import log_event_to_github
+                log_event_to_github(current_user, "Tilføjede til emneliste", valgt_navn)
+            except:
+                pass
+
             st.success(f"{valgt_navn} gemt!")
             st.rerun()
 
@@ -111,16 +112,19 @@ def vis_side(analysis_package=None):
     st.divider()
     if os.path.exists(CSV_PATH):
         try:
-            df_liste = pd.read_csv(CSV_PATH)
+            # Læs CSV med explicit encoding for at undgå fejl med æ, ø, å
+            df_liste = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
             if not df_liste.empty:
+                st.subheader("Aktuel Liste")
                 st.dataframe(df_liste.iloc[::-1], use_container_width=True, hide_index=True)
                 
                 with st.expander("Administrer / Slet"):
-                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique())
-                    if st.button(f"Slet {slet_navn}", type="primary"):
-                        slet_fra_emneliste(slet_navn)
-                        st.rerun()
+                    # Vi tilføjer en unik nøgle til selectbox for at undgå Streamlit Duplicate Widget ID fejl
+                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique(), key="slet_select")
+                    if st.button(f"Slet {slet_navn}", type="primary", key="slet_btn"):
+                        if slet_fra_emneliste(slet_navn):
+                            st.rerun()
             else:
                 st.info("Emnelisten er tom.")
-        except:
-            st.error("Fejl ved læsning af CSV. Prøv at slette data/emneliste.csv manuelt.")
+        except Exception as e:
+            st.error(f"Fejl ved indlæsning af liste: {e}")
