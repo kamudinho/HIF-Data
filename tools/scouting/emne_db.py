@@ -68,8 +68,6 @@ def vis_emne_modal(valgt_navn, emne_data, alle_scout_rapporter):
 
 # --- HOVEDSIDE ---
 def vis_side(dp):
-    st.subheader("📋 Strategisk Emneliste")
-
     # 1. HENT DATA
     content, sha = get_github_file(FILE_PATH)
     if not content:
@@ -89,27 +87,30 @@ def vis_side(dp):
     df_filtered = df_filtered.sort_values(['Pos_Tal', 'Pos_Prioritet'], ascending=[True, True])
 
     # 3. FORBERED TABEL TIL EDITOR
-    # Omdøb kolonne visuelt i editoren
     df_display = df_filtered.copy()
-    df_display = df_display.rename(columns={'Skyggehold': '➕'})
-    df_display['🗑️'] = False
-    df_display['ℹ️'] = False
-
-    cols_order = ['ℹ️', '➕', '🗑️', 'Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
     
-    dynamic_height = (len(df_display) + 1) * 35 + 15
+    # Interaktions-kolonner (Ikoner)
+    df_display['ℹ️'] = False  # Info profil
+    df_display['🗑️'] = False  # Slet permanent
+    df_display = df_display.rename(columns={'Skyggehold': '🛡️'})
+
+    # Kolonne-rækkefølge: Info først, Data i midten, Skygge & Slet bagerst
+    data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
+    cols_order = ['ℹ️'] + data_cols + ['🛡️', '🗑️']
+    
+    dynamic_height = (len(df_display) + 1) * 35 + 20
 
     ed_result = st.data_editor(
         df_display[cols_order],
         column_config={
-            "ℹ️": st.column_config.CheckboxColumn("Profil"),
-            "➕": st.column_config.CheckboxColumn("Skygge"),
-            "🗑️": st.column_config.CheckboxColumn("Slet"),
+            "ℹ️": st.column_config.CheckboxColumn("Info", help="Se profil"),
+            "🛡️": st.column_config.CheckboxColumn("Skygge", help="Marker til skyggehold"),
+            "🗑️": st.column_config.CheckboxColumn("Slet", help="Slet permanent"),
             "Pos_Tal": "POS",
             "Pos_Prioritet": "Kat.",
             "Lon": "Løn"
         },
-        disabled=['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt'],
+        disabled=data_cols,
         hide_index=True,
         use_container_width=True,
         height=dynamic_height,
@@ -125,7 +126,7 @@ def vis_side(dp):
         df_rapporter = pd.read_csv(StringIO(scout_content)) if scout_content else None
         vis_emne_modal(valgt_navn, df, df_rapporter)
 
-    # B. SLETNING
+    # B. SLETNING (Bagerste kolonne)
     slet_valg = ed_result[ed_result["🗑️"] == True]
     if not slet_valg.empty:
         navn_slet = slet_valg.iloc[-1]['Navn']
@@ -135,10 +136,10 @@ def vis_side(dp):
             push_to_github(FILE_PATH, f"Slettede {navn_slet}", df_new.to_csv(index=False), sha)
             st.rerun()
 
-    # C. OPDATER SKYGGEHOLD STATUS
-    if not ed_result['➕'].equals(df_display['➕']):
+    # C. OPDATER SKYGGEHOLD STATUS (Næstsidste kolonne)
+    if not ed_result['🛡️'].equals(df_display['🛡️']):
         for idx, row in ed_result.iterrows():
-            df.loc[df['Navn'] == row['Navn'], 'Skyggehold'] = row['➕']
+            df.loc[df['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
         
         push_to_github(FILE_PATH, "Opdateret Skyggehold status", df.to_csv(index=False), sha)
         st.rerun()
