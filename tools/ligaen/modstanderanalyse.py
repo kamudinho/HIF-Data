@@ -125,55 +125,69 @@ def vis_side(analysis_package=None):
 
         # --- TAB 1: MED BOLD ---
         # --- TAB 1 (index 0): MED BOLD ---
+    # --- TAB 1 (index 0): MED BOLD ---
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
         c1, c2 = st.columns(2)
         
+        # FIX: Vi sorterer efter tid for at kunne beregne "næste" position
+        df_h_ev = df_h_ev.sort_values(['EVENT_TIMEMIN', 'EVENT_TIMESEC'])
+
         if fokus == "Opbygning":
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
+                df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'] < 15)]
                 fig, ax = pitch.draw(figsize=(4, 5))
-                # FIX: Clip sikrer at farverne bliver inde på banen (0-100 x 0-100)
                 if not df_kick.empty:
-                    sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    # FIX: clip=((0, 100), (0, 100)) holder farverne inde på banen
+                    sns.kdeplot(x=df_kick['EVENT_Y'], y=df_kick['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
+                df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(15, 50))]
                 fig, ax = pitch.draw(figsize=(4, 5))
                 if not df_build.empty:
-                    sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_build['EVENT_Y'], y=df_build['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
         else:
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
-                df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
+                df_final = df_h_ev[df_h_ev['EVENT_X'] > 66]
                 fig, ax = pitch.draw(figsize=(4, 5))
                 if not df_final.empty:
-                    # FIX: Her bruger vi clip igen for at undgå det flyder ud over sidelinjen
-                    sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    sns.kdeplot(x=df_final['EVENT_Y'], y=df_final['EVENT_X'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
-                # FIX: Vi sikrer at vi har slut-koordinater før vi tegner
-                if 'ENDLOCATIONX' in df_h_ev.columns:
-                    df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['ENDLOCATIONX'] > (df_h_ev['LOCATIONX'] + 15))]
-                    fig, ax = pitch.draw(figsize=(4, 5))
-                    if not df_prog.empty:
-                        # arrows() tegner de faktiske pile
-                        pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, width=1.5, color=t_color, ax=ax, alpha=0.5)
-                    draw_logo_on_ax(ax, t_logo)
-                    st.pyplot(fig, use_container_width=True)
-                    plt.close(fig)
+                
+                # NØDLØSNING: Vi finder slut-positionen ved at kigge på den næste række i data
+                df_prog_calc = df_h_ev.copy()
+                df_prog_calc['NEXT_X'] = df_prog_calc['EVENT_X'].shift(-1)
+                df_prog_calc['NEXT_Y'] = df_prog_calc['EVENT_Y'].shift(-1)
+                
+                # Filter: Kun afleveringer (Type 1) der rykker mindst 15 meter frem
+                df_prog = df_prog_calc[
+                    (df_prog_calc['EVENT_TYPEID'] == 1) & 
+                    (df_prog_calc['NEXT_X'] > (df_prog_calc['EVENT_X'] + 15))
+                ]
+                
+                fig, ax = pitch.draw(figsize=(4, 5))
+                if not df_prog.empty:
+                    pitch.arrows(df_prog.EVENT_X, df_prog.EVENT_Y, 
+                                 df_prog.NEXT_X, df_prog.NEXT_Y, 
+                                 width=1.5, color=t_color, ax=ax, alpha=0.5)
+                
+                draw_logo_on_ax(ax, t_logo)
+                st.pyplot(fig, use_container_width=True)
+                plt.close(fig)
                     
         # --- TAB 2: MOD BOLD ---
         with tabs[1]:
