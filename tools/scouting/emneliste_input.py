@@ -32,21 +32,22 @@ def vis_side(unique_players, options_list, current_user):
     st.header("Opret nyt emne")
 
     # --- UI: INDTASTNING (INGEN EXPANDER) ---
-    # Linje 1: Spiller, Position (WS), Klub, Scout
     l1_c1, l1_c2, l1_c3, l1_c4 = st.columns([2, 1, 1, 1])
     
+    # Vi bruger 'n' (navnet) som label i stedet for den manglende 'label' nøgle
     sel_id = l1_c1.selectbox(
         "Vælg spiller", 
         [""] + options_list, 
-        format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller..."
+        format_func=lambda x: unique_players[x].get("n", "Ukendt") if x else "Vælg spiller..."
     )
     
     active = unique_players.get(sel_id, {"n": "", "pos": "", "klub": ""})
     
-    l1_c2.text_input("Position (WS)", value=active['pos'], disabled=True)
-    l1_c3.text_input("Klub", value=active['klub'], disabled=True)
+    # Resten af koden er uændret...
+    l1_c2.text_input("Position (WS)", value=active.get('pos', ''), disabled=True)
+    l1_c3.text_input("Klub", value=active.get('klub', ''), disabled=True)
     l1_c4.text_input("Scout", value=current_user.upper(), disabled=True)
-
+    
     # Linje 2: Position (tal), Position (prioritet), Kontrakt
     l2_c1, l2_c2, l2_c3 = st.columns(3)
     pos_tal = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
