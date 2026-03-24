@@ -18,11 +18,11 @@ def get_users():
         "kd": {
             "pass": "Daugaard2650", 
             "role": "coach",
-            "restricted": ["ADMIN", "EMNELISTE"] # Spærret for Emneliste
+            "restricted": ["ADMIN", "Opret emne", "Emneatabase"] # Spærret for Emneliste
         },
         "cg": {
             "pass": "Gron1234", 
             "role": "scout",
-            "restricted": ["ADMIN", "EMNELISTE"] # Spærret for Emneliste
+            "restricted": ["ADMIN", "Opret emne", "Emneatabase"] # Spærret for Emneliste
         }
     }
