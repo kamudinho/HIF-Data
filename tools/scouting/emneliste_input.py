@@ -27,104 +27,120 @@ def slet_fra_emneliste(navn_til_slet):
         return True
     return False
 
-def vis_side(analysis_package=None):
+def vis_side(dp):
     tjek_og_initialiser_csv()
 
-    # --- 2. OPDATERET SIKKERHEDS-TJEK (Matcher HIF-dash.py) ---
+    # --- SIKKERHEDS-TJEK ---
     current_user = st.session_state.get('user', 'Gæst')
-    
-    # Hent brugerens restriktioner fra session_state eller en database
-    # Da vi er i HIF-dash, kan vi tjekke direkte på den loggede bruger
     from data.users import get_users
-    all_users = get_users()
-    user_data = all_users.get(current_user, {})
-    restriktioner = user_data.get('restricted', [])
-
-    if "EMNELISTE" in restriktioner:
+    user_data = get_users().get(current_user, {})
+    if "EMNELISTE" in user_data.get('restricted', []):
         st.error("Du har ikke adgang til denne side.")
         return
 
     st.header("OPRET EMNELISTE")
 
-    if not analysis_package:
-        st.error("Ingen data tilgængelig fra databasen.")
-        return
-
-    # Hent spillere - tjekker både Wyscout (players) og SQL data
-    df_players = analysis_package.get("players", pd.DataFrame())
+    # --- 2. HENT DATA TIL DROPDOWN (Kopieret fra Scout_input.py) ---
+    df_local = dp.get("scout_reports", pd.DataFrame()) 
+    df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
     
-    # Prøv at finde navne-kolonnen
-    p_col = next((c for c in ['PLAYER_NAME', 'player_name', 'Name'] if c in df_players.columns), None)
+    unique_players = {}
+    def add_to_options(df):
+        if df is None or df.empty: return
+        # Standardiser kolonner til STORE BOGSTAVER
+        df.columns = [str(c).upper().strip() for c in df.columns]
+        for _, r in df.iterrows():
+            p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
+            if not p_id or p_id in ['nan', 'None', '']: continue
+            
+            f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
+            l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
+            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
+            
+            klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
+            pos = r.get('ROLECODE3') or r.get('POSITION') or ""
+            if str(pos).strip() in ["??", "nan", "None"]: pos = ""
+            
+            label = f"{fuldt_navn} ({klub})"
+            if p_id not in unique_players:
+                unique_players[p_id] = {
+                    "label": label, 
+                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
+                }
 
-    if p_col is None or df_players.empty:
-        st.warning("Kunne ikke indlæse spillere. Tjek database-forbindelsen.")
-        return
+    add_to_options(df_local)
+    add_to_options(df_wyscout)
+    options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # --- INPUT ---
+    # --- 3. INPUT SEKTION ---
+    data = {"n": "", "id": "", "pos": "", "klub": ""}
+    
     with st.expander("Tilføj ny spiller til listen", expanded=True):
-        player_list = sorted(df_players[p_col].unique())
-        valgt_navn = st.selectbox("Vælg spiller:", player_list)
+        # Dropdown med format_func ligesom i Scoutrapport
+        sel_id = st.selectbox(
+            "Vælg spiller fra databasen:", 
+            [""] + options_list, 
+            format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
+            key="emne_valg"
+        )
         
-        p_info = df_players[df_players[p_col] == valgt_navn].iloc[0]
-        valgt_pos = p_info.get('POSITION', p_info.get('position', 'Ukendt'))
-        valgt_klub = p_info.get('TEAM_NAME', p_info.get('team_name', 'Ukendt'))
-        
+        if sel_id:
+            data = unique_players[sel_id]["data"]
+
         c1, c2, c3 = st.columns(3)
-        c1.text_input("Position", valgt_pos, disabled=True)
-        c2.text_input("Klub", valgt_klub, disabled=True)
-        # Bruger 'current_user' i stedet for 'user_name'
-        c3.text_input("Oprettet af", current_user.upper(), disabled=True)
+        # Position kan overskrives hvis den er tom
+        if data['n'] != "" and data['pos'] == "":
+            pos_final = c1.selectbox("Udfyld position", ["", "GKP", "DEF", "MID", "FWD"])
+        else:
+            pos_final = c1.text_input("Position", value=data['pos'], disabled=True)
+            
+        c2.text_input("Klub", value=data['klub'], disabled=True)
+        c3.text_input("Oprettet af", value=current_user.upper(), disabled=True)
 
         st.divider()
         col_a, col_b = st.columns(2)
         with col_a:
             prioritet = st.select_slider("Prioritet", options=["Lav", "Medium", "Høj", "A-Kandidat"])
-            forventning = st.text_input("Forventning")
+            forventning = st.text_input("Forventning (f.eks. pris/løm)")
         with col_b:
-            kontrakt = st.text_input("Kontraktstatus")
-            bemaerkning = st.text_area("Bemærkninger", height=68)
+            kontrakt = st.text_input("Kontraktstatus (udløb)")
+            bemaerkning = st.text_area("Hvorfor er han interessant?", height=68)
 
-        if st.button("Gem spiller"):
-            ny_entry = {
-                "Dato": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "Navn": valgt_navn,
-                "Position": valgt_pos,
-                "Klub": valgt_klub,
-                "Prioritet": prioritet,
-                "Forventning": forventning,
-                "Kontrakt": kontrakt,
-                "Bemaerkning": bemaerkning.replace('\n', ' '),
-                "Oprettet_af": current_user
-            }
-            gem_til_emneliste(ny_entry)
-            
-            # Valgfri: Log til GitHub hvis funktionen er importeret
-            try:
-                from HIF_dash import log_event_to_github
-                log_event_to_github(current_user, "Tilføjede til emneliste", valgt_navn)
-            except:
-                pass
+        if st.button("Gem spiller på emnelisten"):
+            if not data["n"]:
+                st.error("Vælg venligst en spiller først.")
+            else:
+                ny_entry = {
+                    "Dato": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Navn": data["n"],
+                    "Position": pos_final,
+                    "Klub": data["klub"],
+                    "Prioritet": prioritet,
+                    "Forventning": forventning,
+                    "Kontrakt": kontrakt,
+                    "Bemaerkning": bemaerkning.replace('\n', ' '),
+                    "Oprettet_af": current_user
+                }
+                gem_til_emneliste(ny_entry)
+                st.success(f"✅ {data['n']} er føjet til emnelisten!")
+                st.rerun()
 
-            st.success(f"{valgt_navn} gemt!")
-            st.rerun()
-
-    # --- VISNING ---
+    # --- 4. VISNING AF LISTEN ---
     st.divider()
     if os.path.exists(CSV_PATH):
         try:
-            # Læs CSV med explicit encoding for at undgå fejl med æ, ø, å
             df_liste = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
             if not df_liste.empty:
-                st.subheader("Aktuel Liste")
+                st.subheader("Aktuel Emneliste")
+                # Vis nyeste øverst
                 st.dataframe(df_liste.iloc[::-1], use_container_width=True, hide_index=True)
                 
-                with st.expander("Administrer / Slet"):
-                    # Vi tilføjer en unik nøgle til selectbox for at undgå Streamlit Duplicate Widget ID fejl
-                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique(), key="slet_select")
-                    if st.button(f"Slet {slet_navn}", type="primary", key="slet_btn"):
-                        if slet_fra_emneliste(slet_navn):
-                            st.rerun()
+                with st.expander("Slet fra listen"):
+                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique(), key="slet_sel")
+                    if st.button(f"Fjern {slet_navn} permanent", type="primary"):
+                        slet_fra_emneliste(slet_navn)
+                        st.rerun()
             else:
                 st.info("Emnelisten er tom.")
         except Exception as e:
-            st.error(f"Fejl ved indlæsning af liste: {e}")
+            st.error(f"Fejl ved indlæsning: {e}")
