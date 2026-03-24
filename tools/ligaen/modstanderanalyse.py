@@ -123,65 +123,53 @@ def vis_side(analysis_package=None):
             st.info(f"Ingen data fundet for {valgt_hold} i denne periode.")
             return
 
-        # --- TAB 1: MED BOLD ---
         # --- TAB 1 (index 0): MED BOLD ---
-    # --- TAB 1 (index 0): MED BOLD ---
-    # --- TAB 1 (index 0): MED BOLD ---
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
         c1, c2 = st.columns(2)
         
-        # Sortering for at sikre shift() virker til progressive pile
+        # Sortering er afgørende for shift()
         df_h_ev = df_h_ev.sort_values(['EVENT_TIMEMIN', 'EVENT_TIMESEC'])
 
-        if fokus == "Opbygning":
-            with c1:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'] < 15)]
-                
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_f.empty:
-                    # zorder=1 sikrer at den ligger under banens streger (hvis man vil have dem synlige)
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, 
-                                ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        # Vi definerer pitch her én gang
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
-            with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(15, 50))]
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_f.empty:
-                    sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', alpha=0.6, 
-                                ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        if fokus == "Opbygning":
+            for col, title, x_range in zip([c1, c2], ["MÅLSPARK", "OPBYGNING"], [(0, 15), (15, 50)]):
+                with col:
+                    st.write(f"<p style='text-align:center; font-size:12px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+                    df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['EVENT_X'].between(*x_range))]
+                    
+                    fig, ax = pitch.draw(figsize=(4, 6))
+                    if not df_f.empty:
+                        # Vi tegner KDE direkte på ax
+                        sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Reds', 
+                                    alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
+                    
+                    # Tving banen til at holde sine dimensioner
+                    ax.set_xlim(0, 100)
+                    ax.set_ylim(0, 100)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
         else:
+            # GENNEMBRUD
             with c1:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[df_h_ev['EVENT_X'] > 66]
-                
-                # Her tegner vi banen FØRST
-                fig, ax = pitch.draw(figsize=(4, 5))
-                
+                fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
-                    # clip fjerner de hvide områder udenfor banen
                     sns.kdeplot(x=df_f['EVENT_Y'], y=df_f['EVENT_X'], fill=True, cmap='Oranges', 
-                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)), zorder=0)
-                
-                # Sæt banens rammer hårdt så de ikke skifter
+                                alpha=0.6, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100)
                 ax.set_ylim(0, 100)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
+            # PROGRESSIVE (Nødløsningen med shift)
             with c2:
                 st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
-                
-                # Beregn næste position til pile
                 df_prog_calc = df_h_ev.copy()
                 df_prog_calc['NEXT_X'] = df_prog_calc['EVENT_X'].shift(-1)
                 df_prog_calc['NEXT_Y'] = df_prog_calc['EVENT_Y'].shift(-1)
@@ -189,18 +177,17 @@ def vis_side(analysis_package=None):
                 df_prog = df_prog_calc[
                     (df_prog_calc['EVENT_TYPEID'] == 1) & 
                     (df_prog_calc['NEXT_X'] > (df_prog_calc['EVENT_X'] + 15))
-                ]
+                ].dropna(subset=['NEXT_X', 'NEXT_Y'])
                 
-                fig, ax = pitch.draw(figsize=(4, 5))
-                # Vi tvinger aksen til at blive på banen
-                ax.set_xlim(0, 100)
-                ax.set_ylim(0, 100)
-                
+                fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_prog.empty:
+                    # Arrows skal have zorder for at ligge øverst
                     pitch.arrows(df_prog.EVENT_X, df_prog.EVENT_Y, 
                                  df_prog.NEXT_X, df_prog.NEXT_Y, 
-                                 width=1.5, color=t_color, ax=ax, alpha=0.6, zorder=2)
+                                 width=2, color=t_color, ax=ax, alpha=0.7, zorder=3)
                 
+                ax.set_xlim(0, 100)
+                ax.set_ylim(0, 100)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
