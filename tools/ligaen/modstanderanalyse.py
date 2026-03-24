@@ -67,124 +67,108 @@ def vis_side(analysis_package=None):
     df_matches = analysis_package.get("matches", pd.DataFrame())
 
     if df_matches.empty:
-        st.warning("Ingen kampdata fundet i matches-tabellen.")
+        st.warning("Ingen kampdata fundet.")
         return
 
-    team_map = build_team_map(df_matches)
+    # 1. Byg mappet (Vi fjerner COMP-filteret for at sikre, at vi ser alle hold i pakken)
+    team_map = build_team_map(None, df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
-    valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
-    
-    # Hent UUID og rens det for både 't' og eventuelle mellemrum
-    raw_uuid = team_map[valgt_hold]
-    clean_uuid = raw_uuid.replace('t', '')
-    
-    t_color, t_logo = get_team_style(valgt_hold)
-
-    # --- KRITISK FILTRERING ---
-    # Vi søger efter både med og uden 't' præfiks for at være sikre
-    mask = (
-        df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(clean_uuid, na=False) |
-        df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(raw_uuid, na=False)
-    )
-    df_h_ev = df_events[mask].copy()
-
-    if df_h_ev.empty:
-        st.info(f"Ingen kamp-events fundet for {valgt_hold}.")
-        # Debug hjælp (kan fjernes senere)
-        if not df_events.empty:
-            st.write("Tilgængelige UUIDs i event-data:", df_events['EVENT_CONTESTANT_OPTAUUID'].unique()[:5])
+    if not valgte_hold_liste:
+        st.warning("Ingen hold fundet.")
         return
 
-    # --- TABS (Herfra kører din visning som før) ---
+    valgt_hold = st.selectbox("Vælg hold:", valgte_hold_liste, label_visibility="collapsed")
+    
+    # 2. Definer variabler med den "tilgivende" logik
+    valgt_uuid_data = team_map[valgt_hold]
+    t_color, t_logo = get_team_style(valgt_hold)
+    
+    # Denne linje er nøglen: Vi renser UUID'et fuldstændigt
+    event_uuid_ref = str(valgt_uuid_data).lower().replace('t', '').strip()
+    # Vi tager de første 8 karakterer for at matche på tværs af kilder
+    match_ref = event_uuid_ref[:8] 
+
+    # 3. Definer tabs og pitch
     tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
-    # Præ-filtrering af events for det valgte hold
-    df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(target_uuid, na=False)].copy()
-
-    if df_h_ev.empty:
-        st.info(f"Ingen kamp-events fundet for {valgt_hold}.")
-        return
-
-    # --- TAB 1: MED BOLD ---
-    with tabs[0]:
-        fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
-        c1, c2 = st.columns(2)
+    # Filtrering - Vi tjekker om den rensede ref findes i data
+    if not df_events.empty:
+        df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(match_ref, na=False)].copy()
         
-        if fokus == "Opbygning":
-            with c1:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
-                df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_kick.empty:
-                    sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        if df_h_ev.empty:
+            st.info(f"Ingen data fundet for {valgt_hold} i denne periode.")
+            return
 
-            with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
-                df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_build.empty:
-                    sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
-        else:
-            with c1:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
-                df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_final.empty:
-                    sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        # --- TAB 1: MED BOLD ---
+        with tabs[0]:
+            fokus = st.radio("Fokus:", ["Opbygning", "Gennembrud"], horizontal=True)
+            c1, c2 = st.columns(2)
+            if fokus == "Opbygning":
+                with c1:
+                    st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>MÅLSPARK</p>", unsafe_allow_html=True)
+                    df_kick = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 15)]
+                    fig, ax = pitch.draw(figsize=(4, 5))
+                    ax.set_ylim(0, 35) 
+                    if not df_kick.empty:
+                        sns.kdeplot(x=df_kick['LOCATIONY'], y=df_kick['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
+                with c2:
+                    st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>OPBYGNING</p>", unsafe_allow_html=True)
+                    df_build = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(15, 50))]
+                    fig, ax = pitch.draw(figsize=(4, 5))
+                    ax.set_ylim(0, 60)
+                    if not df_build.empty:
+                        sns.kdeplot(x=df_build['LOCATIONY'], y=df_build['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
+            else:
+                with c1:
+                    st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>GENNEMBRUD</p>", unsafe_allow_html=True)
+                    df_final = df_h_ev[df_h_ev['LOCATIONX'] > 66]
+                    fig, ax = pitch.draw(figsize=(4, 5))
+                    ax.set_ylim(60, 100)
+                    if not df_final.empty:
+                        sns.kdeplot(x=df_final['LOCATIONY'], y=df_final['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
+                with c2:
+                    st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE</p>", unsafe_allow_html=True)
+                    if 'ENDLOCATIONX' in df_h_ev.columns:
+                        df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['ENDLOCATIONX'] > (df_h_ev['LOCATIONX'] + 15))]
+                        fig, ax = pitch.draw(figsize=(4, 5))
+                        ax.set_ylim(40, 100)
+                        if not df_prog.empty:
+                            pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, width=1.5, color=t_color, ax=ax, alpha=0.5)
+                        draw_logo_on_ax(ax, t_logo)
+                        st.pyplot(fig, use_container_width=True)
+                        plt.close(fig)
 
-            with c2:
-                st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>PROGRESSIVE AFLEVERINGER</p>", unsafe_allow_html=True)
-                # Filter for afleveringer der flytter bolden mindst 15m fremad
-                df_prog = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['ENDLOCATIONX'] > (df_h_ev['LOCATIONX'] + 15))]
-                fig, ax = pitch.draw(figsize=(4, 5))
-                if not df_prog.empty:
-                    pitch.arrows(df_prog.LOCATIONX, df_prog.LOCATIONY, df_prog.ENDLOCATIONX, df_prog.ENDLOCATIONY, 
-                                 width=1.5, color=t_color, ax=ax, alpha=0.5)
-                draw_logo_on_ax(ax, t_logo)
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+        # --- TAB 2: MOD BOLD ---
+        with tabs[1]:
+            c1, c2 = st.columns(2)
+            for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
+                with col:
+                    st.write(f"<p style='text-align:center; font-size:11px; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+                    fig, ax = pitch.draw(figsize=(3, 4))
+                    df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
+                    if not df_d.empty:
+                        sns.kdeplot(x=df_d['LOCATIONY'], y=df_d['LOCATIONX'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8)
+                    draw_logo_on_ax(ax, t_logo)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
 
-    # --- TAB 2: MOD BOLD ---
-    with tabs[1]:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>EROBRINGER</p>", unsafe_allow_html=True)
-            df_def = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([4, 8, 49])]
-            fig, ax = pitch.draw(figsize=(4, 5))
-            if not df_def.empty:
-                sns.kdeplot(x=df_def['LOCATIONY'], y=df_def['LOCATIONX'], fill=True, cmap='Blues', alpha=0.5, ax=ax)
-            draw_logo_on_ax(ax, t_logo)
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
-        
-        with c2:
-            st.write("<p style='text-align:center; font-size:12px; font-weight:bold;'>DUELLER</p>", unsafe_allow_html=True)
-            df_duel = df_h_ev[df_h_ev['EVENT_TYPEID'] == 5]
-            fig, ax = pitch.draw(figsize=(4, 5))
-            if not df_duel.empty:
-                sns.kdeplot(x=df_duel['LOCATIONY'], y=df_duel['LOCATIONX'], fill=True, cmap='Greens', alpha=0.5, ax=ax)
-            draw_logo_on_ax(ax, t_logo)
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
-
-    # --- TAB 3: TOP 5 ---
-    with tabs[2]:
-        c1, c2, c3 = st.columns(3)
-        metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([8, 49], 'Erobringer')]
-        for col, (ids, label) in zip([c1, c2, c3], metrics):
-            with col:
-                st.write(f"**{label}**")
-                stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
-                for name, val in stats.items():
-                    st.write(f"{val} {name}")
+        # --- TAB 3: TOP 5 ---
+        with tabs[2]:
+            c1, c2, c3 = st.columns(3)
+            metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([8, 49], 'Erobringer')]
+            for col, (ids, label) in zip([c1, c2, c3], metrics):
+                with col:
+                    st.write(f"**{label}**")
+                    stats = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(ids)]['PLAYER_NAME'].value_counts().head(5)
+                    for n, v in stats.items(): st.write(f"{v} {n}")
