@@ -32,7 +32,7 @@ def get_team_style(team_name):
 def draw_logo_on_ax(ax, logo_img):
     if logo_img:
         try:
-            ax_image = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
+            ax_image = ax.inset_axes([0.02, 0.75, 0.12, 0.12], transform=ax.transAxes)
             ax_image.imshow(logo_img)
             ax_image.axis('off')
         except: pass
