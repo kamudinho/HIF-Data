@@ -122,33 +122,9 @@ def vis_side(analysis_package=None):
     event_uuid_ref = str(valgt_uuid_data).lower().replace('t', '')[:8]
 
     # 3. Definer tabs og pitch
-    tabs = st.tabs(["STRUKTUR", "MED BOLD", "MOD BOLD", "TOP 5"])
+    tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#333333', linewidth=1)
 
-    # --- TAB 0: STRUKTUR ---
-    with tabs[0]:
-        df_h = df_remote[df_remote['CONTESTANT_OPTAUUID'] == valgt_uuid_data]
-        if not df_h.empty:
-            formation = df_h['SHAPE_FORMATION'].iloc[-1] if 'SHAPE_FORMATION' in df_h.columns else "N/A"
-            st.caption(f"**{valgt_hold}** | Formation: {formation}")
-            
-            avg_in = get_avg(df_h, 'inPossession')
-            avg_out = get_avg(df_h, 'outOfPossession')
-            
-            c1, c2 = st.columns(2)
-            for col, data, title, dot_c in zip([c1, c2], [avg_in, avg_out], ["OFFENSIV", "DEFENSIV"], [t_color, "#333333"]):
-                with col:
-                    st.write(f"<p style='text-align:center; font-size:11px; margin-bottom:-15px;'>{title}</p>", unsafe_allow_html=True)
-                    fig, ax = pitch.draw(figsize=(3, 4))
-                    if not data.empty:
-                        ax.scatter(data['averageRolePositionY'], data['averageRolePositionX'], s=150, color=dot_c, edgecolors='black', linewidth=0.8, zorder=3)
-                        for _, row in data.iterrows():
-                            ax.text(row['averageRolePositionY'], row['averageRolePositionX'], str(int(row['shirtNumber'])), color='white', ha='center', va='center', fontsize=6, fontweight='bold', zorder=4)
-                    draw_logo_on_ax(ax, t_logo)
-                    st.pyplot(fig, use_container_width=True)
-                    plt.close(fig)
-        else:
-            st.warning("Ingen positionsdata (shapes) fundet.")
 
     # --- TAB 1: MED BOLD ---
     with tabs[1]:
