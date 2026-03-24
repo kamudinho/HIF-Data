@@ -34,10 +34,16 @@ def vis_side(unique_players, options_list, current_user):
     l1_c1, l1_c2, l1_c3, l1_c4 = st.columns([2, 1, 1, 1])
     
     # Vi bruger 'n' (navnet) som label i stedet for den manglende 'label' nøgle
+    # Vi tjekker alle tænkelige navne-kolonner, så den altid finder noget
     sel_id = l1_c1.selectbox(
         "Vælg spiller", 
         [""] + options_list, 
-        format_func=lambda x: unique_players[x].get("n", "Ukendt") if x else "Vælg spiller..."
+        format_func=lambda x: (
+            unique_players[x].get("n") or 
+            unique_players[x].get("SHORTNAME") or 
+            unique_players[x].get("PLAYER_NAME") or 
+            "Navn mangler"
+        ) if x else "Vælg spiller..."
     )
     
     active = unique_players.get(sel_id, {"n": "", "pos": "", "klub": ""})
