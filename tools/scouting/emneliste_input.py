@@ -61,7 +61,7 @@ def vis_side(dp):
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     # --- UI: OPRET EMNELISTE ---
-    with st.expander("➕ OPRET EMNELISTE", expanded=True):
+    with st.expander(" ", expanded=True):
         sel_id = st.selectbox(
             "Vælg spiller", 
             [""] + options_list, 
@@ -108,5 +108,4 @@ def vis_side(dp):
     if os.path.exists(CSV_PATH):
         df_vis = pd.read_csv(CSV_PATH)
         if not df_vis.empty:
-            st.subheader("📋 Aktuel Emneliste")
             st.dataframe(df_vis.iloc[::-1], width="stretch", hide_index=True)
