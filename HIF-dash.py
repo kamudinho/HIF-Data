@@ -264,7 +264,7 @@ try:
 
             elif sel == "Opret emne":
                 import tools.scouting.emneliste_input as el
-                # Vi sender hele dp med, ligesom i Scoutrapport
+                # Vi tilføjer dog user, da emnelisten skal bruge 'Oprettet_af'
                 el.vis_side(dp, st.session_state.get("user", "UKENDT"))
                 
             # --- DIN NYE SIDE HER ---
