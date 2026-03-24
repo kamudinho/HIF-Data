@@ -78,7 +78,7 @@ def vis_side(dp):
 
     # --- TAB: EMNER (TABELLEN) ---
     with tab_emner:
-        vis_kun_skygge = st.toggle("🛡️ Vis kun Skyggehold spillere", value=False)
+        vis_kun_skygge = st.toggle("Skyggehold", value=False)
         df_filtered = df[df['Skyggehold'] == True] if vis_kun_skygge else df
         df_filtered = df_filtered.sort_values(['Pos_Tal', 'Pos_Prioritet'])
 
