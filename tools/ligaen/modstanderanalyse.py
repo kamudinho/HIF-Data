@@ -188,7 +188,7 @@ def vis_side(analysis_package=None):
 
     # TAB: TOP 5
     with tabs[2]:
-        st.subheader(f"Top 5 Spillere - {valgt_kamp}")
+        st.caption(f"Top 5 Spillere - {valgt_kamp}")
         c1, c2, c3 = st.columns(3)
         metrics = [([1], 'Afleveringer'), ([5], 'Dueller'), ([4, 8, 49], 'Erobringer')]
         for col, (ids, label) in zip([c1, c2, c3], metrics):
