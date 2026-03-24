@@ -82,7 +82,7 @@ def vis_side(dp):
     df['Skyggehold'] = df['Skyggehold'].fillna(False).astype(bool)
 
     # 2. FILTER & SORTERING
-    vis_kun_skygge = st.toggle("🛡️ Vis kun Skyggehold", value=False)
+    vis_kun_skygge = st.toggle("Skyggehold", value=False)
     df_filtered = df[df['Skyggehold'] == True] if vis_kun_skygge else df
     df_filtered = df_filtered.sort_values(['Pos_Tal', 'Pos_Prioritet'], ascending=[True, True])
 
