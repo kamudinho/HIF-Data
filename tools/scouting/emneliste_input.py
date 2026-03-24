@@ -104,26 +104,3 @@ def vis_side(dp):
                     res = push_to_github(FILE_PATH, f"Ny emne: {active['n']}", df_combined.to_csv(index=False), sha)
                     if res in [200, 201]:
                         st.success(f"{active['n']} er gemt!"); st.rerun()
-
-    # --- UI: LISTE VISNING ---
-    st.markdown("### Aktuel emneliste")
-    content, sha = get_github_file(FILE_PATH)
-    if content:
-        df_vis = pd.read_csv(StringIO(content))
-        if not df_vis.empty:
-            for i, row in df_vis.iloc[::-1].iterrows():
-                with st.container():
-                    c1, c2 = st.columns([9, 1])
-                    c1.write(f"**{row['Navn']}** | {row['Position']} | {row['Klub']} | 📅 {row['Kontrakt']} | ⭐ {row['Prioritet']}")
-                    c1.caption(f"Forventning: {row['Forventning']} | Note: {row['Bemaerkning']}")
-                    
-                    if c2.button("🗑️", key=f"del_{i}"):
-                        st.session_state[f"confirm_{i}"] = True
-                    
-                    if st.session_state.get(f"confirm_{i}"):
-                        st.warning(f"Slet {row['Navn']}?")
-                        if st.button("Ja, slet", key=f"yes_{i}"):
-                            df_new = df_vis.drop(i)
-                            push_to_github(FILE_PATH, f"Slettet: {row['Navn']}", df_new.to_csv(index=False), sha)
-                            st.rerun()
-                st.divider()
