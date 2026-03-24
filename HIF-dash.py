@@ -173,11 +173,13 @@ with st.sidebar:
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = user_info.get("restricted", [])
-    synlige_options = [o for o in alle_omraader if o not in restriktioner]
+    
+    # 1. Filtrer Hovedmenu
+    synlige_hoved_options = [o for o in alle_omraader if o not in restriktioner]
     
     hoved_omraade = option_menu(
         None,
-        options=synlige_options,
+        options=synlige_hoved_options,
         default_index=0,
         styles={
             "nav-link-selected": {"background-color": "#0056a3"},
@@ -188,30 +190,39 @@ with st.sidebar:
     st.markdown("---")
     
     sel = ""
+    # 2. Filtrer Undermenuer baseret på restriktioner
     if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=["Oversigt", "Forecast"],
-                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
-    elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Spillerperformance", "Afslutninger", "Assistmap"], # Tilføj denne
-                     styles={"nav-link-selected": {"background-color": HIF_ROD}})
-    elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"],
-                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
-    elif hoved_omraade == "SCOUTING":
-        scout_options = ["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]
-        # Filtrer undermenuen ligesom du gjorde med hovedmenuen:
-        synlige_scout_options = [o for o in scout_options if o not in restriktioner]
+        sub = ["Oversigt", "Forecast"]
+        synlige_sub = [o for o in sub if o not in restriktioner]
+        sel = option_menu(None, options=synlige_sub, styles={"nav-link-selected": {"background-color": HIF_ROD}})
         
-        sel = option_menu(None, 
-                         options=synlige_scout_options,
-                         styles={"nav-link-selected": {"background-color": HIF_ROD}})
+    elif hoved_omraade == "HIF ANALYSE":
+        sub = ["Spillerperformance", "Afslutninger", "Assistmap"]
+        synlige_sub = [o for o in sub if o not in restriktioner]
+        sel = option_menu(None, options=synlige_sub, styles={"nav-link-selected": {"background-color": HIF_ROD}})
+        
+    elif hoved_omraade == "BETINIA LIGAEN":
+        sub = ["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"]
+        synlige_sub = [o for o in sub if o not in restriktioner]
+        sel = option_menu(None, options=synlige_sub, styles={"nav-link-selected": {"background-color": HIF_ROD}})
+        
+    elif hoved_omraade == "SCOUTING":
+        sub = ["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]
+        # HER SKER MAGIEN: Vi fjerner "Opret emne" og "Emnedatabase" for CG
+        synlige_sub = [o for o in sub if o not in restriktioner]
+        sel = option_menu(None, options=synlige_sub, styles={"nav-link-selected": {"background-color": HIF_ROD}})
+        
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=["System Log", "Profil"],
-                         styles={"nav-link-selected": {"background-color": "#333333"}})
+        sub = ["System Log", "Profil"]
+        synlige_sub = [o for o in sub if o not in restriktioner]
+        sel = option_menu(None, options=synlige_sub, styles={"nav-link-selected": {"background-color": "#333333"}})
 
+# Hvis undermenuen er tom pga. restriktioner, sæt en standard
 if not sel:
-    sel = "Oversigt"
-
+    if synlige_sub:
+        sel = synlige_sub[0]
+    else:
+        sel = "Oversigt"
 # LOGNING AF FANESKIFT:
 # Dette tjekker om den nuværende fane er forskellig fra den sidst gemte i session_state
 if "last_sel" not in st.session_state or st.session_state["last_sel"] != sel:
