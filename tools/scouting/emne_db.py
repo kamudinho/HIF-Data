@@ -5,7 +5,6 @@ import requests
 import base64
 from mplsoccer import Pitch
 import matplotlib.pyplot as plt
-from datetime import datetime
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -38,7 +37,6 @@ def prepare_df(content):
     df = pd.read_csv(StringIO(content))
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # Håndtering af Skyggehold (bool tjek)
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
     if col_name:
         df['Skyggehold'] = df[col_name].fillna(False).replace({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
@@ -52,9 +50,14 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp = df_input.copy()
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
-    data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
-    present_cols = [c for c in data_cols if c in df_temp.columns]
     
+    # Specifikke kolonner for hhv. HIF og Emner
+    if "Hvidovre" in path or "players" in path:
+        data_cols = ['Navn', 'Position', 'Kontrakt']
+    else:
+        data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
+    
+    present_cols = [c for c in data_cols if c in df_temp.columns]
     display_cols = ['ℹ️'] + present_cols + (['🛡️', '🗑️'] if kan_slettes else ['🛡️'])
     if kan_slettes: df_temp['🗑️'] = False
 
@@ -76,12 +79,12 @@ def vis_side(dp):
     df_emner = prepare_df(emne_c)
     df_hif = prepare_df(hif_c)
 
-    t_emner, t_hif, t_liste, t_bane = st.tabs(["🔍 Emner", "🔴 HIF", "📋 Liste", "🏟️ Bane"])
+    # Tabs uden ikoner
+    t_emner, t_hif, t_liste, t_bane = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
     with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH, True)
     with t_hif: tegn_spiller_tabel(df_hif, "hif", hif_s, HIF_PATH, False)
 
-    # Samlet Skygge-data
     s_e = df_emner[df_emner['Skyggehold'] == True] if not df_emner.empty else pd.DataFrame()
     s_h = df_hif[df_hif['Skyggehold'] == True] if not df_hif.empty else pd.DataFrame()
     if not s_h.empty: s_h['Klub'] = 'Hvidovre IF'
@@ -94,14 +97,34 @@ def vis_side(dp):
 
     with t_bane:
         if not df_samlet.empty:
+            # Formationsvælger
+            if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "4-3-3"
+            col1, col2, col3 = st.columns(3)
+            if col1.button("4-3-3", use_container_width=True, type="primary" if st.session_state.form_skygge=="4-3-3" else "secondary"):
+                st.session_state.form_skygge = "4-3-3"; st.rerun()
+            if col2.button("3-4-3", use_container_width=True, type="primary" if st.session_state.form_skygge=="3-4-3" else "secondary"):
+                st.session_state.form_skygge = "3-4-3"; st.rerun()
+            if col3.button("3-5-2", use_container_width=True, type="primary" if st.session_state.form_skygge=="3-5-2" else "secondary"):
+                st.session_state.form_skygge = "3-5-2"; st.rerun()
+
             pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333')
             fig, ax = pitch.draw(figsize=(10, 7))
-            # Simpel 4-3-3 mapping til test
-            pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 
-                       6:(50,40,'DM'), 8:(68,25,'VCM'), 10:(68,55,'HCM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+            
+            form = st.session_state.form_skygge
+            if form == "4-3-3":
+                pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 
+                           6:(50,40,'DM'), 8:(68,25,'VCM'), 10:(68,55,'HCM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+            elif form == "3-4-3":
+                pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
+                           6:(60,30,'DM'), 8:(60,50,'DM'), 7:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 10:(85,65,'HW')}
+            else: # 3-5-2
+                pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
+                           6:(60,40,'DM'), 7:(60,70,'HWB'), 8:(75,25,'CM'), 10:(75,55,'CM'), 11:(100,30,'ANG'), 9:(100,50,'ANG')}
+
             for p_num, (x, y, label) in pos_map.items():
                 ax.text(x, y-4, label, color="white", size=7, fontweight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, boxstyle='round'))
-                spillere = df_samlet[df_samlet['Pos_Tal'].astype(str).str.contains(str(p_num))]
+                spillere = df_samlet[df_samlet['Pos_Tal'].astype(float) == float(p_num)]
                 for i, (_, p) in enumerate(spillere.iterrows()):
-                    ax.text(x, y+(i*4), p['Navn'], size=7, ha='center', bbox=dict(facecolor="#f1f8e9", alpha=0.8))
+                    color = "#ffebee" if p['Klub'] == 'Hvidovre IF' else "#f1f8e9"
+                    ax.text(x, y+(i*4), p['Navn'], size=7, ha='center', bbox=dict(facecolor=color, alpha=0.9))
             st.pyplot(fig)
