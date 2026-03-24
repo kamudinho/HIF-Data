@@ -265,13 +265,32 @@ try:
             elif sel == "Opret emne":
                 import tools.scouting.emneliste_input as el
                 
+                # 1. Hent rådata fra pakken
                 u_players = dp.get("sql_players", {})
-                # 2. Lav options_list (navnene til dropdown)
-                o_list = sorted(u_players.keys(), key=lambda x: u_players[x].get("n", ""))
-                # 3. Hent den nuværende bruger fra session_state
+                
+                # SIKKERHEDS-TJEK: Hvis data mangler i sql_players, prøv at kigge i 'players'
+                if not u_players and "players" in dp:
+                    # Dette konverterer en DataFrame til den dict-struktur, el.vis_side forventer
+                    df_p = dp["players"]
+                    # Vi antager her at din df har kolonnerne 'wyId' eller 'Id', 'n' og 'pos'
+                    id_col = 'wyId' if 'wyId' in df_p.columns else df_p.columns[0]
+                    u_players = df_p.set_index(id_col).to_dict('index')
+
+                # 2. Lav options_list (nøglerne/ID'erne) sorteret efter navn 'n'
+                if u_players:
+                    # Vi filtrerer tomme navne fra og sorterer
+                    o_list = sorted(
+                        [k for k in u_players.keys()], 
+                        key=lambda x: str(u_players[x].get("n", u_players[x].get("Navn", ""))).lower()
+                    )
+                else:
+                    o_list = []
+                    st.warning("⚠️ Kunne ikke finde spillerdata i databasen.")
+
+                # 3. Hent bruger og kør siden
                 c_user = st.session_state.get("user", "UKENDT")
                 el.vis_side(u_players, o_list, c_user)
-
+                
             # --- DIN NYE SIDE HER ---
             elif sel == "Emnedatabase":
                 import tools.scouting.emne_db as edb
