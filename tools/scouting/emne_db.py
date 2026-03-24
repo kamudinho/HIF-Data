@@ -103,9 +103,9 @@ def vis_side(dp):
     ed_result = st.data_editor(
         df_display[cols_order],
         column_config={
-            "ℹ️": st.column_config.CheckboxColumn("Info", help="Se profil"),
-            "🛡️": st.column_config.CheckboxColumn("Skygge", help="Marker til skyggehold"),
-            "🗑️": st.column_config.CheckboxColumn("Slet", help="Slet permanent"),
+            "ℹ️": st.column_config.CheckboxColumn("", help="Profil", width="small"),
+            "🛡️": st.column_config.CheckboxColumn("", help="Skyggehold", width="small"),
+            "🗑️": st.column_config.CheckboxColumn("", help="Slet", width="small"),
             "Pos_Tal": "POS",
             "Pos_Prioritet": "Kat.",
             "Lon": "Løn"
