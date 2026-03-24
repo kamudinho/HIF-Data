@@ -58,7 +58,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     if kan_slettes: # Emner
         data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
     else: # Hvidovre IF
-        data_cols = ['Navn', 'POS', 'Kontrakt']
+        data_cols = ['Navn', 'ROLECODE3', 'POS', 'PRIOR', 'CONTRACT']
     
     present_cols = [c for c in data_cols if c in df_temp.columns]
     display_cols = ['ℹ️'] + present_cols + (['🛡️', '🗑️'] if kan_slettes else ['🛡️'])
