@@ -80,7 +80,7 @@ def vis_side(dp):
         l3_c1, l3_c2, l3_c3 = st.columns(3)
         prio_status = l3_c1.selectbox("Prioritet", ["Scoutes nu", "Scoutes senere", "Hold øje", "Arkiveret"])
         forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
-        lon_input = l3_c3.text_input("Løn (Lon)")
+        lon_input = l3_c3.text_input("Lønniveau")
 
         # Linje 4: Bemærkning
         noter = st.text_area("Bemærkning")
