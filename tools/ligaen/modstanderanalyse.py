@@ -93,7 +93,7 @@ def vis_side(analysis_package=None):
         return
 
     # 1. Byg mappet (Vi fjerner COMP-filteret for at sikre, at vi ser alle hold i pakken)
-    team_map = build_team_map(None, df_matches)
+    team_map = build_team_map(df_matches)  # Kun ét argument her!
     valgte_hold_liste = sorted(list(team_map.keys()))
     
     if not valgte_hold_liste:
