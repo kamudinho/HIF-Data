@@ -258,7 +258,7 @@ try:
                     dp["sql_players"],   # HER ER BILLEDERNE! (d3)
                     dp["advanced_stats"]
                 )
-                elif sel == "Emneliste":
+            elif sel == "Emneliste":
                 import tools.scouting.emneliste_input as el
                 # Vi sender dp["scout_reports"] som det første argument
                 el.vis_side(dp)
