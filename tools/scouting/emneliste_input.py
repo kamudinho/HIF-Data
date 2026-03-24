@@ -40,25 +40,37 @@ def vis_side(dp):
 
     st.header("OPRET EMNELISTE")
 
-    # --- 2. HENT DATA TIL DROPDOWN (Kopieret fra Scout_input.py) ---
+    # --- 1. HENT DATA OG SIKR KOLONNER ---
+    # Vi henter de to kilder du bruger i din scout_input
     df_local = dp.get("scout_reports", pd.DataFrame()) 
-    df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
-    
+    df_wyscout = dp.get("players", pd.DataFrame()) # I HIF-dash hedder den 'players' i scouting-pakken
+
     unique_players = {}
+
     def add_to_options(df):
         if df is None or df.empty: return
-        # Standardiser kolonner til STORE BOGSTAVER
-        df.columns = [str(c).upper().strip() for c in df.columns]
-        for _, r in df.iterrows():
-            p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
+        
+        # Opret en kopi så vi ikke ændrer i originalen, og tving store bogstaver på kolonnerne
+        temp_df = df.copy()
+        temp_df.columns = [str(c).upper().strip() for c in temp_df.columns]
+        
+        for _, r in temp_df.iterrows():
+            # Vi bruger .get() for at undgå KeyError, hvis kolonnen mangler
+            p_id = str(r.get('PLAYER_WYID', r.get('WYID', ''))).split('.')[0].strip()
             if not p_id or p_id in ['nan', 'None', '']: continue
             
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
-            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             
-            klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
-            pos = r.get('ROLECODE3') or r.get('POSITION') or ""
+            # Robust navne-hentning
+            if f_name or l_name:
+                fuldt_navn = f"{f_name} {l_name}".strip()
+            else:
+                fuldt_navn = r.get('PLAYER_NAME', r.get('PLAYER', r.get('NAVN', 'Ukendt Spiller')))
+            
+            klub = r.get('TEAMNAME', r.get('TEAM', r.get('KLUB', 'Ukendt Klub')))
+            pos = r.get('ROLECODE3', r.get('POSITION', ''))
+            
             if str(pos).strip() in ["??", "nan", "None"]: pos = ""
             
             label = f"{fuldt_navn} ({klub})"
@@ -68,8 +80,10 @@ def vis_side(dp):
                     "data": {"n": fuldt_navn, "id": p_id, "pos": pos, "klub": klub}
                 }
 
+    # Kør begge kilder igennem
     add_to_options(df_local)
     add_to_options(df_wyscout)
+    
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     # --- 3. INPUT SEKTION ---
