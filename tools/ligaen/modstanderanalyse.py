@@ -122,7 +122,7 @@ def vis_side(analysis_package=None):
         st.info(f"Ingen data fundet for {valgt_hold}.")
         return
 
-    # --- TAB 1: MED BOLD ---
+    # --- TAB 1 (index 0): MED BOLD ---
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Afslutninger"], horizontal=True)
         c1, c2 = st.columns(2)
@@ -171,7 +171,7 @@ def vis_side(analysis_package=None):
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
 
-    # --- TAB 2: MOD BOLD ---
+    # --- TAB 2 (index 1): MOD BOLD ---
     with tabs[1]:
         c1, c2 = st.columns(2)
         for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 49], "EROBRINGER", "Blues"), ([5], "DUELLER", "Greens")]):
@@ -180,11 +180,12 @@ def vis_side(analysis_package=None):
                 fig, ax = pitch.draw(figsize=(3, 4))
                 df_d = df_h_ev[df_h_ev['EVENT_TYPEID'].isin(etype)]
                 if not df_d.empty:
+                    # RETTET FRA LOCATION TIL EVENT
                     sns.kdeplot(x=df_d['EVENT_Y'], y=df_d['EVENT_X'], fill=True, cmap=cmap, alpha=0.5, ax=ax, bw_adjust=0.8, clip=((0, 100), (0, 100)))
                 ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig, use_container_width=True); plt.close(fig)
-
+                
     # --- TAB 3: TOP 5 ---
     with tabs[2]:
         c1, c2, c3 = st.columns(3)
