@@ -107,7 +107,7 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            st.dataframe(df_samlet[['Navn', 'Position', 'Pos_Tal', 'Klub', 'Kontrakt']].sort_values('Pos_Tal'), use_container_width=True, hide_index=True)
+            st.dataframe(df_samlet[['Navn', 'Position', 'Pos_Tal', 'Klub', 'Pos_Prioritet', 'Prioritet', 'Kontrakt']].sort_values('Pos_Tal'), use_container_width=True, hide_index=True)
         else:
             st.info("Ingen spillere valgt til skyggeholdet.")
 
