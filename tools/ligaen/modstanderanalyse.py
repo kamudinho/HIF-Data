@@ -146,6 +146,7 @@ def vis_side(analysis_package=None):
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
                     sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
+                ax.set_ylim(0, 55)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
         else:
@@ -166,7 +167,7 @@ def vis_side(analysis_package=None):
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
                     pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=30, edgecolors=t_color, c='white', alpha=0.6, ax=ax)
                     pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=60, c=t_color, edgecolors='black', ax=ax, zorder=3)
-                ax.set_ylim(60, 101)
+                ax.set_ylim(45, 101)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
 
