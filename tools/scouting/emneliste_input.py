@@ -5,26 +5,49 @@ from datetime import datetime
 
 # --- 1. CONFIG OG STI ---
 CSV_PATH = 'data/emneliste.csv'
+# Vi definerer præcis hvilke kolonner vi forventer
+EXPECTED_COLUMNS = ["Dato", "Navn", "Position", "Klub", "Prioritet", "Forventning", "Kontrakt", "Bemaerkning", "Oprettet_af"]
+
+def tjek_og_initialiser_csv():
+    """Sikrer at CSV-filen findes og har de rigtige kolonner."""
+    if not os.path.exists('data'):
+        os.makedirs('data')
+        
+    if not os.path.isfile(CSV_PATH):
+        df = pd.DataFrame(columns=EXPECTED_COLUMNS)
+        df.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
+    else:
+        # Hvis filen findes, tjek om den er tom eller mangler kolonner
+        try:
+            df = pd.read_csv(CSV_PATH)
+            if list(df.columns) != EXPECTED_COLUMNS:
+                # Hvis kolonnerne er forkerte, tvinger vi en ny (ADVARSEL: Dette overskriver gammel struktur)
+                st.warning("CSV-struktur var forældet. Opdaterer til ny struktur.")
+                # Vi prøver at bevare data hvis muligt, ellers starter vi forfra
+                df_ny = pd.DataFrame(columns=EXPECTED_COLUMNS)
+                df_ny.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
+        except:
+            df = pd.DataFrame(columns=EXPECTED_COLUMNS)
+            df.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
 
 def gem_til_emneliste(data_dict):
-    """Gemmer en enkelt række til CSV-filen."""
+    """Gemmer data og sikrer rækkefølgen af kolonner."""
     df_ny = pd.DataFrame([data_dict])
-    if not os.path.isfile(CSV_PATH):
-        df_ny.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
-    else:
-        df_ny.to_csv(CSV_PATH, mode='a', index=False, header=False, encoding='utf-8-sig')
+    df_ny = df_ny[EXPECTED_COLUMNS] # Gennemtving rækkefølge
+    df_ny.to_csv(CSV_PATH, mode='a', index=False, header=False, encoding='utf-8-sig')
 
 def slet_fra_emneliste(navn_til_slet):
-    """Fjerner alle rækker med det specifikke navn fra CSV-filen."""
     if os.path.exists(CSV_PATH):
         df = pd.read_csv(CSV_PATH)
-        # Behold alle rækker der IKKE matcher navnet
         df_opdateret = df[df['Navn'] != navn_til_slet]
         df_opdateret.to_csv(CSV_PATH, index=False, encoding='utf-8-sig')
         return True
     return False
 
 def vis_side(analysis_package=None):
+    # 0. Initialiser filen med det samme
+    tjek_og_initialiser_csv()
+
     # --- SIKKERHEDS-TJEK ---
     user_info = st.session_state.get('user_info', {})
     if "EMNELISTE" in user_info.get('restricted', []):
@@ -37,15 +60,15 @@ def vis_side(analysis_package=None):
         st.error("Ingen data tilgængelig.")
         return
 
-    # Hent spillere fra databasen til dropdown
+    # Hent spillere
     df_players = analysis_package.get("players", pd.DataFrame())
     p_col = next((c for c in ['PLAYER_NAME', 'player_name', 'Name'] if c in df_players.columns), None)
 
     if p_col is None or df_players.empty:
-        st.warning("Kunne ikke finde spiller-data.")
+        st.warning("Ingen spiller-data fundet i databasen.")
         return
 
-    # --- 2. INPUT SEKTION ---
+    # --- INPUT ---
     with st.expander("Tilføj ny spiller til listen", expanded=True):
         player_list = sorted(df_players[p_col].unique())
         valgt_navn = st.selectbox("Vælg spiller:", player_list)
@@ -60,12 +83,10 @@ def vis_side(analysis_package=None):
         c3.text_input("Oprettet af", st.session_state.get('user_name', 'Ukendt'), disabled=True)
 
         st.divider()
-
         col_a, col_b = st.columns(2)
         with col_a:
             prioritet = st.select_slider("Prioritet", options=["Lav", "Medium", "Høj", "A-Kandidat"])
             forventning = st.text_input("Forventning")
-        
         with col_b:
             kontrakt = st.text_input("Kontraktstatus")
             bemaerkning = st.text_area("Bemærkninger", height=68)
@@ -83,31 +104,23 @@ def vis_side(analysis_package=None):
                 "Oprettet_af": st.session_state.get('user_name', 'Ukendt')
             }
             gem_til_emneliste(ny_entry)
-            st.success(f"{valgt_navn} er tilføjet!")
+            st.success(f"{valgt_navn} gemt!")
             st.rerun()
 
-    # --- 3. VISNING OG SLETNING ---
+    # --- VISNING ---
     st.divider()
-    st.subheader("Aktuel Emneliste")
-    
     if os.path.exists(CSV_PATH):
-        df_liste = pd.read_csv(CSV_PATH)
-        if not df_liste.empty:
-            # Vis tabellen
-            st.dataframe(df_liste.iloc[::-1], use_container_width=True, hide_index=True)
-            
-            # Slet-sektion
-            with st.expander("Administrer / Slet fra liste"):
-                slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique())
-                if st.button(f"Slet {slet_navn} permanent", type="primary"):
-                    if slet_fra_emneliste(slet_navn):
-                        st.warning(f"{slet_navn} er slettet fra listen.")
+        try:
+            df_liste = pd.read_csv(CSV_PATH)
+            if not df_liste.empty:
+                st.dataframe(df_liste.iloc[::-1], use_container_width=True, hide_index=True)
+                
+                with st.expander("Administrer / Slet"):
+                    slet_navn = st.selectbox("Vælg spiller der skal fjernes:", df_liste['Navn'].unique())
+                    if st.button(f"Slet {slet_navn}", type="primary"):
+                        slet_fra_emneliste(slet_navn)
                         st.rerun()
-            
-            # Download
-            csv_data = df_liste.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("Download Liste (CSV)", csv_data, "emneliste.csv", "text/csv")
-        else:
-            st.info("Emnelisten er tom.")
-    else:
-        st.info("Ingen emneliste fundet.")
+            else:
+                st.info("Emnelisten er tom.")
+        except:
+            st.error("Fejl ved læsning af CSV. Prøv at slette data/emneliste.csv manuelt.")
