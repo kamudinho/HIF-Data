@@ -127,7 +127,7 @@ def vis_side(analysis_package=None):
 
 
     # --- TAB 1: MED BOLD ---
-    with tabs[1]:
+    with tabs[0]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)].copy()
             if not df_h_ev.empty:
@@ -182,7 +182,7 @@ def vis_side(analysis_package=None):
                         plt.close(fig)
 
     # --- TAB 2: MOD BOLD ---
-    with tabs[2]:
+    with tabs[1]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
@@ -199,7 +199,7 @@ def vis_side(analysis_package=None):
                         plt.close(fig)
 
     # --- TAB 3: TOP 5 ---
-    with tabs[3]:
+    with tabs[2]:
         if not df_events.empty:
             df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower().str.contains(event_uuid_ref, na=False)]
             if not df_h_ev.empty:
