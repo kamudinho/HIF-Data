@@ -92,45 +92,54 @@ def vis_side(analysis_package=None):
     valgt_uuid = str(team_map[valgt_hold]).lower().strip()
     t_color, t_logo = get_team_style(valgt_hold)
 
-    # 2. Mulighed for at vælge specifik kamp eller hele sæsonen
-    holdets_kampe = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.lower() == valgt_uuid) | 
-                               (df_matches['CONTESTANTAWAY_OPTAUUID'].str.lower() == valgt_uuid)].copy()
+    # 2. Håndtering af kampspecifik filtrering uden MATCH_DESCRIPTION
+    holdets_kampe = df_matches[
+        (df_matches['CONTESTANTHOME_OPTAUUID'].str.lower() == valgt_uuid) | 
+        (df_matches['CONTESTANTAWAY_OPTAUUID'].str.lower() == valgt_uuid)
+    ].copy()
+
+    if not holdets_kampe.empty:
+        # Vi opretter KAMP_NAVN manuelt for at undgå KeyError
+        holdets_kampe['KAMP_NAVN'] = holdets_kampe['CONTESTANTHOME_NAME'] + " - " + holdets_kampe['CONTESTANTAWAY_NAME']
     
     with col_header2:
-        kamp_optioner = ["Hele sæsonen"] + holdets_kampe['MATCH_DESCRIPTION'].tolist()
-        valgt_kamp = st.selectbox("Vælg kamp (Scope):", kamp_optioner)
+        kamp_optioner = ["Hele sæsonen"] 
+        if not holdets_kampe.empty:
+            kamp_optioner += holdets_kampe['KAMP_NAVN'].tolist()
+        
+        valgt_kamp = st.selectbox("Vælg periode/kamp:", kamp_optioner)
 
-    # 3. Filtrering af data
+    # 3. Filtrering af hændelser
     if valgt_kamp == "Hele sæsonen":
         df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower() == valgt_uuid].copy()
     else:
-        m_uuid = holdets_kampe[holdets_kampe['MATCH_DESCRIPTION'] == valgt_kamp]['MATCH_OPTAUUID'].iloc[0]
-        df_h_ev = df_events[(df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower() == valgt_uuid) & 
-                            (df_events['MATCH_OPTAUUID'] == m_uuid)].copy()
+        m_uuid = holdets_kampe[holdets_kampe['KAMP_NAVN'] == valgt_kamp]['MATCH_OPTAUUID'].iloc[0]
+        df_h_ev = df_events[
+            (df_events['EVENT_CONTESTANT_OPTAUUID'].str.lower() == valgt_uuid) & 
+            (df_events['MATCH_OPTAUUID'] == m_uuid)
+        ].copy()
 
     if df_h_ev.empty:
-        st.info(f"Ingen hændelsesdata fundet for {valgt_hold} i den valgte periode.")
+        st.info(f"Ingen hændelsesdata fundet for {valgt_hold}.")
         return
 
-    # 4. Definer tabs og pitch
-    tabs = st.tabs(["🎯 MED BOLD", "🛡️ MOD BOLD", "📊 TOP 5"])
+    # 4. Visualisering (Tabs og Pitch)
+    tabs = st.tabs(["MED BOLD", "MOD BOLD", "TOP 5"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1)
 
-    # --- TAB 1: MED BOLD ---
+    # TAB: MED BOLD
     with tabs[0]:
         fokus = st.radio("Fokus:", ["Opbygning", "Afslutninger"], horizontal=True)
         c1, c2 = st.columns(2)
-        
         if fokus == "Opbygning":
             with c1:
-                st.markdown("<p style='text-align:center; font-weight:bold;'>MÅLSPARK / DYBT</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align:center; font-weight:bold;'>MAALSPARK / DYBT</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'] < 20)]
                 fig, ax = pitch.draw(figsize=(4, 6))
                 if not df_f.empty:
                     sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Reds', alpha=0.6, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
-
             with c2:
                 st.markdown("<p style='text-align:center; font-weight:bold;'>MIDTBANE OPBYGNING</p>", unsafe_allow_html=True)
                 df_f = df_h_ev[(df_h_ev['EVENT_TYPEID'] == 1) & (df_h_ev['LOCATIONX'].between(20, 60))]
@@ -148,7 +157,6 @@ def vis_side(analysis_package=None):
                     sns.kdeplot(x=df_f['LOCATIONY'], y=df_f['LOCATIONX'], fill=True, cmap='Oranges', alpha=0.6, ax=ax, bw_adjust=0.8)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
-
             with c2:
                 st.markdown("<p style='text-align:center; font-weight:bold;'>AFSLUTNINGER</p>", unsafe_allow_html=True)
                 df_shots = df_h_ev[df_h_ev['EVENT_TYPEID'].isin([13, 14, 15, 16])]
@@ -158,14 +166,13 @@ def vis_side(analysis_package=None):
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
                     pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=80, edgecolors=t_color, c='white', alpha=0.6, ax=ax)
                     pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=200, c=t_color, marker='star', edgecolors='black', ax=ax, zorder=3)
-                ax.set_ylim(60, 101) # Zoom ind på modstanderens banehalvdel
+                ax.set_ylim(60, 101)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
 
-    # --- TAB 2: MOD BOLD ---
+    # TAB: MOD BOLD
     with tabs[1]:
         c1, c2 = st.columns(2)
-        # Type 4: Tackle, 8: Interception, 49: Recovery, 12: Clearance
         for col, (etype, title, cmap) in zip([c1, c2], [([4, 8, 12, 49], "DEFENSIVE AKTIONER", "Blues"), ([5], "DUELLER", "Greens")]):
             with col:
                 st.markdown(f"<p style='text-align:center; font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
@@ -176,7 +183,7 @@ def vis_side(analysis_package=None):
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
 
-    # --- TAB 3: TOP 5 ---
+    # TAB: TOP 5
     with tabs[2]:
         st.subheader(f"Top 5 Spillere - {valgt_kamp}")
         c1, c2, c3 = st.columns(3)
