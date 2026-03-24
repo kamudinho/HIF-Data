@@ -199,7 +199,7 @@ with st.sidebar:
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
-                         options=["Scoutrapport", "Database", "Sammenligning"],
+                         options=["Emneliste", "Scoutrapport", "Database", "Sammenligning"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["System Log", "Profil"],
@@ -258,6 +258,10 @@ try:
                     dp["sql_players"],   # HER ER BILLEDERNE! (d3)
                     dp["advanced_stats"]
                 )
+                elif sel == "Emneliste":
+                import tools.scouting.emneliste_input as el
+                # Vi sender dp["scout_reports"] som det første argument
+                el.vis_side(
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
