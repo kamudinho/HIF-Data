@@ -199,7 +199,7 @@ with st.sidebar:
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, 
-                         options=["Emneliste", "Scoutrapport", "Database", "Sammenligning"],
+                         options=["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"],
                          styles={"nav-link-selected": {"background-color": HIF_ROD}})
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=["System Log", "Profil"],
@@ -238,30 +238,36 @@ try:
             if sel == "Scoutrapport":
                 import tools.scouting.scout_input as si
                 si.vis_side(dp)
+            
             elif sel == "Database":
                 import tools.scouting.scout_db as sdb
-                # Vi sender dp["scout_reports"] som det første argument
                 sdb.vis_side(
                     dp["scout_reports"], 
                     dp["players"], 
                     dp["sql_players"], 
                     dp["career"]
                 )
+
+            elif sel == "Opret emne":
+                import tools.scouting.emneliste_input as el
+                el.vis_side(dp)
+
+            # --- DIN NYE SIDE HER ---
+            elif sel == "Emnedatabase":
+                import tools.scouting.emne_db as edb
+                # Vi sender dp med, så modalen kan trække på billeder og karrierestats
+                edb.vis_side(dp)
+            
             elif sel == "Sammenligning":
                 import tools.scouting.comparison as comp
-                # Nu sender vi de rigtige data-pakker med:
                 comp.vis_side(
-                    dp["players"],      # df_spillere
-                    None,               # d1 (ikke brugt pt)
-                    None,               # d2 (ikke brugt pt)
-                    dp["career"],       # career_df
-                    dp["sql_players"],   # HER ER BILLEDERNE! (d3)
+                    dp["players"], 
+                    None, 
+                    None, 
+                    dp["career"], 
+                    dp["sql_players"], 
                     dp["advanced_stats"]
                 )
-            elif sel == "Emneliste":
-                import tools.scouting.emneliste_input as el
-                # Vi sender dp["scout_reports"] som det første argument
-                el.vis_side(dp)
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
