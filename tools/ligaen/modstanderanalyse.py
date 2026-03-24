@@ -165,7 +165,7 @@ def vis_side(analysis_package=None):
                     goals = df_shots[df_shots['EVENT_TYPEID'] == 16]
                     non_goals = df_shots[df_shots['EVENT_TYPEID'] != 16]
                     pitch.scatter(non_goals.LOCATIONX, non_goals.LOCATIONY, s=80, edgecolors=t_color, c='white', alpha=0.6, ax=ax)
-                    pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=200, c=t_color, marker='star', edgecolors='black', ax=ax, zorder=3)
+                    pitch.scatter(goals.LOCATIONX, goals.LOCATIONY, s=200, c=t_color, edgecolors='black', ax=ax, zorder=3)
                 ax.set_ylim(60, 101)
                 draw_logo_on_ax(ax, t_logo)
                 st.pyplot(fig); plt.close(fig)
