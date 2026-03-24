@@ -4,12 +4,12 @@ from io import StringIO
 import requests
 import base64
 from mplsoccer import Pitch
-from datetime import datetime
 import matplotlib.pyplot as plt
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
-FILE_PATH = "data/emneliste.csv"
+EMNE_PATH = "data/emneliste.csv"
+HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
@@ -20,157 +20,175 @@ def get_github_file(path):
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
         data = r.json()
-        content = base64.b64decode(data['content']).decode('utf-8')
+        content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
         return content, data['sha']
     return None, None
 
 def push_to_github(path, message, content, sha=None):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    payload = {"message": message, "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
+    payload = {
+        "message": message, 
+        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    }
     if sha: payload["sha"] = sha
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-# --- MODAL: SPILLERPROFIL ---
-@st.dialog("Spillerprofil: Emne", width="large")
-def vis_emne_modal(valgt_navn, emne_data, alle_scout_rapporter):
-    nyeste = emne_data[emne_data['Navn'] == valgt_navn].iloc[0]
-    rapporter = alle_scout_rapporter[alle_scout_rapporter['Navn'] == valgt_navn] if alle_scout_rapporter is not None else pd.DataFrame()
+# --- HJÆLPEFUNKTION: TEGN SPILLER TABEL ---
+def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
+    """Viser en editor-tabel og håndterer opdateringer af Skygge-status og sletning."""
+    df_temp = df_input.copy()
     
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c1: st.image("https://cdn.pixabay.com/photo/2016/08/08/09/17/avatar-1577909_1280.png", width=120)
-    with c2:
-        st.subheader(valgt_navn)
-        st.write(f"**Klub:** {nyeste.get('Klub', '-')}")
-        st.write(f"**Status:** {nyeste.get('Prioritet', '-')} ({nyeste.get('Pos_Prioritet', '-')})")
-    with c3:
-        st.metric("Pos (Tal)", nyeste.get('Pos_Tal', '-'))
-        st.write(f"**Løn:** {nyeste.get('Lon', '-')}")
+    # Standardisér navne-kolonne
+    if 'NAVN' in df_temp.columns: df_temp = df_temp.rename(columns={'NAVN': 'Navn'})
+    
+    # Tilføj interaktive kolonner hvis de mangler
+    df_temp['ℹ️'] = False
+    if 'Skyggehold' not in df_temp.columns: df_temp['Skyggehold'] = False
+    df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
+    
+    # Definér kolonner og deres rækkefølge
+    data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
+    # Filterer kun de kolonner der faktisk findes i datasættet
+    present_cols = [c for c in data_cols if c in df_temp.columns]
+    
+    if kan_slettes:
+        df_temp['🗑️'] = False
+        display_cols = ['ℹ️'] + present_cols + ['🛡️', '🗑️']
+    else:
+        display_cols = ['ℹ️'] + present_cols + ['🛡️']
 
-    t1, t2 = st.tabs(["Detaljer", "Scout Historik"])
-    with t1:
-        col_a, col_b = st.columns(2)
-        col_a.info(f"**Bemærkning:**\n\n{nyeste.get('Bemaerkning', '-')}")
-        col_b.write(f"**Kontraktudløb:** {nyeste.get('Kontrakt', '-')}")
-        col_b.write(f"**Oprettet af:** {nyeste.get('Oprettet_af', '-')}")
-    with t2:
-        if not rapporter.empty:
-            for _, r in rapporter.sort_values('Dato', ascending=False).iterrows():
-                with st.expander(f"Rapport d. {r['Dato']}"):
-                    st.write(r.get('Vurdering', '-'))
-        else:
-            st.info("Ingen rapporter fundet.")
+    # Vis tabellen
+    ed_res = st.data_editor(
+        df_temp[display_cols],
+        column_config={
+            "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
+            "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
+            "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
+            "Pos_Tal": "POS", "Pos_Prioritet": "Kat."
+        },
+        disabled=present_cols,
+        hide_index=True,
+        use_container_width=True,
+        key=f"ed_{key_suffix}"
+    )
+
+    # LOGIK: Gem Skygge-status ved ændring
+    if not ed_res['🛡️'].equals(df_temp['🛡️']):
+        for idx, row in ed_res.iterrows():
+            # Find den originale række og opdater Skyggehold-kolonnen
+            name_val = row['Navn']
+            df_input.loc[df_input.get('Navn', df_input.get('NAVN')) == name_val, 'Skyggehold'] = row['🛡️']
+        
+        csv_data = df_input.to_csv(index=False, encoding='utf-8')
+        push_to_github(path, "Opdateret Skygge-status", csv_data, sha)
+        st.rerun()
+
+    # LOGIK: Sletning (Kun hvis tilladt)
+    if kan_slettes and '🗑️' in ed_res.columns:
+        if not ed_res['🗑️'].equals(df_temp['🗑️']):
+            slet_navn = ed_res[ed_res['🗑️'] == True].iloc[-1]['Navn']
+            if st.button(f"Bekræft sletning af {slet_navn}"):
+                ny_df = df_input[df_input.get('Navn', df_input.get('NAVN')) != slet_navn]
+                push_to_github(path, f"Slettede {slet_navn}", ny_df.to_csv(index=False), sha)
+                st.rerun()
 
 # --- HOVEDSIDE ---
 def vis_side(dp):
-    # 1. DATA LOADING
-    content, sha = get_github_file(FILE_PATH)
-    if not content:
-        st.error("Kunne ikke hente emneliste.csv.")
-        return
-    df = pd.read_csv(StringIO(content))
-    if 'Skyggehold' not in df.columns: df['Skyggehold'] = False
-    df['Skyggehold'] = df['Skyggehold'].fillna(False).astype(bool)
+    # 1. INDLÆS DATA
+    emne_content, emne_sha = get_github_file(EMNE_PATH)
+    hif_content, hif_sha = get_github_file(HIF_PATH)
+    
+    df_emner = pd.read_csv(StringIO(emne_content)) if emne_content else pd.DataFrame()
+    df_hif = pd.read_csv(StringIO(hif_content)) if hif_content else pd.DataFrame()
 
-    # 2. TABS
-    tab_emner, tab_skygge = st.tabs(["Emner", "Skyggehold"])
+    # Sørg for booleans er rigtige
+    for d in [df_emner, df_hif]:
+        if not d.empty and 'Skyggehold' in d.columns:
+            d['Skyggehold'] = d['Skyggehold'].fillna(False).astype(bool)
 
-    # --- TAB: EMNER (TABELLEN) ---
+    # 2. DEFINÉR TABS
+    tab_emner, tab_hif, tab_liste, tab_bane = st.tabs(["🔍 Emner", "🔴 Hvidovre IF", "📋 Skyggeliste", "🏟️ Skyggehold"])
+
+    # --- TAB 1: EMNER ---
     with tab_emner:
-        vis_kun_skygge = st.toggle("Skyggehold", value=False)
-        df_filtered = df[df['Skyggehold'] == True] if vis_kun_skygge else df
-        df_filtered = df_filtered.sort_values(['Pos_Tal', 'Pos_Prioritet'])
-
-        df_display = df_filtered.copy()
-        df_display['ℹ️'] = False
-        df_display['🗑️'] = False
-        df_display = df_display.rename(columns={'Skyggehold': '🛡️'})
-
-        data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
-        cols_order = ['ℹ️'] + data_cols + ['🛡️', '🗑️']
-        
-        ed_result = st.data_editor(
-            df_display[cols_order],
-            column_config={
-                "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
-                "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
-                "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-                "Pos_Tal": "POS", "Pos_Prioritet": "Kat.", "Lon": "Løn"
-            },
-            disabled=data_cols, hide_index=True, use_container_width=True, key="emne_db_editor"
-        )
-
-        # Logik for interaktion i tabellen
-        if not ed_result['ℹ️'].equals(df_display['ℹ️']):
-            valgt_navn = ed_result[ed_result["ℹ️"] == True].iloc[-1]['Navn']
-            scout_content, _ = get_github_file("data/scouting_db.csv")
-            df_rapporter = pd.read_csv(StringIO(scout_content)) if scout_content else None
-            vis_emne_modal(valgt_navn, df, df_rapporter)
-
-        if not ed_result['🗑️'].equals(df_display['🗑️']):
-            navn_slet = ed_result[ed_result["🗑️"] == True].iloc[-1]['Navn']
-            if st.button(f"Bekræft sletning af {navn_slet}"):
-                push_to_github(FILE_PATH, f"Slettede {navn_slet}", df[df['Navn'] != navn_slet].to_csv(index=False), sha)
-                st.rerun()
-
-        if not ed_result['🛡️'].equals(df_display['🛡️']):
-            for idx, row in ed_result.iterrows():
-                df.loc[df['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
-            push_to_github(FILE_PATH, "Opdateret Skyggehold status", df.to_csv(index=False), sha)
-            st.rerun()
-
-    # --- TAB: SKYGGEHOLD (BANEN) ---
-    with tab_skygge:
-        df_skygge = df[df['Skyggehold'] == True].copy()
-        
-        if df_skygge.empty:
-            st.info("Ingen spillere er valgt til skyggeholdet endnu. Brug 🛡️ i Emner-fanen.")
+        if not df_emner.empty:
+            tegn_spiller_tabel(df_emner, "emner", emne_sha, EMNE_PATH, kan_slettes=True)
         else:
-            col_pitch, col_menu = st.columns([7, 1])
+            st.info("Ingen emner i listen.")
+
+    # --- TAB 2: HVIDOVRE IF ---
+    with tab_hif:
+        if not df_hif.empty:
+            # Her kan de IKKE slettes
+            tegn_spiller_tabel(df_hif, "hif", hif_sha, HIF_PATH, kan_slettes=False)
+        else:
+            st.info("Ingen spillere fundet i players.csv.")
+
+    # --- TAB 3: SKYGGELISTE ---
+    with tab_liste:
+        # Saml alle spillere markeret som Skyggehold fra begge lister
+        s_e = df_emner[df_emner['Skyggehold'] == True] if 'Skyggehold' in df_emner.columns else pd.DataFrame()
+        s_h = df_hif[df_hif['Skyggehold'] == True] if 'Skyggehold' in df_hif.columns else pd.DataFrame()
+        
+        # Standardisér kolonner før concat
+        if not s_h.empty and 'NAVN' in s_h.columns: s_h = s_h.rename(columns={'NAVN': 'Navn'})
+        if not s_h.empty: s_h['Klub'] = 'Hvidovre IF'
+        
+        df_samlet = pd.concat([s_e, s_h], ignore_index=True)
+        
+        if df_samlet.empty:
+            st.info("Ingen spillere valgt til skyggeholdet. Brug 🛡️ i de andre faner.")
+        else:
+            st.subheader("📋 Samlet Skyggeliste")
+            st.dataframe(
+                df_samlet[['Pos_Tal', 'Navn', 'Position', 'Klub', 'Pos_Prioritet', 'Prioritet']].sort_values('Pos_Tal'),
+                use_container_width=True, hide_index=True
+            )
+
+    # --- TAB 4: SKYGGEHOLD (BANEN) ---
+    with tab_bane:
+        if df_samlet.empty:
+            st.info("Ingen spillere at vise på banen.")
+        else:
+            # Logik for formationsvalg
+            if 'form_emne' not in st.session_state: st.session_state.form_emne = "4-3-3"
+            f_cols = st.columns(3)
+            for i, f in enumerate(["3-4-3", "4-3-3", "3-5-2"]):
+                if f_cols[i].button(f, use_container_width=True, type="primary" if st.session_state.form_emne == f else "secondary"):
+                    st.session_state.form_emne = f
+                    st.rerun()
+
+            # Tegn banen
+            pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
+            fig, ax = pitch.draw(figsize=(10, 7))
             
-            with col_menu:
-                if 'formation_emne' not in st.session_state: st.session_state.formation_emne = "4-3-3"
-                for f in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(f, key=f"btn_{f}", use_container_width=True, 
-                                 type="primary" if st.session_state.formation_emne == f else "secondary"):
-                        st.session_state.formation_emne = f
-                        st.rerun()
+            # Formations-mapping (forkortet for overblik)
+            form = st.session_state.form_emne
+            if form == "4-3-3":
+                pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 
+                           6:(50,40,'DM'), 8:(68,25,'VCM'), 10:(68,55,'HCM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+            elif form == "3-4-3":
+                pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
+                           6:(60,30,'DM'), 8:(60,50,'DM'), 7:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 10:(85,65,'HW')}
+            else: # 3-5-2
+                pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
+                           6:(60,40,'DM'), 7:(60,70,'HWB'), 8:(75,25,'CM'), 10:(75,55,'CM'), 11:(100,30,'ANG'), 9:(100,50,'ANG')}
 
-            with col_pitch:
-                pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1, pad_top=0)
-                fig, ax = pitch.draw(figsize=(13, 8))
+            for p_num, (x, y, label) in pos_map.items():
+                # Tegn position label
+                ax.text(x, y-4, label, color="white", size=8, fontweight='bold', ha='center',
+                        bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 
-                # Formation Positions Map
-                form = st.session_state.formation_emne
-                if form == "3-4-3":
-                    pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
-                                 5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 7: (60, 70, 'HWB'), 
-                                 11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 10: (85, 65, 'HW')}
-                elif form == "4-3-3":
-                    pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
-                                 6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
-                                 11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
-                else: # 3-5-2
-                    pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3: (33, 40, 'CB'), 2: (33, 58, 'HCB'),
-                                 5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 7: (60, 70, 'HWB'), 
-                                 8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 11: (100, 28, 'ANG'), 9: (100, 52, 'ANG')}
-
-                # Tegn spillere på banen
-                for pos_num, (x, y, label) in pos_config.items():
-                    spillere = df_skygge[df_skygge['Pos_Tal'].astype(float) == float(pos_num)]
+                # Tegn spillere på denne position
+                spillere = df_samlet[df_samlet['Pos_Tal'].astype(float) == float(p_num)]
+                for i, (_, p) in enumerate(spillere.iterrows()):
+                    # Farveforskel: HIF (Rødlig) vs Emner (Hvid/Grønlig)
+                    is_hif = p['Klub'] == 'Hvidovre IF'
+                    bg_color = "#ffebee" if is_hif else "#f1f8e9"
                     
-                    # Position Label (MM, CB, etc)
-                    ax.text(x, y - 4, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
-                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    
-                    if not spillere.empty:
-                        for i, (_, p) in enumerate(spillere.iterrows()):
-                            # Farvekode baseret på Kat. (Pos_Prioritet)
-                            kat = str(p['Pos_Prioritet'])[0] # A, B eller C
-                            color = "#e8f5e9" if kat == 'A' else "#fffde7" if kat == 'B' else "white"
-                            
-                            ax.text(x, (y - 1) + (i * 2.5), f" {p['Navn']} ", size=8.5, fontweight='bold', ha='center', va='top',
-                                    bbox=dict(facecolor=color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+                    ax.text(x, y + (i*3), p['Navn'], size=8, ha='center', va='top', fontweight='bold',
+                            bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2'))
 
-                st.pyplot(fig, use_container_width=True)
+            st.pyplot(fig)
