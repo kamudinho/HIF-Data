@@ -261,7 +261,7 @@ try:
                 elif sel == "Emneliste":
                 import tools.scouting.emneliste_input as el
                 # Vi sender dp["scout_reports"] som det første argument
-                el.vis_side(
+                el.vis_side(dp)
 
     # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
