@@ -114,7 +114,7 @@ def vis_side(dp, current_user):
                     "Bemaerkning": noter.replace('\n', ' ').strip(), 
                     "Oprettet_af": current_user.upper(),
                     "Pos_Prioritet": pos_prio, 
-                    "Pos_Tal": pos, 
+                    "POS": pos, 
                     "Lon": lon_input,
                     "Skyggehold": False,
                     "PLAYER_WYID": active_data['id']
