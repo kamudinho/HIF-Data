@@ -70,7 +70,7 @@ def map_to_zone(r):
 
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
-        ax_logo = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.02, 0.89, 0.12, 0.10], transform=ax.transAxes)
         ax_logo.imshow(logo_img)
         ax_logo.axis('off')
 
