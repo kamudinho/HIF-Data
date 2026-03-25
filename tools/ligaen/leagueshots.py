@@ -171,7 +171,7 @@ def vis_side(dp=None):
                 st.table(pd.DataFrame(z_summary).sort_values("Antal", ascending=False))
             with c1:
                 pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-                fig, ax = pitch.draw(figsize=(6, 8))
+                fig, ax = pitch.draw(figsize=(10, 12))
                 ax.set_ylim(55, 105)
                 max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
