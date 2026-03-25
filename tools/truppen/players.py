@@ -89,8 +89,9 @@ def vis_side(df_raw):
                 <td style="padding:10px 15px; text-align:right; font-weight:500; background-color:{c_bg};">{k_dag}</td>
             </tr>""")
 
-    html_table = f"""
-    <div style="background:white; border:1px solid #eee; border-radius:4px;">
+    # Saml det hele til én stor tabel-streng
+    fuld_tabel_html = f"""
+    <div style="background:white; border:1px solid #eee; border-radius:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
         <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">
             <tr style="background:#fafafa; border-bottom: 2px solid #cc0000; color:#888; font-size:11px; text-transform:uppercase;">
                 <th style="padding:12px 15px; text-align:left;">Position</th>
@@ -100,11 +101,12 @@ def vis_side(df_raw):
                 <th style="padding:12px 15px; text-align:center;">Fod</th>
                 <th style="padding:12px 15px; text-align:right;">Kontrakt</th>
             </tr>
-            {"".join(rows)}
-        </table>
-    </div>"""
+            {rows}  </table>
+    </div>
+    """
     
-    st.markdown(html_table, unsafe_allow_html=True)
+    # DETTE ER DEN VIGTIGE LINJE:
+    st.markdown(fuld_tabel_html, unsafe_allow_html=True)
 
     # 4. Metrics
     st.write("")
