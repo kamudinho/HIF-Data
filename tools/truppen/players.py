@@ -55,68 +55,44 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 2. Søgefunktion
-    search = st.text_input("", placeholder="Søg spiller eller position...", label_visibility="collapsed")
-    if search:
-        mask = (df_working['POS_NAVN'].str.contains(search, case=False, na=False) | 
-                df_working['NAVN'].str.contains(search, case=False, na=False))
-        df_display = df_working[mask]
-    else:
-        df_display = df_working
+    # 2. Forbered display-data (vi vælger kun de relevante kolonner)
+    cols = ['POS_NAVN', 'NAVN', 'BIRTHDATE', 'HEIGHT', 'FOD', 'CONTRACT', 'ALDER']
+    df_display = df_working[cols].copy()
 
-    # 3. HTML Tabel konstruktion
-    idag = datetime.now()
+    # Formatering af datoer til læsbart format (før styling)
+    df_display['Født'] = df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y')
+    df_display['Kontrakt'] = df_display['CONTRACT'].dt.strftime('%d.%m.%Y')
     
-    # Vi laver rækkerne her
-    rows_list = []
-    for _, r in df_display.iterrows():
-        c_bg = "transparent"
-        if pd.notna(r['CONTRACT']):
-            d = (r['CONTRACT'] - idag).days
-            if d < 183: c_bg = "#ffcccc"      # Under et halvt år (Rød)
-            elif d <= 365: c_bg = "#ffffcc"   # Under et år (Gul)
-        
-        f_dag = r['BIRTHDATE'].strftime('%d.%m.%Y') if pd.notna(r['BIRTHDATE']) else "-"
-        k_dag = r['CONTRACT'].strftime('%d.%m.%Y') if pd.notna(r['CONTRACT']) else "-"
-        hojde = f"{int(r['HEIGHT'])} cm" if pd.notna(r['HEIGHT']) and r['HEIGHT'] > 0 else "-"
-        
-        rows_list.append(f"""
-            <tr style="border-bottom:1px solid #f2f2f2;">
-                <td style="padding:10px 15px; color:#666; font-size:12px;">{r['POS_NAVN']}</td>
-                <td style="padding:10px 15px; font-weight:600; color:#222;">{r['NAVN']}</td>
-                <td style="padding:10px 15px; text-align:center; color:#444;">{f_dag}</td>
-                <td style="padding:10px 15px; text-align:center; color:#444;">{hojde}</td>
-                <td style="padding:10px 15px; text-align:center; color:#444;">{r['FOD'] if pd.notna(r['FOD']) else '-'}</td>
-                <td style="padding:10px 15px; text-align:right; font-weight:500; background-color:{c_bg};">{k_dag}</td>
-            </tr>""")
+    # 3. Styling funktion til farver
+    def style_contract(row):
+        styles = [''] * len(row)
+        if pd.notna(row['CONTRACT']):
+            dage_til_udloeb = (row['CONTRACT'] - datetime.now()).days
+            # Find index for 'Kontrakt' kolonnen (den vi viser)
+            contract_idx = row.index.get_loc('Kontrakt')
+            
+            if dage_til_udloeb < 183:
+                styles[contract_idx] = 'background-color: #ffcccc; color: black;' # Rød
+            elif dage_til_udloeb <= 365:
+                styles[contract_idx] = 'background-color: #ffffcc; color: black;' # Gul
+        return styles
 
-    # --- RETTELSEN HER ---
-    # Vi samler listen af rækker til én lang streng
-    all_rows_html = "".join(rows_list)
+    # 4. Visning af tabellen
+    # Vi fjerner de rå dato-kolonner og omdøber for pæn visning
+    final_df = df_display[['POS_NAVN', 'NAVN', 'Født', 'HEIGHT', 'FOD', 'Kontrakt', 'ALDER']]
+    final_df.columns = ['Position', 'Navn', 'Født', 'Højde (cm)', 'Fod', 'Kontraktudløb', 'Alder']
 
-    html_output = f"""
-    <div style="background:white; border:1px solid #eee; border-radius:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-        <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">
-            <tr style="background:#fafafa; border-bottom: 2px solid #cc0000; color:#888; font-size:11px; text-transform:uppercase;">
-                <th style="padding:12px 15px; text-align:left;">Position</th>
-                <th style="padding:12px 15px; text-align:left;">Spiller</th>
-                <th style="padding:12px 15px; text-align:center;">Født</th>
-                <th style="padding:12px 15px; text-align:center;">Højde</th>
-                <th style="padding:12px 15px; text-align:center;">Fod</th>
-                <th style="padding:12px 15px; text-align:right;">Kontrakt</th>
-            </tr>
-            {all_rows_html}
-        </table>
-    </div>
-    """
-    
-    # Vis tabellen
-    st.markdown(html_output, unsafe_allow_html=True)
+    st.dataframe(
+        final_df.style.apply(style_contract, axis=1),
+        use_container_width=True,
+        hide_index=True,
+        height=600
+    )
 
-    # 4. Metrics
+    # 5. Metrics
     st.write("")
     m1, m2, m3 = st.columns(3)
-    m1.metric("Trupstørrelse", len(df_display))
-    h_avg = df_display[df_display['HEIGHT'] > 0]['HEIGHT'].mean()
+    m1.metric("Trupstørrelse", len(df_working))
+    h_avg = df_working[df_working['HEIGHT'] > 0]['HEIGHT'].mean()
     m2.metric("Gns. Højde", f"{h_avg:.1f} cm" if pd.notna(h_avg) else "-")
-    m3.metric("Gns. Alder", f"{df_display['ALDER'].mean():.1f} år" if not df_display['ALDER'].empty else "-")
+    m3.metric("Gns. Alder", f"{df_working['ALDER'].mean():.1f} år" if not df_working['ALDER'].empty else "-")
