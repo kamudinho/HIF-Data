@@ -70,14 +70,13 @@ def map_to_zone(r):
 
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
-        # Låst til selve aksen (0-1), så den ikke flytter sig ved zoom
         ax_logo = ax.inset_axes([0.02, 0.89, 0.12, 0.10], transform=ax.transAxes)
         ax_logo.imshow(logo_img)
         ax_logo.axis('off')
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    # CSS TIL AT FJERNE TOP-PADDING OG JUSTERE TABS
+    # CSS TIL OPSÆTNING
     st.markdown("""
     <style>
         header {visibility: hidden;}
@@ -107,9 +106,12 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Overskrift og Dropdown helt i top
+    # --- TOP LAYOUT ---
     c_h1, c_h2 = st.columns([2, 1])
+    
     with c_h2:
+        # HER JUSTERER DU HØJDEN: Ændr '15px' til mere eller mindre efter behov
+        st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
         t_sel = st.selectbox(
             "Vælg hold", 
             teams, 
@@ -126,10 +128,11 @@ def vis_side(dp=None):
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     df_team['IS_DZ'] = (df_team['EVENT_X'] >= 88.5) & (df_team['EVENT_Y'] >= 37.0) & (df_team['EVENT_Y'] <= 63.0)
 
+    # --- TABS ---
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
-    # --- TAB 0: SPILLEROVERSIGT ---
+    # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -142,7 +145,7 @@ def vis_side(dp=None):
             })
         st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
 
-    # --- TAB 1: AFSLUTNINGER ---
+    # TAB 1: AFSLUTNINGER
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -159,7 +162,7 @@ def vis_side(dp=None):
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # --- TAB 2: DZ-ANALYSE ---
+    # TAB 2: DZ-ANALYSE
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
@@ -176,7 +179,7 @@ def vis_side(dp=None):
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # --- TAB 3 & 4: ZONER ---
+    # TAB 3 & 4: ZONER
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             c1, c2 = st.columns([1.8, 1])
