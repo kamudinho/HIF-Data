@@ -82,7 +82,7 @@ def vis_side(dp=None):
         header {visibility: hidden;}
         .block-container {
             padding-top: 0.5rem !important;
-            padding-bottom: 1rem !important;
+            padding-bottom: 3rem !important;
         }
         [data-testid="stVerticalBlock"] {
             gap: 0rem !important;
