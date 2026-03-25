@@ -152,8 +152,6 @@ def vis_side(dp=None):
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
     
     # --- TAB 0: SPILLEROVERSIGT ---
-    # --- TAB 0: SPILLEROVERSIGT ---
-    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
         # Gruppér kun på spillere fra det valgte hold
@@ -194,7 +192,7 @@ def vis_side(dp=None):
                 "DZ-Skud": st.column_config.NumberColumn("DZ-Skud", format="%d"),
                 "DZ-Mål": st.column_config.NumberColumn("DZ-Mål", format="%d"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.2f%%"),
-                "DZ-Andel": st.column_config.NumberColumn("DZ-Andel", format="%.2f%%")
+                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)            
             }
         )
         
