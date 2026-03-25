@@ -12,16 +12,16 @@ def map_position_detail(pos_code):
     """Mapper talkoder til læsbare positioner"""
     pos_map = {
         "1.0": "Målmand", "1": "Målmand",
-        "2.0": "Højre Back", "2": "Højre Back",
-        "3.0": "Venstre Back", "3": "Venstre Back",
+        "2.0": "Højre Back", "2": "Højre back",
+        "3.0": "Venstre Back", "3": "Venstre back",
         "4.0": "Midtstopper", "4": "Midtstopper",
         "5.0": "Midtstopper", "5": "Midtstopper",
-        "6.0": "Defensiv Midt", "6": "Defensiv Midt",
-        "7.0": "Højre Kant", "7": "Højre Kant",
-        "8.0": "Central Midt", "8": "Central Midt",
+        "6.0": "Defensiv Midt", "6": "Defensiv midtbane",
+        "7.0": "Højre Kant", "7": "Højre kant",
+        "8.0": "Central Midt", "8": "Central midtbane",
         "9.0": "Angriber", "9": "Angriber",
-        "10.0": "Offensiv Midt", "10": "Offensiv Midt",
-        "11.0": "Venstre Kant", "11": "Venstre Kant"
+        "10.0": "Offensiv Midt", "10": "Offensiv midtbane",
+        "11.0": "Venstre Kant", "11": "Venstre kant"
     }
     clean_code = str(pos_code).strip()
     if ".0" not in clean_code and clean_code.isdigit():
@@ -103,7 +103,7 @@ def vis_side(df_raw):
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=650,
+        height=850,
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
