@@ -111,6 +111,7 @@ def vis_side(dp=None):
         t_sel = st.selectbox("Vælg hold", teams_in_data, index=hif_idx, key="global_team_sel")
     
     with col_header1:
+        
     t_color, t_logo = get_team_style(t_sel)
     txt_color = get_text_color(t_color)
 
