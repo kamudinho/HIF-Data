@@ -64,7 +64,7 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 2. Søgefilter (Søger i de nu STORE kolonner)
+    # 2. Søgefilter
     search = st.text_input("", placeholder="Søg spiller eller position...", label_visibility="collapsed")
     if search:
         mask = (df_working['NAVN'].str.contains(search, case=False, na=False) | 
@@ -73,49 +73,50 @@ def vis_side(df_raw):
     else:
         df_display = df_working.copy()
 
-    # 3. Opret tabel til visning
-    # Vi bruger .dt.strftime her for at sikre pæn visning af datoer
+    # 3. Opret tabel til visning 
+    # VIGTIGT: Vi beholder 'CONTRACT' og 'BIRTHDATE' som dato-objekter for korrekt sortering
     view_df = pd.DataFrame({
         'Position': df_display['POS_NAVN'],
         'Spiller': df_display['NAVN'],
-        'Født': df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y').fillna("-"),
+        'Født': df_display['BIRTHDATE'], # Rå dato
         'Højde': df_display['HEIGHT'].fillna(0).astype(int).replace(0, "-"),
         'Fod': df_display['FOD'].fillna("-"),
-        'Kontrakt': df_display['CONTRACT'].dt.strftime('%d.%m.%Y').fillna("-"),
+        'Kontrakt': df_display['CONTRACT'], # Rå dato
         'Alder': df_display['ALDER_NUM'].fillna("-")
     })
 
-    # 4. Styling funktion
+    # 4. Styling funktion (bruger row.name til at matche med df_display)
     def style_contract(row):
         styles = [''] * len(row)
-        # Vi henter den rå dato fra df_display via rækkens index
         idx = row.name
         raw_date = df_display.loc[idx, 'CONTRACT']
         
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
-            # 'Kontrakt' er kolonne nr. 5 (0-indekseret)
+            # 'Kontrakt' er kolonne nr. 5
             if dage < 183:
                 styles[5] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
                 styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 5. Vis dataframe
+    # 5. Vis dataframe med column_config for korrekt dato-format
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=650
+        height=650,
+        column_config={
+            "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
+            "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
+        }
     )
 
-    # 6. Simple Metrics
+    # 6. Metrics
     st.write("")
     m1, m2, m3 = st.columns(3)
     m1.metric("Antal", len(df_display))
-    
     avg_h = df_display[df_display['HEIGHT'] > 0]['HEIGHT'].mean()
     m2.metric("Gns. Højde", f"{avg_h:.0f} cm" if pd.notna(avg_h) else "-")
-    
     avg_a = df_display['ALDER_NUM'].mean()
     m3.metric("Gns. Alder", f"{avg_a:.1f} år" if pd.notna(avg_a) else "-")
