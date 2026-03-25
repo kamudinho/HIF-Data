@@ -95,7 +95,7 @@ def vis_side(dp=None):
 
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        t_sel = st.selectbox(" ", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
