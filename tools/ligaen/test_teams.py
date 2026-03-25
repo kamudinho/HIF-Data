@@ -68,7 +68,7 @@ def vis_side(dp_unused=None):
         st.warning("Ingen data fundet i Snowflake.")
         return
 
-    # Beregn Ligatabel
+    # --- 1. Beregn Ligatabel ---
     df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
@@ -102,9 +102,21 @@ def vis_side(dp_unused=None):
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
+        
+        # --- SIKKER SELECTBOX (Ingen hårde indexer) ---
         c1, c2 = st.columns(2)
-        team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("HB Køge") if "HB Køge" in h_list else 0)
-        team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1], index=h_list.index("AaB")-1 if "AaB" in h_list else 0)
+        
+        # Find index for HB Køge hvis den findes, ellers 0
+        def_idx1 = h_list.index("HB Køge") if "HB Køge" in h_list else 0
+        team1 = c1.selectbox("Hold 1", h_list, index=def_idx1)
+        
+        # Lav liste til hold 2 (uden hold 1)
+        h_list2 = [h for h in h_list if h != team1]
+        
+        # Find index for AaB (eller Hvidovre) hvis den findes, ellers 0
+        fav_opp = "AaB" if "AaB" in h_list2 else "Hvidovre"
+        def_idx2 = h_list2.index(fav_opp) if fav_opp in h_list2 else 0
+        team2 = c2.selectbox("Hold 2", h_list2, index=def_idx2)
 
         if not df_wy.empty:
             metrics = ['SHOTS', 'XG', 'PASSES', 'PPDA']
@@ -122,34 +134,28 @@ def vis_side(dp_unused=None):
                 xref_name = f"x{axis_suffix}"
                 yref_name = f"y{axis_suffix}"
                 
-                v1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)][m].mean()
-                v2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)][m].mean()
+                # Check om holdet findes i Wyscout dataen
+                d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
+                d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
+                
+                v1 = d1[m].mean() if not d1.empty else 0
+                v2 = d2[m].mean() if not d2.empty else 0
 
-                # Søjler (placeret på x=0 og x=1)
                 fig.add_trace(go.Bar(x=[0], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), width=0.7, showlegend=False), row=1, col=i+1)
                 fig.add_trace(go.Bar(x=[1], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), width=0.7, showlegend=False), row=1, col=i+1)
                 
-                # Labels under graferne
                 fig.add_annotation(dict(
                     x=0.5, y=-0.25, xref=f"{xref_name} domain", yref=f"{yref_name} domain",
                     text=labels[i], showarrow=False, font=dict(size=12, weight="bold")
                 ))
 
-                # Logoer placeret over hver søjle
                 if l1:
-                    fig.add_layout_image(dict(
-                        source=l1, xref=xref_name, yref="paper",
-                        x=0, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
-                    ))
+                    fig.add_layout_image(dict(source=l1, xref=xref_name, yref="paper", x=0, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"))
                 if l2:
-                    fig.add_layout_image(dict(
-                        source=l2, xref=xref_name, yref="paper",
-                        x=1, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
-                    ))
+                    fig.add_layout_image(dict(source=l2, xref=xref_name, yref="paper", x=1, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"))
 
-                # Opdater akser
                 fig.update_xaxes(range=[-0.8, 1.8], showticklabels=False, row=1, col=i+1)
-                fig.update_yaxes(range=[0, max(v1, v2) * 1.5], visible=False, row=1, col=i+1)
+                fig.update_yaxes(range=[0, max(v1, v2, 1) * 1.5], visible=False, row=1, col=i+1)
 
             fig.update_layout(height=350, margin=dict(t=80, b=60, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
