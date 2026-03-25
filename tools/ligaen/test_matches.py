@@ -5,15 +5,15 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. KONFIGURATION & SQL (HELT UAFHÆNGIG) ---
+    # --- 1. DATABASEN & QUERY ---
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke forbinde til Snowflake.")
+        st.error("Kunne ikke oprette forbindelse til Snowflake. Tjek dine credentials.")
         return
 
+    # Dine faste værdier for Hvidovre-appen
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # NordicBet Liga UUID som standard for din Hvidovre-app
-    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
+    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" # NordicBet Liga
 
     sql_query = f"""
     WITH MatchBase AS (
@@ -76,52 +76,59 @@ def vis_side(dp=None):
     ORDER BY b.MATCH_DATE_FULL DESC
     """
 
-    with st.spinner("Henter kampdata..."):
+    try:
         res = conn.query(sql_query)
         df_matches = pd.DataFrame(res)
-
-    if df_matches.empty:
-        st.warning("Ingen data fundet.")
+    except Exception as e:
+        st.error(f"Fejl ved datahentning: {e}")
         return
 
-    # Standardisering
+    if df_matches.empty:
+        st.warning("Der blev ikke fundet nogen kampe for den valgte turnering.")
+        return
+
+    # --- 2. DATA RENS ---
     df_matches.columns = [c.upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
     for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
-    # Hold mapping
-    opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    # Mapping til filtre
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "NordicBet Liga"}
+    opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 2. CSS STYLING ---
+    # --- 3. STYLING ---
     st.markdown("""
         <style>
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #df003b; height: 52px; display: flex; flex-direction: column; justify-content: center; }
-        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; }
+        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #df003b; height: 55px; display: flex; flex-direction: column; justify-content: center; }
+        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #df003b; color: #333; }
-        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
-        .time-pill { text-align: center; font-weight: bold; color: #df003b; border: 1px solid #df003b; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; }
+        .date-header { background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin: 15px 0 5px 0; border-left: 5px solid #df003b; color: #333; }
+        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 85px; text-align: center; }
+        .time-pill { text-align: center; font-weight: bold; color: #df003b; border: 1px solid #df003b; border-radius: 4px; padding: 2px 8px; font-size: 14px; }
         .team-name { font-weight: bold; font-size: 15px; }
         .bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; }
         .bar-val { font-weight: 700; font-size: 12px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP STATS ---
+    # --- 4. HEADER & FILTRE ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
+    
     with row1[0]:
-        valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_sel")
+        valgt_navn = st.selectbox("Vælg Hold", h_list, index=hif_idx, label_visibility="collapsed")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
+    # Filtrering af kampe
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played_all = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
 
+    # Beregn overblik (K, S, U, N...)
     summary = {"K": len(played_all), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played_all.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -132,73 +139,61 @@ def vis_side(dp=None):
         elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
         else: summary["N"] += 1
 
-    stats_r1 = [("Kampe", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
-    for i, (l, v) in enumerate(stats_r1):
+    stats_disp = [("Kampe", summary["K"]), ("S", summary["S"]), ("U", summary["U"]), ("N", summary["N"]), ("M+", summary["M+"]), ("M-", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    for i, (l, v) in enumerate(stats_disp):
         row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TABS & KAMPVISNING ---
+    # --- 5. VISNING AF KAMPE ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
-    def tegn_kamp_række(row, spillet):
+    def tegn_kamp(row, is_played):
         dt = row.get('MATCH_DATE_FULL')
         dato_str = f"{dt.day}. {maaned_map.get(dt.strftime('%b'), '')} {dt.year}"
         st.markdown(f"<div class='date-header'>{dato_str} — RUNDE {int(row.get('WEEK', 0))}</div>", unsafe_allow_html=True)
         
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-            h_uuid, a_uuid = row.get('CONTESTANTHOME_OPTAUUID'), row.get('CONTESTANTAWAY_OPTAUUID')
-            h_n = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME'))
-            a_n = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME'))
+            h_n = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTHOME_NAME'])
+            a_n = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], row['CONTESTANTAWAY_NAME'])
             
             c1.markdown(f"<div class='team-name' style='text-align:right;'>{h_n}</div>", unsafe_allow_html=True)
             c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
             
-            if spillet:
+            if is_played:
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 
-                h_is_valgt = h_uuid == valgt_uuid
-                h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#df003b") if h_is_valgt else "#d1d1d1"
-                a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#df003b") if not h_is_valgt else "#d1d1d1"
+                # Bar-stats under scoren
+                h_is_v = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                h_col = TEAM_COLORS.get(h_n, {}).get("primary", "#df003b") if h_is_v else "#d1d1d1"
+                a_col = TEAM_COLORS.get(a_n, {}).get("primary", "#df003b") if not h_is_v else "#d1d1d1"
                 
-                stats_conf = [
-                    ("HOME_POSS", "AWAY_POSS", "Besiddelse", 1, "%"),
-                    ("HOME_XG", "AWAY_XG", "xG", 2, ""),
-                    ("HOME_SHOTS", "AWAY_SHOTS", "Skud", 0, ""),
-                    ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede", 0, "")
-                ]
-                
-                for hc, ac, label, dec, suffix in stats_conf:
+                for hc, ac, lbl, dec, suf in [("HOME_POSS", "AWAY_POSS", "Besiddelse", 1, "%"), ("HOME_XG", "AWAY_XG", "xG", 2, ""), ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede", 0, "")]:
                     hv, av = pd.to_numeric(row.get(hc), errors='coerce') or 0, pd.to_numeric(row.get(ac), errors='coerce') or 0
-                    h_str = f"{hv:.{dec}f}{suffix}" if dec > 0 else f"{int(hv)}{suffix}"
-                    a_str = f"{av:.{dec}f}{suffix}" if dec > 0 else f"{int(av)}{suffix}"
                     total = hv + av
-                    h_pct = (hv / total * 100) if total > 0 else 50
-                    
+                    h_p = (hv / total * 100) if total > 0 else 50
                     st.markdown(f"""
-                        <div style="margin-bottom: 8px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                                <span class="bar-val">{h_str}</span>
-                                <span class="bar-label">{label}</span>
-                                <span class="bar-val">{a_str}</span>
+                        <div style="margin-top: 8px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                                <b>{hv:.{dec}f}{suf}</b><span class="bar-label">{lbl}</span><b>{av:.{dec}f}{suf}</b>
                             </div>
-                            <div style="display: flex; height: 10px; background: #eee; border-radius: 5px; overflow: hidden;">
-                                <div style="width: {h_pct}%; background: {h_bar_color};"></div>
-                                <div style="width: {100-h_pct}%; background: {a_bar_color};"></div>
+                            <div style="display: flex; height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
+                                <div style="width: {h_p}%; background: {h_col};"></div>
+                                <div style="width: {100-h_p}%; background: {a_col};"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
             else:
                 tid = pd.to_datetime(row.get('MATCH_LOCALTIME')).strftime('%H:%M') if pd.notnull(row.get('MATCH_LOCALTIME')) else 'TBA'
-                c3.markdown(f"<div style='text-align:center; padding-top:8px;'><div class='time-pill'>{tid}</div></div>", unsafe_allow_html=True)
+                c3.markdown(f"<div style='text-align:center; padding-top:8px;'><span class='time-pill'>{tid}</span></div>", unsafe_allow_html=True)
             
             c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
             c5.markdown(f"<div class='team-name' style='text-align:left;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab1:
-        for _, row in played_all.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            tegn_kamp_række(row, True)
+        for _, r in played_all.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
+            tegn_kamp(r, True)
     with tab2:
         future = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
-            tegn_kamp_række(row, False)
+        for _, r in future.sort_values('MATCH_DATE_FULL').iterrows():
+            tegn_kamp(r, False)
