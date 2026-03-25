@@ -37,7 +37,6 @@ ZONE_BOUNDARIES = {
     "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
 }
 
-# --- DATA & UTILS ---
 @st.cache_data(ttl=3600)
 def load_league_data():
     conn = _get_snowflake_conn()
@@ -74,31 +73,18 @@ def draw_logo_on_pitch(ax, logo_img):
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    # CSS TIL OPSÆTNING
     st.markdown("""
     <style>
         header {visibility: hidden;}
-        .main .block-container {
-            padding-top: 0.5rem !important;
-            padding-bottom: 3rem !important;
-        }
-        [data-testid="stVerticalBlock"] {
-            gap: 0rem !important;
-        }
-        .stTabs {
-            margin-top: -10px !important;
-        }
-        /* Stat-boxe med luft og tydelig adskillelse */
+        .main .block-container { padding-top: 0.5rem !important; padding-bottom: 3rem !important; }
+        [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+        .stTabs { margin-top: -10px !important; }
         .stat-box { 
-            background-color: #f8f9fa; 
-            padding: 15px !important; 
-            border-radius: 8px; 
-            border-left: 5px solid #cc0000; 
-            margin-bottom: 12px !important; 
-            display: block;
+            background-color: #f8f9fa; padding: 15px !important; border-radius: 8px; 
+            border-left: 5px solid #cc0000; margin-bottom: 12px !important; 
         }
-        .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; line-height: 1.2; }
-        .stat-value { font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin-top: 4px; line-height: 1; }
+        .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin-top: 4px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -109,10 +95,9 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Top-layout
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
+        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
@@ -122,13 +107,13 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # Danger Zone logik (88.5m til 105m, centreret i bredden)
+    # DZ: Fra 88.5m til 105m (mållinje) og centreret (25.16 til 42.84)
     df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
-    # TAB 0: SPILLEROVERSIGT
+    # TAB 0: SPILLEROVERSIGT med ProgressBar
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -136,62 +121,82 @@ def vis_side(dp=None):
             dz_d = d[d['IS_DZ']]
             dz_s, dz_m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
             p_stats.append({
-                "Spiller": p, "Skud": s, "Mål": m, "Konv.%": (m/s*100 if s>0 else 0),
-                "DZ-Skud": dz_s, "DZ-Mål": dz_m, "DZ-Andel": (dz_s/s*100 if s>0 else 0)
+                "Spiller": p, "Skud": s, "Mål": m, 
+                "Konv.%": (m/s*100 if s>0 else 0),
+                "DZ-Andel": (dz_s/s if s>0 else 0) # Bruges til progress bar (skal være 0.0-1.0)
             })
-        st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
+        
+        st.dataframe(
+            pd.DataFrame(p_stats).sort_values("Skud", ascending=False),
+            use_container_width=True, hide_index=True,
+            column_config={
+                "DZ-Andel": st.column_config.ProgressColumn(
+                    "DZ-Andel (%)", help="Andel af spillerens skud der er foretaget i Danger Zone",
+                    format="%.0f%%", min_value=0, max_value=1
+                ),
+                "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
+            }
+        )
 
-    # TAB 1: AFSLUTNINGER
+    # TAB 1: AFSLUTNINGER med Konv.%
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            p_sel = st.selectbox("Vælg spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()), key="p_afsl")
+            p_sel = st.selectbox("Spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
             d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud i alt</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Konverteringsrate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(55, 105) 
+            fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
             pitch.scatter(d_v['X_M'], d_v['Y_M'], s=100, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
-            draw_logo_on_pitch(ax, t_logo)
-            st.pyplot(fig)
+            draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
-    # TAB 2: DZ-ANALYSE
+    # TAB 2: DZ-ANALYSE med Konv.%
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
         with c2:
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Danger Zone Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Danger Zone Mål</div><div class="stat-value">{len(dz_d[dz_d["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            s_dz, m_dz = len(dz_d), len(dz_d[dz_d["EVENT_TYPEID"]==16])
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{s_dz}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.%</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(55, 105)
-            # DZ REKTANGEL
+            fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
-            draw_logo_on_pitch(ax, t_logo)
-            st.pyplot(fig)
+            draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
-    # TAB 3 & 4: ZONER
+    # TAB 3 & 4: ZONER med Topsorer og Andel
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
-            c1, c2 = st.columns([1.8, 1])
+            c1, c2 = st.columns([1.6, 1])
             plot_df = df_team[df_team['EVENT_TYPEID'] == 16] if is_goal else df_team
+            total_count = len(plot_df)
             with c2:
-                st.write(f"**Data per zone ({'Mål' if is_goal else 'Skud'})**")
+                st.write(f"**Zone-stats ({'Mål' if is_goal else 'Skud'})**")
                 z_summary = []
-                for z in ZONE_BOUNDARIES.keys():
+                for z, b in ZONE_BOUNDARIES.items():
                     z_d = plot_df[plot_df['Zone'] == z]
                     if len(z_d) > 0:
                         top_p = z_d['PLAYER_NAME'].value_counts().idxmax()
-                        z_summary.append({"Zone": z, "Antal": len(z_d), "%": f"{(len(z_d)/len(df_team)*100):.1f}%", "Topscorer": top_p})
-                st.table(pd.DataFrame(z_summary).sort_values("Antal", ascending=False))
+                        z_summary.append({
+                            "Zone": z, 
+                            "Antal": len(z_d), 
+                            "Andel (%)": (len(z_d)/total_count*100 if total_count > 0 else 0),
+                            "Flest": top_p
+                        })
+                st.dataframe(
+                    pd.DataFrame(z_summary).sort_values("Antal", ascending=False),
+                    hide_index=True, use_container_width=True,
+                    column_config={"Andel (%)": st.column_config.NumberColumn(format="%.1f%%")}
+                )
             with c1:
                 pitch = VerticalPitch(**pitch_cfg)
-                fig, ax = pitch.draw(figsize=(8, 10))
-                ax.set_ylim(55, 105)
+                fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
                 max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
                     if b["y_max"] <= 55: continue
@@ -199,8 +204,7 @@ def vis_side(dp=None):
                     alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
                     ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
                     if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
-                draw_logo_on_pitch(ax, t_logo)
-                st.pyplot(fig)
+                draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
 if __name__ == "__main__":
     vis_side()
