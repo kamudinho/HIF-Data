@@ -2,21 +2,57 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.data_load import _get_snowflake_conn  # Vi importerer din connection-helper
 
 def vis_side(dp=None):
-    # --- 1. DATA CHECK & FORBEREDELSE ---
-    # Vi sikrer os at dp findes, ellers stopper vi fejlen her
+    # --- 1. DATA HENTNING (HVIS DP MANGLER) ---
+    # Da du ikke sender dp med fra main.py, henter vi data direkte her
     if dp is None:
-        st.error("Fejl: Datapakken (dp) blev ikke overført korrekt til siden.")
+        conn = _get_snowflake_conn()
+        if not conn:
+            st.error("Kunne ikke oprette forbindelse til databasen.")
+            return
+        
+        # Her kører vi den Master Query, du sendte tidligere (opta_team_stats)
+        # Vi definerer her de nødvendige ID'er lokalt eller via session_state
+        LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" # NordicBet Liga
+        DB = "KLUB_HVIDOVREIF.AXIS"
+        
+        sql = f"""
+            SELECT b.*, 
+                   sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES,
+                   msh.POSSESSION AS HOME_POSS,
+                   sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES,
+                   msa.POSSESSION AS AWAY_POSS
+            FROM {DB}.OPTA_MATCHINFO b
+            LEFT JOIN (SELECT MATCH_ID, CONTESTANT_OPTAUUID, SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE END) AS XG, 
+                       SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE END) AS SHOTS,
+                       SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE END) AS TOUCHES_IN_BOX 
+                       FROM {DB}.OPTA_MATCHEXPECTEDGOALS GROUP BY 1,2) sh 
+                ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID
+            LEFT JOIN (SELECT MATCH_ID, CONTESTANT_OPTAUUID, SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE END) AS XG, 
+                       SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE END) AS SHOTS,
+                       SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE END) AS TOUCHES_IN_BOX 
+                       FROM {DB}.OPTA_MATCHEXPECTEDGOALS GROUP BY 1,2) sa 
+                ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID
+            LEFT JOIN (SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION 
+                       FROM {DB}.OPTA_MATCHSTATS GROUP BY 1,2) msh 
+                ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID
+            LEFT JOIN (SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION 
+                       FROM {DB}.OPTA_MATCHSTATS GROUP BY 1,2) msa 
+                ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID
+            WHERE b.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        """
+        df_matches = conn.query(sql)
+    else:
+        # Hvis der mod forventning sendes en dp med
+        df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
+
+    if df_matches is None or df_matches.empty:
+        st.warning("Ingen kampdata fundet.")
         return
 
-    df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
-    
-    if df_matches.empty:
-        st.warning("Ingen kampdata fundet i systemet.")
-        return
-
-    # Standardisering
+    # --- 2. KLARGØRING AF DATA ---
     df_matches.columns = [c.upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
 
@@ -24,15 +60,13 @@ def vis_side(dp=None):
         if col in df_matches.columns:
             df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
-    config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "NordicBet Liga")
-    
+    # Mapping af hold
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "NordicBet Liga"}
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 2. CSS STYLING ---
+    # --- 3. CSS STYLING ---
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #df003b; height: 52px; display: flex; flex-direction: column; justify-content: center; }
@@ -46,7 +80,7 @@ def vis_side(dp=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP LAYOUT ---
+    # --- 4. TOP LAYOUT & FILTRERING ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     with row1[0]:
@@ -71,7 +105,7 @@ def vis_side(dp=None):
     for i, (l, v) in enumerate(stats_r1):
         row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 4. TABS & KAMPVISNING ---
+    # --- 5. TABS & KAMPVISNING ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
@@ -92,7 +126,6 @@ def vis_side(dp=None):
             if spillet:
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 
-                # Bar-farver
                 h_is_valgt = h_uuid == valgt_uuid
                 h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#df003b") if h_is_valgt else "#d1d1d1"
                 a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#df003b") if not h_is_valgt else "#d1d1d1"
