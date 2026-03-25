@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
-def vis_side(dp):
+def vis_side(dp=None):
     # --- 1. DATA CHECK & FORBEREDELSE ---
     # Vi henter kun de nødvendige team_stats fra opta-nøglen i dp
     df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
