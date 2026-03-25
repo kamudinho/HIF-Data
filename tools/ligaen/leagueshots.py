@@ -114,6 +114,7 @@ def vis_side(dp=None):
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
     # TAB 0: SPILLEROVERSIGT (OPDATERET)
+    # TAB 0: SPILLEROVERSIGT (RETTET DZ-ANDEL BEREGNING)
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -131,7 +132,8 @@ def vis_side(dp=None):
                 "DZ-Skud": dz_s,
                 "DZ-Mål": dz_m,
                 "DZ-Konv.%": (dz_m/dz_s*100 if dz_s > 0 else 0),
-                "DZ-Andel": (dz_s/s if s > 0 else 0) # Vises som ProgressColumn (0 til 1)
+                # VIGTIGT: Skal være mellem 0 og 1 for ProgressColumn
+                "DZ-Andel": (dz_s / s if s > 0 else 0) 
             })
         
         st.dataframe(
@@ -139,8 +141,11 @@ def vis_side(dp=None):
             use_container_width=True, hide_index=True,
             column_config={
                 "DZ-Andel": st.column_config.ProgressColumn(
-                    "DZ-Andel", help="Andel af skud foretaget i Danger Zone",
-                    format="%.0f%%", min_value=0, max_value=1
+                    "DZ-Andel", 
+                    help="Andel af skud foretaget i Danger Zone",
+                    format="%.0f%%", # Viser 0.25 som 25%
+                    min_value=0, 
+                    max_value=1
                 ),
                 "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
