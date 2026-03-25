@@ -195,9 +195,12 @@ def vis_side(dp=None):
         )
 
     # --- TAB 1: AFSLUTNINGER ---
+    # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
+        # Container uden fast højde for at undgå scroll
         c1, c2 = st.columns([2, 1])
         df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
+        
         with c2:
             p_sel = st.selectbox("Vælg spiller", ["Alle"] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
             d_v = df_t if p_sel == "Alle" else df_t[df_t['PLAYER_NAME'] == p_sel]
@@ -205,34 +208,63 @@ def vis_side(dp=None):
             s_cnt, m_cnt = len(d_v), len(d_v[d_v['EVENT_TYPEID'] == 16])
             konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
             
-            st.metric("Skud", s_cnt)
-            st.metric("Mål", m_cnt)
-            st.metric("Konvertering", f"{konv:.2f}%")
+            # --- CUSTOM METRICS LAYOUT ---
+            st.markdown(f"""
+                <div style="background-color: {t_color}15; padding: 20px; border-radius: 10px; border-left: 5px solid {t_color}; margin-bottom: 10px;">
+                    <small style="color: gray; text-transform: uppercase;">Total Afslutninger</small>
+                    <h2 style="margin: 0; color: {t_color};">{s_cnt}</h2>
+                </div>
+                <div style="background-color: #26273010; padding: 20px; border-radius: 10px; border-left: 5px solid #28a745; margin-bottom: 10px;">
+                    <small style="color: gray; text-transform: uppercase;">Mål i alt</small>
+                    <h2 style="margin: 0; color: #28a745;">{m_cnt}</h2>
+                </div>
+                <div style="background-color: #26273010; padding: 20px; border-radius: 10px; border-left: 5px solid #ffc107; margin-bottom: 10px;">
+                    <small style="color: gray; text-transform: uppercase;">Konverteringsrate</small>
+                    <h2 style="margin: 0; color: #ffc107;">{konv:.2f}%</h2>
+                </div>
+            """, unsafe_allow_html=True)
             
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(5, 7))
+            # Mindre figsize (5, 6) sikrer at den passer på skærmen uden scroll
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc', pad_bottom=-20)
+            fig, ax = pitch.draw(figsize=(5, 6))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=50, c=colors, edgecolors=t_color, ax=ax, alpha=0.7)
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=70, c=colors, edgecolors=t_color, ax=ax, alpha=0.8, linewidth=1.5)
             draw_logo_adjusted(ax, t_logo)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
 
     # --- TAB 2: DZ-AFSLUTNINGER ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         with c2:
             df_dz = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['IS_DZ_GEO'])]
-            st.metric("DZ Skud", len(df_dz))
-            st.caption("DZ = Danger Zone")
+            dz_s, dz_m = len(df_dz), len(df_dz[df_dz['EVENT_TYPEID'] == 16])
+            dz_konv = (dz_m/dz_s*100) if dz_s > 0 else 0
+            
+            st.markdown(f"""
+                <div style="background-color: {DZ_COLOR}15; padding: 20px; border-radius: 10px; border-left: 5px solid {DZ_COLOR}; margin-bottom: 10px;">
+                    <small style="color: gray; text-transform: uppercase;">Danger Zone Skud</small>
+                    <h2 style="margin: 0; color: {DZ_COLOR};">{dz_s}</h2>
+                </div>
+                <div style="background-color: #26273010; padding: 20px; border-radius: 10px; border-left: 5px solid #28a745; margin-bottom: 10px;">
+                    <small style="color: gray; text-transform: uppercase;">Mål fra DZ</small>
+                    <h2 style="margin: 0; color: #28a745;">{dz_m}</h2>
+                </div>
+                 <div style="background-color: #26273010; padding: 20px; border-radius: 10px; border-left: 5px solid #ffc107;">
+                    <small style="color: gray; text-transform: uppercase;">DZ Effektivitet</small>
+                    <h2 style="margin: 0; color: #ffc107;">{dz_konv:.1f}%</h2>
+                </div>
+            """, unsafe_allow_html=True)
+            
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(5, 7))
-            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15))
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc', pad_bottom=-20)
+            fig, ax = pitch.draw(figsize=(5, 6))
+            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=DZ_COLOR, alpha=0.15, zorder=1))
             colors = (df_dz['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
-            pitch.scatter(df_dz['EVENT_X'], df_dz['EVENT_Y'], s=60, c=colors, edgecolors=t_color, ax=ax)
+            pitch.scatter(df_dz['EVENT_X'], df_dz['EVENT_Y'], s=80, c=colors, edgecolors=t_color, ax=ax, zorder=2)
             draw_logo_adjusted(ax, t_logo)
-            st.pyplot(fig)
-
+            st.pyplot(fig, use_container_width=True)
+            
     # --- TAB 3 & 4: ZONER ---
     def zone_tab(is_goal):
         c1, c2 = st.columns([1.8, 1])
