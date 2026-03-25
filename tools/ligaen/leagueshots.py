@@ -79,24 +79,19 @@ def vis_side(dp=None):
     # CSS TIL OPSÆTNING
     st.markdown("""
     <style>
-        /* Rykker kun selve indholdet op, uden at ramme sidebar eller top-bjælke */
+        /* Sørger for at hovedindholdet ikke rører ved sidebaren eller top-baren */
         .main .block-container {
-            padding-top: 1.5rem !important;
-            padding-bottom: 0rem !important;
+            padding-top: 3.5rem !important; /* Øget fra 0.5/1.5 for at give luft */
+            padding-bottom: 1rem !important;
             max-width: 95% !important;
         }
 
-        /* Fjerner den ekstra luft som Streamlits "gap" skaber mellem rækker */
-        [data-testid="stVerticalBlock"] > div:first-child {
-            margin-top: -1.5rem !important;
-        }
-
-        /* Gør tabs mere kompakte */
+        /* Justerer kun afstanden ved fanerne, så de rykker lidt tættere på dropdown */
         .stTabs {
-            margin-top: -10px !important;
+            margin-top: -5px !important;
         }
 
-        /* Stat-box styling (beholdes) */
+        /* Stat-box styling (beholdes som den er) */
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
             border-left: 5px solid #cc0000; margin-bottom: 10px; 
