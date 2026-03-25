@@ -76,15 +76,18 @@ def draw_logo_adjusted(ax, logo_img):
         ax_image.axis('off')
 
 # --- MAIN APP ---
+# --- MAIN APP ---
 def vis_side(dp=None):
     st.markdown("""
         <style>
             .stTabs { margin-top: -30px; }
             [data-testid="stVerticalBlock"] > div:has(div.stColumns) { margin-bottom: -15px; }
+            /* Centrerer alt i dataframes */
+            [data-testid="stDataFrame"] div[class*="StyledDataFrameDataCell"] { justify-content: center !important; text-align: center !important; }
+            [data-testid="stDataFrame"] div[data-testid="stTable"] div { text-align: center !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # Hent data direkte via SQL hvis dp ikke indeholder det
     df_all = load_data()
 
     if df_all.empty:
@@ -96,7 +99,6 @@ def vis_side(dp=None):
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     
-    # Filtrer hold der findes i TEAM_mapping
     teams_in_data = sorted([name for name in df_all['KLUB_NAVN'].unique() if pd.notna(name)])
     
     if not teams_in_data:
@@ -106,7 +108,6 @@ def vis_side(dp=None):
     # 2. HOLDVALG
     col_header1, col_header2 = st.columns([2, 1])
     with col_header2:
-        # Finder index for Hvidovre hvis muligt
         hif_idx = teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0
         t_sel = st.selectbox("Vælg hold", teams_in_data, index=hif_idx, key="global_team_sel")
     
@@ -116,7 +117,9 @@ def vis_side(dp=None):
     t_color, t_logo = get_team_style(t_sel)
     txt_color = get_text_color(t_color)
 
-    # 3. ZONE LOGIK (Custom banestørrelse)
+    # 3. ZONE LOGIK & DZ
+    df_all['IS_DZ_GEO'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
+    
     P_L, P_W = 105.0, 68.0
     X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
     X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -146,7 +149,6 @@ def vis_side(dp=None):
         return "Zone 8"
 
     df_all['Zone'] = df_all.apply(map_to_zone, axis=1)
-    df_all['IS_DZ_GEO'] = (df_all['EVENT_X'] >= 88.5) & (df_all['EVENT_Y'] >= 37.0) & (df_all['EVENT_Y'] <= 63.0)
 
     # 4. TABS
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER"])
@@ -154,7 +156,6 @@ def vis_side(dp=None):
     # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
-        # Gruppér kun på spillere fra det valgte hold
         df_team_only = df_all[df_all['KLUB_NAVN'] == t_sel]
         
         for p, d in df_team_only.groupby('PLAYER_NAME'):
@@ -174,11 +175,8 @@ def vis_side(dp=None):
             })
             
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
-        
-        # Beregn højde så hele tabellen vises (ca. 35px pr række + header)
         dynamisk_hojde = (len(df_f) + 1) * 35 + 10
         
-        # Konfiguration af kolonner: Formatering og centrering
         st.dataframe(
             df_f, 
             use_container_width=True, 
@@ -192,37 +190,26 @@ def vis_side(dp=None):
                 "DZ-Skud": st.column_config.NumberColumn("DZ-Skud", format="%d"),
                 "DZ-Mål": st.column_config.NumberColumn("DZ-Mål", format="%d"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.2f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)            
+                "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.2f%%", min_value=0, max_value=100)
             }
         )
-        
-        # CSS til at tvinge centrering af alt indhold i tabellen
-        st.markdown("""
-            <style>
-                /* Centrerer tekst i alle celler i Streamlit Dataframes */
-                [data-testid="stTable"] td { text-align: center !important; }
-                [data-testid="stDataFrame"] div[data-testid="stTable"] div { text-align: center !important; }
-                /* Sikrer at tal-kolonner også centreres */
-                [data-testid="stDataFrame"] div[class*="StyledDataFrameDataCell"] { justify-content: center !important; text-align: center !important; }
-            </style>
-        """, unsafe_allow_html=True)
-        
+
     # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
+        df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
         with c2:
-            df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
             p_sel = st.selectbox("Vælg spiller", ["Alle"] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
             d_v = df_t if p_sel == "Alle" else df_t[df_t['PLAYER_NAME'] == p_sel]
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
+            
+            s_cnt, m_cnt = len(d_v), len(d_v[d_v['EVENT_TYPEID'] == 16])
+            konv = (m_cnt/s_cnt*100) if s_cnt > 0 else 0
+            
+            st.metric("Skud", s_cnt)
+            st.metric("Mål", m_cnt)
+            st.metric("Konvertering", f"{konv:.2f}%")
+            
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(5, 7))
-            colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=20, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
-            st.pyplot(fig)        with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
@@ -236,7 +223,7 @@ def vis_side(dp=None):
         with c2:
             df_dz = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['IS_DZ_GEO'])]
             st.metric("DZ Skud", len(df_dz))
-            st.caption("DZ = Danger Zone (Det centrale felt i feltet)")
+            st.caption("DZ = Danger Zone")
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
@@ -280,6 +267,3 @@ def vis_side(dp=None):
 
     with tabs[3]: zone_tab(False)
     with tabs[4]: zone_tab(True)
-
-if __name__ == "__main__":
-    vis_side()
