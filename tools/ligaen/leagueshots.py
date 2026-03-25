@@ -115,6 +115,7 @@ def vis_side(dp=None):
 
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
+        # TAB 0: SPILLEROVERSIGT (OPDATERET LOGIK)
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
             s, m = len(d), len(d[d['EVENT_TYPEID']==16])
@@ -129,8 +130,8 @@ def vis_side(dp=None):
                 "DZ-Skud": dz_s,
                 "DZ-Mål": dz_m,
                 "DZ-Konv.%": (dz_m/dz_s*100 if dz_s > 0 else 0),
-                # VIGTIGT: Decimaltal (0.0 til 1.0) sikrer at ProgressColumn virker
-                "DZ-Andel": (dz_s / s if s > 0 else 0) 
+                # Ganger med 100 her, så tallet er f.eks. 100 eller 85
+                "DZ-Andel": (dz_s / s * 100 if s > 0 else 0) 
             })
         
         st.dataframe(
@@ -140,15 +141,15 @@ def vis_side(dp=None):
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
                     help="Andel af skud foretaget i Danger Zone",
-                    format="%.0f%%", 
+                    format="%d%%",    # Viser nu heltallet + % (f.eks. 100%)
                     min_value=0, 
-                    max_value=1
+                    max_value=100     # Sætter max til 100 nu hvor vi har ganget med 100
                 ),
                 "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
             }
         )
-
+        
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
