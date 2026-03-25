@@ -26,10 +26,9 @@ def vis_side(conn, name_map=None):
         valgt_hold = st.selectbox(" ", alle_hold, index=alle_hold.index("Hvidovre"))
         v_ssid = TEAMS[valgt_hold]["ssid"]
 
-    # --- 2. DYNAMISK SQL (Bruger dit SSID-opslag) ---
+    # --- 2. DYNAMISK SQL ---
     @st.cache_data(ttl=600)
     def get_phys_data(ssid):
-        # Vi bruger din præcise SQL-logik til at finde de rigtige spillere via SSID
         sql = f"""
         WITH team_player_ids AS (
             SELECT DISTINCT 
@@ -56,49 +55,44 @@ def vis_side(conn, name_map=None):
     df_phys = get_phys_data(v_ssid)
 
     if df_phys.empty:
-        st.warning(f"Ingen data fundet for {valgt_hold} med SSID: {v_ssid}")
+        st.warning(f"Ingen data fundet for {valgt_hold}")
         return
 
-    # --- 3. DATABEHANDLING ---
-    # Vi bruger 'player_opta_id' fra vores JOIN i stedet for p."optaId"
-    df_phys['optaId_str'] = df_phys['PLAYER_OPTA_ID'].astype(str)
-
-    def parse_mins(v):
-        if pd.isna(v) or v == "": return 0.0
-        try:
-            v_s = str(v)
-            if ':' in v_s:
-                m, s = map(int, v_s.split(':'))
-                return round(m + s/60, 2)
-            return float(v_s)
-        except: return 0.0
-
-    df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_mins)
-    df_phys['HI_RUN'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
-    
-    # Navne-mapping
+    # --- 3. NAVNE-MAPPING LOGIK (Genbrugelig) ---
     df_local = load_local_players()
     p_map = {}
     if df_local is not None:
-        # Tjekker om kolonnen hedder optaId eller OPTAID i din Excel
         loc_cols = {c.lower(): c for c in df_local.columns}
         oid_col = loc_cols.get('optaid', 'optaId')
         df_local['clean_oid'] = df_local[oid_col].apply(lambda x: str(int(float(x))) if pd.notnull(x) else "0")
         p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
 
-    df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(r['optaId_str'], r['PLAYER_NAME']), axis=1)
+    # Funktion til at parse minutter (05:30 -> 5.5)
+    def parse_mins(v):
+        if pd.isna(v) or v == "": return 0.0
+        v_s = str(v)
+        if ':' in v_s:
+            try:
+                m, s = map(int, v_s.split(':'))
+                return round(m + s/60, 2)
+            except: return 0.0
+        return pd.to_numeric(v_s, errors='coerce') or 0.0
 
     # --- 4. TABS ---
     t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
 
     with t1:
+        df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_mins)
+        df_phys['HI_RUN_CALC'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
+        df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(str(r['PLAYER_OPTA_ID']), r['PLAYER_NAME']), axis=1)
+
         summary = df_phys.groupby('DISPLAY_NAME').agg({
-            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN': 'sum', 'TOP_SPEED': 'max'
+            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN_CALC': 'sum', 'TOP_SPEED': 'max'
         }).reset_index()
         
         summary = summary[summary['MINS_DEC'] > 10].copy()
         summary['KM/90'] = (summary['DISTANCE'] / summary['MINS_DEC']) * 90 / 1000
-        summary['HI m/90'] = (summary['HI_RUN'] / summary['MINS_DEC']) * 90
+        summary['HI m/90'] = (summary['HI_RUN_CALC'] / summary['MINS_DEC']) * 90
 
         st.dataframe(
             summary.sort_values('KM/90', ascending=False),
@@ -112,24 +106,23 @@ def vis_side(conn, name_map=None):
 
     with t2:
         valg = st.selectbox("Vælg parameter", ["KM/90", "HI m/90", "TOP_SPEED"])
-        fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, color_discrete_sequence=['red'])
+        fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, color_discrete_sequence=[HIF_ROD])
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        # Vi henter en frisk top 5 direkte fra den store tabel
-        df_top = conn.query('SELECT PLAYER_NAME, TOP_SPEED, "HIGH SPEED RUNNING" + SPRINTING as HI_RUN FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS')
+        # Snowflake kræver ofte anførselstegn om "HIGH SPEED RUNNING" pga mellemrum
+        df_top = conn.query('SELECT PLAYER_NAME, TOP_SPEED, "HIGH SPEED RUNNING" + SPRINTING as HI_TOTAL FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS')
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Topfart**")
+            st.write("**Topfart (Liga)**")
             st.dataframe(df_top.nlargest(5, 'TOP_SPEED')[['PLAYER_NAME', 'TOP_SPEED']], hide_index=True)
         with c2:
-            st.write("**HI Meter**")
-            st.dataframe(df_top.nlargest(5, 'HI_RUN')[['PLAYER_NAME', 'HI_RUN']], hide_index=True)
+            st.write("**HI Meter (Liga total)**")
+            st.dataframe(df_top.nlargest(5, 'HI_TOTAL')[['PLAYER_NAME', 'HI_TOTAL']], hide_index=True)
 
     with t4:
-        # 1. Hent metadata (Sørg for "DATE" er i anførselstegn)
         df_meta = conn.query(f"""
-            SELECT TO_VARCHAR("DATE", 'YYYY-MM-DD') as MATCH_DATE_STR, DESCRIPTION, MATCH_SSIID 
+            SELECT TO_VARCHAR("DATE", 'YYYY-MM-DD') as DATE_STR, DESCRIPTION, MATCH_SSIID 
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA 
             WHERE (HOME_SSIID = '{v_ssid}' OR AWAY_SSIID = '{v_ssid}')
             AND "DATE" >= '2025-07-01'
@@ -137,51 +130,42 @@ def vis_side(conn, name_map=None):
         """)
         
         if not df_meta.empty:
-            col_t4_title, col_t4_select = st.columns([3, 1])
-            with col_t4_title:
-                st.subheader("Kampanalyse")
-            with col_t4_select:
-                df_meta['LABEL'] = df_meta['MATCH_DATE_STR'] + " - " + df_meta['DESCRIPTION']
-                v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique(), key="sb_t4_final_fix", label_visibility="collapsed")
-            
+            df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
+            v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
             
-            # 2. Hent de korrekte spillere for det valgte hold (Rettet LATERAL logik)
-            try:
-                valid_ids_sql = f"""
-                    SELECT f.value:"optaId"::string AS tid
-                    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-                    LATERAL FLATTEN(input => CASE 
-                        WHEN m.HOME_SSIID = '{v_ssid}' THEN m.HOME_PLAYERS 
-                        ELSE m.AWAY_PLAYERS 
-                    END) f
-                    WHERE m.MATCH_SSIID = '{m_id}'
-                """
-                list_valid_ids = conn.query(valid_ids_sql)['TID'].tolist()
-                
-                # 3. Hent de fysiske stats for kampen
-                df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
-                
-                if not df_m.empty:
-                    df_m['KM'] = (df_m['DISTANCE'] / 1000).round(2)
-                    df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                    
-                    # Marker hvem der er hvem
-                    df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
+            # Hent valide IDs for det valgte hold i denne kamp
+            ids_df = conn.query(f"""
+                SELECT f.value:"optaId"::string AS tid
+                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
+                LATERAL FLATTEN(input => CASE 
+                    WHEN m.HOME_SSIID = '{v_ssid}' THEN m.HOME_PLAYERS 
+                    ELSE m.AWAY_PLAYERS 
+                END) f
+                WHERE m.MATCH_SSIID = '{m_id}'
+            """)
+            list_valid_ids = ids_df['TID'].tolist()
+            
+            # Hent kampdata
+            df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
+            
+            if not df_m.empty:
+                # Behandling af kamp-specifik data
+                df_m['KM'] = (df_m['DISTANCE'] / 1000).round(2)
+                df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
+                # Vigtigt: Navne-mapping her også!
+                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r['optaId']), r['PLAYER_NAME']), axis=1)
+                df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
 
-                    st.dataframe(
+                st.dataframe(
                     df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
                     column_config={
-                        "DISPLAY_NAME": "Spiller", "Klub_Korrekt": "Klub", "MINUTES": "Min",
+                        "DISPLAY_NAME": "Spiller",
+                        "MINUTES": "Min",
                         "KM": st.column_config.NumberColumn("KM", format="%.2f"),
-                        "HI_RUN": "HI m", "DISTANCE_TIP": "TIP (m)", "DISTANCE_OTIP": "OTIP (m)",
-                        "DISTANCE_BOP": "BOP (m)", "TOP_SPEED": "Top"
+                        "HI_RUN": "HI m",
+                        "TOP_SPEED": "Top"
                     },
-                    column_order=("DISPLAY_NAME", "Klub_Korrekt", "MINUTES", "KM", "HI_RUN", "DISTANCE_TIP", "DISTANCE_OTIP", "DISTANCE_BOP", "TOP_SPEED"),
-                    use_container_width=True, hide_index=True, height=800
-                else:
-                    st.info(f"Ingen fysisk data fundet for kampen: {v_kamp}")
-            except Exception as e:
-                st.error(f"Fejl ved hentning af spillerdata: {e}")
-        else:
-            st.info("Ingen kampe fundet.")
+                    column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                    use_container_width=True, hide_index=True, height=600
+                )
