@@ -82,7 +82,7 @@ def vis_side(dp=None):
             .stat-label {{ font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }}
             .stat-value {{ font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
             [data-testid="stDataFrame"] td {{ text-align: center !important; }}
-            .stTabs {{ margin-top: -20px; }}
+            .stTabs {{ margin-top: -30px; }}
         </style>
     """, unsafe_allow_html=True)
 
