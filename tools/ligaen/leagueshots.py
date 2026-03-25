@@ -10,7 +10,7 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-# --- KONFIGURATION (Hvidovre-app værdier) ---
+# --- KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
@@ -107,33 +107,26 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # DZ: Rettet til at gå helt fra 88.5m til 105m
+    # DZ Definition: 88.5m til 105m (mållinje)
     df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
-    # TAB 0: SPILLEROVERSIGT (OPDATERET)
-    # TAB 0: SPILLEROVERSIGT (RETTET DZ-ANDEL BEREGNING)
+    # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
-            s = len(d)
-            m = len(d[d['EVENT_TYPEID']==16])
+            s, m = len(d), len(d[d['EVENT_TYPEID']==16])
             dz_d = d[d['IS_DZ']]
-            dz_s = len(dz_d)
-            dz_m = len(dz_d[dz_d['EVENT_TYPEID']==16])
+            dz_s, dz_m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
             
             p_stats.append({
-                "Spiller": p, 
-                "Skud": s, 
-                "Mål": m, 
-                "Konv.%": (m/s*100 if s > 0 else 0),
-                "DZ-Skud": dz_s,
-                "DZ-Mål": dz_m,
-                "DZ-Konv.%": (dz_m/dz_s*100 if dz_s > 0 else 0),
-                # VIGTIGT: Skal være mellem 0 og 1 for ProgressColumn
-                "DZ-Andel": (dz_s / s if s > 0 else 0) 
+                "Spiller": p, "Skud": s, "Mål": m, 
+                "Konv.%": (m/s*100 if s>0 else 0),
+                "DZ-Skud": dz_s, "DZ-Mål": dz_m,
+                "DZ-Konv.%": (dz_m/dz_s*100 if dz_s>0 else 0),
+                "DZ-Andel": (dz_s / s if s > 0 else 0) # Rigtig værdi til bjælken (0.0 til 1.0)
             })
         
         st.dataframe(
@@ -141,14 +134,10 @@ def vis_side(dp=None):
             use_container_width=True, hide_index=True,
             column_config={
                 "DZ-Andel": st.column_config.ProgressColumn(
-                    "DZ-Andel", 
-                    help="Andel af skud foretaget i Danger Zone",
-                    format="%.0f%%", # Viser 0.25 som 25%
-                    min_value=0, 
-                    max_value=100
+                    "DZ-Andel", format="%.0f%%", min_value=0, max_value=1
                 ),
-                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
+                "Konv.%": st.column_config.NumberColumn(format="%.1f%%"),
+                "DZ-Konv.%": st.column_config.NumberColumn(format="%.1f%%")
             }
         )
 
@@ -161,7 +150,7 @@ def vis_side(dp=None):
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Konverteringsrate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Konvertering</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
@@ -176,11 +165,10 @@ def vis_side(dp=None):
             s_dz, m_dz = len(dz_d), len(dz_d[dz_d["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{s_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.%</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
-            # DZ REKTANGEL (88.5 til 105m)
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
@@ -198,19 +186,8 @@ def vis_side(dp=None):
                     z_d = plot_df[plot_df['Zone'] == z]
                     if len(z_d) > 0:
                         top_p = z_d['PLAYER_NAME'].value_counts().idxmax()
-                        z_summary.append({
-                            "Zone": z, 
-                            "Antal": len(z_d), 
-                            "Andel": (len(z_d)/total_count if total_count > 0 else 0),
-                            "Topscorer": top_p
-                        })
-                st.dataframe(
-                    pd.DataFrame(z_summary).sort_values("Antal", ascending=False),
-                    hide_index=True, use_container_width=True,
-                    column_config={
-                        "Andel": st.column_config.NumberColumn(format="%.1f%%")
-                    }
-                )
+                        z_summary.append({"Zone": z, "Antal": len(z_d), "Andel": (len(z_d)/total_count if total_count > 0 else 0), "Topscorer": top_p})
+                st.dataframe(pd.DataFrame(z_summary).sort_values("Antal", ascending=False), hide_index=True, use_container_width=True, column_config={"Andel": st.column_config.NumberColumn(format="%.1f%%")})
             with c1:
                 pitch = VerticalPitch(**pitch_cfg)
                 fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
