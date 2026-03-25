@@ -134,7 +134,7 @@ def vis_side(dp=None):
                 "DZ-Andel": (dz_s / s * 100 if s > 0 else 0) 
             })
 
-        df_display = pd.DataFrame(p_stats).sort_values("Skud", ascending=False)
+        df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
         
         # Beregn højde: ca. 35px per række + 40px til header
         dynamic_height = (len(df_display) + 1) * 35 + 40
