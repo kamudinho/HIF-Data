@@ -4,7 +4,10 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp=None):
-    # --- 1. DATA CHECK & FORBEREDELSE ---
+    # Hvis du vil være helt sikker på at den ikke fejler hvis dp er tom:
+    if dp is None:
+        # Her kan du evt. kalde din egen load-funktion hvis det er nødvendigt
+        pass# --- 1. DATA CHECK & FORBEREDELSE ---
     # Vi henter kun de nødvendige team_stats fra opta-nøglen i dp
     df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
     
