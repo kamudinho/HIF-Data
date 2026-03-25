@@ -4,6 +4,11 @@ import plotly.express as px
 from datetime import datetime
 from data.data_load import load_local_players 
 
+# --- KONFIGURATION (Hvidovre-app værdier) ---
+HIF_RED = '#cc0000'
+DB = "KLUB_HVIDOVREIF.AXIS"
+LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
+
 # --- KONFIGURATION (Dine værdier fra toppen) ---
 TEAMS = {
     "Hvidovre": {"ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"},
