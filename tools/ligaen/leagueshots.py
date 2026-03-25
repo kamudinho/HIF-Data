@@ -17,7 +17,7 @@ ASSIST_BLUE = '#1e90ff'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
-# --- ZONE DEFINITIONER (ALLE 13 NUANCER) ---
+# --- ZONE DEFINITIONER (105x68 m) ---
 P_L, P_W = 105.0, 68.0
 X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
 X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
@@ -59,15 +59,19 @@ def get_logo_img(url):
     try: return Image.open(BytesIO(requests.get(url, timeout=5).content))
     except: return None
 
+# Funktion til at konvertere Opta (0-100) til Meter (105x68)
+def to_metric(val, total_m):
+    return val * (total_m / 100)
+
 def map_to_zone(r):
-    mx, my = r['EVENT_X'] * (105/100), r['EVENT_Y'] * (68/100)
+    mx, my = to_metric(r['EVENT_X'], 105), to_metric(r['EVENT_Y'], 68)
     for z, b in ZONE_BOUNDARIES.items():
         if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]: return z
     return "Zone 8"
 
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
-        ax_logo = ax.inset_axes([0.02, 0.85, 0.12, 0.12], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
         ax_logo.imshow(logo_img)
         ax_logo.axis('off')
 
@@ -86,12 +90,10 @@ def vis_side(dp=None):
     df_all = load_league_data()
     if df_all.empty: return
 
-    # Mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Layout: Dropdown til højre
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
         t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
@@ -100,12 +102,17 @@ def vis_side(dp=None):
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
     
     df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
+    
+    # Beregn metriske koordinater én gang
+    df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
+    df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
+    
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     df_team['IS_DZ'] = (df_team['EVENT_X'] >= 88.5) & (df_team['EVENT_Y'] >= 37.0) & (df_team['EVENT_Y'] <= 63.0)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT (MED PROGRESSBAR) ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -121,7 +128,11 @@ def vis_side(dp=None):
             "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
         })
 
-    # --- TAB 1: AFSLUTNINGER (MED KONVERTERINGSRATE) ---
+    # Fælles pitch konfiguration for at sikre ensretning
+    # pad_bottom=-20 fjerner den "ekstra mil" i bunden
+    pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc', "pad_bottom": -20}
+
+    # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -132,13 +143,13 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(10, 12))
-            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax)
+            pitch = VerticalPitch(**pitch_cfg)
+            fig, ax = pitch.draw(figsize=(8, 10))
+            pitch.scatter(d_v['X_M'], d_v['Y_M'], s=100, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # --- TAB 2: DZ-ANALYSE (MED DZ-KONVERTERING) ---
+    # --- TAB 2: DZ-ANALYSE ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
@@ -148,10 +159,12 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(10, 12))
-            ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=t_color, alpha=0.15))
-            pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=80, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax)
+            pitch = VerticalPitch(**pitch_cfg)
+            fig, ax = pitch.draw(figsize=(8, 10))
+            # Tegn DZ i meter: x-akse er bredde (68m), y-akse er længde (105m)
+            # Opta 37-63 på bredden svarer til ca 25.16m til 42.84m
+            ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
+            pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
@@ -170,8 +183,9 @@ def vis_side(dp=None):
                         z_summary.append({"Zone": z, "Antal": len(z_d), "%": f"{(len(z_d)/len(df_team)*100):.1f}%", "Topscorer": top_p})
                 st.table(pd.DataFrame(z_summary).sort_values("Antal", ascending=False))
             with c1:
-                pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-                fig, ax = pitch.draw(figsize=(10, 12))
+                # Vi bruger præcis samme pitch-kontekst som ovenfor
+                pitch = VerticalPitch(**pitch_cfg)
+                fig, ax = pitch.draw(figsize=(8, 10))
                 ax.set_ylim(55, 105)
                 max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
