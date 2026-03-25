@@ -148,7 +148,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(10, 12))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=t_color, alpha=0.15))
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax)
