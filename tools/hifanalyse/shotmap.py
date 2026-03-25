@@ -79,29 +79,61 @@ def vis_side(dp):
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-AFSLUTNINGER", "AFSLUTNINGSZONER", "MÅLZONER", "SEKVENSER"])
 
     # --- TAB 1: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
-        for p in sorted(df_skud['PLAYER_NAME'].unique()):
-            d = df_skud[df_skud['PLAYER_NAME'] == p]
+        # Gruppér kun på spillere fra det valgte hold
+        df_team_only = df_all[df_all['KLUB_NAVN'] == t_sel]
+        
+        for p, d in df_team_only.groupby('PLAYER_NAME'):
             dz = d[d['IS_DZ_GEO']]
             s, m = len(d), len(d[d['EVENT_TYPEID'] == 16])
-            dzs, dzm = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            dz_s, dz_m = len(dz), len(dz[dz['EVENT_TYPEID'] == 16])
+            
             stats.append({
-                "Spiller": p.split()[-1], 
-                "Skud": s, "Mål": m, 
-                "Konvertering%": (m/s*100) if s > 0 else 0,
-                "DZ-Skud": dzs, "DZ-Mål": dzm, 
-                "DZ-Konvertering%": (dzm/dzs*100) if dzs > 0 else 0,
-                "DZ-Andel": (dzs/s*100) if s > 0 else 0
+                "Spiller": p, 
+                "Skud": s, 
+                "Mål": m,  
+                "Konv.%": (m/s*100) if s > 0 else 0.0,
+                "DZ-Skud": dz_s, 
+                "DZ-Mål": dz_m,
+                "DZ-Konv.%": (dz_m/dz_s*100) if dz_s > 0 else 0.0,
+                "DZ-Andel": (dz_s/s*100) if s > 0 else 0.0
             })
+            
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
-        st.dataframe(df_f, use_container_width=True, height=(len(df_f)+1)*36, hide_index=True,
-                    column_config={
-                        "Konvertering%": st.column_config.NumberColumn("Konvertering%", format="%.1f%%"),
-                        "DZ-Konvertering%": st.column_config.NumberColumn("DZ-Konvertering%", format="%.1f%%"),
-                        "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.0f%%", min_value=0, max_value=100)
-                    })
-
+        
+        # Konfiguration af kolonner: Formatering og centrering
+        st.dataframe(
+            df_f, 
+            use_container_width=True, 
+            height=None, # None gør at den viser hele dataframen (scroller ikke internt hvis muligt)
+            hide_index=True,
+            column_config={
+                "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
+                "Skud": st.column_config.NumberColumn("Skud", help="Antal afslutninger i alt", format="%d"),
+                "Mål": st.column_config.NumberColumn("Mål", format="%d"),
+                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.2f%%"),
+                "DZ-Skud": st.column_config.NumberColumn("DZ-Skud", format="%d"),
+                "DZ-Mål": st.column_config.NumberColumn("DZ-Mål", format="%d"),
+                "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.2f%%"),
+                "DZ-Andel": st.column_config.ProgressColumn(
+                    "DZ-Andel af skud", 
+                    min_value=0, 
+                    max_value=100, 
+                    format="%.2f%%"
+                )
+            }
+        )
+        
+        # CSS til at centrere celler (Streamlit standard-dataframe kan være svær at centrere globalt, 
+        # men column_config NumberColumn centrerer automatisk tal/indhold mod højre/center)
+        st.markdown("""
+            <style>
+                [data-testid="stTable"] td { text-align: center !important; }
+                [data-testid="stDataFrame"] td { text-align: center !important; }
+            </style>
+        """, unsafe_allow_html=True)
     # --- TAB 2: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
