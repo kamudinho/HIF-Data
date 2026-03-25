@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
@@ -56,13 +55,14 @@ def get_wyscout_stats():
     """
     return pd.read_sql(query, conn)
 
-# --- 3. CHART FUNKTION ---
+# --- 3. DEN NYE, SIKRE CHART FUNKTION ---
 
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
     
-    col_width = 0.18
-    gap = 0.05 # Mere luft mellem graferne
+    # Fast setup for at undgå at søjlerne ændrer bredde
+    col_width = 0.20
+    gap = 0.05
 
     u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
     u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
@@ -72,73 +72,68 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         suffix = f"{i+1}" if i > 0 else ""
         xref, yref = f"x{suffix}", f"y{suffix}"
         
-        # Data hentning
         d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
         v1 = float(d1[m.upper()].iloc[0] if not d1.empty else 0)
         v2 = float(d2[m.upper()].iloc[0] if not d2.empty else 0)
         
-        # Formatering
         prec = ".2f" if 'XG' in m.upper() else ".1f"
-        
-        # 1. Søjler (Nu med mere højde)
+        max_y = max(v1, v2, 0.5)
+
+        # 1. Søjler (Højere end før)
         fig.add_trace(go.Bar(
             x=[0, 1], y=[v1, v2],
-            text=[format(v1, prec), format(v2, prec)],
-            textposition='outside',
-            textfont=dict(size=12, color="white", weight="bold"),
-            cliponaxis=False,
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
                           TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")],
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
 
-        # 2. Logoer (Helt i top, over værdierne)
+        # 2. Værdier (Lige over søjlerne)
+        fig.add_annotation(dict(x=0, y=v1, xref=xref, yref=yref, text=f"<b>{format(v1, prec)}</b>", 
+                                showarrow=False, yshift=12, font=dict(size=13, color="white")))
+        fig.add_annotation(dict(x=1, y=v2, xref=xref, yref=yref, text=f"<b>{format(v2, prec)}</b>", 
+                                showarrow=False, yshift=12, font=dict(size=13, color="white")))
+
+        # 3. Logoer (Som billed-annotationer - de sejler ikke!)
         if l1:
-            fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.1,
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+            fig.add_annotation(dict(
+                x=0, y=max_y * 1.5, xref=xref, yref=yref,
+                text=f'<html><img src="{l1}" width="35" height="35"></html>',
+                showarrow=False, yanchor="bottom"
             ))
         if l2:
-            fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.1,
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+            fig.add_annotation(dict(
+                x=1, y=max_y * 1.5, xref=xref, yref=yref,
+                text=f'<html><img src="{l2}" width="35" height="35"></html>',
+                showarrow=False, yanchor="bottom"
             ))
 
-        # 3. Kategori-navn (Låst til bunden med fast y-position)
+        # 4. Kategori-navn i bunden
         fig.add_annotation(dict(
-            x=0.5, y=-0.2, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=f"<b>{labels[i]}</b>", showarrow=False, 
-            font=dict(size=12, color="white"),
-            yanchor="top"
+            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=f"<b>{labels[i]}</b>", showarrow=False, font=dict(size=12, color="white"), yanchor="top"
         ))
 
-        # 4. Akser (y-range er nu kun 1.5x max, så søjlerne bliver højere)
-        max_y = max(v1, v2, 0.5)
+        # 5. Lås akserne
         fig.update_layout({
-            f"xaxis{suffix}": dict(
-                domain=[i*(col_width+gap), i*(col_width+gap)+col_width], 
-                range=[-0.8, 1.8], showticklabels=False, fixedrange=True
-            ),
-            f"yaxis{suffix}": dict(
-                range=[0, max_y * 1.5], visible=False, fixedrange=True
-            )
+            f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], range=[-0.8, 1.8], showticklabels=False),
+            f"yaxis{suffix}": dict(range=[0, max_y * 1.9], visible=False)
         })
 
     fig.update_layout(
         height=450,
-        margin=dict(t=100, b=100, l=20, r=20), # Masser af margen i top/bund til logoer/labels
+        margin=dict(t=40, b=100, l=20, r=20),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
+
 # --- 4. HOVEDFUNKTION ---
 
 def vis_side(dp_unused=None):
     df_opta = load_liga_data()
     df_wy = get_wyscout_stats()
-    df_wy.columns = [c.upper() for c in df_wy.columns]
-
+    
     if df_opta.empty:
         st.warning("Data ikke fundet."); return
 
@@ -165,7 +160,7 @@ def vis_side(dp_unused=None):
             else:
                 stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['U'] += 1; stats[a_uuid]['U'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
 
-    # Næste modstander logik
+    # Næste modstander
     next_opp = {}
     df_future = df_opta[df_opta['MATCH_STATUS'].str.strip().str.capitalize() != 'Played'].sort_values('MATCH_DATE_FULL')
     for uuid in stats.keys():
@@ -173,21 +168,21 @@ def vis_side(dp_unused=None):
         if not f.empty:
             r = f.iloc[0]
             is_h = r['CONTESTANTHOME_OPTAUUID'] == uuid
-            opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
             opp_u = r['CONTESTANTAWAY_OPTAUUID'] if is_h else r['CONTESTANTHOME_OPTAUUID']
+            opp_n = r['CONTESTANTAWAY_NAME'] if is_h else r['CONTESTANTHOME_NAME']
             dato = r['MATCH_DATE_FULL'].strftime('%d/%m')
             next_opp[uuid] = f'<div style="display:flex;align-items:center;gap:5px;"><img src="{get_logo_url(opp_u)}" width="18"><span>{opp_n}</span><span style="color:#888;font-size:10px;">{dato}</span></div>'
 
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
-    df_liga = df_liga.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
+    df_liga = df_liga.sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: center; } .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>", unsafe_allow_html=True)
+        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; } .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>", unsafe_allow_html=True)
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
