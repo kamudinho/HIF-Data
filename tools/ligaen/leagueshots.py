@@ -12,8 +12,6 @@ from io import BytesIO
 
 # --- KONFIGURATION & DESIGN ---
 HIF_RED = '#cc0000'
-HIF_GOLD = '#FFD700'
-ASSIST_BLUE = '#1e90ff'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
@@ -76,26 +74,26 @@ def draw_logo_on_pitch(ax, logo_img):
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    # CSS TIL OPSÆTNING
+    # CSS: Balanceret top-luft så navigationen i venstre side ikke knækker
     st.markdown("""
     <style>
-        /* Sørger for at hovedindholdet ikke rører ved sidebaren eller top-baren */
         .main .block-container {
-            padding-top: 3.5rem !important; /* Øget fra 0.5/1.5 for at give luft */
-            padding-bottom: 1rem !important;
+            padding-top: 3.0rem !important;
+            padding-bottom: 0rem !important;
             max-width: 95% !important;
         }
-
-        /* Justerer kun afstanden ved fanerne, så de rykker lidt tættere på dropdown */
-        .stTabs {
-            margin-top: -5px !important;
+        [data-testid="stVerticalBlock"] > div:first-child {
+            margin-top: -1.2rem !important;
         }
-
-        /* Stat-box styling (beholdes som den er) */
+        .stTabs {
+            margin-top: -10px !important;
+        }
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
             border-left: 5px solid #cc0000; margin-bottom: 10px; 
         }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,18 +104,12 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # --- TOP LAYOUT ---
-    # Ryd op i top-layoutet
+    # Top-bar med Dropdown
     c_h1, c_h2 = st.columns([2, 1])
-    
     with c_h2:
-        # Brug kun collapsed label - ingen ekstra div med margin her!
-        t_sel = st.selectbox(
-            "Vælg hold", 
-            teams, 
-            index=teams.index("Hvidovre") if "Hvidovre" in teams else 0,
-            label_visibility="collapsed"
-        )
+        # En lille smule luft over dropdown for at flugte med navigation
+        st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
+        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
@@ -126,9 +118,11 @@ def vis_side(dp=None):
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
-    df_team['IS_DZ'] = (df_team['EVENT_X'] >= 88.5) & (df_team['EVENT_Y'] >= 37.0) & (df_team['EVENT_Y'] <= 63.0)
+    
+    # DZ LOGIK: Centreret rektangel i feltet (Y_M er bredden 0-68)
+    # Center er 34. DZ er 17.68 bred -> 34 +/- 8.84
+    df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
-    # --- TABS ---
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
@@ -151,9 +145,8 @@ def vis_side(dp=None):
         with c2:
             p_sel = st.selectbox("Vælg spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
             d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
-            s, m = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
@@ -167,13 +160,14 @@ def vis_side(dp=None):
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
         with c2:
-            s, m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{len(dz_d[dz_d["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
             ax.set_ylim(55, 105)
+            # Tegner DZ rektangel: (x_start, y_start), bredde, højde
+            # Da det er VerticalPitch, er x/y byttet i Rectangle: (Y_M_min, X_M_min), bredde_i_meter, højde_i_meter
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
@@ -202,6 +196,7 @@ def vis_side(dp=None):
                     if b["y_max"] <= 55: continue
                     cnt = len(plot_df[plot_df['Zone']==z])
                     alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
+                    # Her skal Rectangle bruge (x_min, y_min) fra dine ZONE_BOUNDARIES
                     ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
                     if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
                 draw_logo_on_pitch(ax, t_logo)
