@@ -4,8 +4,6 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp=None):
-    st.title("BETINIA LIGAEN | KAMPE")
-
     # --- 1. DATA CHECK & FORBEREDELSE ---
     # Vi sikrer os at dp findes, ellers stopper vi fejlen her
     if dp is None:
