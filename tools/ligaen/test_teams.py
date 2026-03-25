@@ -59,97 +59,69 @@ def get_wyscout_stats():
 # --- 3. CHART FUNKTION ---
 
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
-    num_metrics = len(metrics)
-    col_width = 0.18 
-    gap = 0.04 # Lidt mere luft mellem kategorier
-    
+    # Vi bruger go.Figure() og styrer alt manuelt for at undgå rod
     fig = go.Figure()
+    
+    col_width = 0.18
+    gap = 0.04
 
     u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
     u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
     l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
     for i, m in enumerate(metrics):
-        axis_num = i + 1
-        suffix = f"{axis_num}" if axis_num > 1 else ""
+        suffix = f"{i+1}" if i > 0 else ""
         xref, yref = f"x{suffix}", f"y{suffix}"
         
-        start_pos = i * (col_width + gap)
-        end_pos = start_pos + col_width
-
+        # Data
         d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
+        v1 = float(d1[m.upper()].iloc[0] if not d1.empty else 0)
+        v2 = float(d2[m.upper()].iloc[0] if not d2.empty else 0)
         
-        raw_v1 = d1[m.upper()].iloc[0] if not d1.empty else 0
-        raw_v2 = d2[m.upper()].iloc[0] if not d2.empty else 0
-        
+        # Formatering
         prec = ".2f" if 'XG' in m.upper() else ".1f"
-        txt1 = format(float(raw_v1), prec)
-        txt2 = format(float(raw_v2), prec)
-
-        # 1. Søjler (Uden tekst her, vi laver det som annotations for fuld kontrol)
+        
+        # 1. Søjler
         fig.add_trace(go.Bar(
-            x=[0, 1], y=[float(raw_v1), float(raw_v2)], 
+            x=[0, 1], y=[v1, v2],
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
-                          TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")], 
+                          TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")],
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
-        
+
         # 2. Værdier (Lige over søjlerne)
-        max_val = max(float(raw_v1), float(raw_v2), 0.5)
-        text_y = max_val * 0.1 # Lille offset opad
+        fig.add_annotation(dict(x=0, y=v1, xref=xref, yref=yref, text=format(v1, prec), 
+                                showarrow=False, yshift=10, font=dict(size=12, color="white", weight="bold")))
+        fig.add_annotation(dict(x=1, y=v2, xref=xref, yref=yref, text=format(v2, prec), 
+                                showarrow=False, yshift=10, font=dict(size=12, color="white", weight="bold")))
 
-        fig.add_annotation(dict(x=0, y=float(raw_v1) + text_y, xref=xref, yref=yref, text=txt1, showarrow=False, font=dict(size=12, color="white", weight="bold")))
-        fig.add_annotation(dict(x=1, y=float(raw_v2) + text_y, xref=xref, yref=yref, text=txt2, showarrow=False, font=dict(size=12, color="white", weight="bold")))
-
-        # 3. Logoer (Placeret højt over søjlerne, men i subplot-koordinater)
-        logo_y = max_val * 1.4 # Logoer lander altid over højeste søjle + luft
-        
+        # 3. Logoer (Som annotations med 'ay' for at styre størrelsen)
         if l1:
             fig.add_layout_image(dict(
-                source=l1, xref=xref, yref=yref, x=0, y=logo_y, 
-                sizex=0.5, sizey=max_val*0.4, xanchor="center", yanchor="middle"
+                source=l1, xref=xref, yref="paper", x=0, y=0.95,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="top"
             ))
         if l2:
             fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=0.9, # Her bruger vi paper for at holde dem på linje i toppen
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+                source=l2, xref=xref, yref="paper", x=1, y=0.95,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="top"
             ))
-            # RETHINK: Vi bruger faktisk paper-metoden korrekt HER:
-            # Vi dropper yref=yref for logoer, da det er for svært at styre. 
-            # Vi bruger paper, men øger y-aksens loft drastisk så de ikke rammer søjlerne.
 
-        # 4. Kategori-label (Helt i bunden)
-        fig.add_annotation(dict(
-            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=labels[i], showarrow=False, font=dict(size=12, weight="bold", color="white")
-        ))
+        # 4. Kategori-navn i bunden
+        fig.add_annotation(dict(x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
+                                text=labels[i], showarrow=False, font=dict(size=12, color="white", weight="bold")))
 
-        # 5. Fix Akserne - vi giver den 100% luft i toppen til logoer
+        # 5. Lås akserne (Vi tvinger søjlerne ned i bunden ved at give y-aksen masser af range)
+        max_y = max(v1, v2, 1) * 2.2
         fig.update_layout({
-            f"xaxis{suffix}": dict(domain=[start_pos, end_pos], range=[-0.8, 1.8], showticklabels=False, fixedrange=True),
-            f"yaxis{suffix}": dict(range=[0, max_val * 2.5], visible=False, fixedrange=True)
+            f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], range=[-0.8, 1.8], showticklabels=False),
+            f"yaxis{suffix}": dict(range=[0, max_y], visible=False)
         })
-
-    # Logoer fix: Vi sætter dem ind som images igen, men med fast Y i paper-space
-    # for at sikre de flugter, men vi hæver loftet på søjlerne i y-aksen (max_val * 2.5)
-    for i, m in enumerate(metrics):
-        axis_num = i + 1
-        suffix = f"{axis_num}" if axis_num > 1 else ""
-        xref = f"x{suffix}"
-        
-        fig.add_layout_image(dict(
-            source=l1, xref=xref, yref="paper", x=0, y=0.85, 
-            sizex=0.3, sizey=0.3, xanchor="center", yanchor="middle"
-        ))
-        fig.add_layout_image(dict(
-            source=l2, xref=xref, yref="paper", x=1, y=0.85, 
-            sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
-        ))
 
     fig.update_layout(
         height=450,
-        margin=dict(t=50, b=80, l=10, r=10), 
+        margin=dict(t=80, b=50, l=10, r=10),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
