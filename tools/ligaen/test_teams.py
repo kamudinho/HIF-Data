@@ -43,11 +43,8 @@ def get_wyscout_stats():
 
 # --- 2. HJÆLPEFUNKTIONER ---
 
-def get_logo_url(opta_uuid):
-    return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
-
 def get_logo_html(uuid):
-    url = get_logo_url(uuid)
+    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == uuid), "")
     return f'<img src="{url}" width="20">' if url else ""
 
 def style_form(f):
@@ -64,10 +61,10 @@ def vis_side(dp_unused=None):
     df_wy = get_wyscout_stats()
 
     if df_opta.empty:
-        st.warning("Data ikke tilgængelig.")
+        st.warning("Ingen data fundet.")
         return
 
-    # Beregn tabel
+    # Ligatabel beregning
     df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
@@ -77,8 +74,7 @@ def vis_side(dp_unused=None):
                 stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MD': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
         
         if str(row['MATCH_STATUS']).strip().lower() == 'played':
-            h_g = int(row['TOTAL_HOME_SCORE'] or 0)
-            a_g = int(row['TOTAL_AWAY_SCORE'] or 0)
+            h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
             stats[h_uuid]['K'] += 1; stats[a_uuid]['K'] += 1
             stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
             if h_g > a_g:
@@ -110,13 +106,13 @@ def vis_side(dp_unused=None):
             metrics = ['SHOTS', 'XG', 'PASSES', 'PPDA']
             labels = ['Skud', 'xG', 'Afleveringer', 'PPDA']
             
-            # Subplots
-            fig = make_subplots(rows=1, cols=len(metrics), horizontal_spacing=0.05)
+            fig = make_subplots(rows=1, cols=len(metrics), horizontal_spacing=0.08)
             
             for i, m in enumerate(metrics):
-                # FIX: Her håndteres navngivning af akser korrekt for Plotly
-                axis_name = f"x{i+1}" if i > 0 else "x"
-                xref_name = f"{axis_name} domain"
+                # KORREKT NAVNGIVNING AF AKSER (x, x2, x3... og y, y2, y3...)
+                axis_suffix = f"{i+1}" if i > 0 else ""
+                xref_name = f"x{axis_suffix} domain"
+                yref_name = f"y{axis_suffix} domain"
                 
                 v1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)][m].mean()
                 v2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)][m].mean()
@@ -124,8 +120,14 @@ def vis_side(dp_unused=None):
                 fig.add_trace(go.Bar(name=team1, x=[team1], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), showlegend=False), row=1, col=i+1)
                 fig.add_trace(go.Bar(name=team2, x=[team2], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), showlegend=False), row=1, col=i+1)
                 
-                fig.add_annotation(dict(x=0.5, y=-0.2, xref=xref_name, yref=f"y{i+1} domain", text=labels[i], showarrow=False, font=dict(size=12, weight="bold")))
+                # Annotation med de rettede xref og yref
+                fig.add_annotation(dict(
+                    x=0.5, y=-0.25, 
+                    xref=xref_name, yref=yref_name, 
+                    text=labels[i], showarrow=False, 
+                    font=dict(size=12, weight="bold")
+                ))
 
-            fig.update_layout(height=300, margin=dict(t=20, b=60, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)')
+            fig.update_layout(height=300, margin=dict(t=20, b=80, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)')
             fig.update_xaxes(showticklabels=False)
             st.plotly_chart(fig, use_container_width=True)
