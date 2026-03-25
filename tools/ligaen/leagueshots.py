@@ -37,7 +37,6 @@ ZONE_BOUNDARIES = {
     "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
 }
 
-# --- DATA & LOGO UTILS ---
 @st.cache_data(ttl=3600)
 def load_league_data():
     conn = _get_snowflake_conn()
@@ -74,20 +73,19 @@ def draw_logo_on_pitch(ax, logo_img):
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    # CSS: Balanceret top-luft så navigationen i venstre side ikke knækker
+    # RENSAT CSS: Ingen skjulte headere, kun fokus på at flytte indholdet samlet
     st.markdown("""
     <style>
         .main .block-container {
-            padding-top: 3.0rem !important;
-            padding-bottom: 0rem !important;
+            padding-top: 4.5rem !important; /* Giver plads til sidebar-toppen */
             max-width: 95% !important;
         }
+        
+        /* Dette rykker hele den første blok (overskrift + dropdown) op */
         [data-testid="stVerticalBlock"] > div:first-child {
-            margin-top: -1.2rem !important;
+            margin-top: -40px !important;
         }
-        .stTabs {
-            margin-top: -10px !important;
-        }
+
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
             border-left: 5px solid #cc0000; margin-bottom: 10px; 
@@ -104,11 +102,10 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Top-bar med Dropdown
+    # --- TOP SEKTION ---
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        # En lille smule luft over dropdown for at flugte med navigation
-        st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
+        # label_visibility="collapsed" fjerner det tomme hul over boksen
         t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
@@ -119,14 +116,13 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # DZ LOGIK: Centreret rektangel i feltet (Y_M er bredden 0-68)
-    # Center er 34. DZ er 17.68 bred -> 34 +/- 8.84
+    # DZ LOGIK: Korrekt centreret i meter
     df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
+    # TABS kommer her - de bør nu følge pænt efter dropdown
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
-    # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -139,7 +135,6 @@ def vis_side(dp=None):
             })
         st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
 
-    # TAB 1: AFSLUTNINGER
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -155,7 +150,6 @@ def vis_side(dp=None):
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # TAB 2: DZ-ANALYSE
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
@@ -166,14 +160,12 @@ def vis_side(dp=None):
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
             ax.set_ylim(55, 105)
-            # Tegner DZ rektangel: (x_start, y_start), bredde, højde
-            # Da det er VerticalPitch, er x/y byttet i Rectangle: (Y_M_min, X_M_min), bredde_i_meter, højde_i_meter
+            # DZ Rektangel (Y_start, X_start), bredde, højde
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # TAB 3 & 4: ZONER
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             c1, c2 = st.columns([1.8, 1])
@@ -196,7 +188,6 @@ def vis_side(dp=None):
                     if b["y_max"] <= 55: continue
                     cnt = len(plot_df[plot_df['Zone']==z])
                     alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
-                    # Her skal Rectangle bruge (x_min, y_min) fra dine ZONE_BOUNDARIES
                     ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
                     if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
                 draw_logo_on_pitch(ax, t_logo)
