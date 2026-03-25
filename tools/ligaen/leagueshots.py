@@ -10,7 +10,7 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-# --- KONFIGURATION & DESIGN ---
+# --- KONFIGURATION (Hvidovre-app værdier) ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
@@ -37,6 +37,7 @@ ZONE_BOUNDARIES = {
     "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
 }
 
+# --- DATA & UTILS ---
 @st.cache_data(ttl=3600)
 def load_league_data():
     conn = _get_snowflake_conn()
@@ -73,25 +74,31 @@ def draw_logo_on_pitch(ax, logo_img):
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    # RENSAT CSS: Ingen skjulte headere, kun fokus på at flytte indholdet samlet
+    # CSS TIL OPSÆTNING
     st.markdown("""
     <style>
+        header {visibility: hidden;}
         .main .block-container {
-            padding-top: 4.5rem !important; /* Giver plads til sidebar-toppen */
-            max-width: 95% !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 3rem !important;
         }
-        
-        /* Dette rykker hele den første blok (overskrift + dropdown) op */
-        [data-testid="stVerticalBlock"] > div:first-child {
-            margin-top: -20px !important;
+        [data-testid="stVerticalBlock"] {
+            gap: 0rem !important;
         }
-
+        .stTabs {
+            margin-top: -10px !important;
+        }
+        /* Stat-boxe med luft og tydelig adskillelse */
         .stat-box { 
-            background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
-            border-left: 5px solid #cc0000; margin-bottom: 10px; 
+            background-color: #f8f9fa; 
+            padding: 15px !important; 
+            border-radius: 8px; 
+            border-left: 5px solid #cc0000; 
+            margin-bottom: 12px !important; 
+            display: block;
         }
-        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
-        .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
+        .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; line-height: 1.2; }
+        .stat-value { font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin-top: 4px; line-height: 1; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -102,11 +109,10 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # --- TOP SEKTION ---
+    # Top-layout
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        # label_visibility="collapsed" fjerner det tomme hul over boksen
-        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
+        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
@@ -116,13 +122,13 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # DZ LOGIK: Korrekt centreret i meter
+    # Danger Zone logik (88.5m til 105m, centreret i bredden)
     df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
-    # TABS kommer her - de bør nu følge pænt efter dropdown
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
+    # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -135,12 +141,13 @@ def vis_side(dp=None):
             })
         st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
 
+    # TAB 1: AFSLUTNINGER
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            p_sel = st.selectbox("Vælg spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
+            p_sel = st.selectbox("Vælg spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()), key="p_afsl")
             d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud i alt</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
@@ -150,22 +157,24 @@ def vis_side(dp=None):
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
+    # TAB 2: DZ-ANALYSE
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
         with c2:
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{len(dz_d[dz_d["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Danger Zone Skud</div><div class="stat-value">{len(dz_d)}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Danger Zone Mål</div><div class="stat-value">{len(dz_d[dz_d["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
             ax.set_ylim(55, 105)
-            # DZ Rektangel (Y_start, X_start), bredde, højde
+            # DZ REKTANGEL
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
+    # TAB 3 & 4: ZONER
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             c1, c2 = st.columns([1.8, 1])
