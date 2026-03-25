@@ -55,7 +55,7 @@ def get_wyscout_stats():
     """
     return pd.read_sql(query, conn)
 
-# --- 3. CHART FUNKTION (FIXET) ---
+# --- 3. CHART FUNKTION (HEAD-TO-HEAD) ---
 
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
@@ -78,45 +78,61 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         prec = ".2f" if 'XG' in m.upper() else ".1f"
         max_y = max(v1, v2, 0.5)
 
-        # 1. Søjler med hvid tekst udenfor
+        # 1. Søjler
         fig.add_trace(go.Bar(
             x=[0, 1], y=[v1, v2],
-            text=[format(v1, prec), format(v2, prec)],
-            textposition='outside',
-            textfont=dict(size=14, color="white", family="Arial Black"), # TVUNGEN HVID
-            cliponaxis=False,
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
                           TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")],
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
 
-        # 2. Logoer i toppen
-        if l1:
-            fig.add_layout_image(dict(source=l1, xref=xref, yref="paper", x=0, y=1.05, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
-        if l2:
-            fig.add_layout_image(dict(source=l2, xref=xref, yref="paper", x=1, y=1.05, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
-
-        # 3. Kategori-navn under søjlerne
+        # 2. VÆRDIER OVER BARENE (Hvid skrift)
         fig.add_annotation(dict(
-            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=f"<b>{labels[i]}</b>", showarrow=False, font=dict(size=12, color="white"), yanchor="top"
+            x=0, y=v1, xref=xref, yref=yref, text=f"<b>{format(v1, prec)}</b>",
+            showarrow=False, yshift=15, font=dict(size=13, color="white")
+        ))
+        fig.add_annotation(dict(
+            x=1, y=v2, xref=xref, yref=yref, text=f"<b>{format(v2, prec)}</b>",
+            showarrow=False, yshift=15, font=dict(size=13, color="white")
         ))
 
-        # 4. Akse setup
+        # 3. KATEGORI UNDER BARENE
+        fig.add_annotation(dict(
+            x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=f"<b>{labels[i]}</b>", showarrow=False, 
+            font=dict(size=12, color="white"), yanchor="top"
+        ))
+
+        # 4. LOGOER I TOPPEN
+        if l1:
+            fig.add_layout_image(dict(
+                source=l1, xref=xref, yref="paper", x=0, y=1.05,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
+            ))
+        if l2:
+            fig.add_layout_image(dict(
+                source=l2, xref=xref, yref="paper", x=1, y=1.05,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
+            ))
+
+        # 5. AKSE SETUP
         fig.update_layout({
-            f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], range=[-0.8, 1.8], showticklabels=False),
-            f"yaxis{suffix}": dict(range=[0, max_y * 1.5], visible=False)
+            f"xaxis{suffix}": dict(
+                domain=[i*(col_width+gap), i*(col_width+gap)+col_width], 
+                range=[-0.8, 1.8], showticklabels=False
+            ),
+            f"yaxis{suffix}": dict(range=[0, max_y * 1.8], visible=False)
         })
 
     fig.update_layout(
         height=450,
-        margin=dict(t=120, b=80, l=20, r=20),
+        margin=dict(t=100, b=80, l=20, r=20),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
-# --- 4. HOVEDFUNKTION (Tabellen) ---
+# --- 4. HOVEDFUNKTION ---
 
 def vis_side(dp_unused=None):
     df_opta = load_liga_data()
@@ -128,6 +144,7 @@ def vis_side(dp_unused=None):
     df_opta.columns = [c.upper() for c in df_opta.columns]
     df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
     
+    # Beregn Tabel-data
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -147,7 +164,7 @@ def vis_side(dp_unused=None):
             else:
                 stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['U'] += 1; stats[a_uuid]['U'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
 
-    # Næste modstander logik (med logo)
+    # Næste modstander
     next_opp = {}
     df_future = df_opta[df_opta['MATCH_STATUS'].str.strip().str.capitalize() != 'Played'].sort_values('MATCH_DATE_FULL')
     for uuid in stats.keys():
@@ -169,11 +186,19 @@ def vis_side(dp_unused=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; color: white; } .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>", unsafe_allow_html=True)
+        st.markdown("""
+            <style>
+                .league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
+                .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
+            </style>
+        """, unsafe_allow_html=True)
+        
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        
+        st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(
+            escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
@@ -183,6 +208,7 @@ def vis_side(dp_unused=None):
         h_list2 = [h for h in h_list if h != team1]
         team2 = c2.selectbox("Hold 2", h_list2, index=0)
 
+        # FANER TIL STATISTIK
         tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
         with tabs[0]: draw_h2h_chart(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_wy, "gen", df_liga)
         with tabs[1]: draw_h2h_chart(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_wy, "xg", df_liga)
