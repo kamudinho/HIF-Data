@@ -39,15 +39,15 @@ def prepare_df(content, is_hif=False):
     # ENSRET KOLONNENAVNE (Gør dem ens for begge filer)
     rename_map = {
         'NAVN': 'Navn',
-        'POS': 'Pos_Tal',
+        'POS': 'POS',
         'CONTRACT': 'Kontrakt',
         'ROLECODE3': 'Position'
     }
     df = df.rename(columns=rename_map)
 
     # SIKR POS_TAL FINDES
-    if 'Pos_Tal' not in df.columns:
-        df['Pos_Tal'] = 0
+    if 'POS' not in df.columns:
+        df['POS'] = 0
     
     # ENSRET SKYGGEHOLD
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
@@ -74,7 +74,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
     # Hvilke kolonner vil vi gerne vise?
-    desired_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Kontrakt', '🛡️']
+    desired_cols = ['Navn', 'Position', 'Klub', 'POS', 'Kontrakt', '🛡️']
     if kan_slettes: df_temp['🗑️'] = False; desired_cols.append('🗑️')
     
     # Vi viser kun de kolonner der rent faktisk findes i DF
@@ -125,7 +125,7 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            vis_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Kontrakt']
+            vis_cols = ['Navn', 'Position', 'Klub', 'POS', 'Kontrakt']
             st.dataframe(
                 df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('Pos_Tal'), 
                 use_container_width=True, 
@@ -168,7 +168,7 @@ def vis_side(dp):
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
                     # Filtrer spillere på denne position (Tving begge til float for sammenligning)
-                    spillere = df_samlet[df_samlet['Pos_Tal'].astype(float) == float(p_num)]
+                    spillere = df_samlet[df_samlet['POS'].astype(float) == float(p_num)]
                     
                     for i, (_, p) in enumerate(spillere.iterrows()):
                         bg_color = "#ffebee" if p['Klub'] == 'Hvidovre IF' else "#f1f8e9"
