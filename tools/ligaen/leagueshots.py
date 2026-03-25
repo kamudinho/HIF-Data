@@ -214,8 +214,15 @@ def vis_side(dp=None):
             df_t = df_all[df_all['KLUB_NAVN'] == t_sel]
             p_sel = st.selectbox("Vælg spiller", ["Alle"] + sorted(df_t['PLAYER_NAME'].unique()), key="p1")
             d_v = df_t if p_sel == "Alle" else df_t[df_t['PLAYER_NAME'] == p_sel]
-            st.metric("Antal skud", len(d_v))
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konvertering</div><div class="stat-value">{konv:.2f}%</div></div>', unsafe_allow_html=True)
         with c1:
+            pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(5, 7))
+            colors = (d_v['EVENT_TYPEID'] == 16).map({True: HIF_RED, False: 'white'})
+            pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=20, c=colors, edgecolors=HIF_RED, linewidth=1, ax=ax)
+            st.pyplot(fig)        with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             colors = (d_v['EVENT_TYPEID'] == 16).map({True: t_color, False: 'white'})
