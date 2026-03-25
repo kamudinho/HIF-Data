@@ -5,7 +5,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. DATA LOAD (Snowflake Query) ---
+    # --- 1. DATA LOAD ---
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
@@ -14,14 +14,14 @@ def vis_side(dp=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
-    # Vi henter alle nødvendige stats i én query for at føde dine bars
+    # SQL er nu rettet til at bruge STAT_VALUE for xG og manuel beregning for Forward Passes
     sql = f"""
         WITH MatchBase AS (
             SELECT 
                 MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS,
                 CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME,
                 CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME,
-                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
+                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_LOCALTIME
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
@@ -29,38 +29,57 @@ def vis_side(dp=None):
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
-                MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_TOTAL END) AS XG,
                 SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_TOTAL ELSE 0 END) AS TOUCHES_IN_BOX,
                 SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS,
-                SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) AS PASSES,
-                SUM(CASE WHEN STAT_TYPE = 'fwdPass' THEN STAT_TOTAL ELSE 0 END) AS FORWARD_PASSES
+                SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) AS PASSES
             FROM {DB}.OPTA_MATCHSTATS
+            GROUP BY 1, 2
+        ),
+        XGPivot AS (
+            SELECT 
+                MATCH_ID, CONTESTANT_OPTAUUID,
+                SUM(STAT_VALUE) AS XG
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE STAT_TYPE IN ('expectedGoals', 'expectedGoal')
+            GROUP BY 1, 2
+        ),
+        ForwardPasses AS (
+            SELECT 
+                MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES
+            FROM (
+                SELECT 
+                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, EVENT_OUTCOME, EVENT_X,
+                    LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as LEAD_X
+                FROM {DB}.OPTA_EVENTS
+                WHERE EVENT_TYPEID = 1
+            )
             GROUP BY 1, 2
         )
         SELECT 
             b.*,
-            h.POSSESSION AS HOME_POSS, h.TOUCHES_IN_BOX AS HOME_TOUCHES, h.XG AS HOME_XG, 
-            h.SHOTS AS HOME_SHOTS, h.PASSES AS HOME_PASSES, h.FORWARD_PASSES AS HOME_FORWARD_PASSES,
-            a.POSSESSION AS AWAY_POSS, a.TOUCHES_IN_BOX AS AWAY_TOUCHES, a.XG AS AWAY_XG,
-            a.SHOTS AS AWAY_SHOTS, a.PASSES AS AWAY_PASSES, a.FORWARD_PASSES AS AWAY_FORWARD_PASSES
+            h.POSSESSION AS HOME_POSS, h.TOUCHES_IN_BOX AS HOME_TOUCHES, hx.XG AS HOME_XG, 
+            h.SHOTS AS HOME_SHOTS, h.PASSES AS HOME_PASSES, hf.FORWARD_PASSES AS HOME_FORWARD_PASSES,
+            a.POSSESSION AS AWAY_POSS, a.TOUCHES_IN_BOX AS AWAY_TOUCHES, ax.XG AS AWAY_XG,
+            a.SHOTS AS AWAY_SHOTS, a.PASSES AS AWAY_PASSES, af.FORWARD_PASSES AS AWAY_FORWARD_PASSES
         FROM MatchBase b
         LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
         LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
+        LEFT JOIN XGPivot hx ON b.MATCH_OPTAUUID = hx.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = hx.CONTESTANT_OPTAUUID
+        LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
+        LEFT JOIN ForwardPasses hf ON b.MATCH_OPTAUUID = hf.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = hf.EVENT_CONTESTANT_OPTAUUID
+        LEFT JOIN ForwardPasses af ON b.MATCH_OPTAUUID = af.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = af.EVENT_CONTESTANT_OPTAUUID
         ORDER BY b.MATCH_DATE_FULL DESC
     """
 
-    try:
-        with st.spinner("Opdaterer kampdata..."):
-            df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-    except Exception as e:
-        st.error(f"Fejl ved datahentning: {e}")
-        return
+    with st.spinner("Henter kampdata..."):
+        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
 
     if df_matches is None or df_matches.empty:
-        st.warning("Ingen kampdata fundet.")
+        st.warning("Ingen data fundet.")
         return
 
-    # --- 2. DATA PREP & MAPPING ---
+    # --- 2. DATA PREP ---
     df_matches.columns = [c.upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
@@ -73,7 +92,7 @@ def vis_side(dp=None):
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 3. CSS STYLING ---
+    # --- 3. UI STYLING ---
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
@@ -82,16 +101,13 @@ def vis_side(dp=None):
         .label-box { background: #eee; border-bottom: 2px solid #666; }
         .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
-        .team-name { font-weight: bold; font-size: 15px; }
         .bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; }
         .bar-val { font-weight: 700; font-size: 12px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP LAYOUT & FILTRERING ---
+    # --- 4. TOP LAYOUT ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
-    
-    # RÆKKE 1: OVERORDNET STATS
     row1 = st.columns(col_layout)
     with row1[0]:
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_sel")
@@ -100,6 +116,7 @@ def vis_side(dp=None):
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
     played_all = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
 
+    # Beregn Overblik
     summary = {"K": len(played_all), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played_all.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
@@ -114,11 +131,12 @@ def vis_side(dp=None):
     for i, (l, v) in enumerate(stats_r1):
         row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # RÆKKE 2: PERIODE SNIT
+    # RÆKKE 2 (SNIT)
     row2 = st.columns(col_layout)
     with row2[0]:
         valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="per_sel")
 
+    # Periode filter logik
     if valgt_periode == "Efterår 25":
         p_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
     elif valgt_periode == "Forår 26":
@@ -136,7 +154,7 @@ def vis_side(dp=None):
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
         row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
 
-    # --- 5. TABS & KAMPVISNING ---
+    # --- 5. TABS ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     maaned_map = {"Jan": "JANUAR", "Feb": "FEBRUAR", "Mar": "MARTS", "Apr": "APRIL", "May": "MAJ", "Jun": "JUNI", "Jul": "JULI", "Aug": "AUGUST", "Sep": "SEPTEMBER", "Oct": "OKTOBER", "Nov": "NOVEMBER", "Dec": "DECEMBER"}
 
@@ -157,7 +175,6 @@ def vis_side(dp=None):
             if spillet:
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 
-                # Bars Logik (Farvestyring)
                 h_is_valgt = h_uuid == valgt_uuid
                 h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if h_is_valgt else "#d1d1d1"
                 a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#cc0000") if not h_is_valgt else "#d1d1d1"
@@ -175,18 +192,14 @@ def vis_side(dp=None):
                 for hc, ac, label, dec, suffix in stats_conf:
                     hv = pd.to_numeric(row.get(hc), errors='coerce') or 0
                     av = pd.to_numeric(row.get(ac), errors='coerce') or 0
-                    h_str = f"{hv:.{dec}f}{suffix}" if dec > 0 else f"{int(hv)}{suffix}"
-                    a_str = f"{av:.{dec}f}{suffix}" if dec > 0 else f"{int(av)}{suffix}"
-                    
-                    total = hv + av
-                    h_pct = (hv / total * 100) if total > 0 else 50
+                    h_pct = (hv / (hv + av) * 100) if (hv + av) > 0 else 50
 
                     st.markdown(f"""
                         <div style="margin-bottom: 8px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                                <span class="bar-val">{h_str}</span>
+                                <span class="bar-val">{hv:.{dec}f}{suffix}</span>
                                 <span class="bar-label">{label}</span>
-                                <span class="bar-val">{a_str}</span>
+                                <span class="bar-val">{av:.{dec}f}{suffix}</span>
                             </div>
                             <div style="display: flex; height: 10px; background: #eee; border-radius: 5px; overflow: hidden;">
                                 <div style="width: {h_pct}%; background: {h_bar_color};"></div>
@@ -195,7 +208,8 @@ def vis_side(dp=None):
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                c3.markdown("<div style='text-align:center; padding-top:15px; font-weight:bold; color:#cc0000;'>KOMMENDE</div>", unsafe_allow_html=True)
+                tid = pd.to_datetime(row.get('MATCH_LOCALTIME')).strftime('%H:%M') if pd.notnull(row.get('MATCH_LOCALTIME')) else 'TBA'
+                c3.markdown(f"<div style='text-align:center; padding-top:8px;'><div class='score-pill' style='background:#f0f0f0; color:#333; font-size:14px;'>KL. {tid}</div></div>", unsafe_allow_html=True)
 
             c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
             c5.markdown(f"<div class='team-name' style='text-align:left;'>{a_n}</div>", unsafe_allow_html=True)
@@ -204,13 +218,9 @@ def vis_side(dp=None):
         if not played_p.empty:
             for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
                 tegn_kamp_række(row, True)
-        else:
-            st.info("Ingen resultater fundet for denne periode.")
 
     with tab2:
-        future = p_matches[~p_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        future = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
         if not future.empty:
             for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
                 tegn_kamp_række(row, False)
-        else:
-            st.info("Ingen kommende kampe i kalenderen.")
