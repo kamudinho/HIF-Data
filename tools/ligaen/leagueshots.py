@@ -70,31 +70,35 @@ def map_to_zone(r):
 
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
+        # Låst til selve aksen (0-1), så den ikke flytter sig ved zoom
         ax_logo = ax.inset_axes([0.02, 0.89, 0.12, 0.10], transform=ax.transAxes)
         ax_logo.imshow(logo_img)
         ax_logo.axis('off')
 
 # --- MAIN APP ---
 def vis_side(dp=None):
+    # CSS TIL AT FJERNE TOP-PADDING OG JUSTERE TABS
     st.markdown("""
     <style>
-        /* Fjerner padding i selve hoved-containeren */
+        header {visibility: hidden;}
         .block-container {
-            padding-top: 2rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 0rem !important;
         }
-        
-        /* Gør afstanden mellem elementer mindre */
         [data-testid="stVerticalBlock"] {
-            gap: 0.5rem !important;
+            gap: 0rem !important;
         }
-
-        /* Justering af tabs */
         .stTabs {
-            margin-top: -30px !important;
+            margin-top: -15px !important;
         }
+        .stat-box { 
+            background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
+            border-left: 5px solid #cc0000; margin-bottom: 10px; 
+        }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     df_all = load_league_data()
     if df_all.empty: return
@@ -103,26 +107,26 @@ def vis_side(dp=None):
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
+    # Overskrift og Dropdown helt i top
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        st.markdown('<div style="margin-top: -55px;"></div>', unsafe_allow_html=True)
-        t_sel = st.selectbox(" ", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        t_sel = st.selectbox(
+            "Vælg hold", 
+            teams, 
+            index=teams.index("Hvidovre") if "Hvidovre" in teams else 0,
+            label_visibility="collapsed"
+        )
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
     
     df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-    
-    # Præcis konvertering til meter
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
-    
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     df_team['IS_DZ'] = (df_team['EVENT_X'] >= 88.5) & (df_team['EVENT_Y'] >= 37.0) & (df_team['EVENT_Y'] <= 63.0)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
-
-    # Fælles pitch konfiguration (uden pad_bottom for at undgå mikroskift)
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
     # --- TAB 0: SPILLEROVERSIGT ---
@@ -136,10 +140,7 @@ def vis_side(dp=None):
                 "Spiller": p, "Skud": s, "Mål": m, "Konv.%": (m/s*100 if s>0 else 0),
                 "DZ-Skud": dz_s, "DZ-Mål": dz_m, "DZ-Andel": (dz_s/s*100 if s>0 else 0)
             })
-        st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True, column_config={
-            "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.1f%%", min_value=0, max_value=100),
-            "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
-        })
+        st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
 
     # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
@@ -150,11 +151,10 @@ def vis_side(dp=None):
             s, m = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(55, 105) # TVUNGET FLUGT
+            ax.set_ylim(55, 105) 
             pitch.scatter(d_v['X_M'], d_v['Y_M'], s=100, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
@@ -167,11 +167,10 @@ def vis_side(dp=None):
             s, m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10))
-            ax.set_ylim(55, 105) # TVUNGET FLUGT
+            ax.set_ylim(55, 105)
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo)
@@ -194,7 +193,7 @@ def vis_side(dp=None):
             with c1:
                 pitch = VerticalPitch(**pitch_cfg)
                 fig, ax = pitch.draw(figsize=(8, 10))
-                ax.set_ylim(55, 105) # TVUNGET FLUGT
+                ax.set_ylim(55, 105)
                 max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
                     if b["y_max"] <= 55: continue
