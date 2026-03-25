@@ -3,18 +3,13 @@ import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-import requests
-import base64
-from datetime import datetime
-from io import StringIO
 
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # IMPORTS
 import data.HIF_load as hif_load
-from data.data_load import _get_snowflake_conn, load_local_players
-import data.analyse_load as analyse_load
+from data.data_load import _get_snowflake_conn
 from data.users import get_users
 
 # --- 1. KONFIGURATION & BRANDING ---
@@ -47,6 +42,7 @@ st.markdown(f"""
             text-transform: uppercase;
             letter-spacing: 2px;
             font-weight: 600;
+            margin: 0;
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -102,11 +98,9 @@ with st.sidebar:
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
-    # SEKTION 1: TRUPPEN (Hurtig CSV-load, ingen Snowflake)
+    # SEKTION 1: TRUPPEN (Hurtig CSV-load)
     if hoved_omraade == "TRUPPEN":
-        # Vi bruger den nye hurtige funktion her
         dp_quick = hif_load.get_squad_only()
-        
         if sel == "Oversigt":
             import tools.truppen.players as pl
             pl.vis_side(dp_quick["players"])
@@ -114,10 +108,9 @@ try:
             import tools.truppen.squad as sq
             sq.vis_side(dp_quick["players"])
 
-    # SEKTION 2: SCOUTING (Den tunge Snowflake pakke)
+    # SEKTION 2: SCOUTING (Kræver stadig sin pakke, da den er cross-tabulær)
     elif hoved_omraade == "SCOUTING":
-        dp = hif_load.get_scouting_package() # Snowflake aktiveres her
-        
+        dp = hif_load.get_scouting_package() 
         if sel == "Scoutrapport":
             import tools.scouting.scout_input as si
             si.vis_side(dp)
@@ -134,42 +127,38 @@ try:
             import tools.scouting.comparison as comp
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
 
-    # SEKTION 3: ANALYSE & LIGA (Opta Snowflake)
-    elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
-        is_hif_mode = (hoved_omraade == "HIF ANALYSE")
-        dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
-        
-        if hoved_omraade == "HIF ANALYSE":
-            if sel == "Spillerperformance":
-                import tools.hifanalyse.player_analysis as pa
-                pa.vis_side(dp)
-            elif sel == "Afslutninger":
-                import tools.hifanalyse.shotmap as sm
-                sm.vis_side(dp)
-            elif sel == "Assistmap":
-                import tools.hifanalyse.assistmap as am
-                am.vis_side(dp)
-        
-        elif hoved_omraade == "BETINIA LIGAEN":
-            if sel == "Modstanderanalyse":
-                import tools.ligaen.modstanderanalyse as ma
-                ma.vis_side()
-            elif sel == "Holdoversigt":
-                import tools.ligaen.test_teams as tt
-                tt.vis_side(dp)
-            elif sel == "Kampe":
-                import tools.ligaen.test_matches as tm
-                tm.vis_side(dp)
-            elif sel == "Charts":
-                import tools.ligaen.chart as pc
-                pc.vis_side(dp)
-            elif sel == "Afslutninger - liga":
-                import tools.ligaen.leagueshots as ls
-                ls.vis_side(dp)
-            elif sel == "Fysisk data":
-                import tools.ligaen.fysisk as fd_page
-                # Bemærk: Vi sender conn direkte med for hastighed lokalt på siden
-                fd_page.vis_side(_get_snowflake_conn(), dp.get('name_map', {}))
+    # SEKTION 3: HIF & LIGA ANALYSE (OPTIMERET: Ingen global load!)
+    elif hoved_omraade == "HIF ANALYSE":
+        if sel == "Spillerperformance":
+            import tools.hifanalyse.player_analysis as pa
+            pa.vis_side() # Siden henter selv data
+        elif sel == "Afslutninger":
+            import tools.hifanalyse.shotmap as sm
+            sm.vis_side()
+        elif sel == "Assistmap":
+            import tools.hifanalyse.assistmap as am
+            am.vis_side()
+
+    elif hoved_omraade == "BETINIA LIGAEN":
+        if sel == "Modstanderanalyse":
+            import tools.ligaen.modstanderanalyse as ma
+            ma.vis_side() # Siden henter selv data
+        elif sel == "Holdoversigt":
+            import tools.ligaen.test_teams as tt
+            tt.vis_side()
+        elif sel == "Kampe":
+            import tools.ligaen.test_matches as tm
+            tm.vis_side()
+        elif sel == "Charts":
+            import tools.ligaen.chart as pc
+            pc.vis_side()
+        elif sel == "Afslutninger - liga":
+            import tools.ligaen.leagueshots as ls
+            ls.vis_side()
+        elif sel == "Fysisk data":
+            import tools.ligaen.fysisk as fd_page
+            # Vi sender kun connection med, data hentes lokalt
+            fd_page.vis_side(_get_snowflake_conn())
 
     # SEKTION 4: ADMIN
     elif hoved_omraade == "ADMIN":
