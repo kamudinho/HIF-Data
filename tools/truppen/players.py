@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# Globale værdier - Henter sæsonnavn fra utils hvis muligt
+# Globale værdier
 try:
     from data.utils.team_mapping import TOURNAMENTCALENDAR_NAME
 except ImportError:
     TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 def map_position_detail(pos_code):
-    """Mapper talkoder fra CSV til læsbare positioner"""
+    """Mapper talkoder til læsbare positioner"""
     pos_map = {
         "1.0": "Målmand", "1": "Målmand",
         "2.0": "Højre Back", "2": "Højre Back",
@@ -24,35 +24,35 @@ def map_position_detail(pos_code):
         "11.0": "Venstre Kant", "11": "Venstre Kant"
     }
     clean_code = str(pos_code).strip()
+    if ".0" not in clean_code and clean_code.isdigit():
+        clean_code = f"{clean_code}.0"
     return pos_map.get(clean_code, "Ukendt")
 
 @st.cache_data(ttl=600)
 def process_squad_data(df):
-    """Renser og forbereder data fra players.csv"""
+    """Renser data og tvinger kolonnenavne til STORE BOGSTAVER"""
     if df is None or df.empty:
         return pd.DataFrame()
 
     df = df.copy()
-    # Fjern usynlige mellemrum i kolonnenavne
-    df.columns = [c.strip() for c in df.columns]
+    # TVING ALT TIL STORE BOGSTAVER FOR AT UNDGÅ 'Navn' vs 'NAVN' FEJL
+    df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # Konvertér kolonner til rigtige typer
+    # Konvertér typer
     df['BIRTHDATE'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
     df['CONTRACT'] = pd.to_datetime(df['CONTRACT'], dayfirst=True, errors='coerce')
     df['HEIGHT'] = pd.to_numeric(df['HEIGHT'], errors='coerce')
     
-    # Beregn Alder
+    # Alder & Position
     idag = datetime.now()
-    df['ALDER'] = (idag - df['BIRTHDATE']).dt.days // 365
+    df['ALDER_NUM'] = (idag - df['BIRTHDATE']).dt.days // 365
+    df['POS_NAVN'] = df['POS'].apply(map_position_detail)
     
-    # Map position ud fra 'POS' kolonnen
-    df['POS_NAVN'] = df['POS'].astype(str).apply(map_position_detail)
-    
-    # Sorteringsorden (GKP -> DEF -> MID -> FWD)
+    # Sortering
     sort_map = {"GKP": 1, "DEF": 2, "MID": 3, "FWD": 4}
-    df['sort_order'] = df['ROLECODE3'].map(sort_map).fillna(5)
+    df['SORT_ORDER'] = df['ROLECODE3'].map(sort_map).fillna(5)
     
-    return df.sort_values(by=['sort_order', 'Navn'])
+    return df.sort_values(by=['SORT_ORDER', 'NAVN'])
 
 def vis_side(df_raw):
     st.subheader("TRUPPEN | OVERSIGT")
@@ -61,69 +61,61 @@ def vis_side(df_raw):
     df_working = process_squad_data(df_raw)
     
     if df_working.empty:
-        st.error("Ingen spillere fundet i players.csv")
+        st.error("Ingen data fundet.")
         return
 
-    # 2. Søgefilter
-    search = st.text_input("", placeholder="Søg på navn eller position...", label_visibility="collapsed")
+    # 2. Søgefilter (Søger i de nu STORE kolonner)
+    search = st.text_input("", placeholder="Søg spiller eller position...", label_visibility="collapsed")
     if search:
-        mask = (df_working['Navn'].str.contains(search, case=False, na=False) | 
+        mask = (df_working['NAVN'].str.contains(search, case=False, na=False) | 
                 df_working['POS_NAVN'].str.contains(search, case=False, na=False))
         df_display = df_working[mask].copy()
     else:
         df_display = df_working.copy()
 
-    # 3. Klargør format til visning
-    # Vi laver læsbare strenge til tabellen, men beholder de rå data til styling
+    # 3. Opret tabel til visning
+    # Vi bruger .dt.strftime her for at sikre pæn visning af datoer
     view_df = pd.DataFrame({
         'Position': df_display['POS_NAVN'],
-        'Spiller': df_display['Navn'],
+        'Spiller': df_display['NAVN'],
         'Født': df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y').fillna("-"),
-        'Højde': df_display['HEIGHT'].apply(lambda x: f"{int(x)} cm" if pd.notna(x) and x > 0 else "-"),
+        'Højde': df_display['HEIGHT'].fillna(0).astype(int).replace(0, "-"),
         'Fod': df_display['FOD'].fillna("-"),
         'Kontrakt': df_display['CONTRACT'].dt.strftime('%d.%m.%Y').fillna("-"),
-        'Alder': df_display['ALDER'].fillna("-")
+        'Alder': df_display['ALDER_NUM'].fillna("-")
     })
 
-    # 4. Styling funktion (Farver baseret på kontrakt-dato)
-    def style_contract_rows(row_data):
-        # Vi skal bruge den oprindelige 'CONTRACT' fra df_display til logikken
-        # Da row_data er en Series fra view_df, bruger vi index til at matche
-        idx = row_data.name
-        original_contract = df_display.loc[idx, 'CONTRACT']
+    # 4. Styling funktion
+    def style_contract(row):
+        styles = [''] * len(row)
+        # Vi henter den rå dato fra df_display via rækkens index
+        idx = row.name
+        raw_date = df_display.loc[idx, 'CONTRACT']
         
-        # Default stil (ingen farve)
-        styles = [''] * len(row_data)
-        
-        if pd.notna(original_contract):
-            dage_til_udloeb = (original_contract - datetime.now()).days
-            
-            # Find placering af 'Kontrakt' kolonnen i view_df
-            contract_col_idx = row_data.index.get_loc('Kontrakt')
-            
-            if dage_til_udloeb < 183:
-                styles[contract_col_idx] = 'background-color: #ffcccc; color: black;' # Rød
-            elif dage_til_udloeb <= 365:
-                styles[contract_col_idx] = 'background-color: #ffffcc; color: black;' # Gul
-                
+        if pd.notna(raw_date):
+            dage = (raw_date - datetime.now()).days
+            # 'Kontrakt' er kolonne nr. 5 (0-indekseret)
+            if dage < 183:
+                styles[5] = 'background-color: #ffcccc; color: black;'
+            elif dage <= 365:
+                styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 5. Tegn tabellen
+    # 5. Vis dataframe
     st.dataframe(
-        view_df.style.apply(style_contract_rows, axis=1),
+        view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
         height=650
     )
 
-    # 6. Metrics bunden
+    # 6. Simple Metrics
     st.write("")
     m1, m2, m3 = st.columns(3)
+    m1.metric("Antal", len(df_display))
     
-    # Beregn gennemsnit kun for dem med data
-    valid_heights = df_display[df_display['HEIGHT'] > 0]['HEIGHT']
-    valid_ages = df_display[df_display['ALDER'] > 0]['ALDER']
+    avg_h = df_display[df_display['HEIGHT'] > 0]['HEIGHT'].mean()
+    m2.metric("Gns. Højde", f"{avg_h:.0f} cm" if pd.notna(avg_h) else "-")
     
-    m1.metric("Antal i trup", len(df_display))
-    m2.metric("Gns. Højde", f"{valid_heights.mean():.0f} cm" if not valid_heights.empty else "-")
-    m3.metric("Gns. Alder", f"{valid_ages.mean():.1f} år" if not valid_ages.empty else "-")
+    avg_a = df_display['ALDER_NUM'].mean()
+    m3.metric("Gns. Alder", f"{avg_a:.1f} år" if pd.notna(avg_a) else "-")
