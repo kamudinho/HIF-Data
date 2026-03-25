@@ -35,7 +35,6 @@ def process_squad_data(df):
         return pd.DataFrame()
 
     df = df.copy()
-    # TVING ALT TIL STORE BOGSTAVER FOR AT UNDGÅ 'Navn' vs 'NAVN' FEJL
     df.columns = [str(c).upper().strip() for c in df.columns]
 
     # Konvertér typer
@@ -56,25 +55,24 @@ def process_squad_data(df):
 
 def vis_side(df_raw):    
     # 1. Behandl data
-    df_working = process_squad_data(df_raw)
+    df_display = process_squad_data(df_raw)
     
-    if df_working.empty:
+    if df_display.empty:
         st.error("Ingen data fundet.")
         return
 
-    # 3. Opret tabel til visning
-    # Vi bruger de rå tal/datoer for at sikre perfekt sortering
+    # 2. Opret tabel til visning
     view_df = pd.DataFrame({
         'Position': df_display['POS_NAVN'],
         'Spiller': df_display['NAVN'],
         'Født': df_display['BIRTHDATE'],
-        'Højde': df_display['HEIGHT'].fillna(0), # Behold som tal
+        'Højde': df_display['HEIGHT'].fillna(0),
         'Fod': df_display['FOD'].fillna("-"),
         'Kontrakt': df_display['CONTRACT'],
-        'Alder': df_display['ALDER_NUM'] # Behold som tal
+        'Alder': df_display['ALDER_NUM']
     })
 
-    # 4. Styling funktion
+    # 3. Styling funktion
     def style_contract(row):
         styles = [''] * len(row)
         idx = row.name
@@ -89,16 +87,16 @@ def vis_side(df_raw):
                 styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 5. Vis dataframe med avanceret konfiguration
+    # 4. Vis dataframe
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=1050,
+        height=850,
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
             "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
-            "Alder": st.column_config.NumberColumn("Alder", format="%d år") # HER TILFØJES "år"
+            "Alder": st.column_config.NumberColumn("Alder", format="%d år")
         }
     )
