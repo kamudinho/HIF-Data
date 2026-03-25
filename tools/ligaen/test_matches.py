@@ -173,7 +173,7 @@ def vis_side(dp=None):
                     ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", 0, ""),
                     ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "Store chancer skabt", 0, ""),
                     ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", 2, ""),
-                    ("HOME_XGNP", "AWAY_XGNP", "xG uden straffe (xGnp)", 2, ""),
+                    ("HOME_XGNP", "AWAY_XGNP", "xG uden straffe (xGnp)", 2, "")
                 ]
                 
                 h_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "#d1d1d1"
