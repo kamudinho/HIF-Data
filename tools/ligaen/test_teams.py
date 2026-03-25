@@ -5,7 +5,24 @@ from plotly.subplots import make_subplots
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA LOADING ---
+# --- 1. HJÆLPEFUNKTIONER (Defineret øverst for at undgå 'not defined' fejl) ---
+
+def get_logo_url(opta_uuid):
+    """Finder logo URL baseret på Opta UUID via TEAMS mapping."""
+    return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
+
+def get_logo_html(uuid):
+    url = get_logo_url(uuid)
+    return f'<img src="{url}" width="20">' if url else ""
+
+def style_form(f):
+    res = ""
+    for char in f[-5:]:
+        color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
+        res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
+    return res
+
+# --- 2. DATA LOADING ---
 
 @st.cache_data(ttl=3600)
 def load_liga_data():
@@ -41,19 +58,6 @@ def get_wyscout_stats():
     """
     return pd.read_sql(query, conn)
 
-# --- 2. HJÆLPEFUNKTIONER ---
-
-def get_logo_html(uuid):
-    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == uuid), "")
-    return f'<img src="{url}" width="20">' if url else ""
-
-def style_form(f):
-    res = ""
-    for char in f[-5:]:
-        color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
-        res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
-    return res
-
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side(dp_unused=None):
@@ -61,10 +65,10 @@ def vis_side(dp_unused=None):
     df_wy = get_wyscout_stats()
 
     if df_opta.empty:
-        st.warning("Ingen data fundet.")
+        st.warning("Ingen data fundet i Snowflake.")
         return
 
-    # Ligatabel beregning
+    # Beregn Ligatabel
     df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
@@ -99,17 +103,16 @@ def vis_side(dp_unused=None):
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
         c1, c2 = st.columns(2)
-        team1 = c1.selectbox("Hold 1", h_list, index=0)
-        team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1], index=0)
+        team1 = c1.selectbox("Hold 1", h_list, index=h_list.index("HB Køge") if "HB Køge" in h_list else 0)
+        team2 = c2.selectbox("Hold 2", [h for h in h_list if h != team1], index=h_list.index("AaB")-1 if "AaB" in h_list else 0)
 
         if not df_wy.empty:
             metrics = ['SHOTS', 'XG', 'PASSES', 'PPDA']
             labels = ['Skud', 'xG', 'Afleveringer', 'PPDA']
             
-            # Subplots med plads i toppen til logoer
             fig = make_subplots(rows=1, cols=len(metrics), horizontal_spacing=0.08)
             
-            # Hent logo URL'er
+            # Find UUIDs og logoer
             u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
             u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
             l1, l2 = get_logo_url(u1), get_logo_url(u2)
@@ -122,36 +125,31 @@ def vis_side(dp_unused=None):
                 v1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)][m].mean()
                 v2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)][m].mean()
 
-                # Søjler
-                fig.add_trace(go.Bar(x=[0], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), width=0.8, showlegend=False), row=1, col=i+1)
-                fig.add_trace(go.Bar(x=[1], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), width=0.8, showlegend=False), row=1, col=i+1)
+                # Søjler (placeret på x=0 og x=1)
+                fig.add_trace(go.Bar(x=[0], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), width=0.7, showlegend=False), row=1, col=i+1)
+                fig.add_trace(go.Bar(x=[1], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), width=0.7, showlegend=False), row=1, col=i+1)
                 
-                # Tekst-labels (Annotationer) under graferne
+                # Labels under graferne
                 fig.add_annotation(dict(
-                    x=0.5, y=-0.2, xref=f"{xref_name} domain", yref=f"{yref_name} domain",
+                    x=0.5, y=-0.25, xref=f"{xref_name} domain", yref=f"{yref_name} domain",
                     text=labels[i], showarrow=False, font=dict(size=12, weight="bold")
                 ))
 
-                # Logoer placeret relativt til hver subplot (xref='x', 'x2' osv)
+                # Logoer placeret over hver søjle
                 if l1:
                     fig.add_layout_image(dict(
                         source=l1, xref=xref_name, yref="paper",
-                        x=0, y=1.05, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"
+                        x=0, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
                     ))
                 if l2:
                     fig.add_layout_image(dict(
                         source=l2, xref=xref_name, yref="paper",
-                        x=1, y=1.05, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"
+                        x=1, y=1.05, sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
                     ))
 
-                # Opdater akser for at give plads og fjerne ticks
+                # Opdater akser
                 fig.update_xaxes(range=[-0.8, 1.8], showticklabels=False, row=1, col=i+1)
-                fig.update_yaxes(range=[0, max(v1, v2) * 1.4], visible=False, row=1, col=i+1)
+                fig.update_yaxes(range=[0, max(v1, v2) * 1.5], visible=False, row=1, col=i+1)
 
-            fig.update_layout(
-                height=350, 
-                margin=dict(t=80, b=50, l=10, r=10), 
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
-            )
+            fig.update_layout(height=350, margin=dict(t=80, b=60, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
