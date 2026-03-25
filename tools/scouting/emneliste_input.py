@@ -78,7 +78,7 @@ def vis_side(dp, current_user):
     
     l1_c2.text_input("Position (WS)", value=active_data['pos'], disabled=True)
     l1_c3.text_input("Klub", value=active_data['klub'], disabled=True)
-    l1_c4.text_input("Scout", value=current_user.upper(), disabled=True)
+    l1_c4.text_input("Oprettet af", value=current_user.upper(), disabled=True)
     
     # Linje 2: Inputfelter
     l2_c1, l2_c2, l2_c3 = st.columns(3)
