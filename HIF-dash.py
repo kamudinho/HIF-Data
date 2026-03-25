@@ -1,106 +1,38 @@
-#HIF-dash.py
 import os
 import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-
-# Sikr at vi kan finde vores egne moduler
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# NYE IMPORTS (Splitte data-loads)
-import data.HIF_load as hif_load
-from data.data_load import _get_snowflake_conn, parse_xg, load_local_players
-import data.analyse_load as analyse_load
-import data.fys_load as fys_loader
-from data.users import get_users
-
 import requests
 import base64
 from datetime import datetime
 from io import StringIO
 
-if "watchdog" not in st.session_state:
-    st.session_state["watchdog"] = True
+# Sikr at vi kan finde vores egne moduler
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def log_event_to_github(user, handling, maal):
-    try:
-        token = st.secrets["GITHUB_TOKEN"]
-        repo = "Kamudinho/HIF-data"
-        path = "data/action_log.csv"
-        url = f"https://api.github.com/repos/{repo}/contents/{path}"
-        headers = {"Authorization": f"token {token}"}
-
-        # 1. Hent den nuværende fil
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            file_json = r.json()
-            sha = file_json['sha']
-            # Læs ALT indhold fra GitHub
-            old_content = base64.b64decode(file_json['content']).decode('utf-8')
-            df_log = pd.read_csv(StringIO(old_content))
-        else:
-            # Hvis filen ikke findes, opret en tom en med kolonner
-            sha = None
-            df_log = pd.DataFrame(columns=["Dato", "Bruger", "Handling", "Mål"])
-
-        # 2. Opret den nye række
-        ny_række = pd.DataFrame([{
-            "Dato": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Bruger": user,
-            "Handling": handling,
-            "Mål": maal
-        }])
-
-        # 3. Sæt dem sammen (vigtigt: vi beholder df_log her)
-        df_updated = pd.concat([df_log, ny_række], ignore_index=True)
-        
-        # 4. Push til GitHub
-        new_csv = df_updated.to_csv(index=False)
-        encoded = base64.b64encode(new_csv.encode('utf-8')).decode('utf-8')
-        
-        payload = {
-            "message": f"Log: {user} -> {handling}",
-            "content": encoded
-        }
-        if sha:
-            payload["sha"] = sha # SHA er nødvendig for at opdatere eksisterende fil
-
-        requests.put(url, headers=headers, json=payload)
-    except Exception as e:
-        print(f"Log-fejl: {e}")
-        
+# IMPORTS
+import data.HIF_load as hif_load
+from data.data_load import _get_snowflake_conn, load_local_players
+import data.analyse_load as analyse_load
+from data.users import get_users
 
 # --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 HIF_ROD = "#df003b"
-HIF_GULD = "#b8860b"
 
 st.set_page_config(
-    page_title="HIF Dataanalyse",
+    page_title="HIF Data Hub",
     layout="wide",
     page_icon=HIF_LOGO_URL,
-    initial_sidebar_state="auto"  # <--- Sørg for at denne ikke tvinger den lukket
+    initial_sidebar_state="auto"
 )
 
 # Centraliseret CSS
-# --- Opdater denne del i din st.markdown blok ---
 st.markdown(f"""
     <style>
-        .block-container {{ padding-top: 0.5rem !important; padding-bottom: 0rem !important; }}
-        
-        /* RETTELSE HER: Skjul kun pynten, ikke funktionaliteten */
-        [data-testid="stHeader"] {{
-            background: rgba(0,0,0,0);
-            color: rgba(0,0,0,0);
-        }}
-        
-        /* Dette sikrer at menu-knappen (pilen) stadig er synlig og trykbar */
-        [data-testid="stSidebarNav"] {{
-            padding-top: 2rem;
-        }}
-        
-        /* Din eksisterende header-container herunder... */
+        .block-container {{ padding-top: 0.5rem !important; }}
+        [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
@@ -109,35 +41,18 @@ st.markdown(f"""
             justify-content: center;
             border-radius: 4px;
             margin-bottom: 15px;
-            width: 100%;
-            border-bottom: 1px solid {HIF_ROD};
         }}
         .hif-header-text {{
             color: white !important;
-            margin: 0 !important;
             text-transform: uppercase;
             letter-spacing: 2px;
-            font-size: 1.1rem;
             font-weight: 600;
-            font-family: sans-serif;
-            line-height: 50px;
         }}
-        button[data-baseweb="tab"] {{ font-size: 14px; font-weight: 600; }}
-        button[data-baseweb="tab"][aria-selected="true"] {{ 
-            color: {HIF_ROD} !important; 
-            border-bottom-color: {HIF_ROD} !important; 
-        }}
-        section[data-testid="stSidebar"] {{ background-color: #f8f9fa; }}
     </style>
 """, unsafe_allow_html=True)
 
 def render_hif_header(titel):
-    """Genererer den ensartede røde top-bar"""
-    st.markdown(f"""
-        <div class="hif-header-container">
-            <p class="hif-header-text">{titel}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="hif-header-container"><p class="hif-header-text">{titel}</p></div>', unsafe_allow_html=True)
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
@@ -147,8 +62,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        st.markdown(f"<div style='text-align: center; padding-top: 50px;'><img src='{HIF_LOGO_URL}' width='150'></div>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>HIF DATA HUB</h3>", unsafe_allow_html=True)
+        st.image(HIF_LOGO_URL, width=150)
         with st.form("login"):
             u = st.text_input("BRUGER").lower().strip()
             p = st.text_input("KODE", type="password")
@@ -156,161 +70,89 @@ if not st.session_state["logged_in"]:
                 if u in USER_DB and USER_DB[u]["pass"] == p:
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = u
-                    st.session_state["role"] = USER_DB[u]["role"]
-                    
-                    # Log hændelsen til GitHub
-                    log_event_to_github(u, "Login", "HIF Data Hub")
-                    
                     st.rerun()
                 else:
-                    st.error("Ugyldig bruger eller kode")
+                    st.error("Ugyldig login")
     st.stop()
-                    
+
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown(f"<div style='text-align: center; padding-bottom: 10px;'><img src='{HIF_LOGO_URL}' width='30'></div>", unsafe_allow_html=True)
-    
     alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
-    
-    # Hent brugerinfo og rens restriktionerne (små bogstaver + fjern mellemrum)
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     
-    # 1. Filtrer Hovedmenu (vi tjekker .lower() her)
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
+    hoved_omraade = option_menu(None, options=synlige_hoved_options, default_index=0)
     
-    hoved_omraade = option_menu(
-        None,
-        options=synlige_hoved_options,
-        default_index=0,
-        styles={
-            "nav-link-selected": {"background-color": "#0056a3"},
-            "nav-link": {"font-weight": "400"}
-        }
-    )
-    
-    st.markdown("---")
-    
-    sel = ""
-    # Hjælpefunktion til at filtrere undermenuer nemt
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
-    # 2. Dynamiske undermenuer
     if hoved_omraade == "TRUPPEN":
-        sub = ["Oversigt", "Forecast"]
-        sel = option_menu(None, options=filtrer_menu(sub), styles={"nav-link-selected": {"background-color": HIF_ROD}})
-        
+        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
     elif hoved_omraade == "HIF ANALYSE":
-        sub = ["Spillerperformance", "Afslutninger", "Assistmap"]
-        sel = option_menu(None, options=filtrer_menu(sub), styles={"nav-link-selected": {"background-color": HIF_ROD}})
-        
+        sel = option_menu(None, options=filtrer_menu(["Spillerperformance", "Afslutninger", "Assistmap"]))
     elif hoved_omraade == "BETINIA LIGAEN":
-        sub = ["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"]
-        sel = option_menu(None, options=filtrer_menu(sub), styles={"nav-link-selected": {"background-color": HIF_ROD}})
-        
+        sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"]))
     elif hoved_omraade == "SCOUTING":
-        sub = ["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]
-        # Nu vil "Opret emne" blive filtreret fra for CG, uanset om der er rod i store/små bogstaver
-        sel = option_menu(None, options=filtrer_menu(sub), styles={"nav-link-selected": {"background-color": HIF_ROD}})
-        
+        sel = option_menu(None, options=filtrer_menu(["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
-        sub = ["System Log", "Profil"]
-        sel = option_menu(None, options=filtrer_menu(sub), styles={"nav-link-selected": {"background-color": "#333333"}})
-
-# Sikr at 'sel' altid har en værdi (vigtigt hvis en hel undermenu er tom)
-if not sel:
-    sel = "Oversigt"
-    
-# LOGNING AF FANESKIFT:
-# Dette tjekker om den nuværende fane er forskellig fra den sidst gemte i session_state
-if "last_sel" not in st.session_state or st.session_state["last_sel"] != sel:
-    log_event_to_github(st.session_state["user"], "Skiftede fane", f"{hoved_omraade} -> {sel}")
-    st.session_state["last_sel"] = sel
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil"]))
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
-    # SEKTION A: TRUPPEN & SCOUTING (HIF_load - Primært CSV/Wyscout)
-    if hoved_omraade in ["TRUPPEN", "SCOUTING"]:
-        dp = hif_load.get_scouting_package()
+    # SEKTION 1: TRUPPEN (Hurtig CSV-load, ingen Snowflake)
+    if hoved_omraade == "TRUPPEN":
+        # Vi bruger den nye hurtige funktion her
+        dp_quick = hif_load.get_squad_only()
         
-        if hoved_omraade == "TRUPPEN":
-            # Sørg for at vi sender dp["players"] (din players.csv) ind
-            if sel == "Oversigt":
-                import tools.truppen.players as pl
-                # Her skal vi sikre os, at vi sender DataFrame'en
-                pl.vis_side(dp["players"]) 
-                
-            elif sel == "Forecast":
-                import tools.truppen.squad as sq
-                # Her skal vi også sende DataFrame'en
-                sq.vis_side(dp["players"])
-                    
-        elif hoved_omraade == "SCOUTING":
-            if sel == "Scoutrapport":
-                import tools.scouting.scout_input as si
-                si.vis_side(dp)
-            
-            elif sel == "Database":
-                import tools.scouting.scout_db as sdb
-                sdb.vis_side(
-                    dp["scout_reports"], 
-                    dp["players"], 
-                    dp["sql_players"], 
-                    dp["career"]
-                )
+        if sel == "Oversigt":
+            import tools.truppen.players as pl
+            pl.vis_side(dp_quick["players"])
+        elif sel == "Forecast":
+            import tools.truppen.squad as sq
+            sq.vis_side(dp_quick["players"])
 
-            elif sel == "Opret emne":
-                import tools.scouting.emneliste_input as el
-                # Vi tilføjer dog user, da emnelisten skal bruge 'Oprettet_af'
-                el.vis_side(dp, st.session_state.get("user", "UKENDT"))
-                
-            # --- DIN NYE SIDE HER ---
-            elif sel == "Emnedatabase":
-                import tools.scouting.emne_db as edb
-                # Vi sender dp med, så modalen kan trække på billeder og karrierestats
-                edb.vis_side(dp)
-            
-            elif sel == "Sammenligning":
-                import tools.scouting.comparison as comp
-                comp.vis_side(
-                    dp["players"], 
-                    None, 
-                    None, 
-                    dp["career"], 
-                    dp["sql_players"], 
-                    dp["advanced_stats"]
-                )
+    # SEKTION 2: SCOUTING (Den tunge Snowflake pakke)
+    elif hoved_omraade == "SCOUTING":
+        dp = hif_load.get_scouting_package() # Snowflake aktiveres her
+        
+        if sel == "Scoutrapport":
+            import tools.scouting.scout_input as si
+            si.vis_side(dp)
+        elif sel == "Database":
+            import tools.scouting.scout_db as sdb
+            sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
+        elif sel == "Opret emne":
+            import tools.scouting.emneliste_input as el
+            el.vis_side(dp, st.session_state["user"])
+        elif sel == "Emnedatabase":
+            import tools.scouting.emne_db as edb
+            edb.vis_side(dp)
+        elif sel == "Sammenligning":
+            import tools.scouting.comparison as comp
+            comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
 
-    # SEKTION B: ANALYSE & LIGA (Analyse_load - Primært OPTA)
+    # SEKTION 3: ANALYSE & LIGA (Opta Snowflake)
     elif hoved_omraade in ["HIF ANALYSE", "BETINIA LIGAEN"]:
-        # Vi definerer hif_only her: True hvis vi er i analyse, False hvis vi er i ligaen
         is_hif_mode = (hoved_omraade == "HIF ANALYSE")
         dp = analyse_load.get_analysis_package(hif_only=is_hif_mode)
         
-        # Gem i session state så tools kan tilgå det
-        st.session_state["dp"] = dp
-        
-        # I din rendering-sektion i main.py:
         if hoved_omraade == "HIF ANALYSE":
-            if sel == "Spillerperformance": # Tilføj denne blok
+            if sel == "Spillerperformance":
                 import tools.hifanalyse.player_analysis as pa
                 pa.vis_side(dp)
             elif sel == "Afslutninger":
                 import tools.hifanalyse.shotmap as sm
                 sm.vis_side(dp)
-            elif sel == "Assistmap": # Tilføj denne blok
+            elif sel == "Assistmap":
                 import tools.hifanalyse.assistmap as am
                 am.vis_side(dp)
-            elif sel == "Shapes": # Tilføj denne blok
-                import tools.hifanalyse.shapes as shapes
-                shapes.vis_side(dp)
         
         elif hoved_omraade == "BETINIA LIGAEN":
-            if sel == "Modstanderanalyse": 
-                import tools.ligaen.modstanderanalyse as ma  # RETTET FRA hifanalyse TIL ligaen
+            if sel == "Modstanderanalyse":
+                import tools.ligaen.modstanderanalyse as ma
                 ma.vis_side(dp)
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
@@ -326,17 +168,17 @@ try:
                 ls.vis_side(dp)
             elif sel == "Fysisk data":
                 import tools.ligaen.fysisk as fd_page
-                fd_page.vis_side(_get_snowflake_conn(), st.session_state.get('name_map', {}))
-                
+                # Bemærk: Vi sender conn direkte med for hastighed lokalt på siden
+                fd_page.vis_side(_get_snowflake_conn(), dp.get('name_map', {}))
+
+    # SEKTION 4: ADMIN
     elif hoved_omraade == "ADMIN":
-        dp = st.session_state.get("dp", {})
-        
         if sel == "System Log":
             import tools.admin_page.admin as admin
             admin.vis_log()
         elif sel == "Profil":
             import tools.admin_page.profil as profil
-            profil.vis_side(dp)
-            
+            profil.vis_side({})
+
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
