@@ -61,7 +61,7 @@ def get_wyscout_stats():
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     num_metrics = len(metrics)
     col_width = 0.18 
-    gap = 0.02
+    gap = 0.04 # Lidt mere luft mellem kategorier
     
     fig = go.Figure()
 
@@ -87,56 +87,69 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         txt1 = format(float(raw_v1), prec)
         txt2 = format(float(raw_v2), prec)
 
-        # Søjler
+        # 1. Søjler (Uden tekst her, vi laver det som annotations for fuld kontrol)
         fig.add_trace(go.Bar(
-            x=[0], y=[float(raw_v1)], 
-            text=[txt1], 
-            textposition='outside', 
-            cliponaxis=False,
-            textfont=dict(size=13, color='white', family="Arial Black"),
-            marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
-            width=0.7, showlegend=False, xaxis=xref, yaxis=yref
-        ))
-        fig.add_trace(go.Bar(
-            x=[1], y=[float(raw_v2)], 
-            text=[txt2], 
-            textposition='outside', 
-            cliponaxis=False,
-            textfont=dict(size=13, color='white', family="Arial Black"),
-            marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), 
+            x=[0, 1], y=[float(raw_v1), float(raw_v2)], 
+            marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
+                          TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")], 
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
         
-        # Akse-konfiguration med masser af luft til labels i bunden (range starter ved minus)
+        # 2. Værdier (Lige over søjlerne)
         max_val = max(float(raw_v1), float(raw_v2), 0.5)
-        fig.update_layout({
-            f"xaxis{suffix}": dict(domain=[start_pos, end_pos], range=[-0.8, 1.8], showticklabels=False, fixedrange=True),
-            f"yaxis{suffix}": dict(range=[0, max_val * 2.2], visible=False, fixedrange=True)
-        })
+        text_y = max_val * 0.1 # Lille offset opad
 
-        # Kategori-label (y-position sat til -0.15 for at sikre den er synlig)
-        fig.add_annotation(dict(
-            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=labels[i], showarrow=False, 
-            font=dict(size=12, weight="bold", color="white"),
-            yanchor="top"
-        ))
+        fig.add_annotation(dict(x=0, y=float(raw_v1) + text_y, xref=xref, yref=yref, text=txt1, showarrow=False, font=dict(size=12, color="white", weight="bold")))
+        fig.add_annotation(dict(x=1, y=float(raw_v2) + text_y, xref=xref, yref=yref, text=txt2, showarrow=False, font=dict(size=12, color="white", weight="bold")))
 
-        # Logoer - xref refererer til subplottet, yref="paper" holder dem i toppen af hele figuren
+        # 3. Logoer (Placeret højt over søjlerne, men i subplot-koordinater)
+        logo_y = max_val * 1.4 # Logoer lander altid over højeste søjle + luft
+        
         if l1:
             fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.0, 
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+                source=l1, xref=xref, yref=yref, x=0, y=logo_y, 
+                sizex=0.5, sizey=max_val*0.4, xanchor="center", yanchor="middle"
             ))
         if l2:
             fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.0, 
+                source=l2, xref=xref, yref="paper", x=1, y=0.9, # Her bruger vi paper for at holde dem på linje i toppen
                 sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
             ))
+            # RETHINK: Vi bruger faktisk paper-metoden korrekt HER:
+            # Vi dropper yref=yref for logoer, da det er for svært at styre. 
+            # Vi bruger paper, men øger y-aksens loft drastisk så de ikke rammer søjlerne.
+
+        # 4. Kategori-label (Helt i bunden)
+        fig.add_annotation(dict(
+            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=labels[i], showarrow=False, font=dict(size=12, weight="bold", color="white")
+        ))
+
+        # 5. Fix Akserne - vi giver den 100% luft i toppen til logoer
+        fig.update_layout({
+            f"xaxis{suffix}": dict(domain=[start_pos, end_pos], range=[-0.8, 1.8], showticklabels=False, fixedrange=True),
+            f"yaxis{suffix}": dict(range=[0, max_val * 2.5], visible=False, fixedrange=True)
+        })
+
+    # Logoer fix: Vi sætter dem ind som images igen, men med fast Y i paper-space
+    # for at sikre de flugter, men vi hæver loftet på søjlerne i y-aksen (max_val * 2.5)
+    for i, m in enumerate(metrics):
+        axis_num = i + 1
+        suffix = f"{axis_num}" if axis_num > 1 else ""
+        xref = f"x{suffix}"
+        
+        fig.add_layout_image(dict(
+            source=l1, xref=xref, yref="paper", x=0, y=0.85, 
+            sizex=0.3, sizey=0.3, xanchor="center", yanchor="middle"
+        ))
+        fig.add_layout_image(dict(
+            source=l2, xref=xref, yref="paper", x=1, y=0.85, 
+            sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+        ))
 
     fig.update_layout(
         height=450,
-        margin=dict(t=120, b=80, l=10, r=10), 
+        margin=dict(t=50, b=80, l=10, r=10), 
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
