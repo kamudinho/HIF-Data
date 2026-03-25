@@ -48,14 +48,14 @@ def process_squad_data(df_spillere):
     return df.sort_values(by=['sort_order', 'LASTNAME'])
 
 def vis_side(df_raw):
-    # 1. Hent færdigbehandlet data (sker øjeblikkeligt pga. cache)
+    # 1. Hent færdigbehandlet data
     df_working = process_squad_data(df_raw)
     
     if df_working.empty:
         st.error("Ingen data fundet.")
         return
 
-    # 2. Søgefunktion (kører lokalt på det cachede df)
+    # 2. Søgefunktion
     search = st.text_input("", placeholder="Søg spiller eller position...", label_visibility="collapsed")
     if search:
         mask = (df_working['POS_NAVN'].str.contains(search, case=False, na=False) | 
@@ -64,22 +64,23 @@ def vis_side(df_raw):
     else:
         df_display = df_working
 
-    # 3. HTML Tabel med list-comprehension (hurtigere end for-loop)
+    # 3. HTML Tabel konstruktion
     idag = datetime.now()
     
-    rows = []
+    # Vi laver rækkerne her
+    rows_list = []
     for _, r in df_display.iterrows():
         c_bg = "transparent"
         if pd.notna(r['CONTRACT']):
             d = (r['CONTRACT'] - idag).days
-            if d < 183: c_bg = "#ffcccc"
-            elif d <= 365: c_bg = "#ffffcc"
+            if d < 183: c_bg = "#ffcccc"      # Under et halvt år (Rød)
+            elif d <= 365: c_bg = "#ffffcc"   # Under et år (Gul)
         
         f_dag = r['BIRTHDATE'].strftime('%d.%m.%Y') if pd.notna(r['BIRTHDATE']) else "-"
         k_dag = r['CONTRACT'].strftime('%d.%m.%Y') if pd.notna(r['CONTRACT']) else "-"
         hojde = f"{int(r['HEIGHT'])} cm" if pd.notna(r['HEIGHT']) and r['HEIGHT'] > 0 else "-"
         
-        rows.append(f"""
+        rows_list.append(f"""
             <tr style="border-bottom:1px solid #f2f2f2;">
                 <td style="padding:10px 15px; color:#666; font-size:12px;">{r['POS_NAVN']}</td>
                 <td style="padding:10px 15px; font-weight:600; color:#222;">{r['NAVN']}</td>
@@ -89,7 +90,10 @@ def vis_side(df_raw):
                 <td style="padding:10px 15px; text-align:right; font-weight:500; background-color:{c_bg};">{k_dag}</td>
             </tr>""")
 
-    # Saml det hele til én stor tabel-streng
+    # --- RETTELSEN HER ---
+    # Vi samler listen af rækker til én lang streng
+    all_rows_html = "".join(rows_list)
+
     html_output = f"""
     <div style="background:white; border:1px solid #eee; border-radius:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
         <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">
@@ -101,14 +105,12 @@ def vis_side(df_raw):
                 <th style="padding:12px 15px; text-align:center;">Fod</th>
                 <th style="padding:12px 15px; text-align:right;">Kontrakt</th>
             </tr>
-            {rows}  </table>
+            {all_rows_html}
+        </table>
     </div>
     """
     
-    # DETTE ER DEN VIGTIGE LINJE:
-    html_output = html_start + rows + "</table></div>"
-    
-    # BRUG DENNE LINJE - og vær sikker på den ikke er indrykket for meget
+    # Vis tabellen
     st.markdown(html_output, unsafe_allow_html=True)
 
     # 4. Metrics
