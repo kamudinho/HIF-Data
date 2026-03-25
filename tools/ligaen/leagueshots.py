@@ -92,7 +92,7 @@ def vis_side(dp=None):
         }
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
-            border-left: 5px solid #cc0000; margin-bottom: 10px; 
+            border-left: 5px solid #cc0000; margin-bottom: 15px; 
         }
         .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
         .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
@@ -111,7 +111,7 @@ def vis_side(dp=None):
     
     with c_h2:
         # HER JUSTERER DU HØJDEN: Ændr '15px' til mere eller mindre efter behov
-        st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="margin-top: 30px;"></div>', unsafe_allow_html=True)
         t_sel = st.selectbox(
             " ", 
             teams, 
