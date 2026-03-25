@@ -127,7 +127,7 @@ def vis_side(dp):
         if not df_samlet.empty:
             vis_cols = ['Navn', 'Position', 'Klub', 'POS', 'Kontrakt']
             st.dataframe(
-                df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('Pos_Tal'), 
+                df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('POS'), 
                 use_container_width=True, 
                 hide_index=True
             )
