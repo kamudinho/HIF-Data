@@ -167,11 +167,13 @@ def vis_side(dp=None):
 
                 # Bars
                 stats_conf = [
+                    ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
+                    ("HOME_PASSES", "AWAY_PASSES", "Afleveringer", 0, ""),
+                    ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede afleveringer", 0, "")
+                    ("HOME_SHOTS", "AWAY_SHOTS", "Afslutninger", 0, ""),
+                    ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "Store chancer skabt", 0, ""),
                     ("HOME_XG", "AWAY_XG", "Expected Goals (xG)", 2, ""),
                     ("HOME_XGNP", "AWAY_XGNP", "xG uden straffe (xGnp)", 2, ""),
-                    ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "Store chancer skabt", 0, ""),
-                    ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
-                    ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "Fremadrettede afleveringer", 0, "")
                 ]
                 
                 h_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "#d1d1d1"
