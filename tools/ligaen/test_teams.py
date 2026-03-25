@@ -79,47 +79,55 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         prec = ".2f" if 'XG' in m.upper() else ".1f"
         max_y = max(v1, v2, 0.5)
 
-        # 1. Søjler
+        # 1. Søjler med Værdier
         fig.add_trace(go.Bar(
             x=[0, 1], y=[v1, v2],
             text=[format(v1, prec), format(v2, prec)],
-            textposition='outside',
+            textposition='outside', # Sætter værdien over søjlen
             textfont=dict(size=13, color="white", weight="bold"),
-            cliponaxis=False,
+            cliponaxis=False, # Tvinger værdien til at blive vist selvom den er "udenfor"
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
                           TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")],
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
 
-        # 2. Logoer (Layout images med paper-referencer fungerer bedst til subplots)
+        # 2. Logoer (Placeret præcis i toppen af hver subplot)
         if l1:
             fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.0,
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+                source=l1, xref=xref, yref="paper", x=0, y=1.02,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
             ))
         if l2:
             fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.0,
-                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
+                source=l2, xref=xref, yref="paper", x=1, y=1.02,
+                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
             ))
 
-        # 3. Kategori-navn
+        # 3. Kategori-navn (Labels under søjlerne)
         fig.add_annotation(dict(
-            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=f"<b>{labels[i]}</b>", showarrow=False, font=dict(size=12, color="white"), yanchor="top"
+            x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=f"<b>{labels[i]}</b>", showarrow=False, 
+            font=dict(size=12, color="white"), yanchor="top"
         ))
 
-        # 4. Akse setup
+        # 4. Akse-indstillinger (Her sikrer vi pladsen)
         fig.update_layout({
-            f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], range=[-0.8, 1.8], showticklabels=False),
-            f"yaxis{suffix}": dict(range=[0, max_y * 1.6], visible=False) # Lidt mere højde til tallene
+            f"xaxis{suffix}": dict(
+                domain=[i*(col_width+gap), i*(col_width+gap)+col_width], 
+                range=[-0.8, 1.8], showticklabels=False, fixedrange=True
+            ),
+            f"yaxis{suffix}": dict(
+                range=[-max_y * 0.2, max_y * 1.5], # Giver 20% plads i bunden og 50% i toppen
+                visible=False, fixedrange=True
+            )
         })
 
     fig.update_layout(
         height=450,
-        margin=dict(t=120, b=80, l=20, r=20),
+        margin=dict(t=100, b=60, l=20, r=20),
         plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
+        paper_bgcolor='rgba(0,0,0,0)',
+        uniformtext=dict(minsize=11, mode='show') # Tvinger tekst til at blive vist
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
