@@ -153,7 +153,7 @@ try:
         elif hoved_omraade == "BETINIA LIGAEN":
             if sel == "Modstanderanalyse":
                 import tools.ligaen.modstanderanalyse as ma
-                ma.vis_side(dp)
+                ma.vis_side()
             elif sel == "Holdoversigt":
                 import tools.ligaen.test_teams as tt
                 tt.vis_side(dp)
