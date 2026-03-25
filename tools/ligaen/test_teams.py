@@ -94,11 +94,18 @@ def vis_side(dp_unused=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: center; }</style>", unsafe_allow_html=True)
+        st.markdown("""<style>
+            .league-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            .league-table th { background-color: rgba(128,128,128,0.1); padding: 8px; text-align: center; }
+            .league-table td { padding: 8px; border-bottom: 1px solid rgba(128,128,128,0.2); text-align: center; }
+            .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
+        </style>""", unsafe_allow_html=True)
+        
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
-        st.write(df_disp[['#', ' ', 'HOLD', 'K', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        
+        st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
