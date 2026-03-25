@@ -14,6 +14,7 @@ def vis_side(dp=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
+    # RETTELSE: STAT_VALUE -> STAT_TOTAL i ExpectedGoalsPivot
     sql = f"""
         WITH MatchBase AS (
             SELECT 
@@ -28,14 +29,14 @@ def vis_side(dp=None):
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
-                SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX
+                SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_TOTAL ELSE 0 END) AS TOUCHES_IN_BOX
             FROM {DB}.OPTA_MATCHSTATS
             GROUP BY 1, 2
         ),
         XGPivot AS (
             SELECT 
                 MATCH_ID, CONTESTANT_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS XG
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_TOTAL ELSE 0 END) AS XG
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
             GROUP BY 1, 2
         )
@@ -52,7 +53,11 @@ def vis_side(dp=None):
     """
 
     with st.spinner("Henter kampdata..."):
-        df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        try:
+            df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        except Exception as e:
+            st.error(f"SQL Fejl: {e}")
+            return
 
     if df is None or df.empty:
         st.warning("Ingen data fundet.")
@@ -62,12 +67,12 @@ def vis_side(dp=None):
     df.columns = [c.upper() for c in df.columns]
     df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce')
     
-    # Mapping fra din team_mapping.py
+    # Mapping fra team_mapping.py (Sikrer match på "1. Division")
     liga_hold = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
     h_list = sorted(liga_hold.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 3. STYLING ---
+    # --- 3. STYLING (The "Fede" Elements) ---
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #df003b; height: 52px; display: flex; flex-direction: column; justify-content: center; }
@@ -85,7 +90,7 @@ def vis_side(dp=None):
     col_sel, *cols = st.columns([2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6])
     with col_sel:
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed")
-        valgt_uuid = liga_hold[valgt_navn]
+        valgt_uuid = str(liga_hold[valgt_navn]).strip()
 
     # Filtrering
     df['H_ID'] = df['CONTESTANTHOME_OPTAUUID'].astype(str).str.strip()
@@ -93,7 +98,7 @@ def vis_side(dp=None):
     team_df = df[(df['H_ID'] == valgt_uuid) | (df['A_ID'] == valgt_uuid)].copy()
     played = team_df[team_df['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
 
-    # Hurtig beregning til kasserne
+    # Beregninger
     summary = {"K": len(played), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played.iterrows():
         is_h = m['H_ID'] == valgt_uuid
@@ -108,7 +113,7 @@ def vis_side(dp=None):
     for i, (l, v) in enumerate(header_stats):
         cols[i].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # --- 5. TABS & KAMPE ---
+    # --- 5. KAMPLISTE ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
     
     with tab1:
@@ -119,9 +124,9 @@ def vis_side(dp=None):
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
                 
-                # Find navne og logoer fra din TEAMS dictionary
-                h_name = next((k for k, v in TEAMS.items() if v.get('opta_uuid') == row['H_ID']), row['CONTESTANTHOME_NAME'])
-                a_name = next((k for k, v in TEAMS.items() if v.get('opta_uuid') == row['A_ID']), row['CONTESTANTAWAY_NAME'])
+                # Mapper navne og logoer
+                h_name = next((k for k, v in TEAMS.items() if str(v.get('opta_uuid')).strip() == row['H_ID']), row['CONTESTANTHOME_NAME'])
+                a_name = next((k for k, v in TEAMS.items() if str(v.get('opta_uuid')).strip() == row['A_ID']), row['CONTESTANTAWAY_NAME'])
                 h_logo = TEAMS.get(h_name, {}).get('logo', '')
                 a_logo = TEAMS.get(a_name, {}).get('logo', '')
 
@@ -131,16 +136,18 @@ def vis_side(dp=None):
                 if a_logo: c4.image(a_logo, width=35)
                 c5.markdown(f"<div class='team-name'>{a_name}</div>", unsafe_allow_html=True)
 
-                # Stats bars
+                # Stats bars (Boldbesiddelse, xG, Touches)
                 st.write("")
                 for h_col, a_col, label, dec, suffix in [
                     ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
                     ("HOME_XG", "AWAY_XG", "xG", 2, ""),
                     ("HOME_TOUCHES", "AWAY_TOUCHES", "Berøringer i feltet", 0, "")
                 ]:
-                    hv, av = row.get(h_col) or 0, row.get(a_col) or 0
+                    hv, av = float(row.get(h_col) or 0), float(row.get(a_col) or 0)
                     total = hv + av if (hv + av) > 0 else 1
                     h_pct = (hv / total * 100)
+                    
+                    # Farve-logik: Rød hvis det er det valgte hold, ellers grå
                     h_color = TEAM_COLORS.get(h_name, {}).get("primary", "#df003b") if row['H_ID'] == valgt_uuid else "#d1d1d1"
                     a_color = TEAM_COLORS.get(a_name, {}).get("primary", "#df003b") if row['A_ID'] == valgt_uuid else "#d1d1d1"
 
