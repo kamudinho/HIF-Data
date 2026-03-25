@@ -107,23 +107,31 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # DZ: Fra 88.5m til 105m (mållinje) og centreret (25.16 til 42.84)
+    # DZ: Rettet til at gå helt fra 88.5m til 105m
     df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
-    # TAB 0: SPILLEROVERSIGT med ProgressBar
+    # TAB 0: SPILLEROVERSIGT (OPDATERET)
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
-            s, m = len(d), len(d[d['EVENT_TYPEID']==16])
+            s = len(d)
+            m = len(d[d['EVENT_TYPEID']==16])
             dz_d = d[d['IS_DZ']]
-            dz_s, dz_m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
+            dz_s = len(dz_d)
+            dz_m = len(dz_d[dz_d['EVENT_TYPEID']==16])
+            
             p_stats.append({
-                "Spiller": p, "Skud": s, "Mål": m, 
-                "Konv.%": (m/s*100 if s>0 else 0),
-                "DZ-Andel": (dz_s/s if s>0 else 0) # Bruges til progress bar (skal være 0.0-1.0)
+                "Spiller": p, 
+                "Skud": s, 
+                "Mål": m, 
+                "Konv.%": (m/s*100 if s > 0 else 0),
+                "DZ-Skud": dz_s,
+                "DZ-Mål": dz_m,
+                "DZ-Konv.%": (dz_m/dz_s*100 if dz_s > 0 else 0),
+                "DZ-Andel": (dz_s/s if s > 0 else 0) # Vises som ProgressColumn (0 til 1)
             })
         
         st.dataframe(
@@ -131,14 +139,15 @@ def vis_side(dp=None):
             use_container_width=True, hide_index=True,
             column_config={
                 "DZ-Andel": st.column_config.ProgressColumn(
-                    "DZ-Andel (%)", help="Andel af spillerens skud der er foretaget i Danger Zone",
+                    "DZ-Andel", help="Andel af skud foretaget i Danger Zone",
                     format="%.0f%%", min_value=0, max_value=1
                 ),
-                "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
+                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
+                "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
             }
         )
 
-    # TAB 1: AFSLUTNINGER med Konv.%
+    # TAB 1: AFSLUTNINGER
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
@@ -154,7 +163,7 @@ def vis_side(dp=None):
             pitch.scatter(d_v['X_M'], d_v['Y_M'], s=100, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
-    # TAB 2: DZ-ANALYSE med Konv.%
+    # TAB 2: DZ-ANALYSE
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
@@ -166,11 +175,12 @@ def vis_side(dp=None):
         with c1:
             pitch = VerticalPitch(**pitch_cfg)
             fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
+            # DZ REKTANGEL (88.5 til 105m)
             ax.add_patch(patches.Rectangle((25.16, 88.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
-    # TAB 3 & 4: ZONER med Topsorer og Andel
+    # TAB 3 & 4: ZONER
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             c1, c2 = st.columns([1.6, 1])
@@ -186,13 +196,15 @@ def vis_side(dp=None):
                         z_summary.append({
                             "Zone": z, 
                             "Antal": len(z_d), 
-                            "Andel (%)": (len(z_d)/total_count*100 if total_count > 0 else 0),
-                            "Flest": top_p
+                            "Andel": (len(z_d)/total_count if total_count > 0 else 0),
+                            "Topscorer": top_p
                         })
                 st.dataframe(
                     pd.DataFrame(z_summary).sort_values("Antal", ascending=False),
                     hide_index=True, use_container_width=True,
-                    column_config={"Andel (%)": st.column_config.NumberColumn(format="%.1f%%")}
+                    column_config={
+                        "Andel": st.column_config.NumberColumn(format="%.1f%%")
+                    }
                 )
             with c1:
                 pitch = VerticalPitch(**pitch_cfg)
