@@ -79,23 +79,28 @@ def vis_side(dp=None):
     # CSS TIL OPSÆTNING
     st.markdown("""
     <style>
-        header {visibility: hidden;}
-        .block-container {
-            padding-top: 0.5rem !important;
+        /* Rykker kun selve indholdet op, uden at ramme sidebar eller top-bjælke */
+        .main .block-container {
+            padding-top: 1.5rem !important;
             padding-bottom: 0rem !important;
+            max-width: 95% !important;
         }
-        [data-testid="stVerticalBlock"] {
-            gap: 0rem !important;
+
+        /* Fjerner den ekstra luft som Streamlits "gap" skaber mellem rækker */
+        [data-testid="stVerticalBlock"] > div:first-child {
+            margin-top: -1.5rem !important;
         }
+
+        /* Gør tabs mere kompakte */
         .stTabs {
-            margin-top: -15px !important;
+            margin-top: -10px !important;
         }
+
+        /* Stat-box styling (beholdes) */
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
             border-left: 5px solid #cc0000; margin-bottom: 10px; 
         }
-        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
-        .stat-value { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -107,11 +112,11 @@ def vis_side(dp=None):
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     # --- TOP LAYOUT ---
+    # Ryd op i top-layoutet
     c_h1, c_h2 = st.columns([2, 1])
     
     with c_h2:
-        # HER JUSTERER DU HØJDEN: Ændr '15px' til mere eller mindre efter behov
-        st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
+        # Brug kun collapsed label - ingen ekstra div med margin her!
         t_sel = st.selectbox(
             "Vælg hold", 
             teams, 
