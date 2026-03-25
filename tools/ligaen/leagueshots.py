@@ -153,6 +153,7 @@ def vis_side(dp=None):
     
     # --- TAB 0: SPILLEROVERSIGT ---
     # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT ---
     with tabs[0]:
         stats = []
         # Gruppér kun på spillere fra det valgte hold
@@ -176,40 +177,38 @@ def vis_side(dp=None):
             
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
         
-        # Konfiguration af kolonner: Formatering og centrering
-        dynamisk_hojde = (len(view_df) + 1) * 35 + 3
+        # Beregn højde så hele tabellen vises (ca. 35px pr række + header)
+        dynamisk_hojde = (len(df_f) + 1) * 35 + 10
         
+        # Konfiguration af kolonner: Formatering og centrering
         st.dataframe(
             df_f, 
             use_container_width=True, 
-            height=dynamisk_hojde, # None gør at den viser hele dataframen (scroller ikke internt hvis muligt)
+            height=dynamisk_hojde,
             hide_index=True,
             column_config={
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
-                "Skud": st.column_config.NumberColumn("Skud", help="Antal afslutninger i alt", format="%d"),
+                "Skud": st.column_config.NumberColumn("Skud", format="%d"),
                 "Mål": st.column_config.NumberColumn("Mål", format="%d"),
                 "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.2f%%"),
                 "DZ-Skud": st.column_config.NumberColumn("DZ-Skud", format="%d"),
                 "DZ-Mål": st.column_config.NumberColumn("DZ-Mål", format="%d"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.2f%%"),
-                "DZ-Andel": st.column_config.ProgressColumn(
-                    "DZ-Andel af skud", 
-                    min_value=0, 
-                    max_value=100, 
-                    format="%.2f%%"
-                )
+                "DZ-Andel": st.column_config.NumberColumn("DZ-Andel", format="%.2f%%")
             }
         )
         
-        # CSS til at centrere celler (Streamlit standard-dataframe kan være svær at centrere globalt, 
-        # men column_config NumberColumn centrerer automatisk tal/indhold mod højre/center)
+        # CSS til at tvinge centrering af alt indhold i tabellen
         st.markdown("""
             <style>
+                /* Centrerer tekst i alle celler i Streamlit Dataframes */
                 [data-testid="stTable"] td { text-align: center !important; }
-                [data-testid="stDataFrame"] td { text-align: center !important; }
+                [data-testid="stDataFrame"] div[data-testid="stTable"] div { text-align: center !important; }
+                /* Sikrer at tal-kolonner også centreres */
+                [data-testid="stDataFrame"] div[class*="StyledDataFrameDataCell"] { justify-content: center !important; text-align: center !important; }
             </style>
         """, unsafe_allow_html=True)
-
+        
     # --- TAB 1: AFSLUTNINGER ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
