@@ -88,7 +88,7 @@ with st.sidebar:
     elif hoved_omraade == "HIF ANALYSE":
         sel = option_menu(None, options=["Under udvikling"])
     elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"]))
+        sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Charts", "Afslutninger - liga", "Fysisk data"]))
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
