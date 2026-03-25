@@ -113,7 +113,7 @@ def vis_side(dp=None):
         # HER JUSTERER DU HØJDEN: Ændr '15px' til mere eller mindre efter behov
         st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
         t_sel = st.selectbox(
-            "Vælg hold", 
+            " ", 
             teams, 
             index=teams.index("Hvidovre") if "Hvidovre" in teams else 0,
             label_visibility="collapsed"
