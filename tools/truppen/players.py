@@ -92,7 +92,7 @@ def vis_side(df_raw):
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=None,
+        height=content,
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
