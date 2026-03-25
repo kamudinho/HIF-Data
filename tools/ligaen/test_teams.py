@@ -80,56 +80,62 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
         
-        # Hent værdier og formater til 1 decimal (eller 2 hvis det er xG)
         raw_v1 = d1[m.upper()].iloc[0] if not d1.empty else 0
         raw_v2 = d2[m.upper()].iloc[0] if not d2.empty else 0
         
-        prec = 2 if 'XG' in m.upper() else 1
-        v1 = round(float(raw_v1), prec)
-        v2 = round(float(raw_v2), prec)
+        # Formatering af tallet til tekst
+        prec = ".2f" if 'XG' in m.upper() else ".1f"
+        txt1 = format(float(raw_v1), prec)
+        txt2 = format(float(raw_v2), prec)
 
-        # Søjler med tekst-labels ovenpå
+        # Søjler
         fig.add_trace(go.Bar(
-            x=[0], y=[v1], 
-            text=[v1], textposition='outside', textfont=dict(size=11, weight="bold"),
+            x=[0], y=[float(raw_v1)], 
+            text=[txt1], 
+            textposition='outside', 
+            cliponaxis=False, # VIGTIG: Gør at teksten ikke forsvinder ved kanten
+            textfont=dict(size=12, color='white', family="Arial Black"),
             marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
         fig.add_trace(go.Bar(
-            x=[1], y=[v2], 
-            text=[v2], textposition='outside', textfont=dict(size=11, weight="bold"),
+            x=[1], y=[float(raw_v2)], 
+            text=[txt2], 
+            textposition='outside', 
+            cliponaxis=False,
+            textfont=dict(size=12, color='white', family="Arial Black"),
             marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), 
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
         
-        # Konfigurer aksen (Giv 80% ekstra luft i toppen til både tal og logo)
-        max_val = max(v1, v2, 0.1)
+        # Konfigurer aksen - vi giver den rigeligt med luft (2x max værdi)
+        max_val = max(float(raw_v1), float(raw_v2), 0.5)
         fig.update_layout({
             f"xaxis{suffix}": dict(domain=[start_pos, end_pos], range=[-0.8, 1.8], showticklabels=False, fixedrange=True),
-            f"yaxis{suffix}": dict(range=[0, max_val * 1.8], visible=False, fixedrange=True)
+            f"yaxis{suffix}": dict(range=[0, max_val * 2.0], visible=False, fixedrange=True)
         })
 
-        # Kategori-label i bunden
+        # Kategori-label
         fig.add_annotation(dict(
-            x=0.5, y=-0.25, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=labels[i], showarrow=False, font=dict(size=11, weight="bold")
+            x=0.5, y=-0.3, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=labels[i], showarrow=False, font=dict(size=11, weight="bold", color="white")
         ))
 
-        # Logoer (Flyttet lidt højere op til y=1.25 for at give plads til tallene)
+        # Logoer - placeret via 'paper' for at ligge helt i top
         if l1:
             fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.25, 
+                source=l1, xref=xref, yref="paper", x=0, y=1.2, 
                 sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
             ))
         if l2:
             fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.25, 
+                source=l2, xref=xref, yref="paper", x=1, y=1.2, 
                 sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
             ))
 
     fig.update_layout(
-        height=300, # Lidt mere højde for at det ikke bliver klemt
-        margin=dict(t=90, b=50, l=10, r=10), 
+        height=320,
+        margin=dict(t=100, b=60, l=10, r=10), 
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
