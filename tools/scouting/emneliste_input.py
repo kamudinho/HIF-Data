@@ -82,7 +82,7 @@ def vis_side(dp, current_user):
     
     # Linje 2: Inputfelter
     l2_c1, l2_c2, l2_c3 = st.columns(3)
-    pos_tal = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
+    pos = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
     pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
     kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
 
@@ -114,7 +114,7 @@ def vis_side(dp, current_user):
                     "Bemaerkning": noter.replace('\n', ' ').strip(), 
                     "Oprettet_af": current_user.upper(),
                     "Pos_Prioritet": pos_prio, 
-                    "Pos_Tal": pos_tal, 
+                    "Pos_Tal": pos, 
                     "Lon": lon_input,
                     "Skyggehold": False,
                     "PLAYER_WYID": active_data['id']
