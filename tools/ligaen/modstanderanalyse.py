@@ -68,20 +68,20 @@ def vis_side(dp=None):
         return
 
     # --- Layout (Tabs) ---
-    tabs = st.tabs(["Offensiv", "Defensiv", "Spiller-stats"])
+    tabs = st.tabs(["Med bold", "Mod bold", "Top 5-stats"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333')
 
     with tabs[0]:
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Afslutningsmønster**")
+            st.write("**Afslutninger**")
             fig, ax = pitch.draw()
             shots = df_hold_events[df_hold_events['EVENT_TYPEID'].isin([13,14,15,16])]
             if not shots.empty:
                 pitch.scatter(shots.LOCATIONX, shots.LOCATIONY, ax=ax, color='#df003b', alpha=0.6)
             st.pyplot(fig)
         with c2:
-            st.write("**Pass Heatmap**")
+            st.write("**Passmap**")
             fig, ax = pitch.draw()
             passes = df_hold_events[df_hold_events['EVENT_TYPEID'] == 1]
             if len(passes) > 5:
