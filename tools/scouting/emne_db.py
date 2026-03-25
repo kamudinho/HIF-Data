@@ -36,39 +36,50 @@ def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     
-    # 1. ENSRET NAVN
-    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
+    # ENSRET KOLONNENAVNE (Gør dem ens for begge filer)
+    rename_map = {
+        'NAVN': 'Navn',
+        'POS': 'Pos_Tal',
+        'CONTRACT': 'Kontrakt',
+        'ROLECODE3': 'Position'
+    }
+    df = df.rename(columns=rename_map)
+
+    # SIKR POS_TAL FINDES
+    if 'Pos_Tal' not in df.columns:
+        df['Pos_Tal'] = 0
     
-    # 2. ENSRET POSITIONS-KOLONNE (Tving alt til 'Pos_Tal')
-    if 'POS' in df.columns:
-        df['Pos_Tal'] = df['POS']
-    
-    # 3. ENSRET SKYGGEHOLD (bool tjek)
+    # ENSRET SKYGGEHOLD
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
     if col_name:
         df['Skyggehold'] = df[col_name].fillna(False).replace({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
         df['Skyggehold'] = df['Skyggehold'].astype(bool)
-        if col_name != 'Skyggehold': df = df.drop(columns=[col_name])
     else:
         df['Skyggehold'] = False
     
-    if is_hif: df['Klub'] = 'Hvidovre IF'
+    if is_hif: 
+        df['Klub'] = 'Hvidovre IF'
+    elif 'Klub' not in df.columns:
+        df['Klub'] = 'Ukendt'
+        
     return df
 
 def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
+    if df_input.empty:
+        st.info("Ingen data tilgængelig.")
+        return
+
     df_temp = df_input.copy()
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Visuelle kolonnenavne til editoren
-    if kan_slettes: # Emner
-        data_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Pos_Prioritet', 'Prioritet', 'Lon', 'Kontrakt']
-    else: # HIF
-        data_cols = ['Navn', 'ROLECODE3', 'Pos_Tal', 'PRIOR', 'CONTRACT']
+    # Hvilke kolonner vil vi gerne vise?
+    desired_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Kontrakt', '🛡️']
+    if kan_slettes: df_temp['🗑️'] = False; desired_cols.append('🗑️')
     
-    present_cols = [c for c in data_cols if c in df_temp.columns]
-    display_cols = ['ℹ️'] + present_cols + (['🛡️', '🗑️'] if kan_slettes else ['🛡️'])
-    if kan_slettes: df_temp['🗑️'] = False
+    # Vi viser kun de kolonner der rent faktisk findes i DF
+    present_cols = [c for c in desired_cols if c in df_temp.columns]
+    display_cols = ['ℹ️'] + present_cols
 
     ed_res = st.data_editor(
         df_temp[display_cols], 
@@ -79,12 +90,12 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "Pos_Tal": st.column_config.NumberColumn("POS", format="%d", width="small"),
-            "POS": st.column_config.NumberColumn("POS", format="%d", width="small")
+            "Pos_Tal": st.column_config.NumberColumn("POS", format="%d", width="small")
         },
-        disabled=present_cols
+        disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
 
+    # Gem ændringer hvis '🛡️' ændres
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
@@ -107,22 +118,13 @@ def vis_side(dp):
     with t_hif:
         tegn_spiller_tabel(df_hif, "hif", hif_s, HIF_PATH, False)
 
-    # Samlet data (Nu bruger alle 'Pos_Tal')
-    s_e = df_emner[df_emner['Skyggehold'] == True].copy() if not df_emner.empty else pd.DataFrame()
-    s_h = df_hif[df_hif['Skyggehold'] == True].copy() if not df_hif.empty else pd.DataFrame()
+    # Samlet data til Skyggelisten
+    s_e = df_emner[df_emner['Skyggehold'] == True].copy()
+    s_h = df_hif[df_hif['Skyggehold'] == True].copy()
     df_samlet = pd.concat([s_e, s_h], ignore_index=True)
 
     with t_liste:
         if not df_samlet.empty:
-            # Vi viser en ren oversigt
-            # Vi sikrer os at 'Kontrakt' altid har data (HIF bruger CONTRACT)
-            if 'CONTRACT' in df_samlet.columns:
-                df_samlet['Kontrakt'] = df_samlet['Kontrakt'].fillna(df_samlet['CONTRACT'])
-            
-            # Vi sikrer os at 'Position' altid har data (HIF bruger ROLECODE3)
-            if 'ROLECODE3' in df_samlet.columns:
-                df_samlet['Position'] = df_samlet['Position'].fillna(df_samlet['ROLECODE3'])
-
             vis_cols = ['Navn', 'Position', 'Klub', 'Pos_Tal', 'Kontrakt']
             st.dataframe(
                 df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('Pos_Tal'), 
@@ -130,7 +132,7 @@ def vis_side(dp):
                 hide_index=True
             )
         else:
-            st.info("Ingen spillere valgt.")
+            st.info("Ingen spillere valgt til skyggehold.")
 
     with t_bane:
         if not df_samlet.empty:
@@ -149,24 +151,28 @@ def vis_side(dp):
                 fig, ax = pitch.draw(figsize=(11, 8))
                 
                 form = st.session_state.form_skygge
+                # Positioner (x, y, label)
                 if form == "4-3-3":
-                    pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 
+                    pos_map = {1:(10,40,'MM'), 2:(35,70,'HB'), 3:(33,55,'HCB'), 4:(33,25,'VCB'), 5:(35,10,'VB'), 
                                6:(50,40,'DM'), 8:(68,25,'VCM'), 10:(68,55,'HCM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
                 elif form == "3-4-3":
-                    pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
-                               6:(60,30,'DM'), 8:(60,50,'DM'), 7:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 10:(85,65,'HW')}
+                    pos_map = {1:(10,40,'MM'), 2:(33,60,'HCB'), 3:(33,40,'CB'), 4:(33,20,'VCB'), 7:(60,70,'HWB'), 
+                               8:(60,50,'DM'), 6:(60,30,'DM'), 5:(60,10,'VWB'), 10:(85,65,'HW'), 9:(100,40,'ANG'), 11:(85,15,'VW')}
                 else: # 3-5-2
-                    pos_map = {1:(10,40,'MM'), 4:(33,20,'VCB'), 3:(33,40,'CB'), 2:(33,60,'HCB'), 5:(60,10,'VWB'), 
-                               6:(60,40,'DM'), 7:(60,70,'HWB'), 8:(75,25,'CM'), 10:(75,55,'CM'), 11:(100,30,'ANG'), 9:(100,50,'ANG')}
+                    pos_map = {1:(10,40,'MM'), 2:(33,60,'HCB'), 3:(33,40,'CB'), 4:(33,20,'VCB'), 7:(60,70,'HWB'), 
+                               6:(60,40,'DM'), 5:(60,10,'VWB'), 10:(75,55,'CM'), 8:(75,25,'CM'), 9:(100,50,'ANG'), 11:(100,30,'ANG')}
 
                 for p_num, (x, y, label) in pos_map.items():
-                    ax.text(x, y-4, label, color="white", size=8, fontweight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    # Tegn positions-label
+                    ax.text(x, y-4, label, color="white", size=8, fontweight='bold', ha='center', 
+                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
-                    # Nu kan vi trygt bruge Pos_Tal for alle
+                    # Filtrer spillere på denne position (Tving begge til float for sammenligning)
                     spillere = df_samlet[df_samlet['Pos_Tal'].astype(float) == float(p_num)]
+                    
                     for i, (_, p) in enumerate(spillere.iterrows()):
                         bg_color = "#ffebee" if p['Klub'] == 'Hvidovre IF' else "#f1f8e9"
-                        ax.text(x, y + (i*3.5), p['Navn'], size=7.5, ha='center', va='top', fontweight='bold',
+                        ax.text(x, y + (i*4.5), p['Navn'], size=8, ha='center', va='top', fontweight='bold',
                                 bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', alpha=0.9))
                 
                 st.pyplot(fig)
