@@ -10,7 +10,7 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-# --- KONFIGURATION ---
+# --- KONFIGURATION & DESIGN ---
 HIF_RED = '#cc0000'
 HIF_GOLD = '#FFD700'
 ASSIST_BLUE = '#1e90ff'
@@ -39,16 +39,16 @@ ZONE_BOUNDARIES = {
     "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
 }
 
-# --- DATA FUNKTIONER ---
+# --- DATA & LOGO UTILS ---
 @st.cache_data(ttl=3600)
 def load_league_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
-    match_id_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+    match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     sql = f"""
         SELECT e.*, q.QUALIFIER_VALUE as XG_RAW FROM {DB}.OPTA_EVENTS e 
         LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
-        WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_id_sql})
+        WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_sql})
     """
     df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     df.columns = [c.upper() for c in df.columns]
@@ -60,10 +60,16 @@ def get_logo_img(url):
     except: return None
 
 def map_to_zone(r):
-    mx, my = r['EVENT_X'] * (P_L / 100), r['EVENT_Y'] * (P_W / 100)
+    mx, my = r['EVENT_X'] * (105/100), r['EVENT_Y'] * (68/100)
     for z, b in ZONE_BOUNDARIES.items():
         if b["y_min"] <= mx <= b["y_max"] and b["x_min"] <= my <= b["x_max"]: return z
     return "Zone 8"
+
+def draw_logo_on_pitch(ax, logo_img):
+    if logo_img:
+        ax_logo = ax.inset_axes([0.02, 0.85, 0.12, 0.12], transform=ax.transAxes)
+        ax_logo.imshow(logo_img)
+        ax_logo.axis('off')
 
 # --- MAIN APP ---
 def vis_side(dp=None):
@@ -78,20 +84,17 @@ def vis_side(dp=None):
     """, unsafe_allow_html=True)
 
     df_all = load_league_data()
-    if df_all.empty:
-        st.info("Ingen ligadata fundet.")
-        return
+    if df_all.empty: return
 
-    # Data Prep
+    # Mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-    teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
+    teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Topbar: Holdvalg til højre
+    # Layout: Dropdown til højre
     c_h1, c_h2 = st.columns([2, 1])
     with c_h2:
-        hif_idx = teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0
-        t_sel = st.selectbox("Vælg hold", teams_in_data, index=hif_idx)
+        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
     
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
@@ -102,7 +105,7 @@ def vis_side(dp=None):
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
-    # --- TAB 0: SPILLEROVERSIGT ---
+    # --- TAB 0: SPILLEROVERSIGT (MED PROGRESSBAR) ---
     with tabs[0]:
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
@@ -111,38 +114,45 @@ def vis_side(dp=None):
             dz_s, dz_m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
             p_stats.append({
                 "Spiller": p, "Skud": s, "Mål": m, "Konv.%": (m/s*100 if s>0 else 0),
-                "DZ-Skud": dz_s, "DZ-Mål": dz_m, "DZ-Konv.%": (dz_m/dz_s*100 if dz_s>0 else 0)
+                "DZ-Skud": dz_s, "DZ-Mål": dz_m, "DZ-Andel": (dz_s/s*100 if s>0 else 0)
             })
-        st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(p_stats).sort_values("Skud", ascending=False), use_container_width=True, hide_index=True, column_config={
+            "DZ-Andel": st.column_config.ProgressColumn("DZ-Andel", format="%.1f%%", min_value=0, max_value=100),
+            "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
+        })
 
-    # --- TAB 1: AFSLUTNINGER ---
+    # --- TAB 1: AFSLUTNINGER (MED KONVERTERINGSRATE) ---
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
             p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_team['PLAYER_NAME'].unique()))
             d_v = df_team if p_sel == "Hele Holdet" else df_team[df_team['PLAYER_NAME'] == p_sel]
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{len(d_v)}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{len(d_v[d_v["EVENT_TYPEID"]==16])}</div></div>', unsafe_allow_html=True)
+            s, m = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             pitch.scatter(d_v['EVENT_X'], d_v['EVENT_Y'], s=80, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax)
-            if t_logo: ax.inset_axes([0.05, 0.88, 0.12, 0.12], transform=ax.transAxes).imshow(t_logo); ax.axis('off')
+            draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
-    # --- TAB 2: DZ-ANALYSE ---
+    # --- TAB 2: DZ-ANALYSE (MED DZ-KONVERTERING) ---
     with tabs[2]:
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
         with c2:
             s, m = len(dz_d), len(dz_d[dz_d['EVENT_TYPEID']==16])
             st.markdown(f'<div class="stat-box" style="border-left-color:{ASSIST_BLUE}"><div class="stat-label">DZ Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">DZ Konv.%</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">DZ Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(5, 7))
             ax.add_patch(patches.Rectangle((37, 88.5), 26, 11.5, color=t_color, alpha=0.15))
             pitch.scatter(dz_d['EVENT_X'], dz_d['EVENT_Y'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax)
+            draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
     # --- TAB 3 & 4: ZONER ---
@@ -150,8 +160,6 @@ def vis_side(dp=None):
         with tabs[i+3]:
             c1, c2 = st.columns([1.8, 1])
             plot_df = df_team[df_team['EVENT_TYPEID'] == 16] if is_goal else df_team
-            z_counts = plot_df['Zone'].value_counts()
-            
             with c2:
                 st.write(f"**Data per zone ({'Mål' if is_goal else 'Skud'})**")
                 z_summary = []
@@ -161,18 +169,18 @@ def vis_side(dp=None):
                         top_p = z_d['PLAYER_NAME'].value_counts().idxmax()
                         z_summary.append({"Zone": z, "Antal": len(z_d), "%": f"{(len(z_d)/len(df_team)*100):.1f}%", "Topscorer": top_p})
                 st.table(pd.DataFrame(z_summary).sort_values("Antal", ascending=False))
-            
             with c1:
                 pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
                 fig, ax = pitch.draw(figsize=(8, 10))
                 ax.set_ylim(55, 105)
-                max_v = z_counts.max() if not z_counts.empty else 1
+                max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
                     if b["y_max"] <= 55: continue
-                    cnt = z_counts.get(z, 0)
+                    cnt = len(plot_df[plot_df['Zone']==z])
                     alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
                     ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
                     if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
+                draw_logo_on_pitch(ax, t_logo)
                 st.pyplot(fig)
 
 if __name__ == "__main__":
