@@ -88,7 +88,7 @@ def vis_side(dp=None):
             gap: 0rem !important;
         }
         .stTabs {
-            margin-top: 10px !important;
+            margin-top: -15px !important;
         }
         .stat-box { 
             background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
