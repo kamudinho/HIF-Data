@@ -91,7 +91,7 @@ def vis_side(dp=None):
             margin-top: -15px !important;
         }
         .stat-box { 
-            background-color: #f8f9fa; padding: 12px; border-radius: 8px; 
+            background-color: #f8f9fa; padding: 5px; border-radius: 4px; 
             border-left: 5px solid #cc0000; margin-bottom: 1px; 
         }
         .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
