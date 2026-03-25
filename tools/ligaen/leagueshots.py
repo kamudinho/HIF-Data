@@ -76,15 +76,25 @@ def draw_logo_on_pitch(ax, logo_img):
 
 # --- MAIN APP ---
 def vis_side(dp=None):
-    st.markdown(f"""
-        <style>
-            .stat-box {{ background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 5px solid {HIF_RED}; margin-bottom: 10px; }}
-            .stat-label {{ font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }}
-            .stat-value {{ font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin-top: 2px; }}
-            [data-testid="stDataFrame"] td {{ text-align: center !important; }}
-            .stTabs {{ margin-top: -30px; }}
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+        /* Fjerner padding i selve hoved-containeren */
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 0rem !important;
+        }
+        
+        /* Gør afstanden mellem elementer mindre */
+        [data-testid="stVerticalBlock"] {
+            gap: 0.5rem !important;
+        }
+
+        /* Justering af tabs */
+        .stTabs {
+            margin-top: -30px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
     df_all = load_league_data()
     if df_all.empty: return
