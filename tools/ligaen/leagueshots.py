@@ -145,7 +145,7 @@ def vis_side(dp=None):
                     help="Andel af skud foretaget i Danger Zone",
                     format="%.0f%%", # Viser 0.25 som 25%
                     min_value=0, 
-                    max_value=1
+                    max_value=100
                 ),
                 "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
