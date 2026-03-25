@@ -126,7 +126,7 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
 
     fig.update_layout(
         height=380,
-        margin=dict(t=250, b=80, l=20, r=20),
+        margin=dict(t=50, b=80, l=20, r=20),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
