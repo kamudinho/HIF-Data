@@ -131,13 +131,13 @@ try:
     elif hoved_omraade == "HIF ANALYSE":
         if sel == "Spillerperformance":
             import tools.hifanalyse.player_analysis as pa
-            pa.vis_side() # Siden henter selv data
+            pa.vis_side(dp) # Siden henter selv data
         elif sel == "Afslutninger":
             import tools.hifanalyse.shotmap as sm
-            sm.vis_side()
+            sm.vis_side(dp)
         elif sel == "Assistmap":
             import tools.hifanalyse.assistmap as am
-            am.vis_side()
+            am.vis_side(dp)
 
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Modstanderanalyse":
