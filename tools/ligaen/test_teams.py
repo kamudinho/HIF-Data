@@ -106,28 +106,52 @@ def vis_side(dp_unused=None):
             metrics = ['SHOTS', 'XG', 'PASSES', 'PPDA']
             labels = ['Skud', 'xG', 'Afleveringer', 'PPDA']
             
+            # Subplots med plads i toppen til logoer
             fig = make_subplots(rows=1, cols=len(metrics), horizontal_spacing=0.08)
             
+            # Hent logo URL'er
+            u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
+            u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
+            l1, l2 = get_logo_url(u1), get_logo_url(u2)
+
             for i, m in enumerate(metrics):
-                # KORREKT NAVNGIVNING AF AKSER (x, x2, x3... og y, y2, y3...)
                 axis_suffix = f"{i+1}" if i > 0 else ""
-                xref_name = f"x{axis_suffix} domain"
-                yref_name = f"y{axis_suffix} domain"
+                xref_name = f"x{axis_suffix}"
+                yref_name = f"y{axis_suffix}"
                 
                 v1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)][m].mean()
                 v2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)][m].mean()
 
-                fig.add_trace(go.Bar(name=team1, x=[team1], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), showlegend=False), row=1, col=i+1)
-                fig.add_trace(go.Bar(name=team2, x=[team2], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), showlegend=False), row=1, col=i+1)
+                # Søjler
+                fig.add_trace(go.Bar(x=[0], y=[v1], marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), width=0.8, showlegend=False), row=1, col=i+1)
+                fig.add_trace(go.Bar(x=[1], y=[v2], marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), width=0.8, showlegend=False), row=1, col=i+1)
                 
-                # Annotation med de rettede xref og yref
+                # Tekst-labels (Annotationer) under graferne
                 fig.add_annotation(dict(
-                    x=0.5, y=-0.25, 
-                    xref=xref_name, yref=yref_name, 
-                    text=labels[i], showarrow=False, 
-                    font=dict(size=12, weight="bold")
+                    x=0.5, y=-0.2, xref=f"{xref_name} domain", yref=f"{yref_name} domain",
+                    text=labels[i], showarrow=False, font=dict(size=12, weight="bold")
                 ))
 
-            fig.update_layout(height=300, margin=dict(t=20, b=80, l=10, r=10), plot_bgcolor='rgba(0,0,0,0)')
-            fig.update_xaxes(showticklabels=False)
-            st.plotly_chart(fig, use_container_width=True)
+                # Logoer placeret relativt til hver subplot (xref='x', 'x2' osv)
+                if l1:
+                    fig.add_layout_image(dict(
+                        source=l1, xref=xref_name, yref="paper",
+                        x=0, y=1.05, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"
+                    ))
+                if l2:
+                    fig.add_layout_image(dict(
+                        source=l2, xref=xref_name, yref="paper",
+                        x=1, y=1.05, sizex=0.4, sizey=0.4, xanchor="center", yanchor="bottom"
+                    ))
+
+                # Opdater akser for at give plads og fjerne ticks
+                fig.update_xaxes(range=[-0.8, 1.8], showticklabels=False, row=1, col=i+1)
+                fig.update_yaxes(range=[0, max(v1, v2) * 1.4], visible=False, row=1, col=i+1)
+
+            fig.update_layout(
+                height=350, 
+                margin=dict(t=80, b=50, l=10, r=10), 
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
