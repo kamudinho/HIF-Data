@@ -90,7 +90,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "Pos_Tal": st.column_config.NumberColumn("POS", format="%d", width="small")
+            "POS": st.column_config.NumberColumn("POS", format="%d", width="small")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
