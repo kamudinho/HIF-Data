@@ -90,7 +90,7 @@ def vis_side(df_raw):
             </tr>""")
 
     # Saml det hele til én stor tabel-streng
-    fuld_tabel_html = f"""
+    html_output = f"""
     <div style="background:white; border:1px solid #eee; border-radius:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
         <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">
             <tr style="background:#fafafa; border-bottom: 2px solid #cc0000; color:#888; font-size:11px; text-transform:uppercase;">
@@ -106,7 +106,10 @@ def vis_side(df_raw):
     """
     
     # DETTE ER DEN VIGTIGE LINJE:
-    st.markdown(fuld_tabel_html, unsafe_allow_html=True)
+    html_output = html_start + rows + "</table></div>"
+    
+    # BRUG DENNE LINJE - og vær sikker på den ikke er indrykket for meget
+    st.markdown(html_output, unsafe_allow_html=True)
 
     # 4. Metrics
     st.write("")
