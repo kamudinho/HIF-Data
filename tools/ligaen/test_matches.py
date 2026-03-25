@@ -5,11 +5,14 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
 def vis_side(dp):
     # --- 1. DATA CHECK & FORBEREDELSE ---
+    # Vi henter kun de nødvendige team_stats fra opta-nøglen i dp
     df_matches = dp.get("opta", {}).get("team_stats", pd.DataFrame()).copy()
+    
     if df_matches.empty:
         st.warning("Ingen kampdata fundet.")
         return
 
+    # Standardisering af kolonnenavne og datoer
     df_matches.columns = [c.upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
@@ -17,11 +20,15 @@ def vis_side(dp):
         if col in df_matches.columns:
             df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
+    # Liga-konfiguration (vi bruger SEASONNAME = "2025/2026" som grundpræmis)
     config = dp.get("config", {})
-    valgt_liga_global = config.get("liga_navn", "1. Division")
+    valgt_liga_global = config.get("liga_navn", "NordicBet Liga") # Default til den aktuelle liga
+    
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == valgt_liga_global}
+    
     h_list = sorted(liga_hold_options.keys())
+    # Finder Hvidovre som standard, hvis de er i listen
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
     # --- 2. CSS STYLING ---
@@ -33,7 +40,7 @@ def vis_side(dp):
             background: #f8f9fa; 
             border-radius: 6px; 
             padding: 8px 4px; 
-            border-bottom: 2px solid #cc0000;
+            border-bottom: 2px solid #df003b;
             height: 52px;
             display: flex;
             flex-direction: column;
@@ -42,16 +49,16 @@ def vis_side(dp):
         .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
         .label-box { background: #eee; border-bottom: 2px solid #666; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
+        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #df003b; color: #333; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
-        .time-pill { text-align: center; font-weight: bold; color: #cc0000; border: 1px solid #cc0000; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; }
+        .time-pill { text-align: center; font-weight: bold; color: #df003b; border: 1px solid #df003b; border-radius: 4px; padding: 2px 8px; font-size: 14px; display: inline-block; }
         .team-name { font-weight: bold; font-size: 15px; padding-top: 8px; }
         .bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; }
         .bar-val { font-weight: 700; font-size: 12px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. TOP LAYOUT ---
+    # --- 3. TOP LAYOUT (FILTRE OG OVERORDNET STATS) ---
     col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     with row1[0]:
@@ -118,10 +125,9 @@ def vis_side(dp):
                 c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row.get('TOTAL_HOME_SCORE',0))} - {int(row.get('TOTAL_AWAY_SCORE',0))}</span></div>", unsafe_allow_html=True)
                 st.write("")
                 
-                # FARVELOGIK: Valgt hold får sin farve, modstander får grå
                 h_is_valgt = h_uuid == valgt_uuid
-                h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#cc0000") if h_is_valgt else "#d1d1d1"
-                a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#cc0000") if not h_is_valgt else "#d1d1d1"
+                h_bar_color = TEAM_COLORS.get(h_n, {}).get("primary", "#df003b") if h_is_valgt else "#d1d1d1"
+                a_bar_color = TEAM_COLORS.get(a_n, {}).get("primary", "#df003b") if not h_is_valgt else "#d1d1d1"
                 
                 stats_conf = [
                     ("HOME_POSS", "AWAY_POSS", "Boldbesiddelse", 1, "%"),
