@@ -133,17 +133,24 @@ def vis_side(dp=None):
                 # Ganger med 100 her, så tallet er f.eks. 100 eller 85
                 "DZ-Andel": (dz_s / s * 100 if s > 0 else 0) 
             })
+
+        df_display = pd.DataFrame(p_stats).sort_values("Skud", ascending=False)
         
+        # Beregn højde: ca. 35px per række + 40px til header
+        dynamic_height = (len(df_display) + 1) * 35 + 40
+
         st.dataframe(
-            pd.DataFrame(p_stats).sort_values("Skud", ascending=False),
-            use_container_width=True, hide_index=True,
+            df_display,
+            use_container_width=True, 
+            hide_index=True,
+            height=dynamic_height, # Her fjernes scroll-baren
             column_config={
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
                     help="Andel af skud foretaget i Danger Zone",
-                    format="%d%%",    # Viser nu heltallet + % (f.eks. 100%)
+                    format="%d%%", 
                     min_value=0, 
-                    max_value=100     # Sætter max til 100 nu hvor vi har ganget med 100
+                    max_value=100
                 ),
                 "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
                 "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
