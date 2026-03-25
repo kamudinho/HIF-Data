@@ -92,17 +92,20 @@ def vis_side(dp=None):
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
     
     df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-    # Konverter Opta (100x100) til Custom (105x68)
+    
+    # 1. KONVERTER TIL METER MED DET SAMME
     df_team['X_M'] = df_team['EVENT_X'] * (105/100)
     df_team['Y_M'] = df_team['EVENT_Y'] * (68/100)
     
+    # 2. OPDATERET DZ LOGIK (METER-BASERET)
+    df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 24.84) & (df_team['Y_M'] <= 43.16)
+
     def map_zone_custom(r):
         for z, b in ZONE_BOUNDARIES.items():
             if b["y_min"] <= r['X_M'] <= b["y_max"] and b["x_min"] <= r['Y_M'] <= b["x_max"]: return z
         return "Zone 8"
     
     df_team['Zone'] = df_team.apply(map_zone_custom, axis=1)
-    df_team['IS_DZ'] = (df_team['EVENT_X'] >= 88.5) & (df_team['EVENT_Y'] >= 37.0) & (df_team['EVENT_Y'] <= 63.0)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
@@ -121,38 +124,38 @@ def vis_side(dp=None):
             "Konv.%": st.column_config.NumberColumn(format="%.1f%%")
         })
 
-    # --- TAB 1 & 2: AFSLUTNINGER OG DZ (NU MED CUSTOM PITCH) ---
-    for i, is_dz in enumerate([False, True]):
+    # --- TAB 1 & 2: AFSLUTNINGER OG DZ ---
+    for i, is_dz_tab in enumerate([False, True]):
         with tabs[i+1]:
             c1, c2 = st.columns([2, 1])
-            d_v = df_team[df_team['IS_DZ']] if is_dz else df_team
+            d_v = df_team[df_team['IS_DZ']] if is_dz_tab else df_team
             
             with c2:
-                if not is_dz:
-                    p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_team['PLAYER_NAME'].unique()), key=f"p_{i}")
+                if not is_dz_tab:
+                    p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_team['PLAYER_NAME'].unique()), key=f"sel_p_{i}")
                     d_v = df_team if p_sel == "Hele Holdet" else df_team[df_team['PLAYER_NAME'] == p_sel]
                 
-                s, m = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
-                lbl = "DZ " if is_dz else ""
-                st.markdown(f'<div class="stat-box"><div class="stat-label">{lbl}Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="stat-box"><div class="stat-label">{lbl}Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">{lbl}Konv. Rate</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
+                s_cnt, m_cnt = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
+                lbl = "DZ " if is_dz_tab else ""
+                st.markdown(f'<div class="stat-box"><div class="stat-label">{lbl}Skud</div><div class="stat-value">{s_cnt}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="stat-box"><div class="stat-label">{lbl}Mål</div><div class="stat-value">{m_cnt}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="stat-box" style="border-left-color:{HIF_GOLD}"><div class="stat-label">{lbl}Konv. Rate</div><div class="stat-value">{(m_cnt/s_cnt*100 if s_cnt>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
             
             with c1:
-                # Vi bruger Custom pitch (105x68) overalt nu for ensartethed
                 pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc', pad_bottom=-20)
                 fig, ax = pitch.draw(figsize=(5, 4.5))
                 
-                if is_dz:
-                    ax.add_patch(patches.Rectangle((X_MID_L, Y_18YD), X_MID_R-X_MID_L, Y_GOAL-Y_18YD, color=t_color, alpha=0.15))
+                # Tegn Danger Zone rektangel hvis det er DZ fanen
+                if is_dz_tab:
+                    ax.add_patch(patches.Rectangle((24.84, 88.5), 18.32, 16.5, color=t_color, alpha=0.15, zorder=1))
                 
                 pitch.scatter(d_v['X_M'], d_v['Y_M'], s=80, 
                               c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), 
-                              edgecolors=t_color, ax=ax, zorder=2)
+                              edgecolors=t_color, ax=ax, zorder=3)
                 draw_logo_on_pitch(ax, t_logo)
                 st.pyplot(fig)
 
-    # --- TAB 3 & 4: ZONER (SKUD & MÅL) ---
+    # --- TAB 3 & 4: ZONER ---
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             c1, c2 = st.columns([1.8, 1])
@@ -169,10 +172,11 @@ def vis_side(dp=None):
                 pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey', pad_bottom=-20)
                 fig, ax = pitch.draw(figsize=(8, 6))
                 ax.set_ylim(55, 105)
-                max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
+                z_counts = plot_df['Zone'].value_counts()
+                max_v = z_counts.max() if not z_counts.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
                     if b["y_max"] <= 55: continue
-                    cnt = len(plot_df[plot_df['Zone']==z])
+                    cnt = z_counts.get(z, 0)
                     alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
                     ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
                     if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
