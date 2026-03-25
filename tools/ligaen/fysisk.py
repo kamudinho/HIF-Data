@@ -169,7 +169,7 @@ def vis_side(conn, name_map=None):
                     # Marker hvem der er hvem
                     df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
 
-                        st.dataframe(
+                    st.dataframe(
                     df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
                     column_config={
                         "DISPLAY_NAME": "Spiller", "Klub_Korrekt": "Klub", "MINUTES": "Min",
