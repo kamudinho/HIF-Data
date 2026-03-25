@@ -177,10 +177,12 @@ def vis_side(dp=None):
         df_f = pd.DataFrame(stats).sort_values("Skud", ascending=False)
         
         # Konfiguration af kolonner: Formatering og centrering
+        dynamisk_hojde = (len(view_df) + 1) * 35 + 3
+        
         st.dataframe(
             df_f, 
             use_container_width=True, 
-            height=None, # None gør at den viser hele dataframen (scroller ikke internt hvis muligt)
+            height=dynamisk_hojde, # None gør at den viser hele dataframen (scroller ikke internt hvis muligt)
             hide_index=True,
             column_config={
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
