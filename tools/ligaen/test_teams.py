@@ -55,11 +55,10 @@ def get_wyscout_stats():
     """
     return pd.read_sql(query, conn)
 
-# --- 3. DEN DEFINITIVE CHART FUNKTION ---
+# --- 3. CHART FUNKTION (FIXET) ---
 
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
-    
     col_width = 0.18
     gap = 0.05
 
@@ -79,59 +78,45 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         prec = ".2f" if 'XG' in m.upper() else ".1f"
         max_y = max(v1, v2, 0.5)
 
-        # 1. Søjler med Værdier
+        # 1. Søjler med hvid tekst udenfor
         fig.add_trace(go.Bar(
             x=[0, 1], y=[v1, v2],
             text=[format(v1, prec), format(v2, prec)],
-            textposition='outside', # Sætter værdien over søjlen
-            textfont=dict(size=13, color="white", weight="bold"),
-            cliponaxis=False, # Tvinger værdien til at blive vist selvom den er "udenfor"
+            textposition='outside',
+            textfont=dict(size=14, color="white", family="Arial Black"), # TVUNGEN HVID
+            cliponaxis=False,
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
                           TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")],
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
 
-        # 2. Logoer (Placeret præcis i toppen af hver subplot)
+        # 2. Logoer i toppen
         if l1:
-            fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.02,
-                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
-            ))
+            fig.add_layout_image(dict(source=l1, xref=xref, yref="paper", x=0, y=1.05, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
         if l2:
-            fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.02,
-                sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
-            ))
+            fig.add_layout_image(dict(source=l2, xref=xref, yref="paper", x=1, y=1.05, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
 
-        # 3. Kategori-navn (Labels under søjlerne)
+        # 3. Kategori-navn under søjlerne
         fig.add_annotation(dict(
-            x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=f"<b>{labels[i]}</b>", showarrow=False, 
-            font=dict(size=12, color="white"), yanchor="top"
+            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=f"<b>{labels[i]}</b>", showarrow=False, font=dict(size=12, color="white"), yanchor="top"
         ))
 
-        # 4. Akse-indstillinger (Her sikrer vi pladsen)
+        # 4. Akse setup
         fig.update_layout({
-            f"xaxis{suffix}": dict(
-                domain=[i*(col_width+gap), i*(col_width+gap)+col_width], 
-                range=[-0.8, 1.8], showticklabels=False, fixedrange=True
-            ),
-            f"yaxis{suffix}": dict(
-                range=[-max_y * 0.2, max_y * 1.5], # Giver 20% plads i bunden og 50% i toppen
-                visible=False, fixedrange=True
-            )
+            f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], range=[-0.8, 1.8], showticklabels=False),
+            f"yaxis{suffix}": dict(range=[0, max_y * 1.5], visible=False)
         })
 
     fig.update_layout(
         height=450,
-        margin=dict(t=100, b=60, l=20, r=20),
+        margin=dict(t=120, b=80, l=20, r=20),
         plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        uniformtext=dict(minsize=11, mode='show') # Tvinger tekst til at blive vist
+        paper_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
 
-# --- 4. HOVEDFUNKTION (Tabellen herunder) ---
+# --- 4. HOVEDFUNKTION (Tabellen) ---
 
 def vis_side(dp_unused=None):
     df_opta = load_liga_data()
@@ -162,6 +147,7 @@ def vis_side(dp_unused=None):
             else:
                 stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['U'] += 1; stats[a_uuid]['U'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
 
+    # Næste modstander logik (med logo)
     next_opp = {}
     df_future = df_opta[df_opta['MATCH_STATUS'].str.strip().str.capitalize() != 'Played'].sort_values('MATCH_DATE_FULL')
     for uuid in stats.keys():
@@ -183,7 +169,7 @@ def vis_side(dp_unused=None):
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
 
     with t_liga:
-        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; } .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>", unsafe_allow_html=True)
+        st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; font-size: 14px; color: white; } .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }</style>", unsafe_allow_html=True)
         df_disp = df_liga.copy()
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
