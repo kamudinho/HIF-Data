@@ -125,8 +125,8 @@ def vis_side(dp=None):
     with tabs[1]:
         c1, c2 = st.columns([2, 1])
         with c2:
-            p_sel = st.selectbox("Vælg spiller", ["Hele Holdet"] + sorted(df_team['PLAYER_NAME'].unique()))
-            d_v = df_team if p_sel == "Hele Holdet" else df_team[df_team['PLAYER_NAME'] == p_sel]
+            p_sel = st.selectbox("Vælg spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
+            d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
             s, m = len(d_v), len(d_v[d_v['EVENT_TYPEID']==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
@@ -171,7 +171,7 @@ def vis_side(dp=None):
                 st.table(pd.DataFrame(z_summary).sort_values("Antal", ascending=False))
             with c1:
                 pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='grey')
-                fig, ax = pitch.draw(figsize=(8, 10))
+                fig, ax = pitch.draw(figsize=(6, 8))
                 ax.set_ylim(55, 105)
                 max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
                 for z, b in ZONE_BOUNDARIES.items():
