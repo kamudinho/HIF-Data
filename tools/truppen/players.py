@@ -62,15 +62,6 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 2. Søgefilter
-    search = st.text_input("", placeholder="Søg spiller eller position...", label_visibility="collapsed")
-    if search:
-        mask = (df_working['NAVN'].str.contains(search, case=False, na=False) | 
-                df_working['POS_NAVN'].str.contains(search, case=False, na=False))
-        df_display = df_working[mask].copy()
-    else:
-        df_display = df_working.copy()
-
     # 3. Opret tabel til visning
     # Vi bruger de rå tal/datoer for at sikre perfekt sortering
     view_df = pd.DataFrame({
@@ -103,7 +94,7 @@ def vis_side(df_raw):
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=850,
+        height=1050,
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
@@ -111,14 +102,3 @@ def vis_side(df_raw):
             "Alder": st.column_config.NumberColumn("Alder", format="%d år") # HER TILFØJES "år"
         }
     )
-
-    # 6. Metrics
-    st.write("")
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Antal", len(df_display))
-    
-    avg_h = df_display[df_display['HEIGHT'] > 0]['HEIGHT'].mean()
-    m2.metric("Gns. Højde", f"{avg_h:.0f} cm" if pd.notna(avg_h) else "-")
-    
-    avg_a = df_display['ALDER_NUM'].mean()
-    m3.metric("Gns. Alder", f"{avg_a:.1f} år" if pd.notna(avg_a) else "-")
