@@ -83,7 +83,7 @@ def vis_side(dp=None):
         
         /* Dette rykker hele den første blok (overskrift + dropdown) op */
         [data-testid="stVerticalBlock"] > div:first-child {
-            margin-top: -40px !important;
+            margin-top: -20px !important;
         }
 
         .stat-box { 
