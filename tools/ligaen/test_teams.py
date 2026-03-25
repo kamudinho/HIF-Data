@@ -89,11 +89,11 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         # 2. VÆRDIER OVER BARENE (Hvid skrift)
         fig.add_annotation(dict(
             x=0, y=v1, xref=xref, yref=yref, text=f"<b>{format(v1, prec)}</b>",
-            showarrow=False, yshift=15, font=dict(size=13, color="white")
+            showarrow=False, yshift=15, font=dict(size=13, color="black")
         ))
         fig.add_annotation(dict(
             x=1, y=v2, xref=xref, yref=yref, text=f"<b>{format(v2, prec)}</b>",
-            showarrow=False, yshift=15, font=dict(size=13, color="white")
+            showarrow=False, yshift=15, font=dict(size=13, color="black")
         ))
 
         # 3. KATEGORI UNDER BARENE
