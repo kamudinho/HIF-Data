@@ -54,9 +54,7 @@ def process_squad_data(df):
     
     return df.sort_values(by=['SORT_ORDER', 'NAVN'])
 
-def vis_side(df_raw):
-    st.subheader("TRUPPEN | OVERSIGT")
-    
+def vis_side(df_raw):    
     # 1. Behandl data
     df_working = process_squad_data(df_raw)
     
@@ -73,19 +71,19 @@ def vis_side(df_raw):
     else:
         df_display = df_working.copy()
 
-    # 3. Opret tabel til visning 
-    # VIGTIGT: Vi beholder 'CONTRACT' og 'BIRTHDATE' som dato-objekter for korrekt sortering
+    # 3. Opret tabel til visning
+    # Vi bruger de rå tal/datoer for at sikre perfekt sortering
     view_df = pd.DataFrame({
         'Position': df_display['POS_NAVN'],
         'Spiller': df_display['NAVN'],
-        'Født': df_display['BIRTHDATE'], # Rå dato
-        'Højde': df_display['HEIGHT'].fillna(0).astype(int).replace(0, "-"),
+        'Født': df_display['BIRTHDATE'],
+        'Højde': df_display['HEIGHT'].fillna(0), # Behold som tal
         'Fod': df_display['FOD'].fillna("-"),
-        'Kontrakt': df_display['CONTRACT'], # Rå dato
-        'Alder': df_display['ALDER_NUM'].fillna("-")
+        'Kontrakt': df_display['CONTRACT'],
+        'Alder': df_display['ALDER_NUM'] # Behold som tal
     })
 
-    # 4. Styling funktion (bruger row.name til at matche med df_display)
+    # 4. Styling funktion
     def style_contract(row):
         styles = [''] * len(row)
         idx = row.name
@@ -100,7 +98,7 @@ def vis_side(df_raw):
                 styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 5. Vis dataframe med column_config for korrekt dato-format
+    # 5. Vis dataframe med avanceret konfiguration
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
@@ -109,6 +107,8 @@ def vis_side(df_raw):
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
+            "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
+            "Alder": st.column_config.NumberColumn("Alder", format="%d år") # HER TILFØJES "år"
         }
     )
 
@@ -116,7 +116,9 @@ def vis_side(df_raw):
     st.write("")
     m1, m2, m3 = st.columns(3)
     m1.metric("Antal", len(df_display))
+    
     avg_h = df_display[df_display['HEIGHT'] > 0]['HEIGHT'].mean()
     m2.metric("Gns. Højde", f"{avg_h:.0f} cm" if pd.notna(avg_h) else "-")
+    
     avg_a = df_display['ALDER_NUM'].mean()
     m3.metric("Gns. Alder", f"{avg_a:.1f} år" if pd.notna(avg_a) else "-")
