@@ -79,7 +79,7 @@ def vis_side(df_raw):
 
     # 4. Visning af tabellen
     # Vi fjerner de rå dato-kolonner og omdøber for pæn visning
-    final_df = df_display[['POS_NAVN', 'NAVN', 'Født', 'HEIGHT', 'FOD', 'Kontrakt', 'ALDER']]
+    final_df = df_display[['POS_NAVN', 'NAVN', 'Født', 'HEIGHT', 'FOD', 'CONTRACT', 'ALDER']]
     final_df.columns = ['Position', 'Navn', 'Født', 'Højde (cm)', 'Fod', 'Kontraktudløb', 'Alder']
 
     st.dataframe(
