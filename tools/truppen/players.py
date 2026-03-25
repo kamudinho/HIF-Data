@@ -87,12 +87,14 @@ def vis_side(df_raw):
                 styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 4. Vis dataframe
+    # Beregn højden: ca. 35 pixels pr. række + 40 pixels til overskriften
+    dynamisk_hojde = (len(view_df) + 1) * 35 + 3
+    
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=content,
+        height=dynamisk_hojde,  # Her tvinger vi den til at fylde det hele
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
