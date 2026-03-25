@@ -162,9 +162,3 @@ def vis_side(dp_unused=None):
             fig.update_layout(height=300, margin=dict(t=20, b=50), plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True)
 
-### Hvad er ændret?
-1.  **Selvstændig Query:** `load_liga_data()` og `get_wyscout_stats()` henter nu data direkte fra Snowflake uden at vente på en global pakke.
-2.  **Mapping robusthed:** Den kigger i dine `TEAMS` og `TEAM_COLORS` filer for at finde logoer og farver automatisk.
-3.  **Union i SQL:** Jeg har forenklet koden betydeligt ved at lade Python beregne tabellen ud fra en simpel match-liste, hvilket er mere præcist end at stole på præ-summerede stats fra Opta.
-
-**Skal jeg fortsætte med `leagueshots.py` (Afslutninger - liga), så vi får den over på samme hurtige model?**
