@@ -100,7 +100,7 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         fig.add_annotation(dict(
             x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
             text=f"<b>{labels[i]}</b>", showarrow=False, 
-            font=dict(size=12, color="white"), yanchor="top"
+            font=dict(size=12, color="black"), yanchor="top"
         ))
 
         # 4. LOGOER I TOPPEN
