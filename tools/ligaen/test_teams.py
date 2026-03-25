@@ -83,7 +83,6 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         raw_v1 = d1[m.upper()].iloc[0] if not d1.empty else 0
         raw_v2 = d2[m.upper()].iloc[0] if not d2.empty else 0
         
-        # Formatering af tallet til tekst
         prec = ".2f" if 'XG' in m.upper() else ".1f"
         txt1 = format(float(raw_v1), prec)
         txt2 = format(float(raw_v2), prec)
@@ -93,8 +92,8 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
             x=[0], y=[float(raw_v1)], 
             text=[txt1], 
             textposition='outside', 
-            cliponaxis=False, # VIGTIG: Gør at teksten ikke forsvinder ved kanten
-            textfont=dict(size=12, color='white', family="Arial Black"),
+            cliponaxis=False,
+            textfont=dict(size=13, color='white', family="Arial Black"),
             marker_color=TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
@@ -103,39 +102,41 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
             text=[txt2], 
             textposition='outside', 
             cliponaxis=False,
-            textfont=dict(size=12, color='white', family="Arial Black"),
+            textfont=dict(size=13, color='white', family="Arial Black"),
             marker_color=TEAM_COLORS.get(team2, {}).get("primary", "#0056a3"), 
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
         
-        # Konfigurer aksen - vi giver den rigeligt med luft (2x max værdi)
+        # Akse-konfiguration med masser af luft til labels i bunden (range starter ved minus)
         max_val = max(float(raw_v1), float(raw_v2), 0.5)
         fig.update_layout({
             f"xaxis{suffix}": dict(domain=[start_pos, end_pos], range=[-0.8, 1.8], showticklabels=False, fixedrange=True),
-            f"yaxis{suffix}": dict(range=[0, max_val * 2.0], visible=False, fixedrange=True)
+            f"yaxis{suffix}": dict(range=[0, max_val * 2.2], visible=False, fixedrange=True)
         })
 
-        # Kategori-label
+        # Kategori-label (y-position sat til -0.15 for at sikre den er synlig)
         fig.add_annotation(dict(
-            x=0.5, y=-0.3, xref=f"{xref} domain", yref=f"{yref} domain",
-            text=labels[i], showarrow=False, font=dict(size=11, weight="bold", color="white")
+            x=0.5, y=-0.15, xref=f"{xref} domain", yref=f"{yref} domain",
+            text=labels[i], showarrow=False, 
+            font=dict(size=12, weight="bold", color="white"),
+            yanchor="top"
         ))
 
-        # Logoer - placeret via 'paper' for at ligge helt i top
+        # Logoer - xref refererer til subplottet, yref="paper" holder dem i toppen af hele figuren
         if l1:
             fig.add_layout_image(dict(
-                source=l1, xref=xref, yref="paper", x=0, y=1.2, 
-                sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
+                source=l1, xref=xref, yref="paper", x=0, y=1.0, 
+                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
             ))
         if l2:
             fig.add_layout_image(dict(
-                source=l2, xref=xref, yref="paper", x=1, y=1.2, 
-                sizex=0.35, sizey=0.35, xanchor="center", yanchor="bottom"
+                source=l2, xref=xref, yref="paper", x=1, y=1.0, 
+                sizex=0.3, sizey=0.3, xanchor="center", yanchor="bottom"
             ))
 
     fig.update_layout(
-        height=320,
-        margin=dict(t=100, b=60, l=10, r=10), 
+        height=450,
+        margin=dict(t=120, b=80, l=10, r=10), 
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)'
     )
