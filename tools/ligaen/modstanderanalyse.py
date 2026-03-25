@@ -4,23 +4,27 @@ import seaborn as sns
 from mplsoccer import VerticalPitch
 from data.data_load import _get_snowflake_conn
 
-# --- CACHED DATA FUNKTIONER ---
-
 @st.cache_data(ttl=3600)
 def get_league_teams(tournament_uuid):
-    """Henter lynhurtigt en liste over hold i turneringen."""
+    """Henter holdliste og sikrer korrekte kolonnenavne."""
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
+    # Vi henter både hjemme- og udehold for at få alle med
     query = f"""
-        SELECT DISTINCT CONTESTANTHOME_NAME as name, CONTESTANTHOME_OPTAUUID as uuid 
+        SELECT DISTINCT CONTESTANTHOME_NAME as TEAM_NAME, CONTESTANTHOME_OPTAUUID as TEAM_UUID 
+        FROM {db}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_uuid}'
+        UNION
+        SELECT DISTINCT CONTESTANTAWAY_NAME as TEAM_NAME, CONTESTANTAWAY_OPTAUUID as TEAM_UUID 
         FROM {db}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_uuid}'
     """
-    return pd.read_sql(query, conn)
+    df = pd.read_sql(query, conn)
+    return df
 
-@st.cache_data(ttl=600) # Kortere cache så nyeste kampe kommer med
+@st.cache_data(ttl=600)
 def get_single_team_events(team_uuid, tournament_uuid):
-    """Henter KUN events for det valgte hold. Dette er nøglen til fart!"""
+    """Henter events for det specifikke hold."""
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     query = f"""
@@ -37,26 +41,33 @@ def get_single_team_events(team_uuid, tournament_uuid):
     """
     return pd.read_sql(query, conn)
 
-# --- HOVEDFUNKTION (LAYOUT BEVARET) ---
-
-def vis_side(dp_fra_main=None):
-    # Vi bruger NordicBet UUID som standard (fra din konfiguration)
+def vis_side(dp=None):
+    # Brug din faste UUID for NordicBet Ligaen
     NORDICBET_UUID = "dyjr458hcmrcy87fsabfsy87o"
     
-    # 1. Vælg hold (Kører lynhurtigt da den kun henter navne)
+    # 1. Hent hold (Fejlsikret)
     df_teams = get_league_teams(NORDICBET_UUID)
-    valgt_hold_navn = st.selectbox("Vælg modstander:", sorted(df_teams['name'].unique()))
-    valgt_uuid = df_teams[df_teams['name'] == valgt_hold_navn]['uuid'].iloc[0]
+    
+    if df_teams.empty:
+        st.error("Kunne ikke hente holdliste fra Snowflake.")
+        return
 
-    # 2. Hent kun data for det valgte hold
-    with st.spinner(f"Analyserer {valgt_hold_navn}..."):
+    # Sørg for at vi bruger de rigtige kolonnenavne fra SQL'en
+    hold_liste = sorted(df_teams['TEAM_NAME'].unique())
+    valgt_hold_navn = st.selectbox("Vælg modstander:", hold_liste)
+    
+    # Find UUID baseret på det valgte navn
+    valgt_uuid = df_teams[df_teams['TEAM_NAME'] == valgt_hold_navn]['TEAM_UUID'].iloc[0]
+
+    # 2. Hent data kun for det valgte hold
+    with st.spinner(f"Henter data for {valgt_hold_navn}..."):
         df_hold_events = get_single_team_events(valgt_uuid, NORDICBET_UUID)
 
     if df_hold_events.empty:
-        st.warning("Ingen data fundet.")
+        st.warning(f"Ingen hændelser fundet for {valgt_hold_navn} i denne sæson.")
         return
 
-    # --- DIN ORIGINALE VISUALISERING ---
+    # --- Layout (Tabs) ---
     tabs = st.tabs(["Offensiv", "Defensiv", "Spiller-stats"])
     pitch = VerticalPitch(pitch_type='opta', pitch_color='white', line_color='#333333')
 
@@ -78,9 +89,8 @@ def vis_side(dp_fra_main=None):
             st.pyplot(fig)
 
     with tabs[1]:
-        st.write("**Defensive aktioner**")
+        st.write("**Defensive aktioner (Tacklinger/Erobringer)**")
         fig, ax = pitch.draw()
-        # 4=Tackle, 8=Interception, 49=Ball Recovery
         defensive = df_hold_events[df_hold_events['EVENT_TYPEID'].isin([4, 8, 49])]
         if len(defensive) > 5:
             sns.kdeplot(x=defensive.LOCATIONY, y=defensive.LOCATIONX, fill=True, cmap='Blues', ax=ax, alpha=0.5)
@@ -88,4 +98,4 @@ def vis_side(dp_fra_main=None):
 
     with tabs[2]:
         st.write(f"Mest aktive spillere ({valgt_hold_navn})")
-        st.dataframe(df_hold_events['PLAYER_NAME'].value_counts().head(10))
+        st.dataframe(df_hold_events['PLAYER_NAME'].value_counts().head(10), use_container_width=True)
