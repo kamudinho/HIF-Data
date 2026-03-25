@@ -11,17 +11,17 @@ except ImportError:
 def map_position_detail(pos_code):
     """Mapper talkoder til læsbare positioner"""
     pos_map = {
-        "1.0": "Målmand", "1": "Målmand",
-        "2.0": "Højre Back", "2": "Højre back",
-        "3.0": "Venstre Back", "3": "Venstre back",
-        "4.0": "Midtstopper", "4": "Midtstopper",
-        "5.0": "Midtstopper", "5": "Midtstopper",
-        "6.0": "Defensiv Midt", "6": "Defensiv midtbane",
-        "7.0": "Højre Kant", "7": "Højre kant",
-        "8.0": "Central Midt", "8": "Central midtbane",
-        "9.0": "Angriber", "9": "Angriber",
-        "10.0": "Offensiv Midt", "10": "Offensiv midtbane",
-        "11.0": "Venstre Kant", "11": "Venstre kant"
+        "1": "Målmand", "1": "Målmand",
+        "2": "Højre Back", "2": "Højre back",
+        "3": "Venstre Back", "3": "Venstre back",
+        "4": "Midtstopper", "4": "Midtstopper",
+        "5": "Midtstopper", "5": "Midtstopper",
+        "6": "Defensiv Midt", "6": "Defensiv midtbane",
+        "7": "Højre Kant", "7": "Højre kant",
+        "8": "Central Midt", "8": "Central midtbane",
+        "9": "Angriber", "9": "Angriber",
+        "10": "Offensiv Midt", "10": "Offensiv midtbane",
+        "11": "Venstre Kant", "11": "Venstre kant"
     }
     clean_code = str(pos_code).strip()
     if ".0" not in clean_code and clean_code.isdigit():
