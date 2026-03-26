@@ -45,7 +45,7 @@ def process_squad_data(df):
     # Alder & Position
     idag = datetime.now()
     df['ALDER_NUM'] = (idag - df['BIRTHDATE']).dt.days // 365
-    df['POS_NAVN'] = df['POS'].apply(map_position_detail)
+    df['POS'] = df['POS'].apply(map_position_detail)
     
     # Sortering
     sort_map = {"GKP": 1, "DEF": 2, "MID": 3, "FWD": 4}
@@ -63,7 +63,7 @@ def vis_side(df_raw):
 
     # 2. Opret tabel til visning
     view_df = pd.DataFrame({
-        'Position': df_display['POS_NAVN'],
+        'Position': df_display['POS'],
         'Spiller': df_display['NAVN'],
         'Født': df_display['BIRTHDATE'],
         'Højde': df_display['HEIGHT'].fillna(0),
