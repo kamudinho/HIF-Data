@@ -155,7 +155,7 @@ def vis_side(dp=None):
     # Vis Række 2 Snit
     row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>{valgt_side.upper()}</div></div>", unsafe_allow_html=True)
 
-    avg_map = [("POSS", "POSS", 1, "%"), ("XG", "xG", 2, ""), ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "STORE", 0, ""), ("PASSES", "PASS", 0, ""), ("FORWARD_PASSES", "FREM", 0, "")]
+    avg_map = [("POSS", "POSS %", 1, "%"), ("XG", "xG", 2, ""), ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "STORE CHANCER", 0, ""), ("PASSES", "PASSES", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
         for _, m in played_p.iterrows():
