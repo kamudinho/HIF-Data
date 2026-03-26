@@ -58,52 +58,60 @@ def process_squad_data(df):
     return df.sort_values(by=['SORT_ORDER', 'NAVN'])
 
 def vis_side(df_raw):    
-    # 1. Behandl data
+    # 1. CSS til at tvinge venstrestilling (Alignment)
+    st.markdown("""
+        <style>
+            [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+                text-align: left !important;
+            }
+            /* Fjerner Streamlits forsøg på at højrejustere indhold i cellerne */
+            div[data-testid="stDataFrame"] div[class*="data-grid-cell-content"] {
+                justify-content: flex-start !important;
+                text-align: left !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 2. Behandl data
     df_display = process_squad_data(df_raw)
     
     if df_display.empty:
         st.error("Ingen data fundet.")
         return
 
-    # 2. Opret tabel og tilføj enheder direkte i teksten for at kunne venstrestille
+    # 3. Opret tabel med de ønskede kolonner formateret som tekst
     view_df = pd.DataFrame({
-        'Position': df_display['POS'],
-        'Spiller': df_display['NAVN'],
-        'Født': df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y'),
+        'Position': df_display['POS'].astype(str),
+        'Spiller': df_display['NAVN'].astype(str),
+        'Født': df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y').fillna("-"),
+        'Alder': df_display['ALDER_NUM'].fillna(0).astype(int).astype(str) + " år",
         'Højde': df_display['HEIGHT'].fillna(0).astype(int).astype(str) + " cm",
-        'Fod': df_display['FOD'].fillna("-"),
-        'Kontrakt': df_display['CONTRACT'].dt.strftime('%d.%m.%Y'),
-        'Alder': df_display['ALDER_NUM'].fillna(0).astype(int).astype(str) + " år"
+        'Fod': df_display['FOD'].fillna("-").astype(str),
+        'Kontraktudløb': df_display['CONTRACT'].dt.strftime('%d.%m.%Y').fillna("-")
     })
 
-    # 3. Styling funktion (bevares som før)
-    def style_contract(row):
+    # 4. Styling af kontraktudløb (Index 6 i denne rækkefølge)
+    def style_rows(row):
         styles = [''] * len(row)
         idx = row.name
         raw_date = df_display.loc[idx, 'CONTRACT']
+        
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
+            # Kontraktudløb er nu kolonne nr. 6
             if dage < 183:
-                styles[5] = 'background-color: #ffcccc; color: black;'
+                styles[6] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
-                styles[5] = 'background-color: #ffffcc; color: black;'
+                styles[6] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    dynamisk_hojde = (len(view_df) + 1) * 35 + 3
+    # 5. Beregn dynamisk højde (35px pr række + lidt til header)
+    dynamisk_hojde = (len(view_df) + 1) * 35 + 10
     
-    # 4. Vis dataframe med generel Column-config for alignment
+    # 6. Vis dataframe
     st.dataframe(
-        view_df.style.apply(style_contract, axis=1),
+        view_df.style.apply(style_rows, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=dynamisk_hojde,
-        column_config={
-            "Position": st.column_config.Column(alignment="left"),
-            "Spiller": st.column_config.Column(alignment="left"),
-            "Født": st.column_config.Column(alignment="left"),
-            "Højde": st.column_config.Column(alignment="left"),
-            "Fod": st.column_config.Column(alignment="left"),
-            "Kontrakt": st.column_config.Column("Kontraktudløb", alignment="left"),
-            "Alder": st.column_config.Column(alignment="left"),
-        }
+        height=dynamisk_hojde
     )
