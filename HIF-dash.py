@@ -56,10 +56,10 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    # CSS der tvinger alt indhold ud til kanten og styler formen
+    # Aggressiv CSS til at tvinge layoutet helt ud til kanten
     st.markdown(f"""
         <style>
-            /* Fjern alt padding og begrænsninger fra Streamlit */
+            /* Fjern Streamlits standard margin/padding overalt */
             [data-testid="stAppViewContainer"] {{
                 padding: 0 !important;
             }}
@@ -71,70 +71,63 @@ if not st.session_state["logged_in"]:
                 max-width: 100% !important;
             }}
             
-            /* Split layout */
-            .login-container {{
-                display: flex;
+            /* Skab en split-skærm baggrund */
+            .stApp {{
+                background: linear-gradient(to right, 
+                    white 0%, white 50%, 
+                    transparent 50%, transparent 100%);
+            }}
+
+            /* Den højre side med billedet (Full bleed) */
+            [data-testid="stAppViewContainer"]::before {{
+                content: "";
+                position: fixed;
+                right: 0;
+                top: 0;
+                width: 50%;
                 height: 100vh;
-                width: 100vw;
-            }}
-            
-            .login-left {{
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                background-color: white;
-            }}
-            
-            .login-right {{
-                flex: 1;
                 background-image: url('https://www.tv2kosmopol.dk/img/asset/aW1hZ2VzLzIwMjMvMDUvMjgvMjAyMzA1MjctMTUxMTM3LWwtMTkyMHgxNDg1d2UuanBn/20230527-151137-l-1920x1485we.jpg?fm=jpg&w=1920&h=862.92134831461&s=69869f3269bf8ebfa06b2b56bcf20a2e');
                 background-size: cover;
                 background-position: center;
+                z-index: 0;
             }}
 
-            /* Gør Streamlit formen pænere */
+            /* Sørg for at login-form lander korrekt til venstre */
+            .login-box {{
+                max-width: 320px;
+                margin-top: 15vh;
+                text-align: center;
+            }}
+            
+            /* Fjern rammen om selve formen */
             div[data-testid="stForm"] {{
                 border: none !important;
                 padding: 0 !important;
-                width: 300px;
             }}
         </style>
     """, unsafe_allow_html=True)
 
-    # Opret selve strukturen
-    # Vi bruger en placeholder til formen, så den lander præcis i venstre side
-    col_main_1, col_main_2 = st.columns([1, 1], gap="small")
-
-    with col_main_1:
-        # Centrerer indholdet vertikalt med tomme rækker
-        for _ in range(8): st.write("") 
-        
-        # Logo og Overskrift
-        sub_col1, sub_col2, sub_col3 = st.columns([1, 2, 1])
-        with sub_col2:
+    # Vi bruger kun den venstre kolonne til indhold (da den højre er dækket af CSS-billedet)
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        # Centrerer formen horisontalt i sin kolonne
+        c1, c2, c3 = st.columns([1, 4, 1])
+        with c2:
+            st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.image(HIF_LOGO_URL, width=80)
-            st.markdown("<h2 style='text-align: center; margin-top: -10px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #31333F; margin-bottom: 20px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
             
-            with st.form("login_new"):
+            with st.form("login_final"):
                 u = st.text_input("BRUGER", placeholder="Brugernavn", label_visibility="collapsed").lower().strip()
                 p = st.text_input("KODE", type="password", placeholder="Adgangskode", label_visibility="collapsed")
-                submit = st.form_submit_button("LOG IND", use_container_width=True)
-                
-                if submit:
+                if st.form_submit_button("LOG IND", use_container_width=True):
                     if u in USER_DB and USER_DB[u]["pass"] == p:
                         st.session_state["logged_in"] = True
                         st.session_state["user"] = u
                         st.rerun()
                     else:
                         st.error("Ugyldig login")
-
-    with col_main_2:
-        # Denne kolonne vil automatisk vise baggrunden pga. CSS'en ovenfor
-        # Men vi indsætter en tom div for at sikre, at kolonnen eksisterer i DOM'en
-        st.markdown('<div class="login-right"></div>', unsafe_allow_html=True)
-
     st.stop()
     
 # --- 3. SIDEBAR NAVIGATION ---
