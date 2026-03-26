@@ -56,19 +56,45 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.image(HIF_LOGO_URL, width=150)
-        with st.form("login"):
-            u = st.text_input("BRUGER").lower().strip()
-            p = st.text_input("KODE", type="password")
-            if st.form_submit_button("LOG IND", use_container_width=True):
-                if u in USER_DB and USER_DB[u]["pass"] == p:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user"] = u
-                    st.rerun()
-                else:
-                    st.error("Ugyldig login")
+    # Opretter to brede kolonner (50/50 split)
+    col_left, col_right = st.columns([1, 1], gap="large")
+    
+    with col_left:
+        # Centrerer logo og tekst i venstre side
+        st.markdown("<br><br>", unsafe_allow_html=True) # Lidt luft fra toppen
+        inner_col1, inner_col2, inner_col3 = st.columns([1, 2, 1])
+        with inner_col2:
+            st.image(HIF_LOGO_URL, use_container_width=True)
+            st.markdown("<h2 style='text-align: center; color: #333;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+            
+            with st.form("login"):
+                u = st.text_input("BRUGER").lower().strip()
+                p = st.text_input("KODE", type="password")
+                if st.form_submit_button("LOG IND", use_container_width=True):
+                    if u in USER_DB and USER_DB[u]["pass"] == p:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user"] = u
+                        st.rerun()
+                    else:
+                        st.error("Ugyldig login")
+    
+    with col_right:
+        # Indsætter det ønskede billede på højre halvdel
+        IMG_URL = "https://www.tv2kosmopol.dk/img/asset/aW1hZ2VzLzIwMjMvMDUvMjgvMjAyMzA1MjctMTUxMTM3LWwtMTkyMHgxNDg1d2UuanBn/20230527-151137-l-1920x1485we.jpg?fm=jpg&w=1920&h=862.92134831461&s=69869f3269bf8ebfa06b2b56bcf20a2e"
+        
+        # Vi bruger CSS til at sikre, at billedet fylder højden pænt ud
+        st.markdown(f"""
+            <style>
+                .login-image {{
+                    width: 100%;
+                    height: 90vh;
+                    object-fit: cover;
+                    border-radius: 10px;
+                }}
+            </style>
+            <img src="{IMG_URL}" class="login-image">
+        """, unsafe_allow_html=True)
+
     st.stop()
 
 # --- 3. SIDEBAR NAVIGATION ---
