@@ -13,9 +13,10 @@ def map_position_detail(pos_code):
     pos_map = {
         "1": "Målmand",
         "2": "Højre back",
-        "3": "Venstre back",
+        "5": "Venstre back",
         "4": "Midtstopper",
-        "5": "Midtstopper",
+        "3": "Midtstopper",
+        "3.5": "Midtstopper",
         "6": "Defensiv midtbane",
         "7": "Højre kant",
         "8": "Central midtbane",
