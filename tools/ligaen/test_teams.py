@@ -219,7 +219,7 @@ def vis_side(dp_unused=None):
 
                 /* Logo-kolonnen (nr. 2) skal ofte have lidt mindre bredde */
                 .league-table td:nth-child(2) {
-                    width: 30px;
+                    width: 30px !important;
                 }
             </style>
         """, unsafe_allow_html=True)
