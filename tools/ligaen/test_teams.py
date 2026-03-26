@@ -205,7 +205,8 @@ def vis_side(dp_unused=None):
                 .league-table td:nth-child(3), 
                 .league-table th:nth-child(3) { 
                     text-align: left !important; 
-                    font-weight: bold; 
+                    font-weight: bold;
+                    width: 350px;
                 }
 
                 /* 3. Venstrestil kolonne 11 (NÆSTE) */
