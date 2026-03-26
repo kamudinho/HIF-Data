@@ -211,7 +211,8 @@ def vis_side(dp_unused=None):
                 /* 3. Venstrestil kolonne 11 (NÆSTE) */
                 .league-table td:nth-child(11), 
                 .league-table th:nth-child(11) { 
-                    text-align: left !important; 
+                    text-align: left !important;
+                    width: 90px;
                 }
 
                 /* Logo-kolonnen (nr. 2) skal ofte have lidt mindre bredde */
