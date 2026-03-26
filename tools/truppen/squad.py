@@ -65,7 +65,6 @@ def vis_side(df):
 
     # --- 5. DATA PROCESSERING ---
     df_squad = df.copy()
-    # Rens kolonnenavne for usynlige tegn/mellemrum
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     
     # Sikr at POS er numerisk
@@ -73,21 +72,15 @@ def vis_side(df):
     
     idag = datetime.now()
     if 'CONTRACT' in df_squad.columns:
-        # Håndtering af dato-fejl (errors='coerce' sætter problematiske datoer til NaT)
         df_squad['CONTRACT_DT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT_DT'] - idag).dt.days
 
     def get_status_color(row):
-        # Tjek for leje-status (PRIOR kolonne)
         if str(row.get('PRIOR', '')).upper() == 'L': 
             return leje_gra
-            
-        # Hent dage tilbage - brug en default værdi hvis data mangler
         try:
             days = row.get('DAYS_LEFT')
-            if pd.isna(days): 
-                return 'white'
-            
+            if pd.isna(days): return 'white'
             days = float(days)
             if days < 183: return rod_udlob
             if days <= 365: return gul_udlob
@@ -100,7 +93,6 @@ def vis_side(df):
 
     with col_menu:
         with st.popover("Trup", use_container_width=True):
-            # HTML Tabel med inline CSS for stabilitet
             tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
                 <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
                     <th style="text-align:left; padding:8px;">Spiller</th>
@@ -117,7 +109,6 @@ def vis_side(df):
             st.components.v1.html(tabel_html, height=400, scrolling=True)
 
         st.write("---")
-        # Formationsknapper
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if is_active else "secondary"):
@@ -135,32 +126,51 @@ def vis_side(df):
         fig, ax = pitch.draw(figsize=(13, 8))
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # Legend på banen
         ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         ax.text(25, 2, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # Formationer definition
+        # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
+        
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
                           11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
         elif form == "4-3-3":
+            # 3.5 flyttes til VCB (4) i 4-backskæde
             pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
                           6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
                           11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
         else: # 3-5-2
+            # 11 og 7 rykkes op som ANG (9 og 7-pladsen)
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 2: (60, 70, 'HWB'), 
                           8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
 
-        # Tegn spillere
         for pos_num, (x, y, label) in pos_config.items():
-            spillere = df_squad[df_squad['POS'] == pos_num].sort_values('PRIOR', ascending=True)
+            # Logik for hvilke spillere der skal vises på den givne boks (x, y)
+            if form == "4-3-3" and pos_num == 4:
+                # Vis både 4'ere og 3.5'ere i VCB boksen
+                spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
+            elif form == "3-5-2" and pos_num == 9:
+                # Vis både 9'ere og 11'ere i den venstre ANG boks
+                spillere = df_squad[df_squad['POS'].isin([9, 11])]
+            elif form == "3-5-2" and pos_num == 7:
+                # Vis 7'ere i den højre ANG boks
+                spillere = df_squad[df_squad['POS'] == 7]
+            else:
+                # Standard filtrering
+                spillere = df_squad[df_squad['POS'] == pos_num]
+
+            spillere = spillere.sort_values('PRIOR', ascending=True)
+            
             if not spillere.empty:
+                # Tegn Positions-label
                 ax.text(x, y - 4.5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
+                
+                # Tegn Spiller-labels
                 for i, (_, p) in enumerate(spillere.iterrows()):
                     ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
                             bbox=dict(facecolor=get_status_color(p), edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
