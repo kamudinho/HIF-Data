@@ -56,86 +56,84 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    # 1. AVANCERET CSS: Vi fjerner padding i højre side og tvinger layoutet til 100% højde
-    # Dette sikrer at billedet går helt til kant og fylder fra top til bund.
-    st.markdown("""
+    # CSS der tvinger alt indhold ud til kanten og styler formen
+    st.markdown(f"""
         <style>
-            /* Fjern padding fra hoved-containeren på login-siden */
-            .main .block-container {
+            /* Fjern alt padding og begrænsninger fra Streamlit */
+            [data-testid="stAppViewContainer"] {{
+                padding: 0 !important;
+            }}
+            [data-testid="stHeader"] {{
+                display: none;
+            }}
+            .main .block-container {{
                 padding: 0 !important;
                 max-width: 100% !important;
-            }
-            /* Definer grid-layout 50/50 */
-            .login-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                height: 100vh; /* 100% af viewport height */
-                width: 100vw;  /* 100% af viewport width */
-                overflow: hidden;
-            }
-            /* Venstre side styling */
-            .login-left {
+            }}
+            
+            /* Split layout */
+            .login-container {{
+                display: flex;
+                height: 100vh;
+                width: 100vw;
+            }}
+            
+            .login-left {{
+                flex: 1;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                padding: 40px;
                 background-color: white;
-            }
-            /* Højre side styling med billedet */
-            .login-right-bg {
+            }}
+            
+            .login-right {{
+                flex: 1;
                 background-image: url('https://www.tv2kosmopol.dk/img/asset/aW1hZ2VzLzIwMjMvMDUvMjgvMjAyMzA1MjctMTUxMTM3LWwtMTkyMHgxNDg1d2UuanBn/20230527-151137-l-1920x1485we.jpg?fm=jpg&w=1920&h=862.92134831461&s=69869f3269bf8ebfa06b2b56bcf20a2e');
                 background-size: cover;
                 background-position: center;
-                background-repeat: no-repeat;
-                height: 100%;
-                width: 100%;
-            }
-            /* Styling af logo og form for at centrere det */
-            .login-form-container {
-                width: 100%;
-                max-width: 350px; /* Holder formen samlet */
-                text-align: center;
-            }
-            /* Skjul Streamlits standard header på login-siden */
-            [data-testid="stHeader"] {
-                display: none;
-            }
+            }}
+
+            /* Gør Streamlit formen pænere */
+            div[data-testid="stForm"] {{
+                border: none !important;
+                padding: 0 !important;
+                width: 300px;
+            }}
         </style>
     """, unsafe_allow_html=True)
 
-    # 2. HTML STRUKTUR: Vi bygger layoutet i ren HTML/CSS for fuld kontrol
-    login_html = f"""
-        <div class="login-grid">
-            <div class="login-left">
-                <div class="login-form-container">
-                    <img src="{HIF_LOGO_URL}" style="width: 80px; margin-bottom: 10px;">
-                    <h2 style='text-align: center; color: #333; margin-top: 0; margin-bottom: 25px;'>HIF Data HUB</h2>
-                </div>
-            </div>
-            <div class="login-right-bg"></div>
-        </div>
-    """
-    
-    st.markdown(login_html, unsafe_allow_html=True)
+    # Opret selve strukturen
+    # Vi bruger en placeholder til formen, så den lander præcis i venstre side
+    col_main_1, col_main_2 = st.columns([1, 1], gap="small")
 
-    form_placeholder = st.empty()
-    with form_placeholder.container():
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.markdown("<br><br><br><br><br><br><br><br><br><br><br>", unsafe_allow_html=True)
-            inner_col1, inner_col2, inner_col3 = st.columns([1, 4, 1])
-            with inner_col2:
-                with st.form("login"):
-                    u = st.text_input("BRUGER", label_visibility="collapsed", placeholder="BRUGER").lower().strip()
-                    p = st.text_input("KODE", type="password", label_visibility="collapsed", placeholder="KODE")
-                    if st.form_submit_button("LOG IND", use_container_width=True):
-                        if u in USER_DB and USER_DB[u]["pass"] == p:
-                            st.session_state["logged_in"] = True
-                            st.session_state["user"] = u
-                            st.rerun()
-                        else:
-                            st.error("Ugyldig login")
+    with col_main_1:
+        # Centrerer indholdet vertikalt med tomme rækker
+        for _ in range(8): st.write("") 
+        
+        # Logo og Overskrift
+        sub_col1, sub_col2, sub_col3 = st.columns([1, 2, 1])
+        with sub_col2:
+            st.image(HIF_LOGO_URL, width=80)
+            st.markdown("<h2 style='text-align: center; margin-top: -10px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+            
+            with st.form("login_new"):
+                u = st.text_input("BRUGER", placeholder="Brugernavn", label_visibility="collapsed").lower().strip()
+                p = st.text_input("KODE", type="password", placeholder="Adgangskode", label_visibility="collapsed")
+                submit = st.form_submit_button("LOG IND", use_container_width=True)
+                
+                if submit:
+                    if u in USER_DB and USER_DB[u]["pass"] == p:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user"] = u
+                        st.rerun()
+                    else:
+                        st.error("Ugyldig login")
+
+    with col_main_2:
+        # Denne kolonne vil automatisk vise baggrunden pga. CSS'en ovenfor
+        # Men vi indsætter en tom div for at sikre, at kolonnen eksisterer i DOM'en
+        st.markdown('<div class="login-right"></div>', unsafe_allow_html=True)
 
     st.stop()
     
