@@ -90,8 +90,11 @@ if not st.session_state["logged_in"]:
                 background-size: cover;
                 background-position: center;
                 z-index: 0;
+                
+                /* Tilføj opacity her (0.0 er helt væk, 1.0 er fuld synlig) */
+                opacity: 0.4; 
             }}
-
+            
             /* Sørg for at login-form lander korrekt til venstre */
             .login-box {{
                 max-width: 320px;
