@@ -12,7 +12,6 @@ def vis_side(dp=None):
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # Hvis LIGA_UUID er en tuple (f.eks. fra dine indstillinger), tager vi første element
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 
     sql = f"""
@@ -86,7 +85,6 @@ def vis_side(dp=None):
         df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    # Filtrer hold baseret på liga
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
@@ -103,18 +101,44 @@ def vis_side(dp=None):
     """, unsafe_allow_html=True)
 
     # --- 4. TOP LAYOUT ---
-    col_layout = [2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
+    col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     with row1[0]:
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="t_sel")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
+    # Find holdets kampe
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
-    played_all = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+
+    # RÆKKE 2: PERIODE & SIDE DROPDOWNS
+    row2 = st.columns(col_layout)
+    with row2[0]:
+        c_period, c_side = st.columns(2)
+        with c_period:
+            valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="p_sel")
+        with c_side:
+            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="s_sel")
+
+    # --- FILTRERING ---
+    # 1. Dato filtrering
+    if valgt_periode == "Efterår 25":
+        f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
+    elif valgt_periode == "Forår 26":
+        f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
+    else:
+        f_matches = team_matches
+
+    # 2. Hjemme/Ude filtrering
+    if valgt_side == "Hjemme":
+        f_matches = f_matches[f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid]
+    elif valgt_side == "Ude":
+        f_matches = f_matches[f_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid]
+
+    played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
     
-    # Summary logic
-    summary = {"K": len(played_all), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
-    for _, m in played_all.iterrows():
+    # Summary beregning
+    summary = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played_p.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
         h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0)), int(m.get('TOTAL_AWAY_SCORE', 0))
         summary["M+"] += h_s if is_h else a_s
@@ -123,32 +147,19 @@ def vis_side(dp=None):
         elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
         else: summary["N"] += 1
 
+    # Vis Række 1
     stats_r1 = [("Kampe", summary["K"]), ("Sejr", summary["S"]), ("Uafgjort", summary["U"]), ("Nederlag", summary["N"]), ("Mål +", summary["M+"]), ("Mål -", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
     for i, (l, v) in enumerate(stats_r1):
         row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
 
-    # RÆKKE 2: PERIODE & SNIT
-    row2 = st.columns(col_layout)
-    with row2[0]:
-        valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="p_sel")
-
-    # Enkel dato-filtrering
-    if valgt_periode == "Efterår 25":
-        p_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
-    elif valgt_periode == "Forår 26":
-        p_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
-    else:
-        p_matches = team_matches
-
-    played_p = p_matches[p_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-    row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>I PERIODEN</div></div>", unsafe_allow_html=True)
+    # Vis Række 2 Snit
+    row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>{valgt_side.upper()}</div></div>", unsafe_allow_html=True)
 
     avg_map = [("POSS", "POSS", 1, "%"), ("XG", "xG", 2, ""), ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "STORE", 0, ""), ("PASSES", "PASS", 0, ""), ("FORWARD_PASSES", "FREM", 0, "")]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
         for _, m in played_p.iterrows():
             pref = "HOME_" if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "AWAY_"
-            # Rettelse: xG, xGNP osv. kræver præfikset, POSS gør også i denne SQL struktur
             col_name = f"{pref}{key}"
             vals.append(pd.to_numeric(m.get(col_name), errors='coerce'))
         avg_val = np.nanmean(vals) if vals and not np.all(np.isnan(vals)) else 0
@@ -192,7 +203,7 @@ def vis_side(dp=None):
                     st.markdown(f"<div style='display:flex; height:8px; background:#eee; border-radius:4px; overflow:hidden;'><div style='width:{h_pct}%; background:{h_color};'></div><div style='width:{100-h_pct}%; background:{a_color};'></div></div>", unsafe_allow_html=True)
 
     with tab2:
-        future = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
         if future.empty:
             st.info("Ingen kommende kampe.")
         for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
