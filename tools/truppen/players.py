@@ -26,7 +26,7 @@ def map_position_detail(pos_code):
     clean_code = str(pos_code).strip()
     if ".0" not in clean_code and clean_code.isdigit():
         clean_code = f"{clean_code}.0"
-    return pos_map.get(clean_code, "Ukendt")
+    return pos_map.get(clean_code, "-")
 
 @st.cache_data(ttl=600)
 def process_squad_data(df):
