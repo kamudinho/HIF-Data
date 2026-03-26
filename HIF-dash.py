@@ -111,17 +111,33 @@ if not st.session_state["logged_in"]:
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        # Centrerer formen horisontalt i sin kolonne
-        c1, c2, c3 = st.columns([1, 4, 1])
-        with c2:
-            st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
-            st.image(HIF_LOGO_URL, width=80)
-            st.markdown("<h2 style='text-align: center; color: #31333F; margin-bottom: 20px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+        # Centrerer indholdet vertikalt
+        st.markdown("<br><br><br><br><br><br><br>", unsafe_allow_html=True)
+        
+        # Vi bruger en række med 3 kolonner [1, 2, 1] for at tvinge indholdet i midten
+        left_pad, center_content, right_pad = st.columns([1, 2, 1])
+        
+        with center_content:
+            # Container til logoet for at sikre horisontal centrering
+            st.markdown(
+                f"""
+                <div style="display: flex; justify-content: center; width: 100%;">
+                    <img src="{HIF_LOGO_URL}" style="width: 70px;">
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
             
+            # Overskrift centreret
+            st.markdown("<h2 style='text-align: center; color: #31333F; margin-top: 10px; margin-bottom: 20px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+            
+            # Selve formen
             with st.form("login_final"):
                 u = st.text_input("BRUGER", placeholder="Brugernavn", label_visibility="collapsed").lower().strip()
                 p = st.text_input("KODE", type="password", placeholder="Adgangskode", label_visibility="collapsed")
-                if st.form_submit_button("LOG IND", use_container_width=True):
+                submit_button = st.form_submit_button("LOG IND", use_container_width=True)
+                
+                if submit_button:
                     if u in USER_DB and USER_DB[u]["pass"] == p:
                         st.session_state["logged_in"] = True
                         st.session_state["user"] = u
