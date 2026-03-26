@@ -12,16 +12,16 @@ def map_position_detail(pos_code):
     """Mapper talkoder til læsbare positioner - virker med rene heltal"""
     pos_map = {
         "1": "Målmand",
-        "2": "Højre Back",
-        "3": "Venstre Back",
+        "2": "Højre back",
+        "3": "Venstre back",
         "4": "Midtstopper",
         "5": "Midtstopper",
-        "6": "Defensiv Midt",
-        "7": "Højre Kant",
-        "8": "Central Midt",
+        "6": "Defensiv midtbane",
+        "7": "Højre kant",
+        "8": "Central midtbane",
         "9": "Angriber",
-        "10": "Offensiv Midt",
-        "11": "Venstre Kant"
+        "10": "Offensiv midtbane",
+        "11": "Venstre kant"
     }
     
     # 1. Gør koden til en ren streng og fjern eventuelle decimaler (.0)
