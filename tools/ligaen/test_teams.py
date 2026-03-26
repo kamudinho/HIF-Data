@@ -199,6 +199,7 @@ def vis_side(dp_unused=None):
                 .league-table th, .league-table td { 
                     text-align: center !important; 
                     padding: 8px 4px;
+                    width: 90px;
                 }
 
                 /* 2. Venstrestil kolonne 3 (HOLD) */
