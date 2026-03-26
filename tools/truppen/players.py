@@ -9,23 +9,26 @@ except ImportError:
     TOURNAMENTCALENDAR_NAME = "2025/2026"
 
 def map_position_detail(pos_code):
-    """Mapper talkoder til læsbare positioner"""
+    """Mapper talkoder til læsbare positioner - virker med rene heltal"""
     pos_map = {
-        "1": "Målmand", "1": "Målmand",
-        "2": "Højre Back", "2": "Højre back",
-        "3": "Venstre Back", "3": "Venstre back",
-        "4": "Midtstopper", "4": "Midtstopper",
-        "5": "Midtstopper", "5": "Midtstopper",
-        "6": "Defensiv Midt", "6": "Defensiv midtbane",
-        "7": "Højre Kant", "7": "Højre kant",
-        "8": "Central Midt", "8": "Central midtbane",
-        "9": "Angriber", "9": "Angriber",
-        "10": "Offensiv Midt", "10": "Offensiv midtbane",
-        "11": "Venstre Kant", "11": "Venstre kant"
+        "1": "Målmand",
+        "2": "Højre Back",
+        "3": "Venstre Back",
+        "4": "Midtstopper",
+        "5": "Midtstopper",
+        "6": "Defensiv Midt",
+        "7": "Højre Kant",
+        "8": "Central Midt",
+        "9": "Angriber",
+        "10": "Offensiv Midt",
+        "11": "Venstre Kant"
     }
-    clean_code = str(pos_code).strip()
-    if ".0" not in clean_code and clean_code.isdigit():
-        clean_code = f"{clean_code}.0"
+    
+    # 1. Gør koden til en ren streng og fjern eventuelle decimaler (.0)
+    # Dette sikrer, at både "3" og "3.0" bliver til "3"
+    clean_code = str(pos_code).split('.')[0].strip()
+    
+    # 2. Returner fra map eller en bindestreg hvis ikke fundet
     return pos_map.get(clean_code, "-")
 
 @st.cache_data(ttl=600)
