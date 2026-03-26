@@ -188,17 +188,49 @@ def vis_side(dp_unused=None):
     with t_liga:
         st.markdown("""
             <style>
-                .league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
-                .league-table td:nth-child(3) { text-align: left !important; font-weight: bold; }
+                /* Generel tabel styling */
+                .league-table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    font-size: 14px; 
+                } 
+                
+                /* 1. Centrer alle celler som udgangspunkt */
+                .league-table th, .league-table td { 
+                    text-align: center !important; 
+                    padding: 8px 4px;
+                }
+
+                /* 2. Venstrestil kolonne 3 (HOLD) */
+                .league-table td:nth-child(3), 
+                .league-table th:nth-child(3) { 
+                    text-align: left !important; 
+                    font-weight: bold; 
+                }
+
+                /* 3. Venstrestil kolonne 11 (NÆSTE) */
+                .league-table td:nth-child(11), 
+                .league-table th:nth-child(11) { 
+                    text-align: left !important; 
+                }
+
+                /* Logo-kolonnen (nr. 2) skal ofte have lidt mindre bredde */
+                .league-table td:nth-child(2) {
+                    width: 30px;
+                }
             </style>
         """, unsafe_allow_html=True)
         
         df_disp = df_liga.copy()
+        # Sikr at vi har de rigtige kolonner til rådighed
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
+        
+        # Hvis style_form returnerer HTML cirkler, så sørg for at de er centreret
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
+        # Vis tabellen
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(
-            escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+            escape=False, index=False, border=0, classes='league-table'), unsafe_allow_html=True)
 
     with t_h2h:
         h_list = sorted(df_liga['HOLD'].tolist())
