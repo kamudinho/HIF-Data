@@ -65,23 +65,22 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 2. Opret tabel til visning
+    # 2. Opret tabel og tilføj enheder direkte i teksten for at kunne venstrestille
     view_df = pd.DataFrame({
         'Position': df_display['POS'],
         'Spiller': df_display['NAVN'],
-        'Født': df_display['BIRTHDATE'],
-        'Højde': df_display['HEIGHT'].fillna(0),
+        'Født': df_display['BIRTHDATE'].dt.strftime('%d.%m.%Y'),
+        'Højde': df_display['HEIGHT'].fillna(0).astype(int).astype(str) + " cm",
         'Fod': df_display['FOD'].fillna("-"),
-        'Kontrakt': df_display['CONTRACT'],
-        'Alder': df_display['ALDER_NUM']
+        'Kontrakt': df_display['CONTRACT'].dt.strftime('%d.%m.%Y'),
+        'Alder': df_display['ALDER_NUM'].fillna(0).astype(int).astype(str) + " år"
     })
 
-    # 3. Styling funktion (Kontraktudløb farver)
+    # 3. Styling funktion (bevares som før)
     def style_contract(row):
         styles = [''] * len(row)
         idx = row.name
         raw_date = df_display.loc[idx, 'CONTRACT']
-        
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
             if dage < 183:
@@ -92,19 +91,19 @@ def vis_side(df_raw):
 
     dynamisk_hojde = (len(view_df) + 1) * 35 + 3
     
+    # 4. Vis dataframe med generel Column-config for alignment
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
         height=dynamisk_hojde,
         column_config={
-            # Vi tvinger alignment="left" på alle kolonner der normalt står til højre
-            "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
-            "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
-            "Højde": st.column_config.NumberColumn("Højde", format="%d cm", alignment="left"),
-            "Alder": st.column_config.NumberColumn("Alder", format="%d år", alignment="left"),
             "Position": st.column_config.Column(alignment="left"),
             "Spiller": st.column_config.Column(alignment="left"),
-            "Fod": st.column_config.Column(alignment="left")
+            "Født": st.column_config.Column(alignment="left"),
+            "Højde": st.column_config.Column(alignment="left"),
+            "Fod": st.column_config.Column(alignment="left"),
+            "Kontrakt": st.column_config.Column("Kontraktudløb", alignment="left"),
+            "Alder": st.column_config.Column(alignment="left"),
         }
     )
