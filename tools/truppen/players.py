@@ -76,7 +76,7 @@ def vis_side(df_raw):
         'Alder': df_display['ALDER_NUM']
     })
 
-    # 3. Styling funktion
+    # 3. Styling funktion (Kontraktudløb farver)
     def style_contract(row):
         styles = [''] * len(row)
         idx = row.name
@@ -84,25 +84,27 @@ def vis_side(df_raw):
         
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
-            # 'Kontrakt' er kolonne nr. 5
             if dage < 183:
                 styles[5] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
                 styles[5] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # Beregn højden: ca. 35 pixels pr. række + 40 pixels til overskriften
     dynamisk_hojde = (len(view_df) + 1) * 35 + 3
     
     st.dataframe(
         view_df.style.apply(style_contract, axis=1),
         use_container_width=True,
         hide_index=True,
-        height=dynamisk_hojde,  # Her tvinger vi den til at fylde det hele
+        height=dynamisk_hojde,
         column_config={
+            # Vi tvinger alignment="left" på alle kolonner der normalt står til højre
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
-            "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
-            "Alder": st.column_config.NumberColumn("Alder", format="%d år")
+            "Højde": st.column_config.NumberColumn("Højde", format="%d cm", alignment="left"),
+            "Alder": st.column_config.NumberColumn("Alder", format="%d år", alignment="left"),
+            "Position": st.column_config.Column(alignment="left"),
+            "Spiller": st.column_config.Column(alignment="left"),
+            "Fod": st.column_config.Column(alignment="left")
         }
     )
