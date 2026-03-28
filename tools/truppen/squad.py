@@ -71,9 +71,10 @@ def vis_side(df):
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     
     idag = datetime.now()
+    # RETTELSE: Brug KONTRAKT i stedet for CONTRACT
     if 'KONTRAKT' in df_squad.columns:
-        df_squad['CONTRACT_DT'] = pd.to_datetime(df_squad['KONTRAKT'], dayfirst=True, errors='coerce')
-        df_squad['DAYS_LEFT'] = (df_squad['CONTRACT_DT'] - idag).dt.days
+        df_squad['KONTRAKT_DT'] = pd.to_datetime(df_squad['KONTRAKT'], dayfirst=True, errors='coerce')
+        df_squad['DAYS_LEFT'] = (df_squad['KONTRAKT_DT'] - idag).dt.days
 
     def get_status_color(row):
         if str(row.get('PRIOR', '')).upper() == 'L': 
@@ -101,9 +102,10 @@ def vis_side(df):
             
             for _, r in df_squad.sort_values('NAVN').iterrows():
                 bg = get_status_color(r)
+                # RETTELSE: Her bruges KONTRAKT til visning
                 tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
                     <td style="padding:8px; font-weight:600;">{str(r['NAVN'])}</td>
-                    <td style="padding:8px; text-align:right;">{r['KONTRAKT'] if pd.notna(r['CONTRACT']) else "-"}</td>
+                    <td style="padding:8px; text-align:right;">{r['KONTRAKT'] if pd.notna(r['KONTRAKT']) else "-"}</td>
                 </tr>'''
             tabel_html += "</table>"
             st.components.v1.html(tabel_html, height=400, scrolling=True)
@@ -138,39 +140,30 @@ def vis_side(df):
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
                           11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
         elif form == "4-3-3":
-            # 3.5 flyttes til VCB (4) i 4-backskæde
             pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
                           6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
                           11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
         else: # 3-5-2
-            # 11 og 7 rykkes op som ANG (9 og 7-pladsen)
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 2: (60, 70, 'HWB'), 
                           8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
 
         for pos_num, (x, y, label) in pos_config.items():
-            # Logik for hvilke spillere der skal vises på den givne boks (x, y)
             if form == "4-3-3" and pos_num == 4:
-                # Vis både 4'ere og 3.5'ere i VCB boksen
                 spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
             elif form == "3-5-2" and pos_num == 9:
-                # Vis både 9'ere og 11'ere i den venstre ANG boks
                 spillere = df_squad[df_squad['POS'].isin([9, 11])]
             elif form == "3-5-2" and pos_num == 7:
-                # Vis 7'ere i den højre ANG boks
                 spillere = df_squad[df_squad['POS'] == 7]
             else:
-                # Standard filtrering
                 spillere = df_squad[df_squad['POS'] == pos_num]
 
             spillere = spillere.sort_values('PRIOR', ascending=True)
             
             if not spillere.empty:
-                # Tegn Positions-label
                 ax.text(x, y - 4.5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
                 
-                # Tegn Spiller-labels
                 for i, (_, p) in enumerate(spillere.iterrows()):
                     ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
                             bbox=dict(facecolor=get_status_color(p), edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
