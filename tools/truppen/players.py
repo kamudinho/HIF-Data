@@ -43,7 +43,7 @@ def process_squad_data(df):
 
     # Konvertér typer
     df['BIRTHDATE'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
-    df['CONTRACT'] = pd.to_datetime(df['CONTRACT'], dayfirst=True, errors='coerce')
+    df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
     df['HEIGHT'] = pd.to_numeric(df['HEIGHT'], errors='coerce')
     
     # Alder & Position
@@ -87,7 +87,7 @@ def vis_side(df_raw):
         'Alder': df_display['ALDER_NUM'].fillna(0).astype(int).astype(str) + " år",
         'Højde': df_display['HEIGHT'].fillna(0).astype(int).astype(str) + " cm",
         'Fod': df_display['FOD'].fillna("-").astype(str),
-        'Kontraktudløb': df_display['CONTRACT'].dt.strftime('%d.%m.%Y').fillna("-")
+        'Kontraktudløb': df_display['KONTRAKT'].dt.strftime('%d.%m.%Y').fillna("-")
     })
 
     # 4. Styling af kontraktudløb (Index 6 i denne rækkefølge)
