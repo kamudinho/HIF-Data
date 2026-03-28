@@ -206,7 +206,7 @@ def vis_side(dp):
                                 elif dage_til <= 365: bg_color = GUL_UDLOB
                             except: pass
                         
-                        ax.text(x, (y - 1.7) + (i * 3.0), f" {p['Navn']} ", size=8, ha='center', va='top', 
+                        ax.text(x, (y - 1.5) + (i * 2.3), f" {p['Navn']} ", size=8, ha='center', va='top', 
                                 fontweight='bold',
                                 bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
                 
