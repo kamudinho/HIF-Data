@@ -81,6 +81,11 @@ def vis_side(dp=None):
     # --- 2. DATA PREP ---
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
+    
+    # NY FIX HER: Håndter time-objekter fra Snowflake
+    if 'MATCH_LOCALTIME' in df_matches.columns:
+        # Konvertér time-objekter til strings, så de kan læses i Tab 2
+        df_matches['MATCH_LOCALTIME'] = df_matches['MATCH_LOCALTIME'].astype(str)
     for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
@@ -202,18 +207,48 @@ def vis_side(dp=None):
                     st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'><b>{hv:.{dec}f}{suf}</b><span style='color:#888;'>{lbl.upper()}</span><b>{av:.{dec}f}{suf}</b></div>", unsafe_allow_html=True)
                     st.markdown(f"<div style='display:flex; height:8px; background:#eee; border-radius:4px; overflow:hidden;'><div style='width:{h_pct}%; background:{h_color};'></div><div style='width:{100-h_pct}%; background:{a_color};'></div></div>", unsafe_allow_html=True)
 
-    with tab2:
-        future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        if future.empty:
-            st.info("Ingen kommende kampe.")
-        for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
-            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK'])} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
-            with st.container(border=True):
-                h_n, a_n = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], "Hjemme"), opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], "Ude")
-                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
-                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
-                tid = pd.to_datetime(row['MATCH_LOCALTIME']).strftime('%H:%M') if pd.notnull(row['MATCH_LOCALTIME']) else 'TBA'
-                c3.markdown(f"<div style='text-align:center; padding-top:4px;'><span class='score-pill' style='background:#eee; color:#333; font-size:14px;'>KL. {tid}</span></div>", unsafe_allow_html=True)
-                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
-                c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
+        with tab2:
+                # Filtrer for kampe der IKKE er spillet endnu
+                future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+                
+                if future.empty:
+                    st.info("Ingen kommende kampe fundet for den valgte periode.")
+                else:
+                    # Sorter efter dato (ældste først = den næste kamp øverst)
+                    for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
+                        # Formater dato til overskrift
+                        dato_str = row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()
+                        runde = int(row['WEEK']) if pd.notnull(row['WEEK']) else 0
+                        
+                        st.markdown(f"<div class='date-header'>RUNDE {runde} — {dato_str}</div>", unsafe_allow_html=True)
+                        
+                        with st.container(border=True):
+                            # Hent navne fra Opta UUIDs
+                            h_n = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], "Hjemme")
+                            a_n = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], "Ude")
+                            
+                            # Håndter tidspunkt (raw_time) fra Snowflake/Pandas
+                            val = row.get('MATCH_LOCALTIME')
+                            if pd.isnull(val) or val == "" or val == "None":
+                                raw_time = "TBA"
+                            else:
+                                # Konverter til string og tag de første 5 tegn (HH:MM)
+                                raw_time = str(val)[:5]
+        
+                            c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                            
+                            # Hjemmehold
+                            c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
+                            c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
+                            
+                            # Tidspunkt / Score Pill
+                            c3.markdown(
+                                f"<div style='text-align:center; padding-top:4px;'>"
+                                f"<span class='score-pill' style='background:#eee; color:#333; font-size:14px;'>KL. {raw_time}</span>"
+                                f"</div>", 
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Udehold
+                            c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
+                            c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
