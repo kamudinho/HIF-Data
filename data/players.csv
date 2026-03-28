@@ -1,4 +1,4 @@
-PLAYER_OPTAUUID,PLAYER_WYID,FIRSTNAME,LASTNAME,Navn,Position,BIRTHDATE,TEAMNAME,HEIGHT,FOD,Kontrakt,POS,PRIOR,optaId,Skyggehold,Klub,Pos_Tal
+PLAYER_OPTAUUID,PLAYER_WYID,FIRSTNAME,LASTNAME,Navn,ROLECODE3,BIRTHDATE,TEAMNAME,HEIGHT,FOD,Kontrakt,POS,PRIOR,optaId,Skyggehold,Klub,Pos_Tal
 a30gduuv9d1s4pkthgu2jhyol,56017.0,Daniel,Stenderup,D. Stenderup,DEF,31.05.1989,Hvidovre IF,186,Højre,30.06.2027,3.0,A,79465.0,True,Hvidovre IF,3.0
 630daj1ef34rczbhng0eoncvd,370269.0,Malte,Kiilerich,M. Kiilerich,DEF,16.10.1995,Hvidovre IF,188,Højre,30.06.2028,3.5,A,486789.0,True,Hvidovre IF,4.0
 bfvdr7ckiersz26ya2kq9f1g4,483429.0,Ahmed,Iljazovski,A. Iljazovski,DEF,31.07.1997,Hvidovre IF,188,,31.12.2026,2.0,C,544954.0,True,Hvidovre IF,2.0
