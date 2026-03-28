@@ -244,7 +244,7 @@ def vis_side(dp=None):
                             # Tidspunkt / Score Pill
                             c3.markdown(
                                 f"<div style='text-align:center; padding-top:4px;'>"
-                                f"<span class='score-pill' style='background:#eee; color:#333; font-size:14px;'>KL. {raw_time}</span>"
+                                f"<span class='score-pill' style='background:#eee; color:#333; font-size:14px;'>{raw_time}</span>"
                                 f"</div>", 
                                 unsafe_allow_html=True
                             )
