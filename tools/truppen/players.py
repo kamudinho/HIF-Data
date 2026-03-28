@@ -54,7 +54,7 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 3. Opret tabel med RÅ DATA (ikke strftime her, da det ødelægger sortering)
+    # 3. Opret tabel med RÅ DATA (vigtigt for sortering)
     view_df = pd.DataFrame({
         'Position': df_display['POS_LABEL'],
         'Spiller': df_display['NAVN'],
@@ -65,7 +65,7 @@ def vis_side(df_raw):
         'Kontraktudløb': df_display['KONTRAKT']
     })
 
-    # 4. Styling (Bruger index-opslag i df_display for at tjekke datoer)
+    # 4. Styling af rækker (baseret på KONTRAKT datoer)
     def style_rows(row):
         styles = [''] * len(row)
         idx = row.name 
@@ -73,7 +73,6 @@ def vis_side(df_raw):
         
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
-            # 'Kontraktudløb' er kolonne nr. 6
             if dage < 183:
                 styles[6] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
@@ -82,7 +81,7 @@ def vis_side(df_raw):
 
     dynamisk_hojde = (len(view_df) + 1) * 35 + 10
     
-    # 5. Vis dataframe med column_config for at styre visningen af datoer
+    # 5. Vis dataframe med korrekt column_config
     st.dataframe(
         view_df.style.apply(style_rows, axis=1),
         use_container_width=True,
@@ -91,7 +90,10 @@ def vis_side(df_raw):
         column_config={
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontraktudløb": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
-            "Alder": st.column_config.TextColumn("Alder", format="%d år"),
-            "Højde": st.column_config.TextColumn("Højde", format="%d cm")
+            "Alder": st.column_config.NumberColumn("Alder", format="%d år"),
+            "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
+            "Spiller": st.column_config.TextColumn("Spiller"),
+            "Position": st.column_config.TextColumn("Position"),
+            "Fod": st.column_config.TextColumn("Fod")
         }
     )
