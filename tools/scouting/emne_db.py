@@ -135,44 +135,81 @@ def vis_side(dp):
             st.info("Ingen spillere valgt til skyggehold.")
 
     with t_bane:
-        if not df_samlet.empty:
-            col_pitch, col_menu = st.columns([6, 1])
+    if not df_samlet.empty:
+        # --- 1. KONSTANTER & FARVER ---
+        HIF_ROD = "#df003b"
+        GUL_UDLOB = "#ffffcc"
+        ROD_UDLOB = "#ffcccc"
+        LEJE_GRA = "#d3d3d3"
+        idag = datetime.now()
+
+        col_pitch, col_menu = st.columns([6, 1])
+        
+        with col_menu:
+            st.write("**Formation**")
+            if 'form_skygge' not in st.session_state: 
+                st.session_state.form_skygge = "3-4-3"
             
-            with col_menu:
-                st.write("**Formation**")
-                if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
-                for f in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if st.session_state.form_skygge == f else "secondary"):
-                        st.session_state.form_skygge = f
-                        st.rerun()
+            for f in ["3-4-3", "4-3-3", "3-5-2"]:
+                is_active = st.session_state.form_skygge == f
+                if st.button(f, key=f"btn_skygge_{f}", use_container_width=True, 
+                             type="primary" if is_active else "secondary"):
+                    st.session_state.form_skygge = f
+                    st.rerun()
 
-            with col_pitch:
-                pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(11, 8))
+        with col_pitch:
+            pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
+            fig, ax = pitch.draw(figsize=(11, 8))
+            
+            form = st.session_state.form_skygge
+
+            # --- 2. DYNAMISK POS_CONFIG (Synkroniseret med Forecast) ---
+            if form == "3-4-3":
+                pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
+                              5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
+                              11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+            elif form == "4-3-3":
+                pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
+                              6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
+                              11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+            else: # 3-5-2
+                pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
+                              5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 2: (60, 70, 'HWB'), 
+                              8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
+
+            # --- 3. TEGN SPILLERE ---
+            for p_num, (x, y, label) in pos_config.items():
+                # Tegn positions-label (Den røde boks)
+                ax.text(x, y - 4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
+                        bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 
-                form = st.session_state.form_skygge
-                # Positioner (x, y, label)
-                if form == "4-3-3":
-                    pos_map = {1:(10,40,'MM'), 2:(35,70,'HB'), 3:(33,55,'HCB'), 4:(33,25,'VCB'), 5:(35,10,'VB'), 
-                               6:(50,40,'DM'), 8:(68,25,'VCM'), 10:(68,55,'HCM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
-                elif form == "3-4-3":
-                    pos_map = {1:(10,40,'MM'), 2:(33,60,'HCB'), 3:(33,40,'CB'), 4:(33,20,'VCB'), 7:(60,70,'HWB'), 
-                               8:(60,50,'DM'), 6:(60,30,'DM'), 5:(60,10,'VWB'), 10:(85,65,'HW'), 9:(100,40,'ANG'), 11:(85,15,'VW')}
-                else: # 3-5-2
-                    pos_map = {1:(10,40,'MM'), 2:(33,60,'HCB'), 3:(33,40,'CB'), 4:(33,20,'VCB'), 7:(60,70,'HWB'), 
-                               6:(60,40,'DM'), 5:(60,10,'VWB'), 10:(75,55,'CM'), 8:(75,25,'CM'), 9:(100,50,'ANG'), 11:(100,30,'ANG')}
-
-                for p_num, (x, y, label) in pos_map.items():
-                    # Tegn positions-label
-                    ax.text(x, y-4, label, color="white", size=8, fontweight='bold', ha='center', 
-                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    
-                    # Filtrer spillere på denne position (Tving begge til float for sammenligning)
+                # Filtreringslogik (Samme som forecast)
+                if form == "4-3-3" and p_num == 4:
+                    spillere = df_samlet[df_samlet['POS'].astype(float).isin([4, 3.5])]
+                elif form == "3-5-2" and p_num == 9:
+                    spillere = df_samlet[df_samlet['POS'].astype(float).isin([9, 11])]
+                else:
                     spillere = df_samlet[df_samlet['POS'].astype(float) == float(p_num)]
+
+                # Sorter efter Prioritet/Navn
+                spillere = spillere.sort_values(by=['Navn']) # Eller 'PRIOR' hvis du har den kolonne her
+
+                for i, (_, p) in enumerate(spillere.iterrows()):
+                    # Farve-logik baseret på KONTRAKT
+                    bg_color = "white"
+                    if str(p.get('PRIOR', '')).upper() == 'L':
+                        bg_color = LEJE_GRA
+                    elif pd.notna(p.get('KONTRAKT')):
+                        try:
+                            k_dato = pd.to_datetime(p['KONTRAKT'], dayfirst=True)
+                            dage_til = (k_dato - idag).days
+                            if dage_til < 183: bg_color = ROD_UDLOB
+                            elif dage_til <= 365: bg_color = GUL_UDLOB
+                        except: pass
                     
-                    for i, (_, p) in enumerate(spillere.iterrows()):
-                        bg_color = "#ffebee" if p['Klub'] == 'Hvidovre IF' else "#f1f8e9"
-                        ax.text(x, y + (i*4.5), p['Navn'], size=8, ha='center', va='top', fontweight='bold',
-                                bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', alpha=0.9))
-                
-                st.pyplot(fig)
+                    # Tegn spillerens navn
+                    ax.text(x, (y - 1.5) + (i * 3.8), f" {p['Navn']} ", size=8, ha='center', va='top', 
+                            fontweight='bold',
+                            bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+            
+            st.pyplot(fig)
