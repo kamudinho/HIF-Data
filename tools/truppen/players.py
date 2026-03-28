@@ -26,7 +26,6 @@ def map_position_detail(pos_code):
     }
     
     # 1. Gør koden til en ren streng og fjern eventuelle decimaler (.0)
-    # Dette sikrer, at både "3" og "3.0" bliver til "3"
     clean_code = str(pos_code).split('.')[0].strip()
     
     # 2. Returner fra map eller en bindestreg hvis ikke fundet
@@ -64,7 +63,6 @@ def vis_side(df_raw):
             [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
                 text-align: left !important;
             }
-            /* Fjerner Streamlits forsøg på at højrejustere indhold i cellerne */
             div[data-testid="stDataFrame"] div[class*="data-grid-cell-content"] {
                 justify-content: flex-start !important;
                 text-align: left !important;
@@ -79,7 +77,9 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 3. Opret tabel med de ønskede kolonner formateret som tekst
+    # 3. Opret tabel med de ønskede kolonner
+    # Vi gemmer 'KONTRAKT' som rå dato i view_df midlertidigt for styling, 
+    # eller vi bruger df_display som opslagsværk.
     view_df = pd.DataFrame({
         'Position': df_display['POS'].astype(str),
         'Spiller': df_display['NAVN'].astype(str),
@@ -90,22 +90,24 @@ def vis_side(df_raw):
         'Kontraktudløb': df_display['KONTRAKT'].dt.strftime('%d.%m.%Y').fillna("-")
     })
 
-    # 4. Styling af kontraktudløb (Index 6 i denne rækkefølge)
+    # 4. Styling af kontraktudløb
     def style_rows(row):
         styles = [''] * len(row)
-        idx = row.name
-        raw_date = df_display.loc[idx, 'CONTRACT']
+        idx = row.name # Dette svarer til index i df_display
+        
+        # Rettet fra 'CONTRACT' til 'KONTRAKT'
+        raw_date = df_display.loc[idx, 'KONTRAKT']
         
         if pd.notna(raw_date):
             dage = (raw_date - datetime.now()).days
-            # Kontraktudløb er nu kolonne nr. 6
+            # 'Kontraktudløb' er kolonne nr. 6 (0-indexed) i view_df
             if dage < 183:
                 styles[6] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
                 styles[6] = 'background-color: #ffffcc; color: black;'
         return styles
 
-    # 5. Beregn dynamisk højde (35px pr række + lidt til header)
+    # 5. Beregn dynamisk højde
     dynamisk_hojde = (len(view_df) + 1) * 35 + 10
     
     # 6. Vis dataframe
