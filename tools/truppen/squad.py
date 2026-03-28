@@ -71,8 +71,8 @@ def vis_side(df):
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     
     idag = datetime.now()
-    if 'CONTRACT' in df_squad.columns:
-        df_squad['CONTRACT_DT'] = pd.to_datetime(df_squad['CONTRACT'], dayfirst=True, errors='coerce')
+    if 'KONTRAKT' in df_squad.columns:
+        df_squad['CONTRACT_DT'] = pd.to_datetime(df_squad['KONTRAKT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['CONTRACT_DT'] - idag).dt.days
 
     def get_status_color(row):
@@ -103,7 +103,7 @@ def vis_side(df):
                 bg = get_status_color(r)
                 tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
                     <td style="padding:8px; font-weight:600;">{str(r['NAVN'])}</td>
-                    <td style="padding:8px; text-align:right;">{r['CONTRACT'] if pd.notna(r['CONTRACT']) else "-"}</td>
+                    <td style="padding:8px; text-align:right;">{r['KONTRAKT'] if pd.notna(r['CONTRACT']) else "-"}</td>
                 </tr>'''
             tabel_html += "</table>"
             st.components.v1.html(tabel_html, height=400, scrolling=True)
