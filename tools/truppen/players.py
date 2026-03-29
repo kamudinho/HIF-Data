@@ -20,27 +20,33 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 1. RENS KOLONNER (Tving alt til STORE bogstaver for at undgå fejl)
+    # 1. RENS KOLONNER (Store bogstaver for at undgå KeyError)
     df = df_raw.copy()
     df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # 2. SAML NAVN FRA FORNAVN + EFTERNAVN
-    # Vi bruger .fillna('') så vi ikke får "None" i navnet
-    df['FULL_NAME'] = (df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')).str.strip()
-    
-    # Hvis både fornavn og efternavn er tomme, prøver vi at falde tilbage på 'NAVN' kolonnen
-    if 'NAVN' in df.columns:
-        df['FULL_NAME'] = df['FULL_NAME'].replace('', df['NAVN'])
+    # 2. SAML NAVN (FIRSTNAME + LASTNAME)
+    # Vi laver en sikker sammensætning række for række
+    def build_name(row):
+        fname = str(row.get('FIRSTNAME', '')).strip()
+        lname = str(row.get('LASTNAME', '')).strip()
+        
+        # Hvis begge er tomme eller "nan", prøv at bruge 'NAVN' kolonnen
+        if (fname == '' or fname == 'nan') and (lname == '' or lname == 'nan'):
+            return str(row.get('NAVN', '')).strip()
+        
+        return f"{fname} {lname}".replace('nan', '').strip()
 
-    # Fjern rækker helt uden navn og nulstil index
+    df['FULL_NAME'] = df.apply(build_name, axis=1)
+    
+    # Fjern rækker uden navn og nulstil index (Løser 'duplicate keys')
     df = df[df['FULL_NAME'] != ''].reset_index(drop=True)
 
     # 3. KLARGØR DATOER
-    # Vi bruger 'KONTRAKT' (store bogstaver) og ignorerer den lille 'Kontrakt'
+    # Vi bruger KONTRAKT (store bogstaver) og dropper 'Kontrakt'
     df['K_DATE'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
     idag = datetime.now()
 
-    # 4. BYG VISNINGS-TABEL (Helt renset for dubletter og forvirrende kolonner)
+    # 4. BYG VISNINGS-TABEL
     view_df = pd.DataFrame()
     view_df['Position'] = df['POS'].apply(map_position_detail)
     view_df['Spiller'] = df['FULL_NAME']
@@ -57,9 +63,9 @@ def vis_side(df_raw):
             dage = (row['Udløb'] - idag).days
             loc = row.index.get_loc('Udløb')
             if dage < 183:
-                styles[loc] = 'background-color: #ffcccc; color: black;' # Rød (< 6 mdr)
+                styles[loc] = 'background-color: #ffcccc; color: black;' # Rød
             elif dage <= 365:
-                styles[loc] = 'background-color: #ffffcc; color: black;' # Gul (< 12 mdr)
+                styles[loc] = 'background-color: #ffffcc; color: black;' # Gul
         return styles
 
     # 6. VISNING
