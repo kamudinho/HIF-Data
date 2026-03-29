@@ -61,7 +61,7 @@ def prepare_df(content, is_hif=False):
     if is_hif: 
         df['Klub'] = 'Hvidovre IF'
     elif 'Klub' not in df.columns:
-        df['Klub'] = 'Ukendt'
+        df['Klub'] = '-'
         
     return df
 
@@ -75,7 +75,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
     # Hvilke kolonner vil vi gerne vise?
-    desired_cols = ['Position', 'Navn', 'Klub', 'Kontrakt', '🛡️']
+    desired_cols = ['POS', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: df_temp['🗑️'] = False; desired_cols.append('🗑️')
     
     # Vi viser kun de kolonner der rent faktisk findes i DF
@@ -126,7 +126,7 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            vis_cols = ['Position', 'Navn', 'Klub', 'Kontrakt']
+            vis_cols = ['POS', 'Navn', 'Klub', 'Kontrakt']
             st.dataframe(
                 df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('POS'), 
                 use_container_width=True, 
