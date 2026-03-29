@@ -49,9 +49,9 @@ def map_position_detail(pos_code):
 def style_kontrakt_raekker(row):
     """ Farver rækker baseret på kontraktudløb (ligesom forecast) """
     styles = [''] * len(row)
-    if 'Kontrakt' in row.index and pd.notna(row['Kontrakt']):
+    if 'KONTRAKT' in row.index and pd.notna(row['KONTRAKT']):
         try:
-            k_dato = pd.to_datetime(row['Kontrakt'], dayfirst=True, errors='coerce')
+            k_dato = pd.to_datetime(row['KONTRAKT'], dayfirst=True, errors='coerce')
             if pd.notna(k_dato):
                 dage = (k_dato - datetime.now()).days
                 if dage < 183: # Under 6 måneder
@@ -66,7 +66,7 @@ def prepare_df(content, is_hif=False):
     df = pd.read_csv(StringIO(content))
     
     # ENSRET KOLONNENAVNE (Sikrer POS findes og omdøber til dine labels)
-    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'CONTRACT': 'Kontrakt'}
+    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
     df = df.rename(columns=rename_map)
 
     if 'POS' not in df.columns:
@@ -122,7 +122,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
             "Pos_Navn": st.column_config.TextColumn("Position", width="medium"),
             "Navn": st.column_config.TextColumn("Spiller"),
-            "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
+            "Kontrakt": st.column_config.DateColumn("KONTRAKT", format="DD.MM.YYYY")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
@@ -168,7 +168,7 @@ def vis_side(dp):
                 column_config={
                     "Pos_Navn": "Position",
                     "Navn": "Spiller",
-                    "Kontrakt": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY")
+                    "Kontrakt": st.column_config.DateColumn("KONTRAKT", format="DD.MM.YYYY")
                 }
             )
         else:
