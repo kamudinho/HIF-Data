@@ -40,11 +40,9 @@ def map_position_detail(pos_code):
         "6": "Defensiv midtbane", "7": "Højre kant", "8": "Central midtbane",
         "9": "Angriber", "10": "Offensiv midtbane", "11": "Venstre kant"
     }
-    # Håndtering af formater som "4.0" eller "3.5"
     p_str = str(pos_code).strip()
     if p_str.endswith('.0'):
         p_str = p_str.split('.')[0]
-    
     return pos_map.get(p_str, "-")
 
 def prepare_df(content, is_hif=False):
@@ -56,15 +54,14 @@ def prepare_df(content, is_hif=False):
         'NAVN': 'Navn',
         'POS': 'POS',
         'CONTRACT': 'Kontrakt',
-        'ROLECODE3': 'Position_Rå' # Omdøber original Position for at undgå konflikt
+        'ROLECODE3': 'Position_Original' 
     }
     df = df.rename(columns=rename_map)
 
-    # SIKR POS_TAL FINDES OG ER STRING TIL MAPPING
     if 'POS' not in df.columns:
         df['POS'] = 0
     
-    # --- HER SKER OVERSÆTTELSEN ---
+    # OVERSÆTTER TIL Pos_Navn
     df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     
     # ENSRET SKYGGEHOLD
@@ -91,8 +88,8 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Vi bruger 'Pos_Navn' i displayet
-    desired_cols = ['POS', 'Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
+    # POS er fjernet fra desired_cols, så den ikke vises
+    desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
         desired_cols.append('🗑️')
@@ -109,14 +106,12 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "POS": st.column_config.NumberColumn("ID", format="%s", width="small"),
-            "Pos_Navn": st.column_config.TextColumn("Position", width="medium"), # Her vises teksten
+            "Pos_Navn": st.column_config.TextColumn("Position", width="medium"),
             "Navn": st.column_config.TextColumn("Spiller")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
 
-    # Gem ændringer (Skyggehold)
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
@@ -146,12 +141,13 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            vis_cols = ['POS', 'Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
+            # Her fjerner vi også POS fra visningen, men bruger den til sort_values
+            vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
             st.dataframe(
-                df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('POS'), 
+                df_samlet[vis_cols].sort_values(by=df_samlet.columns[df_samlet.columns.get_loc('POS')]), 
                 use_container_width=True, 
                 hide_index=True,
-                column_config={"Pos_Navn": "Position", "POS": "ID"}
+                column_config={"Pos_Navn": "Position"}
             )
         else:
             st.info("Ingen spillere valgt til skyggehold.")
@@ -182,7 +178,6 @@ def vis_side(dp):
                 
                 form = st.session_state.form_skygge
                 
-                # Formation configs (samme som før)
                 if form == "3-4-3":
                     pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                                   5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -200,7 +195,6 @@ def vis_side(dp):
                     ax.text(x, y - 4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
-                    # Filtrer spillere til hver position
                     if form == "4-3-3" and p_num == 4:
                         spillere = df_samlet[df_samlet['POS'].astype(float).isin([4, 3.5])]
                     elif form == "3-5-2" and p_num == 9:
