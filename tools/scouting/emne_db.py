@@ -74,7 +74,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- APP LAYOUT ---
-def vis_side():
+def vis_side(dp=None):
     st.title("HIF Skyggehold & Emnedatabase")
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
