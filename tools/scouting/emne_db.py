@@ -112,7 +112,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path):
         st.rerun()
 
 # --- HOVEDSIDE ---
-def vis_side():
+def vis_side(dp=None):
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
     emne_c, emne_s = get_github_file(EMNE_PATH)
