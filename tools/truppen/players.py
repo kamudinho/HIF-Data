@@ -26,25 +26,29 @@ def process_squad_data(df):
     df = df.copy()
     df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # Konvertér typer til rigtige datetime-objekter
+    # VIGTIGT: Reset index for at undgå "duplicate keys" fejlen
+    df = df.dropna(subset=['NAVN']).reset_index(drop=True)
+
+    # Konvertér typer
     df['BIRTHDATE'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
-    df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
+    df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce').dt.date
     df['HEIGHT'] = pd.to_numeric(df['HEIGHT'], errors='coerce')
     
     idag = datetime.now()
-    df['ALDER_NUM'] = (idag - df['BIRTHDATE']).dt.days // 365
+    # Alder beregning
+    df['ALDER_NUM'] = (idag - pd.to_datetime(df['BIRTHDATE'])).dt.days // 365
     df['POS_LABEL'] = df['POS'].apply(map_position_detail)
     
     sort_map = {"GKP": 1, "DEF": 2, "MID": 3, "FWD": 4}
     df['SORT_ORDER'] = df['ROLECODE3'].map(sort_map).fillna(5)
     
-    return df.sort_values(by=['SORT_ORDER', 'NAVN'])
+    # Sortér og reset index igen så rækkefølgen passer med styleren
+    return df.sort_values(by=['SORT_ORDER', 'NAVN']).reset_index(drop=True)
 
 def vis_side(df_raw):    
     st.markdown("""
         <style>
             [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { text-align: left !important; }
-            div[data-testid="stDataFrame"] div[class*="data-grid-cell-content"] { justify-content: flex-start !important; text-align: left !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -54,7 +58,7 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 3. Opret tabel med RÅ DATA (vigtigt for sortering)
+    # Opret tabel til visning
     view_df = pd.DataFrame({
         'Position': df_display['POS_LABEL'],
         'Spiller': df_display['NAVN'],
@@ -65,23 +69,31 @@ def vis_side(df_raw):
         'Kontraktudløb': df_display['KONTRAKT']
     })
 
-    # 4. Styling af rækker (baseret på KONTRAKT datoer)
+    # Styling funktion
     def style_rows(row):
+        # Initialiser alle celler i rækken med tom stil
         styles = [''] * len(row)
-        idx = row.name 
-        raw_date = df_display.loc[idx, 'KONTRAKT']
+        # Hent datoen fra df_display ved at bruge rækkens index (som nu er unikt og synkront)
+        raw_date = df_display.loc[row.name, 'KONTRAKT']
         
         if pd.notna(raw_date):
-            dage = (raw_date - datetime.now()).days
+            # Konverter til datetime for beregning hvis det er en date-objekt
+            dt_kontrakt = pd.to_datetime(raw_date)
+            dage = (dt_kontrakt - datetime.now()).days
+            
+            # Index 6 svarer til kolonnen 'Kontraktudløb'
             if dage < 183:
                 styles[6] = 'background-color: #ffcccc; color: black;'
             elif dage <= 365:
                 styles[6] = 'background-color: #ffffcc; color: black;'
         return styles
 
+    # Dynamisk højde: 25 rækker som ønsket tidligere eller fuld liste
+    # Hvis du vil have præcis 25 rækker fast: height=800
+    # Her bruger vi din dynamiske beregning:
     dynamisk_hojde = (len(view_df) + 1) * 35 + 10
-    
-    # 5. Vis dataframe med korrekt column_config
+    if dynamisk_hojde > 800: dynamisk_hojde = 800
+
     st.dataframe(
         view_df.style.apply(style_rows, axis=1),
         use_container_width=True,
@@ -91,9 +103,6 @@ def vis_side(df_raw):
             "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
             "Kontraktudløb": st.column_config.DateColumn("Kontraktudløb", format="DD.MM.YYYY"),
             "Alder": st.column_config.NumberColumn("Alder", format="%d år"),
-            "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
-            "Spiller": st.column_config.TextColumn("Spiller"),
-            "Position": st.column_config.TextColumn("Position"),
-            "Fod": st.column_config.TextColumn("Fod")
+            "Højde": st.column_config.NumberColumn("Højde", format="%d cm")
         }
     )
