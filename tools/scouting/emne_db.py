@@ -46,27 +46,32 @@ def map_position_detail(pos_code):
     if p_str.endswith('.0'): p_str = p_str.split('.')[0]
     return pos_map.get(p_str, "-")
 
-def style_kontrakt_raekker(row):
-    """ Farver rækker baseret på kontraktudløb (bruger internt navn 'Kontrakt') """
-    styles = [''] * len(row)
-    if 'Kontrakt' in row.index and pd.notna(row['Kontrakt']):
-        try:
-            k_dato = pd.to_datetime(row['Kontrakt'], dayfirst=True, errors='coerce')
+def style_kontrakt_kolonne(df):
+    """ Farver KUN cellerne i kolonnen 'Kontrakt' """
+    # Vi starter med en tom DataFrame af samme størrelse som input
+    style_df = pd.DataFrame('', index=df.index, columns=df.columns)
+    
+    if 'Kontrakt' in df.columns:
+        # Konverterer kolonnen midlertidigt til datoer for at beregne forskellen
+        datoer = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce')
+        idag = datetime.now()
+        
+        for idx in df.index:
+            k_dato = datoer[idx]
             if pd.notna(k_dato):
-                dage = (k_dato - datetime.now()).days
-                if dage < 183: # Under 6 måneder
-                    return ['background-color: #ffcccc; color: black;'] * len(row)
-                elif dage <= 365: # Under 12 måneder
-                    return ['background-color: #ffffcc; color: black;'] * len(row)
-        except: pass
-    return styles
+                dage = (k_dato - idag).days
+                if dage < 183:
+                    style_df.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
+                elif dage <= 365:
+                    style_df.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
+                    
+    return style_df
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     
-    # ENSRET KOLONNENAVNE
-    # Vi omdøber 'KONTRAKT' (rå data) til 'Kontrakt' (visningsnavn) med det samme
+    # ENSRET KOLONNENAVNE (Internt bruger vi 'Kontrakt')
     rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
     df = df.rename(columns=rename_map)
 
@@ -99,7 +104,6 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # 'Kontrakt' bruges her som kolonnenavn
     desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
@@ -127,7 +131,6 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
-        # Vi gemmer tilbage til CSV (her omdøbes 'Kontrakt' tilbage til 'KONTRAKT' så din råfil bevares)
         df_to_save = df_input.copy().rename(columns={'Kontrakt': 'KONTRAKT'})
         push_to_github(path, "Update Skygge", df_to_save.to_csv(index=False), sha)
         st.rerun()
@@ -157,8 +160,9 @@ def vis_side(dp):
             vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
             df_display = df_samlet.sort_values(by='POS')[vis_cols]
             
+            # Her påfører vi stylingen KUN på kolonneniveau
             st.dataframe(
-                df_display.style.apply(style_kontrakt_raekker, axis=1), 
+                df_display.style.apply(style_kontrakt_kolonne, axis=None), 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
