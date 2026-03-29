@@ -2,70 +2,56 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-def map_position_detail(pos_code):
-    pos_map = {
-        "1": "Målmand", "2": "Højre back", "5": "Venstre back",
-        "4": "Midtstopper", "3": "Midtstopper", "3.5": "Midtstopper",
-        "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
-        "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
-    }
-    try:
-        clean_code = str(pos_code).split('.')[0].strip()
-        return pos_map.get(clean_code, "-")
-    except:
-        return "-"
-
 def vis_side(df_raw):
-    if df_raw is None or df_raw.empty:
-        st.error("Ingen data fundet i players.csv")
+    # --- DIAGNOSE: Hvad modtager vi egentlig? ---
+    if df_raw is None:
+        st.error("FEJL: Modulet modtager 'None' i stedet for data.")
+        return
+    
+    if isinstance(df_raw, pd.DataFrame) and df_raw.empty:
+        st.warning("ADVARSEL: Dataframen er tom (0 rækker). Tjek players.csv.")
         return
 
-    # 1. RENS DATA OG TVING STORE BOGSTAVER
+    # --- 1. RENS KOLONNER ---
     df = df_raw.copy()
     df.columns = [str(c).upper().strip() for c in df.columns]
     
-    # Fjern rækker uden navn og nulstil alt index-info
-    df = df.dropna(subset=['NAVN']).reset_index(drop=True)
+    # Vi tjekker om 'NAVN' findes, ellers prøver vi at finde en kolonne der minder om det
+    navne_kolonne = 'NAVN' if 'NAVN' in df.columns else None
+    if not navne_kolonne:
+        # Hvis 'NAVN' ikke findes, tager vi den første kolonne der indeholder ordet 'NAME' eller 'NAVN'
+        for c in df.columns:
+            if 'NAV' in c or 'NAME' in c:
+                navne_kolonne = c
+                break
+    
+    if not navne_kolonne:
+        st.error(f"Kunne ikke finde en navne-kolonne. Tilgængelige kolonner: {list(df.columns)}")
+        st.write("Rå data preview:", df.head()) # Viser de første 5 rækker så vi kan se fejlen
+        return
 
-    # 2. FORBERED DATOER
-    # Vi bruger 'KONTRAKT' kolonnen
-    df['K_DATE'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
-    idag = pd.Timestamp(datetime.now().date())
+    # --- 2. FORBEREDELSE AF VISNING (Uden styling for at undgå 'duplicate keys') ---
+    # Vi fjerner dubletter hårdt her
+    df = df.dropna(subset=[navne_kolonne]).drop_duplicates(subset=[navne_kolonne]).reset_index(drop=True)
 
-    # 3. BEREGN FARVE-KODE (Vi gør det direkte i DataFramen i stedet for i en Styler-funktion)
-    # Dette er 100% sikkert mod duplicate keys fejlen
-    def get_color(dt):
-        if pd.isna(dt): return None
-        dage = (dt - idag).days
-        if dage < 183: return "🔴 Udløber snart"
-        if dage <= 365: return "🟡 Under 1 år"
-        return "🟢 Lang kontrakt"
-
-    # 4. BYG DEN ENDELIGE TABEL
+    # Vi bygger en simpel tabel for at se om det virker
     view_df = pd.DataFrame({
-        'Position': df['POS'].apply(map_position_detail),
-        'Spiller': df['NAVN'],
-        'Født': pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce'),
-        'Højde': pd.to_numeric(df['HEIGHT'], errors='coerce').fillna(0).astype(int),
-        'Fod': df['FOD'].fillna("-"),
-        'Udløb': df['K_DATE']
+        'Spiller': df[navne_kolonne],
+        'Position': df['POS'].fillna("-") if 'POS' in df.columns else "-",
+        'Klub': df['TEAMNAME'].fillna("HIF") if 'TEAMNAME' in df.columns else "HIF",
+        'Udløb': df['KONTRAKT'].fillna("-") if 'KONTRAKT' in df.columns else "-"
     })
 
-    # 5. VISNING UDEN BRUG AF .STYLE.APPLY (For at undgå fejlen)
-    # Vi bruger column_config til at lave dato-formateringen
+    # --- 3. VISNING ---
+    st.success(f"Indlæst {len(view_df)} spillere.")
+    
     st.dataframe(
         view_df,
         use_container_width=True,
         hide_index=True,
-        height=800, # Sticky header
-        column_config={
-            "Født": st.column_config.DateColumn("Født", format="DD.MM.YYYY"),
-            "Udløb": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY"),
-            "Højde": st.column_config.NumberColumn("Højde", format="%d cm"),
-            # Vi kan bruge en baggrundsfarve-skala på 'Udløb' hvis vi vil, 
-            # men for at være helt sikker på at det ikke fejler, starter vi her:
-        }
+        height=800
     )
 
-    # Hvis du ABSOLUT vil have farverne tilbage, så brug denne specifikke blok i stedet for punkt 5:
-    # st.dataframe(view_df.style.background_gradient(subset=['Udløb'], cmap='YlOrRd'))
+    # Vis rå data i en expander til fejlfinding
+    with st.expander("Se rå data (Debug)"):
+        st.write(df_raw.head(10))
