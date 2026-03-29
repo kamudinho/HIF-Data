@@ -46,88 +46,70 @@ def map_position_detail(pos_code):
     if p_str.endswith('.0'): p_str = p_str.split('.')[0]
     return pos_map.get(p_str, "-")
 
-def style_kontrakt_kolonne(x):
-    """ Farver KUN cellerne i kolonnen 'Kontrakt' baseret på dato """
-    # Opret en DataFrame med tomme styles
-    df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
-    
-    if 'Kontrakt' in x.columns:
-        # Konverter til datetime for beregning
-        datoer = pd.to_datetime(x['Kontrakt'], dayfirst=True, errors='coerce')
-        idag = datetime.now()
-        
-        for idx in x.index:
-            k_dato = datoer[idx]
-            if pd.notna(k_dato):
-                dage = (k_dato - idag).days
-                if dage < 183: # Under 6 måneder
-                    df_styler.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
-                elif dage <= 365: # Under 12 måneder
-                    df_styler.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
-                    
-    return df_styler
+def style_kontrakt_kolonne(df):
+    """ Returnerer en styling-maske der KUN farver 'Kontrakt' cellen """
+    styler = pd.DataFrame('', index=df.index, columns=df.columns)
+    if 'Kontrakt' in df.columns:
+        # Konverter til datoer (håndterer strenge fra CSV)
+        dates = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce')
+        now = datetime.now()
+        for idx in df.index:
+            if pd.notna(dates[idx]):
+                days = (dates[idx] - now).days
+                if days < 183:
+                    styler.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
+                elif days <= 365:
+                    styler.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
+    return styler
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
-    
-    # ENSRET KOLONNENAVNE
     rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
     df = df.rename(columns=rename_map)
-
-    if 'POS' not in df.columns:
-        df['POS'] = 0
-    
+    if 'POS' not in df.columns: df['POS'] = 0
     df['POS'] = pd.to_numeric(df['POS'], errors='coerce').fillna(0)
     df['Pos_Navn'] = df['POS'].apply(map_position_detail)
-    
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
     if col_name:
         df['Skyggehold'] = df[col_name].fillna(False).replace({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
         df['Skyggehold'] = df['Skyggehold'].astype(bool)
     else:
         df['Skyggehold'] = False
-    
-    if is_hif: 
-        df['Klub'] = 'Hvidovre IF'
-    elif 'Klub' not in df.columns:
-        df['Klub'] = '-'
-        
+    if is_hif: df['Klub'] = 'Hvidovre IF'
+    elif 'Klub' not in df.columns: df['Klub'] = '-'
     return df
 
 def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     if df_input.empty:
         st.info("Ingen data tilgængelig.")
         return
-
     df_temp = df_input.copy()
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
-    
     desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
         desired_cols.append('🗑️')
+    display_cols = ['ℹ️'] + [c for c in desired_cols if c in df_temp.columns]
     
-    present_cols = [c for c in desired_cols if c in df_temp.columns]
-    display_cols = ['ℹ️'] + present_cols
+    # Dynamisk højde baseret på rækker for at undgå scroll (+3 for header/buffer)
+    calc_height = (len(df_temp) + 3) * 35
 
     ed_res = st.data_editor(
         df_temp[display_cols], 
         hide_index=True, 
         use_container_width=True, 
         key=f"ed_{key_suffix}",
+        height=calc_height,
         column_config={
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "Pos_Navn": st.column_config.TextColumn("Position", width="medium"),
-            "Navn": st.column_config.TextColumn("Spiller"),
-            "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
+            "Pos_Navn": "Position"
         },
-        disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
+        disabled=[c for c in display_cols if c not in ['🛡️', '🗑️', 'ℹ️']]
     )
-
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
@@ -139,17 +121,12 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
 def vis_side(dp):
     emne_c, emne_s = get_github_file(EMNE_PATH)
     h_c, h_s = get_github_file(HIF_PATH)
-    
     df_emner = prepare_df(emne_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
-
     t_emner, t_hif, t_liste, t_bane = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    with t_emner:
-        tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH, True)
-
-    with t_hif:
-        tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH, False)
+    with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH, True)
+    with t_hif: tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH, False)
 
     s_e = df_emner[df_emner['Skyggehold'] == True].copy()
     s_h = df_hif[df_hif['Skyggehold'] == True].copy()
@@ -157,19 +134,17 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
-            df_display = df_samlet.sort_values(by='POS')[vis_cols]
+            df_display = df_samlet.sort_values(by='POS')[['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']]
+            df_display = df_display.rename(columns={'Pos_Navn': 'Position'})
+            calc_height = (len(df_display) + 2) * 35
             
-            # Bruger .style.apply med axis=None for at målrette specifik kolonne
+            # Vi viser tabellen med styling. Vi udelader column_config for Kontrakt her, 
+            # da det ellers kan blokere for baggrundsfarven i visse Streamlit versioner.
             st.dataframe(
                 df_display.style.apply(style_kontrakt_kolonne, axis=None), 
                 use_container_width=True, 
                 hide_index=True,
-                column_config={
-                    "Pos_Navn": "Position",
-                    "Navn": "Spiller",
-                    "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
-                }
+                height=calc_height
             )
         else:
             st.info("Ingen spillere valgt til skyggehold.")
@@ -179,60 +154,33 @@ def vis_side(dp):
             GUL_UDLOB = "#ffffcc"; ROD_UDLOB = "#ffcccc"
             idag = datetime.now()
             col_pitch, col_menu = st.columns([6, 1])
-            
             with col_menu:
                 st.write("**Formation**")
                 if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
                 for f in ["3-4-3", "4-3-3", "3-5-2"]:
-                    is_active = st.session_state.form_skygge == f
-                    if st.button(f, key=f"btn_skygge_{f}", use_container_width=True, 
-                                 type="primary" if is_active else "secondary"):
+                    if st.button(f, key=f"btn_skygge_{f}", use_container_width=True, type="primary" if st.session_state.form_skygge == f else "secondary"):
                         st.session_state.form_skygge = f
                         st.rerun()
-
             with col_pitch:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(11, 8))
                 form = st.session_state.form_skygge
-                
-                # Formation configs
-                if form == "3-4-3":
-                    pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
-                                  5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
-                                  11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
-                elif form == "4-3-3":
-                    pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
-                                  6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 10: (75, 40, 'CM'),
-                                  11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
-                else: # 3-5-2
-                    pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
-                                  5: (45, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (45, 70, 'HWB'), 
-                                  10: (75, 40, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
-
+                if form == "3-4-3": pos_config = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(60,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+                elif form == "4-3-3": pos_config = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+                else: pos_config = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(100,28,'ANG'), 7:(100,52,'ANG')}
                 for p_num, (x, y, label) in pos_config.items():
-                    ax.text(x, y - 4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
-                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    
-                    if form == "4-3-3" and p_num == 4:
-                        spillere = df_samlet[df_samlet['POS'].isin([4, 3.5])]
-                    elif form == "3-5-2" and p_num == 9:
-                        spillere = df_samlet[df_samlet['POS'].isin([9, 11])]
-                    else:
-                        spillere = df_samlet[df_samlet['POS'] == float(p_num)]
-                    
-                    spillere = spillere.sort_values(by=['Navn'])
-
-                    for i, (_, p) in enumerate(spillere.iterrows()):
-                        bg_color = "white"
-                        if str(p.get('Klub', '')).upper() != 'HVIDOVRE IF': bg_color = "#f0f0f0"
+                    ax.text(x, y-4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    sp = df_samlet[df_samlet['POS'].isin([4,3.5])] if (form=="4-3-3" and p_num==4) else (df_samlet[df_samlet['POS'].isin([9,11])] if (form=="3-5-2" and p_num==9) else df_samlet[df_samlet['POS']==float(p_num)])
+                    sp = sp.sort_values(by=['Navn'])
+                    for i, (_, p) in enumerate(sp.iterrows()):
+                        bg = "white"
+                        if str(p.get('Klub','')).upper() != 'HVIDOVRE IF': bg = "#f0f0f0"
                         if pd.notna(p.get('Kontrakt')):
                             try:
-                                k_dato = pd.to_datetime(p['Kontrakt'], dayfirst=True)
-                                dage_til = (k_dato - idag).days
-                                if dage_til < 183: bg_color = ROD_UDLOB
-                                elif dage_til <= 365: bg_color = GUL_UDLOB
+                                d = pd.to_datetime(p['Kontrakt'], dayfirst=True)
+                                diff = (d - idag).days
+                                if diff < 183: bg = ROD_UDLOB
+                                elif diff <= 365: bg = GUL_UDLOB
                             except: pass
-                        
-                        ax.text(x, (y - 1.5) + (i * 2.3), f" {p['Navn']} ", size=8, ha='center', va='top', 
-                                fontweight='bold', bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+                        ax.text(x, (y-1.5)+(i*2.3), f" {p['Navn']} ", size=8, ha='center', va='top', fontweight='bold', bbox=dict(facecolor=bg, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
                 st.pyplot(fig)
