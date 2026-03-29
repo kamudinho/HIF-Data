@@ -1,254 +1,178 @@
-import os
-import sys
 import streamlit as st
-from streamlit_option_menu import option_menu
 import pandas as pd
+from io import StringIO
+import requests
+import base64
+from mplsoccer import Pitch
+from datetime import datetime
 
-# Sikr at vi kan finde vores egne moduler
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# IMPORTS
-import data.HIF_load as hif_load
-from data.data_load import _get_snowflake_conn
-from data.users import get_users
-
-# --- 1. KONFIGURATION & BRANDING ---
-HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+# --- KONFIGURATION ---
+REPO = "Kamudinho/HIF-data"
+EMNE_PATH = "data/emneliste.csv"
+HIF_PATH = "data/players.csv"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
-st.set_page_config(
-    page_title="HIF Data Hub",
-    layout="wide",
-    page_icon=HIF_LOGO_URL,
-    initial_sidebar_state="auto"
-)
+# Ordbog til visning og konvertering
+POS_MAP = {
+    "1": "Målmand", "2": "Højre back", "5": "Venstre back",
+    "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
+    "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
+    "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
+}
+# Omvendt ordbog til når vi skal gemme (Navn -> Tal)
+REVERSE_POS = {v: k for k, v in POS_MAP.items()}
 
-# Centraliseret CSS
-st.markdown(f"""
-    <style>
-        .block-container {{ padding-top: 0.5rem !important; }}
-        [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
-        .hif-header-container {{
-            background-color: {HIF_ROD};
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }}
-        .hif-header-text {{
-            color: white !important;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 600;
-            margin: 0;
-        }}
-    </style>
-""", unsafe_allow_html=True)
+# --- FUNKTIONER ---
+def get_github_file(path):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        data = r.json()
+        content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+        return content, data['sha']
+    return None, None
 
-def render_hif_header(titel):
-    st.markdown(f'<div class="hif-header-container"><p class="hif-header-text">{titel}</p></div>', unsafe_allow_html=True)
+def push_to_github(path, message, content, sha=None):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    payload = {"message": message, "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
+    if sha: payload["sha"] = sha
+    r = requests.put(url, headers=headers, json=payload)
+    return r.status_code
 
-# --- 2. LOGIN SYSTEM ---
-USER_DB = get_users()
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+def style_kontrakt(df):
+    styler = pd.DataFrame('', index=df.index, columns=df.columns)
+    if 'Kontrakt' in df.columns:
+        now = datetime.now().date()
+        for idx in df.index:
+            val = df.at[idx, 'Kontrakt']
+            if pd.notna(val) and not isinstance(val, str):
+                days = (val - now).days
+                if days < 183: styler.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
+                elif days <= 365: styler.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
+    return styler
 
-if not st.session_state["logged_in"]:
-    # Aggressiv CSS til at tvinge layoutet helt ud til kanten
-    st.markdown(f"""
-        <style>
-            /* Fjern Streamlits standard margin/padding overalt */
-            [data-testid="stAppViewContainer"] {{
-                padding: 0 !important;
-            }}
-            [data-testid="stHeader"] {{
-                display: none;
-            }}
-            .main .block-container {{
-                padding: 0 !important;
-                max-width: 100% !important;
-            }}
-            
-            /* Skab en split-skærm baggrund */
-            .stApp {{
-                background: linear-gradient(to right, 
-                    white 0%, white 50%, 
-                    transparent 50%, transparent 100%);
-            }}
-
-            /* Den højre side med billedet (Full bleed) */
-            [data-testid="stAppViewContainer"]::before {{
-                content: "";
-                position: fixed;
-                right: 0;
-                top: 0;
-                width: 50%;
-                height: 100vh;
-                background-image: url('https://www.tv2kosmopol.dk/img/asset/aW1hZ2VzLzIwMjMvMDUvMjgvMjAyMzA1MjctMTUxMTM3LWwtMTkyMHgxNDg1d2UuanBn/20230527-151137-l-1920x1485we.jpg?fm=jpg&w=1920&h=862.92134831461&s=69869f3269bf8ebfa06b2b56bcf20a2e');
-                background-size: cover;
-                background-position: center;
-                z-index: 0;
-                
-                /* Tilføj opacity her (0.0 er helt væk, 1.0 er fuld synlig) */
-                opacity: 0.7; 
-            }}
-            
-            /* Sørg for at login-form lander korrekt til venstre */
-            .login-box {{
-                max-width: 320px;
-                margin-top: 15vh;
-                text-align: center;
-            }}
-            
-            /* Fjern rammen om selve formen */
-            div[data-testid="stForm"] {{
-                border: none !important;
-                padding: 0 !important;
-            }}
-        </style>
-    """, unsafe_allow_html=True)
-
-    # Vi bruger kun den venstre kolonne til indhold (da den højre er dækket af CSS-billedet)
-    col1, col2 = st.columns([1, 1])
+def prepare_df(content, is_hif=False):
+    if not content: return pd.DataFrame()
+    df = pd.read_csv(StringIO(content))
+    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
+    df = df.dropna(subset=['Navn']).reset_index(drop=True)
     
-    with col1:
-        # Centrerer indholdet vertikalt
-        st.markdown("<br><br><br><br><br><br><br>", unsafe_allow_html=True)
-        
-        # Vi bruger en række med 3 kolonner [1, 2, 1] for at tvinge indholdet i midten
-        left_pad, center_content, right_pad = st.columns([1, 2, 1])
-        
-        with center_content:
-            # Container til logoet for at sikre horisontal centrering
-            st.markdown(
-                f"""
-                <div style="display: flex; justify-content: center; width: 100%;">
-                    <img src="{HIF_LOGO_URL}" style="width: 70px;">
-                </div>
-                """, 
-                unsafe_allow_html=True
+    # Rens og klargør positioner som tekst-labels til editoren
+    for col in ['POS', 'POS_343', 'POS_433', 'POS_352']:
+        if col not in df.columns: df[col] = "0"
+        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
+        # Oversæt tal til navn for visning
+        df[col] = df[col].map(POS_MAP).fillna(df[col])
+    
+    df['Kontrakt'] = pd.to_datetime(df['Kontrakt'], errors='coerce').dt.date
+    df['Skyggehold'] = df['Skyggehold'].fillna(False).replace({'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False}).astype(bool)
+    df['Klub'] = 'Hvidovre IF' if is_hif else df.get('Klub', '-')
+    return df
+
+def vis_side():
+    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
+    
+    e_c, e_s = get_github_file(EMNE_PATH)
+    h_c, h_s = get_github_file(HIF_PATH)
+    df_emner = prepare_df(e_c)
+    df_hif = prepare_df(h_c, is_hif=True)
+
+    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+
+    # --- LISTER (Oversat POS + 25 rækker højde) ---
+    for t, d, s, p in [(t1, df_emner, e_s, EMNE_PATH), (t2, df_hif, h_s, HIF_PATH)]:
+        with t:
+            if d.empty: continue
+            # 800px højde fastholder overskriften og viser ca. 25 rækker
+            ed = st.data_editor(
+                d[['POS', 'Navn', 'Klub', 'Kontrakt', 'Skyggehold']].style.apply(style_kontrakt, axis=None), 
+                hide_index=True, use_container_width=True, height=800, key=f"ed_{p}",
+                column_config={
+                    "Skyggehold": st.column_config.CheckboxColumn("Skygge", width="small"),
+                    "POS": st.column_config.SelectboxColumn("Position", options=list(POS_MAP.values())),
+                    "Kontrakt": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY")
+                }, disabled=['Navn', 'Klub']
             )
             
-            # Overskrift centreret
-            st.markdown("<h2 style='text-align: center; color: #31333F; margin-top: 10px; margin-bottom: 20px;'>HIF Data HUB</h2>", unsafe_allow_html=True)
-            
-            # Selve formen
-            with st.form("login_final"):
-                u = st.text_input("BRUGER", placeholder="Brugernavn", label_visibility="collapsed").lower().strip()
-                p = st.text_input("KODE", type="password", placeholder="Adgangskode", label_visibility="collapsed")
-                submit_button = st.form_submit_button("LOG IND", use_container_width=True)
+            if not ed['Skyggehold'].equals(d['Skyggehold']) or not ed['POS'].equals(d['POS']):
+                d_save = d.copy()
+                d_save['Skyggehold'] = ed['Skyggehold']
+                d_save['POS_DISPLAY'] = ed['POS']
+                # Konverter navne tilbage til tal før upload
+                d_save['POS'] = d_save['POS_DISPLAY'].map(REVERSE_POS).fillna(d_save['POS'])
                 
-                if submit_button:
-                    if u in USER_DB and USER_DB[u]["pass"] == p:
-                        st.session_state["logged_in"] = True
-                        st.session_state["user"] = u
+                # Konverter taktiske felter tilbage til tal også
+                for c in ['POS_343', 'POS_433', 'POS_352']:
+                    d_save[c] = d_save[c].map(REVERSE_POS).fillna(d_save[c])
+                
+                push_to_github(p, "Update POS/Skygge", d_save.drop(columns=['POS_DISPLAY','Klub'], errors='ignore').to_csv(index=False), s)
+                st.rerun()
+
+    # --- SKYGGELISTE ---
+    with t3:
+        df_s = pd.concat([df_emner[df_emner['Skyggehold']], df_hif[df_hif['Skyggehold']]], ignore_index=True)
+        if not df_s.empty:
+            ed_s = st.data_editor(
+                df_s[['Navn', 'POS_343', 'POS_433', 'POS_352', 'Kontrakt']].style.apply(style_kontrakt, axis=None), 
+                hide_index=True, use_container_width=True, height=800,
+                column_config={
+                    "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_MAP.values())),
+                    "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_MAP.values())),
+                    "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_MAP.values())),
+                    "Kontrakt": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY", disabled=True)
+                }, disabled=['Navn']
+            )
+            
+            if not ed_s[['POS_343', 'POS_433', 'POS_352']].equals(df_s[['POS_343', 'POS_433', 'POS_352']]):
+                for _, row in ed_s.iterrows():
+                    for src, path, sha in [(df_emner, EMNE_PATH, e_s), (df_hif, HIF_PATH, h_s)]:
+                        if row['Navn'] in src['Navn'].values:
+                            # Map tilbage til tal
+                            src.loc[src['Navn'] == row['Navn'], 'POS_343'] = REVERSE_POS.get(row['POS_343'], row['POS_343'])
+                            src.loc[src['Navn'] == row['Navn'], 'POS_433'] = REVERSE_POS.get(row['POS_433'], row['POS_433'])
+                            src.loc[src['Navn'] == row['Navn'], 'POS_352'] = REVERSE_POS.get(row['POS_352'], row['POS_352'])
+                            # Husk også at konvertere hoved-POS tilbage til tal for en sikkerheds skyld
+                            src['POS'] = src['POS'].map(REVERSE_POS).fillna(src['POS'])
+                            push_to_github(path, "Tactical Update", src.to_csv(index=False), sha)
+                st.rerun()
+
+    # --- BANE ---
+    with t4:
+        df_s = pd.concat([df_emner[df_emner['Skyggehold']], df_hif[df_hif['Skyggehold']]], ignore_index=True)
+        if not df_s.empty:
+            f = st.session_state.form_skygge
+            p_col = f"POS_{f.replace('-', '')}"
+            c_p, c_m = st.columns([5,1])
+            with c_m:
+                for opt in ["3-4-3", "4-3-3", "3-5-2"]:
+                    if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                        st.session_state.form_skygge = opt
                         st.rerun()
-                    else:
-                        st.error("Ugyldig login")
-    st.stop()
-    
-# --- 3. SIDEBAR NAVIGATION ---
-with st.sidebar:
-    alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
-    user_info = USER_DB.get(st.session_state["user"], {})
-    restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
-    
-    synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
-    hoved_omraade = option_menu(None, options=synlige_hoved_options, default_index=0)
-    
-    def filtrer_menu(liste):
-        return [o for o in liste if o.lower().strip() not in restriktioner]
+            with c_p:
+                pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
+                fig, ax = pitch.draw(figsize=(9, 6))
+                
+                # Koordinat-mapping (Samme som før)
+                if f == "3-4-3": m = {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')}
+                elif f == "4-3-3": m = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(30,25,'VCB'), 3:(30,55,'HCB'), 2:(35,70,'HB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+                else: m = {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(95,32,'ANG'), 7:(95,48,'ANG')}
 
-    if hoved_omraade == "TRUPPEN":
-        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
-    elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Charts"])
-    elif hoved_omraade == "BETINIA LIGAEN":
-        sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Afslutninger - liga", "Fysisk data"]))
-    elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=filtrer_menu(["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]))
-    elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil"]))
+                for pid, (x, y, lbl) in m.items():
+                    ax.text(x, y-4, lbl, size=7, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    # Da df_s nu indeholder navne (f.eks. "Angriber"), mapper vi pid-tallet til navn før filter
+                    pos_name = POS_MAP.get(str(pid))
+                    players = df_s[df_s[p_col] == pos_name]
+                    for i, (_, p) in enumerate(players.iterrows()):
+                        bg = "white"
+                        if pd.notna(p['Kontrakt']):
+                            diff = (p['Kontrakt'] - datetime.now().date()).days
+                            if diff < 183: bg = "#ffcccc"
+                            elif diff <= 365: bg = "#ffffcc"
+                        ax.text(x, y+(i*3.5), p['Navn'], size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor='#333', alpha=0.9, boxstyle='square,pad=0.1'))
+                st.pyplot(fig)
 
-# --- 4. DATA LOADING & RENDERING ---
-render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
-
-try:
-    # SEKTION 1: TRUPPEN (Hurtig CSV-load)
-    if hoved_omraade == "TRUPPEN":
-        dp_quick = hif_load.get_squad_only()
-        if sel == "Oversigt":
-            import tools.truppen.players as pl
-            pl.vis_side(dp_quick["players"])
-        elif sel == "Forecast":
-            import tools.truppen.squad as sq
-            sq.vis_side(dp_quick["players"])
-
-    # SEKTION 2: SCOUTING (Kræver stadig sin pakke, da den er cross-tabulær)
-    elif hoved_omraade == "SCOUTING":
-        dp = hif_load.get_scouting_package() 
-        if sel == "Scoutrapport":
-            import tools.scouting.scout_input as si
-            si.vis_side(dp)
-        elif sel == "Database":
-            import tools.scouting.scout_db as sdb
-            sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
-        elif sel == "Opret emne":
-            import tools.scouting.emneliste_input as el
-            el.vis_side(dp, st.session_state["user"])
-        elif sel == "Emnedatabase":
-            import tools.scouting.emne_db as edb
-            edb.vis_side()
-        elif sel == "Sammenligning":
-            import tools.scouting.comparison as comp
-            comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
-
-    # SEKTION 3: HIF & LIGA ANALYSE (OPTIMERET: Ingen global load!)
-    elif hoved_omraade == "HIF ANALYSE":
-        if sel == "Spillerperformance":
-            import tools.hifanalyse.player_analysis as pa
-            pa.vis_side(dp) # Siden henter selv data
-        elif sel == "Afslutninger":
-            import tools.hifanalyse.shotmap as sm
-            sm.vis_side(dp)
-        elif sel == "Charts":
-            import tools.ligaen.chart as pc
-            pc.vis_side()
-        elif sel == "Assistmap":
-            import tools.hifanalyse.assistmap as am
-            am.vis_side(dp)
-
-    elif hoved_omraade == "BETINIA LIGAEN":
-        if sel == "Modstanderanalyse":
-            import tools.ligaen.modstanderanalyse as ma
-            ma.vis_side() # Siden henter selv data
-        elif sel == "Holdoversigt":
-            import tools.ligaen.test_teams as tt
-            tt.vis_side()
-        elif sel == "Kampe":
-            import tools.ligaen.test_matches as tm
-            tm.vis_side()
-        elif sel == "Charts":
-            import tools.ligaen.chart as pc
-            pc.vis_side()
-        elif sel == "Afslutninger - liga":
-            import tools.ligaen.leagueshots as ls
-            ls.vis_side()
-        elif sel == "Fysisk data":
-            import tools.ligaen.fysisk as fd_page
-            # Vi sender kun connection med, data hentes lokalt
-            fd_page.vis_side(_get_snowflake_conn())
-
-    # SEKTION 4: ADMIN
-    elif hoved_omraade == "ADMIN":
-        if sel == "System Log":
-            import tools.admin_page.admin as admin
-            admin.vis_log()
-        elif sel == "Profil":
-            import tools.admin_page.profil as profil
-            profil.vis_side({})
-
-except Exception as e:
-    st.error(f"Fejl ved indlæsning af {sel}: {e}")
+if __name__ == "__main__":
+    vis_side()
