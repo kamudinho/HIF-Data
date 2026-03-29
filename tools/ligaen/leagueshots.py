@@ -78,7 +78,7 @@ def vis_side(dp=None):
         header {visibility: hidden;}
         .main .block-container { padding-top: 0.5rem !important; padding-bottom: 3rem !important; }
         [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-        .stTabs { margin-top: -10px !important; }
+        .stTabs { margin-top: 10px !important; }
         .stat-box { 
             background-color: #f8f9fa; padding: 15px !important; border-radius: 8px; 
             border-left: 5px solid #cc0000; margin-bottom: 12px !important; 
@@ -108,7 +108,7 @@ def vis_side(dp=None):
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
     # DZ Definition: 88.5m til 105m (mållinje)
-    df_team['IS_DZ'] = (df_team['X_M'] >= 88.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
+    df_team['IS_DZ'] = (df_team['X_M'] >= 94.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
     pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
