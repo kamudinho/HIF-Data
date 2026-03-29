@@ -75,7 +75,6 @@ def prepare_df(content, is_hif=False):
 
 # --- APP LAYOUT ---
 def vis_side(dp=None):
-    st.title("HIF Skyggehold & Emnedatabase")
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
     e_c, e_s = get_github_file(EMNE_PATH)
