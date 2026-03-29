@@ -20,42 +20,49 @@ def vis_side(df_raw):
         st.error("Ingen data fundet.")
         return
 
-    # 1. RENS DATA & KOLONNER
+    # 1. RENS KOLONNER (Tving alt til STORE bogstaver for at undgå fejl)
     df = df_raw.copy()
-    
-    # Fjern rækker uden navn og nulstil index med det samme
-    # Vi kigger specifikt efter 'Navn' kolonnen fra din CSV
-    df = df.dropna(subset=['Navn']).reset_index(drop=True)
+    df.columns = [str(c).upper().strip() for c in df.columns]
 
-    # 2. KLARGØR DATOER
-    # Vi bruger 'KONTRAKT' (den sidste kolonne), da den har det rigtige format (DD-MM-YYYY)
-    # Vi ignorerer fuldstændig den kolonne der hedder 'Kontrakt'
+    # 2. SAML NAVN FRA FORNAVN + EFTERNAVN
+    # Vi bruger .fillna('') så vi ikke får "None" i navnet
+    df['FULL_NAME'] = (df['FIRSTNAME'].fillna('') + ' ' + df['LASTNAME'].fillna('')).str.strip()
+    
+    # Hvis både fornavn og efternavn er tomme, prøver vi at falde tilbage på 'NAVN' kolonnen
+    if 'NAVN' in df.columns:
+        df['FULL_NAME'] = df['FULL_NAME'].replace('', df['NAVN'])
+
+    # Fjern rækker helt uden navn og nulstil index
+    df = df[df['FULL_NAME'] != ''].reset_index(drop=True)
+
+    # 3. KLARGØR DATOER
+    # Vi bruger 'KONTRAKT' (store bogstaver) og ignorerer den lille 'Kontrakt'
     df['K_DATE'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
     idag = datetime.now()
 
-    # 3. BYG VISNINGS-TABEL (Uden den forkerte "Kontrakt" kolonne)
+    # 4. BYG VISNINGS-TABEL (Helt renset for dubletter og forvirrende kolonner)
     view_df = pd.DataFrame()
     view_df['Position'] = df['POS'].apply(map_position_detail)
-    view_df['Spiller'] = df['Navn']
+    view_df['Spiller'] = df['FULL_NAME']
     view_df['Født'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
     view_df['Alder'] = ((idag - view_df['Født']).dt.days // 365).fillna(0).astype(int)
     view_df['Højde'] = pd.to_numeric(df['HEIGHT'], errors='coerce').fillna(0).astype(int)
     view_df['Fod'] = df['FOD'].fillna("-")
     view_df['Udløb'] = df['K_DATE']
 
-    # 4. STYLING AF KONTRAKT-UDLØB
+    # 5. STYLING AF KONTRAKT-UDLØB
     def style_rows(row):
         styles = [''] * len(row)
         if pd.notna(row['Udløb']):
             dage = (row['Udløb'] - idag).days
             loc = row.index.get_loc('Udløb')
             if dage < 183:
-                styles[loc] = 'background-color: #ffcccc; color: black;' # Rød
+                styles[loc] = 'background-color: #ffcccc; color: black;' # Rød (< 6 mdr)
             elif dage <= 365:
-                styles[loc] = 'background-color: #ffffcc; color: black;' # Gul
+                styles[loc] = 'background-color: #ffffcc; color: black;' # Gul (< 12 mdr)
         return styles
 
-    # 5. VISNING
+    # 6. VISNING
     st.dataframe(
         view_df.style.apply(style_rows, axis=1),
         use_container_width=True,
