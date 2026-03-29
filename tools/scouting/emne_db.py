@@ -59,7 +59,7 @@ def prepare_df(content, is_hif=False):
     df = pd.read_csv(StringIO(content))
     df = df.rename(columns={'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'})
     
-    # RENSNING AF NAVNE OG INDEKS (Vigtigt for at undgå duplicate keys)
+    # RENSNING AF NAVNE OG NULSTILLING AF INDEKS
     df['Navn'] = df['Navn'].astype(str).str.strip()
     df = df.reset_index(drop=True) 
     
@@ -79,6 +79,7 @@ def prepare_df(content, is_hif=False):
 
 def tegn_spiller_tabel(df_input, key_suffix, sha, path):
     if df_input.empty: return
+    # Vi sikrer os at vi arbejder på en kopi med rent indeks
     df_temp = df_input.copy().reset_index(drop=True)
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     calc_height = (len(df_temp) + 2) * 35 + 45
@@ -94,14 +95,18 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path):
         disabled=['Navn', 'Klub']
     )
     
+    # Tjek om noget er ændret
     if not ed_res['🛡️'].equals(df_temp['🛡️']) or not ed_res['POS'].equals(df_temp['POS']):
         df_save = df_input.copy()
         df_save['Skyggehold'] = ed_res['🛡️'].values
         df_save['POS'] = ed_res['POS'].values
-        # Gem dato i CSV format
+        # Konverter datoer tilbage til tekst-format til CSV
         if 'Kontrakt' in df_save.columns:
             df_save['Kontrakt'] = pd.to_datetime(df_save['Kontrakt']).dt.strftime('%d-%m-%Y')
-        push_to_github(path, "Update Players", df_save.to_csv(index=False), sha)
+        
+        # Omdøb tilbage til store bogstaver før upload
+        df_to_upload = df_save.rename(columns={'Navn':'NAVN','POS':'POS','Kontrakt':'KONTRAKT'})
+        push_to_github(path, "Update Players", df_to_upload.to_csv(index=False), sha)
         st.rerun()
 
 # --- HOVEDSIDE ---
@@ -119,24 +124,23 @@ def vis_side(dp=None):
     with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH)
     with t_hif: tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH)
 
-    # SAMLING AF SKYGGEHOLD (Løser "duplicate keys" fejlen)
+    # SAMLING AF SKYGGEHOLD - Her løses "duplicate keys" fejlen
     s_e = df_emner[df_emner['Skyggehold']].copy()
     s_h = df_hif[df_hif['Skyggehold']].copy()
     
-    # ignore_index=True er kritisk her
+    # ignore_index=True er absolut nødvendig her
     df_samlet = pd.concat([s_e, s_h], ignore_index=True)
 
     with t_liste:
         if not df_samlet.empty:
-            st.subheader("Konfigurer positioner (Dropdown)")
+            st.subheader("Konfigurer positioner for alle formationer")
             cols_to_show = ['Navn', 'POS_343', 'POS_433', 'POS_352', 'Kontrakt']
             calc_height = (len(df_samlet) + 2) * 35 + 50
             
-            # Editor med de 3 dropdown kolonner
             ed_skygge = st.data_editor(
                 df_samlet[cols_to_show].style.apply(style_kontrakt_kolonne, axis=None),
                 hide_index=True, use_container_width=True, height=calc_height,
-                key="editor_skyggeliste_v3",
+                key="editor_skyggeliste_v4",
                 column_config={
                     "POS_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=list(POS_OPTIONS.keys())),
@@ -146,7 +150,7 @@ def vis_side(dp=None):
                 disabled=['Navn']
             )
             
-            # Tjek ændringer og gem
+            # Tjek for ændringer
             changed = False
             for c in ['POS_343', 'POS_433', 'POS_352']:
                 if not ed_skygge[c].equals(df_samlet[c]):
@@ -155,34 +159,41 @@ def vis_side(dp=None):
             if changed:
                 for _, row in ed_skygge.iterrows():
                     name = row['Navn']
+                    # Find og opdater i den rigtige dataframe
                     if name in df_emner['Navn'].values:
                         for c in ['POS_343', 'POS_433', 'POS_352']:
                             df_emner.loc[df_emner['Navn'] == name, c] = row[c]
-                        df_emner['Kontrakt'] = pd.to_datetime(df_emner['Kontrakt']).dt.strftime('%d-%m-%Y')
-                        push_to_github(EMNE_PATH, "Update Pos", df_emner.to_csv(index=False), emne_s)
+                        df_emner_save = df_emner.copy()
+                        df_emner_save['KONTRAKT'] = pd.to_datetime(df_emner_save['Kontrakt']).dt.strftime('%d-%m-%Y')
+                        push_to_github(EMNE_PATH, "Update Skygge Pos", df_emner_save.to_csv(index=False), emne_s)
                     elif name in df_hif['Navn'].values:
                         for c in ['POS_343', 'POS_433', 'POS_352']:
                             df_hif.loc[df_hif['Navn'] == name, c] = row[c]
-                        df_hif['Kontrakt'] = pd.to_datetime(df_hif['Kontrakt']).dt.strftime('%d-%m-%Y')
-                        push_to_github(HIF_PATH, "Update Pos", df_hif.to_csv(index=False), h_s)
+                        df_hif_save = df_hif.copy()
+                        df_hif_save['KONTRAKT'] = pd.to_datetime(df_hif_save['Kontrakt']).dt.strftime('%d-%m-%Y')
+                        push_to_github(HIF_PATH, "Update Skygge Pos", df_hif_save.to_csv(index=False), h_s)
                 st.rerun()
         else:
-            st.info("Vælg spillere i 'Emner' eller 'Hvidovre IF' først.")
+            st.info("Marker spillere med '🛡️' i de andre faner for at se dem her.")
 
     with t_bane:
         if not df_samlet.empty:
             active_f = st.session_state.form_skygge
             p_col = f"POS_{active_f.replace('-', '')}"
+            
             col_pitch, col_menu = st.columns([6, 1])
             with col_menu:
+                st.write("**Vælg formation**")
                 for f in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(f, key=f"b_{f}", use_container_width=True, type="primary" if active_f == f else "secondary"):
+                    if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if active_f == f else "secondary"):
                         st.session_state.form_skygge = f
                         st.rerun()
+
             with col_pitch:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(11, 8))
                 
+                # Koordinater
                 if active_f == "3-4-3": pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(60,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
                 elif active_f == "4-3-3": pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
                 else: pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(100,28,'ANG'), 7:(100,52,'ANG')}
