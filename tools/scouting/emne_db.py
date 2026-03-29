@@ -66,7 +66,7 @@ def prepare_df(content, is_hif=False):
     df = pd.read_csv(StringIO(content))
     
     # ENSRET KOLONNENAVNE (Sikrer POS findes og omdøber til dine labels)
-    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
+    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'Kontrakt': 'Kontrakt'}
     df = df.rename(columns=rename_map)
 
     if 'POS' not in df.columns:
