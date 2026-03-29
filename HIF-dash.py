@@ -200,7 +200,7 @@ try:
             el.vis_side(dp, st.session_state["user"])
         elif sel == "Emnedatabase":
             import tools.scouting.emne_db as edb
-            edb.vis_side(dp)
+            edb.vis_side()
         elif sel == "Sammenligning":
             import tools.scouting.comparison as comp
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
