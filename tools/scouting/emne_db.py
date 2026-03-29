@@ -33,11 +33,25 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
+def map_position_detail(pos_code):
+    pos_map = {
+        "1": "Målmand", "2": "Højre back", "5": "Venstre back",
+        "4": "Midtstopper", "3": "Midtstopper", "3.5": "Midtstopper",
+        "6": "Defensiv midtbane", "7": "Højre kant", "8": "Central midtbane",
+        "9": "Angriber", "10": "Offensiv midtbane", "11": "Venstre kant"
+    }
+    # Sikrer vi håndterer både 4 og 4.0
+    clean_code = str(pos_code).split('.')[0].strip() if '.' in str(pos_code) and not str(pos_code).endswith('.5') else str(pos_code).strip()
+    # Speciel håndtering af 3.5
+    if str(pos_code) == "3.5": clean_code = "3.5"
+    
+    return pos_map.get(clean_code, "-")
+
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     
-    # ENSRET KOLONNENAVNE (Gør dem ens for begge filer)
+    # ENSRET KOLONNENAVNE
     rename_map = {
         'NAVN': 'Navn',
         'POS': 'POS',
@@ -49,6 +63,9 @@ def prepare_df(content, is_hif=False):
     # SIKR POS_TAL FINDES
     if 'POS' not in df.columns:
         df['POS'] = 0
+    
+    # OVERSÆT POS TIL NAVN (Pos_Navn bruges for at undgå konflikt med eksisterende 'Position')
+    df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     
     # ENSRET SKYGGEHOLD
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
@@ -74,11 +91,12 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Hvilke kolonner vil vi gerne vise?
-    desired_cols = ['POS', 'Navn', 'Klub', 'Kontrakt', '🛡️']
-    if kan_slettes: df_temp['🗑️'] = False; desired_cols.append('🗑️')
+    # Liste over kolonner vi viser (inkl. den nye Pos_Navn)
+    desired_cols = ['POS', 'Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
+    if kan_slettes: 
+        df_temp['🗑️'] = False
+        desired_cols.append('🗑️')
     
-    # Vi viser kun de kolonner der rent faktisk findes i DF
     present_cols = [c for c in desired_cols if c in df_temp.columns]
     display_cols = ['ℹ️'] + present_cols
 
@@ -91,7 +109,8 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "POS": st.column_config.NumberColumn("POS", format="%d", width="small")
+            "POS": st.column_config.NumberColumn("POS", format="%s", width="small"),
+            "Pos_Navn": st.column_config.TextColumn("Position", width="medium")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
@@ -126,11 +145,12 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
-            vis_cols = ['POS', 'Navn', 'Klub', 'Kontrakt']
+            vis_cols = ['POS', 'Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
             st.dataframe(
                 df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('POS'), 
                 use_container_width=True, 
-                hide_index=True
+                hide_index=True,
+                column_config={"Pos_Navn": "Position"}
             )
         else:
             st.info("Ingen spillere valgt til skyggehold.")
@@ -138,10 +158,8 @@ def vis_side(dp):
     with t_bane:
         if not df_samlet.empty:
             # --- 1. KONSTANTER & FARVER ---
-            HIF_ROD = "#df003b"
             GUL_UDLOB = "#ffffcc"
             ROD_UDLOB = "#ffcccc"
-            LEJE_GRA = "#d3d3d3"
             idag = datetime.now()
 
             col_pitch, col_menu = st.columns([6, 1])
@@ -194,9 +212,8 @@ def vis_side(dp):
 
                     for i, (_, p) in enumerate(spillere.iterrows()):
                         bg_color = "white"
-                        # Tjekker prioritering eller kontrakt
                         if str(p.get('Klub', '')).upper() != 'HVIDOVRE IF':
-                            bg_color = "#f0f0f0" # Grålig for emner/eksterne
+                            bg_color = "#f0f0f0"
                         
                         if pd.notna(p.get('Kontrakt')):
                             try:
