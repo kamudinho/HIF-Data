@@ -59,13 +59,14 @@ def prepare_df(content, is_hif=False):
     df = pd.read_csv(StringIO(content))
     df = df.rename(columns={'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'})
     
-    # Rens navne for at undgå dublet-fejl i mapping
+    # RENSNING AF NAVNE OG INDEKS (Vigtigt for at undgå duplicate keys)
     df['Navn'] = df['Navn'].astype(str).str.strip()
+    df = df.reset_index(drop=True) 
     
     # Konverter datoer
     df['Kontrakt'] = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce').dt.date
     
-    # Sikr formations-kolonner og rens dem for .0
+    # Sikr formations-kolonner (Tving til streng for dropdown-kompatibilitet)
     for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
         if col not in df.columns:
             df[col] = "0"
@@ -78,7 +79,7 @@ def prepare_df(content, is_hif=False):
 
 def tegn_spiller_tabel(df_input, key_suffix, sha, path):
     if df_input.empty: return
-    df_temp = df_input.copy()
+    df_temp = df_input.copy().reset_index(drop=True)
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     calc_height = (len(df_temp) + 2) * 35 + 45
     
@@ -97,7 +98,9 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path):
         df_save = df_input.copy()
         df_save['Skyggehold'] = ed_res['🛡️'].values
         df_save['POS'] = ed_res['POS'].values
-        df_save['Kontrakt'] = pd.to_datetime(df_input['Kontrakt']).dt.strftime('%d-%m-%Y')
+        # Gem dato i CSV format
+        if 'Kontrakt' in df_save.columns:
+            df_save['Kontrakt'] = pd.to_datetime(df_save['Kontrakt']).dt.strftime('%d-%m-%Y')
         push_to_github(path, "Update Players", df_save.to_csv(index=False), sha)
         st.rerun()
 
@@ -116,9 +119,11 @@ def vis_side(dp=None):
     with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH)
     with t_hif: tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH)
 
-    # Samling af skyggehold - ignore_index=True løser "duplicate keys" fejlen
+    # SAMLING AF SKYGGEHOLD (Løser "duplicate keys" fejlen)
     s_e = df_emner[df_emner['Skyggehold']].copy()
     s_h = df_hif[df_hif['Skyggehold']].copy()
+    
+    # ignore_index=True er kritisk her
     df_samlet = pd.concat([s_e, s_h], ignore_index=True)
 
     with t_liste:
@@ -131,7 +136,7 @@ def vis_side(dp=None):
             ed_skygge = st.data_editor(
                 df_samlet[cols_to_show].style.apply(style_kontrakt_kolonne, axis=None),
                 hide_index=True, use_container_width=True, height=calc_height,
-                key="editor_skyggeliste_final",
+                key="editor_skyggeliste_v3",
                 column_config={
                     "POS_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=list(POS_OPTIONS.keys())),
@@ -148,21 +153,18 @@ def vis_side(dp=None):
                     changed = True; break
             
             if changed:
-                # Opdater de originale dataframes og gem
                 for _, row in ed_skygge.iterrows():
                     name = row['Navn']
                     if name in df_emner['Navn'].values:
                         for c in ['POS_343', 'POS_433', 'POS_352']:
                             df_emner.loc[df_emner['Navn'] == name, c] = row[c]
-                        save_df = df_emner.copy()
-                        save_df['Kontrakt'] = pd.to_datetime(save_df['Kontrakt']).dt.strftime('%d-%m-%Y')
-                        push_to_github(EMNE_PATH, "Update Pos", save_df.to_csv(index=False), emne_s)
+                        df_emner['Kontrakt'] = pd.to_datetime(df_emner['Kontrakt']).dt.strftime('%d-%m-%Y')
+                        push_to_github(EMNE_PATH, "Update Pos", df_emner.to_csv(index=False), emne_s)
                     elif name in df_hif['Navn'].values:
                         for c in ['POS_343', 'POS_433', 'POS_352']:
                             df_hif.loc[df_hif['Navn'] == name, c] = row[c]
-                        save_df = df_hif.copy()
-                        save_df['Kontrakt'] = pd.to_datetime(save_df['Kontrakt']).dt.strftime('%d-%m-%Y')
-                        push_to_github(HIF_PATH, "Update Pos", save_df.to_csv(index=False), h_s)
+                        df_hif['Kontrakt'] = pd.to_datetime(df_hif['Kontrakt']).dt.strftime('%d-%m-%Y')
+                        push_to_github(HIF_PATH, "Update Pos", df_hif.to_csv(index=False), h_s)
                 st.rerun()
         else:
             st.info("Vælg spillere i 'Emner' eller 'Hvidovre IF' først.")
@@ -180,6 +182,7 @@ def vis_side(dp=None):
             with col_pitch:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(11, 8))
+                
                 if active_f == "3-4-3": pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(60,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
                 elif active_f == "4-3-3": pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
                 else: pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(100,28,'ANG'), 7:(100,52,'ANG')}
