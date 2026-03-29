@@ -14,6 +14,14 @@ HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
+# --- POSITIONSMULIGHEDER ---
+POS_OPTIONS = {
+    "1": "Målmand", "2": "Højre back", "5": "Venstre back",
+    "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
+    "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
+    "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
+}
+
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
@@ -34,153 +42,121 @@ def push_to_github(path, message, content, sha=None):
     return r.status_code
 
 # --- LOGIK ---
-def map_position_detail(pos_code):
-    pos_map = {
-        "1": "Målmand", "2": "Højre back", "5": "Venstre back",
-        "4": "Midtstopper", "3": "Midtstopper", "3.5": "Midtstopper",
-        "6": "Defensiv midtbane", "7": "Højre kant", "8": "Central midtbane",
-        "9": "Angriber", "10": "Offensiv midtbane", "11": "Venstre kant"
-    }
-    if pd.isna(pos_code): return "-"
-    p_str = str(pos_code).strip()
-    if p_str.endswith('.0'): p_str = p_str.split('.')[0]
-    return pos_map.get(p_str, "-")
-
-def style_kontrakt_kolonne(df):
-    """ Returnerer en styling-maske der KUN farver 'Kontrakt' cellen """
-    styler = pd.DataFrame('', index=df.index, columns=df.columns)
-    if 'Kontrakt' in df.columns:
-        # Konverter til datoer (håndterer strenge fra CSV)
-        dates = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce')
-        now = datetime.now()
-        for idx in df.index:
-            if pd.notna(dates[idx]):
-                days = (dates[idx] - now).days
-                if days < 183:
-                    styler.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
-                elif days <= 365:
-                    styler.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
-    return styler
-
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
-    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
-    df = df.rename(columns=rename_map)
-    if 'POS' not in df.columns: df['POS'] = 0
+    df = df.rename(columns={'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'})
+    
+    # Sikr at alle formations-kolonner findes
+    for col in ['POS_343', 'POS_433', 'POS_352']:
+        if col not in df.columns:
+            df[col] = df['POS'] # Default til standard POS hvis tom
+            
     df['POS'] = pd.to_numeric(df['POS'], errors='coerce').fillna(0)
-    df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
-    if col_name:
-        df['Skyggehold'] = df[col_name].fillna(False).replace({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
-        df['Skyggehold'] = df['Skyggehold'].astype(bool)
-    else:
-        df['Skyggehold'] = False
-    if is_hif: df['Klub'] = 'Hvidovre IF'
-    elif 'Klub' not in df.columns: df['Klub'] = '-'
+    df['Skyggehold'] = df[col_name].fillna(False).replace({'True':True,'False':False,'1':True,'0':False,1:True,0:False}).astype(bool) if col_name else False
+    df['Klub'] = 'Hvidovre IF' if is_hif else df.get('Klub', '-')
     return df
 
-def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
-    if df_input.empty:
-        st.info("Ingen data tilgængelig.")
-        return
+def tegn_spiller_tabel(df_input, key_suffix, sha, path):
     df_temp = df_input.copy()
-    df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
-    desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
-    if kan_slettes: 
-        df_temp['🗑️'] = False
-        desired_cols.append('🗑️')
-    display_cols = ['ℹ️'] + [c for c in desired_cols if c in df_temp.columns]
+    calc_height = (len(df_temp) + 2) * 35 + 40
     
-    # Dynamisk højde baseret på rækker for at undgå scroll (+3 for header/buffer)
-    calc_height = (len(df_temp) + 3) * 35
-
     ed_res = st.data_editor(
-        df_temp[display_cols], 
-        hide_index=True, 
-        use_container_width=True, 
-        key=f"ed_{key_suffix}",
-        height=calc_height,
+        df_temp[['POS', 'Navn', 'Klub', 'Kontrakt', '🛡️']], 
+        hide_index=True, use_container_width=True, height=calc_height, key=f"ed_{key_suffix}",
         column_config={
-            "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
-            "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "Pos_Navn": "Position"
+            "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
+            "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
         },
-        disabled=[c for c in display_cols if c not in ['🛡️', '🗑️', 'ℹ️']]
+        disabled=['Navn', 'Klub']
     )
-    if not ed_res['🛡️'].equals(df_temp['🛡️']):
+    
+    if not ed_res['🛡️'].equals(df_temp['🛡️']) or not ed_res['POS'].equals(df_temp['POS']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
-        df_to_save = df_input.copy().rename(columns={'Kontrakt': 'KONTRAKT'})
-        push_to_github(path, "Update Skygge", df_to_save.to_csv(index=False), sha)
+            df_input.loc[df_input['Navn'] == row['Navn'], 'POS'] = row['POS']
+        push_to_github(path, "Update Players", df_input.to_csv(index=False), sha)
         st.rerun()
 
 # --- HOVEDSIDE ---
 def vis_side(dp):
+    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
+    
     emne_c, emne_s = get_github_file(EMNE_PATH)
     h_c, h_s = get_github_file(HIF_PATH)
-    df_emner = prepare_df(emne_c, is_hif=False)
+    df_emner = prepare_df(emne_c)
     df_hif = prepare_df(h_c, is_hif=True)
+
     t_emner, t_hif, t_liste, t_bane = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH, True)
-    with t_hif: tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH, False)
+    with t_emner: tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH)
+    with t_hif: tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH)
 
-    s_e = df_emner[df_emner['Skyggehold'] == True].copy()
-    s_h = df_hif[df_hif['Skyggehold'] == True].copy()
-    df_samlet = pd.concat([s_e, s_h], ignore_index=True)
+    df_samlet = pd.concat([df_emner[df_emner['Skyggehold']], df_hif[df_hif['Skyggehold']]], ignore_index=True)
+
+    # Formation vælger (flyttet op så den påvirker både liste og bane)
+    active_form = st.session_state.form_skygge
+    pos_col = f"POS_{active_form.replace('-', '')}" # Bliver til POS_343 osv.
 
     with t_liste:
         if not df_samlet.empty:
-            df_display = df_samlet.sort_values(by='POS')[['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']]
-            df_display = df_display.rename(columns={'Pos_Navn': 'Position'})
-            calc_height = (len(df_display) + 2) * 35
+            st.write(f"### Tilpas positioner for **{active_form}**")
+            # Vis kun den relevante positions-kolonne for den valgte formation
+            df_display = df_samlet[['Navn', pos_col, 'Klub', 'Kontrakt']].copy()
             
-            # Vi viser tabellen med styling. Vi udelader column_config for Kontrakt her, 
-            # da det ellers kan blokere for baggrundsfarven i visse Streamlit versioner.
-            st.dataframe(
-                df_display.style.apply(style_kontrakt_kolonne, axis=None), 
-                use_container_width=True, 
-                hide_index=True,
-                height=calc_height
+            calc_height = (len(df_display) + 2) * 35 + 40
+            ed_skygge = st.data_editor(
+                df_display,
+                hide_index=True, use_container_width=True, height=calc_height,
+                column_config={
+                    pos_col: st.column_config.SelectboxColumn(f"Pos ({active_form})", options=list(POS_OPTIONS.keys())),
+                    "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
+                },
+                disabled=['Navn', 'Klub', 'Kontrakt']
             )
+            
+            if not ed_skygge[pos_col].equals(df_samlet[pos_col]):
+                for idx, row in ed_skygge.iterrows():
+                    # Find hvilken fil spilleren tilhører og gem
+                    is_emne = row['Navn'] in df_emner['Navn'].values
+                    target_df = df_emner if is_emne else df_hif
+                    target_path = EMNE_PATH if is_emne else HIF_PATH
+                    target_sha = emne_s if is_emne else h_s
+                    
+                    target_df.loc[target_df['Navn'] == row['Navn'], pos_col] = row[pos_col]
+                    push_to_github(target_path, f"Update {pos_col}", target_df.to_csv(index=False), target_sha)
+                st.rerun()
         else:
-            st.info("Ingen spillere valgt til skyggehold.")
+            st.info("Vælg spillere i 'Emner' eller 'Hvidovre IF' først.")
 
     with t_bane:
         if not df_samlet.empty:
-            GUL_UDLOB = "#ffffcc"; ROD_UDLOB = "#ffcccc"
-            idag = datetime.now()
             col_pitch, col_menu = st.columns([6, 1])
             with col_menu:
                 st.write("**Formation**")
-                if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
                 for f in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(f, key=f"btn_skygge_{f}", use_container_width=True, type="primary" if st.session_state.form_skygge == f else "secondary"):
+                    if st.button(f, key=f"f_{f}", use_container_width=True, type="primary" if active_form == f else "secondary"):
                         st.session_state.form_skygge = f
                         st.rerun()
+
             with col_pitch:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(11, 8))
-                form = st.session_state.form_skygge
-                if form == "3-4-3": pos_config = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(60,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
-                elif form == "4-3-3": pos_config = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
-                else: pos_config = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(100,28,'ANG'), 7:(100,52,'ANG')}
-                for p_num, (x, y, label) in pos_config.items():
+                
+                # Definer koordinater
+                if active_form == "3-4-3": pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(60,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(60,70,'HWB'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+                elif active_form == "4-3-3": pos_map = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(33,25,'VCB'), 3:(33,55,'HCB'), 2:(35,70,'HB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
+                else: pos_map = {1:(10,40,'MM'), 4:(33,22,'VCB'), 3.5:(33,40,'CB'), 3:(33,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(100,28,'ANG'), 7:(100,52,'ANG')}
+                
+                for p_num, (x, y, label) in pos_map.items():
                     ax.text(x, y-4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    sp = df_samlet[df_samlet['POS'].isin([4,3.5])] if (form=="4-3-3" and p_num==4) else (df_samlet[df_samlet['POS'].isin([9,11])] if (form=="3-5-2" and p_num==9) else df_samlet[df_samlet['POS']==float(p_num)])
-                    sp = sp.sort_values(by=['Navn'])
+                    
+                    # Filtrer spillere der er sat til denne position i den AKTIVE formation
+                    sp = df_samlet[df_samlet[pos_col].astype(str) == str(p_num)].sort_values(by='Navn')
                     for i, (_, p) in enumerate(sp.iterrows()):
-                        bg = "white"
-                        if str(p.get('Klub','')).upper() != 'HVIDOVRE IF': bg = "#f0f0f0"
-                        if pd.notna(p.get('Kontrakt')):
-                            try:
-                                d = pd.to_datetime(p['Kontrakt'], dayfirst=True)
-                                diff = (d - idag).days
-                                if diff < 183: bg = ROD_UDLOB
-                                elif diff <= 365: bg = GUL_UDLOB
-                            except: pass
+                        bg = "#ffcccc" if (pd.to_datetime(p['Kontrakt'], dayfirst=True)-datetime.now()).days < 183 else "white"
                         ax.text(x, (y-1.5)+(i*2.3), f" {p['Navn']} ", size=8, ha='center', va='top', fontweight='bold', bbox=dict(facecolor=bg, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
                 st.pyplot(fig)
