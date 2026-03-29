@@ -54,18 +54,17 @@ def prepare_df(content, is_hif=False):
         'NAVN': 'Navn',
         'POS': 'POS',
         'CONTRACT': 'Kontrakt',
-        'ROLECODE3': 'Position_Original' 
+        'ROLECODE3': 'Position_Rå' 
     }
     df = df.rename(columns=rename_map)
 
-    # SIKKERHEDS-CHECK: Hvis POS mangler i CSV'en, opret den som 0
     if 'POS' not in df.columns:
         df['POS'] = 0
     
-    # Sørg for at POS er numerisk for sorteringens skyld
+    # Konverter POS til tal for korrekt sortering, men behold det skjult i UI
     df['POS'] = pd.to_numeric(df['POS'], errors='coerce').fillna(0)
     
-    # OVERSÆTTER TIL Pos_Navn
+    # OVERSÆTTER TIL Pos_Navn (denne vises i alle lister)
     df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     
     # ENSRET SKYGGEHOLD
@@ -92,7 +91,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Vis kun Pos_Navn, ikke POS
+    # Her definerer vi kun de kolonner, brugeren skal se (POS er væk)
     desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
@@ -145,14 +144,13 @@ def vis_side(dp):
 
     with t_liste:
         if not df_samlet.empty:
+            # Sorterer usynligt efter POS, men viser kun de pæne kolonner
             vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
-            # Sortering med sikkerhedstjek for POS
-            sort_col = 'POS' if 'POS' in df_samlet.columns else df_samlet.columns[0]
             st.dataframe(
-                df_samlet[vis_cols].sort_values(by=sort_col), 
+                df_samlet.sort_values(by='POS')[vis_cols], 
                 use_container_width=True, 
                 hide_index=True,
-                column_config={"Pos_Navn": "Position"}
+                column_config={"Pos_Navn": "Position", "Navn": "Spiller"}
             )
         else:
             st.info("Ingen spillere valgt til skyggehold.")
@@ -178,7 +176,7 @@ def vis_side(dp):
                 fig, ax = pitch.draw(figsize=(11, 8))
                 form = st.session_state.form_skygge
                 
-                # Formation configs
+                # Formation configs (bruges til logikken på banen)
                 if form == "3-4-3":
                     pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                                   5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -196,28 +194,29 @@ def vis_side(dp):
                     ax.text(x, y - 4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
-                    # Sikker filtrering på POS
-                    if 'POS' in df_samlet.columns:
-                        if form == "4-3-3" and p_num == 4:
-                            spillere = df_samlet[df_samlet['POS'].isin([4, 3.5])]
-                        elif form == "3-5-2" and p_num == 9:
-                            spillere = df_samlet[df_samlet['POS'].isin([9, 11])]
-                        else:
-                            spillere = df_samlet[df_samlet['POS'] == float(p_num)]
-                        
-                        spillere = spillere.sort_values(by=['Navn'])
+                    # Logik: Find spillere baseret på det usynlige POS-tal
+                    if form == "4-3-3" and p_num == 4:
+                        spillere = df_samlet[df_samlet['POS'].isin([4, 3.5])]
+                    elif form == "3-5-2" and p_num == 9:
+                        spillere = df_samlet[df_samlet['POS'].isin([9, 11])]
+                    else:
+                        spillere = df_samlet[df_samlet['POS'] == float(p_num)]
+                    
+                    spillere = spillere.sort_values(by=['Navn'])
 
-                        for i, (_, p) in enumerate(spillere.iterrows()):
-                            bg_color = "white"
-                            if str(p.get('Klub', '')).upper() != 'HVIDOVRE IF': bg_color = "#f0f0f0"
-                            if pd.notna(p.get('Kontrakt')):
-                                try:
-                                    k_dato = pd.to_datetime(p['Kontrakt'], dayfirst=True)
-                                    dage_til = (k_dato - idag).days
-                                    if dage_til < 183: bg_color = ROD_UDLOB
-                                    elif dage_til <= 365: bg_color = GUL_UDLOB
-                                except: pass
-                            
-                            ax.text(x, (y - 1.5) + (i * 2.3), f" {p['Navn']} ", size=8, ha='center', va='top', 
-                                    fontweight='bold', bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+                    for i, (_, p) in enumerate(spillere.iterrows()):
+                        bg_color = "white"
+                        if str(p.get('Klub', '')).upper() != 'HVIDOVRE IF': bg_color = "#f0f0f0"
+                        
+                        # Kontraktfarver
+                        if pd.notna(p.get('Kontrakt')):
+                            try:
+                                k_dato = pd.to_datetime(p['Kontrakt'], dayfirst=True)
+                                dage_til = (k_dato - idag).days
+                                if dage_til < 183: bg_color = ROD_UDLOB
+                                elif dage_til <= 365: bg_color = GUL_UDLOB
+                            except: pass
+                        
+                        ax.text(x, (y - 1.5) + (i * 2.3), f" {p['Navn']} ", size=8, ha='center', va='top', 
+                                fontweight='bold', bbox=dict(facecolor=bg_color, edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
                 st.pyplot(fig)
