@@ -120,36 +120,69 @@ def vis_side(dp=None):
     with t_liste:
         if not df_samlet.empty:
             st.subheader("Konfigurer positioner for alle formationer")
-            # Her viser vi alle 3 kolonner samtidigt
+            
+            # 1. Vi tvinger alle POS-kolonner til at være strenge (vigtigt for Selectbox)
+            for c in ['POS_343', 'POS_433', 'POS_352']:
+                df_samlet[c] = df_samlet[c].astype(str).str.replace('.0', '', regex=False)
+
             cols_to_show = ['Navn', 'POS_343', 'POS_433', 'POS_352', 'Kontrakt']
             calc_height = (len(df_samlet) + 2) * 35 + 50
             
+            # 2. Opsætning af editor med eksplicit Selectbox konfiguration
             ed_skygge = st.data_editor(
                 df_samlet[cols_to_show].style.apply(style_kontrakt_kolonne, axis=None),
-                hide_index=True, use_container_width=True, height=calc_height,
+                hide_index=True, 
+                use_container_width=True, 
+                height=calc_height,
+                key="editor_skyggeliste",
                 column_config={
-                    "POS_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=list(POS_OPTIONS.keys())),
-                    "POS_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=list(POS_OPTIONS.keys())),
-                    "POS_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=list(POS_OPTIONS.keys())),
-                    "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
-                },
-                disabled=['Navn', 'Kontrakt']
+                    "Navn": st.column_config.Column(disabled=True),
+                    "POS_343": st.column_config.SelectboxColumn(
+                        "Pos 3-4-3", 
+                        options=list(POS_OPTIONS.keys()), # Bruger nøglerne "1", "2" osv.
+                        required=True
+                    ),
+                    "POS_433": st.column_config.SelectboxColumn(
+                        "Pos 4-3-3", 
+                        options=list(POS_OPTIONS.keys()),
+                        required=True
+                    ),
+                    "POS_352": st.column_config.SelectboxColumn(
+                        "Pos 3-5-2", 
+                        options=list(POS_OPTIONS.keys()),
+                        required=True
+                    ),
+                    "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY", disabled=True)
+                }
             )
             
-            # Tjek for ændringer i de tre kolonner
+            # 3. Gem ændringer
+            # Vi tjekker om de redigerede data er forskellige fra de oprindelige
+            has_changed = False
             for c in ['POS_343', 'POS_433', 'POS_352']:
                 if not ed_skygge[c].equals(df_samlet[c]):
-                    for idx, row in ed_skygge.iterrows():
-                        is_emne = row['Navn'] in df_emner['Navn'].values
-                        target_df = df_emner if is_emne else df_hif
-                        target_path = EMNE_PATH if is_emne else HIF_PATH
-                        target_sha = emne_s if is_emne else h_s
-                        
-                        target_df.loc[target_df['Navn'] == row['Navn'], c] = row[c]
-                        push_to_github(target_path, f"Update {c}", target_df.to_csv(index=False), target_sha)
-                    st.rerun()
-        else:
-            st.info("Vælg spillere i de andre faner først.")
+                    has_changed = True
+                    break
+            
+            if has_changed:
+                for idx, row in ed_skygge.iterrows():
+                    # Find spilleren i enten emne- eller hif-filen
+                    name = row['Navn']
+                    is_emne = name in df_emner['Navn'].values
+                    target_df = df_emner if is_emne else df_hif
+                    target_path = EMNE_PATH if is_emne else HIF_PATH
+                    target_sha = emne_s if is_emne else h_s
+                    
+                    # Opdater alle tre kolonner for spilleren
+                    for c in ['POS_343', 'POS_433', 'POS_352']:
+                        target_df.loc[target_df['Navn'] == name, c] = row[c]
+                    
+                    # Konverter dato tilbage til tekst før gem (så CSV ikke knækker)
+                    target_df_save = target_df.copy()
+                    target_df_save['KONTRAKT'] = pd.to_datetime(target_df_save['Kontrakt']).dt.strftime('%d-%m-%Y')
+                    
+                    push_to_github(target_path, "Update Skygge Positioner", target_df_save.to_csv(index=False), target_sha)
+                st.rerun()
 
     with t_bane:
         if not df_samlet.empty:
