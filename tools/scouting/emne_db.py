@@ -89,7 +89,7 @@ def vis_side():
     df_emner = prepare_df(e_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
     # Lister (Emner & HIF)
     for t, d, s, p in [(t1, df_emner, e_s, EMNE_PATH), (t2, df_hif, h_s, HIF_PATH)]:
