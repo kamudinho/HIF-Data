@@ -33,7 +33,7 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-# --- LOGIK FRA DIN PLAYERS.PY ---
+# --- LOGIK ---
 def map_position_detail(pos_code):
     pos_map = {
         "1": "Målmand", "2": "Højre back", "5": "Venstre back",
@@ -47,11 +47,11 @@ def map_position_detail(pos_code):
     return pos_map.get(p_str, "-")
 
 def style_kontrakt_raekker(row):
-    """ Farver rækker baseret på kontraktudløb (ligesom forecast) """
+    """ Farver rækker baseret på kontraktudløb (bruger internt navn 'Kontrakt') """
     styles = [''] * len(row)
-    if 'KONTRAKT' in row.index and pd.notna(row['KONTRAKT']):
+    if 'Kontrakt' in row.index and pd.notna(row['Kontrakt']):
         try:
-            k_dato = pd.to_datetime(row['KONTRAKT'], dayfirst=True, errors='coerce')
+            k_dato = pd.to_datetime(row['Kontrakt'], dayfirst=True, errors='coerce')
             if pd.notna(k_dato):
                 dage = (k_dato - datetime.now()).days
                 if dage < 183: # Under 6 måneder
@@ -65,20 +65,17 @@ def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     
-    # ENSRET KOLONNENAVNE (Sikrer POS findes og omdøber til dine labels)
-    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'Kontrakt': 'Kontrakt'}
+    # ENSRET KOLONNENAVNE
+    # Vi omdøber 'KONTRAKT' (rå data) til 'Kontrakt' (visningsnavn) med det samme
+    rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
     df = df.rename(columns=rename_map)
 
     if 'POS' not in df.columns:
         df['POS'] = 0
     
-    # Konverter POS til tal (usynlig sorterings-nøgle)
     df['POS'] = pd.to_numeric(df['POS'], errors='coerce').fillna(0)
-    
-    # OVERSÆTTER TIL Pos_Navn (denne vises i alle lister)
     df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     
-    # ENSRET SKYGGEHOLD-STATUS
     col_name = next((c for c in df.columns if c.lower() == 'skyggehold'), None)
     if col_name:
         df['Skyggehold'] = df[col_name].fillna(False).replace({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
@@ -102,7 +99,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Vi udelader 'POS' fra visningen helt her
+    # 'Kontrakt' bruges her som kolonnenavn
     desired_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
@@ -122,7 +119,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
             "Pos_Navn": st.column_config.TextColumn("Position", width="medium"),
             "Navn": st.column_config.TextColumn("Spiller"),
-            "Kontrakt": st.column_config.DateColumn("KONTRAKT", format="DD.MM.YYYY")
+            "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
@@ -130,7 +127,9 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
-        push_to_github(path, "Update Skygge", df_input.to_csv(index=False), sha)
+        # Vi gemmer tilbage til CSV (her omdøbes 'Kontrakt' tilbage til 'KONTRAKT' så din råfil bevares)
+        df_to_save = df_input.copy().rename(columns={'Kontrakt': 'KONTRAKT'})
+        push_to_github(path, "Update Skygge", df_to_save.to_csv(index=False), sha)
         st.rerun()
 
 # --- HOVEDSIDE ---
@@ -149,7 +148,6 @@ def vis_side(dp):
     with t_hif:
         tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH, False)
 
-    # Samlet data til Skyggelisten
     s_e = df_emner[df_emner['Skyggehold'] == True].copy()
     s_h = df_hif[df_hif['Skyggehold'] == True].copy()
     df_samlet = pd.concat([s_e, s_h], ignore_index=True)
@@ -157,10 +155,8 @@ def vis_side(dp):
     with t_liste:
         if not df_samlet.empty:
             vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
-            # Sortering efter det skjulte POS-felt
             df_display = df_samlet.sort_values(by='POS')[vis_cols]
             
-            # Visning med kontrakt-farver ligesom i forecast-filen
             st.dataframe(
                 df_display.style.apply(style_kontrakt_raekker, axis=1), 
                 use_container_width=True, 
@@ -168,7 +164,7 @@ def vis_side(dp):
                 column_config={
                     "Pos_Navn": "Position",
                     "Navn": "Spiller",
-                    "Kontrakt": st.column_config.DateColumn("KONTRAKT", format="DD.MM.YYYY")
+                    "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD.MM.YYYY")
                 }
             )
         else:
@@ -195,7 +191,6 @@ def vis_side(dp):
                 fig, ax = pitch.draw(figsize=(11, 8))
                 form = st.session_state.form_skygge
                 
-                # POS_CONFIG (Bruger de usynlige POS talkoder)
                 if form == "3-4-3":
                     pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                                   5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
