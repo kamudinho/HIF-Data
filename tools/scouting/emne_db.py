@@ -46,32 +46,32 @@ def map_position_detail(pos_code):
     if p_str.endswith('.0'): p_str = p_str.split('.')[0]
     return pos_map.get(p_str, "-")
 
-def style_kontrakt_kolonne(df):
-    """ Farver KUN cellerne i kolonnen 'Kontrakt' """
-    # Vi starter med en tom DataFrame af samme størrelse som input
-    style_df = pd.DataFrame('', index=df.index, columns=df.columns)
+def style_kontrakt_kolonne(x):
+    """ Farver KUN cellerne i kolonnen 'Kontrakt' baseret på dato """
+    # Opret en DataFrame med tomme styles
+    df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
     
-    if 'Kontrakt' in df.columns:
-        # Konverterer kolonnen midlertidigt til datoer for at beregne forskellen
-        datoer = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce')
+    if 'Kontrakt' in x.columns:
+        # Konverter til datetime for beregning
+        datoer = pd.to_datetime(x['Kontrakt'], dayfirst=True, errors='coerce')
         idag = datetime.now()
         
-        for idx in df.index:
+        for idx in x.index:
             k_dato = datoer[idx]
             if pd.notna(k_dato):
                 dage = (k_dato - idag).days
-                if dage < 183:
-                    style_df.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
-                elif dage <= 365:
-                    style_df.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
+                if dage < 183: # Under 6 måneder
+                    df_styler.at[idx, 'Kontrakt'] = 'background-color: #ffcccc; color: black;'
+                elif dage <= 365: # Under 12 måneder
+                    df_styler.at[idx, 'Kontrakt'] = 'background-color: #ffffcc; color: black;'
                     
-    return style_df
+    return df_styler
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     
-    # ENSRET KOLONNENAVNE (Internt bruger vi 'Kontrakt')
+    # ENSRET KOLONNENAVNE
     rename_map = {'NAVN': 'Navn', 'POS': 'POS', 'KONTRAKT': 'Kontrakt'}
     df = df.rename(columns=rename_map)
 
@@ -160,7 +160,7 @@ def vis_side(dp):
             vis_cols = ['Pos_Navn', 'Navn', 'Klub', 'Kontrakt']
             df_display = df_samlet.sort_values(by='POS')[vis_cols]
             
-            # Her påfører vi stylingen KUN på kolonneniveau
+            # Bruger .style.apply med axis=None for at målrette specifik kolonne
             st.dataframe(
                 df_display.style.apply(style_kontrakt_kolonne, axis=None), 
                 use_container_width=True, 
@@ -195,6 +195,7 @@ def vis_side(dp):
                 fig, ax = pitch.draw(figsize=(11, 8))
                 form = st.session_state.form_skygge
                 
+                # Formation configs
                 if form == "3-4-3":
                     pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                                   5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
