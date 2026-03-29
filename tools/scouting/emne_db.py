@@ -40,12 +40,12 @@ def map_position_detail(pos_code):
         "6": "Defensiv midtbane", "7": "Højre kant", "8": "Central midtbane",
         "9": "Angriber", "10": "Offensiv midtbane", "11": "Venstre kant"
     }
-    # Sikrer vi håndterer både 4 og 4.0
-    clean_code = str(pos_code).split('.')[0].strip() if '.' in str(pos_code) and not str(pos_code).endswith('.5') else str(pos_code).strip()
-    # Speciel håndtering af 3.5
-    if str(pos_code) == "3.5": clean_code = "3.5"
+    # Håndtering af formater som "4.0" eller "3.5"
+    p_str = str(pos_code).strip()
+    if p_str.endswith('.0'):
+        p_str = p_str.split('.')[0]
     
-    return pos_map.get(clean_code, "-")
+    return pos_map.get(p_str, "-")
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
@@ -56,15 +56,15 @@ def prepare_df(content, is_hif=False):
         'NAVN': 'Navn',
         'POS': 'POS',
         'CONTRACT': 'Kontrakt',
-        'ROLECODE3': 'Position'
+        'ROLECODE3': 'Position_Rå' # Omdøber original Position for at undgå konflikt
     }
     df = df.rename(columns=rename_map)
 
-    # SIKR POS_TAL FINDES
+    # SIKR POS_TAL FINDES OG ER STRING TIL MAPPING
     if 'POS' not in df.columns:
         df['POS'] = 0
     
-    # OVERSÆT POS TIL NAVN (Pos_Navn bruges for at undgå konflikt med eksisterende 'Position')
+    # --- HER SKER OVERSÆTTELSEN ---
     df['Pos_Navn'] = df['POS'].apply(map_position_detail)
     
     # ENSRET SKYGGEHOLD
@@ -91,7 +91,7 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
     df_temp['ℹ️'] = False
     df_temp = df_temp.rename(columns={'Skyggehold': '🛡️'})
     
-    # Liste over kolonner vi viser (inkl. den nye Pos_Navn)
+    # Vi bruger 'Pos_Navn' i displayet
     desired_cols = ['POS', 'Pos_Navn', 'Navn', 'Klub', 'Kontrakt', '🛡️']
     if kan_slettes: 
         df_temp['🗑️'] = False
@@ -109,13 +109,14 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
             "ℹ️": st.column_config.CheckboxColumn("Info", width="small"),
             "🛡️": st.column_config.CheckboxColumn("Skygge", width="small"),
             "🗑️": st.column_config.CheckboxColumn("Slet", width="small"),
-            "POS": st.column_config.NumberColumn("POS", format="%s", width="small"),
-            "Pos_Navn": st.column_config.TextColumn("Position", width="medium")
+            "POS": st.column_config.NumberColumn("ID", format="%s", width="small"),
+            "Pos_Navn": st.column_config.TextColumn("Position", width="medium"), # Her vises teksten
+            "Navn": st.column_config.TextColumn("Spiller")
         },
         disabled=[c for c in present_cols if c not in ['🛡️', '🗑️']]
     )
 
-    # Gem ændringer hvis '🛡️' ændres
+    # Gem ændringer (Skyggehold)
     if not ed_res['🛡️'].equals(df_temp['🛡️']):
         for idx, row in ed_res.iterrows():
             df_input.loc[df_input['Navn'] == row['Navn'], 'Skyggehold'] = row['🛡️']
@@ -125,10 +126,10 @@ def tegn_spiller_tabel(df_input, key_suffix, sha, path, kan_slettes=True):
 # --- HOVEDSIDE ---
 def vis_side(dp):
     emne_c, emne_s = get_github_file(EMNE_PATH)
-    hif_c, hif_s = get_github_file(HIF_PATH)
+    h_c, h_s = get_github_file(HIF_PATH)
     
     df_emner = prepare_df(emne_c, is_hif=False)
-    df_hif = prepare_df(hif_c, is_hif=True)
+    df_hif = prepare_df(h_c, is_hif=True)
 
     t_emner, t_hif, t_liste, t_bane = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
@@ -136,7 +137,7 @@ def vis_side(dp):
         tegn_spiller_tabel(df_emner, "emner", emne_s, EMNE_PATH, True)
 
     with t_hif:
-        tegn_spiller_tabel(df_hif, "hif", hif_s, HIF_PATH, False)
+        tegn_spiller_tabel(df_hif, "hif", h_s, HIF_PATH, False)
 
     # Samlet data til Skyggelisten
     s_e = df_emner[df_emner['Skyggehold'] == True].copy()
@@ -150,14 +151,13 @@ def vis_side(dp):
                 df_samlet[[c for c in vis_cols if c in df_samlet.columns]].sort_values('POS'), 
                 use_container_width=True, 
                 hide_index=True,
-                column_config={"Pos_Navn": "Position"}
+                column_config={"Pos_Navn": "Position", "POS": "ID"}
             )
         else:
             st.info("Ingen spillere valgt til skyggehold.")
 
     with t_bane:
         if not df_samlet.empty:
-            # --- 1. KONSTANTER & FARVER ---
             GUL_UDLOB = "#ffffcc"
             ROD_UDLOB = "#ffcccc"
             idag = datetime.now()
@@ -181,8 +181,8 @@ def vis_side(dp):
                 fig, ax = pitch.draw(figsize=(11, 8))
                 
                 form = st.session_state.form_skygge
-
-                # --- 2. DYNAMISK POS_CONFIG ---
+                
+                # Formation configs (samme som før)
                 if form == "3-4-3":
                     pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                                   5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -196,11 +196,11 @@ def vis_side(dp):
                                   5: (45, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (45, 70, 'HWB'), 
                                   10: (75, 40, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
 
-                # --- 3. TEGN SPILLERE ---
                 for p_num, (x, y, label) in pos_config.items():
                     ax.text(x, y - 4.5, f" {label} ", size=9, color="white", fontweight='bold', ha='center',
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
+                    # Filtrer spillere til hver position
                     if form == "4-3-3" and p_num == 4:
                         spillere = df_samlet[df_samlet['POS'].astype(float).isin([4, 3.5])]
                     elif form == "3-5-2" and p_num == 9:
