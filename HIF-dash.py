@@ -213,6 +213,9 @@ try:
         elif sel == "Afslutninger":
             import tools.hifanalyse.shotmap as sm
             sm.vis_side(dp)
+        elif sel == "Charts":
+            import tools.ligaen.chart as pc
+            pc.vis_side()
         elif sel == "Assistmap":
             import tools.hifanalyse.assistmap as am
             am.vis_side(dp)
