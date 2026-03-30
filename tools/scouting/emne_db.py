@@ -130,9 +130,9 @@ def vis_side(df):
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
         # --- DIN NYE LEGEND LOGIK ---
-        ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(25, 2, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(1, 5, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(12, 5, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(25, 5, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
