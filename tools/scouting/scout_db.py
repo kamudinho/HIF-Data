@@ -94,6 +94,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "editor_key" not in st.session_state:
         st.session_state.editor_key = 0
 
+    # 1. HENT DATA FRA GITHUB
     content, sha = get_github_file(FILE_PATH)
     if not content:
         st.error("Kunne ikke hente scouting_db.csv fra GitHub")
@@ -101,34 +102,42 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     df_raw = pd.read_csv(StringIO(content))
     
-    # Sørg for ensartede kolonnenavne (tvinger store bogstaver for DATO)
-    if 'Dato' in df_raw.columns:
-        df_raw = df_raw.rename(columns={'Dato': 'DATO'})
-    
+    # --- ROBUST KOLONNE-MAPPING (Løser 'not in index' fejlen) ---
+    # Vi tvinger alle eksisterende kolonnenavne til at være ensartede
+    # Ved at omdøbe dine CSV-kolonner (STORE) til kodens forventede navne (Lille/Mix)
+    rename_map = {
+        'KLUB': 'Klub',
+        'POSITION': 'Position',
+        'RATING_AVG': 'Rating_Avg',
+        'POTENTIALE': 'Potentiale',
+        'DATO': 'DATO' # Vi beholder DATO med stort da din kode refererer til det senere
+    }
+    df_raw = df_raw.rename(columns=rename_map)
+
+    # Sikr at ER_EMNE findes
     if 'ER_EMNE' not in df_raw.columns:
         df_raw['ER_EMNE'] = False
+    else:
+        # Konverter 'True'/'False' strenge til rigtige Booleans
+        df_raw['ER_EMNE'] = df_raw['ER_EMNE'].map({'True': True, 'False': False, True: True, False: False}).fillna(False)
 
+    # Rens ID og Dato
     df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].apply(rens_id)
     df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], errors='coerce')
     
-    # Find unikke spillere (nyeste rapport først) baseret på DATO
+    # 2. FIND UNIKKE SPILLERE (Nyeste rapport først)
     df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
-    
-    # Lav en pæn dato-kolonne til visning (uden tid)
     df_unique['Dato_Visning'] = df_unique['DATO'].dt.date
 
-    # Billed-map
-    billed_map = {}
-    if sql_players is not None:
-        billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
-
-    # Forbered display (Brug Dato_Visning i stedet for den rå DATO)
-    df_display = df_unique[['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning', 'ER_EMNE']].copy()
+    # 3. FORBERED DISPLAY
+    # Nu findes disse i index fordi vi omdøbte dem i rename_map
+    cols_to_show = ['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning', 'ER_EMNE']
+    df_display = df_unique[cols_to_show].copy()
     df_display.insert(0, "Se", False)
 
-    dynamic_height = min((len(df_display) + 1) * 35 + 45, 800)
+    dynamic_height = min((len(df_display) + 1) * 35 + 45, 600)
 
-    # DATA EDITOR
+    # 4. DATA EDITOR
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -144,22 +153,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         key=f"editor_v{st.session_state.editor_key}"
     )
 
-    # GEM LOGIK (HVIS ER_EMNE ÆNDRES)
+    # 5. GEM LOGIK (HVIS ER_EMNE ÆNDRES)
     if not ed_result['ER_EMNE'].equals(df_display['ER_EMNE']):
-        with st.spinner("Gemmer ændringer til GitHub..."):
-            for _, row in ed_result.iterrows():
+        with st.spinner("Gemmer ændringer..."):
+            # Opdater df_raw baseret på ændringerne
+            for idx, row in ed_result.iterrows():
                 df_raw.loc[df_raw['Navn'] == row['Navn'], 'ER_EMNE'] = row['ER_EMNE']
             
             new_csv = df_raw.to_csv(index=False)
-            res = push_to_github(FILE_PATH, "Update ER_EMNE status", new_csv, sha)
-            
+            res = push_to_github(FILE_PATH, "Update status", new_csv, sha)
             if res in [200, 201]:
                 st.toast("Database opdateret!")
                 st.rerun()
-            else:
-                st.error(f"Fejl ved gem. Status: {res}")
 
-    # MODAL HÅNDTERING
+    # 6. MODAL HÅNDTERING
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
@@ -167,8 +174,11 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         st.rerun()
 
     if st.session_state.active_player:
+        billed_map = {}
+        if sql_players is not None:
+            billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
+        
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
-        # Nulstil session state efter dialogen er lukket eller genindlæst
         st.session_state.active_player = None
 
 if __name__ == "__main__":
