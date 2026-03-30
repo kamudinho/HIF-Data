@@ -14,7 +14,7 @@ SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
-GRON_NY = "#ccffcc"  # Grøn til ny transfer
+GRON_NY = "#ccffcc" 
 
 POS_OPTIONS = {
     "1": "Maalmand", "2": "Hoejre back", "5": "Venstre back",
@@ -80,8 +80,8 @@ def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
             div.block-container{padding: 1rem 1rem; max-width: 100% !important;}
-            /* Dropdown styling */
-            .stSelectbox { margin-bottom: 1rem; }
+            /* Sikrer at dropdown boksen er fuldt klikbar uden overlap */
+            .stSelectbox { width: 300px !important; position: relative; z-index: 999; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -93,8 +93,8 @@ def vis_side(df_input_unused=None):
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # --- TOP DROPDOWN (Hele bredden over tabs) ---
-    sel_v = st.selectbox("Vælg Transfervindue for Bane & Lister:", VINDUE_OPTIONS, key="global_vindue_sel")
+    # --- DROPDOWN (Placeret alene for at undgå klik-problemer) ---
+    sel_v = st.selectbox("Vælg Vindue:", VINDUE_OPTIONS, key="global_vindue_sel")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
@@ -110,7 +110,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"ed_v5_{key_base}", 
+                    key=f"ed_v6_{key_base}", 
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -136,7 +136,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v5",
+                key="skyggeliste_editor_v6",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -144,7 +144,6 @@ def vis_side(df_input_unused=None):
                     "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
                 }
             )
-            # (Gemme-logik uændret herfra...)
             if not ed_s.equals(df_s_input):
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
@@ -181,7 +180,10 @@ def vis_side(df_input_unused=None):
                 legend_y = -5
                 ax.text(5, legend_y, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(20, legend_y, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(37, legend_y, f" Ny tilgang ({sel_v}) ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.5, boxstyle='round,pad=0.2'))
+                ax.text(37, legend_y, f" Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.5, boxstyle='round,pad=0.2'))
+
+                # --- DYNAMISK VINDUE TEKST (Top Højre) ---
+                ax.text(115, -5, f"Vindue: {sel_v}", size=14, color=HIF_ROD, weight='bold', ha='right')
 
                 m = {
                     "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
@@ -193,12 +195,9 @@ def vis_side(df_input_unused=None):
                     ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                     for i, (_, p) in enumerate(players.iterrows()):
-                        # Standard farver
                         bg = "white"
                         edge = "#333"
                         lw = 1
-                        
-                        # Tjek om det er en ny transfer
                         is_new = str(p['TRANSFER_VINDUE']) != "Nu"
                         
                         if is_new:
@@ -206,14 +205,13 @@ def vis_side(df_input_unused=None):
                             edge = "black"
                             lw = 1.5
                         else:
-                            # Kontraktfarver (kun for nuværende spillere)
                             if pd.notna(p['KONTRAKT']):
                                 diff = (p['KONTRAKT'] - datetime.now().date()).days
                                 if diff < 183: bg = "#ffcccc"
                                 elif diff <= 365: bg = "#ffffcc"
                         
                         txt = p['Navn']
-                        if is_new: txt += "*" # Indikator for ny
+                        if is_new: txt += "*"
                         
                         ax.text(x, y+(i*3.8), txt, size=7.5, ha='center', weight='bold', 
                                 bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=lw))
