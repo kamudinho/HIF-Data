@@ -84,7 +84,7 @@ def vis_side(df_input_unused=None):
             div[data-testid="stSelectbox"] label { display: none; }
             
             /* Aggressiv reducering af afstand mellem tabs og indhold */
-            .stTabs { margin-top: 1px; }
+            .stTabs { margin-top: -10px; }
             div[data-baseweb="tab-panel"] {
                 padding-top: 0px !important;
                 margin-top: 1px !important;
