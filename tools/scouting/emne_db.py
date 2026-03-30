@@ -84,10 +84,10 @@ def vis_side(df_input_unused=None):
             div[data-testid="stSelectbox"] label { display: none; }
             
             /* Aggressiv reducering af afstand mellem tabs og indhold */
-            .stTabs { margin-top: -15px; }
+            .stTabs { margin-top: 5px; }
             div[data-baseweb="tab-panel"] {
                 padding-top: 0px !important;
-                margin-top: -5px !important;
+                margin-top: 5px !important;
             }
             
             /* Fjern ekstra luft under knapperne til højre */
@@ -188,7 +188,7 @@ def vis_side(df_input_unused=None):
             
             with c_p:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(12, 7))
+                fig, ax = pitch.draw(figsize=(10, 6))
                 
                 # Legends og Overskrift (Rykket lidt op: y=2)
                 ax.text(2, 2, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
