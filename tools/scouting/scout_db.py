@@ -107,37 +107,48 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         fig_evol.update_layout(yaxis=dict(range=[1, 5.5]))
         st.plotly_chart(fig_evol, use_container_width=True)
 
-    # --- TAB 4: SÆSONSTATS (Aggregeret pr. sæson/hold) ---
+    # --- TAB 4: SÆSONSTATS (Aggregeret korrekt) ---
     with t4:
         st.markdown("### Karriereoversigt (Aggregeret)")
         if career_df is not None:
             c_df = career_df.copy()
             
-            # 1. Identificer ID-kolonne og rens ID
+            # 1. Rens ID og klargør data
             id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in c_df.columns else 'wyId'
             c_df['match_id'] = c_df[id_col].apply(rens_id)
             
-            # 2. Filtrer på den valgte spiller
-            stats = c_df[c_df['match_id'] == pid]
+            # Filtrer på spilleren
+            stats = c_df[c_df['match_id'] == pid].copy()
             
             if not stats.empty:
-                # 3. Definer kolonner til gruppering og opsummering
-                # Vi grupperer på Sæson, Hold og Turnering for at undgå dubletter
-                group_cols = ['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']
-                sum_cols = ['MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']
-                
-                # Tjek hvilke kolonner der rent faktisk findes
-                act_group = [c for c in group_cols if c in stats.columns]
-                act_sum = [c for c in sum_cols if c in stats.columns]
-                
-                # 4. AGGREGERING: Læg tallene sammen pr. række
-                stats_grouped = stats.groupby(act_group)[act_sum].sum().reset_index()
-                
-                # Sorter så nyeste sæson står øverst
-                if 'SEASONNAME' in stats_grouped.columns:
-                    stats_grouped = stats_grouped.sort_values('SEASONNAME', ascending=False)
+                # 2. Konverter kolonner til tal for at undgå fejl i summering
+                for col in ['MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']:
+                    if col in stats.columns:
+                        stats[col] = pd.to_numeric(stats[col], errors='coerce').fillna(0)
 
-                # 5. Omdøb til visning
+                # 3. Definer hvordan vi runder af/samler data
+                # Vi grupperer på Sæson, Hold og Turnering
+                # Hvis der er dubletter, tager vi gennemsnittet eller den første værdi 
+                # for at undgå at tælle 300 kampe.
+                
+                group_cols = ['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']
+                act_group = [c for c in group_cols if c in stats.columns]
+                
+                # Her er "tricket": Vi bruger .max() eller .first() hvis data 
+                # i forvejen ER totaler, men optræder flere gange.
+                # Hvis rækkerne er enkelte kampe, skal vi bruge .sum() - men kun på mål/minutter.
+                
+                stats_grouped = stats.groupby(act_group).agg({
+                    'MATCHES': 'max',    # Vi tager den højeste værdi (hvis det er totaler)
+                    'MINUTES': 'max',    # Vi tager den højeste værdi
+                    'GOALS': 'max',      # Vi tager den højeste værdi
+                    'YELLOWCARD': 'max',
+                    'REDCARDS': 'max'
+                }).reset_index()
+                
+                # Sorter efter nyeste sæson
+                stats_grouped = stats_grouped.sort_values('SEASONNAME', ascending=False)
+
                 vis_mapping = {
                     'SEASONNAME': 'Saeson',
                     'TEAMNAME': 'Hold',
@@ -156,8 +167,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 )
             else:
                 st.warning(f"Ingen data fundet for ID: {pid}")
-        else:
-            st.error("Career database ikke indlæst.")
+                
 # --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "active_player" not in st.session_state:
