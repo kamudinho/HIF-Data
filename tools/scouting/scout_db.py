@@ -219,8 +219,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # Forbered visning til data_editor
     df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning', 'ER_EMNE']].copy()
     df_display.insert(0, "Se", False)
-
-    st.subheader("Scout Database Oversigt")
     
     ed_result = st.data_editor(
         df_display,
