@@ -10,55 +10,34 @@ def vis_side(df):
         st.error("Ingen data fundet for truppen.")
         return
 
-    # --- 1. SESSION STATE ---
-    if 'formation_valg' not in st.session_state:
-        st.session_state.formation_valg = "3-4-3"
-
-    # --- 2. FARVER & KONSTANTER ---
+    # --- 1. FARVER & KONSTANTER ---
     hif_rod = "#df003b"
     gul_udlob = "#ffffcc"
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
     transfer_gron = "#ccffcc" 
 
-    # --- 3. CSS INJECTION (Kompakt styling) ---
+    # --- 2. CSS INJECTION (Kompakt dropdown + layout) ---
     st.markdown(f"""
         <style>
-            /* Gør dropdown-beholderen mindre */
-            div[data-testid="stSelectbox"] {{
-                margin-bottom: 0px;
-            }}
-            .stSelectbox label p {{
-                font-size: 13px !important;
-                margin-bottom: 2px !important;
-            }}
-            /* Fjern unødvendig luft i toppen */
-            .block-container {{
-                padding-top: 1rem !important;
-            }}
-            
-            [data-testid="column"] {{
-                display: flex !important;
-                flex-direction: column !important;
-            }}
+            div[data-testid="stSelectbox"] {{ width: 250px !important; }}
+            .stSelectbox label p {{ font-size: 14px !important; font-weight: bold; }}
+            [data-testid="column"] {{ display: flex !important; flex-direction: column !important; }}
             div.stButton > button {{
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
                 background-color: white !important;
                 color: #333 !important;
                 width: 110px !important;
-                margin-left: auto !important;
-                display: block !important;
             }}
             div.stButton > button[kind="primary"] {{
                 color: {hif_rod} !important;
                 border: 2px solid {hif_rod} !important;
-                font-weight: bold !important;
             }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. DATA PROCESSERING ---
+    # --- 3. DATA PREP ---
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
@@ -68,6 +47,21 @@ def vis_side(df):
         df_squad['KONTRAKT_DT'] = pd.to_datetime(df_squad['KONTRAKT'], dayfirst=True, errors='coerce')
         df_squad['DAYS_LEFT'] = (df_squad['KONTRAKT_DT'] - idag).dt.days
 
+    # --- 4. FILTRERING (Her fejlede den sandsynligvis før) ---
+    c1, c2 = st.columns([2, 5])
+    with c1:
+        if 'TRANSFER_VINDUE' in df_squad.columns:
+            # Vi finder de unikke vinduer (f.eks. Sommer 26, Sommer 27)
+            mulige_vinduer = sorted(df_squad['TRANSFER_VINDUE'].unique().tolist())
+            valgt_vindue = st.selectbox("Vis trup for:", mulige_vinduer, key="squad_filter")
+            
+            # VIGTIGT: Her filtrerer vi den dataframe, der skal tegnes!
+            df_display = df_squad[df_squad['TRANSFER_VINDUE'] == valgt_vindue].copy()
+        else:
+            st.warning("Kolonnen 'TRANSFER_VINDUE' mangler.")
+            df_display = df_squad.copy()
+
+    # --- 5. LOGIK TIL FARVER ---
     def get_status_color(row):
         is_transfer = str(row.get('TRANSFER_VINDUE', 'Nu')).strip().upper() != 'NU'
         if is_transfer: return transfer_gron
@@ -80,19 +74,14 @@ def vis_side(df):
         except: return 'white'
         return 'white'
 
-    # --- 5. TOP SEKTION (Kompakt Dropdown) ---
-    # Vi bruger en lille kolonne til venstre (2) og en stor tom kolonne til højre (10)
-    c1, c2 = st.columns([2, 10])
-    with c1:
-        # Henter unikke værdier fra din data til dropdown
-        vinduer = sorted(df_squad['TRANSFER_VINDUE'].unique()) if 'TRANSFER_VINDUE' in df_squad.columns else ["Nu"]
-        st.selectbox("Vis trup for:", vinduer, key="vindue_select")
+    # --- 6. FORMATIONER & LAYOUT ---
+    if 'formation_valg' not in st.session_state:
+        st.session_state.formation_valg = "3-4-3"
 
-    # --- 6. HOVEDLAYOUT ---
     col_pitch, col_menu = st.columns([7, 1])
 
     with col_menu:
-        st.write("") # Afstand
+        st.write("")
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if is_active else "secondary"):
@@ -100,23 +89,16 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
-        pitch = Pitch(
-            pitch_type='statsbomb', 
-            pitch_color='#ffffff', 
-            line_color='#333', 
-            linewidth=1,
-            pad_top=15, pad_bottom=10, pad_left=0, pad_right=0
-        )
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='#ffffff', line_color='#333', linewidth=1, pad_top=15, pad_bottom=10)
         fig, ax = pitch.draw(figsize=(13, 9))
         
-        # --- LEGENDS (Toppen) ---
+        # Legends
         ax.text(2, -7, " < 6 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         ax.text(20, -7, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         ax.text(40, -7, " Ny Transfer ", size=8, fontweight='bold', bbox=dict(facecolor=transfer_gron, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # --- POSITIONER & SPILLERE (Samme logik som før) ---
+        # Positions-config (bevares fuldt ud)
         form = st.session_state.formation_valg
-        # [MM, VCB, CB, HCB, VWB, DM, DM, HWB, VW, ANG, HW]
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -131,14 +113,15 @@ def vis_side(df):
                           8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (105, 28, 'ANG'), 7: (105, 52, 'ANG')}
 
         for pos_num, (x, y, label) in pos_config.items():
+            # Vi bruger df_display (den filtrerede data)
             if form == "4-3-3" and pos_num == 4:
-                spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
+                spillere = df_display[df_display['POS'].isin([4, 3.5])]
             elif form == "3-5-2" and pos_num == 9:
-                spillere = df_squad[df_squad['POS'].isin([9, 11])]
+                spillere = df_display[df_display['POS'].isin([9, 11])]
             else:
-                spillere = df_squad[df_squad['POS'] == pos_num]
+                spillere = df_display[df_display['POS'] == pos_num]
 
-            spillere = spillere.sort_values('PRIOR', ascending=True)
+            spillere = spillere.sort_values('PRIOR')
             
             if not spillere.empty:
                 ax.text(x, y - 5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
