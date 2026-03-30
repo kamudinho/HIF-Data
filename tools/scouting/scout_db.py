@@ -107,15 +107,38 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         fig_evol.update_layout(yaxis=dict(range=[1, 5.5]))
         st.plotly_chart(fig_evol, use_container_width=True)
 
+    # --- TAB 4: SÆSONSTATS (Aggregeret pr. sæson/hold) ---
     with t4:
-        st.markdown("### Karriereoversigt (Wyscout)")
+        st.markdown("### Karriereoversigt (Aggregeret)")
         if career_df is not None:
             c_df = career_df.copy()
-            c_df['match_id'] = c_df['PLAYER_WYID'].apply(rens_id) if 'PLAYER_WYID' in c_df.columns else c_df['wyId'].apply(rens_id)
+            
+            # 1. Identificer ID-kolonne og rens ID
+            id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in c_df.columns else 'wyId'
+            c_df['match_id'] = c_df[id_col].apply(rens_id)
+            
+            # 2. Filtrer på den valgte spiller
             stats = c_df[c_df['match_id'] == pid]
             
             if not stats.empty:
-                vis_kolonner = {
+                # 3. Definer kolonner til gruppering og opsummering
+                # Vi grupperer på Sæson, Hold og Turnering for at undgå dubletter
+                group_cols = ['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']
+                sum_cols = ['MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']
+                
+                # Tjek hvilke kolonner der rent faktisk findes
+                act_group = [c for c in group_cols if c in stats.columns]
+                act_sum = [c for c in sum_cols if c in stats.columns]
+                
+                # 4. AGGREGERING: Læg tallene sammen pr. række
+                stats_grouped = stats.groupby(act_group)[act_sum].sum().reset_index()
+                
+                # Sorter så nyeste sæson står øverst
+                if 'SEASONNAME' in stats_grouped.columns:
+                    stats_grouped = stats_grouped.sort_values('SEASONNAME', ascending=False)
+
+                # 5. Omdøb til visning
+                vis_mapping = {
                     'SEASONNAME': 'Saeson',
                     'TEAMNAME': 'Hold',
                     'COMPETITIONNAME': 'Turnering',
@@ -125,13 +148,16 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                     'YELLOWCARD': 'Gult',
                     'REDCARDS': 'Roedt'
                 }
-                available = [c for c in vis_kolonner.keys() if c in stats.columns]
-                st.dataframe(stats[available].rename(columns=vis_kolonner), use_container_width=True, hide_index=True)
+                
+                st.dataframe(
+                    stats_grouped.rename(columns=vis_mapping), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
                 st.warning(f"Ingen data fundet for ID: {pid}")
         else:
             st.error("Career database ikke indlæst.")
-
 # --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "active_player" not in st.session_state:
