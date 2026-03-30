@@ -216,8 +216,22 @@ def vis_side(df_input_unused=None):
                             if diff < 183: bg = "#ffcccc"
                             elif diff <= 365: bg = "#ffffcc"
                         
-                        ax.text(x, y+(i*2.3), f"{p['Navn']}{'*' if is_new else ''}", size=7, ha='left', weight='bold', 
-                                bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=lw))
+                        ax.text(
+                                x, 
+                                y + (i * 2.3), 
+                                f"{p['Navn']}{'*' if is_new else ''}", 
+                                size=7, 
+                                ha='center',     # Horisontal centrering
+                                va='center',     # Vertikal centrering (Dette er nøglen!)
+                                weight='bold', 
+                                bbox=dict(
+                                    facecolor=bg, 
+                                    edgecolor=edge, 
+                                    alpha=0.9, 
+                                    boxstyle='square,pad=0.2', # Øg pad en smule for bedre luft
+                                    linewidth=lw
+                                )
+                            )
                 st.pyplot(fig)
 
 if __name__ == "__main__":
