@@ -26,6 +26,7 @@ VINDUE_OPTIONS = ["Nu", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
+    # Cache-buster tilføjet for at sikre vi henter nyeste CSV struktur
     url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     r = requests.get(url, headers=headers)
@@ -64,15 +65,18 @@ def prepare_df(content, is_hif=False):
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
     
-    # --- AUTO-FIX: OPRET KOLONNER HVIS DE MANGLER ---
+    # --- TVING KOLONNER IND (Ligesom ER_EMNE) ---
     if 'TRANSFER_VINDUE' not in df.columns:
         df['TRANSFER_VINDUE'] = "Nu"
-    if 'SKYGGEHOLD' not in df.columns:
-        df['SKYGGEHOLD'] = False
     
-    # Sørg for at taktik-kolonner findes
+    # Sikr at alle nødvendige felter findes til editoren
+    needed = ['SKYGGEHOLD', 'POS', 'POS_343', 'POS_433', 'POS_352']
+    for c in needed:
+        if c not in df.columns:
+            df[c] = False if c == 'SKYGGEHOLD' else "0"
+    
+    # Rens taktik-værdier
     for c in ['POS_343', 'POS_433', 'POS_352', 'POS']:
-        if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
     
     df['SKYGGEHOLD'] = df['SKYGGEHOLD'].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
@@ -85,7 +89,8 @@ def prepare_df(content, is_hif=False):
 
 # --- HOVEDSIDE ---
 def vis_side():
-    st.markdown("<style>div.block-container{padding: 1rem 2rem; max-width: 100% !important;}</style>", unsafe_allow_html=True)
+    # Gør layoutet bredere så der er plads til de nye kolonner
+    st.markdown("<style>div.block-container{padding: 1rem 1rem; max-width: 100% !important;}</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
@@ -95,56 +100,60 @@ def vis_side():
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
     
-    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TAB 1 & 2 ---
-    configs = [(t1, df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE"), (t2, df_hif, HIF_PATH, "HIF")]
-    for tab, df_display, path, key in configs:
+    # --- TAB 1 & 2: Lister ---
+    configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE_LIST"), 
+               (tabs[1], df_hif, HIF_PATH, "HIF_LIST")]
+    
+    for tab, df_display, path, key_base in configs:
         with tab:
             if not df_display.empty:
-                # Vi vælger præcis de kolonner vi vil se (Vindue er nu med)
-                disp_cols = ['TRANSFER_VINDUE', 'POS', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']
-                df_input = df_display.set_index('Navn')[disp_cols]
+                # Eksplicit valg af kolonner der SKAL vises
+                target_cols = ['TRANSFER_VINDUE', 'POS', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']
+                df_input = df_display.set_index('Navn')[target_cols]
                 
+                # Vi bruger et dynamisk key for at tvinge reload af editoren
                 ed = st.data_editor(
                     df_input.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"editor_final_{key}",
+                    key=f"editor_v3_{key_base}", 
                     column_config={
-                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS, width="medium"),
+                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS, required=True),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
                         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge")
                     }
                 )
                 
                 if not ed.equals(df_input):
-                    raw_c, raw_sha = get_github_file(path)
-                    df_save = pd.read_csv(StringIO(raw_c))
+                    content, sha = get_github_file(path)
+                    df_save = pd.read_csv(StringIO(content))
                     df_save.columns = [str(c).upper().strip() for c in df_save.columns]
                     if 'NAVN' in df_save.columns: df_save = df_save.rename(columns={'NAVN': 'Navn'})
                     
-                    # Opdater værdier
+                    # Sikr kolonnen findes i den fil vi gemmer
+                    if 'TRANSFER_VINDUE' not in df_save.columns: df_save['TRANSFER_VINDUE'] = "Nu"
+
                     for navn, row in ed.iterrows():
-                        if 'TRANSFER_VINDUE' not in df_save.columns: df_save['TRANSFER_VINDUE'] = "Nu"
                         mask = df_save['Navn'] == navn
                         df_save.loc[mask, 'TRANSFER_VINDUE'] = row['TRANSFER_VINDUE']
                         df_save.loc[mask, 'POS'] = row['POS']
                         df_save.loc[mask, 'SKYGGEHOLD'] = row['SKYGGEHOLD']
                     
-                    push_to_github(path, "Update data with Transfer Window", df_save.to_csv(index=False), raw_sha)
+                    push_to_github(path, "Update transfer window", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # --- TAB 3: SKYGGELISTE ---
-    with t3:
+    # --- TAB 3: SKYGGELISTE (Her hvor du manglede kolonnen) ---
+    with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
-            # Her tvinger vi TRANSFER_VINDUE ind i visningen
+            # Her tvinger vi TRANSFER_VINDUE ind som den første kolonne efter Navn
             df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']]
             
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v3",
+                key="skyggeliste_editor_v4",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -156,21 +165,22 @@ def vis_side():
             if not ed_s.equals(df_s_input):
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
-                        raw_c, raw_sha = get_github_file(p)
-                        df_tmp = pd.read_csv(StringIO(raw_c))
+                        c_raw, sha_raw = get_github_file(p)
+                        df_tmp = pd.read_csv(StringIO(c_raw))
                         df_tmp.columns = [col.upper().strip() for col in df_tmp.columns]
                         if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
                         if navn in df_tmp['Navn'].values:
                             if 'TRANSFER_VINDUE' not in df_tmp.columns: df_tmp['TRANSFER_VINDUE'] = "Nu"
                             df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Sync Tactical/Window", df_tmp.to_csv(index=False), raw_sha)
+                            push_to_github(p, "Update tactical window", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
     # --- TAB 4: BANE ---
-    with t4:
+    with tabs[3]:
         df_total = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_total.empty:
             sel_v = st.selectbox("Vis trup for:", VINDUE_OPTIONS)
+            # Logik: Vis dem der er "Nu" ELLER dem der er sat til det valgte vindue
             df_filtered = df_total[df_total['TRANSFER_VINDUE'].isin(["Nu", sel_v])]
             
             f = st.session_state.form_skygge
@@ -178,7 +188,7 @@ def vis_side():
             c_p, c_m = st.columns([5,1])
             with c_m:
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v4_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             with c_p:
@@ -191,17 +201,17 @@ def vis_side():
                 }[f]
                 for pid, (x, y, lbl) in m.items():
                     ax.text(x, y-4, lbl, size=7, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    p_at = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
-                    for i, (_, p) in enumerate(p_at.iterrows()):
+                    players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
+                    for i, (_, p) in enumerate(players.iterrows()):
                         bg = "white"
                         edge = HIF_ROD if p['TRANSFER_VINDUE'] != "Nu" else "#333"
                         if pd.notna(p['KONTRAKT']):
                             diff = (p['KONTRAKT'] - datetime.now().date()).days
                             if diff < 183: bg = "#ffcccc"
                             elif diff <= 365: bg = "#ffffcc"
-                        n = p['Navn']
-                        if p['TRANSFER_VINDUE'] != "Nu": n += f" ({p['TRANSFER_VINDUE']})"
-                        ax.text(x, y+(i*3.5), n, size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=1.5 if p['TRANSFER_VINDUE'] != "Nu" else 1))
+                        txt = p['Navn']
+                        if p['TRANSFER_VINDUE'] != "Nu": txt += f" ({p['TRANSFER_VINDUE']})"
+                        ax.text(x, y+(i*3.5), txt, size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=1.5 if p['TRANSFER_VINDUE'] != "Nu" else 1))
                 st.pyplot(fig)
 
 if __name__ == "__main__":
