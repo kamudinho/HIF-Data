@@ -10,13 +10,13 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# Den korrekte rækkefølge og navngivning af de 28 kolonner
+# Den opdaterede, officielle rækkefølge (STATUS_NOTAT er nu KOMMENTAR)
 COL_ORDER = [
     "PLAYER_WYID", "DATO", "NAVN", "KLUB", "POSITION", "RATING_AVG", "STATUS",
     "POTENTIALE", "STYRKER", "UDVIKLING", "VURDERING", "BESLUTSOMHED", "FART",
     "AGGRESIVITET", "ATTITUDE", "UDHOLDENHED", "LEDEREGENSKABER", "TEKNIK",
     "SPILINTELLIGENS", "SCOUT", "KONTRAKT", "PRIORITET", "FORVENTNING",
-    "POS_PRIORITET", "POS", "LON", "SKYGGEHOLD", "STATUS_NOTAT"
+    "POS_PRIORITET", "POS", "LON", "SKYGGEHOLD", "KOMMENTAR"
 ]
 
 def get_github_file(path):
@@ -49,7 +49,6 @@ def vis_side(dp):
     unique_players = {}
     def add_to_options(df):
         if df is None or df.empty: return
-        # Standardiser kolonner til UPPER for opslag
         df.columns = [str(c).upper().strip() for c in df.columns]
         for _, r in df.iterrows():
             p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
@@ -84,7 +83,7 @@ def vis_side(dp):
     t3.text_input("Klub", value=data['klub'], disabled=True)
     scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # --- NYE INPUT FELTER ---
+    # --- EKSTRA INFO ---
     l2_c1, l2_c2, l2_c3 = st.columns(3)
     pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
     pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
@@ -120,18 +119,17 @@ def vis_side(dp):
         v1, v2, v3 = st.columns(3)
         styrker = v1.text_area("Styrker", height=150)
         udv = v2.text_area("Udviklingsområder", height=150)
-        vurder = v3.text_area("Samlet vurdering", height=150)
+        vurder = v3.text_area("Samlet vurdering (KOMMENTAR)", height=150)
 
-        submitted = st.form_submit_button("Gem rapport i databasen", use_container_width=True)
+        submitted = st.form_submit_button("Gem rapport og opdater database", use_container_width=True)
         
         if submitted:
-            if not data["n"] or (data['pos'] == "" and pos_final == ""):
-                st.error("⚠️ Vælg en spiller først!")
+            if not data["n"]:
+                st.error("⚠️ Vælg en spiller!")
             else:
                 kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
                 beregnet_rating = round(sum(kategorier) / len(kategorier), 1)
                 
-                # Opret den nye række
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%d/%m/%Y"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final,
@@ -143,43 +141,45 @@ def vis_side(dp):
                     "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn,
                     "KONTRAKT": kontrakt_udloeb.strftime("%Y-%m-%d") if kontrakt_udloeb else "",
                     "PRIORITET": prio_status, "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
-                    "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "STATUS_NOTAT": vurder.replace('\n', ' ').strip()
+                    "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "KOMMENTAR": vurder.replace('\n', ' ').strip()
                 }
 
-                with st.spinner("Gemmer og renser database..."):
+                with st.spinner("Renser kolonner og gemmer til GitHub..."):
                     content, sha = get_github_file(FILE_PATH)
                     
                     if content:
-                        # --- DATABASE RENSNINGS-LOGIK ---
                         df_raw = pd.read_csv(StringIO(content))
                         
-                        # 1. Tving alle eksisterende kolonnenavne til UPPERCASE
+                        # Tving alle eksisterende navne til store bogstaver for sammenligning
                         df_raw.columns = [str(c).upper().strip() for c in df_raw.columns]
                         
-                        # 2. Fjern dublet-kolonner (f.eks. hvis der er både 'NAVN' og 'Navn')
+                        # Håndter navneskift: Flyt data fra STATUS_NOTAT eller BEMAERKNING til KOMMENTAR hvis de findes
+                        if "KOMMENTAR" not in df_raw.columns:
+                            if "STATUS_NOTAT" in df_raw.columns:
+                                df_raw["KOMMENTAR"] = df_raw["STATUS_NOTAT"]
+                            elif "BEMAERKNING" in df_raw.columns:
+                                df_raw["KOMMENTAR"] = df_raw["BEMAERKNING"]
+                        
+                        # Fjern alle dublet-kolonner (f.eks. både 'Navn' og 'NAVN')
                         df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
                         
-                        # 3. Behøld kun de 28 officielle kolonner (smid alt andet væk)
-                        # Hvis en kolonne mangler i den gamle fil, oprettes den med tomme værdier
+                        # Opret den rene dataframe med de korrekte 28 kolonner
                         df_cleaned = pd.DataFrame(columns=COL_ORDER)
                         for col in COL_ORDER:
                             if col in df_raw.columns:
                                 df_cleaned[col] = df_raw[col]
                         
-                        # Tilføj den nye række
-                        new_row_df = pd.DataFrame([ny_rapport])
-                        df_final = pd.concat([df_cleaned, new_row_df], ignore_index=True)
+                        df_final = pd.concat([df_cleaned, pd.DataFrame([ny_rapport])], ignore_index=True)
                     else:
                         df_final = pd.DataFrame([ny_rapport])
 
-                    # Sikr rækkefølgen en sidste gang
+                    # Sikr rækkefølge og gem
                     df_final = df_final[COL_ORDER]
-                    
                     csv_data = df_final.to_csv(index=False)
-                    res = push_to_github(FILE_PATH, f"Rapport: {data['n']}", csv_data, sha)
+                    res = push_to_github(FILE_PATH, f"Rensning & Rapport: {data['n']}", csv_data, sha)
 
                     if res in [200, 201]:
-                        st.success(f"✅ Gemt korrekt i de 28 kolonner!")
+                        st.success("✅ Database opdateret og kolonnenavne rettet!")
                         st.balloons()
                     else:
                         st.error(f"Fejl: {res}")
