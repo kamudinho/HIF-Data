@@ -155,7 +155,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                     'COMPETITIONNAME': 'Turnering',
                     'MATCHES': 'Kampe',
                     'MINUTES': 'Minutter',
-                    'GOALS': 'Maal',
+                    'GOALS': 'Mål',
                     'YELLOWCARD': 'Gult',
                     'REDCARDS': 'Roedt'
                 }
@@ -196,7 +196,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     ed_result = st.data_editor(
         df_display,
-        column_config={"Se": st.column_config.CheckboxColumn("Se", width="small"), "ER_EMNE": st.column_config.CheckboxColumn("Emne")},
+        column_config={"Profil": st.column_config.CheckboxColumn("Profil", width="small"), "ER_EMNE": st.column_config.CheckboxColumn("Emne")},
         disabled=['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning'],
         hide_index=True, use_container_width=True, height=735,
         key=f"scout_editor_{st.session_state.editor_key}"
