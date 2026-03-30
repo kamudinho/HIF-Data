@@ -193,7 +193,7 @@ def vis_side(df_input_unused=None):
                 # Legends og Overskrift (Rykket lidt op: y=2)
                 ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(28, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
                 ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
 
                 m = {
