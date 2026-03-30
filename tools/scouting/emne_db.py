@@ -80,11 +80,10 @@ def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
             div.block-container{padding: 0.5rem 1rem; max-width: 100% !important;}
-            /* Ryk alt op og minimer spildplads */
-            .stTabs { margin-top: -25px; }
-            [data-testid="stMetricValue"] { font-size: 1.5rem; }
-            /* Styling af dropdown for at gøre den klikbar og pæn */
-            div[data-testid="stSelectbox"] { margin-bottom: 0.5rem; width: 100% !important; }
+            /* Fjern label/overskrift fra selectbox helt */
+            div[data-testid="stSelectbox"] label { display: none; }
+            /* Ryk tabs op for at mindske hullet */
+            .stTabs { margin-top: -15px; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -96,9 +95,13 @@ def vis_side(df_input_unused=None):
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # --- TOP: DROPDOWN OVER TABS ---
-    sel_v = st.selectbox("Vis trup for:", VINDUE_OPTIONS, key="global_vindue_sel")
+    # --- TOP: DROPDOWN I HØJRE SIDE ---
+    t_col1, t_col2 = st.columns([4, 1])
+    with t_col2:
+        # Tom streng som label fjerner teksten "Vis trup for"
+        sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
+    # Tabs placeres herunder
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # --- TAB 1 & 2: LISTER ---
@@ -113,7 +116,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"ed_v8_{key_base}", 
+                    key=f"ed_v9_{key_base}", 
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -139,7 +142,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v8",
+                key="skyggeliste_editor_v9",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -169,9 +172,9 @@ def vis_side(df_input_unused=None):
             
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True) 
+                st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v8_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v9_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             
