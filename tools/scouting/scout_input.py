@@ -77,7 +77,7 @@ def vis_side(dp):
 
     # --- FORMULAREN ---
     with st.form("rapport_form", clear_on_submit=True):
-        st.caption("### Parametre (1-6)")
+        st.caption("Parametre (1-6)")
         
         # Slider-rækker (Eksisterende)
         m1, m2, m3, m4 = st.columns(4)
