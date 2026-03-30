@@ -89,7 +89,7 @@ def vis_side():
     df_emner = df_all[~mask_hif]
     df_skygge = df_all[df_all['SKYGGEHOLD']]
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Bane"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Emner", "Hvidovre IF", "📋 Skyggeliste", "🏟️ Bane"])
 
     # Tab 1 & 2: Lister
     for t, data, title in [(tab1, df_emner, "Emner"), (tab2, df_hif, "Hvidovre IF")]:
