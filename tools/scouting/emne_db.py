@@ -8,7 +8,7 @@ from mplsoccer import Pitch
 from datetime import datetime
 import time
 
-# --- KONFIGURATION (Bibeholdt fra din kode) ---
+# --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
 SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
@@ -24,7 +24,7 @@ POS_OPTIONS = {
 
 VINDUE_OPTIONS = ["Nu", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
-# --- GITHUB FUNKTIONER (Bibeholdt) ---
+# --- HJÆLPEFUNKTIONER (Bibeholdt) ---
 def get_github_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -63,66 +63,69 @@ def prepare_df(content, is_hif=False):
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
     if 'TRANSFER_VINDUE' not in df.columns: df['TRANSFER_VINDUE'] = "Nu"
-    
     needed = ['SKYGGEHOLD', 'POS', 'POS_343', 'POS_433', 'POS_352']
     for c in needed:
-        if c not in df.columns:
-            df[c] = False if c == 'SKYGGEHOLD' else "0"
-    
+        if c not in df.columns: df[c] = False if c == 'SKYGGEHOLD' else "0"
     for c in ['POS_343', 'POS_433', 'POS_352', 'POS']:
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
-    
     df['SKYGGEHOLD'] = df['SKYGGEHOLD'].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     if 'KONTRAKT' in df.columns:
         df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
-    
     df['KLUB'] = 'Hvidovre IF' if is_hif else df.get('KLUB', '-')
     return df
 
 # --- HOVEDSIDE ---
-def vis_side(df):
-    # CSS til at styre bredden på dropdown og generel styling
+def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
             div.block-container{padding: 1rem 1rem; max-width: 100% !important;}
-            div[data-testid="stSelectbox"] { width: 250px !important; }
-            .stSelectbox label p { font-size: 14px !important; font-weight: bold; }
+            /* Gør dropdown mindre og pænere */
+            div[data-testid="stSelectbox"] label { display: none; }
+            div[data-testid="stSelectbox"] { margin-bottom: -45px; }
         </style>
     """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
+    # Hent data
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
-    
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
-    
+
+    # --- TOP LAYOUT: Overskrift og Dropdown ---
+    col_t1, col_t2 = st.columns([6, 2])
+    with col_t2:
+        sel_v = st.selectbox("Vindue", VINDUE_OPTIONS, key="global_vindue_sel")
+
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TAB 1 & 2: Lister ---
+    # --- TAB 1 & 2: LISTER ---
     configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE_LIST"), 
                (tabs[1], df_hif, HIF_PATH, "HIF_LIST")]
     
     for tab, df_display, path, key_base in configs:
         with tab:
             if not df_display.empty:
+                # Filtrer listerne efter det valgte vindue i toppen
+                df_filtered_list = df_display[df_display['TRANSFER_VINDUE'] == sel_v] if path == SCOUT_DB_PATH else df_display
+                
                 target_cols = ['TRANSFER_VINDUE', 'POS', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']
-                df_input = df_display.set_index('Navn')[target_cols]
+                df_editor_in = df_display.set_index('Navn')[target_cols]
                 ed = st.data_editor(
-                    df_input.style.apply(style_kontrakt, axis=None),
+                    df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"editor_v3_{key_base}", 
+                    key=f"ed_v4_{key_base}", 
                     column_config={
-                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS, required=True),
+                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
                         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge")
                     }
                 )
-                if not ed.equals(df_input):
-                    content, sha = get_github_file(path)
-                    df_save = pd.read_csv(StringIO(content))
-                    df_save.columns = [str(c).upper().strip() for c in df_save.columns]
+                if not ed.equals(df_editor_in):
+                    c, sha = get_github_file(path)
+                    df_save = pd.read_csv(StringIO(c))
+                    df_save.columns = [str(x).upper().strip() for x in df_save.columns]
                     if 'NAVN' in df_save.columns: df_save = df_save.rename(columns={'NAVN': 'Navn'})
                     for navn, row in ed.iterrows():
                         mask = df_save['Navn'] == navn
@@ -138,7 +141,7 @@ def vis_side(df):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v4",
+                key="skyggeliste_editor_final",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -155,35 +158,36 @@ def vis_side(df):
                         if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
                         if navn in df_tmp['Navn'].values:
                             df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update tactical window", df_tmp.to_csv(index=False), sha_raw)
+                            push_to_github(p, "Update tact", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
     # --- TAB 4: BANE ---
     with tabs[3]:
         df_total = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_total.empty:
-            # KOMPAKT DROPDOWN: Begræns bredden ved at bruge kolonner
-            c_drop, _ = st.columns([2, 5])
-            with c_drop:
-                sel_v = st.selectbox("Vis trup for:", VINDUE_OPTIONS)
-            
-            # Filtrering
+            # Filtrering baseret på top-dropdown
             df_filtered = df_total[df_total['TRANSFER_VINDUE'].isin(["Nu", sel_v])]
             
             f = st.session_state.form_skygge
             p_col = f"POS_{f.replace('-', '')}"
             
-            c_p, c_m = st.columns([7,1])
+            c_p, c_m = st.columns([8,1])
             with c_m:
-                st.write("") # Spacer
+                st.write("") 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v4_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_f_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             
             with c_p:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(11, 7))
+                fig, ax = pitch.draw(figsize=(12, 8))
+                
+                # --- LEGENDS (Farvekoder) ---
+                ax.text(2, -4, "■ < 6 mdr", color="#ffcccc", size=9, weight='bold')
+                ax.text(15, -4, "■ 6-12 mdr", color="#ffffcc", size=9, weight='bold')
+                ax.text(30, -4, "■ Ny tilgang", color=HIF_ROD, size=9, weight='bold')
+
                 m = {
                     "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
                     "4-3-3": {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(30,25,'VCB'), 3:(30,55,'HCB'), 2:(35,70,'HB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')},
