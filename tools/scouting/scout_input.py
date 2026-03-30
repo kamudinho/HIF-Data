@@ -77,7 +77,7 @@ def vis_side(dp):
 
     # --- FORMULAREN ---
     with st.form("rapport_form", clear_on_submit=True):
-        st.write("### Parametre (1-6)")
+        st.caption("### Parametre (1-6)")
         
         # Slider-rækker (Eksisterende)
         m1, m2, m3, m4 = st.columns(4)
@@ -93,7 +93,6 @@ def vis_side(dp):
         intel = m8.select_slider("Spilintelligens", options=list(range(1, 7)), value=3)
 
         st.markdown("---")
-        st.write("### Status & Planlægning")
         
         # NY LINJE 2: POS, Prioritet og Kontrakt
         l2_c1, l2_c2, l2_c3 = st.columns(3)
