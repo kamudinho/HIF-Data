@@ -123,7 +123,7 @@ with st.sidebar:
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Afslutninger - liga", "Fysisk data"]))
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=filtrer_menu(["Opret emne", "Emnedatabase", "Scoutrapport", "Database", "Sammenligning"]))
+        sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Emnedatabase", "Database", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil"]))
 
