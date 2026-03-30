@@ -57,7 +57,7 @@ def load_data():
     return df, sha
 
 # --- HOVEDFUNKTION (Kaldes af HIF-dash.py) ---
-def vis_side():
+def vis_side(dp=None):
     # Vi henter dataen herinde, da HIF-dash ikke sender noget med til denne specifikke menu-knap
     df_raw, _ = load_data()
     
