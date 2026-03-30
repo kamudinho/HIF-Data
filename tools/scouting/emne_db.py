@@ -21,16 +21,20 @@ def vis_side(df):
     rod_udlob = "#ffcccc"
     transfer_gron = "#ccffcc" 
 
-    # --- 3. CSS INJECTION (Målretter dropdown og layout) ---
+    # --- 3. CSS INJECTION (Kompakt styling) ---
     st.markdown(f"""
         <style>
-            /* Gør dropdown og labels mindre */
-            .stSelectbox label p {{
-                font-size: 14px !important;
-                font-weight: bold;
+            /* Gør dropdown-beholderen mindre */
+            div[data-testid="stSelectbox"] {{
+                margin-bottom: 0px;
             }}
-            div[data-testid="stSelectbox"] div[data-baseweb="select"] {{
-                min-height: 30px !important;
+            .stSelectbox label p {{
+                font-size: 13px !important;
+                margin-bottom: 2px !important;
+            }}
+            /* Fjern unødvendig luft i toppen */
+            .block-container {{
+                padding-top: 1rem !important;
             }}
             
             [data-testid="column"] {{
@@ -76,18 +80,19 @@ def vis_side(df):
         except: return 'white'
         return 'white'
 
-    # --- 5. TOP BAR (Dropdown & Menu) ---
-    # Her gør vi dropdown-menuen mindre ved at begrænse kolonne-bredden
-    col_drop, col_empty = st.columns([1, 2])
-    with col_drop:
-        # Antager at du har en liste over vinduer/datoer i din dataframe eller som filter
-        vindue_valg = st.selectbox("Vis trup for:", ["Sommer 26", "Vinter 26", "Sommer 27"], label_visibility="visible")
+    # --- 5. TOP SEKTION (Kompakt Dropdown) ---
+    # Vi bruger en lille kolonne til venstre (2) og en stor tom kolonne til højre (10)
+    c1, c2 = st.columns([2, 10])
+    with c1:
+        # Henter unikke værdier fra din data til dropdown
+        vinduer = sorted(df_squad['TRANSFER_VINDUE'].unique()) if 'TRANSFER_VINDUE' in df_squad.columns else ["Nu"]
+        st.selectbox("Vis trup for:", vinduer, key="vindue_select")
 
     # --- 6. HOVEDLAYOUT ---
     col_pitch, col_menu = st.columns([7, 1])
 
     with col_menu:
-        st.write("---")
+        st.write("") # Afstand
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if is_active else "secondary"):
@@ -100,17 +105,18 @@ def vis_side(df):
             pitch_color='#ffffff', 
             line_color='#333', 
             linewidth=1,
-            pad_top=12, pad_bottom=10, pad_left=0, pad_right=0
+            pad_top=15, pad_bottom=10, pad_left=0, pad_right=0
         )
         fig, ax = pitch.draw(figsize=(13, 9))
         
         # --- LEGENDS (Toppen) ---
-        ax.text(2, -6, " < 6 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(20, -6, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(40, -6, " Ny Transfer ", size=8, fontweight='bold', bbox=dict(facecolor=transfer_gron, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(2, -7, " < 6 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(20, -7, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        ax.text(40, -7, " Ny Transfer ", size=8, fontweight='bold', bbox=dict(facecolor=transfer_gron, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-        # --- POSITIONER ---
+        # --- POSITIONER & SPILLERE (Samme logik som før) ---
         form = st.session_state.formation_valg
+        # [MM, VCB, CB, HCB, VWB, DM, DM, HWB, VW, ANG, HW]
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -125,7 +131,6 @@ def vis_side(df):
                           8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (105, 28, 'ANG'), 7: (105, 52, 'ANG')}
 
         for pos_num, (x, y, label) in pos_config.items():
-            # Filtrering baseret på formation
             if form == "4-3-3" and pos_num == 4:
                 spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
             elif form == "3-5-2" and pos_num == 9:
