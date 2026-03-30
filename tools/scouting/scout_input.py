@@ -123,63 +123,70 @@ def vis_side(dp):
 
         submitted = st.form_submit_button("Gem rapport og opdater database", use_container_width=True)
         
-        if submitted:
-            if not data["n"]:
-                st.error("⚠️ Vælg en spiller!")
-            else:
-                kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
-                beregnet_rating = round(sum(kategorier) / len(kategorier), 1)
+        # --- RETTET SEKTION TIL GEMME-LOGIK ---
+
+if submitted:
+    if not data["n"]:
+        st.error("⚠️ Vælg en spiller!")
+    else:
+        kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
+        beregnet_rating = round(sum(kategorier) / len(kategorier), 1)
+        
+        ny_rapport = {
+            "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%d/%m/%Y"),
+            "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final,
+            "RATING_AVG": beregnet_rating, "STATUS": status_label, "POTENTIALE": pot,
+            "STYRKER": styrker.replace('\n', ' ').strip(), "UDVIKLING": udv.replace('\n', ' ').strip(),
+            "VURDERING": vurder.replace('\n', ' ').strip(), "BESLUTSOMHED": float(beslut),
+            "FART": float(fart), "AGGRESIVITET": float(agg), "ATTITUDE": float(att),
+            "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), "TEKNIK": float(tek),
+            "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn,
+            "KONTRAKT": kontrakt_udloeb.strftime("%Y-%m-%d") if kontrakt_udloeb else "",
+            "PRIORITET": prio_status, "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
+            "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "KOMMENTAR": vurder.replace('\n', ' ').strip()
+        }
+
+        with st.spinner("Renser kolonner og gemmer til GitHub..."):
+            content, sha = get_github_file(FILE_PATH)
+            
+            if content:
+                # Læs rådata
+                df_raw = pd.read_csv(StringIO(content))
                 
-                ny_rapport = {
-                    "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%d/%m/%Y"),
-                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final,
-                    "RATING_AVG": beregnet_rating, "STATUS": status_label, "POTENTIALE": pot,
-                    "STYRKER": styrker.replace('\n', ' ').strip(), "UDVIKLING": udv.replace('\n', ' ').strip(),
-                    "VURDERING": vurder.replace('\n', ' ').strip(), "BESLUTSOMHED": float(beslut),
-                    "FART": float(fart), "AGGRESIVITET": float(agg), "ATTITUDE": float(att),
-                    "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), "TEKNIK": float(tek),
-                    "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn,
-                    "KONTRAKT": kontrakt_udloeb.strftime("%Y-%m-%d") if kontrakt_udloeb else "",
-                    "PRIORITET": prio_status, "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
-                    "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "KOMMENTAR": vurder.replace('\n', ' ').strip()
-                }
+                # Tving kolonnenavne til UPPERCASE og rens for mellemrum
+                df_raw.columns = [str(c).upper().strip() for c in df_raw.columns]
+                
+                # RETTELSE AF FEJL: Håndter dublet-kolonner sikkert
+                df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()].copy()
+                
+                # Opret den rene dataframe baseret på de 28 kolonner
+                df_cleaned = pd.DataFrame(columns=COL_ORDER)
+                
+                # Overfør data kolonne for kolonne
+                for col in COL_ORDER:
+                    if col in df_raw.columns:
+                        df_cleaned[col] = df_raw[col]
+                    # Specifik håndtering af dine gamle kolonnenavne
+                    elif col == "KOMMENTAR":
+                        if "STATUS_NOTAT" in df_raw.columns:
+                            df_cleaned["KOMMENTAR"] = df_raw["STATUS_NOTAT"]
+                        elif "BEMAERKNING" in df_raw.columns:
+                            df_cleaned["KOMMENTAR"] = df_raw["BEMAERKNING"]
 
-                with st.spinner("Renser kolonner og gemmer til GitHub..."):
-                    content, sha = get_github_file(FILE_PATH)
-                    
-                    if content:
-                        df_raw = pd.read_csv(StringIO(content))
-                        
-                        # Tving alle eksisterende navne til store bogstaver for sammenligning
-                        df_raw.columns = [str(c).upper().strip() for c in df_raw.columns]
-                        
-                        # Håndter navneskift: Flyt data fra STATUS_NOTAT eller BEMAERKNING til KOMMENTAR hvis de findes
-                        if "KOMMENTAR" not in df_raw.columns:
-                            if "STATUS_NOTAT" in df_raw.columns:
-                                df_raw["KOMMENTAR"] = df_raw["STATUS_NOTAT"]
-                            elif "BEMAERKNING" in df_raw.columns:
-                                df_raw["KOMMENTAR"] = df_raw["BEMAERKNING"]
-                        
-                        # Fjern alle dublet-kolonner (f.eks. både 'Navn' og 'NAVN')
-                        df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
-                        
-                        # Opret den rene dataframe med de korrekte 28 kolonner
-                        df_cleaned = pd.DataFrame(columns=COL_ORDER)
-                        for col in COL_ORDER:
-                            if col in df_raw.columns:
-                                df_cleaned[col] = df_raw[col]
-                        
-                        df_final = pd.concat([df_cleaned, pd.DataFrame([ny_rapport])], ignore_index=True)
-                    else:
-                        df_final = pd.DataFrame([ny_rapport])
+                # Tilføj den nye rapport
+                new_row_df = pd.DataFrame([ny_rapport])
+                df_final = pd.concat([df_cleaned, new_row_df], ignore_index=True)
+            else:
+                df_final = pd.DataFrame([ny_rapport])
 
-                    # Sikr rækkefølge og gem
-                    df_final = df_final[COL_ORDER]
-                    csv_data = df_final.to_csv(index=False)
-                    res = push_to_github(FILE_PATH, f"Rensning & Rapport: {data['n']}", csv_data, sha)
+            # Sikr rækkefølge og fjern eventuelle ekstra kolonner der sneg sig ind
+            df_final = df_final[COL_ORDER]
+            
+            csv_data = df_final.to_csv(index=False)
+            res = push_to_github(FILE_PATH, f"Rensning & Rapport: {data['n']}", csv_data, sha)
 
-                    if res in [200, 201]:
-                        st.success("✅ Database opdateret og kolonnenavne rettet!")
-                        st.balloons()
-                    else:
-                        st.error(f"Fejl: {res}")
+            if res in [200, 201]:
+                st.success("✅ Database opdateret og kolonnenavne rettet!")
+                st.balloons()
+            else:
+                st.error(f"❌ Fejl: {res}")
