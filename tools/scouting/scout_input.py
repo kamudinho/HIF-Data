@@ -75,25 +75,26 @@ def vis_side(dp):
     scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"), disabled=True)
     st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
 
-    # NY LINJE 2: POS, Prioritet og Kontrakt
+    # --- FORMULAREN ---
+    with st.form("rapport_form", clear_on_submit=True):
+        st.write("### Status & Planlægning")
+        
+        # Linje 2: POS, Prioritet og Kontrakt
         l2_c1, l2_c2, l2_c3 = st.columns(3)
         pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
         pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
         kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
 
-        # NY LINJE 3: Status og Økonomi
+        # Linje 3: Status og Økonomi
         l3_c1, l3_c2, l3_c3 = st.columns(3)
         prio_status = l3_c1.selectbox("Prioritet", ["Scoutes nu", "Scoutes senere", "Hold øje", "Arkiveret"])
         forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
         lon_input = l3_c3.text_input("Lønniveau")
 
         st.markdown("---")
-
-    # --- FORMULAREN ---
-    with st.form("rapport_form", clear_on_submit=True):
         st.caption("Parametre (1-6)")
         
-        # Slider-rækker (Eksisterende)
+        # Slider-rækker
         m1, m2, m3, m4 = st.columns(4)
         beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
         fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
@@ -108,7 +109,7 @@ def vis_side(dp):
 
         st.markdown("---")
         
-        # Status (Eksisterende) og Potentiale
+        # Status og Potentiale
         c1, c2 = st.columns(2)
         status_label = c1.selectbox("Vurdering Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
         pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
@@ -128,7 +129,7 @@ def vis_side(dp):
                 kategorier = [beslut, fart, agg, att, udh, led, tek, intel]
                 beregnet_rating = round(sum(kategorier) / len(kategorier), 2)
                 
-                # KLARGØR NY RÆKKE (Kombineret data)
+                # KLARGØR NY RÆKKE
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], 
                     "Dato": datetime.now().strftime("%d/%m/%Y"),
@@ -152,7 +153,7 @@ def vis_side(dp):
                     "POS": pos_nr,
                     "Lon": lon_input,
                     "Skyggehold": False,
-                    "Bemaerkning": vurder.replace('\n', ' ').strip() # Bruger vurdering som bemærkning
+                    "Bemaerkning": vurder.replace('\n', ' ').strip()
                 }
 
                 with st.spinner("Gemmer til GitHub..."):
@@ -170,4 +171,4 @@ def vis_side(dp):
                         st.success(f"✅ Rapport for {data['n']} er gemt!")
                         st.balloons()
                     else:
-                        st.error(f"❌ Fejl: {res}")
+                        st.error(f"❌ Fejl ved GitHub: {res}")
