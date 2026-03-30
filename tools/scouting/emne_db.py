@@ -79,7 +79,7 @@ def prepare_df(content, is_hif=False):
 def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
-            div.block-container{padding: 0.2rem 1rem; max-width: 95% !important;}
+            div.block-container{padding: 0.2rem 0.5rem; max-width: 95% !important;}
             /* Fjern label/overskrift fra selectbox helt */
             div[data-testid="stSelectbox"] label { display: none; }
             /* Ryk tabs op for at mindske hullet */
