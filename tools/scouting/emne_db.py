@@ -17,7 +17,7 @@ POS_OPTIONS = {
     "1": "Maalmand", "2": "Hoejre back", "5": "Venstre back",
     "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
     "6": "Defensiv midt", "8": "Central midt", "7": "Hoejre kant",
-    "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
+    "11": "Venstre kant", "10": "Offensiv midtbane", "9": "Angriber"
 }
 
 # --- FUNKTIONER ---
