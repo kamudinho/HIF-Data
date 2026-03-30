@@ -82,8 +82,16 @@ def vis_side(df_input_unused=None):
             div.block-container{padding: 0.2rem 0.5rem; max-width: 95% !important;}
             /* Fjern label/overskrift fra selectbox helt */
             div[data-testid="stSelectbox"] label { display: none; }
-            /* Ryk tabs op for at mindske hullet */
+            
+            /* Aggressiv reducering af afstand mellem tabs og indhold */
             .stTabs { margin-top: -35px; }
+            div[data-baseweb="tab-panel"] {
+                padding-top: 0px !important;
+                margin-top: -15px !important;
+            }
+            
+            /* Fjern ekstra luft under knapperne til højre */
+            div[data-testid="column"] { padding-top: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -98,7 +106,6 @@ def vis_side(df_input_unused=None):
     # --- TOP: DROPDOWN I HØJRE SIDE ---
     t_col1, t_col2 = st.columns([4, 1])
     with t_col2:
-        # Tom streng som label fjerner teksten "Vis trup for"
         sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
     # Tabs placeres herunder
@@ -116,7 +123,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"ed_v9_{key_base}", 
+                    key=f"ed_v10_{key_base}", 
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -142,7 +149,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v9",
+                key="skyggeliste_editor_v10",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -172,9 +179,10 @@ def vis_side(df_input_unused=None):
             
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True) 
+                # Mindre spacer for at flugte med legende-teksten på banen
+                st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v9_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v10_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             
@@ -182,11 +190,11 @@ def vis_side(df_input_unused=None):
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(12, 7))
                 
-                # Legends og Overskrift
-                ax.text(2, 4, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(12, 4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(22, 4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
-                ax.text(118, 4, f"Vindue: {sel_v}", size=14, color="black", weight='bold', ha='right')
+                # Legends og Overskrift (Rykket lidt op: y=2)
+                ax.text(2, 2, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(12, 2, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(22, 2, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(118, 2, f"Vindue: {sel_v}", size=14, color="black", weight='bold', ha='right')
 
                 m = {
                     "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
