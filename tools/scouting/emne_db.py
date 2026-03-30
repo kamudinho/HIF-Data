@@ -17,7 +17,7 @@ HIF_ROD = "#df003b"
 GRON_NY = "#ccffcc" 
 
 POS_OPTIONS = {
-    "1": "Maalmand", "2": "Hoejre back", "5": "Venstre back",
+    "1": "Målmand", "2": "Hoejre back", "5": "Venstre back",
     "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
     "6": "Defensiv midt", "8": "Central midt", "7": "Hoejre kant",
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
@@ -172,7 +172,7 @@ def vis_side(df_input_unused=None):
             
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True) 
+                st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
                     if st.button(opt, key=f"btn_v9_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
@@ -184,8 +184,8 @@ def vis_side(df_input_unused=None):
                 
                 # Legends og Overskrift
                 ax.text(2, 4, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(14, 4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(28, 4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(12, 4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(24, 4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
                 ax.text(118, 4, f"Vindue: {sel_v}", size=14, color=HIF_ROD, weight='bold', ha='right')
 
                 m = {
