@@ -19,6 +19,7 @@ def vis_side(df):
     gul_udlob = "#ffffcc"
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
+    transfer_gron = "#ccffcc"  # Grøn farve til nye transfers
 
     # --- 3. CSS INJECTION ---
     st.markdown("""
@@ -68,7 +69,6 @@ def vis_side(df):
     df_squad = df.copy()
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     
-    # Sikr at POS er numerisk
     df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
     
     idag = datetime.now()
@@ -77,8 +77,16 @@ def vis_side(df):
         df_squad['DAYS_LEFT'] = (df_squad['KONTRAKT_DT'] - idag).dt.days
 
     def get_status_color(row):
+        # 1. Prioritér Transfer (Grøn)
+        is_transfer = str(row.get('TRANSFER_VINDUE', 'Nu')).strip().upper() != 'NU'
+        if is_transfer:
+            return transfer_gron
+            
+        # 2. Leje (Grå)
         if str(row.get('PRIOR', '')).upper() == 'L': 
             return leje_gra
+            
+        # 3. Kontraktudløb (Rød/Gul)
         try:
             days = row.get('DAYS_LEFT')
             if pd.isna(days): return 'white'
@@ -127,19 +135,20 @@ def vis_side(df):
         fig, ax = pitch.draw(figsize=(13, 8))
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # --- LEGENDS (Placeret ved y=98 for at undgå at blive skåret af) ---
+        # --- LEGENDS (Opdateret med grøn transfer boks) ---
         ax.text(2, 98, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
         ax.text(20, 98, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
-        ax.text(40, 98, " Ny Transfer (Rød ramme) ", size=8, fontweight='bold', va='center', 
-                zorder=5, bbox=dict(facecolor='white', edgecolor=hif_rod, linewidth=1.5, boxstyle='round,pad=0.2'))
+        ax.text(40, 98, " Ny Transfer ", size=8, fontweight='bold', va='center', 
+                zorder=5, bbox=dict(facecolor=transfer_gron, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
         
+        # Position configs... (forkortet her, men bevares i din kodelogik)
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
@@ -170,15 +179,13 @@ def vis_side(df):
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
                 
                 for i, (_, p) in enumerate(spillere.iterrows()):
-                    # RETTELSE: Dynamisk ramme baseret på TRANSFER_VINDUE
-                    is_transfer = str(p.get('TRANSFER_VINDUE', 'Nu')).strip().upper() != 'NU'
-                    kant_farve = hif_rod if is_transfer else '#333'
-                    kant_bredde = 1.5 if is_transfer else 0.5
+                    # Her bruges get_status_color nu, som prioriterer grøn hvis det er en transfer
+                    face_color = get_status_color(p)
                     
                     ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
-                            bbox=dict(facecolor=get_status_color(p), 
-                                     edgecolor=kant_farve, 
-                                     linewidth=kant_bredde, 
+                            bbox=dict(facecolor=face_color, 
+                                     edgecolor='#333', 
+                                     linewidth=0.5, 
                                      boxstyle='square,pad=0.2'))
 
         st.pyplot(fig, use_container_width=True)
