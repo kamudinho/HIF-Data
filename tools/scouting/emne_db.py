@@ -79,31 +79,27 @@ def prepare_df(content, is_hif=False):
 def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
-            div.block-container{padding: 1rem 1rem; max-width: 100% !important;}
-            /* Ryk banen opad ved at mindske padding/margin i faner */
-            div[data-testid="stExpander"] { margin-top: -20px; }
-            .stTabs { margin-top: -10px; }
-            /* Gør dropdown kompakt */
-            div[data-testid="stSelectbox"] label { display: none; }
+            div.block-container{padding: 0.5rem 1rem; max-width: 100% !important;}
+            /* Ryk alt op og minimer spildplads */
+            .stTabs { margin-top: -25px; }
+            [data-testid="stMetricValue"] { font-size: 1.5rem; }
+            /* Styling af dropdown for at gøre den klikbar og pæn */
+            div[data-testid="stSelectbox"] { margin-bottom: 0.5rem; width: 100% !important; }
         </style>
     """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
+    # Hent data
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # --- LAYOUT: TABS TIL VENSTRE, DROPDOWN TIL HØJRE ---
-    col_tabs, col_drop = st.columns([4, 1])
-    
-    with col_drop:
-        # Flyttet herop for at ligge på linje med tabs
-        sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
+    # --- TOP: DROPDOWN OVER TABS ---
+    sel_v = st.selectbox("Vis trup for:", VINDUE_OPTIONS, key="global_vindue_sel")
 
-    with col_tabs:
-        tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # --- TAB 1 & 2: LISTER ---
     configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE_LIST"), 
@@ -117,7 +113,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"ed_v7_{key_base}", 
+                    key=f"ed_v8_{key_base}", 
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -143,7 +139,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v7",
+                key="skyggeliste_editor_v8",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -171,27 +167,23 @@ def vis_side(df_input_unused=None):
             f = st.session_state.form_skygge
             p_col = f"POS_{f.replace('-', '')}"
             
-            # --- KNAPPER OG BANE ---
-            c_p, c_m = st.columns([8, 1])
+            c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                st.write("") 
+                st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v7_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v8_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             
             with c_p:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(12, 7)) # Lidt lavere figurhøjde rykker indholdet sammen
+                fig, ax = pitch.draw(figsize=(12, 7))
                 
-                # Legends
-                legend_y = -3
-                ax.text(5, legend_y, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(18, legend_y, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(33, legend_y, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
-
-                # Dynamisk tekst
-                ax.text(115, legend_y, f"Vindue: {sel_v}", size=12, color=HIF_ROD, weight='bold', ha='right')
+                # Legends og Overskrift
+                ax.text(2, -4, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(14, -4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(28, -4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(118, -4, f"Vindue: {sel_v}", size=14, color=HIF_ROD, weight='bold', ha='right')
 
                 m = {
                     "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
