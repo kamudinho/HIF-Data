@@ -37,22 +37,31 @@ def vis_side():
 
     tab1, tab2, tab3, tab4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Banevisning"])
 
-    # Vi bruger en meget bred søgning for at undgå fejl med store/små bogstaver
+    # --- FILTRERING ---
+    # Vi laver en maske, der fanger alt, hvor der står 'Hvidovre' i klubnavnet
+    mask_hif = df_unique['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
+    
     with tab1:
-        # Alt der IKKE er Hvidovre
-        mask_emner = ~df['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
-        st.dataframe(df[mask_emner], use_container_width=True)
-
+        st.subheader("Søgning: Emner")
+        # Vis alt der IKKE er HIF
+        df_emner = df_unique[~mask_hif]
+        st.data_editor(df_emner[['Navn', 'KLUB', 'POSITION', 'RATING_AVG', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
+    
     with tab2:
-        # Alt der ER Hvidovre
-        mask_hif = df['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
-        st.dataframe(df[mask_hif], use_container_width=True)
-
+        st.subheader("Hvidovre IF Trup")
+        # Vis alt der ER HIF
+        df_hif_trup = df_unique[mask_hif]
+        if df_hif_trup.empty:
+            st.warning("Ingen spillere fundet med klubnavnet 'Hvidovre'. Tjek stavemåde i CSV.")
+        else:
+            st.data_editor(df_hif_trup[['Navn', 'POSITION', 'RATING_AVG', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
+    
     with tab3:
-        # Skyggeliste baseret på din SKYGGEHOLD kolonne
-        # Vi tjekker om den indeholder 'True' som tekst eller bool
-        mask_skygge = df['SKYGGEHOLD'].astype(str).str.strip().str.upper() == "TRUE"
-        st.dataframe(df[mask_skygge], use_container_width=True)
+        st.subheader("Skyggeliste")
+        # Vi tjekker om SKYGGEHOLD er True, uanset om det er gemt som tekst eller bool
+        mask_skygge = df_unique['SKYGGEHOLD'].astype(str).str.strip().str.upper() == "TRUE"
+        df_skygge = df_unique[mask_skygge]
+        st.data_editor(df_skygge[['Navn', 'KLUB', 'POSITION', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
