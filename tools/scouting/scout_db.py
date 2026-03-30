@@ -41,11 +41,26 @@ def rens_id(val):
 # --- MODAL: SPILLERPROFIL ---
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
-    # Sørg for at vi filtrerer rigtigt på tværs af alle rapporter
-    spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('DATO', ascending=False)
+    # 1. Sikr kolonnenavne inde i modalen
+    df_modal = alle_rapporter.copy()
+    mapping = {
+        'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
+        'STATUS': 'Status', 'SCOUT': 'Scout', 'DATO': 'DATO', 'POTENTIALE': 'Potentiale',
+        'STYRKER': 'Styrker', 'UDVIKLING': 'Udvikling', 'VURDERING': 'Vurdering',
+        'BESLUTSOMHED': 'Beslutsomhed', 'FART': 'Fart', 'AGGRESIVITET': 'Aggresivitet',
+        'ATTITUDE': 'Attitude', 'UDHOLDENHED': 'Udholdenhed', 'LEDEREGENSKABER': 'Lederegenskaber',
+        'TEKNIK': 'Teknik', 'SPILINTELLIGENS': 'Spilintelligens'
+    }
+    
+    current_cols = {c.upper(): c for c in df_modal.columns}
+    rename_dict = {current_cols[k]: v for k, v in mapping.items() if k in current_cols}
+    df_modal = df_modal.rename(columns=rename_dict)
+
+    # Filtrer historik for den valgte spiller
+    spiller_historik = df_modal[df_modal['Navn'] == valgt_navn].sort_values('DATO', ascending=False)
     
     if spiller_historik.empty:
-        st.error(f"Ingen historik fundet for {valgt_navn}")
+        st.error(f"Ingen data fundet for {valgt_navn}")
         return
         
     nyeste = spiller_historik.iloc[0]
@@ -64,46 +79,33 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
     
     keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
-    
-    # --- TAB 1: RADAR & TEKST ---
+
     with t1:
         col_stats, col_radar, col_text = st.columns([1, 2, 2])
         with col_stats:
             st.markdown("### Vurderinger")
             for k in keys:
-                val = nyeste.get(k, 1)
-                st.write(f"**{k}:** {val}")
-        
+                st.write(f"**{k}:** {nyeste.get(k, 1)}")
         with col_radar:
             r_vals = []
             for k in keys:
                 try:
                     v = float(str(nyeste.get(k, 1)).replace(',', '.'))
                     r_vals.append(v)
-                except:
-                    r_vals.append(1.0)
-            
-            fig = go.Figure(data=go.Scatterpolar(
-                r=r_vals + [r_vals[0]], 
-                theta=keys + [keys[0]], 
-                fill='toself', 
-                line_color='#df003b'
-            ))
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[1, 6])),
-                showlegend=False, height=350, margin=dict(l=40,r=40,t=40,b=40)
-            )
+                except: r_vals.append(1.0)
+            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=keys + [keys[0]], fill='toself', line_color='#df003b'))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=350, margin=dict(l=40,r=40,t=40,b=40))
             st.plotly_chart(fig, use_container_width=True)
-            
         with col_text:
             st.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
             st.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
             st.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
 
-    # --- TAB 2: HISTORIK ---
     with t2:
+        hist_cols = ['DATO', 'Klub', 'Rating_Avg', 'Status', 'Scout']
+        available_hist = [c for c in hist_cols if c in spiller_historik.columns]
         st.dataframe(
-            spiller_historik[['DATO', 'Klub', 'Rating_Avg', 'Status', 'Scout']].rename(columns={'DATO': 'Dato'}),
+            spiller_historik[available_hist].rename(columns={'DATO': 'Dato'}),
             use_container_width=True,
             hide_index=True
         )
@@ -123,34 +125,32 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     df_raw = pd.read_csv(StringIO(content))
     
-    # --- KOLONNE-FIX ---
-    standard_cols = {
+    # --- ROBUST KOLONNE-FIX ---
+    mapping = {
         'PLAYER_WYID': 'PLAYER_WYID', 'DATO': 'DATO', 'NAVN': 'Navn',
         'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
-        'POTENTIALE': 'Potentiale', 'ER_EMNE': 'ER_EMNE'
+        'POTENTIALE': 'Potentiale', 'STATUS': 'Status', 'ER_EMNE': 'ER_EMNE'
     }
     current_cols = {c.upper(): c for c in df_raw.columns}
-    rename_dict = {current_cols[k]: v for k, v in standard_cols.items() if k in current_cols}
+    rename_dict = {current_cols[k]: v for k, v in mapping.items() if k in current_cols}
     df_raw = df_raw.rename(columns=rename_dict)
 
     # 2. DATA RENSNING
-    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False}).fillna(False)
     df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], errors='coerce')
+    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False, '1.0': True, '0.0': False}).fillna(False)
     df_raw['Rating_Avg'] = pd.to_numeric(df_raw['Rating_Avg'], errors='coerce').fillna(0)
     
-    # Unikke spillere
+    # Find unikke (nyeste først)
     df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
     df_unique['Dato_Visning'] = df_unique['DATO'].dt.date
 
     # 3. FORBERED DISPLAY
     display_cols = ['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning', 'ER_EMNE']
-    df_display = df_unique[[c for c in display_cols if c in df_unique.columns]].copy()
+    available_display = [c for c in display_cols if c in df_unique.columns]
+    df_display = df_unique[available_display].copy()
     df_display.insert(0, "Se", False)
 
-    # --- FAST HØJDE (20 linjer + header) ---
-    FAST_HOEJDE = 735 
-
-    # 4. DATA EDITOR
+    # 4. DATA EDITOR (FAST HØJDE: 735px ~ 20 rækker)
     ed_result = st.data_editor(
         df_display,
         column_config={
@@ -162,25 +162,25 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning'],
         hide_index=True,
         use_container_width=True,
-        height=FAST_HOEJDE, # Her låses højden
+        height=735, 
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
     # 5. GEM LOGIK
     if not ed_result['ER_EMNE'].equals(df_display['ER_EMNE']):
-        with st.spinner("Gemmer..."):
+        with st.spinner("Gemmer ændringer..."):
             for idx, row in ed_result.iterrows():
                 df_raw.loc[df_raw['Navn'] == row['Navn'], 'ER_EMNE'] = row['ER_EMNE']
             
             df_to_save = df_raw.copy()
             df_to_save['DATO'] = df_to_save['DATO'].dt.strftime('%Y-%m-%d')
             new_csv = df_to_save.to_csv(index=False)
-            res = push_to_github(FILE_PATH, "Update status", new_csv, sha)
+            res = push_to_github(FILE_PATH, "Update status via Editor", new_csv, sha)
             if res in [200, 201]:
-                st.toast("✅ Gemt!")
+                st.toast("✅ Gemt i databasen!")
                 st.rerun()
 
-    # 6. MODAL
+    # 6. PROFIL-MODAL
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
@@ -191,10 +191,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         billed_map = {}
         if sql_players is not None:
             billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
+        
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
         st.session_state.active_player = None
-        
-# --- RUN ---
-if __name__ == "__main__":
-    # vis_side(None, None, None, None)
-    pass
