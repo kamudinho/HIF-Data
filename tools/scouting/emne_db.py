@@ -57,28 +57,46 @@ def style_kontrakt(df):
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
+    
+    # Læs filen
     df = pd.read_csv(StringIO(content))
     
-    # RENS KOLONNER (Tvinger store bogstaver for at undgå 'Kontrakt' vs 'KONTRAKT' fejl)
+    # 1. Rens kolonnenavne (Fjerner mellemrum og tvinger STORE BOGSTAVER)
     df.columns = [str(c).upper().strip() for c in df.columns]
     
-    # RETTET: Vi sikrer os at Navn findes (Pandas omdøber til NAVN pga. .upper())
-    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
+    # 2. VIGTIGT: Fjern dublerede kolonnenavne (f.eks. hvis både 'Dato' og 'DATO' fandtes)
+    df = df.loc[:, ~df.columns.duplicated()]
     
+    # 3. Sikr Navn-kolonnen (Pandas omdøbte NAVN til Navn i din tidligere logik)
+    if 'NAVN' in df.columns: 
+        df = df.rename(columns={'NAVN': 'Navn'})
+    
+    # 4. Fjern rækker uden navn (håndterer de tomme kommaer i din CSV)
     df = df.dropna(subset=['Navn']).reset_index(drop=True)
     
-    # Formater taktiske kolonner
+    # 5. Fjern dubletter af spillere (stopper "duplicate keys" fejlen)
+    df = df.drop_duplicates(subset=['Navn'], keep='first')
+    
+    # 6. Formater taktiske kolonner og rens for .0
     for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
         if col not in df.columns: df[col] = "0"
-        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0')
+        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
     
-    # RETTET: Bruger KONTRAKT i stedet for Kontrakt
-    df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce').dt.date
+    # 7. Dato-konvertering (Håndterer både YYYY-MM-DD og DD/MM/YYYY)
+    if 'KONTRAKT' in df.columns:
+        df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
     
-    df['SKYGGEHOLD'] = df['SKYGGEHOLD'].fillna(False).replace({'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False}).astype(bool)
+    # 8. Skyggehold logik
+    if 'SKYGGEHOLD' in df.columns:
+        df['SKYGGEHOLD'] = df['SKYGGEHOLD'].fillna(False).replace(
+            {'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}
+        ).astype(bool)
+    else:
+        df['SKYGGEHOLD'] = False
+        
     df['KLUB'] = 'Hvidovre IF' if is_hif else df.get('KLUB', '-')
     
-    return df
+    return df.reset_index(drop=True)
 
 # --- APP ---
 def vis_side():
