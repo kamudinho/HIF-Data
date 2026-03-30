@@ -1,3 +1,3 @@
-Dato,Navn,Position,Klub,Prioritet,Forventning,Kontrakt,Bemaerkning,Oprettet_af,Pos_Prioritet,POS,Lon,Skyggehold,PLAYER_WYID,Pos_Tal,POS_343,POS_433,POS_352
-29/03/2026,Gustav Johan Holm,FWD,Hørsholm-Usserød,Scoutes nu,Realistisk,,,KASPER,C - Udviklingsspiller,9,,False,622048,,,,
-30/03/2026,Oliver Bjerrum Jensen,FWD,Thisted,Scoutes nu,Realistisk,30/06/2027,Kan også spille 8'er,CEO,A - Start-11,6,,False,525614,,,,
+DATO,Navn,POSITION,KLUB,PRIORITET,FORVENTNING,KONTRAKT,BEMAERKNING,OPRETTET_AF,POS_PRIORITET,POS,LON,SKYGGEHOLD,PLAYER_WYID,POS_TAL,POS_343,POS_433,POS_352
+29/03/2026,Gustav Johan Holm,FWD,Hørsholm-Usserød,Scoutes nu,Realistisk,,,KASPER,C - Udviklingsspiller,9,,False,622048,,0,0,0
+30/03/2026,Oliver Bjerrum Jensen,FWD,Thisted,Scoutes nu,Realistisk,2027-06-30,Kan også spille 8'er,CEO,A - Start-11,6,,True,525614,,0,0,0
