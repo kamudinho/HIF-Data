@@ -57,38 +57,48 @@ def style_kontrakt(df):
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
+    
+    # Læs filen
     df = pd.read_csv(StringIO(content))
     
-    # --- RENSNING AF KOLONNENAVNE (VIGTIGT!) ---
-    # Vi tvinger de vigtigste kolonner til et fast format i appen
+    # 1. FIX DUBLETTER: Hvis filen har både 'KONTRAKT' og 'Kontrakt', 
+    # så flyt data fra den lille til den store, hvis den store er tom.
+    if 'KONTRAKT' in df.columns and 'Kontrakt' in df.columns:
+        df['KONTRAKT'] = df['KONTRAKT'].fillna(df['Kontrakt'])
+    
+    # 2. STANDARDISER NAVNE: Vi tvinger alt til vores interne 'Kontrakt' og 'Navn'
     rename_map = {}
     if 'NAVN' in df.columns: rename_map['NAVN'] = 'Navn'
+    elif 'Navn' not in df.columns and 'navn' in df.columns: rename_map['navn'] = 'Navn'
+    
     if 'KONTRAKT' in df.columns: rename_map['KONTRAKT'] = 'Kontrakt'
     
-    if rename_map:
-        df = df.rename(columns=rename_map)
+    df = df.rename(columns=rename_map)
 
-    # Fjern tomme navne og rens tekst
+    # 3. RENS RÆKKER: Fjern rækker uden navn (vigtigt pga. din tomme linje i bunden)
     df = df.dropna(subset=['Navn']).reset_index(drop=True)
     df['Navn'] = df['Navn'].astype(str).str.strip()
-    df = df.drop_duplicates(subset=['Navn']).reset_index(drop=True)
 
-    # Taktiske kolonner & Typer
+    # 4. DATO-PARSING: Håndterer både 2027-06-30 og 30/06/2027
+    if 'Kontrakt' in df.columns:
+        df['Kontrakt'] = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce').dt.date
+
+    # 5. TAKTISKE KOLONNER & SKYGGEHOLD (sikrer de findes)
     tactical_cols = ['POS_343', 'POS_433', 'POS_352']
     for col in tactical_cols + ['POS']:
         if col not in df.columns: df[col] = "0"
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
 
-    # Skyggehold status
-    if 'Skyggehold' not in df.columns: df['Skyggehold'] = False
+    if 'Skyggehold' not in df.columns:
+        # Tjekker også om den findes som 'SKYGGEHOLD'
+        if 'SKYGGEHOLD' in df.columns:
+            df['Skyggehold'] = df['SKYGGEHOLD']
+        else:
+            df['Skyggehold'] = False
+            
     df['Skyggehold'] = df['Skyggehold'].fillna(False).replace({'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False}).astype(bool)
-
-    # Konverter Kontrakt til dato-format (dag-først for DK format)
-    df['Kontrakt'] = pd.to_datetime(df['Kontrakt'], dayfirst=True, errors='coerce').dt.date
-    df['Klub'] = 'Hvidovre IF' if is_hif else df.get('Klub', '-')
     
     return df
-
 # --- APP LAYOUT ---
 def vis_side():
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
