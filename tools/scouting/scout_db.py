@@ -118,115 +118,82 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # 1. HENT DATA
     content, sha = get_github_file(FILE_PATH)
     if not content:
-        st.error("Kunne ikke hente databasen fra GitHub.")
+        st.error("Kunne ikke hente databasen.")
         return
 
     df_raw = pd.read_csv(StringIO(content))
     
-    # --- ROBUST KOLONNE-FIX (Fikser store/små bogstaver én gang for alle) ---
-    # Vi tvinger alle dine CSV-kolonner til de navne, koden bruger
+    # --- KOLONNE-FIX ---
     standard_cols = {
-        'PLAYER_WYID': 'PLAYER_WYID',
-        'DATO': 'DATO',
-        'NAVN': 'Navn',
-        'KLUB': 'Klub',
-        'POSITION': 'Position',
-        'RATING_AVG': 'Rating_Avg',
-        'POTENTIALE': 'Potentiale',
-        'STATUS': 'Status',
-        'ER_EMNE': 'ER_EMNE',
-        'STYRKER': 'Styrker',
-        'UDVIKLING': 'Udvikling',
-        'VURDERING': 'Vurdering',
-        'SCOUT': 'Scout',
-        'BESLUTSOMHED': 'Beslutsomhed',
-        'FART': 'Fart',
-        'AGGRESIVITET': 'Aggresivitet',
-        'ATTITUDE': 'Attitude',
-        'UDHOLDENHED': 'Udholdenhed',
-        'LEDEREGENSKABER': 'Lederegenskaber',
-        'TEKNIK': 'Teknik',
-        'SPILINTELLIGENS': 'Spilintelligens'
+        'PLAYER_WYID': 'PLAYER_WYID', 'DATO': 'DATO', 'NAVN': 'Navn',
+        'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
+        'POTENTIALE': 'Potentiale', 'ER_EMNE': 'ER_EMNE'
     }
-    
-    # Omdøb eksisterende kolonner i df_raw ved at matche case-insensitive
     current_cols = {c.upper(): c for c in df_raw.columns}
-    rename_dict = {}
-    for target_upper, target_real in standard_cols.items():
-        if target_upper in current_cols:
-            rename_dict[current_cols[target_upper]] = target_real
-    
+    rename_dict = {current_cols[k]: v for k, v in standard_cols.items() if k in current_cols}
     df_raw = df_raw.rename(columns=rename_dict)
 
     # 2. DATA RENSNING
-    # Sikr at Booleans er rigtige flueben
-    if 'ER_EMNE' in df_raw.columns:
-        df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False, '1.0': True, '0.0': False}).fillna(False)
-    else:
-        df_raw['ER_EMNE'] = False
-
+    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False}).fillna(False)
     df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], errors='coerce')
     df_raw['Rating_Avg'] = pd.to_numeric(df_raw['Rating_Avg'], errors='coerce').fillna(0)
     
-    # Find unikke spillere (nyeste rapport først)
+    # Unikke spillere
     df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
     df_unique['Dato_Visning'] = df_unique['DATO'].dt.date
 
-    # 3. FORBERED TABEL TIL VISNING
+    # 3. FORBERED DISPLAY
     display_cols = ['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning', 'ER_EMNE']
-    # Tjek om alle kolonner findes før vi laver df_display
-    available_cols = [c for c in display_cols if c in df_unique.columns]
-    df_display = df_unique[available_cols].copy()
+    df_display = df_unique[[c for c in display_cols if c in df_unique.columns]].copy()
     df_display.insert(0, "Se", False)
+
+    # --- FAST HØJDE (20 linjer + header) ---
+    FAST_HOEJDE = 735 
 
     # 4. DATA EDITOR
     ed_result = st.data_editor(
         df_display,
         column_config={
             "Se": st.column_config.CheckboxColumn("🔍", default=False, width="small"),
-            "ER_EMNE": st.column_config.CheckboxColumn("Emne", help="Tilføj til emneliste"),
+            "ER_EMNE": st.column_config.CheckboxColumn("Emne"),
             "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
             "Dato_Visning": "Seneste"
         },
         disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning'],
         hide_index=True,
         use_container_width=True,
-        height=min((len(df_display) + 1) * 35 + 45, 500),
+        height=FAST_HOEJDE, # Her låses højden
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
     # 5. GEM LOGIK
     if not ed_result['ER_EMNE'].equals(df_display['ER_EMNE']):
-        with st.spinner("Gemmer til GitHub..."):
+        with st.spinner("Gemmer..."):
             for idx, row in ed_result.iterrows():
                 df_raw.loc[df_raw['Navn'] == row['Navn'], 'ER_EMNE'] = row['ER_EMNE']
             
-            # Konverter DATO tilbage til streng før gem for at undgå rod i CSV
             df_to_save = df_raw.copy()
             df_to_save['DATO'] = df_to_save['DATO'].dt.strftime('%Y-%m-%d')
-            
             new_csv = df_to_save.to_csv(index=False)
-            res = push_to_github(FILE_PATH, "Update status via Editor", new_csv, sha)
+            res = push_to_github(FILE_PATH, "Update status", new_csv, sha)
             if res in [200, 201]:
                 st.toast("✅ Gemt!")
                 st.rerun()
 
-    # 6. PROFIL-MODAL HÅNDTERING
+    # 6. MODAL
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
-        st.session_state.editor_key += 1 # Reset editor for at fjerne fluebenet
+        st.session_state.editor_key += 1
         st.rerun()
 
     if st.session_state.active_player:
-        # Hent billed-URL'er fra SQL data hvis muligt
         billed_map = {}
         if sql_players is not None:
             billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
-        
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
         st.session_state.active_player = None
-
+        
 # --- RUN ---
 if __name__ == "__main__":
     # vis_side(None, None, None, None)
