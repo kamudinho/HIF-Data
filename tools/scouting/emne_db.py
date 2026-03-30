@@ -16,13 +16,13 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
 POS_OPTIONS = {
-    "1": "Maalmand", "2": "Hoejre back", "5": "Venstre back",
+    "1": "Målmand", "2": "Hoejre back", "5": "Venstre back",
     "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
     "6": "Defensiv midt", "8": "Central midt", "7": "Hoejre kant",
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
 }
 
-VINDUE_OPTIONS = ["Nu", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_OPTIONS = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
