@@ -1,4 +1,4 @@
-PLAYER_WYID,DATO,Navn,Klub,POSITION,Rating_Avg,STATUS,POTENTIALE,STYRKER,UDVIKLING,VURDERING,BESLUTSOMHED,FART,AGGRESIVITET,ATTITUDE,UDHOLDENHED,LEDEREGENSKABER,TEKNIK,SPILINTELLIGENS,SCOUT,KONTRAKT,ER_EMNE,SKYGGEHOLD,POS,POS_343,POS_433,POS_352
+PLAYER_WYID,DATO,Navn,KLUB,POSITION,RATING_AVG,STATUS,POTENTIALE,STYRKER,UDVIKLING,VURDERING,BESLUTSOMHED,FART,AGGRESIVITET,ATTITUDE,UDHOLDENHED,LEDEREGENSKABER,TEKNIK,SPILINTELLIGENS,SCOUT,KONTRAKT,ER_EMNE,SKYGGEHOLD,POS,POS_343,POS_433,POS_352
 626639,2026-02-11,Victor Vestby,Næsby,Stopper,3.8,Hold øje,Middel,Rolig på bolden,Forsvarsspillet generelt,Godt venstre ben,3.0,3.0,2.0,4.0,3.0,4.0,3.0,4.0,Christian,,False,,,,,
 626639,2026-03-15,Victor Vestby,Næsby,Stopper,4.1,Kig nærmere,Top,Stærk i duellerne,Kommunikation,Styrer bagkæden flot,4.0,3.0,4.0,5.0,4.0,5.0,3.0,5.0,Christian,,False,,,,,
 626639,2026-04-20,Victor Vestby,Næsby,Stopper,4.5,Køb,Top,Fantastisk overblik,Ingen markante mangler,En klassespiller,5.0,3.0,4.0,6.0,5.0,6.0,4.0,6.0,Christian,,False,,,,,
@@ -71,9 +71,9 @@ PLAYER_WYID,DATO,Navn,Klub,POSITION,Rating_Avg,STATUS,POTENTIALE,STYRKER,UDVIKLI
 748624,2026-03-06,Alexander Johansen,Hvidovre IF,FWD,3.1,Hold øje,Højt,Næse for mål,Fysisk tilstedeværelse,Ung målræv,3.0,4.0,3.0,4.0,3.0,2.0,4.0,3.0,CG,,False,,,,,
 748624,2026-04-29,Alexander Johansen,Hvidovre IF,FWD,3.5,Kig nærmere,Højt,God teknik i feltet,Bevægelse uden bold,Farlig i dag,4.0,4.0,4.0,4.0,4.0,3.0,4.0,4.0,CG,,False,,,,,
 748624,2026-06-03,Alexander Johansen,Hvidovre IF,FWD,3.8,Kig nærmere,Højt,Afgørende i boksen,Hold øje med formen,Lovende angriber,4.0,4.0,4.0,5.0,4.0,3.0,4.0,5.0,CG,,False,,,,,
-525614,2026-03-22,Oliver Bjerrum Jensen,Thisted,FWD,3.38,Interessant,Højt,"God på bolden, kan drive den, god i stikningsspillet",Defensive kompetencer,Har en spændende pakke der kan styrke os på den centrale midtbane,3.0,3.0,3.0,5.0,3.0,2.0,4.0,4.0,ceo,2027-06-30,True,,,,,
+525614,2026-03-22,Oliver Bjerrum Jensen,Thisted,FWD,3.38,Interessant,Højt,"God på bolden, kan drive den, god i stikningsspillet",Defensive kompetencer,Har en spændende pakke der kan styrke os på den centrale midtbane,3.0,3.0,3.0,5.0,3.0,2.0,4.0,4.0,ceo,2027-06-30,True,True,0,,,
 562633,2026-03-23,Nicolai Vallys,Brøndby,MID,3.62,Hold øje,Middel,God på bolden,Tage lederskab,En god spiller med offensivt output,4.0,2.0,5.0,2.0,5.0,4.0,5.0,2.0,kasper,2026-06-30,False,,,,,
 766640,2026-03-27,Kasper Nyegaard,Roskilde,MID,3.0,Interessant,Højt,"Så rigtig fin ud på kuglen
 vandt mange af sine dueller mod et top 2.divsionshold
-Placerede sig lidt stationært",,Spædende på kuglen og ,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2027-06-30,True,True,0.0,6.0,6.0,0.0
+Placerede sig lidt stationært",,Spædende på kuglen og ,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2027-06-30,True,True,0,6.0,6.0,0.0
 821046,2026-03-30,Alexander Edvardsen Hvid,Hørsholm-Usserød,FWD,3.12,Interessant,Højt,,,,3.0,3.0,3.0,3.0,3.0,4.0,3.0,3.0,kasper,,False,False,0.0,,,
