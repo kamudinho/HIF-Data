@@ -51,13 +51,13 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"Klub: {nyeste.get('Klub', 'Ukendt')} | Pos: {nyeste.get('Position', 'Ukendt')}")
+        st.write(f"Klub: {nyeste.get('Klub', '-')} | Pos: {nyeste.get('Position', '-')}")
         st.write(f"Rating: {nyeste.get('Rating_Avg', 0)} | Potentiale: {nyeste.get('Potentiale', '-')}")
 
     t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
     
     keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
-    labels = ['Beslut.', 'Fart', 'Aggres.', 'Attitude', 'Udhold.', 'Leder', 'Teknik', 'Intell.']
+    labels = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
 
     # --- TAB 1: SENESTE RAPPORT ---
     with t1:
@@ -98,11 +98,11 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_raw['ER_EMNE'] = False
 
     df_raw['PLAYER_WYID'] = df_raw['PLAYER_WYID'].apply(rens_id)
-    df_raw['Dato'] = pd.to_datetime(df_raw['Dato'])
+    df_raw['DATO'] = pd.to_datetime(df_raw['DATO'])
     
     # Find unikke spillere (nyeste rapport først)
-    df_unique = df_raw.sort_values('Dato', ascending=False).drop_duplicates('Navn').copy()
-    df_unique['Dato'] = df_unique['Dato'].dt.date
+    df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
+    df_unique['DATO'] = df_unique['Dato'].dt.date
 
     # Billed-map
     billed_map = {}
