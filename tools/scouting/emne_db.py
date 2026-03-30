@@ -221,8 +221,8 @@ def vis_side(df_input_unused=None):
                                 y + (i * 2.3), 
                                 f"{p['Navn']}{'*' if is_new else ''}", 
                                 size=7, 
-                                ha='center',     # Horisontal centrering
-                                va='left',     # Vertikal centrering (Dette er nøglen!)
+                                ha='left',     # Horisontal centrering
+                                va='center',     # Vertikal centrering (Dette er nøglen!)
                                 weight='bold', 
                                 bbox=dict(
                                     facecolor=bg, 
