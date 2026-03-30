@@ -9,72 +9,50 @@ REPO = "Kamudinho/HIF-data"
 DB_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- 1. LYNHURTIG DATALÆSNING (CACHED) ---
-@st.cache_data(ttl=300) # Gemmer data i 5 minutter, så den ikke henter hele tiden
-def load_data_from_github():
+@st.cache_data(ttl=60)
+def load_raw_data():
     url = f"https://api.github.com/repos/{REPO}/contents/{DB_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     r = requests.get(url, headers=headers)
-    
     if r.status_code == 200:
         content = base64.b64decode(r.json()['content']).decode('utf-8')
         df = pd.read_csv(StringIO(content))
-        
-        # --- DATARRENS (Gøres kun én gang her) ---
-        df.columns = [c.strip() for c in df.columns] # Fjern mellemrum i navne
-        for col in df.select_dtypes(include=['object']):
-            df[col] = df[col].astype(str).str.strip() # Fjern mellemrum i tekst
-            
-        # Tving Skyggehold til at være sand/falsk
-        df['SKYGGE_BOOL'] = df['SKYGGEHOLD'].astype(str).str.upper().isin(['TRUE', '1', 'YES'])
-        
-        # Sorter så nyeste rapporter er øverst
-        df['DATO'] = pd.to_datetime(df['DATO'], errors='coerce')
-        return df.sort_values('DATO', ascending=False)
+        # RENS KOLONNER MED DET SAMME
+        df.columns = df.columns.str.strip()
+        return df
     return pd.DataFrame()
 
-# --- 2. HOVEDAPP ---
-def main():
-    st.title("HIF Scouting Database")
+def vis_side():
+    st.title("Scouting | Emnedatabase")
     
-    # Hent data (lynhurtigt pga. cache)
-    df = load_data_from_github()
+    df = load_raw_data()
     
     if df.empty:
-        st.error("Kunne ikke indlæse data. Tjek filsti og Token.")
+        st.error("Ingen data fundet! Tjek om stien 'data/scouting_db.csv' er korrekt i dit repo.")
         return
 
-    # Lav en unik liste med de nyeste observationer pr. spiller
-    df_unique = df.drop_duplicates('Navn').copy()
+    # TEST: Vis de første 5 rækker af din CSV direkte på skærmen
+    st.write("### Rå data tjek (Ser du dine spillere herunder?)")
+    st.write(df.head())
 
-    # Opret faner
-    tab1, tab2, tab3 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggehold"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Banevisning"])
 
-    # Logik til opdeling
-    is_hif = df_unique['KLUB'].str.contains("Hvidovre", case=False, na=False)
-    
+    # Vi bruger en meget bred søgning for at undgå fejl med store/små bogstaver
     with tab1:
-        st.subheader("Eksterne Emner")
-        st.dataframe(df_unique[~is_hif][['Navn', 'KLUB', 'POSITION', 'RATING_AVG']], use_container_width=True, hide_index=True)
+        # Alt der IKKE er Hvidovre
+        mask_emner = ~df['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
+        st.dataframe(df[mask_emner], use_container_width=True)
 
     with tab2:
-        st.subheader("Hvidovre IF Spillere")
-        st.dataframe(df_unique[is_hif][['Navn', 'POSITION', 'RATING_AVG']], use_container_width=True, hide_index=True)
+        # Alt der ER Hvidovre
+        mask_hif = df['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
+        st.dataframe(df[mask_hif], use_container_width=True)
 
     with tab3:
-        st.subheader("Dit valgte Skyggehold")
-        # Her viser vi kun dem, hvor SKYGGEHOLD er True i CSV'en
-        df_skygge = df_unique[df_unique['SKYGGE_BOOL'] == True]
-        
-        if not df_skygge.empty:
-            st.table(df_skygge[['Navn', 'KLUB', 'POSITION', 'RATING_AVG']])
-        else:
-            st.info("Ingen spillere er markeret som 'True' i SKYGGEHOLD-kolonnen i din CSV.")
-
-    # Knap til at tvinge opdatering af data
-    if st.button("🔄 Hent frisk data"):
-        st.cache_data.clear()
-        st.rerun()
+        # Skyggeliste baseret på din SKYGGEHOLD kolonne
+        # Vi tjekker om den indeholder 'True' som tekst eller bool
+        mask_skygge = df['SKYGGEHOLD'].astype(str).str.strip().str.upper() == "TRUE"
+        st.dataframe(df[mask_skygge], use_container_width=True)
 
 if __name__ == "__main__":
-    main()
+    vis_side()
