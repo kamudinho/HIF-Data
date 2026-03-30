@@ -11,7 +11,7 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- GITHUB HJÆLPEFUNKTIONER ---
+# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -35,13 +35,14 @@ def push_to_github(path, message, content, sha=None):
     return r.status_code
 
 def rens_id(val):
+    """Fjerner .0 og mellemrum fra ID'er så de altid kan matches"""
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
 # --- MODAL: SPILLERPROFIL ---
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
-    # 1. Sikr kolonnenavne inde i modalen
+    # 1. ENSRET KOLONNER I RAPPORTER
     df_modal = alle_rapporter.copy()
     mapping = {
         'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
@@ -51,20 +52,20 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         'ATTITUDE': 'Attitude', 'UDHOLDENHED': 'Udholdenhed', 'LEDEREGENSKABER': 'Lederegenskaber',
         'TEKNIK': 'Teknik', 'SPILINTELLIGENS': 'Spilintelligens'
     }
-    
     current_cols = {c.upper(): c for c in df_modal.columns}
     rename_dict = {current_cols[k]: v for k, v in mapping.items() if k in current_cols}
     df_modal = df_modal.rename(columns=rename_dict)
 
-    # Filtrer historik for den valgte spiller
-    spiller_historik = df_modal[df_modal['Navn'] == valgt_navn].sort_values('DATO', ascending=False)
-    
+    # Filtrer historik (sorteret ældst -> nyest for grafer)
+    spiller_historik = df_modal[df_modal['Navn'] == valgt_navn].sort_values('DATO', ascending=True)
     if spiller_historik.empty:
-        st.error(f"Ingen data fundet for {valgt_navn}")
+        st.error("Ingen data fundet.")
         return
         
-    nyeste = spiller_historik.iloc[0]
+    nyeste = spiller_historik.iloc[-1]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
+    
+    # Billede
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
     # Header
@@ -73,42 +74,59 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"**Klub:** {nyeste.get('Klub', '-')} | **Pos:** {nyeste.get('Position', '-')}")
-        st.write(f"**Rating:** {nyeste.get('Rating_Avg', 0)} | **Potentiale:** {nyeste.get('Potentiale', '-')}")
+        st.write(f"**Klub:** {nyeste.get('Klub', '-')} | **Pos:** {nyeste.get('Position', '-')} | **ID:** {pid}")
 
     t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
     
-    keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
-
+    # --- TAB 1: RADAR ---
     with t1:
-        col_stats, col_radar, col_text = st.columns([1, 2, 2])
-        with col_stats:
-            st.markdown("### Vurderinger")
-            for k in keys:
-                st.write(f"**{k}:** {nyeste.get(k, 1)}")
+        keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+        col_radar, col_text = st.columns([2, 2])
         with col_radar:
             r_vals = []
             for k in keys:
-                try:
-                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
-                    r_vals.append(v)
-                except: r_vals.append(1.0)
+                try: v = float(str(nyeste.get(k, 1)).replace(',', '.'))
+                except: v = 1.0
+                r_vals.append(v)
             fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=keys + [keys[0]], fill='toself', line_color='#df003b'))
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=350, margin=dict(l=40,r=40,t=40,b=40))
             st.plotly_chart(fig, use_container_width=True)
         with col_text:
-            st.success(f"**Styrker**\n\n{nyeste.get('Styrker', '-')}")
-            st.warning(f"**Udvikling**\n\n{nyeste.get('Udvikling', '-')}")
-            st.info(f"**Vurdering**\n\n{nyeste.get('Vurdering', '-')}")
+            st.success(f"**Styrker:**\n\n{nyeste.get('Styrker', '-')}")
+            st.info(f"**Vurdering:**\n\n{nyeste.get('Vurdering', '-')}")
 
+    # --- TAB 2: HISTORIK ---
     with t2:
-        hist_cols = ['DATO', 'Klub', 'Rating_Avg', 'Status', 'Scout']
-        available_hist = [c for c in hist_cols if c in spiller_historik.columns]
-        st.dataframe(
-            spiller_historik[available_hist].rename(columns={'DATO': 'Dato'}),
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
+
+    # --- TAB 3: UDVIKLING (Graf) ---
+    with t3:
+        st.markdown("### Rating over tid")
+        fig_evol = go.Figure(go.Scatter(x=spiller_historik['DATO'], y=spiller_historik['Rating_Avg'], mode='lines+markers', line_color='#df003b', marker=dict(size=10)))
+        fig_evol.update_layout(yaxis=dict(range=[1, 5.5], title="Rating"), height=400, margin=dict(l=20,r=20,t=20,b=20))
+        st.plotly_chart(fig_evol, use_container_width=True)
+
+    # --- TAB 4: SÆSONSTATS (Match på PLAYER_WYID) ---
+    with t4:
+        st.markdown(f"### Wyscout Sæsonstats (ID: {pid})")
+        if career_df is not None:
+            # Rens ID i career_df for at sikre match
+            career_copy = career_df.copy()
+            if 'PLAYER_WYID' in career_copy.columns:
+                career_copy['match_id'] = career_copy['PLAYER_WYID'].apply(rens_id)
+                stats = career_copy[career_copy['match_id'] == pid]
+                
+                if not stats.empty:
+                    # Vis relevante stats (tilpas disse navne til din career_df)
+                    cols_to_show = ['competitionName', 'matches', 'goals', 'assists', 'minutesPlayed']
+                    available = [c for c in cols_to_show if c in stats.columns]
+                    st.dataframe(stats[available], use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Ingen stats fundet for dette ID i sæson-databasen.")
+            else:
+                st.error("Kolonnen 'PLAYER_WYID' findes ikke i career_df.")
+        else:
+            st.error("Sæson-databasen er ikke indlæst.")
 
 # --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
@@ -117,58 +135,42 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "editor_key" not in st.session_state:
         st.session_state.editor_key = 0
 
-    # 1. HENT DATA
     content, sha = get_github_file(FILE_PATH)
-    if not content:
-        st.error("Kunne ikke hente databasen.")
-        return
-
+    if not content: return
     df_raw = pd.read_csv(StringIO(content))
     
-    # --- ROBUST KOLONNE-FIX ---
-    mapping = {
-        'PLAYER_WYID': 'PLAYER_WYID', 'DATO': 'DATO', 'NAVN': 'Navn',
-        'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
-        'POTENTIALE': 'Potentiale', 'STATUS': 'Status', 'ER_EMNE': 'ER_EMNE'
-    }
+    # ENSRET KOLONNER (Robust fix)
+    mapping = {'PLAYER_WYID': 'PLAYER_WYID', 'DATO': 'DATO', 'NAVN': 'Navn', 'KLUB': 'Klub', 'RATING_AVG': 'Rating_Avg', 'ER_EMNE': 'ER_EMNE'}
     current_cols = {c.upper(): c for c in df_raw.columns}
-    rename_dict = {current_cols[k]: v for k, v in mapping.items() if k in current_cols}
-    df_raw = df_raw.rename(columns=rename_dict)
+    df_raw = df_raw.rename(columns={current_cols[k]: v for k, v in mapping.items() if k in current_cols})
 
-    # 2. DATA RENSNING
+    # Typer
     df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], errors='coerce')
-    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False, '1.0': True, '0.0': False}).fillna(False)
-    df_raw['Rating_Avg'] = pd.to_numeric(df_raw['Rating_Avg'], errors='coerce').fillna(0)
+    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map({'true': True, 'false': False, '1': True, '0': False}).fillna(False)
     
-    # Find unikke (nyeste først)
     df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
     df_unique['Dato_Visning'] = df_unique['DATO'].dt.date
 
-    # 3. FORBERED DISPLAY
-    display_cols = ['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning', 'ER_EMNE']
-    available_display = [c for c in display_cols if c in df_unique.columns]
-    df_display = df_unique[available_display].copy()
+    # Tabel visning
+    df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning', 'ER_EMNE']].copy()
     df_display.insert(0, "Se", False)
 
-    # 4. DATA EDITOR (FAST HØJDE: 735px ~ 20 rækker)
+    # 4. DATA EDITOR (FAST HØJDE: 20 rækker)
     ed_result = st.data_editor(
         df_display,
         column_config={
-            "Se": st.column_config.CheckboxColumn("🔍", default=False, width="small"),
+            "Se": st.column_config.CheckboxColumn("🔍", width="small"),
             "ER_EMNE": st.column_config.CheckboxColumn("Emne"),
-            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
-            "Dato_Visning": "Seneste"
+            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f")
         },
-        disabled=['Navn', 'Klub', 'Position', 'Rating_Avg', 'Potentiale', 'Dato_Visning'],
-        hide_index=True,
-        use_container_width=True,
-        height=735, 
+        disabled=['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning'],
+        hide_index=True, use_container_width=True, height=735,
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
-    # 5. GEM LOGIK
+    # GEM LOGIK (HVIS ER_EMNE ÆNDRES)
     if not ed_result['ER_EMNE'].equals(df_display['ER_EMNE']):
-        with st.spinner("Gemmer ændringer..."):
+        with st.spinner("Opdaterer database..."):
             for idx, row in ed_result.iterrows():
                 df_raw.loc[df_raw['Navn'] == row['Navn'], 'ER_EMNE'] = row['ER_EMNE']
             
@@ -177,10 +179,10 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
             new_csv = df_to_save.to_csv(index=False)
             res = push_to_github(FILE_PATH, "Update status via Editor", new_csv, sha)
             if res in [200, 201]:
-                st.toast("✅ Gemt i databasen!")
+                st.toast("✅ Database opdateret!")
                 st.rerun()
 
-    # 6. PROFIL-MODAL
+    # MODAL TRIGGER
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
@@ -190,6 +192,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if st.session_state.active_player:
         billed_map = {}
         if sql_players is not None:
+            # Sikr at billed-mappet også bruger rensede ID'er
             billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
         
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
