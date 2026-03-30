@@ -144,16 +144,25 @@ def vis_side():
                     st.rerun()
 
     # --- TAB 3: SKYGGELISTE (Her hvor du manglede kolonnen) ---
-    with tabs[2]:
+        with tabs[2]:
+        # Hent data på ny for at undgå cache-problemer
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
+        
         if not df_s.empty:
-            # Her tvinger vi TRANSFER_VINDUE ind som den første kolonne efter Navn
-            df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']]
+            # VI TVINGER KOLONNEN IND HER:
+            cols_to_use = ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']
             
-            ed_s = st.data_editor(
+            # Hvis kolonnen mod forventning stadig mangler i DF, opretter vi den on-the-fly
+            for col in cols_to_use:
+                if col not in df_s.columns:
+                    df_s[col] = "Nu" if col == 'TRANSFER_VINDUE' else "0"
+    
+            df_s_input = df_s.set_index('Navn')[cols_to_use]
+            
+            st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                key="skyggeliste_editor_v4",
+                key="skyggeliste_FORCE_V1", # Nyt key tvinger Streamlit til at tegne tabellen forfra
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
