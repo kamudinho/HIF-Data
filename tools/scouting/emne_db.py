@@ -93,7 +93,6 @@ def vis_side(df):
     col_pitch, col_menu = st.columns([7, 1])
 
     with col_menu:
-        # Popover med tabeloversigt
         with st.popover("Trup", use_container_width=True):
             tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
                 <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
@@ -111,7 +110,6 @@ def vis_side(df):
             st.components.v1.html(tabel_html, height=400, scrolling=True)
 
         st.write("---")
-        # Formationsknapper
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if is_active else "secondary"):
@@ -129,21 +127,15 @@ def vis_side(df):
         fig, ax = pitch.draw(figsize=(13, 8))
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # --- DIN NYE LEGEND LOGIK ---
-        # --- TEGN LEGENDS (Nu fokuseret på Transfer-vinduer) ---
-        # Vi placerer dem ved y=78 (bunden af banen) for at sikre de er synlige
-        ax.text(2, 78, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+        # --- LEGENDS (Placeret ved y=98 for at undgå at blive skåret af) ---
+        ax.text(2, 98, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
-        ax.text(20, 78, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+        ax.text(20, 98, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
-        # Den nye Transfer-legend (erstatter 'Leje')
-        ax.text(40, 78, " Ny Transfer (Markeret med ramme) ", size=8, fontweight='bold', va='center', 
+        ax.text(40, 98, " Ny Transfer (Rød ramme) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor='white', edgecolor=hif_rod, linewidth=1.5, boxstyle='round,pad=0.2'))
-
-        # --- DYNAMISK POSITIONS LOGIK ---
-        # (Sørg for at din tegn-spiller logik bruger 'edgecolor=hif_rod' hvis p['TRANSFER_VINDUE'] != 'Nu')
 
         # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
@@ -162,7 +154,6 @@ def vis_side(df):
                           8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
 
         for pos_num, (x, y, label) in pos_config.items():
-            # Håndtering af specifikke grupperinger baseret på formation
             if form == "4-3-3" and pos_num == 4:
                 spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
             elif form == "3-5-2" and pos_num == 9:
@@ -175,13 +166,19 @@ def vis_side(df):
             spillere = spillere.sort_values('PRIOR', ascending=True)
             
             if not spillere.empty:
-                # Positions-label (f.eks. ANG, MM)
                 ax.text(x, y - 4.5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
                 
-                # Spiller-navne listet under positionen
                 for i, (_, p) in enumerate(spillere.iterrows()):
+                    # RETTELSE: Dynamisk ramme baseret på TRANSFER_VINDUE
+                    is_transfer = str(p.get('TRANSFER_VINDUE', 'Nu')).strip().upper() != 'NU'
+                    kant_farve = hif_rod if is_transfer else '#333'
+                    kant_bredde = 1.5 if is_transfer else 0.5
+                    
                     ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
-                            bbox=dict(facecolor=get_status_color(p), edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
+                            bbox=dict(facecolor=get_status_color(p), 
+                                     edgecolor=kant_farve, 
+                                     linewidth=kant_bredde, 
+                                     boxstyle='square,pad=0.2'))
 
         st.pyplot(fig, use_container_width=True)
