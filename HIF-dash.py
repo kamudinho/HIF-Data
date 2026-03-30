@@ -145,9 +145,9 @@ try:
         if sel == "Scoutrapport":
             import tools.scouting.scout_input as si
             si.vis_side(dp)
-        elif sel == "Emnedatabase":
-            import tools.scouting.emne_db as edb
-            edb.vis_side()
+        elif sel == "Database":
+            import tools.scouting.scout_db as sdb
+            sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
         elif sel == "Opret emne":
             import tools.scouting.emneliste_input as el
             el.vis_side(dp, st.session_state["user"])
