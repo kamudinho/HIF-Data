@@ -83,7 +83,7 @@ def vis_side(df_input_unused=None):
             /* Fjern label/overskrift fra selectbox helt */
             div[data-testid="stSelectbox"] label { display: none; }
             /* Ryk tabs op for at mindske hullet */
-            .stTabs { margin-top: -10px; }
+            .stTabs { margin-top: -5px; }
         </style>
     """, unsafe_allow_html=True)
     
