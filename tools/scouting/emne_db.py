@@ -8,16 +8,13 @@ from datetime import datetime
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
-EMNE_PATH = "data/emneliste.csv"
-HIF_PATH = "data/players.csv"
+DB_PATH = "data/scouting_db.csv" # Vi bruger kun denne som din "Master"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
 POS_OPTIONS = {
-    "1": "Målmand", "2": "Højre back", "5": "Venstre back",
-    "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
-    "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
-    "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
+    "0": "Vælg", "1": "MM", "2": "HB", "5": "VB", "3": "HCB", "3.5": "CB", "4": "VCB",
+    "6": "DM", "8": "CM", "7": "HK", "11": "VK", "10": "OM", "9": "ANG"
 }
 
 # --- FUNKTIONER ---
@@ -31,145 +28,102 @@ def get_github_file(path):
         return content, data['sha']
     return None, None
 
-def push_to_github(path, message, content, sha=None):
+def push_to_github(path, message, content, sha):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    payload = {"message": message, "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
-    if sha: payload["sha"] = sha
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8'),
+        "sha": sha
+    }
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-def style_kontrakt(df):
-    """ Farver celler baseret på KONTRAKT (STORE BOGSTAVER) """
-    styler = pd.DataFrame('', index=df.index, columns=df.columns)
-    # RETTET: Vi kigger nu efter KONTRAKT
-    target_col = 'KONTRAKT' if 'KONTRAKT' in df.columns else 'Kontrakt'
+def load_and_prepare():
+    content, sha = get_github_file(DB_PATH)
+    if not content: return pd.DataFrame(), None
     
-    if target_col in df.columns:
-        now = datetime.now().date()
-        for idx in df.index:
-            val = df.at[idx, target_col]
-            if pd.notna(val) and not isinstance(val, str):
-                days = (val - now).days
-                if days < 183: styler.at[idx, target_col] = 'background-color: #ffcccc; color: black;'
-                elif days <= 365: styler.at[idx, target_col] = 'background-color: #ffffcc; color: black;'
-    return styler
-
-def prepare_df(content, is_hif=False):
-    if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
-    
-    # RENS KOLONNER (Tvinger store bogstaver for at undgå 'Kontrakt' vs 'KONTRAKT' fejl)
     df.columns = [str(c).upper().strip() for c in df.columns]
     
-    # RETTET: Vi sikrer os at Navn findes (Pandas omdøber til NAVN pga. .upper())
-    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
+    # Konverter datoer
+    if 'DATO' in df.columns:
+        df['DATO'] = pd.to_datetime(df['DATO'], errors='coerce')
+        df = df.sort_values('DATO', ascending=False)
     
-    df = df.dropna(subset=['Navn']).reset_index(drop=True)
-    
-    # Formater taktiske kolonner
-    for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
-        if col not in df.columns: df[col] = "0"
-        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0')
-    
-    # RETTET: Bruger KONTRAKT i stedet for Kontrakt
-    df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce').dt.date
-    
-    df['SKYGGEHOLD'] = df['SKYGGEHOLD'].fillna(False).replace({'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False}).astype(bool)
-    df['KLUB'] = 'Hvidovre IF' if is_hif else df.get('KLUB', '-')
-    
-    return df
+    # Tving typer
+    df['SKYGGEHOLD'] = df['SKYGGEHOLD'].astype(str).str.upper() == 'TRUE'
+    for col in ['POS', 'POS_343', 'POS_433', 'POS_352']:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0')
+            
+    return df, sha
 
-# --- APP ---
 def vis_side():
-    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
-    
-    e_c, e_s = get_github_file(EMNE_PATH)
-    h_c, h_s = get_github_file(HIF_PATH)
-    df_emner = prepare_df(e_c)
-    df_hif = prepare_df(h_c, is_hif=True)
+    # 1. Hent data
+    df_full, current_sha = load_and_prepare()
+    if df_full.empty:
+        st.error("Kunne ikke hente scouting_db.csv")
+        return
+
+    # 2. Skab en unik visning (kun nyeste rapport pr. spiller)
+    # Dette løser "duplicate keys" fejlen
+    df_display = df_full.drop_duplicates('NAVN').copy().reset_index(drop=True)
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Lister (Emner & HIF)
-    for t, d, s, p in [(t1, df_emner, e_s, EMNE_PATH), (t2, df_hif, h_s, HIF_PATH)]:
-        with t:
-            if d.empty: continue
-            h = min(len(d) * 35 + 40, 500)
-            # RETTET: Kolonnenavne her skal matche dem i prepare_df (STORE BOGSTAVER)
-            ed = st.data_editor(
-                d[['POS', 'Navn', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']].style.apply(style_kontrakt, axis=None), 
-                hide_index=True, use_container_width=True, height=h, key=f"ed_{p}",
-                column_config={
-                    "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
-                    "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys()), width="small"),
-                    "KONTRAKT": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY")
-                }, disabled=['Navn', 'KLUB']
-            )
-            
-            # Gem ændringer
-            if not ed['SKYGGEHOLD'].equals(d['SKYGGEHOLD']) or not ed['POS'].equals(d['POS']):
-                for idx in ed.index:
-                    name = d.iloc[idx]['Navn']
-                    d.loc[d['Navn'] == name, ['SKYGGEHOLD', 'POS']] = [ed.iloc[idx]['SKYGGEHOLD'], ed.iloc[idx]['POS']]
-                push_to_github(p, "Update", d.to_csv(index=False), s)
-                st.rerun()
+    # Hjælpefunktion til at gemme (Opdaterer ALLE historiske rækker for spilleren)
+    def gem_data(edited_df, original_display_subset):
+        with st.spinner("Gemmer..."):
+            # Hent helt frisk fil for at undgå SHA-konflikt
+            raw_c, latest_sha = get_github_file(DB_PATH)
+            df_to_save = pd.read_csv(StringIO(raw_c))
+            df_to_save.columns = [str(c).upper().strip() for c in df_to_save.columns]
 
-    # Skyggeliste
-    with t3:
-        df_s = pd.concat([df_emner[df_emner['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
-        if not df_s.empty:
-            h = min(len(df_s) * 35 + 40, 600)
-            ed_s = st.data_editor(
-                df_s[['Navn', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']].style.apply(style_kontrakt, axis=None), 
-                hide_index=True, use_container_width=True, height=h,
-                column_config={
-                    "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
-                    "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
-                    "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
-                    "KONTRAKT": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY", disabled=True)
-                }, disabled=['Navn']
-            )
-            # Gem taktiske ændringer
-            if not ed_s[['POS_343', 'POS_433', 'POS_352']].equals(df_s[['POS_343', 'POS_433', 'POS_352']]):
-                for _, row in ed_s.iterrows():
-                    for src, p, sh in [(df_emner, EMNE_PATH, e_s), (df_hif, HIF_PATH, h_s)]:
-                        if row['Navn'] in src['Navn'].values:
-                            src.loc[src['Navn'] == row['Navn'], ['POS_343', 'POS_433', 'POS_352']] = [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Tactical", src.to_csv(index=False), sh)
-                st.rerun()
-
-    # Banevisning (Bliver nu også styret af KONTRAKT)
-    with t4:
-        df_s = pd.concat([df_emner[df_emner['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
-        if not df_s.empty:
-            f = st.session_state.form_skygge
-            p_col = f"POS_{f.replace('-', '')}"
-            c_p, c_m = st.columns([5,1])
-            with c_m:
-                for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
-                        st.session_state.form_skygge = opt
-                        st.rerun()
-            with c_p:
-                pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(9, 6))
+            for idx, row in edited_df.iterrows():
+                p_name = original_display_subset.iloc[idx]['NAVN']
+                mask = df_to_save['NAVN'].str.strip() == p_name.strip()
                 
-                if f == "3-4-3": m = {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')}
-                elif f == "4-3-3": m = {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(30,25,'VCB'), 3:(30,55,'HCB'), 2:(35,70,'HB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')}
-                else: m = {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(95,32,'ANG'), 7:(95,48,'ANG')}
+                # Opdater alle fundne rækker for denne spiller
+                df_to_save.loc[mask, 'SKYGGEHOLD'] = str(row['SKYGGEHOLD']).upper()
+                if 'POS' in edited_df.columns:
+                    df_to_save.loc[mask, 'POS'] = row['POS']
+                if 'POS_343' in edited_df.columns:
+                    df_to_save.loc[mask, ['POS_343', 'POS_433', 'POS_352']] = [row['POS_343'], row['POS_433'], row['POS_352']]
 
-                for pid, (x, y, lbl) in m.items():
-                    ax.text(x, y-4, lbl, size=7, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    players = df_s[df_s[p_col].astype(str) == str(pid)]
-                    for i, (_, p) in enumerate(players.iterrows()):
-                        bg = "white"
-                        if pd.notna(p['KONTRAKT']):
-                            diff = (p['KONTRAKT'] - datetime.now().date()).days
-                            if diff < 183: bg = "#ffcccc"
-                            elif diff <= 365: bg = "#ffffcc"
-                        ax.text(x, y+(i*3.5), p['Navn'], size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor='#333', alpha=0.9, boxstyle='square,pad=0.1'))
-                st.pyplot(fig)
+            push_to_github(DB_PATH, "Update", df_to_save.to_csv(index=False), latest_sha)
+            st.success("Gemt!")
+            st.rerun()
 
-if __name__ == "__main__":
-    vis_side()
+    # --- TABERNE ---
+    is_hif = df_display['KLUB'].str.contains("Hvidovre", case=False, na=False)
+
+    with t1:
+        df_e = df_display[~is_hif]
+        ed1 = st.data_editor(df_e[['NAVN', 'KLUB', 'POS', 'SKYGGEHOLD']], 
+                            hide_index=True, use_container_width=True, key="ed_emner",
+                            column_config={"SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge")})
+        if st.button("Gem Emner"): gem_data(ed1, df_e)
+
+    with t2:
+        df_h = df_display[is_hif]
+        ed2 = st.data_editor(df_h[['NAVN', 'POS', 'SKYGGEHOLD']], 
+                            hide_index=True, use_container_width=True, key="ed_hif",
+                            column_config={"SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge")})
+        if st.button("Gem Hvidovre"): gem_data(ed2, df_h)
+
+    with t3:
+        df_s = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
+        if not df_s.empty:
+            ed3 = st.data_editor(df_s[['NAVN', 'POS_343', 'POS_433', 'POS_352']], 
+                                hide_index=True, use_container_width=True, key="ed_skygge",
+                                column_config={
+                                    "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
+                                    "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
+                                    "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys()))
+                                })
+            if st.button("Gem Taktik"): gem_data(ed3, df_s)
+
+    with t4:
+        st.write("Banevisning baseret på Skyggeliste")
+        # Pitch logik her...
