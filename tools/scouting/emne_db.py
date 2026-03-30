@@ -8,15 +8,15 @@ from datetime import datetime
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
-EMNE_PATH = "data/emneliste.csv"
+SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
 POS_OPTIONS = {
-    "1": "Målmand", "2": "Højre back", "5": "Venstre back",
+    "1": "Maalmand", "2": "Hoejre back", "5": "Venstre back",
     "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
-    "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
+    "6": "Defensiv midt", "8": "Central midt", "7": "Hoejre kant",
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
 }
 
@@ -40,11 +40,8 @@ def push_to_github(path, message, content, sha=None):
     return r.status_code
 
 def style_kontrakt(df):
-    """ Farver celler baseret på KONTRAKT (STORE BOGSTAVER) """
     styler = pd.DataFrame('', index=df.index, columns=df.columns)
-    # RETTET: Vi kigger nu efter KONTRAKT
     target_col = 'KONTRAKT' if 'KONTRAKT' in df.columns else 'Kontrakt'
-    
     if target_col in df.columns:
         now = datetime.now().date()
         for idx in df.index:
@@ -57,80 +54,79 @@ def style_kontrakt(df):
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
-    
-    # Læs filen
     df = pd.read_csv(StringIO(content))
-    
-    # 1. Rens kolonnenavne (Fjerner mellemrum og tvinger STORE BOGSTAVER)
     df.columns = [str(c).upper().strip() for c in df.columns]
-    
-    # 2. VIGTIGT: Fjern dublerede kolonnenavne (f.eks. hvis både 'Dato' og 'DATO' fandtes)
     df = df.loc[:, ~df.columns.duplicated()]
     
-    # 3. Sikr Navn-kolonnen (Pandas omdøbte NAVN til Navn i din tidligere logik)
-    if 'NAVN' in df.columns: 
-        df = df.rename(columns={'NAVN': 'Navn'})
-    
-    # 4. Fjern rækker uden navn (håndterer de tomme kommaer i din CSV)
+    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn']).reset_index(drop=True)
     
-    # 5. Fjern dubletter af spillere (stopper "duplicate keys" fejlen)
+    if 'DATO' in df.columns:
+        df['DATO'] = pd.to_datetime(df['DATO'], errors='coerce')
+        df = df.sort_values('DATO', ascending=False)
+    
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-    # 6. Formater taktiske kolonner og rens for .0
+    for col in ['POS_343', 'POS_433', 'POS_352', 'POS', 'ER_EMNE', 'SKYGGEHOLD']:
+        if col not in df.columns: 
+            df[col] = False if col in ['ER_EMNE', 'SKYGGEHOLD'] else "0"
+
     for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
-        if col not in df.columns: df[col] = "0"
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
     
-    # 7. Dato-konvertering (Håndterer både YYYY-MM-DD og DD/MM/YYYY)
+    # Robust konvertering af booleans
+    for col in ['ER_EMNE', 'SKYGGEHOLD']:
+        df[col] = df[col].map({True: True, False: False, 'True': True, 'False': False, 1: True, 0: False, '1': True, '0': False}).fillna(False)
+
     if 'KONTRAKT' in df.columns:
         df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
     
-    # 8. Skyggehold logik
-    if 'SKYGGEHOLD' in df.columns:
-        df['SKYGGEHOLD'] = df['SKYGGEHOLD'].fillna(False).replace(
-            {'True':True, 'False':False, '1':True, '0':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}
-        ).astype(bool)
-    else:
-        df['SKYGGEHOLD'] = False
-        
     df['KLUB'] = 'Hvidovre IF' if is_hif else df.get('KLUB', '-')
-    
     return df.reset_index(drop=True)
 
 # --- APP ---
 def vis_side():
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
     
-    e_c, e_s = get_github_file(EMNE_PATH)
+    s_c, s_s = get_github_file(SCOUT_DB_PATH)
     h_c, h_s = get_github_file(HIF_PATH)
-    df_emner = prepare_df(e_c)
+    
+    df_raw_scout = prepare_df(s_c)
+    df_emner = df_raw_scout[df_raw_scout['ER_EMNE'] == True].copy()
     df_hif = prepare_df(h_c, is_hif=True)
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # Lister (Emner & HIF)
-    for t, d, s, p in [(t1, df_emner, e_s, EMNE_PATH), (t2, df_hif, h_s, HIF_PATH)]:
+    data_configs = [(t1, df_emner, s_s, SCOUT_DB_PATH), (t2, df_hif, h_s, HIF_PATH)]
+    
+    for t, d, s, p in data_configs:
         with t:
-            if d.empty: continue
+            if d.empty:
+                st.info("Ingen data fundet.")
+                continue
+            
             h = min(len(d) * 35 + 40, 500)
-            # RETTET: Kolonnenavne her skal matche dem i prepare_df (STORE BOGSTAVER)
             ed = st.data_editor(
                 d[['POS', 'Navn', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']].style.apply(style_kontrakt, axis=None), 
                 hide_index=True, use_container_width=True, height=h, key=f"ed_{p}",
                 column_config={
                     "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
                     "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys()), width="small"),
-                    "KONTRAKT": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY")
+                    "KONTRAKT": st.column_config.DateColumn("Udloeb", format="DD.MM.YYYY")
                 }, disabled=['Navn', 'KLUB']
             )
             
-            # Gem ændringer
             if not ed['SKYGGEHOLD'].equals(d['SKYGGEHOLD']) or not ed['POS'].equals(d['POS']):
+                # Hent nyeste version af den specifikke fil før gem
+                full_c, current_sha = get_github_file(p)
+                df_to_save = pd.read_csv(StringIO(full_c))
+                
                 for idx in ed.index:
                     name = d.iloc[idx]['Navn']
-                    d.loc[d['Navn'] == name, ['SKYGGEHOLD', 'POS']] = [ed.iloc[idx]['SKYGGEHOLD'], ed.iloc[idx]['POS']]
-                push_to_github(p, "Update", d.to_csv(index=False), s)
+                    df_to_save.loc[df_to_save['Navn'] == name, ['SKYGGEHOLD', 'POS']] = [ed.loc[idx, 'SKYGGEHOLD'], ed.loc[idx, 'POS']]
+                
+                push_to_github(p, "Opdatering af status", df_to_save.to_csv(index=False), current_sha)
                 st.rerun()
 
     # Skyggeliste
@@ -145,19 +141,22 @@ def vis_side():
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
                     "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
-                    "KONTRAKT": st.column_config.DateColumn("Udløb", format="DD.MM.YYYY", disabled=True)
+                    "KONTRAKT": st.column_config.DateColumn("Udloeb", format="DD.MM.YYYY", disabled=True)
                 }, disabled=['Navn']
             )
-            # Gem taktiske ændringer
+            
             if not ed_s[['POS_343', 'POS_433', 'POS_352']].equals(df_s[['POS_343', 'POS_433', 'POS_352']]):
                 for _, row in ed_s.iterrows():
-                    for src, p, sh in [(df_emner, EMNE_PATH, e_s), (df_hif, HIF_PATH, h_s)]:
-                        if row['Navn'] in src['Navn'].values:
-                            src.loc[src['Navn'] == row['Navn'], ['POS_343', 'POS_433', 'POS_352']] = [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Tactical", src.to_csv(index=False), sh)
+                    # Opdater i begge mulige kilder
+                    for src_p, src_sha in [(SCOUT_DB_PATH, s_s), (HIF_PATH, h_s)]:
+                        c, sha = get_github_file(src_p)
+                        df_tmp = pd.read_csv(StringIO(c))
+                        if row['Navn'] in df_tmp['Navn'].values:
+                            df_tmp.loc[df_tmp['Navn'] == row['Navn'], ['POS_343', 'POS_433', 'POS_352']] = [row['POS_343'], row['POS_433'], row['POS_352']]
+                            push_to_github(src_p, "Taktisk opdatering", df_tmp.to_csv(index=False), sha)
                 st.rerun()
 
-    # Banevisning (Bliver nu også styret af KONTRAKT)
+    # Banevisning
     with t4:
         df_s = pd.concat([df_emner[df_emner['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
