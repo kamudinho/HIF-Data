@@ -130,9 +130,20 @@ def vis_side(df):
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
         # --- DIN NYE LEGEND LOGIK ---
-        ax.text(1, 5, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(12, 5, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(25, 5, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        # --- TEGN LEGENDS (Nu fokuseret på Transfer-vinduer) ---
+        # Vi placerer dem ved y=78 (bunden af banen) for at sikre de er synlige
+        ax.text(2, 78, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+                zorder=5, bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        
+        ax.text(20, 78, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+                zorder=5, bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        
+        # Den nye Transfer-legend (erstatter 'Leje')
+        ax.text(40, 78, " Ny Transfer (Markeret med ramme) ", size=8, fontweight='bold', va='center', 
+                zorder=5, bbox=dict(facecolor='white', edgecolor=hif_rod, linewidth=1.5, boxstyle='round,pad=0.2'))
+
+        # --- DYNAMISK POSITIONS LOGIK ---
+        # (Sørg for at din tegn-spiller logik bruger 'edgecolor=hif_rod' hvis p['TRANSFER_VINDUE'] != 'Nu')
 
         # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
