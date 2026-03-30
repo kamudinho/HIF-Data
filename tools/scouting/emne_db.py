@@ -67,7 +67,7 @@ def prepare_df(content, is_hif=False):
         df = df.sort_values('DATO', ascending=False)
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-    # --- AUTOMATISK OPRETTELSE AF KOLONNER (INKL. TRANSFER_VINDUE) ---
+    # --- AUTOMATISK OPRETTELSE AF KOLONNER ---
     cols_to_fix = {
         'POS_343': "0", 'POS_433': "0", 'POS_352': "0", 'POS': "0", 
         'ER_EMNE': False, 'SKYGGEHOLD': False, 'TRANSFER_VINDUE': "Nu"
@@ -101,7 +101,7 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TAB 1 & 2: LISTER ---
+    # --- TAB 1 & 2: LISTER (EMNER & HIF) ---
     configs = [(t1, df_emner, s_s, SCOUT_DB_PATH, "EMNER"), (t2, df_hif, h_s, HIF_PATH, "HIF")]
     
     for tab, df_display, sha, path, key_prefix in configs:
@@ -110,7 +110,8 @@ def vis_side():
                 st.info("Ingen data.")
                 continue
 
-            df_editor_input = df_display.set_index('Navn')[['POS', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']]
+            # Inkluderer nu TRANSFER_VINDUE i input-sættet
+            df_editor_input = df_display.set_index('Navn')[['POS', 'TRANSFER_VINDUE', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']]
             
             edited_df = st.data_editor(
                 df_editor_input.style.apply(style_kontrakt, axis=None),
@@ -120,6 +121,7 @@ def vis_side():
                 column_config={
                     "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
                     "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys()), width="small"),
+                    "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS, width="medium"),
                     "KONTRAKT": st.column_config.DateColumn("Udloeb", format="DD.MM.YYYY"),
                     "KLUB": st.column_config.Column(disabled=True)
                 }
@@ -132,16 +134,16 @@ def vis_side():
                 if 'NAVN' in df_to_save.columns: df_to_save = df_to_save.rename(columns={'NAVN': 'Navn'})
 
                 for navn, row in edited_df.iterrows():
-                    df_to_save.loc[df_to_save['Navn'] == navn, ['SKYGGEHOLD', 'POS']] = [row['SKYGGEHOLD'], row['POS']]
+                    df_to_save.loc[df_to_save['Navn'] == navn, ['SKYGGEHOLD', 'POS', 'TRANSFER_VINDUE']] = [row['SKYGGEHOLD'], row['POS'], row['TRANSFER_VINDUE']]
                 
-                push_to_github(path, "Update status", df_to_save.to_csv(index=False), current_sha)
+                push_to_github(path, "Update status og vindue", df_to_save.to_csv(index=False), current_sha)
                 st.rerun()
 
-    # --- TAB 3: SKYGGELISTE (Med Transfer Vindue) ---
+    # --- TAB 3: SKYGGELISTE (Med Sortering og Vindue) ---
     with t3:
         df_s = pd.concat([df_emner[df_emner['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
-            # Sortering: Nu øverst, derefter fremtidige vinduer
+            # Sortering: Nu først, derefter kronologisk
             df_s['sort_idx'] = df_s['TRANSFER_VINDUE'].apply(lambda x: VINDUE_OPTIONS.index(x) if x in VINDUE_OPTIONS else 99)
             df_s = df_s.sort_values('sort_idx').drop(columns=['sort_idx'])
 
@@ -163,23 +165,24 @@ def vis_side():
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
                         c, sha = get_github_file(p)
-                        df_tmp = pd.read_csv(StringIO(c))
-                        df_tmp.columns = [col.upper().strip() for col in df_tmp.columns]
-                        if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
-                        if navn in df_tmp['Navn'].values:
-                            df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Vindue/Taktik update", df_tmp.to_csv(index=False), sha)
+                        if c:
+                            df_tmp = pd.read_csv(StringIO(c))
+                            df_tmp.columns = [col.upper().strip() for col in df_tmp.columns]
+                            if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
+                            if navn in df_tmp['Navn'].values:
+                                df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']]
+                                push_to_github(p, "Taktik/Vindue update", df_tmp.to_csv(index=False), sha)
                 st.rerun()
 
     # --- TAB 4: BANEVISNING (Med Vindue-filter) ---
     with t4:
         df_s = pd.concat([df_emner[df_emner['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
-            c1, c2 = st.columns([2, 3])
-            with c1:
-                st.session_state.valgt_vindue = st.selectbox("Vælg transfervindue:", VINDUE_OPTIONS)
+            c_filter, _ = st.columns([2, 3])
+            with c_filter:
+                st.session_state.valgt_vindue = st.selectbox("Vis trup for vindue:", VINDUE_OPTIONS)
             
-            # Filtrering: Vis spillere fra det valgte vindue + alle dem der er sat til "Nu"
+            # Filtrering: Vis dem i valgte vindue + dem der er "Nu" (nuværende trup)
             df_filtered = df_s[df_s['TRANSFER_VINDUE'].isin(["Nu", st.session_state.valgt_vindue])]
 
             f = st.session_state.form_skygge
@@ -206,20 +209,18 @@ def vis_side():
                     
                     for i, (_, p) in enumerate(players.iterrows()):
                         bg = "white"
-                        # Marker nye spillere (ikke "Nu") med en anden kant-farve
-                        edge_color = HIF_ROD if p['TRANSFER_VINDUE'] != "Nu" else "#333"
+                        edge = HIF_ROD if p['TRANSFER_VINDUE'] != "Nu" else "#333"
                         
                         if pd.notna(p['KONTRAKT']):
                             diff = (p['KONTRAKT'] - datetime.now().date()).days
                             if diff < 183: bg = "#ffcccc"
                             elif diff <= 365: bg = "#ffffcc"
                         
-                        name_display = p['Navn']
-                        if p['TRANSFER_VINDUE'] != "Nu":
-                            name_display += f" ({p['TRANSFER_VINDUE']})"
-                            
-                        ax.text(x, y+(i*3.5), name_display, size=7, ha='center', weight='bold', 
-                                bbox=dict(facecolor=bg, edgecolor=edge_color, alpha=0.9, boxstyle='square,pad=0.1', linewidth=1.5 if p['TRANSFER_VINDUE'] != "Nu" else 1))
+                        name_txt = p['Navn']
+                        if p['TRANSFER_VINDUE'] != "Nu": name_txt += f" ({p['TRANSFER_VINDUE']})"
+                        
+                        ax.text(x, y+(i*3.5), name_txt, size=7, ha='center', weight='bold', 
+                                bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=1.5 if p['TRANSFER_VINDUE'] != "Nu" else 1))
                 st.pyplot(fig)
 
 if __name__ == "__main__":
