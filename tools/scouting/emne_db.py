@@ -9,59 +9,80 @@ REPO = "Kamudinho/HIF-data"
 DB_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-@st.cache_data(ttl=60)
-def load_raw_data():
+# --- 1. HURTIG INDLÆSNING & RENS ---
+@st.cache_data(ttl=60) # Opdaterer hvert minut
+def load_data():
     url = f"https://api.github.com/repos/{REPO}/contents/{DB_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     r = requests.get(url, headers=headers)
+    
     if r.status_code == 200:
         content = base64.b64decode(r.json()['content']).decode('utf-8')
         df = pd.read_csv(StringIO(content))
-        # RENS KOLONNER MED DET SAMME
+        
+        # Rens kolonnenavne (fjerner usynlige mellemrum)
         df.columns = df.columns.str.strip()
+        
+        # Konverter dato og sorter så nyeste observation er øverst
+        df['DATO'] = pd.to_datetime(df['DATO'], errors='coerce')
+        df = df.sort_values('DATO', ascending=False)
+        
+        # Tving Skyggehold til at være sande booleans
+        df['SKYGGE_BOOL'] = df['SKYGGEHOLD'].astype(str).str.strip().str.upper() == 'TRUE'
+        
         return df
     return pd.DataFrame()
 
 def vis_side():
-    st.title("Scouting | Emnedatabase")
+    st.set_page_config(page_title="HIF Scouting Database", layout="wide")
     
-    df = load_raw_data()
+    df = load_data()
     
     if df.empty:
-        st.error("Ingen data fundet! Tjek om stien 'data/scouting_db.csv' er korrekt i dit repo.")
+        st.error("Kunne ikke hente data fra GitHub.")
         return
 
-    # TEST: Vis de første 5 rækker af din CSV direkte på skærmen
-    st.write("### Rå data tjek (Ser du dine spillere herunder?)")
-    st.write(df.head())
-
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Banevisning"])
+    # Lav en unik liste (kun den nyeste rapport pr. spiller)
+    df_unique = df.drop_duplicates('Navn').copy()
 
     # --- FILTRERING ---
-    # Vi laver en maske, der fanger alt, hvor der står 'Hvidovre' i klubnavnet
-    mask_hif = df_unique['KLUB'].astype(str).str.contains("Hvidovre", case=False, na=False)
+    # Vi bruger 'Hvidovre' som keyword (uafhængig af store/små bogstaver)
+    is_hif = df_unique['KLUB'].str.contains("Hvidovre", case=False, na=False)
     
+    df_hif = df_unique[is_hif]
+    df_emner = df_unique[~is_hif]
+    df_skygge = df_unique[df_unique['SKYGGE_BOOL'] == True]
+
+    # --- UI ---
+    tab1, tab2, tab3 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste"])
+
     with tab1:
-        st.subheader("Søgning: Emner")
-        # Vis alt der IKKE er HIF
-        df_emner = df_unique[~mask_hif]
-        st.data_editor(df_emner[['Navn', 'KLUB', 'POSITION', 'RATING_AVG', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
-    
+        st.subheader(f"Eksterne emner ({len(df_emner)})")
+        st.dataframe(
+            df_emner[['Navn', 'KLUB', 'POSITION', 'RATING_AVG', 'PRIORITET']], 
+            use_container_width=True, hide_index=True
+        )
+
     with tab2:
-        st.subheader("Hvidovre IF Trup")
-        # Vis alt der ER HIF
-        df_hif_trup = df_unique[mask_hif]
-        if df_hif_trup.empty:
-            st.warning("Ingen spillere fundet med klubnavnet 'Hvidovre'. Tjek stavemåde i CSV.")
-        else:
-            st.data_editor(df_hif_trup[['Navn', 'POSITION', 'RATING_AVG', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
-    
+        st.subheader(f"Hvidovre IF Trup ({len(df_hif)})")
+        st.dataframe(
+            df_hif[['Navn', 'POSITION', 'RATING_AVG', 'PRIORITET', 'STATUS']], 
+            use_container_width=True, hide_index=True
+        )
+
     with tab3:
-        st.subheader("Skyggeliste")
-        # Vi tjekker om SKYGGEHOLD er True, uanset om det er gemt som tekst eller bool
-        mask_skygge = df_unique['SKYGGEHOLD'].astype(str).str.strip().str.upper() == "TRUE"
-        df_skygge = df_unique[mask_skygge]
-        st.data_editor(df_skygge[['Navn', 'KLUB', 'POSITION', 'SKYGGEHOLD']], use_container_width=True, hide_index=True)
+        st.subheader(f"Skyggeliste / Fokusspillere ({len(df_skygge)})")
+        if not df_skygge.empty:
+            st.dataframe(
+                df_skygge[['Navn', 'KLUB', 'POSITION', 'RATING_AVG', 'PRIORITET']], 
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.info("Ingen spillere er markeret med 'True' i SKYGGEHOLD.")
+
+    # Status i bunden
+    st.caption(f"Sidst opdateret: {datetime.now().strftime('%H:%M:%S')} (Data hentet fra scouting_db.csv)")
 
 if __name__ == "__main__":
+    from datetime import datetime
     vis_side()
