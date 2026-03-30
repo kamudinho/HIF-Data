@@ -125,42 +125,42 @@ def vis_side(df):
                 st.rerun()
 
     with col_pitch:
+        # Tilføjer padding top/bottom for at give plads til legend og de nederste spillere
         pitch = Pitch(
             pitch_type='statsbomb', 
             pitch_color='#ffffff', 
             line_color='#333', 
             linewidth=1,
-            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
+            pad_top=10, pad_bottom=10, pad_left=0, pad_right=0
         )
-        fig, ax = pitch.draw(figsize=(13, 8))
+        fig, ax = pitch.draw(figsize=(13, 9))
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        # --- LEGENDS (Opdateret med grøn transfer boks) ---
-        ax.text(2, 98, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+        # --- LEGENDS (Placeret øverst over banen for bedre overblik) ---
+        ax.text(2, -5, " < 6 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
-        ax.text(20, 98, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
+        ax.text(20, -5, " 6-12 mdr (Udløb) ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
         
-        ax.text(40, 98, " Ny Transfer ", size=8, fontweight='bold', va='center', 
+        ax.text(40, -5, " Ny Transfer ", size=8, fontweight='bold', va='center', 
                 zorder=5, bbox=dict(facecolor=transfer_gron, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
         # --- DYNAMISK POSITIONS LOGIK ---
         form = st.session_state.formation_valg
         
-        # Position configs... (forkortet her, men bevares i din kodelogik)
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
-                          11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+                          11: (85, 15, 'VW'), 9: (105, 40, 'ANG'), 7: (85, 65, 'HW')}
         elif form == "4-3-3":
             pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
                           6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
-                          11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+                          11: (85, 15, 'VW'), 9: (105, 40, 'ANG'), 7: (85, 65, 'HW')}
         else: # 3-5-2
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
                           5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 2: (60, 70, 'HWB'), 
-                          8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
+                          8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (105, 28, 'ANG'), 7: (105, 52, 'ANG')}
 
         for pos_num, (x, y, label) in pos_config.items():
             if form == "4-3-3" and pos_num == 4:
@@ -175,14 +175,15 @@ def vis_side(df):
             spillere = spillere.sort_values('PRIOR', ascending=True)
             
             if not spillere.empty:
-                ax.text(x, y - 4.5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
+                # Positions-label (f.eks. ANG, MM)
+                ax.text(x, y - 5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
                         bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
                 
+                # Spiller-navne listet under positionen med øget lodret afstand
                 for i, (_, p) in enumerate(spillere.iterrows()):
-                    # Her bruges get_status_color nu, som prioriterer grøn hvis det er en transfer
                     face_color = get_status_color(p)
                     
-                    ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
+                    ax.text(x, y + (i * 3.5), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
                             bbox=dict(facecolor=face_color, 
                                      edgecolor='#333', 
                                      linewidth=0.5, 
