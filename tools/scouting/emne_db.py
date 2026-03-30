@@ -80,7 +80,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- HOVEDSIDE ---
-def vis_side():
+def vis_side(df):
     # CSS til at styre bredden på dropdown og generel styling
     st.markdown("""
         <style>
