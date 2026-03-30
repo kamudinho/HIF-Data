@@ -203,7 +203,7 @@ def vis_side(df_input_unused=None):
                 }[f]
                 
                 for pid, (x, y, lbl) in m.items():
-                    ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    ax.text(x, y-4, lbl, size=7, color="white", weight='bold', ha='right', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                     for i, (_, p) in enumerate(players.iterrows()):
                         bg = "white"; edge = "#333"; lw = 1
