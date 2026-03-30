@@ -23,7 +23,7 @@ POS_OPTIONS = {
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
 }
 
-VINDUE_OPTIONS = ["Nu", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_OPTIONS = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
@@ -87,7 +87,7 @@ def vis_side(df_input_unused=None):
             .stTabs { margin-top: -35px; }
             div[data-baseweb="tab-panel"] {
                 padding-top: 0px !important;
-                margin-top: -15px !important;
+                margin-top: -10px !important;
             }
             
             /* Fjern ekstra luft under knapperne til højre */
