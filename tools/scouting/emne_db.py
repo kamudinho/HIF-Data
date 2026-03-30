@@ -183,10 +183,10 @@ def vis_side(df_input_unused=None):
                 fig, ax = pitch.draw(figsize=(12, 7))
                 
                 # Legends og Overskrift
-                ax.text(2, -4, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(14, -4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(28, -4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
-                ax.text(118, -4, f"Vindue: {sel_v}", size=14, color=HIF_ROD, weight='bold', ha='right')
+                ax.text(2, 4, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(14, 4, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(28, 4, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(118, 4, f"Vindue: {sel_v}", size=14, color=HIF_ROD, weight='bold', ha='right')
 
                 m = {
                     "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
