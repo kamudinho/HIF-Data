@@ -208,7 +208,7 @@ def vis_side(df_input_unused=None):
                             if diff < 183: bg = "#ffcccc"
                             elif diff <= 365: bg = "#ffffcc"
                         
-                        ax.text(x, y+(i*3.5), f"{p['Navn']}{'*' if is_new else ''}", size=7.5, ha='center', weight='bold', 
+                        ax.text(x, y+(i*2.3), f"{p['Navn']}{'*' if is_new else ''}", size=7.5, ha='center', weight='bold', 
                                 bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=lw))
                 st.pyplot(fig)
 
