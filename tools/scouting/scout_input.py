@@ -75,6 +75,20 @@ def vis_side(dp):
     scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"), disabled=True)
     st.caption(f"**Spiller ID:** {data['id'] if data['id'] else '-'}")
 
+    # NY LINJE 2: POS, Prioritet og Kontrakt
+        l2_c1, l2_c2, l2_c3 = st.columns(3)
+        pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
+        pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
+        kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
+
+        # NY LINJE 3: Status og Økonomi
+        l3_c1, l3_c2, l3_c3 = st.columns(3)
+        prio_status = l3_c1.selectbox("Prioritet", ["Scoutes nu", "Scoutes senere", "Hold øje", "Arkiveret"])
+        forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
+        lon_input = l3_c3.text_input("Lønniveau")
+
+        st.markdown("---")
+
     # --- FORMULAREN ---
     with st.form("rapport_form", clear_on_submit=True):
         st.caption("Parametre (1-6)")
@@ -94,19 +108,6 @@ def vis_side(dp):
 
         st.markdown("---")
         
-        # NY LINJE 2: POS, Prioritet og Kontrakt
-        l2_c1, l2_c2, l2_c3 = st.columns(3)
-        pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)], index=0)
-        pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
-        kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
-
-        # NY LINJE 3: Status og Økonomi
-        l3_c1, l3_c2, l3_c3 = st.columns(3)
-        prio_status = l3_c1.selectbox("Prioritet", ["Scoutes nu", "Scoutes senere", "Hold øje", "Arkiveret"])
-        forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
-        lon_input = l3_c3.text_input("Lønniveau")
-
-        st.markdown("---")
         # Status (Eksisterende) og Potentiale
         c1, c2 = st.columns(2)
         status_label = c1.selectbox("Vurdering Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
