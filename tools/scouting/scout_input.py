@@ -77,7 +77,6 @@ def vis_side(dp):
 
     # --- FORMULAREN ---
     with st.form("rapport_form", clear_on_submit=True):
-        st.write("### Status & Planlægning")
         
         # Linje 2: POS, Prioritet og Kontrakt
         l2_c1, l2_c2, l2_c3 = st.columns(3)
