@@ -5,7 +5,7 @@ from mplsoccer import Pitch
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-def vis_side():
+def vis_side(df):
     if df is None:
         st.error("Ingen data fundet for truppen.")
         return
