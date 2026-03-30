@@ -13,12 +13,21 @@ DB_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 
-# --- POSITIONSMAPPING ---
+# Præcis mapping af dine talværdier fra CSV'en
 POS_OPTIONS = {
-    "0": "Vælg position", "1": "Målmand", "2": "Højre back", "5": "Venstre back",
-    "4": "Midtstopper (V)", "3.5": "Midtstopper (C)", "3": "Midtstopper (H)",
-    "6": "Defensiv midt", "8": "Central midt", "7": "Højre kant",
-    "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
+    "0.0": "Vælg", "0": "Vælg",
+    "1.0": "Målmand", "1": "Målmand",
+    "2.0": "Højre back", "2": "Højre back",
+    "5.0": "Venstre back", "5": "Venstre back",
+    "4.0": "Midtstopper (V)", "4": "Midtstopper (V)",
+    "3.5": "Midtstopper (C)", 
+    "3.0": "Midtstopper (H)", "3": "Midtstopper (H)",
+    "6.0": "Defensiv midt", "6": "Defensiv midt",
+    "8.0": "Central midt", "8": "Central midt",
+    "7.0": "Højre kant", "7": "Højre kant",
+    "11.0": "Venstre kant", "11": "Venstre kant",
+    "10.0": "Offensiv midt", "10": "Offensiv midt",
+    "9.0": "Angriber", "9": "Angriber"
 }
 
 # --- GITHUB FUNKTIONER ---
@@ -42,11 +51,11 @@ def push_to_github(path, message, content, sha=None):
 
 # --- MODAL: SPILLERPROFIL ---
 @st.dialog("Spillerprofil", width="large")
-def vis_spiller_modal(valgt_navn, alle_rapporter):
-    # Filtrér historik for spilleren
-    spiller_historik = alle_rapporter[alle_rapporter['Navn'] == valgt_navn].sort_values('DATO', ascending=False)
-    nyeste = spiller_historik.iloc[0]
+def vis_spiller_modal(valgt_navn, df_full):
+    spiller_data = df_full[df_full['Navn'] == valgt_navn].sort_values('DATO', ascending=False)
+    nyeste = spiller_data.iloc[0]
     
+    # Rens WYID til billede
     pid = str(nyeste.get('PLAYER_WYID', '')).split('.')[0]
     img_url = f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
@@ -55,165 +64,140 @@ def vis_spiller_modal(valgt_navn, alle_rapporter):
         st.image(img_url, width=150, fallback="https://via.placeholder.com/150")
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **Pos:** {nyeste.get('POSITION', '-')}")
-        st.write(f"**Rating:** {nyeste.get('RATING_AVG', 0)} | **Status:** {nyeste.get('STATUS', '-')}")
+        st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **Rating:** {nyeste.get('RATING_AVG', 0)}")
+        st.write(f"**Status:** {nyeste.get('STATUS', '-')} | **Prioritet:** {nyeste.get('PRIORITET', '-')}")
 
-    t1, t2, t3 = st.tabs(["Seneste Rapport", "Historik", "Udvikling"])
-    
-    # Egenskaber til Radar
-    keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-    
+    t1, t2 = st.tabs(["Seneste Rapport", "Historik"])
     with t1:
-        col_stats, col_radar, col_text = st.columns([1, 2, 2])
-        with col_stats:
-            for k in keys:
-                val = nyeste.get(k, 1)
-                st.write(f"**{k.title()}:** {val}")
-        with col_radar:
-            r_vals = [float(str(nyeste.get(k, 1)).replace(',', '.')) for k in keys]
-            labels = [k.title()[:5] + '.' for k in keys]
-            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=labels + [labels[0]], fill='toself', line_color=HIF_ROD))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=300, margin=dict(l=30,r=30,t=30,b=30))
-            st.plotly_chart(fig, use_container_width=True)
-        with col_text:
-            st.success(f"**Styrker:**\n\n{nyeste.get('STYRKER', '-')}")
-            st.info(f"**Vurdering:**\n\n{nyeste.get('VURDERING', '-')}")
-
+        st.info(f"**Vurdering:**\n\n{nyeste.get('VURDERING', '-')}")
+        st.success(f"**Styrker:**\n\n{nyeste.get('STYRKER', '-')}")
     with t2:
-        for _, rap in spiller_historik.iterrows():
-            dato_str = rap['DATO'].strftime('%d. %b %Y') if hasattr(rap['DATO'], 'strftime') else str(rap['DATO'])
-            with st.expander(f"Rapport - {dato_str} (Scout: {rap.get('SCOUT','?')})"):
-                st.write(f"**Rating:** {rap.get('RATING_AVG', 0)}")
-                st.write(f"**Vurdering:** {rap.get('VURDERING', '-')}")
-
-    with t3:
-        hist_evo = spiller_historik.sort_values('DATO')
-        fig_evo = go.Figure(go.Scatter(x=hist_evo['DATO'], y=hist_evo['RATING_AVG'], mode='lines+markers', line_color=HIF_ROD))
-        fig_evo.update_layout(yaxis=dict(range=[1, 6], title="Rating"), height=300)
-        st.plotly_chart(fig_evo, use_container_width=True)
+        for _, rap in spiller_data.iterrows():
+            st.write(f"**{rap['DATO'].date()}:** Rating {rap['RATING_AVG']} - {rap['VURDERING']}")
 
 # --- HOVEDLOGIK ---
 def vis_side():
+    st.set_page_config(page_title="HIF Scouting", layout="wide")
+    
+    # Session States
     if "active_player" not in st.session_state: st.session_state.active_player = None
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # Hent data fra GitHub
+    # Hent data
     content, sha = get_github_file(DB_PATH)
     if not content:
-        st.error("Kunne ikke hente data fra GitHub.")
+        st.error("Kunne ikke finde scouting_db.csv")
         return
 
-    # Læs CSV og standardiser
+    # Læs og tving kolonnenavne til korrekt format
     df_raw = pd.read_csv(StringIO(content))
-    # Vi laver en kopi til visning hvor vi tvinger kolonnenavne til at være pæne
-    df_clean = df_raw.copy()
     
-    # Sikr at vigtige kolonner findes (case-insensitive check)
-    cols_upper = [c.upper() for c in df_clean.columns]
-    df_clean.columns = cols_upper
+    # AUTO-MAPPER: Vi omdøber kolonnerne internt så de matcher koden
+    col_map = {c.upper(): c for c in df_raw.columns}
     
-    # Mapping tilbage til de navne vi bruger i koden
-    rename_map = {
-        'NAVN': 'Navn', 'KLUB': 'KLUB', 'POSITION': 'POSITION', 
-        'RATING_AVG': 'RATING_AVG', 'DATO': 'DATO', 'SKYGGEHOLD': 'SKYGGEHOLD'
-    }
-    df_clean = df_clean.rename(columns=rename_map)
-    
-    # Konverter typer
-    df_clean['DATO'] = pd.to_datetime(df_clean['DATO'], errors='coerce')
-    df_clean['SKYGGEHOLD'] = df_clean['SKYGGEHOLD'].astype(str).str.upper().map({'TRUE': True, 'FALSE': False}).fillna(False)
-    
-    # Nyeste rapport pr. spiller
-    df_unique = df_clean.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
+    def get_col(target):
+        return col_map.get(target.upper(), target)
 
-    t1, t2, t3, t4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Banevisning"])
+    # Opret en visnings-DF med standardiserede navne
+    df = df_raw.copy()
+    df['DATO'] = pd.to_datetime(df[get_col('DATO')], errors='coerce')
+    df['Navn'] = df[get_col('Navn')]
+    df['KLUB'] = df[get_col('KLUB')]
+    df['RATING_AVG'] = pd.to_numeric(df[get_col('RATING_AVG')], errors='coerce').fillna(0)
+    
+    # Håndtering af Skyggehold (Boolean check)
+    skygge_col = get_col('SKYGGEHOLD')
+    df['SKYGGE_BOOL'] = df[skygge_col].astype(str).str.upper().str.strip() == 'TRUE'
 
-    # Filtrér grupper
-    df_hif = df_unique[df_unique['KLUB'] == 'Hvidovre IF'].copy()
-    df_emner = df_unique[df_unique['KLUB'] != 'Hvidovre IF'].copy()
+    # Unik liste (nyeste rapport først)
+    df_unique = df.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
 
-    # --- TAB 1 & 2: OVERSIGTER ---
-    for tab, data, key_suffix in [(t1, df_emner, "emne"), (t2, df_hif, "hif")]:
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Emner", "🏠 Hvidovre IF", "📋 Skyggeliste", "🏟️ Banevisning"])
+
+    # --- LISTER ---
+    for tab, filter_val, key in [(tab1, False, "emner"), (tab2, True, "hif")]:
         with tab:
+            if filter_val:
+                data = df_unique[df_unique['KLUB'] == 'Hvidovre IF']
+            else:
+                data = df_unique[df_unique['KLUB'] != 'Hvidovre IF']
+            
             if data.empty:
-                st.info("Ingen spillere fundet.")
+                st.info("Ingen spillere i denne kategori.")
                 continue
-            
-            display_cols = ['Navn', 'KLUB', 'POSITION', 'RATING_AVG', 'SKYGGEHOLD']
-            df_disp = data[display_cols].copy()
-            df_disp.insert(0, "Profil", False)
-            
-            # Dynamisk højde
-            h = (len(df_disp) + 1) * 35 + 20
+
+            # Forbered data til editor
+            df_editor = data[['Navn', 'KLUB', 'RATING_AVG', 'SKYGGE_BOOL']].copy()
+            df_editor.insert(0, "Se", False)
             
             ed = st.data_editor(
-                df_disp,
+                df_editor,
                 column_config={
-                    "Profil": st.column_config.CheckboxColumn("Se", width="small"),
-                    "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
+                    "Se": st.column_config.CheckboxColumn("Profil", width="small"),
+                    "SKYGGE_BOOL": st.column_config.CheckboxColumn("Skygge", width="small"),
                     "RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f")
                 },
-                disabled=['Navn', 'KLUB', 'POSITION'],
-                hide_index=True, use_container_width=True, height=h, key=f"ed_{key_suffix}"
+                disabled=['Navn', 'KLUB'],
+                hide_index=True, use_container_width=True, key=f"editor_{key}"
             )
 
-            # Gem ændringer til Skyggehold
-            if not ed['SKYGGEHOLD'].equals(data['SKYGGEHOLD'].values):
+            # Gem ændringer i Skyggehold
+            if not ed['SKYGGE_BOOL'].equals(df_editor['SKYGGE_BOOL']):
                 for idx, row in ed.iterrows():
-                    player_name = row['Navn']
-                    df_raw.loc[df_raw.iloc[:, 2] == player_name, 'SKYGGEHOLD'] = str(row['SKYGGEHOLD'])
-                push_to_github(DB_PATH, "Update Skygge Status", df_raw.to_csv(index=False), sha)
+                    # Find alle rækker for spilleren i den oprindelige df_raw og opdater
+                    df_raw.loc[df_raw[get_col('Navn')] == row['Navn'], skygge_col] = row['SKYGGE_BOOL']
+                
+                push_to_github(DB_PATH, "Update Skyggehold", df_raw.to_csv(index=False), sha)
                 st.rerun()
 
-            # Åbn modal
-            valgte = ed[ed["Profil"] == True]
-            if not valgte.empty:
-                st.session_state.active_player = valgte.iloc[-1]['Navn']
+            # Trigger Profil
+            if ed["Se"].any():
+                st.session_state.active_player = ed[ed["Se"] == True].iloc[-1]["Navn"]
                 st.rerun()
 
-    # --- TAB 3: SKYGGELISTE (TAKTISK) ---
-    with t3:
-        df_s = df_unique[df_unique['SKYGGEHOLD'] == True].copy()
+    # --- SKYGGELISTE (TAKTISK) ---
+    with tab3:
+        df_s = df_unique[df_unique['SKYGGE_BOOL'] == True].copy()
         if not df_s.empty:
-            # Sørg for at taktiske kolonner findes
-            for c in ['POS_343', 'POS_433', 'POS_352']:
-                if c not in df_s.columns: df_s[c] = "0"
+            # Vi viser taktiske positioner
+            taktik_cols = [get_col('POS_343'), get_col('POS_433'), get_col('POS_352')]
             
-            # Vi viser taktiske valg. Vi caster til string for at matche POS_OPTIONS nøgler
-            df_s[['POS_343', 'POS_433', 'POS_352']] = df_s[['POS_343', 'POS_433', 'POS_352']].astype(str).replace('nan','0').apply(lambda x: x.str.split('.').str[0] if '.' in str(x) else x)
+            # Konverter værdier til string for selectbox (f.eks. 3.5 -> "3.5")
+            for c in taktik_cols:
+                df_s[c] = df_s[c].astype(str).str.replace('nan', '0').apply(lambda x: x.split('.')[0] if x.endswith('.0') else x)
 
             ed_s = st.data_editor(
-                df_s[['Navn', 'POS_343', 'POS_433', 'POS_352']],
-                hide_index=True, use_container_width=True,
+                df_s[['Navn'] + taktik_cols],
                 column_config={
-                    "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
-                    "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
-                    "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys()))
-                }, disabled=['Navn']
+                    get_col('POS_343'): st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
+                    get_col('POS_433'): st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
+                    get_col('POS_352'): st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys()))
+                },
+                disabled=['Navn'], hide_index=True, use_container_width=True
             )
             
-            if not ed_s[['POS_343', 'POS_433', 'POS_352']].equals(df_s[['POS_343', 'POS_433', 'POS_352']]):
+            if not ed_s[taktik_cols].equals(df_s[taktik_cols]):
                 for _, row in ed_s.iterrows():
-                    # Opdater rådata
-                    df_raw.loc[df_raw.iloc[:, 2] == row['Navn'], ['POS_343', 'POS_433', 'POS_352']] = [row['POS_343'], row['POS_433'], row['POS_352']]
-                push_to_github(DB_PATH, "Update Tactical Positions", df_raw.to_csv(index=False), sha)
+                    df_raw.loc[df_raw[get_col('Navn')] == row['Navn'], taktik_cols] = row[taktik_cols].values
+                push_to_github(DB_PATH, "Update Taktik", df_raw.to_csv(index=False), sha)
                 st.rerun()
+        else:
+            st.info("Marker spillere med 'Skygge' i oversigterne for at se dem her.")
 
-    # --- TAB 4: BANEVISNING ---
-    with t4:
-        df_pitch_data = df_unique[df_unique['SKYGGEHOLD'] == True].copy()
+    # --- BANEVISNING ---
+    with tab4:
+        df_pitch_data = df_unique[df_unique['SKYGGE_BOOL'] == True].copy()
         f = st.session_state.form_skygge
-        p_col = f"POS_{f.replace('-', '')}"
+        p_col = get_col(f"POS_{f.replace('-', '')}")
         
-        c_p, c_m = st.columns([5, 1])
-        with c_m:
+        c1, c2 = st.columns([5, 1])
+        with c2:
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"btn_{opt}", type="primary" if f == opt else "secondary", use_container_width=True):
+                if st.button(opt, type="primary" if f == opt else "secondary", use_container_width=True):
                     st.session_state.form_skygge = opt
                     st.rerun()
-        
-        with c_p:
-            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
+        with c1:
+            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333')
             fig, ax = pitch.draw(figsize=(10, 7))
             
             # Formationer
@@ -222,18 +206,16 @@ def vis_side():
             else: m = {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(95,32,'ANG'), 7:(95,48,'ANG')}
 
             for pid, (x, y, lbl) in m.items():
-                # Tegn boks for position
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                
-                # Find spillere på denne position (håndterer både 3 og 3.0 i data)
+                # Matcher både float-strings ("3.5") og int-strings ("3")
                 players = df_pitch_data[df_pitch_data[p_col].astype(str).str.startswith(str(pid))]
                 for i, (_, p) in enumerate(players.iterrows()):
                     ax.text(x, y+(i*4), p['Navn'], size=8, ha='center', weight='bold', bbox=dict(facecolor='white', edgecolor='#333', alpha=0.8, boxstyle='square,pad=0.1'))
             st.pyplot(fig)
 
-    # Trigger Modal
+    # Vis Modal hvis aktiv
     if st.session_state.active_player:
-        vis_spiller_modal(st.session_state.active_player, df_clean)
+        vis_spiller_modal(st.session_state.active_player, df)
         st.session_state.active_player = None
 
 if __name__ == "__main__":
