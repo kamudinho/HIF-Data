@@ -44,7 +44,7 @@ def vis_side(conn, name_map=None):
 
             /* 3. Skjul label i dropdown og gør den kompakt */
             div[data-testid="stSelectbox"] label { display: none; }
-            div[data-testid="stSelectbox"] { margin-top: -10px; }
+            div[data-testid="stSelectbox"] { margin-top: -5px; }
 
             /* 4. TABS: Fjern luft mellem header og tabs */
             .stTabs { margin-top: 0px; }
