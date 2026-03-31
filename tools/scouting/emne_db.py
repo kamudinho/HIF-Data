@@ -75,30 +75,30 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- APP LOGIK ---
-# FIX: Tilføjet df_input som argument, så den ikke fejler ved kald fra hovedfilen
+# FIX: Tilføjet df_input=None, så funktionen kan modtage argumentet fra din hovedfil
 def vis_side(df_input=None):
-    # Vi bruger ikke df_input her, da vi henter frisk data fra GitHub for at kunne gemme korrekt
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
+    # Hent frisk data for at sikre synkronisering med GitHub
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_global")
+    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_emne_db")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # 1 & 2: ADMINISTRATION
+    # Administrationstabs (1 & 2)
     for i, (path, name, is_hif_flag) in enumerate([(SCOUT_DB_PATH, "EMNE", False), (HIF_PATH, "HIF", True)]):
         with tabs[i]:
             curr_df = df_hif if is_hif_flag else df_scout[df_scout['ER_EMNE']]
             if not curr_df.empty:
                 cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
-                ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_{name}")
+                ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_{name}_{i}")
                 
                 if not ed.equals(curr_df.set_index('Navn')[cols]):
                     raw_c, sha = get_github_file(path)
@@ -114,14 +114,14 @@ def vis_side(df_input=None):
                     push_to_github(path, f"Update {name}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # 3: SKYGGELISTE (LÅST VINDUE)
+    # Skyggeliste (3)
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
         if not df_s.empty:
             ed_s = st.data_editor(
                 df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
                 use_container_width=True,
-                key="sky_ed_final",
+                key="sky_ed_final_db",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -140,10 +140,10 @@ def vis_side(df_input=None):
                         if navn in tmp['Navn'].values:
                             tmp.loc[tmp['Navn'] == navn, ['POS_343', 'POS_433', 'POS_352']] = \
                                 [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
+                            push_to_github(p, f"Update Skygge Pos {navn}", tmp.to_csv(index=False), rsha)
                 st.rerun()
 
-    # 4: BANE
+    # Bane (4)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -158,7 +158,7 @@ def vis_side(df_input=None):
         c_p, c_m = st.columns([8.5, 1.5])
         with c_m:
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"btn_{opt}", type="primary" if f == opt else "secondary"):
+                if st.button(opt, key=f"btn_bane_{opt}", type="primary" if f == opt else "secondary"):
                     st.session_state.form_skygge = opt
                     st.rerun()
 
@@ -177,6 +177,5 @@ def vis_side(df_input=None):
                     ax.text(px, py + (i * 2.5), f"{p['Navn']}{'*' if not p['IS_HIF'] else ''}", size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, alpha=0.8))
             st.pyplot(fig)
 
-# Sørg for at den kun kører hvis den kaldes direkte (til test)
 if __name__ == "__main__":
     vis_side()
