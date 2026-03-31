@@ -24,5 +24,19 @@ def get_users():
             "pass": "Gron1234", 
             "role": "scout",
             "restricted": ["ADMIN", "Opret emne", "Emnedatabase"] # Spærret for Emneliste
+        },
+        "jeppe": {
+            "pass": "Scout1234", 
+            "role": "scout",
+            "restricted": [
+                "ADMIN", 
+                "TRUPPEN", 
+                "HIF ANALYSE", 
+                "BETINIA LIGAEN", 
+                "Opret emne", 
+                "Emnedatabase", 
+                "Sammenligning",
+                "Database"
+            ] 
         }
     }
