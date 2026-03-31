@@ -146,13 +146,14 @@ def vis_side(df_input_unused=None):
                     st.rerun()
 
     # --- TAB 3: SKYGGELISTE ---
+    # --- TAB 3: SKYGGELISTE ---
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
             df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
-            ed_s = st.data_editor(df_s_input, use_container_width=True, height=600, key="sky_ed_v2",
+            
+            ed_s = st.data_editor(df_s_input, use_container_width=True, height=600, key="sky_ed_final",
                 column_config={
-                    # Her tillader vi alle vinduer, men logikken fra hovedlisten begrænser emnerne ved oprettelse
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS_GLOBAL),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
@@ -161,84 +162,76 @@ def vis_side(df_input_unused=None):
             
             if not ed_s.equals(df_s_input):
                 for navn, row in ed_s.iterrows():
+                    # Find ud af om spilleren er HIF eller EMNE
+                    is_hif_player = navn in df_hif['Navn'].values
+                    
+                    # SIKKERHEDS-CHECK: Hvis det er et emne, og man har valgt "Nuværende trup"
+                    final_vindue = row['TRANSFER_VINDUE']
+                    if not is_hif_player and final_vindue == "Nuværende trup":
+                        final_vindue = "Sommer 26" # Force-skift emner væk fra nuværende trup
+                        st.warning(f"Emnet '{navn}' kan ikke være i nuværende trup. Sat til Sommer 26.")
+
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
                         c_raw, sha_raw = get_github_file(p)
                         df_tmp = pd.read_csv(StringIO(c_raw))
                         df_tmp.columns = [col.upper().strip() for col in df_tmp.columns]
                         if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
+                        
                         if navn in df_tmp['Navn'].values:
+                            # Gem med de korrigerede værdier
+                            s_val = "Nu" if final_vindue == "Nuværende trup" else final_vindue
                             df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [
-                                row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']
+                                s_val, row['POS_343'], row['POS_433'], row['POS_352']
                             ]
-                            push_to_github(p, "Update Skygge Pos", df_tmp.to_csv(index=False), sha_raw)
+                            push_to_github(p, f"Update {navn} Pos/Vindue", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
     # --- TAB 4: BANE ---
-    # --- TAB 4: BANE ---
-with tabs[3]:
-    # 1. Forbered data
-    # Vi bruger df_hif (alle HIF spillere) og df_scout (kun dem der er markeret som emner)
-    
-    f = st.session_state.form_skygge
-    p_col = f"POS_{f.replace('-', '')}"
+    with tabs[3]:
+        f = st.session_state.form_skygge
+        p_col = f"POS_{f.replace('-', '')}"
 
-    # 2. Logik for filtrering baseret på valgt vindue
-    if sel_v == "Nuværende trup":
-        # VIS ALLE FRA HIF - ignore Skyggehold-tjekket her
-        df_filtered = df_hif.copy()
-        # Emner (df_scout) er ikke inkluderet her, da de ikke kan være i nuværende trup
-    else:
-        # FREMTIDIGE VINDUER:
-        # Vis kun spillere markeret med SKYGGEHOLD=True
-        # Dette gælder både HIF-spillere man vil beholde, og nye emner man vil hente
-        
-        # HIF spillere på skyggeholdet
-        hif_skygge = df_hif[df_hif['SKYGGEHOLD'] == True]
-        
-        # Emner på skyggeholdet til det VALGTE vindue
-        emne_skygge = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
-        
-        df_filtered = pd.concat([hif_skygge, emne_skygge], ignore_index=True)
-
-    # 3. Tegn banen
-    if not df_filtered.empty:
-        c_p, c_m = st.columns([8.5, 1.5])
-        with c_m:
-            for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
-                    st.session_state.form_skygge = opt
-                    st.rerun()
-
-        with c_p:
-            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-            fig, ax = pitch.draw(figsize=(10, 6))
+        # FILTRERINGSLOGIK JFR. DINE ØNSKER:
+        if sel_v == "Nuværende trup":
+            # 1. Vis ALLE fra HIF uanset skyggehold-status
+            # 2. Vis INGEN emner
+            df_filtered = df_hif.copy()
+        else:
+            # 1. Vis kun HIF spillere der er på SKYGGEHOLD
+            hif_skygge = df_hif[df_hif['SKYGGEHOLD'] == True]
+            # 2. Vis kun EMNER der er på SKYGGEHOLD og sat til det VALGTE vindue
+            emne_skygge = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             
-            m = {
-                "3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
-                "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
-                "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}
-            }[f]
+            df_filtered = pd.concat([hif_skygge, emne_skygge], ignore_index=True)
 
-            for pid, (x, y, lbl) in m.items():
-                ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+        if not df_filtered.empty:
+            c_p, c_m = st.columns([8.5, 1.5])
+            with c_m:
+                for opt in ["3-4-3", "4-3-3", "3-5-2"]:
+                    if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                        st.session_state.form_skygge = opt
+                        st.rerun()
+
+            with c_p:
+                pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
+                fig, ax = pitch.draw(figsize=(10, 6))
                 
-                # Filtrér spillere til den specifikke position
-                players_at_pos = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
-                
-                for i, (_, p) in enumerate(players_at_pos.iterrows()):
-                    # Logik for farve: Grøn hvis det er en "ny" spiller (ikke fra HIF)
-                    is_new = (p['IS_HIF'] == False)
-                    bg = GRON_NY if is_new else "white"
+                m = {
+                    "3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
+                    "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
+                    "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}
+                }[f]
+
+                for pid, (x, y, lbl) in m.items():
+                    ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
-                    # Tilføj stjerne til emner for at adskille dem visuelt
-                    label_text = f"{p['Navn']}{'*' if is_new else ''}"
-                    
-                    ax.text(x, y + (i * 2.3), label_text, size=7, ha='center', va='center', weight='bold', 
-                            bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
-            
-            st.pyplot(fig)
-    else:
-        st.info(f"Ingen spillere fundet for vinduet: {sel_v}")
+                    players_at_pos = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
+                    for i, (_, p) in enumerate(players_at_pos.iterrows()):
+                        is_new = (p['IS_HIF'] == False)
+                        bg = GRON_NY if is_new else "white"
+                        ax.text(x, y + (i * 2.3), f"{p['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', 
+                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
+                st.pyplot(fig)
 
 if __name__ == "__main__":
     vis_side()
