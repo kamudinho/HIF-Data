@@ -92,8 +92,6 @@ def vis_side(dp):
     t4.text_input("Fødselsdato", value=data['birth'], disabled=True)
     scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    st.markdown("---")
-
     # LINJE 2: Status, POS (1-11), Prioritet (Pos-prioritet)
     l2_c1, l2_c2, l2_c3 = st.columns(3)
     status_label = l2_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
@@ -108,7 +106,10 @@ def vis_side(dp):
 
     # LINJE 4: Lønniveau, Transferemne, Transfervindue
     l4_c1, l4_c2, l4_c3 = st.columns(3)
-    lon_input = l4_c1.text_input("Lønniveau")
+    lon_val = l4_c1.number_input("Lønniveau", min_value=0, step=1000, value=0, format="%d")
+    
+    # Formater tallet til streng med punktum som tusindtalsseparator til visning/gemning
+    lon_display = f"{lon_val:,}".replace(",", ".")
     
     # Centrering af checkbox
     with l4_c3:
