@@ -141,7 +141,14 @@ def vis_side(conn, name_map=None):
 
     with t2:
         valg = st.selectbox("Vælg parameter", ["KM/90", "HI m/90", "TOP_SPEED"])
-        fig = px.bar(summary.sort_values(valg, ascending=False), x='DISPLAY_NAME', y=valg, color_discrete_sequence=[HIF_ROD])
+        fig = px.bar(
+            summary.sort_values(valg, ascending=False), 
+            x='DISPLAY_NAME', 
+            y=valg, 
+            color_discrete_sequence=[HIF_ROD],
+            text_auto='.2f' if valg != "HI m/90" else 'd' # Tilføjer værdier over bars
+        )
+        fig.update_traces(textposition='outside') # Placerer teksten over søjlen
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
