@@ -181,7 +181,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         if col not in df_raw.columns:
             df_raw[col] = False if col != 'KONTRAKT' else ""
 
-    # Mapping til de navne koden bruger internt
     mapping = {
         'PLAYER_WYID': 'PLAYER_WYID', 
         'DATO': 'DATO', 
@@ -196,20 +195,22 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     rename_dict = {k: v for k, v in mapping.items() if k in df_raw.columns}
     df_raw = df_raw.rename(columns=rename_dict)
 
-    # Formatér dato for sortering
-    df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], dayfirst=True, errors='coerce')
-    
-    # Konverter Booleans korrekt
+    # Formatér Booleans korrekt
     for col in ['ER_EMNE', 'SKYGGEHOLD']:
         df_raw[col] = df_raw[col].astype(str).str.lower().map(
             {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
         ).fillna(False)
     
-    # Lav unik oversigt (nyeste rapport pr. spiller)
-    df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
+    # --- SORTERING & UNIK LISTE ---
+    # 1. Vi sorterer først efter DATO for at sikre, at drop_duplicates beholder den nyeste rapport
+    df_raw = df_raw.sort_values('DATO', ascending=False)
+    df_unique = df_raw.drop_duplicates('Navn').copy()
+
+    # 2. Nu sorterer vi den unikke liste efter KONTRAKT faldende
+    # Vi bruger 'na_position='last' for at få spillere uden kontraktdata i bunden
+    df_unique = df_unique.sort_values('Kontrakt', ascending=False, na_position='last')
 
     # --- FORBERED VISNING ---
-    # Vi fjerner 'Dato_Visning' og tilføjer 'Kontrakt' og 'SKYGGEHOLD'
     df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Kontrakt', 'ER_EMNE', 'SKYGGEHOLD']].copy()
     df_display.insert(0, "Se", False)
     
@@ -220,9 +221,9 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
             "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
             "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
             "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
-            "Kontrakt": st.column_config.TextColumn("Kontrakt")
+            "Kontrakt": st.column_config.TextColumn("Kontrakt", width="medium")
         },
-        disabled=['Navn', 'Klub', 'Rating_Avg', 'Kontrakt'], # 'Kontrakt' er nu read-only her
+        disabled=['Navn', 'Klub', 'Rating_Avg', 'Kontrakt'],
         hide_index=True, 
         use_container_width=True, 
         height=700,
@@ -230,27 +231,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     )
 
     # --- GEM ÆNDRINGER ---
-    # Tjek om enten ER_EMNE eller SKYGGEHOLD er ændret
-    changed_emne = not ed_result['ER_EMNE'].equals(df_display['ER_EMNE'])
-    changed_skygge = not ed_result['SKYGGEHOLD'].equals(df_display['SKYGGEHOLD'])
-
-    if changed_emne or changed_skygge:
+    if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
         with st.spinner("Opdaterer status på GitHub..."):
             for _, row in ed_result.iterrows():
-                # Opdater begge værdier i den store dataframe
                 df_raw.loc[df_raw['Navn'] == row['Navn'], ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
             
-            # Gør klar til gem (tilbage til UPPERCASE)
             df_to_save = df_raw.copy()
             reverse_map = {v: k for k, v in mapping.items()}
             df_to_save = df_to_save.rename(columns=reverse_map)
             
-            # Fjern hjælpe-kolonner hvis de findes (som f.eks. DATO hvis den blev konverteret)
-            # Her gemmer vi direkte
+            # Sørg for at gemme datoer i det format du ønsker (f.eks. streng) hvis de er blevet konverteret
             push_to_github(FILE_PATH, "Update Emne/Skygge status", df_to_save.to_csv(index=False), sha)
             st.rerun()
 
-    # Håndter "Se Profil" klik (uændret)
+    # Håndter modal-kald (uændret)
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
