@@ -77,28 +77,39 @@ def prepare_df(content, is_hif=False):
 
 # --- HOVEDSIDE ---
 def vis_side(df_input_unused=None):
-    # RENSING AF CSS (Kun ét kald, ingen dubletter)
+    # OPDATERET CSS til at rykke alt helt i top
     st.markdown("""
         <style>
-            /* 1. Maksimal bredde og luft i toppen */
-            div.block-container { padding: 1rem 2rem; max-width: 98% !important; }
+            /* 1. Fjern Streamlits standard top-margin helt */
+            .stAppViewBlockContainer {
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+            }
+            div.block-container {
+                padding-top: 0.5rem !important; /* Meget lidt luft til toppen */
+                padding-bottom: 0px !important;
+                max-width: 98% !important;
+            }
             
-            /* 2. Skjul labels i dropdowns */
-            div[data-testid="stSelectbox"] label { display: none; }
-            
-            /* 3. Afstand fra Tabs til indhold */
-            .stTabs { margin-top: 10px; }
-            div[data-baseweb="tab-panel"] {
-                padding-top: 25px !important; 
+            /* 2. Fjern ekstra luft over dropdown og tabs */
+            [data-testid="stVerticalBlock"] > div:first-child {
+                margin-top: -20px !important;
             }
 
-            /* 4. Tving tabellen til at fylde skærmen vertikalt */
-            div[data-testid="stDataEditor"] {
-                min-height: 700px !important;
-            }
+            /* 3. Dropdown-styling: skjul label og ryk den op */
+            div[data-testid="stSelectbox"] label { display: none; }
+            div[data-testid="stSelectbox"] { margin-bottom: -15px; }
             
-            /* 5. Rens luft i kolonner */
-            div[data-testid="column"] { padding-top: 0px !important; }
+            /* 4. Tabs: Mindsk luft over og under fanerne */
+            .stTabs { margin-top: 0px; }
+            div[data-baseweb="tab-panel"] {
+                padding-top: 15px !important; /* Afstand fra fanen til tabellen */
+            }
+
+            /* 5. Tabel-højde (justeret så den ikke tvinger siden unødigt lang) */
+            div[data-testid="stDataEditor"] {
+                min-height: 650px !important;
+            }
         </style>
     """, unsafe_allow_html=True)
     
@@ -110,14 +121,14 @@ def vis_side(df_input_unused=None):
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # --- TOP: DROPDOWN I HØJRE SIDE ---
+    # --- TOP SEKTION ---
+    # Her bruger vi en container til at holde vindue-vælgeren tæt på tabs
     t_col1, t_col2 = st.columns([4, 1])
     with t_col2:
         sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
-    # Tabs
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
-
+    
     # --- TAB 1 & 2: LISTER ---
     configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE_LIST"), 
                (tabs[1], df_hif, HIF_PATH, "HIF_LIST")]
