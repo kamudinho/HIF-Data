@@ -74,59 +74,54 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-# --- HOVEDFUNKTION ---
-def vis_side(*args, **kwargs):
+# --- APP LOGIK ---
+# FIX: Tilføjet df_input=None, så funktionen kan modtage argumentet fra din hovedfil
+def vis_side(df_input=None):
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
+    # Hent frisk data for at sikre synkronisering med GitHub
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_emne_db_final")
+    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_emne_db")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # 1 & 2: ADMINISTRATION (Her bringer vi dropdowns tilbage)
+    # Administrationstabs (1 & 2)
     for i, (path, name, is_hif_flag) in enumerate([(SCOUT_DB_PATH, "EMNE", False), (HIF_PATH, "HIF", True)]):
         with tabs[i]:
             curr_df = df_hif if is_hif_flag else df_scout[df_scout['ER_EMNE']]
             if not curr_df.empty:
                 cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
-                ed = st.data_editor(
-                    curr_df.set_index('Navn')[cols], 
-                    use_container_width=True, 
-                    key=f"ed_main_{name}",
-                    column_config={
-                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS_GLOBAL),
-                        "POS": st.column_config.SelectboxColumn("Position", options=list(POS_OPTIONS.keys())),
-                        "SKYGGEHOLD": st.column_config.CheckboxColumn("Skyggehold")
-                    }
-                )
+                ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_{name}_{i}")
                 
                 if not ed.equals(curr_df.set_index('Navn')[cols]):
                     raw_c, sha = get_github_file(path)
                     df_save = pd.read_csv(StringIO(raw_c))
                     df_save.columns = [c.upper().strip() for c in df_save.columns]
                     if 'NAVN' in df_save.columns: df_save = df_save.rename(columns={'NAVN': 'Navn'})
-                    for n, row in ed.iterrows():
-                        mask = df_save['Navn'] == n
+                    
+                    for navn, row in ed.iterrows():
+                        mask = df_save['Navn'] == navn
                         df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD', 'POS_343', 'POS_433', 'POS_352']] = \
                             [row['TRANSFER_VINDUE'], row['POS'], row['SKYGGEHOLD'], row['POS'], row['POS'], row['POS']]
+                    
                     push_to_github(path, f"Update {name}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # 3: SKYGGELISTE (Låst vindue, interaktive positioner)
+    # Skyggeliste (3)
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
         if not df_s.empty:
             ed_s = st.data_editor(
                 df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
                 use_container_width=True,
-                key="sky_ed_locked_v4",
+                key="sky_ed_final_db",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -135,25 +130,24 @@ def vis_side(*args, **kwargs):
                 }
             )
             if not ed_s.equals(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]):
-                for n, row in ed_s.iterrows():
+                for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
                         rc, rsha = get_github_file(p)
                         if not rc: continue
                         tmp = pd.read_csv(StringIO(rc))
                         tmp.columns = [c.upper().strip() for c in tmp.columns]
                         if 'NAVN' in tmp.columns: tmp = tmp.rename(columns={'NAVN': 'Navn'})
-                        if n in tmp['Navn'].values:
-                            tmp.loc[tmp['Navn'] == n, ['POS_343', 'POS_433', 'POS_352']] = \
+                        if navn in tmp['Navn'].values:
+                            tmp.loc[tmp['Navn'] == navn, ['POS_343', 'POS_433', 'POS_352']] = \
                                 [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
+                            push_to_github(p, f"Update Skygge Pos {navn}", tmp.to_csv(index=False), rsha)
                 st.rerun()
 
-    # 4: BANE (Layout fix)
+    # Bane (4)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
 
-        # Filtrering baseret på valgt vindue
         if sel_v == "Nuværende trup":
             df_filtered = df_hif.copy()
         else:
@@ -161,13 +155,10 @@ def vis_side(*args, **kwargs):
             e_s = df_scout[(df_scout['SKYGGEHOLD']) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_filtered = pd.concat([h_s, e_s])
 
-        # Layout med bane til venstre og knapper til højre
         c_p, c_m = st.columns([8.5, 1.5])
-        
         with c_m:
-            st.write("") # Padding
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"form_btn_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                if st.button(opt, key=f"btn_bane_{opt}", type="primary" if f == opt else "secondary"):
                     st.session_state.form_skygge = opt
                     st.rerun()
 
