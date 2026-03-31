@@ -152,42 +152,46 @@ def vis_side(conn, name_map=None):
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        # 1. Tilføj vertikal afstand specifikt til denne tab
         st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
         
-        # 2. Hent data inkl. minutter for at kunne regne pr. 90
-        # Vi grupperer pr. spiller for at få deres gennemsnit i ligaen
+        # SQL der henter klub og grunddata
         df_league = conn.query("""
             SELECT 
                 PLAYER_NAME, 
+                "teamName" as KLUB,
                 MAX(TOP_SPEED) as MAX_SPEED,
                 SUM(DISTANCE) as TOTAL_DIST,
                 SUM("HIGH SPEED RUNNING" + SPRINTING) as TOTAL_HI,
                 SUM(CAST(SPLIT_PART(MINUTES, ':', 1) AS FLOAT) + CAST(SPLIT_PART(MINUTES, ':', 2) AS FLOAT)/60) as TOTAL_MINS
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-            GROUP BY PLAYER_NAME
+            GROUP BY PLAYER_NAME, "teamName"
             HAVING TOTAL_MINS > 90
         """)
 
         df_league['KM/90'] = (df_league['TOTAL_DIST'] / df_league['TOTAL_MINS']) * 90 / 1000
         df_league['HI/90'] = (df_league['TOTAL_HI'] / df_league['TOTAL_MINS']) * 90
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**Topfart (Liga)**")
-            st.dataframe(
-                df_league.nlargest(5, 'MAX_SPEED')[['PLAYER_NAME', 'MAX_SPEED']], 
-                column_config={"MAX_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")},
-                hide_index=True, use_container_width=True
-            )
-        with c2:
-            st.write("**HI Meter pr. 90 (Liga)**")
-            st.dataframe(
-                df_league.nlargest(5, 'HI/90')[['PLAYER_NAME', 'HI/90']], 
-                column_config={"HI/90": st.column_config.NumberColumn("HI m/90", format="%d m")},
-                hide_index=True, use_container_width=True
-            )
+        # Tre kolonner layout
+        c1, c2, c3 = st.columns(3)
+        
+        col_set = {
+            "MAX_SPEED": ["Topfart", "%.1f km/t", c1, "Topfart (Max)"],
+            "KM/90": ["Distance", "%.2f km", c2, "KM pr. 90"],
+            "HI/90": ["HI løb", "%d m", c3, "HI m pr. 90"]
+        }
 
+        for key, (label, fmt, col, title) in col_set.items():
+            with col:
+                st.write(f"**{title}**")
+                st.dataframe(
+                    df_league.nlargest(5, key)[['PLAYER_NAME', 'KLUB', key]],
+                    column_config={
+                        "PLAYER_NAME": "Navn",
+                        "KLUB": "Klub",
+                        key: st.column_config.NumberColumn(label, format=fmt)
+                    },
+                    hide_index=True, use_container_width=True
+                )
     with t4:
         df_meta = conn.query(f"""
             SELECT TO_VARCHAR("DATE", 'YYYY-MM-DD') as DATE_STR, DESCRIPTION, MATCH_SSIID 
