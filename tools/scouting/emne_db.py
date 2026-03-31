@@ -65,29 +65,29 @@ def prepare_df(content, is_hif=False):
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
     
-    # Håndter "Nu" vs "Nuværende trup" mapping fra CSV
+    # Mapping af vindue - "Nu" bliver til "Nuværende trup"
     if 'TRANSFER_VINDUE' in df.columns:
         df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace('Nu', 'Nuværende trup').fillna("Nuværende trup")
     else:
         df['TRANSFER_VINDUE'] = "Nuværende trup"
 
-    # Sikr at boolean kolonner er korrekte
+    # Boolean konvertering
     for c in ['ER_EMNE', 'SKYGGEHOLD']:
         if c not in df.columns:
             df[c] = False
         else:
-            bool_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False, 'TRUE':True, 'FALSE':False}
-            df[c] = df[c].map(bool_map).fillna(False)
+            b_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False, 'TRUE':True, 'FALSE':False}
+            df[c] = df[c].map(b_map).fillna(False)
     
-    # Positioner og formatering
-    needed_pos = ['POS', 'POS_343', 'POS_433', 'POS_352']
-    for c in needed_pos:
+    # Positioner
+    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
     
     if 'KONTRAKT' in df.columns:
         df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
     
+    df['IS_HIF'] = is_hif
     df['KLUB'] = df.get('KLUB', 'Hvidovre IF' if is_hif else '-')
     return df
 
@@ -105,28 +105,23 @@ def vis_side(df_input_unused=None):
         </style>
     """, unsafe_allow_html=True)
 
-    if 'form_skygge' not in st.session_state: 
-        st.session_state.form_skygge = "3-4-3"
+    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # Hent data fra GitHub
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     
-    df_scout = prepare_df(s_c)
+    df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # Top-sektion med vinduesvalg
     t_col1, t_col2 = st.columns([4, 1])
     with t_col2:
         sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TAB 1 & 2: LISTER ---
-    configs = [
-        (tabs[0], df_scout[df_scout['ER_EMNE'] == True], SCOUT_DB_PATH, "EMNE"), 
-        (tabs[1], df_hif, HIF_PATH, "HIF")
-    ]
+    # TAB 1 & 2
+    configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE"), 
+               (tabs[1], df_hif, HIF_PATH, "HIF")]
 
     for tab, df_display, path, key_base in configs:
         with tab:
@@ -135,7 +130,7 @@ def vis_side(df_input_unused=None):
                 df_editor_in = df_display.set_index('Navn')[target_cols]
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
-                    use_container_width=True, height=700, key=f"ed_v14_{key_base}",
+                    use_container_width=True, height=700, key=f"ed_v15_{key_base}",
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -151,19 +146,17 @@ def vis_side(df_input_unused=None):
                         mask = df_save['Navn'] == navn
                         s_val = "Nu" if row['TRANSFER_VINDUE'] == "Nuværende trup" else row['TRANSFER_VINDUE']
                         df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [s_val, row['POS'], row['SKYGGEHOLD']]
-                    push_to_github(path, "Update list", df_save.to_csv(index=False), sha)
+                    push_to_github(path, "Update data", df_save.to_csv(index=False), sha)
                     st.rerun()
-            else:
-                st.info("Ingen spillere fundet.")
 
-    # --- TAB 3: SKYGGELISTE ---
+    # TAB 3: SKYGGELISTE
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
             df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']]
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
-                use_container_width=True, height=700, key="skyggeliste_editor_v14",
+                use_container_width=True, height=700, key="skyggeliste_editor_v15",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -183,22 +176,26 @@ def vis_side(df_input_unused=None):
                             df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [s_val, row['POS_343'], row['POS_433'], row['POS_352']]
                             push_to_github(p, "Update tactical", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
-        else:
-            st.info("Marker spillere med 'Skygge' i listerne for at se dem her.")
 
-    # --- TAB 4: BANE ---
+    # TAB 4: BANE
     with tabs[3]:
         df_total = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_total.empty:
-            df_filtered = df_total[df_total['TRANSFER_VINDUE'].isin(["Nuværende trup", sel_v])]
+            # NY FILTRERINGSLOGIK:
+            # Hvis vi ser på "Nuværende trup", viser vi kun spillere fra HIF-filen.
+            # Hvis vi ser på et fremtidigt vindue, viser vi HIF-spillere (Nu) + emner til det specifikke vindue.
+            if sel_v == "Nuværende trup":
+                df_filtered = df_total[(df_total['IS_HIF'] == True) & (df_total['TRANSFER_VINDUE'] == "Nuværende trup")]
+            else:
+                df_filtered = df_total[(df_total['TRANSFER_VINDUE'] == "Nuværende trup") | (df_total['TRANSFER_VINDUE'] == sel_v)]
+
             f = st.session_state.form_skygge
             p_col = f"POS_{f.replace('-', '')}"
 
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v14_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v15_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
 
@@ -206,7 +203,6 @@ def vis_side(df_input_unused=None):
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(10, 6))
                 
-                # Legends og info
                 ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
@@ -223,7 +219,7 @@ def vis_side(df_input_unused=None):
                     players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                     for i, (_, p) in enumerate(players.iterrows()):
                         bg = "white"; edge = "#333"; lw = 1
-                        is_new = str(p['TRANSFER_VINDUE']) != "Nuværende trup"
+                        is_new = str(p['TRANSFER_VINDUE']) == sel_v and sel_v != "Nuværende trup"
                         if is_new:
                             bg = GRON_NY; edge = "black"; lw = 1.2
                         elif pd.notna(p['KONTRAKT']):
