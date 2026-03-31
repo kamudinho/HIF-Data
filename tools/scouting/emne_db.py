@@ -26,16 +26,13 @@ VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27
 
 # --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
-    try:
-        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            data = r.json()
-            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
-            return content, data['sha']
-    except Exception as e:
-        st.error(f"GitHub fejl ({path}): {e}")
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        data = r.json()
+        content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+        return content, data['sha']
     return None, None
 
 def push_to_github(path, message, content, sha=None):
@@ -78,31 +75,37 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- HOVEDFUNKTION ---
-# *args og **kwargs gør at den aldrig fejler på "positional arguments"
 def vis_side(*args, **kwargs):
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # Hent data direkte fra GitHub
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
-    
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_final")
+    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_emne_db_final")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # 1 & 2: ADMINISTRATION
+    # 1 & 2: ADMINISTRATION (Her bringer vi dropdowns tilbage)
     for i, (path, name, is_hif_flag) in enumerate([(SCOUT_DB_PATH, "EMNE", False), (HIF_PATH, "HIF", True)]):
         with tabs[i]:
             curr_df = df_hif if is_hif_flag else df_scout[df_scout['ER_EMNE']]
             if not curr_df.empty:
                 cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
-                ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_v3_{name}")
+                ed = st.data_editor(
+                    curr_df.set_index('Navn')[cols], 
+                    use_container_width=True, 
+                    key=f"ed_main_{name}",
+                    column_config={
+                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS_GLOBAL),
+                        "POS": st.column_config.SelectboxColumn("Position", options=list(POS_OPTIONS.keys())),
+                        "SKYGGEHOLD": st.column_config.CheckboxColumn("Skyggehold")
+                    }
+                )
                 
                 if not ed.equals(curr_df.set_index('Navn')[cols]):
                     raw_c, sha = get_github_file(path)
@@ -116,14 +119,14 @@ def vis_side(*args, **kwargs):
                     push_to_github(path, f"Update {name}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # 3: SKYGGELISTE (Vindue låst som tekst)
+    # 3: SKYGGELISTE (Låst vindue, interaktive positioner)
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
         if not df_s.empty:
             ed_s = st.data_editor(
                 df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
                 use_container_width=True,
-                key="sky_ed_v3",
+                key="sky_ed_locked_v4",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -142,19 +145,29 @@ def vis_side(*args, **kwargs):
                         if n in tmp['Navn'].values:
                             tmp.loc[tmp['Navn'] == n, ['POS_343', 'POS_433', 'POS_352']] = \
                                 [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, f"Update Skygge {n}", tmp.to_csv(index=False), rsha)
+                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
                 st.rerun()
 
-    # 4: BANE
+    # 4: BANE (Layout fix)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
-        df_filtered = df_hif.copy() if sel_v == "Nuværende trup" else pd.concat([df_hif[df_hif['SKYGGEHOLD']], df_scout[(df_scout['SKYGGEHOLD']) & (df_scout['TRANSFER_VINDUE'] == sel_v)]])
 
+        # Filtrering baseret på valgt vindue
+        if sel_v == "Nuværende trup":
+            df_filtered = df_hif.copy()
+        else:
+            h_s = df_hif[df_hif['SKYGGEHOLD']]
+            e_s = df_scout[(df_scout['SKYGGEHOLD']) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
+            df_filtered = pd.concat([h_s, e_s])
+
+        # Layout med bane til venstre og knapper til højre
         c_p, c_m = st.columns([8.5, 1.5])
+        
         with c_m:
+            st.write("") # Padding
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"btn_v3_{opt}", type="primary" if f == opt else "secondary"):
+                if st.button(opt, key=f"form_btn_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                     st.session_state.form_skygge = opt
                     st.rerun()
 
@@ -164,6 +177,7 @@ def vis_side(*args, **kwargs):
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}}[f]
+
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                 at_pos = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
