@@ -1,4 +1,4 @@
-#tools/scouting/emne_db.py
+# --- FIL: tools/scouting/emne_db.py ---
 import streamlit as st
 import pandas as pd
 from io import StringIO
@@ -75,7 +75,9 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- APP LOGIK ---
-def vis_side(df):
+# FIX: Tilføjet df_input som argument, så den ikke fejler ved kald fra hovedfilen
+def vis_side(df_input=None):
+    # Vi bruger ikke df_input her, da vi henter frisk data fra GitHub for at kunne gemme korrekt
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -86,14 +88,14 @@ def vis_side(df):
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel")
+    sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel_global")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Administrationstabs (1 & 2)
-    for i, (path, name, is_hif) in enumerate([(SCOUT_DB_PATH, "EMNE", False), (HIF_PATH, "HIF", True)]):
+    # 1 & 2: ADMINISTRATION
+    for i, (path, name, is_hif_flag) in enumerate([(SCOUT_DB_PATH, "EMNE", False), (HIF_PATH, "HIF", True)]):
         with tabs[i]:
-            curr_df = df_hif if is_hif else df_scout[df_scout['ER_EMNE']]
+            curr_df = df_hif if is_hif_flag else df_scout[df_scout['ER_EMNE']]
             if not curr_df.empty:
                 cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
                 ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_{name}")
@@ -112,32 +114,21 @@ def vis_side(df):
                     push_to_github(path, f"Update {name}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # Skyggeliste (3) - NU MED LÅST VINDUE
-    # --- TAB 3: SKYGGELISTE ---
+    # 3: SKYGGELISTE (LÅST VINDUE)
     with tabs[2]:
-        # Saml alle spillere der er markeret til skyggeholdet
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
-        
         if not df_s.empty:
-            # Vis editoren med TRANSFER_VINDUE som låst tekst
             ed_s = st.data_editor(
                 df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
                 use_container_width=True,
-                key="sky_ed_no_drop",
+                key="sky_ed_final",
                 column_config={
-                    # Vi ændrer denne til TextColumn og deaktiverer den
-                    "TRANSFER_VINDUE": st.column_config.TextColumn(
-                        "Vindue", 
-                        disabled=True,
-                        help="Vinduet kan kun ændres i fanerne 'Emner' eller 'Hvidovre IF'"
-                    ),
+                    "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
                     "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
                 }
             )
-            
-            # Gem-logik (kun for positionerne)
             if not ed_s.equals(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]):
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
@@ -146,16 +137,13 @@ def vis_side(df):
                         tmp = pd.read_csv(StringIO(rc))
                         tmp.columns = [c.upper().strip() for c in tmp.columns]
                         if 'NAVN' in tmp.columns: tmp = tmp.rename(columns={'NAVN': 'Navn'})
-                        
                         if navn in tmp['Navn'].values:
                             tmp.loc[tmp['Navn'] == navn, ['POS_343', 'POS_433', 'POS_352']] = \
                                 [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, f"Update Pos for {navn}", tmp.to_csv(index=False), rsha)
+                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
                 st.rerun()
-        else:
-            st.info("Ingen spillere er valgt til skyggeholdet endnu. Sæt kryds i 'Skyggehold' under Emner eller HIF.")
 
-    # Bane (4)
+    # 4: BANE
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -170,7 +158,7 @@ def vis_side(df):
         c_p, c_m = st.columns([8.5, 1.5])
         with c_m:
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, type="primary" if f == opt else "secondary"):
+                if st.button(opt, key=f"btn_{opt}", type="primary" if f == opt else "secondary"):
                     st.session_state.form_skygge = opt
                     st.rerun()
 
@@ -189,5 +177,6 @@ def vis_side(df):
                     ax.text(px, py + (i * 2.5), f"{p['Navn']}{'*' if not p['IS_HIF'] else ''}", size=7, ha='center', weight='bold', bbox=dict(facecolor=bg, alpha=0.8))
             st.pyplot(fig)
 
+# Sørg for at den kun kører hvis den kaldes direkte (til test)
 if __name__ == "__main__":
     vis_side()
