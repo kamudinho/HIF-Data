@@ -169,6 +169,12 @@ def vis_side(df_input_unused=None):
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 6))
+
+            ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
+            ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+            ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+            ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
+            
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}}[f]
