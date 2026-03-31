@@ -48,28 +48,44 @@ def vis_side(dp):
     unique_players = {}
     def add_to_options(df):
         if df is None or df.empty: return
-        df.columns = [str(c).upper().strip() for c in df.columns]
-        for _, r in df.iterrows():
+        # Lav en kopi og ensret kolonnenavne til store bogstaver
+        df_temp = df.copy()
+        df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
+        
+        for _, r in df_temp.iterrows():
             p_id = str(r.get('PLAYER_WYID', '')).split('.')[0].strip()
             if not p_id or p_id in ['nan', 'None', '']: continue
+            
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
-            fuldt_navn = f"{f_name} { l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
+            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos_code = r.get('ROLECODE3') or r.get('POSITION') or ""
             
-            # Hent fødselsdato fra data hvis den findes
-            b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or ""
+            # --- FORBEDRET BIRTHDATE SØGNING ---
+            # Vi kigger efter alle tænkelige varianter
+            b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or r.get('BIRTH_DAY') or r.get('DOB') or ""
+            
+            # Formatering af datoen så den er læselig i tekstfeltet
+            birth_val = ""
             if pd.notna(b_date) and b_date != "":
-                # Forsøg at formatere hvis det er timestamp
-                try: b_date = pd.to_datetime(b_date).strftime("%Y-%m-%d")
-                except: b_date = str(b_date)
+                try:
+                    # Hvis det er en datetime eller en streng der kan konverteres
+                    birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
+                except:
+                    birth_val = str(b_date)
 
             label = f"{fuldt_navn} ({klub})"
             if p_id not in unique_players:
                 unique_players[p_id] = {
                     "label": label, 
-                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos_code, "klub": klub, "birth": b_date}
+                    "data": {
+                        "n": fuldt_navn, 
+                        "id": p_id, 
+                        "pos": pos_code, 
+                        "klub": klub, 
+                        "birth": birth_val # Her gemmes den fundne dato
+                    }
                 }
 
     add_to_options(df_local)
@@ -77,12 +93,16 @@ def vis_side(dp):
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     # --- UI LAYOUT ---
+    # Default værdier hvis ingen spiller er valgt
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
+    
     t1, t2, t3, t4 = st.columns([2, 1, 1, 1])
     
     with t1:
-        sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
-        if sel_id: data = unique_players[sel_id]["data"]
+        sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
+                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+        if sel_id: 
+            data = unique_players[sel_id]["data"]
     
     pos_final = t2.text_input("Position", value=data['pos'])
     t3.text_input("Klub", value=data['klub'], disabled=True)
@@ -94,7 +114,7 @@ def vis_side(dp):
     kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
 
     l3_c1, l3_c2, l3_c3 = st.columns(3)
-    # PRIORITET er nu erstattet med Fødselsdato input
+    # Her bruges data['birth'] som nu er blevet fyldt i add_to_options
     fodselsdato = l3_c1.text_input("Fødselsdato", value=data['birth'], help="Format: YYYY-MM-DD")
     forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
     lon_input = l3_c3.text_input("Lønniveau")
