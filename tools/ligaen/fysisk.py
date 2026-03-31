@@ -136,7 +136,7 @@ def vis_side(conn, name_map=None):
                 "HI m/90": st.column_config.NumberColumn(format="%d"),
                 "TOP_SPEED": st.column_config.NumberColumn(format="%.1f")
             },
-            use_container_width=True, hide_index=True
+            use_container_width=True, hide_index=True, height=700
         )
 
     with t2:
@@ -202,5 +202,5 @@ def vis_side(conn, name_map=None):
                         "TOP_SPEED": "Top"
                     },
                     column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                    use_container_width=True, hide_index=True, height=600
+                    use_container_width=True, hide_index=True, height=700
                 )
