@@ -87,8 +87,8 @@ def vis_side(dp=None):
             margin-bottom: 20px !important; /* Her styres afstanden mellem boksene */
             display: block; /* Sikrer at margenen respekteres korrekt */
         }
-        .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #666; font-weight: bold; }
-        .stat-value { font-size: 1.2rem; font-weight: 800; color: #1a1a1a; margin-top: 4px; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.2rem; font-weight: 800; color: #1a1a1a; margin-top: 3px; }
     </style>
     """, unsafe_allow_html=True)
 
