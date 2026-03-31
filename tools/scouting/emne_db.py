@@ -75,7 +75,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- APP LOGIK ---
-def vis_side():
+def vis_side(df):
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -113,20 +113,31 @@ def vis_side():
                     st.rerun()
 
     # Skyggeliste (3) - NU MED LÅST VINDUE
+    # --- TAB 3: SKYGGELISTE ---
     with tabs[2]:
+        # Saml alle spillere der er markeret til skyggeholdet
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
+        
         if not df_s.empty:
-            # Lås vinduet her, så det kun kan ændres i kilde-fanerne
+            # Vis editoren med TRANSFER_VINDUE som låst tekst
             ed_s = st.data_editor(
                 df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
                 use_container_width=True,
+                key="sky_ed_no_drop",
                 column_config={
-                    "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
+                    # Vi ændrer denne til TextColumn og deaktiverer den
+                    "TRANSFER_VINDUE": st.column_config.TextColumn(
+                        "Vindue", 
+                        disabled=True,
+                        help="Vinduet kan kun ændres i fanerne 'Emner' eller 'Hvidovre IF'"
+                    ),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
                     "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
                 }
             )
+            
+            # Gem-logik (kun for positionerne)
             if not ed_s.equals(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]):
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
@@ -135,11 +146,14 @@ def vis_side():
                         tmp = pd.read_csv(StringIO(rc))
                         tmp.columns = [c.upper().strip() for c in tmp.columns]
                         if 'NAVN' in tmp.columns: tmp = tmp.rename(columns={'NAVN': 'Navn'})
+                        
                         if navn in tmp['Navn'].values:
                             tmp.loc[tmp['Navn'] == navn, ['POS_343', 'POS_433', 'POS_352']] = \
                                 [row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
+                            push_to_github(p, f"Update Pos for {navn}", tmp.to_csv(index=False), rsha)
                 st.rerun()
+        else:
+            st.info("Ingen spillere er valgt til skyggeholdet endnu. Sæt kryds i 'Skyggehold' under Emner eller HIF.")
 
     # Bane (4)
     with tabs[3]:
