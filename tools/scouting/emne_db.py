@@ -77,27 +77,27 @@ def prepare_df(content, is_hif=False):
 
 # --- HOVEDSIDE ---
 def vis_side(df_input_unused=None):
+    # RENSING AF CSS (Kun ét kald, ingen dubletter)
     st.markdown("""
-        st.markdown("""
         <style>
-            /* 1. Gør containeren bred og fjern top-padding */
-            div.block-container { padding: 0.5rem 1rem; max-width: 98% !important; }
+            /* 1. Maksimal bredde og luft i toppen */
+            div.block-container { padding: 1rem 2rem; max-width: 98% !important; }
             
-            /* 2. Fjern label fra selectbox */
+            /* 2. Skjul labels i dropdowns */
             div[data-testid="stSelectbox"] label { display: none; }
             
-            /* 3. Juster afstanden fra Tabs til indhold (væk med negativ margin) */
-            .stTabs { margin-top: 0px; }
+            /* 3. Afstand fra Tabs til indhold */
+            .stTabs { margin-top: 10px; }
             div[data-baseweb="tab-panel"] {
-                padding-top: 20px !important; /* Giver luft så tabellen ikke klistrer til fanen */
+                padding-top: 25px !important; 
             }
 
-            /* 4. Tving Data Editor til at fylde mere (hvis nødvendigt) */
+            /* 4. Tving tabellen til at fylde skærmen vertikalt */
             div[data-testid="stDataEditor"] {
-                min-height: 600px !important; /* Sikrer at tabellen fylder halvdelen+ af skærmen */
+                min-height: 700px !important;
             }
             
-            /* 5. Fix for kolonne-afstande */
+            /* 5. Rens luft i kolonner */
             div[data-testid="column"] { padding-top: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -115,7 +115,7 @@ def vis_side(df_input_unused=None):
     with t_col2:
         sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
-    # Tabs placeres herunder
+    # Tabs
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # --- TAB 1 & 2: LISTER ---
@@ -130,7 +130,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    height=700, # Tilføj denne linje for at styre højden slavisk
+                    height=700, 
                     key=f"ed_v10_{key_base}",
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
@@ -157,6 +157,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
+                height=700,
                 key="skyggeliste_editor_v10",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
@@ -187,7 +188,6 @@ def vis_side(df_input_unused=None):
             
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
-                # Mindre spacer for at flugte med legende-teksten på banen
                 st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
                     if st.button(opt, key=f"btn_v10_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
@@ -198,16 +198,16 @@ def vis_side(df_input_unused=None):
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(10, 6))
                 
-                # Legends og Overskrift (Rykket lidt op: y=2)
                 ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
                 ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
                 ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
 
+                # FIX: Keys er nu strenge ("3.5" i stedet for 3.5) for at undgå Decimal-fejl
                 m = {
-                    "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
-                    "4-3-3": {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(30,25,'VCB'), 3:(30,55,'HCB'), 2:(35,70,'HB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')},
-                    "3-5-2": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(95,32,'ANG'), 7:(95,48,'ANG')}
+                    "3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
+                    "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
+                    "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}
                 }[f]
                 
                 for pid, (x, y, lbl) in m.items():
@@ -229,14 +229,14 @@ def vis_side(df_input_unused=None):
                                 y + (i * 2.3), 
                                 f"{p['Navn']}{'*' if is_new else ''}", 
                                 size=7, 
-                                ha='center',     # Horisontal centrering
-                                va='center',     # Vertikal centrering (Dette er nøglen!)
+                                ha='center', 
+                                va='center', 
                                 weight='bold', 
                                 bbox=dict(
                                     facecolor=bg, 
                                     edgecolor=edge, 
-                                    alpha=0.7, 
-                                    boxstyle='square,pad=0.2', # Øg pad en smule for bedre luft
+                                    alpha=0.8, 
+                                    boxstyle='square,pad=0.2', 
                                     linewidth=lw
                                 )
                             )
