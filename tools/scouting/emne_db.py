@@ -98,7 +98,7 @@ def vis_side(df_input_unused=None):
             div[data-testid="stSelectbox"] label { display: none; }
             
             /* 4. TABS: Her styrer vi afstanden til selve indholdet */
-            .stTabs { margin-top: 5px; }
+            .stTabs { margin-top: -5px; }
             
             /* Denne del sørger for, at indholdet (banen/tabellen) 
                ikke kravler op over fanerne */
