@@ -103,7 +103,7 @@ def vis_side(df_input_unused=None):
             /* Denne del sørger for, at indholdet (banen/tabellen) 
                ikke kravler op over fanerne */
             div[data-baseweb="tab-panel"] {
-                padding-top: 45px !important; /* Øget fra 15/25 til 45 for at give luft */
+                padding-top: 30px !important; /* Øget fra 15/25 til 45 for at give luft */
                 margin-top: 0px !important;
             }
 
