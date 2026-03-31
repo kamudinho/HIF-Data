@@ -44,34 +44,21 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-def style_kontrakt(df):
-    styler = pd.DataFrame('', index=df.index, columns=df.columns)
-    if 'KONTRAKT' in df.columns:
-        now = datetime.now().date()
-        for idx in df.index:
-            val = df.at[idx, 'KONTRAKT']
-            if pd.notna(val) and not isinstance(val, str):
-                days = (val - now).days
-                if days < 183: styler.at[idx, 'KONTRAKT'] = 'background-color: #ffcccc; color: black;'
-                elif days <= 365: styler.at[idx, 'KONTRAKT'] = 'background-color: #ffffcc; color: black;'
-    return styler
-
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
-    df = df.loc[:, ~df.columns.duplicated()]
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
     
-    # Mapping af vindue - "Nu" bliver til "Nuværende trup"
+    # 1. Standardiser Transfervindue
     if 'TRANSFER_VINDUE' in df.columns:
-        df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace('Nu', 'Nuværende trup').fillna("Nuværende trup")
+        df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Nuværende trup")
     else:
         df['TRANSFER_VINDUE'] = "Nuværende trup"
 
-    # Boolean konvertering
+    # 2. Boolean rensning (vigtigt for Skyggehold)
     for c in ['ER_EMNE', 'SKYGGEHOLD']:
         if c not in df.columns:
             df[c] = False
@@ -79,16 +66,21 @@ def prepare_df(content, is_hif=False):
             b_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False, 'TRUE':True, 'FALSE':False}
             df[c] = df[c].map(b_map).fillna(False)
     
-    # Positioner
-    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
+    # 3. Position-synkronisering (Løser problemet med gammel data)
+    pos_cols = ['POS', 'POS_343', 'POS_433', 'POS_352']
+    for c in pos_cols:
         if c not in df.columns: df[c] = "0"
-        df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
+        # Rens for .0 (f.eks. "6.0" -> "6") og "nan"
+        df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
+    # Hvis en taktisk position er 0, så arver den fra hoved-POS
+    for tac in ['POS_343', 'POS_433', 'POS_352']:
+        df.loc[df[tac] == "0", tac] = df['POS']
+
     if 'KONTRAKT' in df.columns:
         df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
     
     df['IS_HIF'] = is_hif
-    df['KLUB'] = df.get('KLUB', 'Hvidovre IF' if is_hif else '-')
     return df
 
 # --- HOVEDSIDE ---
@@ -97,10 +89,6 @@ def vis_side(df_input_unused=None):
         <style>
             .stAppViewBlockContainer { padding-top: 0px !important; }
             div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -15px !important; }
-            div[data-testid="stSelectbox"] label { display: none; }
-            .stTabs { margin-top: -5px; }
-            div[data-baseweb="tab-panel"] { padding-top: 30px !important; margin-top: 0px !important; }
             div[data-testid="stDataEditor"] { min-height: 650px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -119,24 +107,21 @@ def vis_side(df_input_unused=None):
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # TAB 1 & 2
+    # --- LISTER (TAB 1 & 2) ---
     configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE"), 
                (tabs[1], df_hif, HIF_PATH, "HIF")]
 
     for tab, df_display, path, key_base in configs:
         with tab:
             if not df_display.empty:
-                target_cols = ['TRANSFER_VINDUE', 'POS', 'KLUB', 'KONTRAKT', 'SKYGGEHOLD']
+                target_cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
                 df_editor_in = df_display.set_index('Navn')[target_cols]
-                ed = st.data_editor(
-                    df_editor_in.style.apply(style_kontrakt, axis=None),
-                    use_container_width=True, height=700, key=f"ed_v15_{key_base}",
+                ed = st.data_editor(df_editor_in, use_container_width=True, height=600, key=f"ed_v16_{key_base}",
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
                         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge")
-                    }
-                )
+                    })
                 if not ed.equals(df_editor_in):
                     c, sha = get_github_file(path)
                     df_save = pd.read_csv(StringIO(c))
@@ -145,25 +130,25 @@ def vis_side(df_input_unused=None):
                     for navn, row in ed.iterrows():
                         mask = df_save['Navn'] == navn
                         s_val = "Nu" if row['TRANSFER_VINDUE'] == "Nuværende trup" else row['TRANSFER_VINDUE']
-                        df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [s_val, row['POS'], row['SKYGGEHOLD']]
-                    push_to_github(path, "Update data", df_save.to_csv(index=False), sha)
+                        # Opdater både POS og de taktiske felter så de følges ad
+                        df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD', 'POS_343', 'POS_433', 'POS_352']] = [
+                            s_val, row['POS'], row['SKYGGEHOLD'], row['POS'], row['POS'], row['POS']
+                        ]
+                    push_to_github(path, "Sync Pos", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # TAB 3: SKYGGELISTE
+    # --- TAB 3: SKYGGELISTE ---
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
-            df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 'KONTRAKT']]
-            ed_s = st.data_editor(
-                df_s_input.style.apply(style_kontrakt, axis=None),
-                use_container_width=True, height=700, key="skyggeliste_editor_v15",
+            df_s_input = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            ed_s = st.data_editor(df_s_input, use_container_width=True, height=600, key="sky_ed_v16",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
                     "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
                     "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
-                }
-            )
+                })
             if not ed_s.equals(df_s_input):
                 for navn, row in ed_s.iterrows():
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
@@ -173,17 +158,17 @@ def vis_side(df_input_unused=None):
                         if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
                         if navn in df_tmp['Navn'].values:
                             s_val = "Nu" if row['TRANSFER_VINDUE'] == "Nuværende trup" else row['TRANSFER_VINDUE']
-                            df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [s_val, row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update tactical", df_tmp.to_csv(index=False), sha_raw)
+                            df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [
+                                s_val, row['POS_343'], row['POS_433'], row['POS_352']
+                            ]
+                            push_to_github(p, "Update Skygge", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
-    # TAB 4: BANE
+    # --- TAB 4: BANE ---
     with tabs[3]:
         df_total = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_total.empty:
-            # NY FILTRERINGSLOGIK:
-            # Hvis vi ser på "Nuværende trup", viser vi kun spillere fra HIF-filen.
-            # Hvis vi ser på et fremtidigt vindue, viser vi HIF-spillere (Nu) + emner til det specifikke vindue.
+            # Filtrering: Vis HIF (Nu) + Emner (Valgt vindue)
             if sel_v == "Nuværende trup":
                 df_filtered = df_total[(df_total['IS_HIF'] == True) & (df_total['TRANSFER_VINDUE'] == "Nuværende trup")]
             else:
@@ -195,7 +180,7 @@ def vis_side(df_input_unused=None):
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v15_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
 
@@ -203,11 +188,6 @@ def vis_side(df_input_unused=None):
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
                 fig, ax = pitch.draw(figsize=(10, 6))
                 
-                ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
-                ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
-
                 m = {
                     "3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                     "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
@@ -216,19 +196,13 @@ def vis_side(df_input_unused=None):
 
                 for pid, (x, y, lbl) in m.items():
                     ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    # Vigtigt: Her kigger vi på p_col (f.eks. POS_343)
                     players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                     for i, (_, p) in enumerate(players.iterrows()):
-                        bg = "white"; edge = "#333"; lw = 1
                         is_new = str(p['TRANSFER_VINDUE']) == sel_v and sel_v != "Nuværende trup"
-                        if is_new:
-                            bg = GRON_NY; edge = "black"; lw = 1.2
-                        elif pd.notna(p['KONTRAKT']):
-                            diff = (p['KONTRAKT'] - datetime.now().date()).days
-                            if diff < 183: bg = "#ffcccc"
-                            elif diff <= 365: bg = "#ffffcc"
-
+                        bg = GRON_NY if is_new else "white"
                         ax.text(x, y + (i * 2.3), f"{p['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', 
-                                bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.8, boxstyle='square,pad=0.2', linewidth=lw))
+                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
                 st.pyplot(fig)
 
 if __name__ == "__main__":
