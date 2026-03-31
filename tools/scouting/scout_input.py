@@ -81,32 +81,42 @@ def vis_side(dp):
     # --- UI LAYOUT ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    # LINJE 1: Spiller, Position, Klub, Fødselsdato, Scout
+    # LINJE 1: Spiller (Vælg), Position (Låst), Klub (Låst), Fødselsdato (Låst), Scout (Låst)
     t1, t2, t3, t4, t5 = st.columns([2, 1, 1, 1, 1])
-    
     with t1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
         if sel_id: data = unique_players[sel_id]["data"]
     
-    pos_final = t2.text_input("Position", value=data['pos'])
+    t2.text_input("Position", value=data['pos'], disabled=True)
     t3.text_input("Klub", value=data['klub'], disabled=True)
-    fodselsdato = t4.text_input("Fødselsdato", value=data['birth'])
-    scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"))
+    t4.text_input("Fødselsdato", value=data['birth'], disabled=True)
+    scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # LINJE 2: POS (1-11), POS-prioritet, Kontraktudløb, Lønniveau
-    l2_c1, l2_c2, l2_c3, l2_c4 = st.columns(4)
-    pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
-    pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
-    kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
-    lon_input = l2_c4.text_input("Lønniveau")
+    st.markdown("---")
 
-    # LINJE 3: Status, Potentiale, Forventning, Transferemne (Checkbox + Vindue)
-    l3_c1, l3_c2, l3_c3, l3_c4, l3_c5 = st.columns([1, 1, 1, 0.7, 1])
-    status_label = l3_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
-    pot = l3_c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-    forventning = l3_c3.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
-    er_emne = l3_c4.checkbox("Transferemne?", value=False)
-    vindue = l3_c5.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
+    # LINJE 2: Status, POS (1-11), Prioritet (Pos-prioritet)
+    l2_c1, l2_c2, l2_c3 = st.columns(3)
+    status_label = l2_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
+    pos_nr = l2_c2.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
+    pos_prio = l2_c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
+
+    # LINJE 3: Potentiale, forventning, kontrakt
+    l3_c1, l3_c2, l3_c3 = st.columns(3)
+    pot = l3_c1.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+    forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
+    kontrakt_udloeb = l3_c3.date_input("Kontraktudløb", value=None)
+
+    # LINJE 4: Lønniveau, Transferemne, Transfervindue
+    l4_c1, l4_c2, l4_c3 = st.columns(3)
+    lon_input = l4_c1.text_input("Lønniveau")
+    
+    # Centrering af checkbox
+    with l4_c2:
+        st.write("") # Spacer for at skubbe ned
+        st.write("") 
+        er_emne = st.checkbox("Transferemne?", value=False)
+        
+    vindue = l4_c3.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
 
     with st.form("rapport_form", clear_on_submit=True):
         # SLIDERS
@@ -142,7 +152,7 @@ def vis_side(dp):
                 avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
-                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final, "BIRTHDATE": fodselsdato,
+                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
                     "RATING_AVG": avg_rating, "STATUS": status_label, "POTENTIALE": pot, 
                     "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder_kort, 
                     "BESLUTSOMHED": float(beslut), "FART": float(fart), "AGGRESIVITET": float(agg), 
@@ -152,19 +162,15 @@ def vis_side(dp):
                     "POS_PRIORITET": pos_prio, "POS": pos_nr, "LON": lon_input, 
                     "SKYGGEHOLD": False, "KOMMENTAR": kommentar_full,
                     "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue,
-                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0 # Standardværdier for taktiske kolonner
+                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
                 }
 
-                # --- RENS OG GEM LOGIK ---
                 content, sha = get_github_file(FILE_PATH)
                 if content:
                     df_old = pd.read_csv(StringIO(content), low_memory=False)
-                    df_old.columns = [c.upper().strip() for c in df_old.columns]
-                    # Dynamisk kolonnetjek baseret på din CSV struktur
-                    current_cols = list(df_old.columns)
                     df_final = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
                 else:
                     df_final = pd.DataFrame([ny_rapport])
 
                 push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
-                st.success(f"Rapport for {data['n']} er gemt i databasen!")
+                st.success(f"Rapport for {data['n']} er gemt!")
