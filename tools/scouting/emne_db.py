@@ -1,4 +1,5 @@
 #tools/scouting/emne_db.py
+#tools/scouting/emne_db.py
 import streamlit as st
 import pandas as pd
 from io import StringIO
@@ -23,7 +24,7 @@ POS_OPTIONS = {
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
 }
 
-VINDUE_OPTIONS = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_OPTIONS = ["Nu", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
@@ -61,30 +62,17 @@ def prepare_df(content, is_hif=False):
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]
-    
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
-    
-    # --- SIKKERHEDS-TJEK FOR KOLONNER ---
-    if 'TRANSFER_VINDUE' not in df.columns: df['TRANSFER_VINDUE'] = "Nuværende trup"
-    if 'ER_EMNE' not in df.columns: df['ER_EMNE'] = False
-    
+    if 'TRANSFER_VINDUE' not in df.columns: df['TRANSFER_VINDUE'] = "Nu"
     needed = ['SKYGGEHOLD', 'POS', 'POS_343', 'POS_433', 'POS_352']
     for c in needed:
         if c not in df.columns: df[c] = False if c == 'SKYGGEHOLD' else "0"
-    
-    # Konverter typer
     for c in ['POS_343', 'POS_433', 'POS_352', 'POS']:
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace('nan', '0').str.strip()
-    
-    # Boolean håndtering
-    bool_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}
-    df['SKYGGEHOLD'] = df['SKYGGEHOLD'].map(bool_map).fillna(False)
-    df['ER_EMNE'] = df['ER_EMNE'].map(bool_map).fillna(False)
-    
+    df['SKYGGEHOLD'] = df['SKYGGEHOLD'].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     if 'KONTRAKT' in df.columns:
         df['KONTRAKT'] = pd.to_datetime(df['KONTRAKT'], dayfirst=False, errors='coerce').dt.date
-    
     df['KLUB'] = 'Hvidovre IF' if is_hif else df.get('KLUB', '-')
     return df
 
@@ -92,13 +80,19 @@ def prepare_df(content, is_hif=False):
 def vis_side(df_input_unused=None):
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 0px !important; }
-            div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -15px !important; }
+            div.block-container{padding: 0.2rem 0.5rem; max-width: 95% !important;}
+            /* Fjern label/overskrift fra selectbox helt */
             div[data-testid="stSelectbox"] label { display: none; }
-            .stTabs { margin-top: -5px; }
-            div[data-baseweb="tab-panel"] { padding-top: 30px !important; margin-top: 0px !important; }
-            div[data-testid="stDataEditor"] { min-height: 650px !important; }
+            
+            /* Aggressiv reducering af afstand mellem tabs og indhold */
+            .stTabs { margin-top: -35px; }
+            div[data-baseweb="tab-panel"] {
+                padding-top: 0px !important;
+                margin-top: -15px !important;
+            }
+            
+            /* Fjern ekstra luft under knapperne til højre */
+            div[data-testid="column"] { padding-top: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -107,23 +101,20 @@ def vis_side(df_input_unused=None):
     # Hent data
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
-    
     df_scout = prepare_df(s_c)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # --- TOP SEKTION ---
+    # --- TOP: DROPDOWN I HØJRE SIDE ---
     t_col1, t_col2 = st.columns([4, 1])
     with t_col2:
         sel_v = st.selectbox("", VINDUE_OPTIONS, key="global_vindue_sel")
 
+    # Tabs placeres herunder
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
-    
+
     # --- TAB 1 & 2: LISTER ---
-    # Her filtrerer vi kun df_scout for ER_EMNE == True
-    configs = [
-        (tabs[0], df_scout[df_scout['ER_EMNE'] == True], SCOUT_DB_PATH, "EMNE_LIST"), 
-        (tabs[1], df_hif, HIF_PATH, "HIF_LIST")
-    ]
+    configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE_LIST"), 
+               (tabs[1], df_hif, HIF_PATH, "HIF_LIST")]
     
     for tab, df_display, path, key_base in configs:
         with tab:
@@ -133,8 +124,7 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    height=700, 
-                    key=f"ed_v11_{key_base}",
+                    key=f"ed_v10_{key_base}", 
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
@@ -151,8 +141,6 @@ def vis_side(df_input_unused=None):
                         df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [row['TRANSFER_VINDUE'], row['POS'], row['SKYGGEHOLD']]
                     push_to_github(path, "Update data", df_save.to_csv(index=False), sha)
                     st.rerun()
-            else:
-                st.info("Ingen spillere markeret som 'Emne' i databasen.")
 
     # --- TAB 3: SKYGGELISTE ---
     with tabs[2]:
@@ -162,8 +150,7 @@ def vis_side(df_input_unused=None):
             ed_s = st.data_editor(
                 df_s_input.style.apply(style_kontrakt, axis=None),
                 use_container_width=True,
-                height=700,
-                key="skyggeliste_editor_v11",
+                key="skyggeliste_editor_v10",
                 column_config={
                     "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                     "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
@@ -187,31 +174,33 @@ def vis_side(df_input_unused=None):
     with tabs[3]:
         df_total = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_total.empty:
-            df_filtered = df_total[df_total['TRANSFER_VINDUE'].isin(["Nuværende trup", sel_v])]
+            df_filtered = df_total[df_total['TRANSFER_VINDUE'].isin(["Nu", sel_v])]
             f = st.session_state.form_skygge
             p_col = f"POS_{f.replace('-', '')}"
             
             c_p, c_m = st.columns([8.5, 1.5])
             with c_m:
+                # Mindre spacer for at flugte med legende-teksten på banen
                 st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True) 
                 for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(opt, key=f"btn_v11_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                    if st.button(opt, key=f"btn_v10_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                         st.session_state.form_skygge = opt
                         st.rerun()
             
             with c_p:
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-                fig, ax = pitch.draw(figsize=(10, 6))
+                fig, ax = pitch.draw(figsize=(12, 7))
                 
-                ax.text(2, 4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(14, 4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
-                ax.text(26, 4, " Ny tilgang ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
-                ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
+                # Legends og Overskrift (Rykket lidt op: y=2)
+                ax.text(2, 2, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffcccc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(12, 2, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor='#ffffcc', edgecolor='#333', boxstyle='round,pad=0.2'))
+                ax.text(22, 2, " Ny tilgang ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='black', linewidth=1.2, boxstyle='round,pad=0.2'))
+                ax.text(118, 2, f"Vindue: {sel_v}", size=14, color="black", weight='bold', ha='right')
 
                 m = {
-                    "3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
-                    "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
-                    "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}
+                    "3-4-3": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(55,10,'VWB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 2:(55,70,'HWB'), 11:(80,15,'VW'), 9:(100,40,'ANG'), 7:(80,65,'HW')},
+                    "4-3-3": {1:(10,40,'MM'), 5:(35,10,'VB'), 4:(30,25,'VCB'), 3:(30,55,'HCB'), 2:(35,70,'HB'), 6:(55,30,'DM'), 8:(55,50,'DM'), 10:(75,40,'CM'), 11:(85,15,'VW'), 9:(100,40,'ANG'), 7:(85,65,'HW')},
+                    "3-5-2": {1:(10,40,'MM'), 4:(30,22,'VCB'), 3.5:(30,40,'CB'), 3:(30,58,'HCB'), 5:(45,10,'VWB'), 6:(60,30,'DM'), 8:(60,50,'DM'), 2:(45,70,'HWB'), 10:(75,40,'CM'), 9:(95,32,'ANG'), 7:(95,48,'ANG')}
                 }[f]
                 
                 for pid, (x, y, lbl) in m.items():
@@ -219,7 +208,7 @@ def vis_side(df_input_unused=None):
                     players = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                     for i, (_, p) in enumerate(players.iterrows()):
                         bg = "white"; edge = "#333"; lw = 1
-                        is_new = str(p['TRANSFER_VINDUE']) != "Nuværende trup"
+                        is_new = str(p['TRANSFER_VINDUE']) != "Nu"
                         
                         if is_new:
                             bg = GRON_NY; edge = "black"; lw = 1.2
@@ -228,12 +217,8 @@ def vis_side(df_input_unused=None):
                             if diff < 183: bg = "#ffcccc"
                             elif diff <= 365: bg = "#ffffcc"
                         
-                        ax.text(
-                            x, y + (i * 2.3), 
-                            f"{p['Navn']}{'*' if is_new else ''}", 
-                            size=7, ha='center', va='center', weight='bold', 
-                            bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.8, boxstyle='square,pad=0.2', linewidth=lw)
-                        )
+                        ax.text(x, y+(i*2.3), f"{p['Navn']}{'*' if is_new else ''}", size=7.5, ha='center', weight='bold', 
+                                bbox=dict(facecolor=bg, edgecolor=edge, alpha=0.9, boxstyle='square,pad=0.1', linewidth=lw))
                 st.pyplot(fig)
 
 if __name__ == "__main__":
