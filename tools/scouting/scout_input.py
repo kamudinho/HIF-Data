@@ -104,10 +104,11 @@ def vis_side(dp):
             l4_c1, l4_c2, l4_c3 = st.columns(3)
             lon_val = l4_c1.number_input("Lønniveau", min_value=0, step=1000, value=0, format="%d")
             lon_display = f"{lon_val:,}".replace(",", ".")
-            with l4_c2:
-                st.write("") # Spacer
+            with l4_c3:
+                st.write("")
+                st.write("")# Spacer
                 er_emne = st.checkbox("Transferemne?", value=False)
-            vindue = l4_c3.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
+            vindue = l4_c2.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
 
         st.write("") # Mellemrum mellem bokse
 
