@@ -193,51 +193,103 @@ def vis_side(conn, name_map=None):
                     hide_index=True, use_container_width=True
                 )
     with t4:
+        # 1. Hent kun kampe der har data i SUMMARY_PLAYERS tabellen
         df_meta = conn.query(f"""
-            SELECT TO_VARCHAR("DATE", 'YYYY-MM-DD') as DATE_STR, DESCRIPTION, MATCH_SSIID 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA 
-            WHERE (HOME_SSIID = '{v_ssid}' OR AWAY_SSIID = '{v_ssid}')
-            AND "DATE" >= '2025-07-01'
-            ORDER BY "DATE" DESC
+            SELECT DISTINCT
+                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
+                m.DESCRIPTION, 
+                m.MATCH_SSIID 
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m
+            INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p 
+                ON m.MATCH_SSIID = p.MATCH_SSIID
+            WHERE (m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}')
+            AND m."DATE" >= '2025-07-01'
+            ORDER BY DATE_STR DESC
         """)
         
-        if not df_meta.empty:
+        if df_meta.empty:
+            st.info("Venter på fysisk data for sæsonens kampe...")
+        else:
             df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
-            
-            # Hent valide IDs for det valgte hold i denne kamp
-            ids_df = conn.query(f"""
-                SELECT f.value:"optaId"::string AS tid
-                FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-                LATERAL FLATTEN(input => CASE 
-                    WHEN m.HOME_SSIID = '{v_ssid}' THEN m.HOME_PLAYERS 
-                    ELSE m.AWAY_PLAYERS 
-                END) f
-                WHERE m.MATCH_SSIID = '{m_id}'
-            """)
-            list_valid_ids = ids_df['TID'].tolist()
             
             # Hent kampdata
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
             
             if not df_m.empty:
-                # Behandling af kamp-specifik data
-                df_m['KM'] = (df_m['DISTANCE'] / 1000).round(2)
+                # Omskrivning til KM og HI
+                df_m['KM'] = (df_m['DISTANCE'] / 1000)
                 df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                # Vigtigt: Navne-mapping her også!
-                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r['optaId']), r['PLAYER_NAME']), axis=1)
-                df_m['Hold'] = df_m['optaId'].apply(lambda x: valgt_hold if str(x) in list_valid_ids else "Modstander")
+                
+                # Vigtigt: Navne-mapping (tjekker for både 'optaId' og 'OPTAID')
+                oid_col = 'optaId' if 'optaId' in df_m.columns else 'OPTAID'
+                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r[oid_col]), r['PLAYER_NAME']), axis=1)
+                
+                # Marker Hvidovre vs Modstander
+                # Vi bruger teamName i stedet for ID-liste for at gøre det mere stabilt
+                df_m['Hold'] = df_m['teamName'].apply(lambda x: valgt_hold if x.lower() in valgt_hold.lower() else "Modstander")
 
                 st.dataframe(
                     df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
                     column_config={
                         "DISPLAY_NAME": "Spiller",
+                        "teamName": "Hold",
                         "MINUTES": "Min",
-                        "KM": st.column_config.NumberColumn("Distance", format="%.2f km"),
-                        "HI_RUN": st.column_config.NumberColumn("HI løb", format="%d m"),
-                        "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
+                        "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
+                        "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
+                        "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t")
                     },
-                    column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                    use_container_width=True, hide_index=True, height=700
+                    column_order=("DISPLAY_NAME", "teamName", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                    use_container_width=True, hide_index=True, height=600
+                )with t4:
+        # 1. Hent kun kampe der har data i SUMMARY_PLAYERS tabellen
+        df_meta = conn.query(f"""
+            SELECT DISTINCT
+                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
+                m.DESCRIPTION, 
+                m.MATCH_SSIID 
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m
+            INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p 
+                ON m.MATCH_SSIID = p.MATCH_SSIID
+            WHERE (m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}')
+            AND m."DATE" >= '2025-07-01'
+            ORDER BY DATE_STR DESC
+        """)
+        
+        if df_meta.empty:
+            st.info("Venter på fysisk data for sæsonens kampe...")
+        else:
+            df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
+            v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
+            m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
+            
+            # Hent kampdata
+            df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
+            
+            if not df_m.empty:
+                # Omskrivning til KM og HI
+                df_m['KM'] = (df_m['DISTANCE'] / 1000)
+                df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
+                
+                # Vigtigt: Navne-mapping (tjekker for både 'optaId' og 'OPTAID')
+                oid_col = 'optaId' if 'optaId' in df_m.columns else 'OPTAID'
+                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r[oid_col]), r['PLAYER_NAME']), axis=1)
+                
+                # Marker Hvidovre vs Modstander
+                # Vi bruger teamName i stedet for ID-liste for at gøre det mere stabilt
+                df_m['Hold'] = df_m['teamName'].apply(lambda x: valgt_hold if x.lower() in valgt_hold.lower() else "Modstander")
+
+                st.dataframe(
+                    df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
+                    column_config={
+                        "DISPLAY_NAME": "Spiller",
+                        "teamName": "Hold",
+                        "MINUTES": "Min",
+                        "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
+                        "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
+                        "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t")
+                    },
+                    column_order=("DISPLAY_NAME", "teamName", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
+                    use_container_width=True, hide_index=True, height=600
                 )
