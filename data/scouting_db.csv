@@ -23,7 +23,7 @@ PLAYER_WYID,DATO,Navn,KLUB,POSITION,RATING_AVG,STATUS,POTENTIALE,STYRKER,UDVIKLI
 680719,2026-03-04,Anders Ravn,Hvidovre IF,GKP,2.9,Hold øje,Højt,Høj arbejdsmoral,Udfelt-aktioner,Skal modnes,3.0,3.0,3.0,4.0,3.0,3.0,3.0,3.0,MR,,,,,,False,Skal modnes,,False,,,,
 844,2026-03-05,Marius Holst Papuga,Hvidovre IF,MID,3.0,Hold øje,Højt,Godt løbepensum,Taktisk forståelse,Arbejdsom,3.0,3.0,3.0,4.0,4.0,3.0,3.0,3.0,KD,,,,,,False,Arbejdsom,,False,,,,
 748624,2026-03-06,Alexander Johansen,Hvidovre IF,FWD,3.1,Hold øje,Højt,Næse for mål,Fysisk tilstedeværelse,Ung målræv,3.0,4.0,3.0,4.0,3.0,2.0,4.0,3.0,CG,,,,,,False,Ung målræv,,False,,,,
-525614,,Oliver Bjerrum Jensen,Thisted,FWD,3.38,Interessant,Højt,"God på bolden, kan drive den, god i stikningsspillet",Defensive kompetencer,Har en spændende pakke,3.0,3.0,3.0,5.0,3.0,2.0,4.0,4.0,ceo,2027-06-30,Scoutes nu,Realistisk,B - Trupspiller,6,15000,True,Har en spændende pakke,False,Nu,0.0,0.0,0.0
+525614,,Oliver Bjerrum Jensen,Thisted,FWD,3.38,Interessant,Højt,"God på bolden, kan drive den, god i stikningsspillet",Defensive kompetencer,Har en spændende pakke,3.0,3.0,3.0,5.0,3.0,2.0,4.0,4.0,ceo,2027-06-30,Scoutes nu,Realistisk,B - Trupspiller,6,15000,True,Har en spændende pakke,False,Nu,0,0,0
 562633,,Nicolai Vallys,Brøndby,MID,3.62,Hold øje,Middel,God på bolden,Tage lederskab,En god spiller med offensivt output,4.0,2.0,5.0,2.0,5.0,4.0,5.0,2.0,kasper,2026-06-30,,,,,,False,En god spiller med offensivt output,False,,,,
 766640,,Kasper Nyegaard,Roskilde,MID,3.0,Interessant,Højt,Fin på kuglen,Placering,Spædende på kuglen,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2027-06-30,Scoutes nu,Realistisk,B - Trupspiller,8,,True,Spædende på kuglen,False,Nu,0.0,0.0,0.0
 821046,,Alexander Edvardsen Hvid,Hørsholm-Usserød,FWD,3.12,Interessant,Højt,,,,3.0,3.0,3.0,3.0,3.0,4.0,3.0,3.0,kasper,,,,,,False,,,False,,,,
@@ -35,7 +35,7 @@ Moden i sit spil",,Meget spændende spiller der skal følges tæt,4.0,4.0,3.0,3.
 kombinationsspil",spillet uden bold,,3.0,3.0,3.0,3.0,3.0,2.0,5.0,4.0,ceo,2026-06-30,Hold øje,Realistisk,A - Start-11,1,,False,,False,,,,
 762322,,Gabriel Larsen,HB Køge,MID,3.0,Hold øje,Højt,,,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Realistisk,C - Udviklingsspiller,6,,False,,False,,,,
 762322,,Gabriel Larsen,HB Køge,MID,3.0,Interessant,Lavt,,,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Realistisk,C - Udviklingsspiller,6,,False,,False,,,,
-481951,,Kasper  Nygaard Andersen,Aarhus Fremad,MID,3.0,Interessant,Højt,God på kuglen. Kan droppe og holde fast i bolden som 9'er. Har et godt drev med bolden,,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Svær,A - Start-11,9,,True,,True,Nu,6,0,0
+481951,,Kasper  Nygaard Andersen,Aarhus Fremad,MID,3.0,Interessant,Højt,God på kuglen. Kan droppe og holde fast i bolden som 9'er. Har et godt drev med bolden,,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Svær,A - Start-11,9,,True,,True,Nu,6.0,0.0,0.0
 562789,,Marinus Due Grandt,Hillerød,MID,3.0,Hold øje,Lavt,"Sikker på bolden
 Kan godt vende/dreje i forrum",Fremadrettethed i sit spil,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Realistisk,B - Trupspiller,6,20 tusind,False,,False,,,,
 400359,,Christian Tue Jensen,HB Køge,MID,3.0,Interessant,Middel,"Stærk 1 divisionsspiller
