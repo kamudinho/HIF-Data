@@ -88,11 +88,11 @@ def vis_side(df_input_unused=None):
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("", VINDUE_OPTIONS_GLOBAL, key="global_vindue_sel")
+    sel_v = t_col2.selectbox("Vælg vindue for banen", VINDUE_OPTIONS_GLOBAL, key="global_vindue_sel")
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TABS 1 & 2 (Uændret logik for overskuelighed) ---
+    # --- TAB 1 & 2: ADMINISTRATION ---
     configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE", False), 
                (tabs[1], df_hif, HIF_PATH, "HIF", True)]
 
@@ -100,12 +100,13 @@ def vis_side(df_input_unused=None):
         with tab:
             if not df_display.empty:
                 v_opts = HIF_VINDUE_OPTIONS if is_hif_flag else EMNE_VINDUE_OPTIONS
-                ed = st.data_editor(df_display.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, key=f"ed_{key_base}",
+                target_cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
+                ed = st.data_editor(df_display.set_index('Navn')[target_cols], use_container_width=True, key=f"ed_{key_base}",
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=v_opts),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
                     })
-                if not ed.equals(df_display.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]):
+                if not ed.equals(df_display.set_index('Navn')[target_cols]):
                     c, sha = get_github_file(path)
                     df_save = pd.read_csv(StringIO(c))
                     df_save.columns = [str(x).upper().strip() for x in df_save.columns]
@@ -116,11 +117,11 @@ def vis_side(df_input_unused=None):
                     push_to_github(path, "Update", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # --- TAB 3: SKYGGELISTE (Validering af Emner) ---
+    # --- TAB 3: SKYGGELISTE (LOGIK-LÅS) ---
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
-            ed_s = st.data_editor(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], use_container_width=True, key="sky_ed_v3",
+            ed_s = st.data_editor(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], use_container_width=True, key="sky_ed_v4",
                 column_config={"TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS_GLOBAL)})
             
             if not ed_s.equals(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]):
@@ -128,10 +129,9 @@ def vis_side(df_input_unused=None):
                     is_hif_player = navn in df_hif['Navn'].values
                     target_v = row['TRANSFER_VINDUE']
                     
-                    # TVUNGEN VALIDERING: Emner må IKKE være i nuværende trup
                     if not is_hif_player and target_v == "Nuværende trup":
                         target_v = "Sommer 26"
-                        st.error(f"'{navn}' er et emne og kan ikke tilføjes 'Nuværende trup'. Ændret til Sommer 26.")
+                        st.error(f"'{navn}' er et emne og kan ikke være i nuværende trup. Ændret til Sommer 26.")
                         time.sleep(1)
 
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
@@ -145,17 +145,18 @@ def vis_side(df_input_unused=None):
                             push_to_github(p, "Update Skygge", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
-    # --- TAB 4: BANE (Opdateret Filtrering) ---
+    # --- TAB 4: BANE (FILTRERINGSLOGIK) ---
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
 
         if sel_v == "Nuværende trup":
-            # VIS ALLE FRA HIF (players.csv) - ingen filtrering på skyggehold her
+            # REGEL: Vis alle fra HIF, ingen emner.
             df_filtered = df_hif.copy()
         else:
-            # FREMTIDIGE VINDUER: Vis kun dem med SKYGGEHOLD = True
+            # REGEL: Kun spillere med flueben i Skyggehold.
             hif_skygge = df_hif[df_hif['SKYGGEHOLD'] == True]
+            # REGEL: Kun emner der matcher det valgte vindue.
             emne_skygge = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_filtered = pd.concat([hif_skygge, emne_skygge], ignore_index=True)
 
