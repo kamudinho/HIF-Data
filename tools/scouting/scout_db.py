@@ -125,18 +125,9 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 for col in ['MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']:
                     if col in stats.columns:
                         stats[col] = pd.to_numeric(stats[col], errors='coerce').fillna(0)
-
-                # 3. Definer hvordan vi runder af/samler data
-                # Vi grupperer på Sæson, Hold og Turnering
-                # Hvis der er dubletter, tager vi gennemsnittet eller den første værdi 
-                # for at undgå at tælle 300 kampe.
                 
                 group_cols = ['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']
                 act_group = [c for c in group_cols if c in stats.columns]
-                
-                # Her er "tricket": Vi bruger .max() eller .first() hvis data 
-                # i forvejen ER totaler, men optræder flere gange.
-                # Hvis rækkerne er enkelte kampe, skal vi bruge .sum() - men kun på mål/minutter.
                 
                 stats_grouped = stats.groupby(act_group).agg({
                     'MATCHES': 'max',    # Vi tager den højeste værdi (hvis det er totaler)
@@ -230,7 +221,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning'],
         hide_index=True, 
         use_container_width=True, 
-        height=600,
+        height=700,
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
