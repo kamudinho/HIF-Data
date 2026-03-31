@@ -111,12 +111,12 @@ def vis_side(dp):
     lon_input = l4_c1.text_input("Lønniveau")
     
     # Centrering af checkbox
-    with l4_c2:
+    with l4_c3:
         st.write("") # Spacer for at skubbe ned
         st.write("") 
         er_emne = st.checkbox("Transferemne?", value=False)
         
-    vindue = l4_c3.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
+    vindue = l4_c2.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
 
     with st.form("rapport_form", clear_on_submit=True):
         # SLIDERS
