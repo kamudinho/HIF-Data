@@ -80,33 +80,34 @@ def vis_side(df_input_unused=None):
     # OPDATERET CSS til at rykke alt helt i top
     st.markdown("""
         <style>
-            /* 1. Fjern Streamlits standard top-margin helt */
+            /* 1. Fjern Streamlits standard top-margin */
             .stAppViewBlockContainer {
                 padding-top: 0px !important;
-                padding-bottom: 0px !important;
             }
             div.block-container {
-                padding-top: 0.5rem !important; /* Meget lidt luft til toppen */
-                padding-bottom: 0px !important;
+                padding-top: 0.5rem !important;
                 max-width: 98% !important;
             }
             
-            /* 2. Fjern ekstra luft over dropdown og tabs */
+            /* 2. Ryk dropdown op i niveau med overskriften eller lige under */
             [data-testid="stVerticalBlock"] > div:first-child {
-                margin-top: -20px !important;
+                margin-top: -15px !important;
             }
 
-            /* 3. Dropdown-styling: skjul label og ryk den op */
+            /* 3. Dropdown-styling */
             div[data-testid="stSelectbox"] label { display: none; }
-            div[data-testid="stSelectbox"] { margin-bottom: -15px; }
             
-            /* 4. Tabs: Mindsk luft over og under fanerne */
-            .stTabs { margin-top: 0px; }
+            /* 4. TABS: Her styrer vi afstanden til selve indholdet */
+            .stTabs { margin-top: 5px; }
+            
+            /* Denne del sørger for, at indholdet (banen/tabellen) 
+               ikke kravler op over fanerne */
             div[data-baseweb="tab-panel"] {
-                padding-top: 15px !important; /* Afstand fra fanen til tabellen */
+                padding-top: 45px !important; /* Øget fra 15/25 til 45 for at give luft */
+                margin-top: 0px !important;
             }
 
-            /* 5. Tabel-højde (justeret så den ikke tvinger siden unødigt lang) */
+            /* 5. Tving Data Editor til en god højde */
             div[data-testid="stDataEditor"] {
                 min-height: 650px !important;
             }
