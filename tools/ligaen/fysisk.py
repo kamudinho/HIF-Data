@@ -132,9 +132,9 @@ def vis_side(conn, name_map=None):
         st.dataframe(
             summary.sort_values('KM/90', ascending=False),
             column_config={
-                "KM/90": st.column_config.NumberColumn(format="%.2f"),
-                "HI m/90": st.column_config.NumberColumn(format="%d"),
-                "TOP_SPEED": st.column_config.NumberColumn(format="%.1f")
+                "KM/90": st.column_config.NumberColumn("KM/90", format="%.2f km"),
+                "HI m/90": st.column_config.NumberColumn("HI m/90", format="%d m"),
+                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
             },
             use_container_width=True, hide_index=True, height=700
         )
@@ -145,15 +145,41 @@ def vis_side(conn, name_map=None):
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
-        # Snowflake kræver ofte anførselstegn om "HIGH SPEED RUNNING" pga mellemrum
-        df_top = conn.query('SELECT PLAYER_NAME, TOP_SPEED, "HIGH SPEED RUNNING" + SPRINTING as HI_TOTAL FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS')
+        # 1. Tilføj vertikal afstand specifikt til denne tab
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        
+        # 2. Hent data inkl. minutter for at kunne regne pr. 90
+        # Vi grupperer pr. spiller for at få deres gennemsnit i ligaen
+        df_league = conn.query("""
+            SELECT 
+                PLAYER_NAME, 
+                MAX(TOP_SPEED) as MAX_SPEED,
+                SUM(DISTANCE) as TOTAL_DIST,
+                SUM("HIGH SPEED RUNNING" + SPRINTING) as TOTAL_HI,
+                SUM(CAST(SPLIT_PART(MINUTES, ':', 1) AS FLOAT) + CAST(SPLIT_PART(MINUTES, ':', 2) AS FLOAT)/60) as TOTAL_MINS
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            GROUP BY PLAYER_NAME
+            HAVING TOTAL_MINS > 90
+        """)
+
+        df_league['KM/90'] = (df_league['TOTAL_DIST'] / df_league['TOTAL_MINS']) * 90 / 1000
+        df_league['HI/90'] = (df_league['TOTAL_HI'] / df_league['TOTAL_MINS']) * 90
+
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Topfart (Liga)**")
-            st.dataframe(df_top.nlargest(5, 'TOP_SPEED')[['PLAYER_NAME', 'TOP_SPEED']], hide_index=True)
+            st.dataframe(
+                df_league.nlargest(5, 'MAX_SPEED')[['PLAYER_NAME', 'MAX_SPEED']], 
+                column_config={"MAX_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")},
+                hide_index=True, use_container_width=True
+            )
         with c2:
-            st.write("**HI Meter (Liga total)**")
-            st.dataframe(df_top.nlargest(5, 'HI_TOTAL')[['PLAYER_NAME', 'HI_TOTAL']], hide_index=True)
+            st.write("**HI Meter pr. 90 (Liga)**")
+            st.dataframe(
+                df_league.nlargest(5, 'HI/90')[['PLAYER_NAME', 'HI/90']], 
+                column_config={"HI/90": st.column_config.NumberColumn("HI m/90", format="%d m")},
+                hide_index=True, use_container_width=True
+            )
 
     with t4:
         df_meta = conn.query(f"""
@@ -197,9 +223,9 @@ def vis_side(conn, name_map=None):
                     column_config={
                         "DISPLAY_NAME": "Spiller",
                         "MINUTES": "Min",
-                        "KM": st.column_config.NumberColumn("KM", format="%.2f"),
-                        "HI_RUN": "HI m",
-                        "TOP_SPEED": "Top"
+                        "KM": st.column_config.NumberColumn("Distance", format="%.2f km"),
+                        "HI_RUN": st.column_config.NumberColumn("HI løb", format="%d m"),
+                        "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
                     },
                     column_order=("DISPLAY_NAME", "Hold", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
                     use_container_width=True, hide_index=True, height=700
