@@ -10,12 +10,12 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# De officielle 28 kolonner
+# Opdateret kolonne-rækkefølge (PRIORITET erstattet af BIRTHDATE)
 COL_ORDER = [
-    "PLAYER_WYID", "DATO", "NAVN", "KLUB", "POSITION", "RATING_AVG", "STATUS",
+    "PLAYER_WYID", "DATO", "NAVN", "KLUB", "POSITION", "BIRTHDATE", "RATING_AVG", "STATUS",
     "POTENTIALE", "STYRKER", "UDVIKLING", "VURDERING", "BESLUTSOMHED", "FART",
     "AGGRESIVITET", "ATTITUDE", "UDHOLDENHED", "LEDEREGENSKABER", "TEKNIK",
-    "SPILINTELLIGENS", "SCOUT", "KONTRAKT", "PRIORITET", "FORVENTNING",
+    "SPILINTELLIGENS", "SCOUT", "KONTRAKT", "FORVENTNING",
     "POS_PRIORITET", "POS", "LON", "SKYGGEHOLD", "KOMMENTAR"
 ]
 
@@ -41,7 +41,7 @@ def push_to_github(path, message, content, sha=None):
     return r.status_code
 
 def vis_side(dp):    
-    # --- DATA HENTNING (Dropdowns) ---
+    # --- DATA HENTNING ---
     df_local = dp.get("scout_reports", pd.DataFrame()) 
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()) 
     
@@ -54,19 +54,30 @@ def vis_side(dp):
             if not p_id or p_id in ['nan', 'None', '']: continue
             f_name = str(r.get('FIRSTNAME', '')).replace('None', '').strip()
             l_name = str(r.get('LASTNAME', '')).replace('None', '').strip()
-            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
+            fuldt_navn = f"{f_name} { l_name}" if f_name and l_name else (r.get('PLAYER_NAME') or r.get('NAVN') or "Ukendt")
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos_code = r.get('ROLECODE3') or r.get('POSITION') or ""
+            
+            # Hent fødselsdato fra data hvis den findes
+            b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or ""
+            if pd.notna(b_date) and b_date != "":
+                # Forsøg at formatere hvis det er timestamp
+                try: b_date = pd.to_datetime(b_date).strftime("%Y-%m-%d")
+                except: b_date = str(b_date)
+
             label = f"{fuldt_navn} ({klub})"
             if p_id not in unique_players:
-                unique_players[p_id] = {"label": label, "data": {"n": fuldt_navn, "id": p_id, "pos": pos_code, "klub": klub}}
+                unique_players[p_id] = {
+                    "label": label, 
+                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos_code, "klub": klub, "birth": b_date}
+                }
 
     add_to_options(df_local)
     add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     # --- UI LAYOUT ---
-    data = {"n": "", "id": "", "pos": "", "klub": ""}
+    data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     t1, t2, t3, t4 = st.columns([2, 1, 1, 1])
     
     with t1:
@@ -83,7 +94,8 @@ def vis_side(dp):
     kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
 
     l3_c1, l3_c2, l3_c3 = st.columns(3)
-    prio_status = l3_c1.selectbox("Prioritet", ["Scoutes nu", "Scoutes senere", "Hold øje", "Arkiveret"])
+    # PRIORITET er nu erstattet med Fødselsdato input
+    fodselsdato = l3_c1.text_input("Fødselsdato", value=data['birth'], help="Format: YYYY-MM-DD")
     forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
     lon_input = l3_c3.text_input("Lønniveau")
 
@@ -119,14 +131,14 @@ def vis_side(dp):
             else:
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%d/%m/%Y"),
-                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final,
+                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final, "BIRTHDATE": fodselsdato,
                     "RATING_AVG": round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2),
                     "STATUS": status_label, "POTENTIALE": pot, "STYRKER": styrker, "UDVIKLING": udv,
                     "VURDERING": vurder, "BESLUTSOMHED": float(beslut), "FART": float(fart),
                     "AGGRESIVITET": float(agg), "ATTITUDE": float(att), "UDHOLDENHED": float(udh),
                     "LEDEREGENSKABER": float(led), "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel),
                     "SCOUT": scout_navn, "KONTRAKT": str(kontrakt_udloeb) if kontrakt_udloeb else "",
-                    "PRIORITET": prio_status, "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
+                    "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
                     "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "KOMMENTAR": vurder
                 }
 
@@ -134,16 +146,18 @@ def vis_side(dp):
                 content, sha = get_github_file(FILE_PATH)
                 if content:
                     df_old = pd.read_csv(StringIO(content), low_memory=False)
-                    # Slet alt der ikke er i COL_ORDER
                     df_old.columns = [c.upper().strip() for c in df_old.columns]
-                    df_clean = pd.DataFrame(columns=COL_ORDER)
-                    for c in COL_ORDER:
-                        if c in df_old.columns:
-                            df_clean[c] = df_old[c]
+                    
+                    # Sikr at alle kolonner i COL_ORDER findes, ellers opret dem
+                    for col in COL_ORDER:
+                        if col not in df_old.columns:
+                            df_old[col] = None
+                            
+                    df_clean = df_old[COL_ORDER].copy()
                     df_final = pd.concat([df_clean, pd.DataFrame([ny_rapport])], ignore_index=True)
                 else:
                     df_final = pd.DataFrame([ny_rapport])
 
                 df_final = df_final[COL_ORDER]
-                push_to_github(FILE_PATH, f"Renset Rapport: {data['n']}", df_final.to_csv(index=False), sha)
-                st.success("Gemt og database renset!")
+                push_to_github(FILE_PATH, f"Ny Rapport (+Fødselsdato): {data['n']}", df_final.to_csv(index=False), sha)
+                st.success(f"Rapport for {data['n']} gemt succesfuldt!")
