@@ -48,7 +48,6 @@ def vis_side(dp):
     unique_players = {}
     def add_to_options(df):
         if df is None or df.empty: return
-        # Lav en kopi og ensret kolonnenavne til store bogstaver
         df_temp = df.copy()
         df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
         
@@ -62,30 +61,17 @@ def vis_side(dp):
             klub = r.get('TEAMNAME') or r.get('KLUB') or "Ukendt klub"
             pos_code = r.get('ROLECODE3') or r.get('POSITION') or ""
             
-            # --- FORBEDRET BIRTHDATE SØGNING ---
-            # Vi kigger efter alle tænkelige varianter
             b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or r.get('BIRTH_DAY') or r.get('DOB') or ""
-            
-            # Formatering af datoen så den er læselig i tekstfeltet
             birth_val = ""
             if pd.notna(b_date) and b_date != "":
-                try:
-                    # Hvis det er en datetime eller en streng der kan konverteres
-                    birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
-                except:
-                    birth_val = str(b_date)
+                try: birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
+                except: birth_val = str(b_date)
 
             label = f"{fuldt_navn} ({klub})"
             if p_id not in unique_players:
                 unique_players[p_id] = {
                     "label": label, 
-                    "data": {
-                        "n": fuldt_navn, 
-                        "id": p_id, 
-                        "pos": pos_code, 
-                        "klub": klub, 
-                        "birth": birth_val # Her gemmes den fundne dato
-                    }
+                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos_code, "klub": klub, "birth": birth_val}
                 }
 
     add_to_options(df_local)
@@ -93,33 +79,37 @@ def vis_side(dp):
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     # --- UI LAYOUT ---
-    # Default værdier hvis ingen spiller er valgt
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    t1, t2, t3, t4 = st.columns([2, 1, 1, 1])
+    # LINJE 1: Spiller, Position, Klub, Fødselsdato, Scout
+    t1, t2, t3, t4, t5 = st.columns([2, 1, 1, 1, 1])
     
     with t1:
-        sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
-                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
-        if sel_id: 
-            data = unique_players[sel_id]["data"]
+        sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+        if sel_id: data = unique_players[sel_id]["data"]
     
     pos_final = t2.text_input("Position", value=data['pos'])
     t3.text_input("Klub", value=data['klub'], disabled=True)
-    scout_navn = t4.text_input("Scout", value=st.session_state.get("user", "HIF Scout"))
+    fodselsdato = t4.text_input("Fødselsdato", value=data['birth'])
+    scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"))
 
-    l2_c1, l2_c2, l2_c3 = st.columns(3)
+    # LINJE 2: POS (1-11), POS-prioritet, Kontraktudløb, Lønniveau
+    l2_c1, l2_c2, l2_c3, l2_c4 = st.columns(4)
     pos_nr = l2_c1.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
     pos_prio = l2_c2.selectbox("Pos-prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
     kontrakt_udloeb = l2_c3.date_input("Kontraktudløb", value=None)
+    lon_input = l2_c4.text_input("Lønniveau")
 
-    l3_c1, l3_c2, l3_c3 = st.columns(3)
-    # Her bruges data['birth'] som nu er blevet fyldt i add_to_options
-    fodselsdato = l3_c1.text_input("Fødselsdato", value=data['birth'], help="Format: YYYY-MM-DD")
-    forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
-    lon_input = l3_c3.text_input("Lønniveau")
+    # LINJE 3: Status, Potentiale, Forventning, Transferemne (Checkbox + Vindue)
+    l3_c1, l3_c2, l3_c3, l3_c4, l3_c5 = st.columns([1, 1, 1, 0.7, 1])
+    status_label = l3_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
+    pot = l3_c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+    forventning = l3_c3.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
+    er_emne = l3_c4.checkbox("Transferemne?", value=False)
+    vindue = l3_c5.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
 
     with st.form("rapport_form", clear_on_submit=True):
+        # SLIDERS
         st.caption("Vurdering (1-6)")
         m1, m2, m3, m4 = st.columns(4)
         beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
@@ -134,14 +124,14 @@ def vis_side(dp):
         intel = m8.select_slider("Intelligens", options=list(range(1, 7)), value=3)
 
         st.markdown("---")
+        # TEKSTOMRÅDER: Styrker, Udvikling, Vurdering
         v1, v2, v3 = st.columns(3)
         styrker = v1.text_area("Styrker")
         udv = v2.text_area("Udvikling")
-        vurder = v3.text_area("Kommentar")
+        vurder_kort = v3.text_area("Vurdering")
 
-        c1, c2 = st.columns(2)
-        status_label = c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
-        pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+        # KOMMENTAR (Fuld bredde nederst)
+        kommentar_full = st.text_area("Kommentar (uddybende)", height=100)
 
         submitted = st.form_submit_button("Gem Rapport", use_container_width=True)
         
@@ -149,17 +139,20 @@ def vis_side(dp):
             if not data["n"]:
                 st.error("Vælg en spiller!")
             else:
+                avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
                 ny_rapport = {
-                    "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%d/%m/%Y"),
+                    "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": pos_final, "BIRTHDATE": fodselsdato,
-                    "RATING_AVG": round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2),
-                    "STATUS": status_label, "POTENTIALE": pot, "STYRKER": styrker, "UDVIKLING": udv,
-                    "VURDERING": vurder, "BESLUTSOMHED": float(beslut), "FART": float(fart),
-                    "AGGRESIVITET": float(agg), "ATTITUDE": float(att), "UDHOLDENHED": float(udh),
-                    "LEDEREGENSKABER": float(led), "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel),
-                    "SCOUT": scout_navn, "KONTRAKT": str(kontrakt_udloeb) if kontrakt_udloeb else "",
-                    "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
-                    "POS": pos_nr, "LON": lon_input, "SKYGGEHOLD": False, "KOMMENTAR": vurder
+                    "RATING_AVG": avg_rating, "STATUS": status_label, "POTENTIALE": pot, 
+                    "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder_kort, 
+                    "BESLUTSOMHED": float(beslut), "FART": float(fart), "AGGRESIVITET": float(agg), 
+                    "ATTITUDE": float(att), "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), 
+                    "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn, 
+                    "KONTRAKT": str(kontrakt_udloeb) if kontrakt_udloeb else "", "FORVENTNING": forventning, 
+                    "POS_PRIORITET": pos_prio, "POS": pos_nr, "LON": lon_input, 
+                    "SKYGGEHOLD": False, "KOMMENTAR": kommentar_full,
+                    "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue,
+                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0 # Standardværdier for taktiske kolonner
                 }
 
                 # --- RENS OG GEM LOGIK ---
@@ -167,17 +160,11 @@ def vis_side(dp):
                 if content:
                     df_old = pd.read_csv(StringIO(content), low_memory=False)
                     df_old.columns = [c.upper().strip() for c in df_old.columns]
-                    
-                    # Sikr at alle kolonner i COL_ORDER findes, ellers opret dem
-                    for col in COL_ORDER:
-                        if col not in df_old.columns:
-                            df_old[col] = None
-                            
-                    df_clean = df_old[COL_ORDER].copy()
-                    df_final = pd.concat([df_clean, pd.DataFrame([ny_rapport])], ignore_index=True)
+                    # Dynamisk kolonnetjek baseret på din CSV struktur
+                    current_cols = list(df_old.columns)
+                    df_final = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
                 else:
                     df_final = pd.DataFrame([ny_rapport])
 
-                df_final = df_final[COL_ORDER]
-                push_to_github(FILE_PATH, f"Ny Rapport (+Fødselsdato): {data['n']}", df_final.to_csv(index=False), sha)
-                st.success(f"Rapport for {data['n']} gemt succesfuldt!")
+                push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
+                st.success(f"Rapport for {data['n']} er gemt i databasen!")
