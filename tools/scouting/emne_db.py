@@ -78,19 +78,26 @@ def prepare_df(content, is_hif=False):
 # --- HOVEDSIDE ---
 def vis_side(df_input_unused=None):
     st.markdown("""
+        st.markdown("""
         <style>
-            div.block-container{padding: 0.2rem 0.5rem; max-width: 95% !important;}
-            /* Fjern label/overskrift fra selectbox helt */
+            /* 1. Gør containeren bred og fjern top-padding */
+            div.block-container { padding: 0.5rem 1rem; max-width: 98% !important; }
+            
+            /* 2. Fjern label fra selectbox */
             div[data-testid="stSelectbox"] label { display: none; }
             
-            /* Aggressiv reducering af afstand mellem tabs og indhold */
-            .stTabs { margin-top: -5px; }
+            /* 3. Juster afstanden fra Tabs til indhold (væk med negativ margin) */
+            .stTabs { margin-top: 0px; }
             div[data-baseweb="tab-panel"] {
-                padding-top: 0px !important;
-                margin-top: 5px !important;
+                padding-top: 20px !important; /* Giver luft så tabellen ikke klistrer til fanen */
+            }
+
+            /* 4. Tving Data Editor til at fylde mere (hvis nødvendigt) */
+            div[data-testid="stDataEditor"] {
+                min-height: 600px !important; /* Sikrer at tabellen fylder halvdelen+ af skærmen */
             }
             
-            /* Fjern ekstra luft under knapperne til højre */
+            /* 5. Fix for kolonne-afstande */
             div[data-testid="column"] { padding-top: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -123,7 +130,8 @@ def vis_side(df_input_unused=None):
                 ed = st.data_editor(
                     df_editor_in.style.apply(style_kontrakt, axis=None),
                     use_container_width=True,
-                    key=f"ed_v10_{key_base}", 
+                    height=700, # Tilføj denne linje for at styre højden slavisk
+                    key=f"ed_v10_{key_base}",
                     column_config={
                         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS),
                         "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
