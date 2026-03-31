@@ -23,7 +23,7 @@ POS_OPTIONS = {
     "11": "Venstre kant", "10": "Offensiv midt", "9": "Angriber"
 }
 
-VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_OPTIONS_GLOBAL = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 EMNE_VINDUE_OPTIONS = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 HIF_VINDUE_OPTIONS = ["Nuværende trup"]
 
