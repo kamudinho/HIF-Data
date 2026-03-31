@@ -78,6 +78,7 @@ def get_wy_queries(comp_filter, season_filter):
                 p.LASTNAME,
                 p.SHORTNAME AS PLAYER_NAME,
                 p.ROLECODE3,
+                p.BIRTHDATE,
                 t.TEAMNAME
             FROM {DB}.WYSCOUT_PLAYERS p
             JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
