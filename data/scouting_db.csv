@@ -29,7 +29,7 @@ PLAYER_WYID,DATO,NAVN,KLUB,POSITION,RATING_AVG,STATUS,POTENTIALE,STYRKER,UDVIKLI
 821046,,Alexander Edvardsen Hvid,Hørsholm-Usserød,FWD,3.12,Interessant,Højt,,,,3.0,3.0,3.0,3.0,3.0,4.0,3.0,3.0,kasper,,,,,,False,,,False
 625209,,Bertram Bangsted Kvist,Næstved,MID,3.12,Interessant,Lavt,,,,,3.0,4.0,3.0,3.0,4.0,3.0,2.0,3.0,kasper,,Scoutes senere,Realistisk,B - Trupspiller,,False,,False
 449310,,Louis Larsen,Næsby,MID,3.38,Interessant,Middel,,,,4.0,2.0,2.0,4.0,4.0,2.0,5.0,4.0,kasper,,Hold øje,Realistisk,C - Udviklingsspiller,7,15.000,True,,False
-624735,,Aksel Emil Halsgaard,Næstved,DEF,3.62,Interessant,Højt,"Duespil/god og rolig på bolden
+624735,,Aksel Emil Halsgaard,Næstved,DEF,3.62,Interessant,Højt,"Duespil/god og rolig på bolden, True
 Moden i sit spil",,Meget spændende spiller der skal følges tæt,4.0,4.0,3.0,3.0,4.0,3.0,4.0,4.0,ceo,,Scoutes nu,Realistisk,A - Start-11,1,,True,Meget spændende spiller der skal følges tæt,False
 1088612,,Jonas Horup Damkjær,HIK,MID,3.25,Interessant,Middel,"Stikningsspil
 kombinationsspil",spillet uden bold,,3.0,3.0,3.0,3.0,3.0,2.0,5.0,4.0,ceo,2026-06-30,Hold øje,Realistisk,A - Start-11,1,,False,,False
@@ -40,6 +40,6 @@ kombinationsspil",spillet uden bold,,3.0,3.0,3.0,3.0,3.0,2.0,5.0,4.0,ceo,2026-06
 Kan godt vende/dreje i forrum",Fremadrettethed i sit spil,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Scoutes nu,Realistisk,B - Trupspiller,6,20 tusind,False,,False
 400359,,Christian Tue Jensen,HB Køge,MID,3.0,Interessant,Middel,"Stærk 1 divisionsspiller
 god i kombinationer
-har lavet en del mål",,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-12-31,Scoutes nu,Realistisk,A - Start-11,10,,False,,False
+har lavet en del mål",,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-12-31,Scoutes nu,Realistisk,A - Start-11,10,,False,,True
 762382,,Jerailly Wielzen,Middelfart,DEF,3.38,Interessant,Lavt,"Stærk i omstillingerne
-Har god fart",Indlægsspil,,2.0,5.0,3.0,3.0,5.0,3.0,3.0,3.0,ceo,2027-06-30,Scoutes nu,Realistisk,A - Start-11,7,,False,,False
+Har god fart",Indlægsspil,,2.0,5.0,3.0,3.0,5.0,3.0,3.0,3.0,ceo,2027-06-30,Scoutes nu,Realistisk,A - Start-11,7,,False,,True
