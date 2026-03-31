@@ -80,8 +80,8 @@ def vis_side(dp=None):
         [data-testid="stVerticalBlock"] { gap: 0rem !important; }
         .stTabs { margin-top: 10px !important; }
         .stat-box { 
-            background-color: #f8f9fa; padding: 15px !important; border-radius: 8px; 
-            border-left: 5px solid #cc0000; margin-bottom: 12px !important; 
+            background-color: #f8f9fa; padding: 5px !important; border-radius: 8px; 
+            border-left: 5px solid #cc0000; margin-bottom: 5px !important; 
         }
         .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: bold; }
         .stat-value { font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin-top: 4px; }
