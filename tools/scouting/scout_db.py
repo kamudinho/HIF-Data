@@ -174,12 +174,12 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     df_raw = pd.read_csv(StringIO(content))
     
     # --- SIKKER KOLONNE-HÅNDTERING ---
-    # Tving alle eksisterende kolonner til UPPERCASE for sammenligning
     df_raw.columns = [c.upper().strip() for c in df_raw.columns]
     
-    # Hvis ER_EMNE mangler i CSV'en, opret den som False
-    if 'ER_EMNE' not in df_raw.columns:
-        df_raw['ER_EMNE'] = False
+    # Sørg for at alle nødvendige kolonner findes
+    for col in ['ER_EMNE', 'SKYGGEHOLD', 'KONTRAKT']:
+        if col not in df_raw.columns:
+            df_raw[col] = False if col != 'KONTRAKT' else ""
 
     # Mapping til de navne koden bruger internt
     mapping = {
@@ -188,27 +188,29 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         'NAVN': 'Navn', 
         'KLUB': 'Klub', 
         'RATING_AVG': 'Rating_Avg', 
-        'ER_EMNE': 'ER_EMNE'
+        'ER_EMNE': 'ER_EMNE',
+        'SKYGGEHOLD': 'SKYGGEHOLD',
+        'KONTRAKT': 'Kontrakt'
     }
     
-    # Omdøb kun de kolonner der rent faktisk findes
     rename_dict = {k: v for k, v in mapping.items() if k in df_raw.columns}
     df_raw = df_raw.rename(columns=rename_dict)
 
-    # Formatér data
+    # Formatér dato for sortering
     df_raw['DATO'] = pd.to_datetime(df_raw['DATO'], dayfirst=True, errors='coerce')
     
-    # Konverter ER_EMNE til rigtige Booleans (True/False)
-    df_raw['ER_EMNE'] = df_raw['ER_EMNE'].astype(str).str.lower().map(
-        {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
-    ).fillna(False)
+    # Konverter Booleans korrekt
+    for col in ['ER_EMNE', 'SKYGGEHOLD']:
+        df_raw[col] = df_raw[col].astype(str).str.lower().map(
+            {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
+        ).fillna(False)
     
     # Lav unik oversigt (nyeste rapport pr. spiller)
     df_unique = df_raw.sort_values('DATO', ascending=False).drop_duplicates('Navn').copy()
-    df_unique['Dato_Visning'] = df_unique['DATO'].dt.date
 
-    # Forbered visning til data_editor
-    df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning', 'ER_EMNE']].copy()
+    # --- FORBERED VISNING ---
+    # Vi fjerner 'Dato_Visning' og tilføjer 'Kontrakt' og 'SKYGGEHOLD'
+    df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Kontrakt', 'ER_EMNE', 'SKYGGEHOLD']].copy()
     df_display.insert(0, "Se", False)
     
     ed_result = st.data_editor(
@@ -216,35 +218,43 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         column_config={
             "Se": st.column_config.CheckboxColumn("Se Profil", width="small"), 
             "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
-            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f")
+            "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
+            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
+            "Kontrakt": st.column_config.TextColumn("Kontrakt")
         },
-        disabled=['Navn', 'Klub', 'Rating_Avg', 'Dato_Visning'],
+        disabled=['Navn', 'Klub', 'Rating_Avg', 'Kontrakt'], # 'Kontrakt' er nu read-only her
         hide_index=True, 
         use_container_width=True, 
         height=700,
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
-    # Gem ændringer i "ER_EMNE" (Tjek om noget er ændret)
-    if not ed_result['ER_EMNE'].equals(df_display['ER_EMNE']):
-        with st.spinner("Opdaterer emne-status på GitHub..."):
+    # --- GEM ÆNDRINGER ---
+    # Tjek om enten ER_EMNE eller SKYGGEHOLD er ændret
+    changed_emne = not ed_result['ER_EMNE'].equals(df_display['ER_EMNE'])
+    changed_skygge = not ed_result['SKYGGEHOLD'].equals(df_display['SKYGGEHOLD'])
+
+    if changed_emne or changed_skygge:
+        with st.spinner("Opdaterer status på GitHub..."):
             for _, row in ed_result.iterrows():
-                df_raw.loc[df_raw['Navn'] == row['Navn'], 'ER_EMNE'] = row['ER_EMNE']
+                # Opdater begge værdier i den store dataframe
+                df_raw.loc[df_raw['Navn'] == row['Navn'], ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
             
-            # Gem med de oprindelige UPPERCASE navne for at bevare konsistens
+            # Gør klar til gem (tilbage til UPPERCASE)
             df_to_save = df_raw.copy()
-            # Vend mapping om for at få de rigtige navne tilbage til CSV
             reverse_map = {v: k for k, v in mapping.items()}
             df_to_save = df_to_save.rename(columns=reverse_map)
             
-            push_to_github(FILE_PATH, "Update ER_EMNE status", df_to_save.to_csv(index=False), sha)
+            # Fjern hjælpe-kolonner hvis de findes (som f.eks. DATO hvis den blev konverteret)
+            # Her gemmer vi direkte
+            push_to_github(FILE_PATH, "Update Emne/Skygge status", df_to_save.to_csv(index=False), sha)
             st.rerun()
 
-    # Håndter "Se Profil" klik
+    # Håndter "Se Profil" klik (uændret)
     valgte = ed_result[ed_result["Se"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['Navn']
-        st.session_state.editor_key += 1 # Reset editor for at fjerne tjekket i "Se"
+        st.session_state.editor_key += 1 
         st.rerun()
 
     if st.session_state.active_player:
