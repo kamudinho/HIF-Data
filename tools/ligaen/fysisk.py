@@ -24,6 +24,36 @@ TEAMS = {
 }
 
 def vis_side(conn, name_map=None):
+    # --- 0. CSS TIL AT RYKKE ALT OP ---
+    st.markdown("""
+        <style>
+            /* 1. Fjern Streamlits standard top-padding */
+            .stAppViewBlockContainer {
+                padding-top: 0px !important;
+            }
+            div.block-container {
+                padding-top: 1rem !important;
+                max-width: 98% !important;
+            }
+            
+            /* 2. Ryk kolonne-headeren op */
+            [data-testid="stHorizontalBlock"] {
+                margin-top: -25px !important;
+                margin-bottom: -10px !important;
+            }
+
+            /* 3. Skjul label i dropdown og gør den kompakt */
+            div[data-testid="stSelectbox"] label { display: none; }
+            div[data-testid="stSelectbox"] { margin-top: -10px; }
+
+            /* 4. TABS: Fjern luft mellem header og tabs */
+            .stTabs { margin-top: 0px; }
+            div[data-baseweb="tab-panel"] {
+                padding-top: 20px !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     # --- 1. DROPDOWN ---
     header_col, select_col = st.columns([3, 1])
     with select_col:
