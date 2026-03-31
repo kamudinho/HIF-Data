@@ -81,8 +81,8 @@ def vis_side(dp=None):
         .stTabs { margin-top: 10px !important; }
         .stat-box { 
             background-color: #f8f9fa; 
-            padding: 10px !important; /* Øget lidt for at give luft indeni boksen også */
-            border-radius: 8px; 
+            padding: 1px !important; /* Øget lidt for at give luft indeni boksen også */
+            border-radius: 5px; 
             border-left: 5px solid #cc0000; 
             margin-bottom: 20px !important; /* Her styres afstanden mellem boksene */
             display: block; /* Sikrer at margenen respekteres korrekt */
