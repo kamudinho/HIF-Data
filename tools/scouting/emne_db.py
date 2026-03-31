@@ -45,20 +45,16 @@ def push_to_github(path, message, content, sha=None):
 
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
-    # Læs CSV og fjern potentielle linjeskift-fejl i celler
     df = pd.read_csv(StringIO(content), skipinitialspace=True)
     df.columns = [str(c).upper().strip() for c in df.columns]
-    
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     df = df.dropna(subset=['Navn'])
     
-    # 1. FIX: Transfervindue standardisering
     if 'TRANSFER_VINDUE' in df.columns:
         df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].astype(str).replace(['Nu', 'nu', 'NU', 'nan'], 'Nuværende trup')
     else:
         df['TRANSFER_VINDUE'] = "Nuværende trup" if is_hif else "Sommer 26"
 
-    # 2. FIX: Boolean rensning (Skyggehold)
     for c in ['SKYGGEHOLD', 'ER_EMNE']:
         if c in df.columns:
             b_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False, 'TRUE':True, 'FALSE':False}
@@ -66,14 +62,12 @@ def prepare_df(content, is_hif=False):
         else:
             df[c] = False
 
-    # 3. FIX: Positioner (Gennemtving tal-strenge og håndter tomme felter)
     pos_cols = ['POS', 'POS_343', 'POS_433', 'POS_352']
     for c in pos_cols:
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).str.strip()
         df[c] = df[c].replace(['nan', 'None', '', 'True', 'False'], '0')
 
-    # 4. FIX: Hvis en taktisk position er 0, prøv at arve fra POS
     for tac in ['POS_343', 'POS_433', 'POS_352']:
         df.loc[df[tac] == "0", tac] = df['POS']
 
@@ -86,13 +80,11 @@ def vis_side():
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # Hent data
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # Top bar med vinduesvælger
     _, t_col2 = st.columns([4, 1])
     sel_v = t_col2.selectbox("Visning på bane:", VINDUE_OPTIONS_GLOBAL, key="v_sel")
 
@@ -103,7 +95,6 @@ def vis_side():
         with tabs[i]:
             curr_df = df_hif if is_hif else df_scout[df_scout['ER_EMNE']]
             if not curr_df.empty:
-                # Kun relevante kolonner for hurtig redigering
                 cols = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
                 ed = st.data_editor(curr_df.set_index('Navn')[cols], use_container_width=True, key=f"ed_{name}")
                 
@@ -115,46 +106,49 @@ def vis_side():
                     
                     for navn, row in ed.iterrows():
                         mask = df_save['Navn'] == navn
-                        # Synkroniser POS til alle taktiske felter ved hoved-ændring
                         df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD', 'POS_343', 'POS_433', 'POS_352']] = \
                             [row['TRANSFER_VINDUE'], row['POS'], row['SKYGGEHOLD'], row['POS'], row['POS'], row['POS']]
                     
                     push_to_github(path, f"Update {name}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # Skyggeliste (3) med emne-lås
+    # Skyggeliste (3) - NU MED LÅST VINDUE
     with tabs[2]:
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]])
         if not df_s.empty:
-            ed_s = st.data_editor(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], use_container_width=True)
+            # Lås vinduet her, så det kun kan ændres i kilde-fanerne
+            ed_s = st.data_editor(
+                df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']], 
+                use_container_width=True,
+                column_config={
+                    "TRANSFER_VINDUE": st.column_config.TextColumn("Vindue", disabled=True),
+                    "POS_343": st.column_config.SelectboxColumn("3-4-3", options=list(POS_OPTIONS.keys())),
+                    "POS_433": st.column_config.SelectboxColumn("4-3-3", options=list(POS_OPTIONS.keys())),
+                    "POS_352": st.column_config.SelectboxColumn("3-5-2", options=list(POS_OPTIONS.keys())),
+                }
+            )
             if not ed_s.equals(df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]):
                 for navn, row in ed_s.iterrows():
-                    target_v = row['TRANSFER_VINDUE']
-                    # EMNE-LÅS:
-                    if (navn in df_scout['Navn'].values) and target_v == "Nuværende trup":
-                        target_v = "Sommer 26"
-                        st.warning(f"Emnet {navn} kan ikke være 'Nu'. Ændret til Sommer 26.")
-
                     for p in [SCOUT_DB_PATH, HIF_PATH]:
                         rc, rsha = get_github_file(p)
+                        if not rc: continue
                         tmp = pd.read_csv(StringIO(rc))
                         tmp.columns = [c.upper().strip() for c in tmp.columns]
                         if 'NAVN' in tmp.columns: tmp = tmp.rename(columns={'NAVN': 'Navn'})
                         if navn in tmp['Navn'].values:
-                            tmp.loc[tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = \
-                                [target_v, row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p, "Update Skygge", tmp.to_csv(index=False), rsha)
+                            tmp.loc[tmp['Navn'] == navn, ['POS_343', 'POS_433', 'POS_352']] = \
+                                [row['POS_343'], row['POS_433'], row['POS_352']]
+                            push_to_github(p, "Update Skygge Pos", tmp.to_csv(index=False), rsha)
                 st.rerun()
 
-    # Bane (4) med din specifikke filtrering
+    # Bane (4)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
 
         if sel_v == "Nuværende trup":
-            df_filtered = df_hif.copy() # Vis alle HIF, ingen emner
+            df_filtered = df_hif.copy()
         else:
-            # Vis kun skygge-HIF + emner for det specifikke vindue
             h_s = df_hif[df_hif['SKYGGEHOLD']]
             e_s = df_scout[(df_scout['SKYGGEHOLD']) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_filtered = pd.concat([h_s, e_s])
@@ -175,7 +169,6 @@ def vis_side():
 
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
-                # Filtrer spillere på position (vi tjekker som streng for at undgå .0 fejl)
                 at_pos = df_filtered[df_filtered[p_col].astype(str) == str(pid)]
                 for i, (_, p) in enumerate(at_pos.iterrows()):
                     bg = GRON_NY if not p['IS_HIF'] else "white"
