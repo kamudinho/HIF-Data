@@ -9,7 +9,7 @@ HIF_ROD = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
-# --- KONFIGURATION (Dine værdier fra toppen) ---
+# --- KONFIGURATION (Hold og SSIID) ---
 TEAMS = {
     "Hvidovre": {"ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"},
     "AaB": {"ssid": "40d5387b-ac2f-4e9b-bb97-34456aeb69c4"},
@@ -27,30 +27,13 @@ def vis_side(conn, name_map=None):
     # --- 0. CSS TIL AT RYKKE ALT OP ---
     st.markdown("""
         <style>
-            /* 1. Fjern Streamlits standard top-padding */
-            .stAppViewBlockContainer {
-                padding-top: 0px !important;
-            }
-            div.block-container {
-                padding-top: 1rem !important;
-                max-width: 98% !important;
-            }
-            
-            /* 2. Ryk kolonne-headeren op */
-            [data-testid="stHorizontalBlock"] {
-                margin-top: -25px !important;
-                margin-bottom: -10px !important;
-            }
-
-            /* 3. Skjul label i dropdown og gør den kompakt */
+            .stAppViewBlockContainer { padding-top: 0px !important; }
+            div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
+            [data-testid="stHorizontalBlock"] { margin-top: -25px !important; margin-bottom: -10px !important; }
             div[data-testid="stSelectbox"] label { display: none; }
             div[data-testid="stSelectbox"] { margin-top: -5px; }
-
-            /* 4. TABS: Fjern luft mellem header og tabs */
             .stTabs { margin-top: 0px; }
-            div[data-baseweb="tab-panel"] {
-                padding-top: 20px !important;
-            }
+            div[data-baseweb="tab-panel"] { padding-top: 20px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -93,7 +76,7 @@ def vis_side(conn, name_map=None):
         st.warning(f"Ingen data fundet for {valgt_hold}")
         return
 
-    # --- 3. NAVNE-MAPPING LOGIK (Genbrugelig) ---
+    # --- 3. NAVNE-MAPPING LOGIK ---
     df_local = load_local_players()
     p_map = {}
     if df_local is not None:
@@ -102,7 +85,6 @@ def vis_side(conn, name_map=None):
         df_local['clean_oid'] = df_local[oid_col].apply(lambda x: str(int(float(x))) if pd.notnull(x) else "0")
         p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
 
-    # Funktion til at parse minutter (05:30 -> 5.5)
     def parse_mins(v):
         if pd.isna(v) or v == "": return 0.0
         v_s = str(v)
@@ -146,15 +128,13 @@ def vis_side(conn, name_map=None):
             x='DISPLAY_NAME', 
             y=valg, 
             color_discrete_sequence=[HIF_ROD],
-            text_auto='.2f' if valg != "HI m/90" else 'd' # Tilføjer værdier over bars
+            text_auto='.2f' if valg != "HI m/90" else 'd'
         )
-        fig.update_traces(textposition='outside') # Placerer teksten over søjlen
+        fig.update_traces(textposition='outside')
         st.plotly_chart(fig, use_container_width=True)
 
     with t3:
         st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        
-        # SQL der henter klub og grunddata
         df_league = conn.query("""
             SELECT 
                 PLAYER_NAME, 
@@ -171,9 +151,7 @@ def vis_side(conn, name_map=None):
         df_league['KM/90'] = (df_league['TOTAL_DIST'] / df_league['TOTAL_MINS']) * 90 / 1000
         df_league['HI/90'] = (df_league['TOTAL_HI'] / df_league['TOTAL_MINS']) * 90
 
-        # Tre kolonner layout
         c1, c2, c3 = st.columns(3)
-        
         col_set = {
             "MAX_SPEED": ["Topfart", "%.1f km/t", c1, "Topfart (Max)"],
             "KM/90": ["Distance", "%.2f km", c2, "KM pr. 90"],
@@ -192,8 +170,8 @@ def vis_side(conn, name_map=None):
                     },
                     hide_index=True, use_container_width=True
                 )
+
     with t4:
-        # 1. Hent kun kampe der har data i SUMMARY_PLAYERS tabellen
         df_meta = conn.query(f"""
             SELECT DISTINCT
                 TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
@@ -214,74 +192,16 @@ def vis_side(conn, name_map=None):
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
             
-            # Hent kampdata
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
             
             if not df_m.empty:
-                # Omskrivning til KM og HI
                 df_m['KM'] = (df_m['DISTANCE'] / 1000)
                 df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                
-                # Vigtigt: Navne-mapping (tjekker for både 'optaId' og 'OPTAID')
                 oid_col = 'optaId' if 'optaId' in df_m.columns else 'OPTAID'
                 df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r[oid_col]), r['PLAYER_NAME']), axis=1)
                 
-                # Marker Hvidovre vs Modstander
-                # Vi bruger teamName i stedet for ID-liste for at gøre det mere stabilt
-                df_m['Hold'] = df_m['teamName'].apply(lambda x: valgt_hold if x.lower() in valgt_hold.lower() else "Modstander")
-
                 st.dataframe(
-                    df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
-                    column_config={
-                        "DISPLAY_NAME": "Spiller",
-                        "teamName": "Hold",
-                        "MINUTES": "Min",
-                        "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
-                        "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
-                        "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t")
-                    },
-                    column_order=("DISPLAY_NAME", "teamName", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                    use_container_width=True, hide_index=True, height=600
-                )with t4:
-        # 1. Hent kun kampe der har data i SUMMARY_PLAYERS tabellen
-        df_meta = conn.query(f"""
-            SELECT DISTINCT
-                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
-                m.DESCRIPTION, 
-                m.MATCH_SSIID 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m
-            INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p 
-                ON m.MATCH_SSIID = p.MATCH_SSIID
-            WHERE (m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}')
-            AND m."DATE" >= '2025-07-01'
-            ORDER BY DATE_STR DESC
-        """)
-        
-        if df_meta.empty:
-            st.info("Venter på fysisk data for sæsonens kampe...")
-        else:
-            df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
-            v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
-            m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
-            
-            # Hent kampdata
-            df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
-            
-            if not df_m.empty:
-                # Omskrivning til KM og HI
-                df_m['KM'] = (df_m['DISTANCE'] / 1000)
-                df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                
-                # Vigtigt: Navne-mapping (tjekker for både 'optaId' og 'OPTAID')
-                oid_col = 'optaId' if 'optaId' in df_m.columns else 'OPTAID'
-                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r[oid_col]), r['PLAYER_NAME']), axis=1)
-                
-                # Marker Hvidovre vs Modstander
-                # Vi bruger teamName i stedet for ID-liste for at gøre det mere stabilt
-                df_m['Hold'] = df_m['teamName'].apply(lambda x: valgt_hold if x.lower() in valgt_hold.lower() else "Modstander")
-
-                st.dataframe(
-                    df_m.sort_values(by=['Hold', 'DISTANCE'], ascending=[True, False]),
+                    df_m.sort_values(by=['teamName', 'DISTANCE'], ascending=[True, False]),
                     column_config={
                         "DISPLAY_NAME": "Spiller",
                         "teamName": "Hold",
