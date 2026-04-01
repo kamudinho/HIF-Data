@@ -9,7 +9,7 @@ import time
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
-SCO_DB_PATH = "data/scouting_db.csv"
+SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
@@ -23,18 +23,19 @@ POS_OPTIONS = {
 }
 
 VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-EMNE_VINDUE_OPTIONS = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-HIF_VINDUE_OPTIONS = ["Nuværende trup"]
 
 # --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
-    url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        data = r.json()
-        content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
-        return content, data['sha']
+    try:
+        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+            return content, data['sha']
+    except:
+        pass
     return None, None
 
 def push_to_github(path, message, content, sha=None):
@@ -49,10 +50,13 @@ def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
-    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # SIKRING: Fjern rækker uden navn og fjern dubletter i kilden
+    if 'NAVN' in df.columns: 
+        df = df.rename(columns={'NAVN': 'Navn'})
+    
+    # RENS DATA: Fjern NaN, fjern dubletter, fjern whitespace
     df = df.dropna(subset=['Navn'])
+    df['Navn'] = df['Navn'].astype(str).str.strip()
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
     if 'TRANSFER_VINDUE' in df.columns:
@@ -66,102 +70,79 @@ def prepare_df(content, is_hif=False):
             b_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False, 'TRUE':True, 'FALSE':False}
             df[c] = df[c].map(b_map).fillna(False)
     
-    pos_cols = ['POS', 'POS_343', 'POS_433', 'POS_352']
-    for c in pos_cols:
+    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
-    for tac in ['POS_343', 'POS_433', 'POS_352']:
-        mask = (df[tac] == "0") | (df[tac] == "")
-        df.loc[mask, tac] = df['POS']
-
     df['IS_HIF'] = is_hif
     return df
 
-# --- HOVEDSIDE ---
 def vis_side(df_input_unused=None):
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
 
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    s_c, s_sha = get_github_file(SCO_DB_PATH)
+    # HENT DATA
+    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
     _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("", VINDUE_OPTIONS_GLOBAL, key="global_vindue_sel", index=1) # Default Sommer 26
+    sel_v = t_col2.selectbox("Vælg Vindue", VINDUE_OPTIONS_GLOBAL, key="global_vindue_sel", index=1)
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # --- TABS 1 & 2: Emner og HIF ---
-    configs = [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCO_DB_PATH, "EMNE", False), 
-               (tabs[1], df_hif, HIF_PATH, "HIF", True)]
-
-    for tab, df_display, path, key_base, is_hif_flag in configs:
+    # TAB 1 & 2
+    for tab, df_source, path, key_base, is_hif_flag in [(tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "EMNE", False), 
+                                                       (tabs[1], df_hif, HIF_PATH, "HIF", True)]:
         with tab:
-            if not df_display.empty:
-                v_opts = HIF_VINDUE_OPTIONS if is_hif_flag else EMNE_VINDUE_OPTIONS
-                # Lav display-df med unikt index
-                df_to_edit = df_display.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+            if not df_source.empty:
+                # SIKRING: Unikt index før editor
+                df_edit = df_source.copy().set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+                ed = st.data_editor(df_edit, use_container_width=True, key=f"ed_{key_base}")
                 
-                ed = st.data_editor(df_to_edit, use_container_width=True, key=f"ed_{key_base}",
-                    column_config={
-                        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=v_opts),
-                        "POS": st.column_config.SelectboxColumn("Pos", options=list(POS_OPTIONS.keys())),
-                    })
-                
-                if not ed.equals(df_to_edit):
+                if not ed.equals(df_edit):
                     c, sha = get_github_file(path)
                     df_save = pd.read_csv(StringIO(c))
                     df_save.columns = [str(x).upper().strip() for x in df_save.columns]
                     if 'NAVN' in df_save.columns: df_save = df_save.rename(columns={'NAVN': 'Navn'})
                     
                     for navn, row in ed.iterrows():
-                        mask = df_save['Navn'] == navn
-                        df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD', 'POS_343', 'POS_433', 'POS_352']] = \
-                            [row['TRANSFER_VINDUE'], row['POS'], row['SKYGGEHOLD'], row['POS'], row['POS'], row['POS']]
+                        mask = df_save['Navn'].astype(str).str.strip() == str(navn).strip()
+                        df_save.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [row['TRANSFER_VINDUE'], row['POS'], row['SKYGGEHOLD']]
                     
-                    push_to_github(path, "Update", df_save.to_csv(index=False), sha)
+                    push_to_github(path, f"Update {key_base}", df_save.to_csv(index=False), sha)
                     st.rerun()
 
-    # --- TAB 3: SKYGGELISTE ---
+    # TAB 3: SKYGGELISTE (Her fejler det oftest)
     with tabs[2]:
-        # Saml data og fjern dubletter hvis en spiller findes begge steder
         df_s = pd.concat([df_scout[df_scout['SKYGGEHOLD']], df_hif[df_hif['SKYGGEHOLD']]], ignore_index=True)
         if not df_s.empty:
+            # TVUNGEN UNIKGØRELSE AF NAVNE
             df_s = df_s.drop_duplicates(subset=['Navn'], keep='first')
-            df_s_to_edit = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            df_s_edit = df_s.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
             
-            ed_s = st.data_editor(df_s_to_edit, use_container_width=True, key="sky_ed_v3",
-                column_config={"TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_OPTIONS_GLOBAL)})
+            ed_s = st.data_editor(df_s_edit, use_container_width=True, key="sky_ed_final")
             
-            if not ed_s.equals(df_s_to_edit):
+            if not ed_s.equals(df_s_edit):
                 for navn, row in ed_s.iterrows():
-                    is_hif_player = navn in df_hif['Navn'].values
-                    target_v = row['TRANSFER_VINDUE']
-                    
-                    if not is_hif_player and target_v == "Nuværende trup":
-                        target_v = "Sommer 26"
-                        st.error(f"'{navn}' er et emne og kan ikke tilføjes 'Nuværende trup'.")
-                        time.sleep(1)
-
-                    # Gem til begge filer hvis nødvendigt
-                    for p_path in [SCO_DB_PATH, HIF_PATH]:
+                    for p_path in [SCOUT_DB_PATH, HIF_PATH]:
                         c_raw, sha_raw = get_github_file(p_path)
                         if not c_raw: continue
                         df_tmp = pd.read_csv(StringIO(c_raw))
                         df_tmp.columns = [col.upper().strip() for col in df_tmp.columns]
                         if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
                         
-                        if navn in df_tmp['Navn'].values:
-                            df_tmp.loc[df_tmp['Navn'] == navn, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = \
-                                [target_v, row['POS_343'], row['POS_433'], row['POS_352']]
-                            push_to_github(p_path, "Update Skygge", df_tmp.to_csv(index=False), sha_raw)
+                        mask = df_tmp['Navn'].astype(str).str.strip() == str(navn).strip()
+                        if mask.any():
+                            df_tmp.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = \
+                                [row['TRANSFER_VINDUE'], row['POS_343'], row['POS_433'], row['POS_352']]
+                            push_to_github(p_path, "Skygge Update", df_tmp.to_csv(index=False), sha_raw)
                 st.rerun()
 
-    # --- TAB 4: BANE ---
+    # TAB 4: BANE
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -171,21 +152,18 @@ def vis_side(df_input_unused=None):
         else:
             hif_skygge = df_hif[df_hif['SKYGGEHOLD'] == True]
             emne_skygge = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
-            df_filtered = pd.concat([hif_skygge, emne_skygge], ignore_index=True)
-            df_filtered = df_filtered.drop_duplicates(subset=['Navn'])
+            df_filtered = pd.concat([hif_skygge, emne_skygge], ignore_index=True).drop_duplicates(subset=['Navn'])
 
         c_p, c_m = st.columns([8.5, 1.5])
         with c_m:
             for opt in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(opt, key=f"b_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
+                if st.button(opt, key=f"btn_{opt}", use_container_width=True, type="primary" if f == opt else "secondary"):
                     st.session_state.form_skygge = opt
                     st.rerun()
 
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 6))
-
-            ax.text(118, 4, f"Vindue: {sel_v}", size=12, color="black", weight='bold', ha='right')
             
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
