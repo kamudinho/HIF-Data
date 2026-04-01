@@ -3,10 +3,10 @@ streamlit>=1.35.0
 streamlit-option-menu
 streamlit-antd-components
 
-# Data & Database (Vigtigt: [pandas] sikrer Arrow-support)
-pandas
-snowflake-connector-python[pandas]
-pyarrow
+# Data & Database (Opdateret til 3.12 kompatibilitet)
+pandas>=2.0.0
+snowflake-connector-python[pandas]>=3.6.0
+pyarrow>=14.0.0
 
 # Visualisering
 plotly
@@ -15,7 +15,7 @@ seaborn
 mplsoccer
 
 # Alt det andet
-cryptography
+cryptography>=42.0.0
 bcrypt
 requests
 gspread
