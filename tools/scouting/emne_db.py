@@ -46,11 +46,10 @@ def prepare_df(content, is_hif=False):
     df = df.dropna(subset=['Navn'])
     df['Navn'] = df['Navn'].astype(str).str.strip()
     
+    # Standardisering af værdier
     if 'TRANSFER_VINDUE' in df.columns:
         df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
-    else:
-        df['TRANSFER_VINDUE'] = "Nuværende trup" if is_hif else "Sommer 26"
-
+    
     for c in ['ER_EMNE', 'SKYGGEHOLD']:
         if c not in df.columns: df[c] = False
         else:
@@ -64,69 +63,45 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-# --- NY FUNKTION: FIXER DUBLETTER I STATS ---
-def vis_spiller_profil(player_row, df_all):
-    st.markdown(f"## {player_row['Navn']}")
-    st.write(f"**Klub:** {player_row.get('KLUB', 'Ukendt')} | **Pos:** {player_row.get('POSITION', 'N/A')} | **ID:** {player_row.get('PLAYER_WYID', '0')}")
-    
-    tab_rap, tab_his, tab_udv, tab_stats = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
-    
-    with tab_stats:
-        st.write("### Karriereoversigt")
-        # Filtrer alle rækker for denne spiller
-        p_id = player_row.get('PLAYER_WYID')
-        if p_id:
-            stats_df = df_all[df_all['PLAYER_WYID'] == p_id].copy()
-            
-            # KRITISK FIX: Fjern dubletter så hver sæson/klub kun vises én gang
-            cols_to_show = ['PLAYER_WYID', 'SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']
-            # Vi fjerner dubletter baseret på de unikke sæson-nøgler
-            display_stats = stats_df.drop_duplicates(subset=['SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME'])
-            
-            # Sikr at kolonnerne findes før visning
-            available_cols = [c for c in cols_to_show if c in display_stats.columns]
-            st.dataframe(display_stats[available_cols], use_container_width=True, hide_index=True)
-        else:
-            st.warning("Intet Player ID fundet - kan ikke hente stats.")
-
 def vis_side():
+    # Fjern padding øverst
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
+    
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
-    h_c, h_sha = get_github_file(HIF_PATH)
+    # 1. Hent data
+    s_c, _ = get_github_file(SCOUT_DB_PATH)
+    h_c, _ = get_github_file(HIF_PATH)
     
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # Master liste til visning og stats
-    all_players_full = pd.concat([df_scout, df_hif], ignore_index=True)
-    # Deduplikeret liste til selve oversigterne
-    all_players_unique = all_players_full.drop_duplicates(subset=['Navn'], keep='first')
+    # 2. Samle Master Data
+    df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
+    # 3. Top bar (Vindue vælger)
     _, t_col2 = st.columns([4, 1])
     sel_v = t_col2.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1)
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Editør sektion (forkortet for overblik, men bibeholder din logik)
-    with tabs[0]: # Emner
-        df_emne = all_players_unique[(all_players_unique['ER_EMNE']==True) & (all_players_unique['IS_HIF']==False)]
-        if not df_emne.empty:
-            # Her kan du klikke på en række for at åbne profil (hvis du har implementeret det)
-            # Men for nu fixer vi selve data-strukturen
-            st.data_editor(df_emne.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True)
+    # TAB 1: Emner (Renset for dubletter i oversigten)
+    with tabs[0]:
+        df_emner_vis = df_all[(df_all['ER_EMNE']==True) & (df_all['IS_HIF']==False)].drop_duplicates(subset=['Navn'])
+        if not df_emner_vis.empty:
+            st.data_editor(df_emner_vis.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, key="ed_emner")
 
-    # Bane sektion
+    # TAB 4: Bane (Her vi ofte ser dubletterne)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
         
+        # Filtrering til banen
         if sel_v == "Nuværende trup":
-            df_f = all_players_unique[all_players_unique['IS_HIF'] == True]
+            df_f = df_hif.drop_duplicates(subset=['Navn'])
         else:
-            h_s = all_players_unique[(all_players_unique['IS_HIF'] == True) & (all_players_unique['SKYGGEHOLD'] == True)]
-            e_s = all_players_unique[(all_players_unique['IS_HIF'] == False) & (all_players_unique['SKYGGEHOLD'] == True) & (all_players_unique['TRANSFER_VINDUE'] == sel_v)]
+            h_s = df_hif[df_hif['SKYGGEHOLD'] == True]
+            e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
 
         c_p, c_m = st.columns([8.5, 1.5])
@@ -145,12 +120,29 @@ def vis_side():
 
             for pid, (x, y, lbl) in m.items():
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                
+                # Vælg spillere til positionen
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     is_new = (p_row['IS_HIF'] == False)
-                    # Hvis man klikker her, kunne man kalde vis_spiller_profil(p_row, all_players_full)
                     ax.text(x, y + (i * 2.3), f"{p_row['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', bbox=dict(facecolor=GRON_NY if is_new else "white", edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
             st.pyplot(fig)
+
+    # --- DENNE DEL FIXER DIT SKÆRMBILLEDE (Sæsonstats) ---
+    # Jeg antager at du har en knap eller en selektion der åbner profilen.
+    # Her er logikken der SKAL bruges når stats vises:
+    if "selected_player" in st.session_state:
+        p_name = st.session_state.selected_player
+        st.write(f"### Spillerprofil: {p_name}")
+        
+        # Filtrer alle rækker for spilleren
+        stats_raw = df_all[df_all['Navn'] == p_name]
+        
+        # RENSNING AF DUBLETTER:
+        # Vi grupperer efter sæson, turnering og hold og tager kun den første række.
+        stats_clean = stats_raw.drop_duplicates(subset=['SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME'])
+        
+        st.dataframe(stats_clean[['PLAYER_WYID', 'SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']], hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
