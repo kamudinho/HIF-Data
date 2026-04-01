@@ -144,6 +144,8 @@ def vis_side(dp):
                 st.error("Vælg en spiller!")
             else:
                 avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
+                
+                # Opret den nye rapport som en dictionary
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
@@ -158,11 +160,29 @@ def vis_side(dp):
                     "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue,
                     "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
                 }
+
+                # Hent eksisterende data fra GitHub
                 content, sha = get_github_file(FILE_PATH)
-                if content:
-                    df_old = pd.read_csv(StringIO(content), low_memory=False)
-                    df_final = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
+                
+                # RETTELSE HER: Tjek om content er None eller tom streng
+                if content is not None and content.strip() != "":
+                    try:
+                        df_old = pd.read_csv(StringIO(content), low_memory=False)
+                        # Brug ignore_index=True for at undgå index-problemer
+                        df_final = pd.concat([df_old, pd.DataFrame([ny_rapport])], ignore_index=True)
+                    except Exception as e:
+                        st.warning(f"Kunne ikke læse eksisterende fil, opretter en ny: {e}")
+                        df_final = pd.DataFrame([ny_rapport])
                 else:
+                    # Hvis filen er tom eller ikke findes
                     df_final = pd.DataFrame([ny_rapport])
-                push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
-                st.success(f"Rapport for {data['n']} er gemt!")
+
+                # Gem til GitHub
+                status_code = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
+                
+                if status_code in [200, 201]:
+                    st.success(f"Rapport for {data['n']} er gemt!")
+                    time.sleep(1) # Lille pause så brugeren ser beskeden
+                    st.rerun()
+                else:
+                    st.error(f"Fejl ved gem til GitHub (Status: {status_code})")
