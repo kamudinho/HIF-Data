@@ -171,9 +171,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
     df_display = df_unique[display_cols].copy()
     df_display.insert(0, "SE", False)
-    
-    st.subheader("Scouting Database")
-    
+        
     ed_result = st.data_editor(
         df_display,
         column_config={
