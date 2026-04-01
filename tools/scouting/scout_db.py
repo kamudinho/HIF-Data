@@ -5,6 +5,7 @@ import requests
 import base64
 from io import StringIO
 from datetime import datetime
+import time
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -13,13 +14,17 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
-    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        data = r.json()
-        content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
-        return content, data['sha']
+    try:
+        # Tilføj tidsstempel for at undgå GitHub cache-problemer
+        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+            return content, data['sha']
+    except Exception as e:
+        st.error(f"Fejl ved hentning fra GitHub: {e}")
     return None, None
 
 def push_to_github(path, message, content, sha=None):
@@ -36,27 +41,19 @@ def push_to_github(path, message, content, sha=None):
 
 def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
+    # Fjerner .0 hvis ID'et er indlæst som float
     return str(val).split('.')[0].strip()
 
 # --- MODAL: SPILLERPROFIL ---
 @st.dialog("Spillerprofil", width="large")
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     df_modal = alle_rapporter.copy()
-    mapping = {
-        'KLUB': 'Klub', 'POSITION': 'Position', 'RATING_AVG': 'Rating_Avg',
-        'STATUS': 'Status', 'SCOUT': 'Scout', 'DATO': 'DATO', 'POTENTIALE': 'Potentiale',
-        'STYRKER': 'Styrker', 'UDVIKLING': 'Udvikling', 'VURDERING': 'Vurdering',
-        'BESLUTSOMHED': 'Beslutsomhed', 'FART': 'Fart', 'AGGRESIVITET': 'Aggresivitet',
-        'ATTITUDE': 'Attitude', 'UDHOLDENHED': 'Udholdenhed', 'LEDEREGENSKABER': 'Lederegenskaber',
-        'TEKNIK': 'Teknik', 'SPILINTELLIGENS': 'Spilintelligens', 'PLAYER_WYID': 'PLAYER_WYID'
-    }
-    current_cols = {c.upper(): c for c in df_modal.columns}
-    rename_dict = {current_cols[k]: v for k, v in mapping.items() if k in current_cols}
-    df_modal = df_modal.rename(columns=rename_dict)
-
-    spiller_historik = df_modal[df_modal['Navn'] == valgt_navn].sort_values('DATO', ascending=True)
+    
+    # Standardisering af navne for filtrering
+    spiller_historik = df_modal[df_modal['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
+    
     if spiller_historik.empty:
-        st.error("Data ikke fundet.")
+        st.error(f"Ingen data fundet for {valgt_navn}")
         return
         
     nyeste = spiller_historik.iloc[-1]
@@ -69,11 +66,11 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"Klub: {nyeste.get('Klub', '-')} | Pos: {nyeste.get('Position', '-')} | ID: {pid}")
+        st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
 
     t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
     
-    keys = ['Beslutsomhed', 'Fart', 'Aggresivitet', 'Attitude', 'Udholdenhed', 'Lederegenskaber', 'Teknik', 'Spilintelligens']
+    keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
 
     with t1:
         col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
@@ -81,7 +78,8 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
             st.markdown("**Vurderinger**")
             for k in keys:
                 val = nyeste.get(k, "-")
-                st.write(f"{k}: {val}")
+                st.write(f"{k.capitalize()}: {val}")
+        
         with col_radar:
             r_vals = []
             for k in keys:
@@ -89,76 +87,48 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                     v = float(str(nyeste.get(k, 1)).replace(',', '.'))
                     r_vals.append(v)
                 except: r_vals.append(1.0)
-            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=keys + [keys[0]], fill='toself', line_color='#df003b'))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 5])), showlegend=False, height=300, margin=dict(l=40,r=40,t=30,b=30))
+            
+            fig = go.Figure(data=go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
+                fill='toself', 
+                line_color='#df003b'
+            ))
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
+                showlegend=False, height=300, margin=dict(l=40,r=40,t=30,b=30)
+            )
             st.plotly_chart(fig, use_container_width=True)
+            
         with col_text:
             st.write("**Styrker**")
-            st.info(nyeste.get('Styrker', '-'))
+            st.info(nyeste.get('STYRKER', '-'))
             st.write("**Vurdering**")
-            st.success(nyeste.get('Vurdering', '-'))
+            st.success(nyeste.get('VURDERING', '-'))
 
     with t2:
         st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
 
     with t3:
         st.markdown("### Rating over tid")
-        fig_evol = go.Figure(go.Scatter(x=spiller_historik['DATO'], y=spiller_historik['Rating_Avg'], mode='lines+markers', line_color='#df003b'))
-        fig_evol.update_layout(yaxis=dict(range=[1, 5.5]))
+        fig_evol = go.Figure(go.Scatter(
+            x=spiller_historik['DATO'], 
+            y=spiller_historik['RATING_AVG'], 
+            mode='lines+markers', 
+            line_color='#df003b'
+        ))
+        fig_evol.update_layout(yaxis=dict(range=[1, 6]))
         st.plotly_chart(fig_evol, use_container_width=True)
 
-    # --- TAB 4: SÆSONSTATS (Aggregeret korrekt) ---
     with t4:
-        st.markdown("### Karriereoversigt (Aggregeret)")
+        st.markdown("### Karriereoversigt")
         if career_df is not None:
-            c_df = career_df.copy()
-            
-            # 1. Rens ID og klargør data
-            id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in c_df.columns else 'wyId'
-            c_df['match_id'] = c_df[id_col].apply(rens_id)
-            
-            # Filtrer på spilleren
-            stats = c_df[c_df['match_id'] == pid].copy()
-            
+            stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
             if not stats.empty:
-                # 2. Konverter kolonner til tal for at undgå fejl i summering
-                for col in ['MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']:
-                    if col in stats.columns:
-                        stats[col] = pd.to_numeric(stats[col], errors='coerce').fillna(0)
-                
-                group_cols = ['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']
-                act_group = [c for c in group_cols if c in stats.columns]
-                
-                stats_grouped = stats.groupby(act_group).agg({
-                    'MATCHES': 'max',    # Vi tager den højeste værdi (hvis det er totaler)
-                    'MINUTES': 'max',    # Vi tager den højeste værdi
-                    'GOALS': 'max',      # Vi tager den højeste værdi
-                    'YELLOWCARD': 'max',
-                    'REDCARDS': 'max'
-                }).reset_index()
-                
-                # Sorter efter nyeste sæson
-                stats_grouped = stats_grouped.sort_values('SEASONNAME', ascending=False)
-
-                vis_mapping = {
-                    'SEASONNAME': 'Saeson',
-                    'TEAMNAME': 'Hold',
-                    'COMPETITIONNAME': 'Turnering',
-                    'MATCHES': 'Kampe',
-                    'MINUTES': 'Minutter',
-                    'GOALS': 'Mål',
-                    'YELLOWCARD': 'Gult',
-                    'REDCARDS': 'Roedt'
-                }
-                
-                st.dataframe(
-                    stats_grouped.rename(columns=vis_mapping), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                st.dataframe(stats, use_container_width=True, hide_index=True)
             else:
-                st.warning(f"Ingen data fundet for ID: {pid}")
-                
+                st.warning("Ingen karrieredata fundet i Wyscout-filen.")
+
 # --- HOVEDSIDE ---
 def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if "active_player" not in st.session_state:
@@ -168,62 +138,54 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     content, sha = get_github_file(FILE_PATH)
     if not content:
-        st.error("Kunne ikke hente database.")
+        st.error("Kunne ikke hente database fra GitHub.")
         return
     
-    df_raw = pd.read_csv(StringIO(content))
+    df_raw = pd.read_csv(StringIO(content), low_memory=False)
     
-    # --- SIKKER KOLONNE-HÅNDTERING ---
+    # 1. Standardisering: Gør alle kolonnenavne STORE
     df_raw.columns = [c.upper().strip() for c in df_raw.columns]
     
-    # Sørg for at alle nødvendige kolonner findes
-    for col in ['ER_EMNE', 'SKYGGEHOLD', 'KONTRAKT']:
+    # 2. Sikr at de kritiske kolonner findes
+    for col in ['ER_EMNE', 'SKYGGEHOLD', 'KONTRAKT', 'PLAYER_WYID', 'NAVN', 'DATO', 'RATING_AVG']:
         if col not in df_raw.columns:
-            df_raw[col] = False if col != 'KONTRAKT' else ""
+            df_raw[col] = False if col in ['ER_EMNE', 'SKYGGEHOLD'] else ""
 
-    mapping = {
-        'PLAYER_WYID': 'PLAYER_WYID', 
-        'DATO': 'DATO', 
-        'NAVN': 'Navn', 
-        'KLUB': 'Klub', 
-        'RATING_AVG': 'Rating_Avg', 
-        'ER_EMNE': 'ER_EMNE',
-        'SKYGGEHOLD': 'SKYGGEHOLD',
-        'KONTRAKT': 'Kontrakt'
-    }
-    
-    rename_dict = {k: v for k, v in mapping.items() if k in df_raw.columns}
-    df_raw = df_raw.rename(columns=rename_dict)
-
-    # Formatér Booleans korrekt
+    # 3. Rens data-typer
     for col in ['ER_EMNE', 'SKYGGEHOLD']:
         df_raw[col] = df_raw[col].astype(str).str.lower().map(
             {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
         ).fillna(False)
-    
-    # --- SORTERING & UNIK LISTE ---
-    # 1. Vi sorterer først efter DATO for at sikre, at drop_duplicates beholder den nyeste rapport
+
+    # 4. UNIK LISTE (Vigtigt: Vi bruger PLAYER_WYID for at undgå at slette spillere med samme navn)
     df_raw = df_raw.sort_values('DATO', ascending=False)
-    df_unique = df_raw.drop_duplicates('Navn').copy()
+    
+    # Vi dropper dubletter, men gemmer de nyeste rapporter
+    df_unique = df_raw.drop_duplicates(subset=['PLAYER_WYID']).copy()
+    
+    # Sorter efter kontraktudløb
+    df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
-    # 2. Nu sorterer vi den unikke liste efter KONTRAKT faldende
-    # Vi bruger 'na_position='last' for at få spillere uden kontraktdata i bunden
-    df_unique = df_unique.sort_values('Kontrakt', ascending=False, na_position='last')
-
-    # --- FORBERED VISNING ---
-    df_display = df_unique[['Navn', 'Klub', 'Rating_Avg', 'Kontrakt', 'ER_EMNE', 'SKYGGEHOLD']].copy()
-    df_display.insert(0, "Se", False)
+    # --- FORBERED VISNING I EDITOR ---
+    # Vi vælger de kolonner vi vil vise (brug de STORE navne her)
+    display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
+    df_display = df_unique[display_cols].copy()
+    df_display.insert(0, "SE", False)
+    
+    st.subheader("Scouting Database")
     
     ed_result = st.data_editor(
         df_display,
         column_config={
-            "Se": st.column_config.CheckboxColumn("Se Profil", width="small"), 
+            "SE": st.column_config.CheckboxColumn("Profil", width="small"), 
             "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
             "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
-            "Rating_Avg": st.column_config.NumberColumn("Rating", format="%.1f"),
-            "Kontrakt": st.column_config.TextColumn("Kontrakt", width="medium")
+            "RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f"),
+            "KONTRAKT": st.column_config.TextColumn("Kontrakt", width="medium"),
+            "NAVN": st.column_config.TextColumn("Navn", width="large"),
+            "KLUB": st.column_config.TextColumn("Klub", width="medium")
         },
-        disabled=['Navn', 'Klub', 'Rating_Avg', 'Kontrakt'],
+        disabled=['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT'],
         hide_index=True, 
         use_container_width=True, 
         height=700,
@@ -231,29 +193,32 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     )
 
     # --- GEM ÆNDRINGER ---
+    # Hvis brugeren har klikket på Emne eller Skygge
     if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
-        with st.spinner("Opdaterer status på GitHub..."):
-            for _, row in ed_result.iterrows():
-                df_raw.loc[df_raw['Navn'] == row['Navn'], ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
+        with st.spinner("Gemmer ændringer..."):
+            # Opdater hoved-dataframe baseret på ændringer i editoren
+            for i, row in ed_result.iterrows():
+                p_name = row['NAVN']
+                df_raw.loc[df_raw['NAVN'] == p_name, ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
             
-            df_to_save = df_raw.copy()
-            reverse_map = {v: k for k, v in mapping.items()}
-            df_to_save = df_to_save.rename(columns=reverse_map)
-            
-            # Sørg for at gemme datoer i det format du ønsker (f.eks. streng) hvis de er blevet konverteret
-            push_to_github(FILE_PATH, "Update Emne/Skygge status", df_to_save.to_csv(index=False), sha)
-            st.rerun()
+            # Gem tilbage til GitHub
+            status_code = push_to_github(FILE_PATH, "Update Emne/Skygge status", df_raw.to_csv(index=False), sha)
+            if status_code in [200, 201]:
+                st.success("Status opdateret!")
+                time.sleep(0.5)
+                st.rerun()
 
-    # Håndter modal-kald (uændret)
-    valgte = ed_result[ed_result["Se"] == True]
+    # --- MODAL HÅNDTERING ---
+    valgte = ed_result[ed_result["SE"] == True]
     if not valgte.empty:
-        st.session_state.active_player = valgte.iloc[-1]['Navn']
-        st.session_state.editor_key += 1 
+        st.session_state.active_player = valgte.iloc[-1]['NAVN']
+        st.session_state.editor_key += 1 # Reset editor så "SE" tjekboksen nulstilles
         st.rerun()
 
     if st.session_state.active_player:
         billed_map = {}
         if sql_players is not None:
             billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
+        
         vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
         st.session_state.active_player = None
