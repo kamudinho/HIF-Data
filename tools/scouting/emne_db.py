@@ -72,14 +72,13 @@ def vis_side():
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    s_c, _ = get_github_file(SCOUT_DB_PATH)
-    h_c, _ = get_github_file(HIF_PATH)
+    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
+    h_c, h_sha = get_github_file(HIF_PATH)
     
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
 
-    # MASTER DEDUPLICATION: Hvis spilleren findes i begge, prioriter data fra scout_db (hvor dine noter er)
-    # Vi bruger PLAYER_WYID eller Navn som nøgle
+    # DEDUPLIKERING: Prioriter scout_db frem for players.csv hvis navnet findes begge steder
     all_players = pd.concat([df_scout, df_hif], ignore_index=True)
     all_players = all_players.drop_duplicates(subset=['Navn'], keep='first')
 
@@ -89,27 +88,55 @@ def vis_side():
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # TAB 1 & 2: Editører
-    with tabs[0]: # Emner
-        d_src = all_players[(all_players['ER_EMNE']==True) & (all_players['IS_HIF']==False)]
-        if not d_src.empty:
-            ed = st.data_editor(d_src.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, key="ed_E")
-            # Save logik her (som din originale)
+    for tab, source_filter, p_path, k_base in [
+        (tabs[0], (all_players['ER_EMNE']==True) & (all_players['IS_HIF']==False), SCOUT_DB_PATH, "E"),
+        (tabs[1], (all_players['IS_HIF']==True), HIF_PATH, "H")
+    ]:
+        with tab:
+            df_src = all_players[source_filter]
+            if not df_src.empty:
+                d_edit = df_src.copy().set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+                ed = st.data_editor(d_edit, use_container_width=True, key=f"ed_{k_base}")
+                if not ed.equals(d_edit):
+                    raw, sha = get_github_file(p_path)
+                    df_s = pd.read_csv(StringIO(raw))
+                    df_s.columns = [str(x).upper().strip() for x in df_s.columns]
+                    if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
+                    for n, r in ed.iterrows():
+                        mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
+                        df_s.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [r['TRANSFER_VINDUE'], r['POS'], r['SKYGGEHOLD']]
+                    push_to_github(p_path, "Update", df_s.to_csv(index=False), sha)
+                    st.rerun()
 
-    with tabs[1]: # Hvidovre IF
-        d_src = all_players[all_players['IS_HIF']==True]
-        if not d_src.empty:
-            ed = st.data_editor(d_src.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, key="ed_H")
+    # TAB 3: Skyggeliste
+    with tabs[2]:
+        df_sky = all_players[all_players['SKYGGEHOLD'] == True]
+        if not df_sky.empty:
+            d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            ed_s = st.data_editor(d_sky_ed, use_container_width=True, key="sky_ed_fix")
+            if not ed_s.equals(d_sky_ed):
+                # Gem ændringer i begge filer for at være sikker
+                for p_path in [SCOUT_DB_PATH, HIF_PATH]:
+                    raw, sha = get_github_file(p_path)
+                    if not raw: continue
+                    df_t = pd.read_csv(StringIO(raw))
+                    df_t.columns = [c.upper().strip() for c in df_t.columns]
+                    if 'NAVN' in df_t.columns: df_t = df_t.rename(columns={'NAVN': 'Navn'})
+                    for n, r in ed_s.iterrows():
+                        mask = df_t['Navn'].astype(str).str.strip() == str(n).strip()
+                        if mask.any():
+                            df_t.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [r['TRANSFER_VINDUE'], r['POS_343'], r['POS_433'], r['POS_352']]
+                    push_to_github(p_path, "Skygge Update", df_t.to_csv(index=False), sha)
+                st.rerun()
 
-    # TAB 4: Bane (Her sker rettelsen af dubletter på banen)
+    # TAB 4: Bane
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
         
-        # Filter logik til banen
         if sel_v == "Nuværende trup":
             df_f = all_players[all_players['IS_HIF'] == True]
         else:
-            # Vis HIF spillere (stammen) + Emner til det valgte vindue
             h_s = all_players[(all_players['IS_HIF'] == True) & (all_players['SKYGGEHOLD'] == True)]
             e_s = all_players[(all_players['IS_HIF'] == False) & (all_players['SKYGGEHOLD'] == True) & (all_players['TRANSFER_VINDUE'] == sel_v)]
             df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
@@ -130,8 +157,6 @@ def vis_side():
 
             for pid, (x, y, lbl) in m.items():
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                
-                # Her vælger vi kun spillere der matcher positionen
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     is_new = (p_row['IS_HIF'] == False)
