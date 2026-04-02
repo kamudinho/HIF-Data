@@ -148,6 +148,7 @@ def vis_side(df):
                 st.rerun()
 
     # TAB 4: Bane
+    # TAB 4: Bane (Opdateret med mindre whitespace)
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -167,8 +168,13 @@ def vis_side(df):
                     st.rerun()
 
         with c_p:
+            # Vi fjerner constrained_layout for at få fuld kontrol over margins
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 6))
+            
+            # FJERN WHITESPACE: Vi sætter marginerne direkte på aksen til 0
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+            
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}}[f]
@@ -179,7 +185,9 @@ def vis_side(df):
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     is_new = (p_row['IS_HIF'] == False)
                     ax.text(x, y + (i * 2.3), f"{p_row['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', bbox=dict(facecolor=GRON_NY if is_new else "white", edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
-            st.pyplot(fig)
+            
+            # VIGTIGT: bbox_inches='tight' og pad_inches=0 fjerner den sidste hvide kant
+            st.pyplot(fig, bbox_inches='tight', pad_inches=0)
 
 if __name__ == "__main__":
     vis_side()
