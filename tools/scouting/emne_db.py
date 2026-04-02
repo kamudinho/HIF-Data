@@ -65,21 +65,26 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- 4. HOVEDFUNKTION (VISNING) ---
-def vis_side(df=None):
-    # CSS: Optimeret til Full Width indhold og korrekt luft i toppen
+def vis_side():
+    # CSS: Justeret til at trække tabs op, så de flugter med dropdown
     st.markdown("""
         <style>
             .stAppViewBlockContainer { padding-top: 40px !important; } 
             div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
             [data-testid="stVerticalBlock"] > div:first-child { margin-top: 0rem !important; }
+            
+            /* Gør dropdown mindre og fjerner label */
             div[data-testid="stSelectbox"] > label { display: none !important; }
-            .stTabs { margin-top: 10px; }
+            
+            /* Trækker tabs-rækken op, så den ligger på linje med dropdown-menuen */
+            .stTabs { margin-top: -45px !important; }
         </style>
     """, unsafe_allow_html=True)
     
-    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
+    if 'form_skygge' not in st.session_state: 
+        st.session_state.form_skygge = "3-4-3"
 
-    # Hent data fra GitHub
+    # Hent data
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     
@@ -87,17 +92,14 @@ def vis_side(df=None):
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # LAYOUT: Tabs og Dropdown i toppen (to kolonner)
-    col_tabs, col_v = st.columns([4, 1])
-    
+    # 1. NAVIGATION LAYOUT (Kun dropdown i kolonne)
+    col_empty, col_v = st.columns([4, 1])
     with col_v:
         sel_v = st.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
-    with col_tabs:
-        tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    # 2. TABS (Placeret uden for kolonner = 100% bredde)
+    tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # ALT HERUNDER ER I FULD BREDDE (Uden for kolonne-kontekst)
-    
     # --- TAB 1 & 2: Editører ---
     for tab, source_df, p_path, k_base in [
         (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
@@ -156,7 +158,6 @@ def vis_side(df=None):
             e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
 
-        # Indvendige kolonner i Tab 4 (Bane vs Knapper)
         c_p, c_m = st.columns([9, 1])
         with c_m:
             for o in ["3-4-3", "4-3-3", "3-5-2"]:
@@ -167,8 +168,6 @@ def vis_side(df=None):
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 6))
-            
-            # Fjern hvide kanter i selve figuren
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
             
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
@@ -182,7 +181,6 @@ def vis_side(df=None):
                     is_new = (p_row['IS_HIF'] == False)
                     ax.text(x, y + (i * 2.3), f"{p_row['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', bbox=dict(facecolor=GRON_NY if is_new else "white", edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
             
-            # Tegn bane uden whitespace
             st.pyplot(fig, bbox_inches='tight', pad_inches=0)
 
 if __name__ == "__main__":
