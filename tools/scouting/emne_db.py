@@ -6,7 +6,7 @@ import base64
 from mplsoccer import Pitch
 import time
 
-# --- KONFIGURATION ---
+# --- 1. KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
 SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
@@ -16,6 +16,7 @@ GRON_NY = "#ccffcc"
 
 VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
+# --- 2. GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -37,6 +38,7 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
+# --- 3. DATA PROCESSING ---
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
@@ -62,29 +64,22 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-def vis_side(df):
-    # CSS OPPDATERET: Øget padding-top og justeret margin for at rykke indholdet ned
+# --- 4. HOVEDFUNKTION (VISNING) ---
+def vis_side(df=None):
+    # CSS: Optimeret til Full Width indhold og korrekt luft i toppen
     st.markdown("""
         <style>
-            /* Juster denne værdi (f.eks. 40px eller 60px) for at rykke alt ned */
             .stAppViewBlockContainer { padding-top: 40px !important; } 
-            
             div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
-            
-            /* Fjerner den negative margin der trak indholdet helt op i toppen */
             [data-testid="stVerticalBlock"] > div:first-child { margin-top: 0rem !important; }
-            
-            /* Gør dropdown mindre og fjerner label-plads */
             div[data-testid="stSelectbox"] > label { display: none !important; }
-            
-            /* Sørger for at tabs følger med ned og har luft */
             .stTabs { margin-top: 10px; }
         </style>
     """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # 1. Hent data
+    # Hent data fra GitHub
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
     
@@ -92,17 +87,18 @@ def vis_side(df):
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # 2. Header layout med dropdown til højre for tabs
+    # LAYOUT: Tabs og Dropdown i toppen (to kolonner)
     col_tabs, col_v = st.columns([4, 1])
     
     with col_v:
-        # Dropdown vises uden label pga. 'collapsed'
-        sel_v = st.selectbox("Transfervindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
+        sel_v = st.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
     with col_tabs:
         tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # TAB 1 & 2: Editører (Emner og HIF)
+    # ALT HERUNDER ER I FULD BREDDE (Uden for kolonne-kontekst)
+    
+    # --- TAB 1 & 2: Editører ---
     for tab, source_df, p_path, k_base in [
         (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
         (tabs[1], df_hif, HIF_PATH, "H")
@@ -111,6 +107,7 @@ def vis_side(df):
             if not source_df.empty:
                 d_edit = source_df.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
                 ed = st.data_editor(d_edit, use_container_width=True, height=600, key=f"ed_{k_base}")
+                
                 if not ed.equals(d_edit):
                     raw, sha = get_github_file(p_path)
                     df_s = pd.read_csv(StringIO(raw))
@@ -122,7 +119,7 @@ def vis_side(df):
                     push_to_github(p_path, f"Update {k_base}", df_s.to_csv(index=False), sha)
                     st.rerun()
 
-    # TAB 3: Skyggeliste
+    # --- TAB 3: Skyggeliste ---
     with tabs[2]:
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
@@ -147,8 +144,7 @@ def vis_side(df):
                         push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
                 st.rerun()
 
-    # TAB 4: Bane
-    # TAB 4: Bane (Opdateret med mindre whitespace)
+    # --- TAB 4: Bane ---
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -160,7 +156,8 @@ def vis_side(df):
             e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
             df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
 
-        c_p, c_m = st.columns([8.5, 1.5])
+        # Indvendige kolonner i Tab 4 (Bane vs Knapper)
+        c_p, c_m = st.columns([9, 1])
         with c_m:
             for o in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(o, key=f"btn_{o}", use_container_width=True, type="primary" if f == o else "secondary"):
@@ -168,11 +165,10 @@ def vis_side(df):
                     st.rerun()
 
         with c_p:
-            # Vi fjerner constrained_layout for at få fuld kontrol over margins
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 6))
             
-            # FJERN WHITESPACE: Vi sætter marginerne direkte på aksen til 0
+            # Fjern hvide kanter i selve figuren
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
             
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
@@ -186,7 +182,7 @@ def vis_side(df):
                     is_new = (p_row['IS_HIF'] == False)
                     ax.text(x, y + (i * 2.3), f"{p_row['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', bbox=dict(facecolor=GRON_NY if is_new else "white", edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
             
-            # VIGTIGT: bbox_inches='tight' og pad_inches=0 fjerner den sidste hvide kant
+            # Tegn bane uden whitespace
             st.pyplot(fig, bbox_inches='tight', pad_inches=0)
 
 if __name__ == "__main__":
