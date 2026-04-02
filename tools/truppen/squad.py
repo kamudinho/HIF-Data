@@ -5,7 +5,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 
 def vis_side(df):
-    if df is None:
+    if df is None or df.empty:
         st.error("Ingen data fundet for truppen.")
         return
 
@@ -15,157 +15,117 @@ def vis_side(df):
 
     # --- 2. FARVER & KONSTANTER ---
     hif_rod = "#df003b"
-    gul_udlob = "#ffffcc"
+    gul_udlob = "#ffff99" # Justeret til en lidt kraftigere gul for læsbarhed
     leje_gra = "#d3d3d3"
     rod_udlob = "#ffcccc"
 
-    # --- 3. CSS INJECTION ---
+    # --- 3. CSS INJECTION (Forbedret knap-styling) ---
     st.markdown("""
         <style>
-            [data-testid="column"] {
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            div[data-testid="stHorizontalBlock"] {
-                gap: 0rem !important;
-                margin-top: 5px !important;
-            }
-            div[data-testid="stHorizontalBlock"] > div:last-child {
-                flex: 0 1 auto !important;
-                min-width: 130px !important;
-                padding-left: 0px !important;
-                padding-right: 0px !important;
-                align-items: flex-end !important;
-            }
             div.stButton > button {
                 border-radius: 20px !important;
                 border: 1px solid #ddd !important;
-                background-color: white !important;
-                color: #333 !important;
-                width: 110px !important;
-                margin-left: auto !important;
-                display: block !important;
+                transition: all 0.3s ease;
             }
-            div.stButton > button[kind="primary"] {
+            div.stButton > button:hover {
+                border-color: #df003b !important;
                 color: #df003b !important;
-                border: 2px solid #df003b !important;
-                font-weight: bold !important;
-            }
-            div[data-testid="stPopover"] {
-                width: 100% !important;
-                display: flex !important;
-                justify-content: flex-end !important;
-            }
-            div[data-testid="stPopover"] > button {
-                width: 110px !important;
-                border-radius: 20px !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 5. DATA PROCESSERING ---
+    # --- 4. DATA PROCESSERING ---
     df_squad = df.copy()
+    # Standardiser kolonnenavne
     df_squad.columns = [str(c).strip().upper() for c in df_squad.columns]
     
-    # Sikr at POS er numerisk
-    df_squad['POS'] = pd.to_numeric(df_squad['POS'], errors='coerce')
+    # Håndter både 'UDLØB' og 'KONTRAKT' kolonnenavne for fleksibilitet
+    udlob_col = 'UDLØB' if 'UDLØB' in df_squad.columns else 'KONTRAKT'
     
-    idag = datetime.now()
-    # RETTELSE: Brug KONTRAKT i stedet for CONTRACT
-    if 'KONTRAKT' in df_squad.columns:
-        df_squad['KONTRAKT_DT'] = pd.to_datetime(df_squad['KONTRAKT'], dayfirst=True, errors='coerce')
+    if udlob_col in df_squad.columns:
+        df_squad['KONTRAKT_DT'] = pd.to_datetime(df_squad[udlob_col], dayfirst=True, errors='coerce')
+        idag = datetime.now()
         df_squad['DAYS_LEFT'] = (df_squad['KONTRAKT_DT'] - idag).dt.days
 
     def get_status_color(row):
+        # Tjek for leje (PRIOR 'L')
         if str(row.get('PRIOR', '')).upper() == 'L': 
             return leje_gra
-        try:
-            days = row.get('DAYS_LEFT')
-            if pd.isna(days): return 'white'
-            days = float(days)
-            if days < 183: return rod_udlob
-            if days <= 365: return gul_udlob
-        except:
+        
+        days = row.get('DAYS_LEFT')
+        if pd.isna(days): 
             return 'white'
+        
+        if days < 183: # Under 6 måneder
+            return rod_udlob
+        if days <= 365: # 6-12 måneder
+            return gul_udlob
         return 'white'
 
-    # --- 6. HOVEDLAYOUT ---
-    col_pitch, col_menu = st.columns([7, 1])
+    # --- 5. LAYOUT ---
+    col_pitch, col_menu = st.columns([8, 1.2])
 
     with col_menu:
-        with st.popover("Trup", use_container_width=True):
-            tabel_html = f'''<table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:12px;">
-                <tr style="background:#fafafa; border-bottom:2px solid {hif_rod};">
-                    <th style="text-align:left; padding:8px;">Spiller</th>
-                    <th style="text-align:right; padding:8px;">Udløb</th>
-                </tr>'''
-            
-            for _, r in df_squad.sort_values('NAVN').iterrows():
-                bg = get_status_color(r)
-                # RETTELSE: Her bruges KONTRAKT til visning
-                tabel_html += f'''<tr style="background-color:{bg}; border-bottom:1px solid #eee;">
-                    <td style="padding:8px; font-weight:600;">{str(r['NAVN'])}</td>
-                    <td style="padding:8px; text-align:right;">{r['KONTRAKT'] if pd.notna(r['KONTRAKT']) else "-"}</td>
-                </tr>'''
-            tabel_html += "</table>"
-            st.components.v1.html(tabel_html, height=400, scrolling=True)
-
-        st.write("---")
+        st.write("**Indstillinger**")
+        # Formation knapper
         for f in ["3-4-3", "4-3-3", "3-5-2"]:
             is_active = st.session_state.formation_valg == f
             if st.button(f, key=f"btn_{f}", use_container_width=True, type="primary" if is_active else "secondary"):
                 st.session_state.formation_valg = f
                 st.rerun()
+        
+        st.write("---")
+        # Trup-oversigt i popover
+        with st.popover("Se hele truppen", use_container_width=True):
+            st.dataframe(
+                df_squad[['NAVN', udlob_col]].sort_values('NAVN'),
+                hide_index=True,
+                use_container_width=True
+            )
 
     with col_pitch:
         pitch = Pitch(
             pitch_type='statsbomb', 
-            pitch_color='#ffffff', 
+            pitch_color='white', 
             line_color='#333', 
-            linewidth=1,
-            pad_top=0, pad_bottom=0, pad_left=0, pad_right=0
+            linewidth=1.5
         )
         fig, ax = pitch.draw(figsize=(13, 8))
-        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
-        ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=rod_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=gul_udlob, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-        ax.text(25, 2, " Leje ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=leje_gra, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+        # --- LEGENDS (Placeret præcist i toppen) ---
+        legend_y = -4
+        ax.text(2, legend_y, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor=rod_udlob, edgecolor='#333', boxstyle='round,pad=0.3'))
+        ax.text(18, legend_y, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor=gul_udlob, edgecolor='#333', boxstyle='round,pad=0.3'))
+        ax.text(36, legend_y, " Leje ", size=8, weight='bold', bbox=dict(facecolor=leje_gra, edgecolor='#333', boxstyle='round,pad=0.3'))
 
-        # --- DYNAMISK POSITIONS LOGIK ---
+        # Positions-konfiguration
         form = st.session_state.formation_valg
-        
         if form == "3-4-3":
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
-                          5: (60, 10, 'VWB'), 6: (60, 30, 'DM'), 8: (60, 50, 'DM'), 2: (60, 70, 'HWB'), 
-                          11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+                          5: (58, 10, 'VWB'), 6: (55, 32, 'DM'), 8: (55, 48, 'DM'), 2: (58, 70, 'HWB'), 
+                          11: (82, 15, 'VW'), 9: (98, 40, 'ANG'), 7: (82, 65, 'HW')}
         elif form == "4-3-3":
-            pos_config = {1: (10, 40, 'MM'), 5: (35, 10, 'VB'), 4: (33, 25, 'VCB'), 3: (33, 55, 'HCB'), 2: (35, 70, 'HB'),
-                          6: (50, 40, 'DM'), 8: (68, 25, 'VCM'), 10: (68, 55, 'HCM'),
-                          11: (85, 15, 'VW'), 9: (100, 40, 'ANG'), 7: (85, 65, 'HW')}
+            pos_config = {1: (10, 40, 'MM'), 5: (35, 12, 'VB'), 4: (30, 28, 'VCB'), 3: (30, 52, 'HCB'), 2: (35, 68, 'HB'),
+                          6: (55, 40, 'DM'), 8: (72, 25, 'VCM'), 10: (72, 55, 'HCM'),
+                          11: (85, 15, 'VW'), 9: (105, 40, 'ANG'), 7: (85, 65, 'HW')}
         else: # 3-5-2
             pos_config = {1: (10, 40, 'MM'), 4: (33, 22, 'VCB'), 3.5: (33, 40, 'CB'), 3: (33, 58, 'HCB'),
-                          5: (60, 10, 'VWB'), 6: (60, 40, 'DM'), 2: (60, 70, 'HWB'), 
-                          8: (70, 25, 'CM'), 10: (70, 55, 'CM'), 9: (100, 28, 'ANG'), 7: (100, 52, 'ANG')}
+                          5: (55, 10, 'VWB'), 6: (55, 40, 'DM'), 2: (55, 70, 'HWB'), 
+                          8: (75, 28, 'CM'), 10: (75, 52, 'CM'), 9: (102, 32, 'ANG'), 7: (102, 48, 'ANG')}
 
+        # Tegn spillere
         for pos_num, (x, y, label) in pos_config.items():
-            if form == "4-3-3" and pos_num == 4:
-                spillere = df_squad[df_squad['POS'].isin([4, 3.5])]
-            elif form == "3-5-2" and pos_num == 9:
-                spillere = df_squad[df_squad['POS'].isin([9, 11])]
-            elif form == "3-5-2" and pos_num == 7:
-                spillere = df_squad[df_squad['POS'] == 7]
-            else:
-                spillere = df_squad[df_squad['POS'] == pos_num]
-
+            spillere = df_squad[df_squad['POS'].astype(str) == str(pos_num)]
             spillere = spillere.sort_values('PRIOR', ascending=True)
-            
+
             if not spillere.empty:
-                ax.text(x, y - 4.5, f" {label} ", size=10, color="white", fontweight='bold', ha='center',
-                        bbox=dict(facecolor=hif_rod, edgecolor='white', boxstyle='round,pad=0.2'))
+                # Positions-label (f.eks. ANG)
+                ax.text(x, y - 5, label, size=9, color="white", weight='bold', ha='center',
+                        bbox=dict(facecolor=hif_rod, edgecolor='none', boxstyle='round,pad=0.2'))
                 
+                # Spiller-navne
                 for i, (_, p) in enumerate(spillere.iterrows()):
-                    ax.text(x, (y - 1.5) + (i * 2.3), f" {p['NAVN']} ", size=9, fontweight='bold', ha='center', va='top',
+                    ax.text(x, y + (i * 2.8), p['NAVN'], size=8.5, weight='bold', ha='center',
                             bbox=dict(facecolor=get_status_color(p), edgecolor='#333', boxstyle='square,pad=0.2', linewidth=0.5))
 
         st.pyplot(fig, use_container_width=True)
