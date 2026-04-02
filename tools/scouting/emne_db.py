@@ -13,7 +13,8 @@ HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 HIF_ROD = "#df003b"
 GRON_NY = "#ccffcc" 
-GUL_ADVARSEL = "#ffff99" # Til 6-12 mdr.
+GUL_ADVARSEL = "#ffff99" # 6-12 mdr.
+ROD_ADVARSEL = "#ffcccc" # < 6 mdr.
 
 VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
@@ -65,7 +66,7 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-# --- 4. HOVEDFUNKTION (VISNING) ---
+# --- 4. HOVEDFUNKTION ---
 def vis_side():
     st.markdown("""
         <style>
@@ -87,22 +88,57 @@ def vis_side():
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
+    # Header med dropdown
     col_empty, col_v = st.columns([4, 1])
     with col_v:
         sel_v = st.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
+    # Tabs i fuld bredde
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # (Tab 1, 2 og 3 koden er uændret...)
-    with tabs[0]:
-        if not df_scout[df_scout['ER_EMNE']==True].empty:
-            st.data_editor(df_scout[df_scout['ER_EMNE']==True].set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, height=400, key="ed_E")
-    
-    with tabs[1]:
-        if not df_hif.empty:
-            st.data_editor(df_hif.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, height=400, key="ed_H")
+    # Tab 1 & 2: Data Editors
+    for tab, source_df, p_path, k_base in [
+        (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
+        (tabs[1], df_hif, HIF_PATH, "H")
+    ]:
+        with tab:
+            if not source_df.empty:
+                d_edit = source_df.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+                ed = st.data_editor(d_edit, use_container_width=True, height=500, key=f"ed_{k_base}")
+                if not ed.equals(d_edit):
+                    raw, sha = get_github_file(p_path)
+                    df_s = pd.read_csv(StringIO(raw))
+                    df_s.columns = [str(x).upper().strip() for x in df_s.columns]
+                    if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
+                    for n, r in ed.iterrows():
+                        mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
+                        df_s.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [r['TRANSFER_VINDUE'], r['POS'], r['SKYGGEHOLD']]
+                    push_to_github(p_path, f"Update {k_base}", df_s.to_csv(index=False), sha)
+                    st.rerun()
 
-    # --- TAB 4: Bane med Legends ---
+    # Tab 3: Skyggeliste
+    with tabs[2]:
+        df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
+        if not df_sky.empty:
+            d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            ed_s = st.data_editor(d_sky_ed, use_container_width=True, height=500, key="sky_ed_final")
+            if not ed_s.equals(d_sky_ed):
+                for path in [SCOUT_DB_PATH, HIF_PATH]:
+                    raw, sha = get_github_file(path)
+                    if not raw: continue
+                    df_tmp = pd.read_csv(StringIO(raw))
+                    df_tmp.columns = [c.upper().strip() for c in df_tmp.columns]
+                    if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
+                    changed = False
+                    for n, r in ed_s.iterrows():
+                        mask = df_tmp['Navn'].astype(str).str.strip() == str(n).strip()
+                        if mask.any():
+                            df_tmp.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [r['TRANSFER_VINDUE'], r['POS_343'], r['POS_433'], r['POS_352']]
+                            changed = True
+                    if changed: push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
+                st.rerun()
+
+    # Tab 4: Bane
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
@@ -123,8 +159,8 @@ def vis_side():
 
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
-            fig, ax = pitch.draw(figsize=(10, 7)) # Øget højde lidt til legends
-            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.95)
+            fig, ax = pitch.draw(figsize=(10, 7))
+            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90) # Plads til top-legends
             
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
@@ -134,25 +170,19 @@ def vis_side():
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
-                    # Farvelogik
                     bg_color = "white"
-                    if p_row['IS_HIF'] == False:
-                        bg_color = GRON_NY
-                    # EKSEMPEL: Hvis du har en 'KONTRAKT_REST' kolonne (i måneder)
-                    # elif p_row.get('KONTRAKT_REST', 24) < 6: bg_color = "#ffcccc" (Rød)
-                    # elif p_row.get('KONTRAKT_REST', 24) <= 12: bg_color = GUL_ADVARSEL
-                    
+                    if p_row['IS_HIF'] == False: bg_color = GRON_NY
+                    # Her kan du tilføje logik for GUL/RØD hvis du har kontrakt-data i fremtiden
                     ax.text(x, y + (i * 2.5), p_row['Navn'], size=7, ha='center', va='center', weight='bold', 
                             bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
 
-            # --- LEGENDS (Venstre side) ---
-            ax.text(2, -5, "LEGEND:", size=8, weight='bold', ha='left')
-            ax.text(12, -5, "Ny Transfer", size=7, bbox=dict(facecolor=GRON_NY, edgecolor='#333', boxstyle='square,pad=0.2'))
-            ax.text(28, -5, "6-12 mdr.", size=7, bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='square,pad=0.2'))
-            ax.text(42, -5, "< 6 mdr.", size=7, bbox=dict(facecolor="#ffcccc", edgecolor='#333', boxstyle='square,pad=0.2'))
-
-            # --- VINDUE TITEL (Højre side) ---
-            ax.text(118, -5, f"Vindue: {sel_v}", size=9, weight='bold', ha='right', color=HIF_ROD)
+            # --- LEGENDS I TOPPEN ---
+            y_top = -8
+            ax.text(2, y_top, "LEGEND:", size=9, weight='bold', ha='left', va='center')
+            ax.text(15, y_top, "Ny Transfer", size=8, ha='left', va='center', bbox=dict(facecolor=GRON_NY, edgecolor='#333', boxstyle='square,pad=0.3'))
+            ax.text(35, y_top, "6-12 mdr.", size=8, ha='left', va='center', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='square,pad=0.3'))
+            ax.text(55, y_top, "< 6 mdr.", size=8, ha='left', va='center', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#333', boxstyle='square,pad=0.3'))
+            ax.text(118, y_top, f"Vindue: {sel_v}", size=10, weight='bold', ha='right', va='center', color=HIF_ROD)
             
             st.pyplot(fig, bbox_inches='tight', pad_inches=0.1)
 
