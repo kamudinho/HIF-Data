@@ -62,7 +62,7 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-def vis_side():
+def vis_side(df):
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
