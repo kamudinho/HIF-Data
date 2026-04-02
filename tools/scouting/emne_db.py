@@ -62,8 +62,17 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-def vis_side(df):
-    st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
+def vis_side():
+    # CSS til at fjerne top-margin og optimere layout
+    st.markdown("""
+        <style>
+            .stAppViewBlockContainer { padding-top: 0px !important; }
+            div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
+            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -1rem !important; }
+            /* Gør dropdown mindre og fjerner label-plads */
+            div[data-testid="stSelectbox"] > label { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
@@ -75,11 +84,14 @@ def vis_side(df):
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # 2. Top bar
-    _, t_col2 = st.columns([4, 1])
-    sel_v = t_col2.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1)
+    # 2. Header layout med dropdown til højre for tabs
+    col_tabs, col_v = st.columns([4, 1])
+    
+    with col_v:
+        sel_v = st.selectbox("Transfervindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
-    tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    with col_tabs:
+        tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # TAB 1 & 2: Editører (Emner og HIF)
     for tab, source_df, p_path, k_base in [
@@ -89,7 +101,7 @@ def vis_side(df):
         with tab:
             if not source_df.empty:
                 d_edit = source_df.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
-                ed = st.data_editor(d_edit, use_container_width=True, key=f"ed_{k_base}")
+                ed = st.data_editor(d_edit, use_container_width=True, height=600, key=f"ed_{k_base}")
                 if not ed.equals(d_edit):
                     raw, sha = get_github_file(p_path)
                     df_s = pd.read_csv(StringIO(raw))
@@ -101,15 +113,14 @@ def vis_side(df):
                     push_to_github(p_path, f"Update {k_base}", df_s.to_csv(index=False), sha)
                     st.rerun()
 
-    # TAB 3: Skyggeliste (Rettet og funktionel)
+    # TAB 3: Skyggeliste
     with tabs[2]:
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
             d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
-            ed_s = st.data_editor(d_sky_ed, use_container_width=True, key="sky_ed_final")
+            ed_s = st.data_editor(d_sky_ed, use_container_width=True, height=600, key="sky_ed_final")
             
             if not ed_s.equals(d_sky_ed):
-                # Vi skal opdatere i begge kilde-filer
                 for path in [SCOUT_DB_PATH, HIF_PATH]:
                     raw, sha = get_github_file(path)
                     if not raw: continue
@@ -123,7 +134,6 @@ def vis_side(df):
                         if mask.any():
                             df_tmp.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [r['TRANSFER_VINDUE'], r['POS_343'], r['POS_433'], r['POS_352']]
                             changed = True
-                    
                     if changed:
                         push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
                 st.rerun()
