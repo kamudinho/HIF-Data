@@ -222,7 +222,6 @@ def vis_side(df):
             ax.text(1, -4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
             ax.text(14, -4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
             ax.text(28, -4, " Ny/Emne ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='#333', boxstyle='round,pad=0.2'))
-            ax.text(43, -4, " Leje ", size=7, weight='bold', bbox=dict(facecolor=LEJE_GRA, edgecolor='#333', boxstyle='round,pad=0.2'))
             
             st.pyplot(fig, bbox_inches='tight', pad_inches=0.1)
 
