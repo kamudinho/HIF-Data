@@ -62,7 +62,7 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-def vis_side():
+def vis_side(df):
     # CSS til at fjerne top-margin og optimere layout
     st.markdown("""
         <style>
