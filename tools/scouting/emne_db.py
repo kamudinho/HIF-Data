@@ -65,7 +65,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- 4. HOVEDFUNKTION (VISNING) ---
-def vis_side():
+def vis_side(df):
     # CSS: Justeret til at trække tabs op, så de flugter med dropdown
     st.markdown("""
         <style>
