@@ -1,215 +1,191 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+from io import StringIO
+import requests
+import base64
+from mplsoccer import Pitch
+import time
 from datetime import datetime
-from data.data_load import load_local_players 
 
-# --- KONFIGURATION (Hvidovre-app værdier) ---
-HIF_ROD = '#cc0000'
-DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
+# --- 1. KONFIGURATION ---
+REPO = "Kamudinho/HIF-data"
+SCOUT_DB_PATH = "data/scouting_db.csv"
+HIF_PATH = "data/players.csv"
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+HIF_ROD = "#df003b"
+GRON_NY = "#ccffcc" 
+GUL_ADVARSEL = "#ffff99" 
+ROD_ADVARSEL = "#ffcccc" 
+LEJE_GRA = "#d3d3d3"
 
-# --- KONFIGURATION (Hold og SSIID) ---
-TEAMS = {
-    "Hvidovre": {"ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9"},
-    "AaB": {"ssid": "40d5387b-ac2f-4e9b-bb97-34456aeb69c4"},
-    "Horsens": {"ssid": "f2b45639-d8e6-4d9b-9371-6f9f1fe2a9d9"},
-    "Lyngby": {"ssid": "15af1cc2-5ce6-4552-8a5f-7e233a65cedc"},
-    "Esbjerg": {"ssid": "bfc8edb9-96af-4152-a8b0-d096d4271f48"},
-    "Kolding": {"ssid": "04aaceac-8a20-422b-8417-9199a519c1b3"},
-    "Hobro": {"ssid": "e274c022-4cf1-4c4d-9555-4c6dd38b1224"},
-    "HB Køge": {"ssid": "2dccb353-4598-4f35-845d-c6c55c9f5672"},
-    "Hillerød": {"ssid": "e274c022-4cf1-4c4d-9555-4c6dd38b1224"},
-    "B 93": {"ssid": "e0bb5b5f-2df2-4fc4-854a-e537bd65a280"}
-}
+VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
-def vis_side(conn, name_map=None):
-    # --- 0. CSS TIL AT RYKKE ALT OP ---
+# --- 2. GITHUB FUNKTIONER ---
+def get_github_file(path):
+    try:
+        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+            return content, data['sha']
+    except:
+        pass
+    return None, None
+
+def push_to_github(path, message, content, sha=None):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    payload = {"message": message, "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
+    if sha: payload["sha"] = sha
+    r = requests.put(url, headers=headers, json=payload)
+    return r.status_code
+
+# --- 3. DATA PROCESSING ---
+def prepare_df(content, is_hif=False):
+    if not content: return pd.DataFrame()
+    df = pd.read_csv(StringIO(content))
+    df.columns = [str(c).upper().strip() for c in df.columns]
+    
+    if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
+    if 'Navn' not in df.columns: return pd.DataFrame()
+    
+    df = df.dropna(subset=['Navn'])
+    df['Navn'] = df['Navn'].astype(str).str.strip()
+    
+    # --- NY OMREGNING LOGIK ---
+    # 1. MIN_SEC til rene minutter (f.eks. 5400 sek -> 90 min)
+    if 'MIN_SEC' in df.columns:
+        df['MINUTTER'] = pd.to_numeric(df['MIN_SEC'], errors='coerce') / 60
+        df['MINUTTER'] = df['MINUTTER'].fillna(0).round(0)
+
+    # 2. DISTANCE (meter) til KM
+    if 'DISTANCE' in df.columns:
+        df['DISTANCE_KM'] = pd.to_numeric(df['DISTANCE'], errors='coerce') / 1000
+        df['DISTANCE_KM'] = df['DISTANCE_KM'].fillna(0).round(1)
+
+    # Standardisering af vinduer og positioner
+    if 'TRANSFER_VINDUE' in df.columns:
+        df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
+    
+    for c in ['ER_EMNE', 'SKYGGEHOLD']:
+        if c not in df.columns: df[c] = False
+        else:
+            b_map = {True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}
+            df[c] = df[c].map(b_map).fillna(False)
+    
+    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
+        if c not in df.columns: df[c] = "0"
+        df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
+    
+    # Kontrakt-udløb beregning
+    df['IS_HIF'] = is_hif
+    return df
+
+# --- 4. HOVEDFUNKTION ---
+def vis_side():
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 0px !important; }
+            .stAppViewBlockContainer { padding-top: 40px !important; } 
             div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
-            [data-testid="stHorizontalBlock"] { margin-top: -25px !important; margin-bottom: -10px !important; }
-            div[data-testid="stSelectbox"] label { display: none; }
-            div[data-testid="stSelectbox"] { margin-top: -5px; }
-            .stTabs { margin-top: 0px; }
-            div[data-baseweb="tab-panel"] { padding-top: 20px !important; }
+            .stTabs { margin-top: -45px !important; }
         </style>
     """, unsafe_allow_html=True)
+    
+    if 'form_skygge' not in st.session_state: 
+        st.session_state.form_skygge = "3-4-3"
 
-    # --- 1. DROPDOWN ---
-    header_col, select_col = st.columns([3, 1])
-    with select_col:
-        alle_hold = sorted(list(TEAMS.keys()))
-        valgt_hold = st.selectbox(" ", alle_hold, index=alle_hold.index("Hvidovre"))
-        v_ssid = TEAMS[valgt_hold]["ssid"]
+    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
+    h_c, h_sha = get_github_file(HIF_PATH)
+    
+    df_scout = prepare_df(s_c, is_hif=False)
+    df_hif = prepare_df(h_c, is_hif=True)
+    df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # --- 2. DYNAMISK SQL ---
-    @st.cache_data(ttl=600)
-    def get_phys_data(ssid):
-        sql = f"""
-        WITH team_player_ids AS (
-            SELECT DISTINCT 
-                m.MATCH_SSIID, 
-                f.value:"optaId"::string AS player_opta_id
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-            LATERAL FLATTEN(input => CASE 
-                WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS 
-                ELSE m.AWAY_PLAYERS 
-            END) f
-            WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
-        )
-        SELECT 
-            p.*, 
-            h.player_opta_id
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        INNER JOIN team_player_ids h 
-            ON p.MATCH_SSIID = h.MATCH_SSIID 
-            AND p."optaId" = h.player_opta_id
-        WHERE p.MATCH_DATE >= '2025-07-01'
-        """
-        return conn.query(sql)
+    col_empty, col_v = st.columns([4, 1])
+    with col_v:
+        sel_v = st.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
-    df_phys = get_phys_data(v_ssid)
+    tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    if df_phys.empty:
-        st.warning(f"Ingen data fundet for {valgt_hold}")
-        return
-
-    # --- 3. NAVNE-MAPPING LOGIK ---
-    df_local = load_local_players()
-    p_map = {}
-    if df_local is not None:
-        loc_cols = {c.lower(): c for c in df_local.columns}
-        oid_col = loc_cols.get('optaid', 'optaId')
-        df_local['clean_oid'] = df_local[oid_col].apply(lambda x: str(int(float(x))) if pd.notnull(x) else "0")
-        p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
-
-    def parse_mins(v):
-        if pd.isna(v) or v == "": return 0.0
-        v_s = str(v)
-        if ':' in v_s:
-            try:
-                m, s = map(int, v_s.split(':'))
-                return round(m + s/60, 2)
-            except: return 0.0
-        return pd.to_numeric(v_s, errors='coerce') or 0.0
-
-    # --- 4. TABS ---
-    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
-
-    with t1:
-        df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_mins)
-        df_phys['HI_RUN_CALC'] = df_phys['HIGH SPEED RUNNING'].fillna(0) + df_phys['SPRINTING'].fillna(0)
-        df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(str(r['PLAYER_OPTA_ID']), r['PLAYER_NAME']), axis=1)
-
-        summary = df_phys.groupby('DISPLAY_NAME').agg({
-            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_RUN_CALC': 'sum', 'TOP_SPEED': 'max'
-        }).reset_index()
-        
-        summary = summary[summary['MINS_DEC'] > 10].copy()
-        summary['KM/90'] = (summary['DISTANCE'] / summary['MINS_DEC']) * 90 / 1000
-        summary['HI m/90'] = (summary['HI_RUN_CALC'] / summary['MINS_DEC']) * 90
-
-        st.dataframe(
-            summary.sort_values('KM/90', ascending=False),
-            column_config={
-                "KM/90": st.column_config.NumberColumn("KM/90", format="%.2f km"),
-                "HI m/90": st.column_config.NumberColumn("HI m/90", format="%d m"),
-                "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t")
-            },
-            use_container_width=True, hide_index=True, height=700
-        )
-
-    with t2:
-        valg = st.selectbox("Vælg parameter", ["KM/90", "HI m/90", "TOP_SPEED"])
-        fig = px.bar(
-            summary.sort_values(valg, ascending=False), 
-            x='DISPLAY_NAME', 
-            y=valg, 
-            color_discrete_sequence=[HIF_ROD],
-            text_auto='.2f' if valg != "HI m/90" else 'd'
-        )
-        fig.update_traces(textposition='outside')
-        st.plotly_chart(fig, use_container_width=True)
-
-    with t3:
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        df_league = conn.query("""
-            SELECT 
-                PLAYER_NAME, 
-                "teamName" as KLUB,
-                MAX(TOP_SPEED) as MAX_SPEED,
-                SUM(DISTANCE) as TOTAL_DIST,
-                SUM("HIGH SPEED RUNNING" + SPRINTING) as TOTAL_HI,
-                SUM(CAST(SPLIT_PART(MINUTES, ':', 1) AS FLOAT) + CAST(SPLIT_PART(MINUTES, ':', 2) AS FLOAT)/60) as TOTAL_MINS
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-            GROUP BY PLAYER_NAME, "teamName"
-            HAVING TOTAL_MINS > 90
-        """)
-
-        df_league['KM/90'] = (df_league['TOTAL_DIST'] / df_league['TOTAL_MINS']) * 90 / 1000
-        df_league['HI/90'] = (df_league['TOTAL_HI'] / df_league['TOTAL_MINS']) * 90
-
-        c1, c2, c3 = st.columns(3)
-        col_set = {
-            "MAX_SPEED": ["Topfart", "%.1f km/t", c1, "Topfart (Max)"],
-            "KM/90": ["Distance", "%.2f km", c2, "KM pr. 90"],
-            "HI/90": ["HI løb", "%d m", c3, "HI m pr. 90"]
-        }
-
-        for key, (label, fmt, col, title) in col_set.items():
-            with col:
-                st.write(f"**{title}**")
-                st.dataframe(
-                    df_league.nlargest(5, key)[['PLAYER_NAME', 'KLUB', key]],
-                    column_config={
-                        "PLAYER_NAME": "Navn",
-                        "KLUB": "Klub",
-                        key: st.column_config.NumberColumn(label, format=fmt)
-                    },
-                    hide_index=True, use_container_width=True
-                )
-
-    with t4:
-        df_meta = conn.query(f"""
-            SELECT DISTINCT
-                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
-                m.DESCRIPTION, 
-                m.MATCH_SSIID 
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m
-            INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p 
-                ON m.MATCH_SSIID = p.MATCH_SSIID
-            WHERE (m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}')
-            AND m."DATE" >= '2025-07-01'
-            ORDER BY DATE_STR DESC
-        """)
-        
-        if df_meta.empty:
-            st.info("Venter på fysisk data for sæsonens kampe...")
-        else:
-            df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
-            v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
-            m_id = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]['MATCH_SSIID']
-            
-            df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_id}'")
-            
-            if not df_m.empty:
-                df_m['KM'] = (df_m['DISTANCE'] / 1000)
-                df_m['HI_RUN'] = df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)
-                oid_col = 'optaId' if 'optaId' in df_m.columns else 'OPTAID'
-                df_m['DISPLAY_NAME'] = df_m.apply(lambda r: p_map.get(str(r[oid_col]), r['PLAYER_NAME']), axis=1)
+    # Tab 1 & 2: Editorer
+    for tab, source_df, p_path, k_base in [
+        (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
+        (tabs[1], df_hif, HIF_PATH, "H")
+    ]:
+        with tab:
+            if not source_df.empty:
+                cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
+                # Tilføj de nye beregnede kolonner til visning hvis de findes
+                display_cols = cols_to_show + ([c for c in ['MINUTTER', 'DISTANCE_KM'] if c in source_df.columns])
                 
-                st.dataframe(
-                    df_m.sort_values(by=['teamName', 'DISTANCE'], ascending=[True, False]),
-                    column_config={
-                        "DISPLAY_NAME": "Spiller",
-                        "teamName": "Hold",
-                        "MINUTES": "Min",
-                        "KM": st.column_config.NumberColumn("KM", format="%.2f km"),
-                        "HI_RUN": st.column_config.NumberColumn("HI m", format="%d m"),
-                        "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t")
-                    },
-                    column_order=("DISPLAY_NAME", "teamName", "MINUTES", "KM", "HI_RUN", "TOP_SPEED"),
-                    use_container_width=True, hide_index=True, height=600
-                )
+                d_edit = source_df.set_index('Navn')[display_cols]
+                st.data_editor(d_edit, use_container_width=True, height=500, key=f"ed_{k_base}")
+
+    # Tab 3: Skyggeliste
+    with tabs[2]:
+        df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
+        if not df_sky.empty:
+            d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            st.data_editor(d_sky_ed, use_container_width=True, height=500, key="sky_ed_final")
+
+    # Tab 4: Bane (Med rettet Legends og Vindue)
+    with tabs[3]:
+        f = st.session_state.form_skygge
+        p_col = f"POS_{f.replace('-', '')}"
+        
+        if sel_v == "Nuværende trup":
+            df_f = df_hif.drop_duplicates(subset=['Navn'])
+        else:
+            h_s = df_hif[df_hif['SKYGGEHOLD'] == True]
+            e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
+            df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
+
+        c_p, c_m = st.columns([9, 1])
+        with c_m:
+            for o in ["3-4-3", "4-3-3", "3-5-2"]:
+                if st.button(o, key=f"btn_{o}", use_container_width=True, type="primary" if f == o else "secondary"):
+                    st.session_state.form_skygge = o
+                    st.rerun()
+
+        with c_p:
+            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
+            fig, ax = pitch.draw(figsize=(10, 7))
+            fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98) 
+            
+            m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
+                 "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
+                 "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[f]
+
+            for pid, (x, y, lbl) in m.items():
+                ax.text(x, y-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                plist = df_f[df_f[p_col].astype(str) == str(pid)].sort_values('PRIOR', ascending=True)
+                for i, (_, p_row) in enumerate(plist.iterrows()):
+                    bg = "white"
+                    if p_row['IS_HIF'] == False: bg = GRON_NY
+                    elif str(p_row.get('PRIOR', '')).upper() == 'L': bg = LEJE_GRA
+                    else:
+                        u_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) else p_row.get('KONTRAKT')
+                        try:
+                            days = (pd.to_datetime(u_val, dayfirst=True) - datetime.now()).days
+                            if days < 183: bg = ROD_ADVARSEL
+                            elif days <= 365: bg = GUL_ADVARSEL
+                        except: bg = "white"
+                    
+                    ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', 
+                            bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
+
+            # LEGENDS PLACERET PÅ BANEN
+            ax.text(2, 2, " < 6 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(12, 2, " 6-12 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(25, 2, " Ny/Emne ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(38, 2, " Leje ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=LEJE_GRA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            
+            # VINDUE TEKST
+            ax.text(118, 2, f"Vindue: {sel_v}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
+            
+            st.pyplot(fig, use_container_width=True)
+
+if __name__ == "__main__":
+    vis_side()
