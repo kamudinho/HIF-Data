@@ -156,10 +156,12 @@ def vis_side(df):
                 st.rerun()
 
     # Tab 4: Bane
+    # --- Tab 4: Bane ---
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
         
+        # Filtrering af spillere til banen
         if sel_v == "Nuværende trup":
             df_f = df_hif.drop_duplicates(subset=['Navn'])
         else:
@@ -177,35 +179,50 @@ def vis_side(df):
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 7))
-            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90) 
+            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95) 
             
-            m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
-                 "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
-                 "3-5-2": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(45,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(45,70,'HWB'), "10":(75,40,'CM'), "9":(95,32,'ANG'), "7":(95,48,'ANG')}}[f]
+            # Positions-konfiguration (Koordinater)
+            m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(60,10,'VWB'), "6":(60,30,'DM'), "8":(60,50,'DM'), "2":(60,70,'HWB'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
+                 "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(33,25,'VCB'), "3":(33,55,'HCB'), "2":(35,70,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
+                 "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,25,'CM'), "10":(75,52,'CM'), "9":(100,32,'ANG'), "7":(100,48,'ANG')}}[f]
 
             for pid, (x, y, lbl) in m.items():
-                ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                plist = df_f[df_f[p_col].astype(str) == str(pid)]
+                # Tegn positions-label (f.eks. ANG)
+                ax.text(x, y-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                
+                # Filtrer spillere for denne position
+                plist = df_f[df_f[p_col].astype(str) == str(pid)].sort_values('PRIOR', ascending=True)
+                
                 for i, (_, p_row) in enumerate(plist.iterrows()):
-                    # FARVELOGIK MATCHET MED LEGENDS
+                    # --- FARVELOGIK (SQUAD MATCH) ---
                     bg_color = "white"
-                    if p_row['IS_HIF'] == False: 
-                        bg_color = GRON_NY
-                    else:
-                        mdr = p_row.get('MDR_TIL_UDLØB', 99)
-                        if mdr < 6: bg_color = ROD_ADVARSEL
-                        elif mdr <= 12: bg_color = GUL_ADVARSEL
                     
-                    ax.text(x, y + (i * 2.5), p_row['Navn'], size=7, ha='center', va='center', weight='bold', 
-                            bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
+                    if p_row['IS_HIF'] == False: 
+                        bg_color = GRON_NY  # Emner fra scouting_db
+                    elif str(p_row.get('PRIOR', '')).upper() == 'L':
+                        bg_color = LEJE_GRA # Lejespillere
+                    else:
+                        # Beregn dage til udløb
+                        udlob_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) else p_row.get('KONTRAKT')
+                        try:
+                            expiry = pd.to_datetime(udlob_val, dayfirst=True)
+                            days_left = (expiry - datetime.now()).days
+                            if days_left < 183:
+                                bg_color = ROD_ADVARSEL
+                            elif days_left <= 365:
+                                bg_color = GUL_ADVARSEL
+                        except:
+                            bg_color = "white"
+                    
+                    # Tegn spiller-navn
+                    ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', 
+                            bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
 
-            # --- LEGENDS I TOPPEN ---
-            y_top = -8
-            ax.text(2, y_top, "LEGEND:", size=9, weight='bold', ha='left', va='center')
-            ax.text(15, y_top, "Ny Transfer", size=8, ha='left', va='center', bbox=dict(facecolor=GRON_NY, edgecolor='#333', boxstyle='square,pad=0.3'))
-            ax.text(35, y_top, "6-12 mdr.", size=8, ha='left', va='center', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='square,pad=0.3'))
-            ax.text(55, y_top, "< 6 mdr.", size=8, ha='left', va='center', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#333', boxstyle='square,pad=0.3'))
-            ax.text(118, y_top, f"Vindue: {sel_v}", size=10, weight='bold', ha='right', va='center', color=HIF_ROD)
+            # --- LEGENDS (I TOPPEN AF BANEN) ---
+            ax.text(1, -4, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
+            ax.text(14, -4, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
+            ax.text(28, -4, " Ny/Emne ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY, edgecolor='#333', boxstyle='round,pad=0.2'))
+            ax.text(43, -4, " Leje ", size=7, weight='bold', bbox=dict(facecolor=LEJE_GRA, edgecolor='#333', boxstyle='round,pad=0.2'))
             
             st.pyplot(fig, bbox_inches='tight', pad_inches=0.1)
 
