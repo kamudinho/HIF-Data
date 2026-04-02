@@ -63,14 +63,22 @@ def prepare_df(content, is_hif=False):
     return df
 
 def vis_side(df):
-    # CSS til at fjerne top-margin og optimere layout
+    # CSS OPPDATERET: Øget padding-top og justeret margin for at rykke indholdet ned
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 0px !important; }
-            div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
-            [data-testid="stVerticalBlock"] > div:first-child { margin-top: -1rem !important; }
+            /* Juster denne værdi (f.eks. 40px eller 60px) for at rykke alt ned */
+            .stAppViewBlockContainer { padding-top: 40px !important; } 
+            
+            div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
+            
+            /* Fjerner den negative margin der trak indholdet helt op i toppen */
+            [data-testid="stVerticalBlock"] > div:first-child { margin-top: 0rem !important; }
+            
             /* Gør dropdown mindre og fjerner label-plads */
             div[data-testid="stSelectbox"] > label { display: none !important; }
+            
+            /* Sørger for at tabs følger med ned og har luft */
+            .stTabs { margin-top: 10px; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -88,6 +96,7 @@ def vis_side(df):
     col_tabs, col_v = st.columns([4, 1])
     
     with col_v:
+        # Dropdown vises uden label pga. 'collapsed'
         sel_v = st.selectbox("Transfervindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
     with col_tabs:
