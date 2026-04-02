@@ -46,7 +46,6 @@ def prepare_df(content, is_hif=False):
     df = df.dropna(subset=['Navn'])
     df['Navn'] = df['Navn'].astype(str).str.strip()
     
-    # Standardisering af værdier
     if 'TRANSFER_VINDUE' in df.columns:
         df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
     
@@ -63,40 +62,77 @@ def prepare_df(content, is_hif=False):
     df['IS_HIF'] = is_hif
     return df
 
-def vis_side(df):
-    # Fjern padding øverst
+def vis_side():
     st.markdown("<style>.stAppViewBlockContainer { padding-top: 0px !important; } div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     # 1. Hent data
-    s_c, _ = get_github_file(SCOUT_DB_PATH)
-    h_c, _ = get_github_file(HIF_PATH)
+    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
+    h_c, h_sha = get_github_file(HIF_PATH)
     
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
-
-    # 2. Samle Master Data
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # 3. Top bar (Vindue vælger)
+    # 2. Top bar
     _, t_col2 = st.columns([4, 1])
     sel_v = t_col2.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1)
 
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # TAB 1: Emner (Renset for dubletter i oversigten)
-    with tabs[0]:
-        df_emner_vis = df_all[(df_all['ER_EMNE']==True) & (df_all['IS_HIF']==False)].drop_duplicates(subset=['Navn'])
-        if not df_emner_vis.empty:
-            st.data_editor(df_emner_vis.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']], use_container_width=True, key="ed_emner")
+    # TAB 1 & 2: Editører (Emner og HIF)
+    for tab, source_df, p_path, k_base in [
+        (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
+        (tabs[1], df_hif, HIF_PATH, "H")
+    ]:
+        with tab:
+            if not source_df.empty:
+                d_edit = source_df.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+                ed = st.data_editor(d_edit, use_container_width=True, key=f"ed_{k_base}")
+                if not ed.equals(d_edit):
+                    raw, sha = get_github_file(p_path)
+                    df_s = pd.read_csv(StringIO(raw))
+                    df_s.columns = [str(x).upper().strip() for x in df_s.columns]
+                    if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
+                    for n, r in ed.iterrows():
+                        mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
+                        df_s.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [r['TRANSFER_VINDUE'], r['POS'], r['SKYGGEHOLD']]
+                    push_to_github(p_path, f"Update {k_base}", df_s.to_csv(index=False), sha)
+                    st.rerun()
 
-    # TAB 4: Bane (Her vi ofte ser dubletterne)
+    # TAB 3: Skyggeliste (Rettet og funktionel)
+    with tabs[2]:
+        df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
+        if not df_sky.empty:
+            d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
+            ed_s = st.data_editor(d_sky_ed, use_container_width=True, key="sky_ed_final")
+            
+            if not ed_s.equals(d_sky_ed):
+                # Vi skal opdatere i begge kilde-filer
+                for path in [SCOUT_DB_PATH, HIF_PATH]:
+                    raw, sha = get_github_file(path)
+                    if not raw: continue
+                    df_tmp = pd.read_csv(StringIO(raw))
+                    df_tmp.columns = [c.upper().strip() for c in df_tmp.columns]
+                    if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
+                    
+                    changed = False
+                    for n, r in ed_s.iterrows():
+                        mask = df_tmp['Navn'].astype(str).str.strip() == str(n).strip()
+                        if mask.any():
+                            df_tmp.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [r['TRANSFER_VINDUE'], r['POS_343'], r['POS_433'], r['POS_352']]
+                            changed = True
+                    
+                    if changed:
+                        push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
+                st.rerun()
+
+    # TAB 4: Bane
     with tabs[3]:
         f = st.session_state.form_skygge
         p_col = f"POS_{f.replace('-', '')}"
         
-        # Filtrering til banen
         if sel_v == "Nuværende trup":
             df_f = df_hif.drop_duplicates(subset=['Navn'])
         else:
@@ -120,29 +156,11 @@ def vis_side(df):
 
             for pid, (x, y, lbl) in m.items():
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                
-                # Vælg spillere til positionen
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     is_new = (p_row['IS_HIF'] == False)
                     ax.text(x, y + (i * 2.3), f"{p_row['Navn']}{'*' if is_new else ''}", size=7, ha='center', va='center', weight='bold', bbox=dict(facecolor=GRON_NY if is_new else "white", edgecolor="#333", alpha=0.8, boxstyle='square,pad=0.2'))
             st.pyplot(fig)
-
-    # --- DENNE DEL FIXER DIT SKÆRMBILLEDE (Sæsonstats) ---
-    # Jeg antager at du har en knap eller en selektion der åbner profilen.
-    # Her er logikken der SKAL bruges når stats vises:
-    if "selected_player" in st.session_state:
-        p_name = st.session_state.selected_player
-        st.write(f"### Spillerprofil: {p_name}")
-        
-        # Filtrer alle rækker for spilleren
-        stats_raw = df_all[df_all['Navn'] == p_name]
-        
-        # RENSNING AF DUBLETTER:
-        # Vi grupperer efter sæson, turnering og hold og tager kun den første række.
-        stats_clean = stats_raw.drop_duplicates(subset=['SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME'])
-        
-        st.dataframe(stats_clean[['PLAYER_WYID', 'SEASONNAME', 'COMPETITIONNAME', 'TEAMNAME', 'MATCHES', 'MINUTES', 'GOALS', 'YELLOWCARD', 'REDCARDS']], hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
