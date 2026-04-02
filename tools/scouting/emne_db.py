@@ -5,6 +5,7 @@ import requests
 import base64
 from mplsoccer import Pitch
 import time
+from datetime import datetime
 
 # --- 1. KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -63,11 +64,25 @@ def prepare_df(content, is_hif=False):
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
+    # Beregn måneder til kontraktudløb for HIF spillere
+    if is_hif and 'UDLØB' in df.columns:
+        def calc_months(date_str):
+            try:
+                # Forventer format DD-MM-YYYY eller lignende
+                expiry = pd.to_datetime(date_str, dayfirst=True)
+                now = datetime.now()
+                return (expiry.year - now.year) * 12 + (expiry.month - now.month)
+            except:
+                return 99
+        df['MDR_TIL_UDLØB'] = df['UDLØB'].apply(calc_months)
+    else:
+        df['MDR_TIL_UDLØB'] = 99
+
     df['IS_HIF'] = is_hif
     return df
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side(df):
+def vis_side():
     st.markdown("""
         <style>
             .stAppViewBlockContainer { padding-top: 40px !important; } 
@@ -88,23 +103,25 @@ def vis_side(df):
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # Header med dropdown
     col_empty, col_v = st.columns([4, 1])
     with col_v:
         sel_v = st.selectbox("Vindue", VINDUE_OPTIONS_GLOBAL, key="global_v_sel", index=1, label_visibility="collapsed")
 
-    # Tabs i fuld bredde
     tabs = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Tab 1 & 2: Data Editors
+    # Editører (Tab 1 & 2)
     for tab, source_df, p_path, k_base in [
         (tabs[0], df_scout[df_scout['ER_EMNE']==True], SCOUT_DB_PATH, "E"),
         (tabs[1], df_hif, HIF_PATH, "H")
     ]:
         with tab:
             if not source_df.empty:
-                d_edit = source_df.set_index('Navn')[['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']]
+                cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
+                if 'UDLØB' in source_df.columns: cols_to_show.append('UDLØB')
+                
+                d_edit = source_df.set_index('Navn')[cols_to_show]
                 ed = st.data_editor(d_edit, use_container_width=True, height=500, key=f"ed_{k_base}")
+                
                 if not ed.equals(d_edit):
                     raw, sha = get_github_file(p_path)
                     df_s = pd.read_csv(StringIO(raw))
@@ -112,7 +129,7 @@ def vis_side(df):
                     if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
                     for n, r in ed.iterrows():
                         mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
-                        df_s.loc[mask, ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']] = [r['TRANSFER_VINDUE'], r['POS'], r['SKYGGEHOLD']]
+                        df_s.loc[mask, cols_to_show] = [r[c] for c in cols_to_show]
                     push_to_github(p_path, f"Update {k_base}", df_s.to_csv(index=False), sha)
                     st.rerun()
 
@@ -160,7 +177,7 @@ def vis_side(df):
         with c_p:
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1)
             fig, ax = pitch.draw(figsize=(10, 7))
-            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90) # Plads til top-legends
+            fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.90) 
             
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(30,22,'VCB'), "3.5":(30,40,'CB'), "3":(30,58,'HCB'), "5":(55,10,'VWB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "2":(55,70,'HWB'), "11":(80,15,'VW'), "9":(100,40,'ANG'), "7":(80,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,10,'VB'), "4":(30,25,'VCB'), "3":(30,55,'HCB'), "2":(35,70,'HB'), "6":(55,30,'DM'), "8":(55,50,'DM'), "10":(75,40,'CM'), "11":(85,15,'VW'), "9":(100,40,'ANG'), "7":(85,65,'HW')},
@@ -170,9 +187,15 @@ def vis_side(df):
                 ax.text(x, y-4, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
+                    # FARVELOGIK MATCHET MED LEGENDS
                     bg_color = "white"
-                    if p_row['IS_HIF'] == False: bg_color = GRON_NY
-                    # Her kan du tilføje logik for GUL/RØD hvis du har kontrakt-data i fremtiden
+                    if p_row['IS_HIF'] == False: 
+                        bg_color = GRON_NY
+                    else:
+                        mdr = p_row.get('MDR_TIL_UDLØB', 99)
+                        if mdr < 6: bg_color = ROD_ADVARSEL
+                        elif mdr <= 12: bg_color = GUL_ADVARSEL
+                    
                     ax.text(x, y + (i * 2.5), p_row['Navn'], size=7, ha='center', va='center', weight='bold', 
                             bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
 
