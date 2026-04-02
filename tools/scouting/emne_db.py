@@ -82,7 +82,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side():
+def vis_side(df):
     st.markdown("""
         <style>
             .stAppViewBlockContainer { padding-top: 40px !important; } 
