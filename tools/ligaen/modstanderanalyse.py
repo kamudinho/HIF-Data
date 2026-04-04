@@ -38,25 +38,25 @@ def build_team_map(df_matches):
     return team_map
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner mindre logoer og info på én linje i nederste venstre hjørne."""
-    # Logo 1 (Mindre størrelse: 0.05)
+    """Tegner små logoer og info-tekst rykket en smule op fra bunden."""
+    # Logo 1
     if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.07, 0.05, 0.05], transform=ax.transAxes)
+        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo)
         ax_l1.axis('off')
     
-    # "vs." tekst - rykket tættere på
-    ax.text(0.08, 0.095, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
+    # "vs." tekst
+    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     
-    # Logo 2 (Mindre størrelse: 0.05)
+    # Logo 2
     if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.10, 0.07, 0.05, 0.05], transform=ax.transAxes)
+        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l2.imshow(opp_team_logo)
         ax_l2.axis('off')
     
-    # Info på én linje under logoerne
+    # Info-linje (Rykket op fra 0.04 til 0.05)
     full_info = f"{date_str}  |  Resultat: {score_str}  ({min_str}. min)"
-    ax.text(0.02, 0.04, full_info, transform=ax.transAxes, fontsize=8, color='#555555', va='top', fontweight='medium')
+    ax.text(0.02, 0.05, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
 
@@ -82,7 +82,6 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
         
-        # Hent data til Tab 1 (Events) og Tab 3 (Topspillere)
         sql_all = f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')"
         df_all_events = conn.query(sql_all)
 
@@ -94,7 +93,6 @@ def vis_side(dp=None):
 
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
-    # --- TAB 1: EVENTS ---
     with t1:
         df_t1 = df_all_events[df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
         if not df_t1.empty:
@@ -102,7 +100,6 @@ def vis_side(dp=None):
             event_summary.columns = ['Aktion', 'Antal']
             st.dataframe(event_summary, use_container_width=True, hide_index=True)
 
-    # --- TAB 2: MÅL-SEKVENSER ---
     with t2:
         team_seq = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
         if not team_seq.empty:
@@ -136,7 +133,6 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
-                # INFO BOKS
                 draw_match_info_box(
                     ax, 
                     get_logo_img(valgt_uuid), 
@@ -155,13 +151,12 @@ def vis_side(dp=None):
                             bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
                     if i < len(this_goal) - 1:
                         n = this_goal.iloc[i+1]
-                        pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1.5, color='grey', ax=ax, alpha=0.3)
+                        pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1.5, color='grey', ax=ax, alpha=0.3, zorder=5)
                 st.pyplot(fig)
 
             with col_tab:
                 st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
 
-    # --- TAB 3: TOPSPILLERE ---
     with t3:
         if not df_all_events.empty:
             df_goals = df_all_events[(df_all_events['EVENT_TYPEID'] == 16) & (df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)]
