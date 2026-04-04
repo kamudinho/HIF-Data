@@ -109,7 +109,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
 
     # --- VISNING ---
-    t1, t2, t3 = st.tabs(["📊 EVENTS", "⚽ MÅL-SEKVENSER", "🏆 TOPSPILLERE"])
+    t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
     with t1:
         # Brug EVENT_CONTESTANT_OPTAUUID direkte til filtrering
@@ -138,9 +138,9 @@ def vis_side(dp=None):
 
                 # --- RETTELSE: Vi bruger 'Pitch' for horisontal visning ---
                 from mplsoccer import Pitch
-                pitch = Pitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', 
+                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', 
                               goal_type='box', stripe=True)
-                fig, ax = pitch.draw(figsize=(12, 8))
+                fig, ax = pitch.draw(figsize=(10, 7))
 
                 # Opta koordinater: RAW_X er længden (0-100), RAW_Y er bredden (0-100)
                 for i in range(len(this_goal)):
