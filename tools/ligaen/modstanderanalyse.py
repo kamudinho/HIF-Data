@@ -38,8 +38,8 @@ def build_team_map(df_matches):
     return team_map
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner små logoer og info-tekst rykket en smule op fra bunden."""
-    # Logo 1
+    """Tegner små logoer og info-tekst med stillingen på scoringstidspunktet."""
+    # Logo 1 (Scoring team)
     if scoring_team_logo:
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo)
@@ -48,14 +48,14 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     # "vs." tekst
     ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     
-    # Logo 2
+    # Logo 2 (Opponent)
     if opp_team_logo:
         ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l2.imshow(opp_team_logo)
         ax_l2.axis('off')
     
-    # Info-linje (Rykket op fra 0.04 til 0.05)
-    full_info = f"{date_str}  |  Resultat: {score_str}  ({min_str}. min)"
+    # Info-linje med stillingen på tidspunktet
+    full_info = f"{date_str}  |  Stilling: {score_str}  ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
@@ -67,13 +67,14 @@ def vis_side(dp=None):
     with st.spinner("Henter data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
+        # Vi inkluderer HOME_SCORE og AWAY_SCORE fra EVENTS tabellen for at få stillingen ved målet
         sql_seq = f"""
             WITH GoalEvents AS (
-                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID
+                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID, HOME_SCORE, AWAY_SCORE
                 FROM {DB}.OPTA_EVENTS WHERE EVENT_TYPEID = 16
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')
             )
-            SELECT e.*, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID, q.QUALIFIER_LIST
+            SELECT e.*, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID, ge.HOME_SCORE, ge.AWAY_SCORE, q.QUALIFIER_LIST
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
             LEFT JOIN (SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST FROM {DB}.OPTA_QUALIFIERS GROUP BY 1) q 
@@ -93,34 +94,30 @@ def vis_side(dp=None):
 
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
-    with t1:
-        df_t1 = df_all_events[df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
-        if not df_t1.empty:
-            event_summary = df_t1['EVENT_TYPEID'].astype(str).map(lambda x: OPTA_EVENT_TYPES.get(x, x)).value_counts().reset_index()
-            event_summary.columns = ['Aktion', 'Antal']
-            st.dataframe(event_summary, use_container_width=True, hide_index=True)
-
     with t2:
         team_seq = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
         if not team_seq.empty:
             team_seq = team_seq.merge(
                 df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 
-                           'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE']], 
+                           'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']], 
                 on='MATCH_OPTAUUID', how='left'
             )
 
+            # Find unikke mål og brug HOME_SCORE/AWAY_SCORE fra selve eventet
             goal_list = team_seq[team_seq['EVENT_TYPEID'] == 16].drop_duplicates('SEQUENCEID')
             goal_options = {}
             for _, row in goal_list.iterrows():
                 is_h = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
                 opp_name = row['CONTESTANTAWAY_NAME'] if is_h else row['CONTESTANTHOME_NAME']
                 opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_h else row['CONTESTANTHOME_OPTAUUID']
-                score = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
+                
+                # Stillingen på tidspunktet (HOME_SCORE og AWAY_SCORE fra eventet)
+                current_score = f"{int(row['HOME_SCORE'])}-{int(row['AWAY_SCORE'])}"
                 date = pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
                 
                 goal_options[row['SEQUENCEID']] = {
                     'label': f"Mål vs. {opp_name} ({row['EVENT_TIMEMIN']}. min)",
-                    'opp_uuid': opp_uuid, 'date': date, 'score': score, 'min': row['EVENT_TIMEMIN']
+                    'opp_uuid': opp_uuid, 'date': date, 'score': current_score, 'min': row['EVENT_TIMEMIN']
                 }
 
             col_t, col_v = st.columns([2, 1])
@@ -156,10 +153,3 @@ def vis_side(dp=None):
 
             with col_tab:
                 st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
-
-    with t3:
-        if not df_all_events.empty:
-            df_goals = df_all_events[(df_all_events['EVENT_TYPEID'] == 16) & (df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)]
-            top_scorers = df_goals['PLAYER_NAME'].value_counts().reset_index()
-            top_scorers.columns = ['Spiller', 'Mål']
-            st.dataframe(top_scorers, use_container_width=True, hide_index=True)
