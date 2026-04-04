@@ -45,10 +45,9 @@ def vis_side(dp=None):
     if not conn: return
 
     with st.spinner("Henter data..."):
-        # 3.1 Kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # 3.2 Mål-sekvenser til visualisering
+        # SQL til sekvenser
         sql_seq = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -77,7 +76,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (Kun aktioner involveret i mål)
+        # RETTET SQL: Her adskiller vi nu Assists og Pasninger (mål) korrekt
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -92,11 +91,12 @@ def vis_side(dp=None):
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            -- Tæller kun aktioner der er i en GoalPossession
             COUNT(CASE WHEN gp.POSSESSIONID IS NOT NULL THEN 1 END) as TOTAL_ACTIONS_IN_GOALS,
             COUNT(DISTINCT CASE WHEN gp.POSSESSIONID IS NOT NULL THEN gp.POSSESSIONID END) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
-            COUNT(CASE WHEN a.EVENT_OPTAUUID IS NOT NULL THEN 1 END) as ASSISTS,
+            -- Vi tæller kun assists hvis aktionen findes i Assists-tabellen
+            COUNT(DISTINCT CASE WHEN a.EVENT_OPTAUUID IS NOT NULL THEN a.EVENT_OPTAUUID END) as ASSISTS,
+            -- Pasninger er kun type 1
             COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as PASSES_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as DUELS_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID = 8 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as INTERCEPTIONS_IN_GOAL
