@@ -119,7 +119,7 @@ with st.sidebar:
     if hoved_omraade == "TRUPPEN":
         sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
     elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Charts"])
+        sel = option_menu(None, options=["Modstanderanalyse", "Charts"])
     elif hoved_omraade == "BETINIA LIGAEN":
         sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Afslutninger - liga", "Fysisk data"]))
     elif hoved_omraade == "SCOUTING":
@@ -163,6 +163,9 @@ try:
         if sel == "Charts":
             import tools.ligaen.chart as pc
             pc.vis_side()
+        elif sel == "Modstanderanalyse":
+            import tools.ligaen.modstanderanalyse as ma
+            ma.vis_side()
 
     elif hoved_omraade == "BETINIA LIGAEN":
         if sel == "Holdoversigt":
