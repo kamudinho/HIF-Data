@@ -64,20 +64,25 @@ def vis_side(dp=None):
     # --- T1: OVERSIGT ---
     with t1:
         st.subheader(f"Status: {valgt_hold}")
-        # RETTET: SCOREHOME -> CONTESTANTHOME_SCORE, SCOREAWAY -> CONTESTANTAWAY_SCORE
+        # RETTET: Fjernet 'Å' fra aliasser for at undgå SQL-fejl
         sql_res = f"""
             SELECT 
                 MATCH_LOCALDATE as DATO, 
                 CONTESTANTHOME_NAME as HJEMMEHOLD, 
                 CONTESTANTAWAY_NAME as UDEHOLD, 
-                CONTESTANTHOME_SCORE as MÅL_H, 
-                CONTESTANTAWAY_SCORE as MÅL_U
+                CONTESTANTHOME_SCORE as GOAL_H, 
+                CONTESTANTAWAY_SCORE as GOAL_U
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}')
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
             ORDER BY MATCH_LOCALDATE DESC LIMIT 5
         """
         df_res = conn.query(sql_res)
+        
+        # Omdøb i Pandas i stedet for SQL
+        if not df_res.empty:
+            df_res = df_res.rename(columns={'GOAL_H': 'Mål (H)', 'GOAL_U': 'Mål (U)'})
+            
         st.write("**Seneste resultater:**")
         st.dataframe(df_res, hide_index=True)
 
@@ -121,7 +126,7 @@ def vis_side(dp=None):
             fig, ax = pitch.draw()
             pitch.kdeplot(df_def.EVENT_X, df_def.EVENT_Y, ax=ax, cmap='Greens', fill=True, alpha=0.6, levels=10)
             st.pyplot(fig)
-            st.caption("Områder med højest defensiv intensitet (Tacklinger, Interceptions, Clearinger).")
+            st.caption("Heatmap over defensive aktioner.")
 
     # --- T4: MÅL-SEKVENSER ---
     with t4:
