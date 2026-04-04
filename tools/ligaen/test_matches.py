@@ -241,7 +241,7 @@ def vis_side(dp=None):
                     """, unsafe_allow_html=True)
                 
                 # Giver lidt ekstra luft helt i bunden af containeren efter sidste bar
-                st.markdown("<div style='padding-bottom: 15px;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='padding-bottom: 5px;'></div>", unsafe_allow_html=True)
 
     with tab2:
         future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
