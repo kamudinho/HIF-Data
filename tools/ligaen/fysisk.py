@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import json
 from data.data_load import load_local_players 
 from data.utils.team_mapping import TEAMS
 
@@ -82,7 +83,8 @@ def vis_side(conn, name_map=None):
         df_phys['DISPLAY_NAME'] = df_phys.apply(lambda r: p_map.get(str(r['PLAYER_OPTA_ID']), r['PLAYER_NAME']), axis=1)
 
         summary = df_phys.groupby('DISPLAY_NAME').agg({
-            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_TOTAL': 'sum', 'TOP_SPEED': 'max'
+            'MINS_DEC': 'sum', 'DISTANCE': 'sum', 'HI_TOTAL': 'sum', 'TOP_SPEED': 'max',
+            'HIGH SPEED RUNNING': 'sum', 'SPRINTING': 'sum'
         }).reset_index()
         summary = summary[summary['MINS_DEC'] > 5].copy()
 
@@ -105,8 +107,6 @@ def vis_side(conn, name_map=None):
             )
 
         with t2:
-        if not df_phys.empty:
-            # 1. Definer hvilke metrikker vi vil kunne vælge imellem
             metrics_map = {
                 "Total Distance (m)": "DISTANCE",
                 "High Speed Running (m)": "HIGH SPEED RUNNING",
@@ -114,49 +114,29 @@ def vis_side(conn, name_map=None):
                 "HI Løb (HSR + Sprint)": "HI_TOTAL",
                 "Topfart (km/t)": "TOP_SPEED"
             }
-            
-            # 2. Dropdown til valg af kategori
             valgt_metrik_navn = st.selectbox("Vælg kategori til graf", list(metrics_map.keys()))
             valgt_kolonne = metrics_map[valgt_metrik_navn]
-
-            # 3. Forbered data til barchart (vi bruger summary fra t1)
-            # Sorter efter den valgte værdi for bedre overblik
+            
             plot_data = summary.sort_values(valgt_kolonne, ascending=False)
-
-            # 4. Lav Bar Chart
             fig_bar = px.bar(
-                plot_data,
-                x='DISPLAY_NAME',
-                y=valgt_kolonne,
-                text=valgt_kolonne,  # Dette skriver værdien over baren
+                plot_data, x='DISPLAY_NAME', y=valgt_kolonne, text=valgt_kolonne,
                 labels={valgt_kolonne: valgt_metrik_navn, 'DISPLAY_NAME': 'Spiller'},
                 title=f"{valgt_metrik_navn} pr. spiller (Sæson total)",
                 color_discrete_sequence=[HIF_ROD]
             )
-
-            # 5. Konfiguration af udseende
             fig_bar.update_traces(
                 texttemplate='%{text:.1f}' if valgt_kolonne == 'TOP_SPEED' else '%{text:d}', 
-                textposition='outside',
-                cliponaxis=False
+                textposition='outside', cliponaxis=False
             )
-            
-            fig_bar.update_layout(
-                xaxis_tickangle=-45,
-                margin=dict(t=50, b=100),
-                height=600,
-                yaxis_title=valgt_metrik_navn
-            )
-
+            fig_bar.update_layout(xaxis_tickangle=-45, height=600)
             st.plotly_chart(fig_bar, use_container_width=True)
-        else:
-            st.warning("Ingen data fundet til generering af graf.")
 
         with t3:
+            summary['KM90_NUM'] = (summary['DISTANCE'] / 1000 / summary['MINS_DEC']) * 90
             fig = px.scatter(
                 summary, x='KM90_NUM', y='TOP_SPEED', text='DISPLAY_NAME',
                 labels={'KM90_NUM': 'KM pr. 90 min', 'TOP_SPEED': 'Topfart (km/t)'},
-                height=650  # Øget højde for bedre læsbarhed
+                height=650
             )
             fig.update_traces(textposition='top center', marker=dict(size=8.5, color=HIF_ROD))
             st.plotly_chart(fig, use_container_width=True)
@@ -183,16 +163,11 @@ def vis_side(conn, name_map=None):
                 st.dataframe(df_l_hi[['PLAYER_NAME', 'HI/90']], hide_index=True)
 
     with t5:
-        # 1. Hent metadata for de relevante kampe
         df_meta = conn.query(f"""
             SELECT DISTINCT 
                 TO_VARCHAR(s."DATE", 'YYYY-MM-DD') as DATE_STR, 
-                s.DESCRIPTION, 
-                s.MATCH_SSIID, 
-                s.HOME_SSIID, 
-                s.AWAY_SSIID,
-                m.HOME_PLAYERS,
-                m.AWAY_PLAYERS
+                s.DESCRIPTION, s.MATCH_SSIID, s.HOME_SSIID, s.AWAY_SSIID,
+                m.HOME_PLAYERS, m.AWAY_PLAYERS
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA s
             JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
             WHERE s.HOME_SSIID = '{v_ssid}' OR s.AWAY_SSIID = '{v_ssid}'
@@ -204,56 +179,32 @@ def vis_side(conn, name_map=None):
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_row = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]
             
-            # --- NY MAPPING LOGIK ---
-            # Vi laver et opslagsværk fra SSID til Fuldt Navn baseret på din TEAMS-fil
             ssid_to_full_name = {str(v['ssid']): k for k, v in TEAMS.items() if 'ssid' in v}
-            
-            # Find de rigtige navne baseret på SSID fra metadata
             home_full_name = ssid_to_full_name.get(str(m_row['HOME_SSIID']), "Hjemme")
             away_full_name = ssid_to_full_name.get(str(m_row['AWAY_SSIID']), "Ude")
 
-            # 2. Hent de fysiske stats for kampen
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_row['MATCH_SSIID']}'")
             
             if not df_m.empty:
-                # 3. Logik: Er spillerens optaId i HOME_PLAYERS eller AWAY_PLAYERS?
-                import json
                 def clean_player_list(plist):
                     if isinstance(plist, str):
                         try: return json.loads(plist)
                         except: return []
                     return plist if isinstance(plist, list) else []
 
-                home_ids = [str(p.get('optaId')) for p in clean_player_list(m_row['HOME_PLAYERS']) if isinstance(p, dict)]
-                away_ids = [str(p.get('optaId')) for p in clean_player_list(m_row['AWAY_PLAYERS']) if isinstance(p, dict)]
+                h_ids = [str(p.get('optaId')) for p in clean_player_list(m_row['HOME_PLAYERS']) if isinstance(p, dict)]
+                a_ids = [str(p.get('optaId')) for p in clean_player_list(m_row['AWAY_PLAYERS']) if isinstance(p, dict)]
 
-                def identify_team_full_name(row):
-                    p_id = str(row['optaId']).strip()
-                    if p_id in home_ids:
-                        return home_full_name
-                    elif p_id in away_ids:
-                        return away_full_name
-                    return "Ukendt"
-
-                df_m['HOLD'] = df_m.apply(identify_team_full_name, axis=1)
-                
-                # 4. Formatering og Visning
+                df_m['HOLD'] = df_m.apply(lambda r: home_full_name if str(r['optaId']) in h_ids else (away_full_name if str(r['optaId']) in a_ids else "Ukendt"), axis=1)
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
-                
-                # Navne-mapping på spillere
                 df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r['optaId']), r['PLAYER_NAME']), axis=1)
                 
                 st.dataframe(
                     df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DISTANCE']].sort_values('DISTANCE', ascending=False),
                     column_config={
-                        "SPIL": "Spiller", 
-                        "HOLD": "Hold", 
-                        "MINUTES": "Min", 
-                        "SMART_DIST": "Distance", 
-                        "HI_DISP": "HI-løb",
-                        "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
-                        "DISTANCE": None 
+                        "SPIL": "Spiller", "HOLD": "Hold", "MINUTES": "Min", "SMART_DIST": "Distance", 
+                        "HI_DISP": "HI-løb", "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"), "DISTANCE": None 
                     },
                     use_container_width=True, hide_index=True
                 )
