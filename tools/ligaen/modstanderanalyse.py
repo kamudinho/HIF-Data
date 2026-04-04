@@ -105,7 +105,6 @@ def vis_side(dp=None):
     col_titel, col_spacer, col_hold = st.columns([2, 1, 1.5])
     
     with col_titel:
-        st.subheader("Modstanderanalyse")
         
     team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
@@ -116,7 +115,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
 
     # --- TABS ---
-    t1, t2, t3 = st.tabs(["📊 EVENTS", "⚽ MÅL-SEKVENSER", "🏃 TOPSPILLERE"])
+    t1, t2, t3 = st.tabs(["Events", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
     with t1:
         df_team_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
