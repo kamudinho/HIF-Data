@@ -13,7 +13,6 @@ from io import BytesIO
 # --- 1. KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
-HVIDOVRE_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"
 
 # --- 2. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
@@ -43,13 +42,25 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Analyserer mål-sekvenser (eksklusivt for holdet)..."):
-        # 3.1 Find alle mål (inkl. selvmål via Qualifier 28, KUN FOR HOLDET)
+    # --- 3.1 INITIALISERING AF HOLDVALG (Løser 'valgt_uuid' fejlen) ---
+    # Vi henter en liste over hold først for at kunne definere valgt_uuid
+    df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
+    
+    ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
+
+    col_spacer, col_hold = st.columns([3, 1])
+    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    valgt_uuid = team_map[valgt_hold]
+
+    with st.spinner(f"Analyserer mål for {valgt_hold}..."):
+        # 3.2 Find alle mål (KUN FOR DET VALGTE HOLD)
         sql_goals = f"""
         SELECT 
             e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
             e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
-            m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
+            m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE
         FROM {DB}.OPTA_EVENTS e
         JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -59,12 +70,13 @@ def vis_side(dp=None):
         """
         df_goals = conn.query(sql_goals)
 
-        # 3.2 Hent alle hændelser der skete MAX 12 SEKUNDER før et mål
+        # 3.3 Hent hændelser 12 sekunder før mål (KUN FOR DET VALGTE HOLD)
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT 
             e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN,
-            g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID
+            g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID,
+            g.MATCH_LOCALDATE
         FROM {DB}.OPTA_EVENTS e
         JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
         WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME)
@@ -74,15 +86,6 @@ def vis_side(dp=None):
         """
         df_all_events = conn.query(sql_events)
 
-    # --- 4. UI ---
-    ids = pd.concat([df_goals['CONTESTANTHOME_OPTAUUID'], df_goals['CONTESTANTAWAY_OPTAUUID']]).unique()
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
-    team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
-
-    col_spacer, col_hold = st.columns([3, 1])
-    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
-    valgt_uuid = team_map[valgt_hold]
-
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t2:
@@ -90,11 +93,12 @@ def vis_side(dp=None):
             goal_list = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
             
             goal_options = {f"{row['MATCH_OPTAUUID']}_{row['GOAL_TIME']}": {
-                'label': f"vs. {row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_OPTAUUID']==valgt_uuid else row['CONTESTANTHOME_NAME']} ({row['GOAL_MIN']}. min)",
+                'label': f"{pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} vs. {row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_OPTAUUID']==valgt_uuid else row['CONTESTANTHOME_NAME']} ({row['GOAL_MIN']}. min)",
                 'match_id': row['MATCH_OPTAUUID'],
                 'goal_ts': row['GOAL_TIME'],
                 'opp_uuid': row['CONTESTANTAWAY_OPTAUUID'] if row['CONTESTANTHOME_OPTAUUID']==valgt_uuid else row['CONTESTANTHOME_OPTAUUID'],
-                'min': row['GOAL_MIN']
+                'min': row['GOAL_MIN'],
+                'date': pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
             } for _, row in goal_list.iterrows()}
 
             sel_key = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
@@ -111,12 +115,17 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
+                # Info boks med logoer og kampinfo
+                draw_match_info_box(ax, get_logo_img(valgt_uuid), get_logo_img(sel_data['opp_uuid']), sel_data['date'], "Mål", sel_data['min'])
+                
+                # Tegn linjer
                 for i in range(len(this_goal_events) - 1):
                     curr = this_goal_events.iloc[i]
                     nxt = this_goal_events.iloc[i+1]
                     pitch.arrows(curr['EVENT_X'], curr['EVENT_Y'], nxt['EVENT_X'], nxt['EVENT_Y'], 
-                                 width=1.5, headwidth=3, color='black', alpha=0.2, ax=ax)
+                                 width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
 
+                # Tegn spillere/aktioner
                 for i, row in this_goal_events.iterrows():
                     is_goal = row['EVENT_TYPEID'] == 16
                     is_freekick = row['EVENT_TYPEID'] == 5
@@ -135,10 +144,10 @@ def vis_side(dp=None):
 
             with col_list:
                 this_goal_events['Aktion'] = this_goal_events['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                st.write("**Aktioner før mål:**")
+                st.write("**Sekvens:**")
                 st.dataframe(this_goal_events[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
         else:
-            st.info("Ingen mål fundet for dette hold under de angivne kriterier.")
+            st.info("Ingen mål fundet.")
 
     with t3:
         stats = df_all_events.groupby('PLAYER_NAME').agg({
