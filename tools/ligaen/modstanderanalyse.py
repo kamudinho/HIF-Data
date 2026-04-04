@@ -76,60 +76,42 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (RETTET: Inkluderer alle assist-typer 29, 30, 328)
-        # 3.3 SQL til Spiller-stats (RETTET LOGIK FOR ASSISTS)
-        # 3.3 SQL til Spiller-stats - TVUNGEN ASSIST LOGIK
+        # 3.3 SQL til Spiller-stats - PRÆCIS OPTA LOGIK (328 & 29)
         sql_stats = f"""
-        WITH GoalEvents AS (
-            -- Finder selve målene og deres præcise tidspunkt
-            SELECT MATCH_OPTAUUID, POSSESSIONID, EVENT_TIMESTAMP as GOAL_TIME, EVENT_OPTAUUID as GOAL_UUID
+        WITH GoalPossessions AS (
+            -- Finder alle unikke boldbesiddelser, der endte i mål
+            SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
-        LastPassBeforeGoal AS (
-            -- Finder den SIDSTE pasning (Type 1) i hver mål-besiddelse, der skete før målet
+        AssistsPerEvent AS (
+            -- Finder alle events der er markeret som assist i databasen (QID 29 eller 328)
             SELECT 
-                e.MATCH_OPTAUUID, 
-                e.POSSESSIONID, 
-                MAX(e.EVENT_TIMESTAMP) as LAST_PASS_TIME
-            FROM {DB}.OPTA_EVENTS e
-            JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID AND e.POSSESSIONID = ge.POSSESSIONID
-            WHERE e.EVENT_TYPEID = 1 -- Kun pasninger
-            AND e.EVENT_TIMESTAMP < ge.GOAL_TIME
-            GROUP BY 1, 2
-        ),
-        AssistsIdentified AS (
-            -- Mapper tidspunktet tilbage til en spiller
-            SELECT e.EVENT_OPTAUUID
-            FROM {DB}.OPTA_EVENTS e
-            JOIN LastPassBeforeGoal lp ON e.MATCH_OPTAUUID = lp.MATCH_OPTAUUID 
-                AND e.POSSESSIONID = lp.POSSESSIONID 
-                AND e.EVENT_TIMESTAMP = lp.LAST_PASS_TIME
-            WHERE e.EVENT_TYPEID = 1
+                EVENT_OPTAUUID,
+                MAX(CASE WHEN QUALIFIER_QID IN (29, 328) THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST
+            FROM {DB}.OPTA_QUALIFIERS 
+            WHERE QUALIFIER_QID IN (29, 328)
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+            GROUP BY EVENT_OPTAUUID
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
+            -- Samlet antal mål-sekvenser spilleren har været en del af i den besiddelse
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
+            -- Mål (Type 16)
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
-            -- En assist er enten markeret af Opta (29,328) ELLER det er den sidste pasning vi fandt
-            SUM(CASE 
-                WHEN (EXISTS (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID AND q.QUALIFIER_QID IN (29, 30, 328)))
-                OR (ai.EVENT_OPTAUUID IS NOT NULL)
-                THEN 1 ELSE 0 END) as ASSISTS,
-            -- Opspils-pasninger (Alt andet i sekvensen)
-            SUM(CASE 
-                WHEN e.EVENT_TYPEID = 1 
-                AND ai.EVENT_OPTAUUID IS NULL 
-                AND NOT EXISTS (SELECT 1 FROM {DB}.OPTA_QUALIFIERS q WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID AND q.QUALIFIER_QID IN (29, 30, 328))
-                THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
+            -- Assists (Kun dem med de officielle Opta-markører)
+            SUM(COALESCE(ap.IS_OFFICIAL_ASSIST, 0)) as ASSISTS,
+            -- Opspils-pasninger (Pasninger i mål-sekvenser der IKKE er assists)
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND COALESCE(ap.IS_OFFICIAL_ASSIST, 0) = 0 THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
+            -- Dueller vundet i målsekvensen
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN AssistsIdentified ai ON e.EVENT_OPTAUUID = ai.EVENT_OPTAUUID
+        INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN AssistsPerEvent ap ON e.EVENT_OPTAUUID = ap.EVENT_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
-        -- Vi kigger kun på de besiddelser hvor der rent faktisk blev scoret
-        AND EXISTS (SELECT 1 FROM GoalEvents ge WHERE ge.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND ge.POSSESSIONID = e.POSSESSIONID)
         GROUP BY 1, 2
         HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0)
         ORDER BY ASSISTS DESC, GOALS DESC
