@@ -135,7 +135,6 @@ def vis_side(conn, name_map=None):
                 y=valgt_kolonne, 
                 text=valgt_kolonne,
                 labels={valgt_kolonne: valgt_metrik_navn, 'DISPLAY_NAME': 'Spiller'},
-                caption=f"{valgt_metrik_navn} pr. spiller (Sæson total)",
                 color_discrete_sequence=[HIF_ROD]
             )
 
