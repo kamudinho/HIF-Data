@@ -13,7 +13,6 @@ from io import BytesIO
 # --- 1. KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
-HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
 # --- 2. HJÆLPEFUNKTIONER ---
 
@@ -45,11 +44,11 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Henter officielle Opta stats..."):
+    with st.spinner("Henter og renser data..."):
         # 3.1 Hent kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # 3.2 SQL til mål-sekvenser (Bruger Events til visuel bane)
+        # 3.2 SQL til mål-sekvenser (EVENTS)
         sql_seq = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -78,25 +77,39 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (Bruger MATCHEXPECTEDGOALS for 100% præcision)
+        # 3.3 SQL til Spiller-stats (RETTET: Håndterer multiplikator-fejlen fra Qualifiers)
         sql_stats = f"""
+        WITH UniqueAssists AS (
+            -- Finder kun de unikke events der faktisk er en assist (QID 213)
+            SELECT DISTINCT EVENT_OPTAUUID 
+            FROM {DB}.OPTA_QUALIFIERS 
+            WHERE QUALIFIER_QID = 213
+        ),
+        GoalPossessions AS (
+            SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        )
         SELECT 
-            p.MATCH_NAME as PLAYER,
-            s.CONTESTANT_OPTAUUID as TEAM_ID,
-            MAX(CASE WHEN s.STAT_TYPE = 'goals' THEN s.STAT_VALUE ELSE 0 END) as GOALS,
-            MAX(CASE WHEN s.STAT_TYPE = 'goalAssist' THEN s.STAT_VALUE ELSE 0 END) as ASSISTS,
-            MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN s.STAT_VALUE ELSE 0 END) as TOTAL_PASSES,
-            MAX(CASE WHEN s.STAT_TYPE = 'expectedGoals' THEN s.STAT_VALUE ELSE 0 END) as XG
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS s
-        JOIN {DB}.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        WHERE s.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY p.MATCH_NAME, s.CONTESTANT_OPTAUUID
-        HAVING (GOALS > 0 OR ASSISTS > 0 OR TOTAL_PASSES > 0)
-        ORDER BY GOALS DESC, ASSISTS DESC
+            e.PLAYER_NAME as PLAYER,
+            e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
+            COUNT(DISTINCT e.EVENT_OPTAUUID) as TOTAL_ACTIONS_IN_GOALS,
+            COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
+            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 16 THEN e.EVENT_OPTAUUID END) as GOALS,
+            COUNT(DISTINCT ua.EVENT_OPTAUUID) as ASSISTS,
+            -- Pasninger i mål-sekvenser der IKKE er assists
+            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 1 AND ua.EVENT_OPTAUUID IS NULL THEN e.EVENT_OPTAUUID END) as PASSES_IN_GOAL
+        FROM {DB}.OPTA_EVENTS e
+        INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN UniqueAssists ua ON e.EVENT_OPTAUUID = ua.EVENT_OPTAUUID
+        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        AND e.PLAYER_NAME IS NOT NULL
+        GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
+        ORDER BY GOAL_INVOLVEMENTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
-    # 4. TEAM MAPPING & UI
+    # 4. MAPPING OG UI
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
@@ -150,9 +163,10 @@ def vis_side(dp=None):
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
+            'TOTAL_ACTIONS_IN_GOALS': 'Alle aktioner (mål)',
+            'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
             'ASSISTS': 'Assists',
-            'TOTAL_PASSES': 'Afleveringer (Total)',
-            'XG': 'xG'
+            'PASSES_IN_GOAL': 'Pasninger (mål)'
         })
         st.dataframe(df_team_stats, use_container_width=True, hide_index=True)
