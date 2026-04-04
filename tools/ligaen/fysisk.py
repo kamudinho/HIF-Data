@@ -145,41 +145,42 @@ def vis_side(conn, name_map=None):
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_row = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]
             
-            # Find holdnavne fra beskrivelsen (f.eks. "HVI - HIL" eller "HVI vs HIL")
+            # Find holdnavne fra beskrivelsen (f.eks. "HVI - HIL")
             desc = m_row['DESCRIPTION'].replace(" vs. ", " - ").replace(" vs ", " - ")
             teams_in_desc = desc.split(" - ")
-            home_name = teams_in_desc[0].strip()
-            away_name = teams_in_desc[1].strip() if len(teams_in_desc) > 1 else "Ude"
+            home_label = teams_in_desc[0].strip()
+            away_label = teams_in_desc[1].strip() if len(teams_in_desc) > 1 else "Ude"
 
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_row['MATCH_SSIID']}'")
             df_m.columns = [c.upper() for c in df_m.columns]
             
             if not df_m.empty:
-                # Vi leder specifikt efter den kolonne, der indeholder holdets ID
-                # Vi tjekker de mest sandsynlige navne fra Snowflake
-                possible_team_cols = ['TEAM_SSIID', 'TEAMID', 'TEAM_ID', 'TEAM_UUID']
-                actual_team_col = next((c for c in possible_team_cols if c in df_m.columns), None)
+                # Find den kolonne der indeholder hold-ID (ofte TEAM_SSIID i Second Spectrum)
+                team_col = next((c for c in ['TEAM_SSIID', 'TEAMID', 'TEAM_ID'] if c in df_m.columns), None)
                 
-                def map_team(row_data):
-                    # Hvis vi har fundet en team-kolonne, sammenligner vi med HOME_SSIID fra metadata
-                    if actual_team_col:
-                        if str(row_data[actual_team_col]) == str(m_row['HOME_SSIID']):
-                            return home_name
-                    return away_name
+                def identify_team(row_data):
+                    if team_col:
+                        # Vi sammenligner spillerens team_id med kampens HOME_SSIID
+                        # Vi bruger str() og strip() for at undgå mismatch på datatyper eller mellemrum
+                        curr_team_id = str(row_data[team_col]).strip()
+                        home_id = str(m_row['HOME_SSIID']).strip()
+                        
+                        if curr_team_id == home_id:
+                            return home_label
+                    return away_label
 
-                df_m['HOLD'] = df_m.apply(map_team, axis=1)
+                df_m['HOLD'] = df_m.apply(identify_team, axis=1)
                 
-                # Resten af formateringen
+                # Formatering af data
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
                 
-                # Navne-mapping
+                # Navne-mapping via p_map (load_local_players)
                 oid_col = next((c for c in ['OPTAID', 'OPTA_ID'] if c in df_m.columns), 'OPTAID')
-                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get(oid_col)), r['PLAYER_NAME']), axis=1)
-                df_m['DIST_VAL'] = df_m['DISTANCE']
+                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get(oid_col)).split('.')[0], r['PLAYER_NAME']), axis=1)
                 
                 st.dataframe(
-                    df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DIST_VAL']].sort_values('DIST_VAL', ascending=False),
+                    df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DISTANCE']].sort_values('DISTANCE', ascending=False),
                     column_config={
                         "SPIL": "Spiller", 
                         "HOLD": "Hold", 
@@ -187,7 +188,7 @@ def vis_side(conn, name_map=None):
                         "SMART_DIST": "Distance", 
                         "HI_DISP": "HI-løb",
                         "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
-                        "DIST_VAL": None
+                        "DISTANCE": None # Skjul den rå sorteringskolonne
                     },
                     use_container_width=True, hide_index=True
                 )
