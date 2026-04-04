@@ -10,7 +10,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- 1. KONFIGURATION (Baseret på dine gemte værdier) ---
+# --- 1. KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
@@ -45,7 +45,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Henter data..."):
+    with st.spinner("Synkroniserer kampdata..."):
         # 3.1 Hent kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
@@ -78,18 +78,12 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (RETTET: Assists tælles nu kun via Qualifier 213)
+        # 3.3 SQL til Spiller-stats (RETTET: Skudsikker EXISTS logik)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        ),
-        -- Vi laver en liste over alle assist-markører først
-        AssistsLookup AS (
-            SELECT DISTINCT EVENT_OPTAUUID, MATCH_OPTAUUID
-            FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
@@ -98,17 +92,24 @@ def vis_side(dp=None):
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
             
-            -- Her tæller vi assists korrekt uden at bryde GROUP BY reglerne
-            SUM(CASE WHEN al.EVENT_OPTAUUID IS NOT NULL THEN 1 ELSE 0 END) as ASSISTS,
+            -- ASSISTS: Tjekker direkte efter Qualifier 213
+            SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM {DB}.OPTA_QUALIFIERS q 
+                WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
+                AND q.QUALIFIER_QID = 213
+            ) THEN 1 ELSE 0 END) as ASSISTS,
             
-            -- Almindelige pasninger (vi trækker dem fra der er assists)
-            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND al.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
+            -- PASNINGER: Type 1 (Pasning) minus dem der er assists
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND NOT EXISTS (
+                SELECT 1 FROM {DB}.OPTA_QUALIFIERS q 
+                WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
+                AND q.QUALIFIER_QID = 213
+            ) THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
             
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL,
             SUM(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 ELSE 0 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN AssistsLookup al ON e.EVENT_OPTAUUID = al.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = al.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
