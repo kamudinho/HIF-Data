@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
-# Sørg for at 'dp' (Dataprovider) er importeret og tilgængelig her, eller sendt med som argument
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_QUALIFIERS, OPTA_EVENT_TYPES, get_event_name
 
@@ -42,7 +41,7 @@ def build_team_map(df_matches):
     return team_map
 
 # --- 2. HOVEDFUNKTION ---
-def vis_side(dp=None): # Husk dp skal med her!
+def vis_side(dp=None): 
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Ingen forbindelse til Snowflake.")
@@ -58,16 +57,6 @@ def vis_side(dp=None): # Husk dp skal med her!
             CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_LOCALDATE 
         FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-    """
-
-    sql_events = f"""
-        SELECT 
-            EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, 
-            EVENT_TYPEID, PLAYER_NAME, EVENT_X AS LOCATIONX, EVENT_Y AS LOCATIONY,
-            EVENT_TIMESTAMP
-        FROM {DB}.OPTA_EVENTS
-        WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')
-        AND EVENT_TYPEID IN (1, 4, 5, 8, 49, 13, 14, 15, 16)
     """
 
     sql_sequences = f"""
@@ -98,26 +87,17 @@ def vis_side(dp=None): # Husk dp skal med her!
 
     with st.spinner("Henter data..."):
         df_matches = conn.query(sql_matchinfo)
-        df_events = conn.query(sql_events)
         df_sequences = conn.query(sql_sequences)
 
-    # --- TOP LAYOUT: HOLDVÆLGER TIL HØJRE ---
+    # --- TOP LAYOUT ---
     col_spacer, col_hold = st.columns([3, 1])
-    
     team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
-    
     with col_hold:
         valgt_hold = st.selectbox("Vælg hold", valgte_hold_liste, label_visibility="collapsed")
-    
     valgt_uuid = team_map[valgt_hold]
 
-    # --- TABS (UDEN IKONER) ---
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
-
-    with t1:
-        df_team_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
-        st.write(f"Antal events fundet for **{valgt_hold}**: {len(df_team_events)}")
 
     with t2:
         if df_sequences.empty:
@@ -134,46 +114,40 @@ def vis_side(dp=None): # Husk dp skal med her!
                 goal_events = team_sequences_all[team_sequences_all['EVENT_TYPEID'] == 16].copy()
                 goal_list = goal_events.sort_values(['MATCH_LOCALDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
 
-                # Lav labels til dropdown
                 goal_options = {}
                 for idx, row in goal_list.iterrows():
                     modstander = row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_NAME'] == valgt_hold else row['CONTESTANTHOME_NAME']
-                    # Label til brug i dropdown (med minut)
-                    label_full = f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)"
-                    # Label til brug i titlen (uden minut)
-                    label_short = f"Mål #{idx + 1} vs. {modstander}"
-                    goal_options[row['SEQUENCEID']] = {'full': label_full, 'short': label_short}
+                    goal_options[row['SEQUENCEID']] = {
+                        'full': f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)",
+                        'short': f"Mål #{idx + 1} vs. {modstander}",
+                        'modstander': modstander
+                    }
 
                 if goal_options:
-                    # Layout over banen (Titel til venstre, Vælger til højre)
                     col_titel, col_velger = st.columns([2, 1])
-
-                    # 1. NYHED: Vi gemmer valget i en variabel, så vi kan bruge 'short'-titlen nedenfor
-                    selected_goal_id = col_velger.selectbox(
-                        "Vælg scoring", 
-                        options=list(goal_options.keys()), 
-                        format_func=lambda x: goal_options[x]['full'], # dropdown viser fuld info
-                        label_visibility="collapsed"
-                    )
+                    selected_goal_id = col_velger.selectbox("Vælg scoring", options=list(goal_options.keys()), 
+                                                          format_func=lambda x: goal_options[x]['full'], label_visibility="collapsed")
                     
-                    # 2. NYHED: Stor tydelig titel til venstre
-                    titel_tekst = goal_options[selected_goal_id]['short']
-                    col_titel.markdown(f"## {titel_tekst}")
+                    col_titel.markdown(f"### {goal_options[selected_goal_id]['short']}")
 
                     this_goal = team_sequences_all[
                         (team_sequences_all['SEQUENCEID'] == selected_goal_id) & 
                         (team_sequences_all['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)
                     ].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
 
-                    # Find modstander for at kunne hente logo
-                    goal_row = goal_list[goal_list['SEQUENCEID'] == selected_goal_id].iloc[0]
-                    modstander_navn = goal_row['CONTESTANTAWAY_NAME'] if goal_row['CONTESTANTHOME_NAME'] == valgt_hold else goal_row['CONTESTANTHOME_NAME']
+                    # --- LOGO HÅNDTERING ---
+                    modstander_navn = goal_options[selected_goal_id]['modstander']
+                    opp_logo_path = None
+                    if dp is not None:
+                        try:
+                            opp_logo_path = dp.load_team_logo(modstander_navn)
+                        except:
+                            opp_logo_path = None
 
                     def decode_q(q_string):
                         if not q_string: return ""
                         names = [OPTA_QUALIFIERS.get(q.strip(), q) for q in str(q_string).split(',')]
-                        ignore = ["Pass End X", "Pass End Y", "Zone", "Length", "Angle"]
-                        return ", ".join([n for n in names if n not in ignore])
+                        return ", ".join([n for n in names if n not in ["Pass End X", "Pass End Y", "Zone", "Length", "Angle"]])
 
                     this_goal['Aktion'] = this_goal['EVENT_TYPEID'].astype(str).apply(lambda x: OPTA_EVENT_TYPES.get(x, x))
                     this_goal['Beskrivelse'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
@@ -181,49 +155,27 @@ def vis_side(dp=None): # Husk dp skal med her!
                     col_bane, col_tabel = st.columns([2, 1]) 
 
                     with col_bane:
-                        # 3. NYHED: Forbered logo
-                        # Vi bruger dp (Dataprovider) til at hente det rigtige logo fra team_mapping.py
-                        opp_logo_path = dp.load_team_logo(modstander_navn)
-                        
                         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
                         fig, ax = pitch.draw(figsize=(10, 7))
 
-                        # 4. NYHED: Smid logo i venstre hjørne
-                        # Logoet placeres i øverste venstre hjørne. Vi bruger 'xy'-koordinater på aksen.
-                        # Opta X: 0-100, Y: 0-100 (Y=0 er toppen).
                         if opp_logo_path:
-                            # offset=(5,5) flytter det lidt ind på banen
-                            pitch.logo(opp_logo_path, x=5, y=5, ax=ax, width=15, height=15)
+                            pitch.logo(opp_logo_path, x=5, y=5, ax=ax, width=12, height=12)
 
                         for i in range(len(this_goal)):
                             row = this_goal.iloc[i]
                             is_goal = int(row['EVENT_TYPEID']) == 16
                             marker_color = '#e74c3c' if is_goal else 'red'
-                            
-                            # Vi sikrer, at logoet altid ligger *under* spillernavne, hvis de overlapper
-                            ax.scatter(row['RAW_X'], row['RAW_Y'], color=marker_color, s=180 if is_goal else 70, 
-                                       marker='s' if is_goal else 'o', edgecolors='black', linewidth=1, zorder=10)
-                            
-                            ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], fontsize=9, ha='center',
-                                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.5))
-                                    
+                            ax.scatter(row['RAW_X'], row['RAW_Y'], color=marker_color, s=150 if is_goal else 60, 
+                                       marker='s' if is_goal else 'o', edgecolors='black', zorder=10)
+                            ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], fontsize=8, ha='center',
+                                    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.2))
                             if i < len(this_goal) - 1:
                                 next_row = this_goal.iloc[i+1]
                                 pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
-                                             width=1.5, headwidth=3, color='grey', ax=ax, alpha=0.4)
+                                             width=1.5, color='grey', ax=ax, alpha=0.3)
                         st.pyplot(fig, use_container_width=True)
 
                     with col_tabel:
-                        st.write("**Sekvens-detaljer:**")
-                        display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={
-                            'PLAYER_NAME': 'Spiller', 'Aktion': 'Type', 'Beskrivelse': 'Info'
-                        })
-                        st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
-                
-    with t3:
-        if not df_events.empty:
-            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
-            st.subheader("Mest involverede spillere (Top 10)")
-            top_players = df_h_ev['PLAYER_NAME'].value_counts().head(10)
-            for name, count in top_players.items():
-                st.write(f"**{count}** - {name}")
+                        st.write("**Sekvens:**")
+                        display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'})
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
