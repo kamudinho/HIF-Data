@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
-from data.utils.mappings import OPTA_QUALIFIERS, OPTA_EVENT_TYPES, get_event_name
+from data.utils.mapping import OPTA_QUALIFIERS, OPTA_EVENT_TYPES, get_event_name
 
 # --- 1. HJÆLPEFUNKTION: BUILD TEAM MAP ---
 def build_team_map(df_matches):
