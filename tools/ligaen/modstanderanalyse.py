@@ -46,7 +46,7 @@ def vis_side(dp=None):
     with st.spinner("Henter data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser
+        # SQL til sekvenser (Henter alle begivenheder i en mål-possession)
         sql_base = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -75,7 +75,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_base)
 
-        # SQL til Spiller-stats: ALT filtreres nu via INNER JOIN på GoalPossessions
+        # SQL til Spiller-stats: Tæller nu unikke possessions for at vise korrekte mål-involveringer
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -85,7 +85,7 @@ def vis_side(dp=None):
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            COUNT(*) as GOAL_ACTIONS,
+            COUNT(DISTINCT gp.POSSESSIONID) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 END) as PASSES,
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 END) as DUELS,
@@ -94,7 +94,7 @@ def vis_side(dp=None):
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
-        ORDER BY GOALS DESC, GOAL_ACTIONS DESC
+        ORDER BY GOALS DESC, GOAL_INVOLVEMENTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
@@ -127,7 +127,9 @@ def vis_side(dp=None):
             } for _, row in goal_list.iterrows()}
 
             sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
-            this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP').tail(8)
+            
+            # Her viser vi nu HELE sekvensen (ingen .tail(8))
+            this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP')
             
             col_b, col_tab = st.columns([2.5, 1])
             with col_b:
@@ -148,14 +150,14 @@ def vis_side(dp=None):
                 st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
 
     with t3:
-        # Filtrer og omdøb
+        # Filtrer og omdøb for overskuelighed
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
-            'GOAL_ACTIONS': 'Aktioner i målsekvens',
+            'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
-            'PASSES': 'Pasninger',
-            'DUELS': 'Dueller',
-            'INTERCEPTIONS': 'Interceptions'
+            'PASSES': 'Pasninger i målsekvenser',
+            'DUELS': 'Dueller i målsekvenser',
+            'INTERCEPTIONS': 'Interceptions i målsekvenser'
         })
         st.dataframe(df_team_stats, use_container_width=True, hide_index=True)
