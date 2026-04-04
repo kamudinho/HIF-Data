@@ -116,10 +116,10 @@ def vis_side(dp=None):
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
         else:
-            # 1. Filtrering og rensning (Som før)
+            # 1. Filtrering: Vi tillader 0,0 hvis det er et mål (Type 16), ellers renser vi støj
             team_goals = df_sequences[
                 (df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) & 
-                ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0))
+                ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0) | (df_sequences['EVENT_TYPEID'] == 16))
             ].copy()
             
             if not team_goals.empty:
@@ -127,7 +127,8 @@ def vis_side(dp=None):
                 goal_options = {row['SEQUENCEID']: f"Mål v. {row['EVENT_TIMEMIN']}'" for _, row in goal_list.iterrows()}
                 selected_goal_id = st.selectbox("Vælg en scoring:", options=list(goal_options.keys()), format_func=lambda x: goal_options[x])
 
-                this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP').copy()
+                # SORTERING: Vigtigt at Type 16 kommer sidst i listen for korrekt z-order på banen
+                this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
 
                 # --- Dekodning af data til visning ---
                 def decode_q(q_string):
@@ -140,7 +141,7 @@ def vis_side(dp=None):
                 this_goal['Beskrivelse'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
 
                 # --- 2. LAYOUT: Opret to kolonner ---
-                col_bane, col_tabel = st.columns([2, 1]) # Banen får 2/3, tabellen 1/3
+                col_bane, col_tabel = st.columns([2, 1])
 
                 with col_bane:
                     # Tegn banen (Pitch)
@@ -150,33 +151,42 @@ def vis_side(dp=None):
                     for i in range(len(this_goal)):
                         row = this_goal.iloc[i]
                         is_goal = int(row['EVENT_TYPEID']) == 16
+                        
                         marker_type = 's' if is_goal else 'o'
+                        marker_color = '#e74c3c' if is_goal else 'red'
                         
-                        ax.scatter(row['RAW_X'], row['RAW_Y'], color='red', s=130 if is_goal else 70, 
-                                   marker=marker_type, edgecolors='black', zorder=10 if is_goal else 5)
+                        # Plot punktet
+                        ax.scatter(row['RAW_X'], row['RAW_Y'], 
+                                   color=marker_color, 
+                                   s=180 if is_goal else 70, 
+                                   marker=marker_type, 
+                                   edgecolors='black', 
+                                   linewidth=2 if is_goal else 1,
+                                   zorder=20 if is_goal else 5)
                         
+                        # Label
                         ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
                                 fontsize=9, fontweight='bold' if is_goal else 'normal', ha='center',
-                                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1))
+                                bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=1))
 
+                        # Tegn pil til næste aktion
                         if i < len(this_goal) - 1:
                             next_row = this_goal.iloc[i+1]
                             pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
-                                         width=1.5, color='grey', ax=ax, alpha=0.4)
+                                         width=1.5, headwidth=3, color='grey', ax=ax, alpha=0.4)
                     
                     st.pyplot(fig, use_container_width=True)
 
                 with col_tabel:
                     st.write("**Hvad skete der?**")
-                    # Vi vælger kun de relevante kolonner til den smalle tabel-visning
-                    display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].rename(columns={
+                    # Vend rækkefølgen så målet står øverst i tabellen
+                    display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={
                         'PLAYER_NAME': 'Spiller',
                         'Aktion': 'Type',
                         'Beskrivelse': 'Info'
                     })
                     
-                    # Vi bruger st.dataframe med højere højde så den matcher banen
-                    st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
+                    st.dataframe(display_df, use_container_width=True, hide_index=True, height=520)
                 
     with t3:
         if not df_events.empty:
