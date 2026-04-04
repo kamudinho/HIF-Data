@@ -71,28 +71,41 @@ def vis_side(dp=None):
         df_sequences = conn.query(sql_seq)
 
         # 3.3 SQL til Spiller-stats (QID 213 LOGIK)
+        # 3.3 SQL til Spiller-stats (OPDATERET TIL QID 29 = ASSISTED)
         sql_stats = f"""
-        WITH UniqueAssists AS (
-            SELECT DISTINCT EVENT_OPTAUUID FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID = 213 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        WITH GoalPoss AS (
+            SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_TYPEID = 16 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
-        GoalPoss AS (
-            SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID FROM {DB}.OPTA_EVENTS 
-            WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        AssistsData AS (
+            -- Vi skifter fra 213 til 29 baseret på din liste
+            SELECT DISTINCT EVENT_OPTAUUID 
+            FROM {DB}.OPTA_QUALIFIERS 
+            WHERE QUALIFIER_QID = 29 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
+            -- Mål (Type 16)
             COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 16 THEN e.EVENT_OPTAUUID END) as GOALS,
-            COUNT(DISTINCT ua.EVENT_OPTAUUID) as ASSISTS,
-            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 1 AND ua.EVENT_OPTAUUID IS NULL THEN e.EVENT_OPTAUUID END) as PASSES_IN_GOAL
+            -- Assists (Qualifier 29)
+            COUNT(DISTINCT CASE WHEN ad.EVENT_OPTAUUID IS NOT NULL THEN e.EVENT_OPTAUUID END) as ASSISTS,
+            -- Pasninger (Type 1) der ikke er assists
+            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 1 AND ad.EVENT_OPTAUUID IS NULL THEN e.EVENT_OPTAUUID END) as PASSES_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
-        INNER JOIN GoalPoss gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN UniqueAssists ua ON e.EVENT_OPTAUUID = ua.EVENT_OPTAUUID
+        INNER JOIN GoalPoss gp 
+            ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID 
+            AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN AssistsData ad 
+            ON e.EVENT_OPTAUUID = ad.EVENT_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY 1, 2
         HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0)
+        ORDER BY GOALS DESC, ASSISTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
