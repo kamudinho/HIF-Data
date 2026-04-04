@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.exports as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
@@ -37,7 +37,36 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
+
+def is_assist(qualifiers_list):
+    """
+    Tjekker om en liste af qualifiers indeholder en assist.
+    Vi tjekker både efter den officielle (210) og den tekniske (213),
+    da Opta bruger begge dele i forskellige rå-feeds.
+    """
+    # Lav listen til strings for sikker sammenligning
+    q_strs = [str(q) for q in qualifiers_list]
+    return "210" in q_strs or "213" in q_strs
+
+def get_event_label(row):
+    """Returnerer et pænt navn baseret på event type og qualifiers"""
+    e_id = str(row['EVENT_TYPEID'])
+    base_name = OPTA_EVENT_TYPES.get(e_id, f"Aktion {e_id}")
+    
+    # Hvis det er et mål, men vi vil vide om det er på hovedet, frispark etc.
+    if e_id == "16":
+        return "Mål"
+    if e_id == "1":
+        # Tjek om det er en assist via vores nye funktion
+        # (Antager at 'QUALIFIERS' kolonnen findes i din row)
+        if 'QUALIFIERS' in row and is_assist(row['QUALIFIERS']):
+            return "Assist"
+        return "Pasning"
+        
+    return base_name
+    
+# --- 4. HOVEDFUNKTION ---
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
@@ -46,7 +75,7 @@ def vis_side(dp=None):
     with st.spinner("Henter data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser (Henter alle begivenheder i en mål-possession)
+        # SQL til sekvenser (Uændret, henter rå-data til banen)
         sql_base = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -75,26 +104,34 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_base)
 
-        # SQL til Spiller-stats: Tæller nu unikke possessions for at vise korrekte mål-involveringer
+        # SQL til Spiller-stats: Inkluderer nu Assists (Qualifier 213) og Alle Aktioner
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        ),
+        Assists AS (
+            SELECT EVENT_ID, MATCH_ID 
+            FROM {DB}.OPTA_EVENTQUALIFIERS 
+            WHERE QUALIFIER_ID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            COUNT(DISTINCT gp.POSSESSIONID) as GOAL_INVOLVEMENTS,
+            COUNT(*) as TOTAL_ACTIONS,
+            COUNT(DISTINCT CASE WHEN gp.POSSESSIONID IS NOT NULL THEN gp.POSSESSIONID END) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
-            COUNT(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 END) as PASSES,
-            COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 END) as DUELS,
-            COUNT(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 END) as INTERCEPTIONS
+            COUNT(CASE WHEN a.EVENT_ID IS NOT NULL THEN 1 END) as ASSISTS,
+            COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as PASSES_IN_GOAL,
+            COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as DUELS_IN_GOAL,
+            COUNT(CASE WHEN e.EVENT_TYPEID = 8 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
-        INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN Assists a ON e.EVENT_ID = a.EVENT_ID AND e.MATCH_OPTAUUID = a.MATCH_ID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
-        ORDER BY GOALS DESC, GOAL_INVOLVEMENTS DESC
+        ORDER BY GOALS DESC, ASSISTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
@@ -127,8 +164,6 @@ def vis_side(dp=None):
             } for _, row in goal_list.iterrows()}
 
             sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
-            
-            # Her viser vi nu HELE sekvensen (ingen .tail(8))
             this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP')
             
             col_b, col_tab = st.columns([2.5, 1])
@@ -150,14 +185,15 @@ def vis_side(dp=None):
                 st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
 
     with t3:
-        # Filtrer og omdøb for overskuelighed
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
+            'TOTAL_ACTIONS': 'Aktioner (alle)',
             'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
-            'PASSES': 'Pasninger i målsekvenser',
-            'DUELS': 'Dueller i målsekvenser',
-            'INTERCEPTIONS': 'Interceptions i målsekvenser'
+            'ASSISTS': 'Assists',
+            'PASSES_IN_GOAL': 'Pasninger i målsekvenser',
+            'DUELS_IN_GOAL': 'Dueller i målsekvenser',
+            'INTERCEPTIONS_IN_GOAL': 'Interceptions i målsekvenser'
         })
         st.dataframe(df_team_stats, use_container_width=True, hide_index=True)
