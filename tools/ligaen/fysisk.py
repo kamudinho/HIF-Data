@@ -113,7 +113,7 @@ def vis_side(conn, name_map=None):
                 labels={'KM90_NUM': 'KM pr. 90 min', 'TOP_SPEED': 'Topfart (km/t)'},
                 title=f"Fysisk profil: {valgt_hold}"
             )
-            fig.update_traces(textposition='top center', marker=dict(size=12, color=HIF_ROD))
+            fig.update_traces(textposition='top center', marker=dict(size=8, color=HIF_ROD))
             st.plotly_chart(fig, use_container_width=True)
 
     with t3:
