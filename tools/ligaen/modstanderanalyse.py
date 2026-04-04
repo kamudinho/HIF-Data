@@ -70,19 +70,28 @@ def vis_side(dp=None):
         """
         df_goals = conn.query(sql_goals)
 
-        # 3.3 Hent hændelser 12 sekunder før mål (KUN FOR DET VALGTE HOLD)
+        # 3.3 Hent hændelser 12 sekunder før mål (RETTET JOIN)
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT 
-            e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN,
-            g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID,
+            e.*, 
+            g.GOAL_TIME, 
+            g.SCORING_TEAM as GOAL_TEAM_ID, 
+            g.GOAL_MIN,
+            g.CONTESTANTHOME_NAME, 
+            g.CONTESTANTAWAY_NAME, 
+            g.CONTESTANTHOME_OPTAUUID, 
+            g.CONTESTANTAWAY_OPTAUUID,
             g.MATCH_LOCALDATE
         FROM {DB}.OPTA_EVENTS e
-        JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
+        INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
+        -- Her sikrer vi, at eventet kun kobles til det mål, det faktisk leder op til
         WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME)
         AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
         AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         AND e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        -- Tilføj en DISTINCT eller GROUP BY hvis Opta-event-databasen har dubletter
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP) = 1
         """
         df_all_events = conn.query(sql_events)
 
