@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from mplsoccer import VerticalPitch
+import matplotlib.pyplot as plt
+from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 
@@ -11,14 +12,12 @@ def build_team_map(df_matches):
     if df_matches.empty:
         return {}
     
-    # Vi kigger på alle unikke hold i kampsættet
     ids_i_ligaen = pd.concat([
         df_matches['CONTESTANTHOME_OPTAUUID'], 
         df_matches['CONTESTANTAWAY_OPTAUUID']
     ]).unique()
 
     team_map = {}
-    # Lav et hurtigt opslag baseret på din team_mapping.py
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name 
                      for name, info in TEAMS.items()}
 
@@ -26,10 +25,8 @@ def build_team_map(df_matches):
         if pd.isna(u_raw): continue
         u_clean = str(u_raw).lower().strip().replace('t', '')
         
-        # 1. Tjek om vi kender UUID'en fra vores mapping-fil
         matched_name = mapping_lookup.get(u_clean)
 
-        # 2. Hvis ikke, så snup navnet direkte fra kamp-dataen
         if not matched_name:
             match_row = df_matches[df_matches['CONTESTANTHOME_OPTAUUID'] == u_raw]
             if not match_row.empty:
@@ -56,7 +53,7 @@ def vis_side(dp=None):
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
-    # --- SQL QUERIES (Dine nye udvidede udtræk) ---
+    # --- SQL QUERIES ---
     sql_events = f"""
         SELECT 
             EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, 
@@ -108,24 +105,27 @@ def vis_side(dp=None):
     valgt_hold = st.selectbox("Vælg hold til analyse", valgte_hold_liste)
     valgt_uuid = team_map[valgt_hold]
 
-    # --- VISNING ---
+    # --- TABS ---
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
     with t1:
-        # Brug EVENT_CONTESTANT_OPTAUUID direkte til filtrering
         df_team_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
-        st.write(f"Antal events fundet for {valgt_hold}: {len(df_team_events)}")
-                
+        st.write(f"Antal events fundet for **{valgt_hold}**: {len(df_team_events)}")
+
     with t2:
-        
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
         else:
-            team_goals = df_sequences[df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
+            # Filtrér og fjern ugyldige 0,0 koordinator (system-støj)
+            team_goals = df_sequences[
+                (df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) & 
+                ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0))
+            ].copy()
             
             if team_goals.empty:
-                st.warning(f"Ingen mål-sekvenser for {valgt_hold}.")
+                st.warning(f"Ingen mål-sekvenser fundet for {valgt_hold}.")
             else:
+                # Gruppér for at få en liste over mål
                 goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
                 goal_options = {row['SEQUENCEID']: f"Mål v. {row['EVENT_TIMEMIN']}'" for _, row in goal_list.iterrows()}
                 
@@ -135,39 +135,42 @@ def vis_side(dp=None):
 
                 this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP')
 
-                # --- RETTELSE: Vi bruger 'Pitch' for horisontal visning ---
-                from mplsoccer import Pitch
-                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', 
-                              goal_type='box', stripe=False)
+                # Tegn horisontal bane
+                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
                 fig, ax = pitch.draw(figsize=(10, 7))
 
-                # Opta koordinater: RAW_X er længden (0-100), RAW_Y er bredden (0-100)
                 for i in range(len(this_goal)):
                     row = this_goal.iloc[i]
+                    is_goal = int(row['EVENT_TYPEID']) == 16
+                    
+                    # Markør: Firkant for mål (16), cirkel for resten
+                    marker_type = 's' if is_goal else 'o'
+                    marker_size = 130 if is_goal else 70
                     
                     # Plot punktet
-                    ax.scatter(row['RAW_X'], row['RAW_Y'], color='red', s=80, edgecolors='black', zorder=5)
+                    ax.scatter(row['RAW_X'], row['RAW_Y'], 
+                               color='red', s=marker_size, 
+                               marker=marker_type, edgecolors='black', zorder=6 if is_goal else 5)
                     
-                    # Navn over punktet
-                    ax.text(row['RAW_X'], row['RAW_Y'] + 2, row['PLAYER_NAME'], 
-                            color='black', fontsize=8, fontweight='bold', ha='center',
-                            bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1))
+                    # Navn-label
+                    ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
+                            color='black', fontsize=8, fontweight='bold' if is_goal else 'normal', 
+                            ha='center', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1))
 
-                    # Pil til næste aktion
+                    # Tegn pil til næste aktion
                     if i < len(this_goal) - 1:
                         next_row = this_goal.iloc[i+1]
-                        # Pitch.arrows tager (x_start, y_start, x_end, y_end)
                         pitch.arrows(row['RAW_X'], row['RAW_Y'], 
                                      next_row['RAW_X'], next_row['RAW_Y'], 
-                                     width=2, headwidth=4, color='grey', ax=ax, alpha=0.7)
+                                     width=1.5, headwidth=3, color='grey', ax=ax, alpha=0.5)
 
                 st.pyplot(fig)
                 st.dataframe(this_goal[['EVENT_TIMEMIN', 'PLAYER_NAME', 'QUALIFIER_LIST']], use_container_width=True)
                 
     with t3:
-        # Nu bruger vi PLAYER_NAME direkte fra SQL
-        if not df_team_events.empty:
-            st.subheader("Flest involveringer (Top 5)")
-            top_players = df_team_events['PLAYER_NAME'].value_counts().head(10)
+        if not df_events.empty:
+            df_h_ev = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
+            st.subheader("Mest involverede spillere (Top 10)")
+            top_players = df_h_ev['PLAYER_NAME'].value_counts().head(10)
             for name, count in top_players.items():
                 st.write(f"**{count}** - {name}")
