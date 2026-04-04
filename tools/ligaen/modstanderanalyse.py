@@ -129,17 +129,19 @@ def vis_side(dp=None):
 
     # --- T2: MED BOLDEN ---
     with t2:
-        # 1. Valg af fokusområde
-        view_opt_med = st.selectbox(
-            "Vælg fokusområde", 
-            ["Afleveringer", "Driblinger & Skud", "Gennembrud"],
-            key="med_bolden_select"
-        )
+        # Vi definerer kolonnerne med det samme for at få dropdown til højre
+        col_pitch, col_side = st.columns([2, 1])
         
-        # 2. Opsætning af kolonner (Banen til venstre, Listen til højre)
-        col_pitch, col_list = st.columns([2, 1])
-        
-        # Definer parametre baseret på valg
+        with col_side:
+            # Dropdown placeret her for at spare plads i toppen
+            view_opt_med = st.selectbox(
+                "Vælg fokusområde", 
+                ["Afleveringer", "Driblinger & Skud", "Gennembrud"],
+                key="med_bolden_select"
+            )
+            st.divider() # En lille streg for at adskille dropdown fra listen
+
+        # Logik-valg baseret på dropdown
         if view_opt_med == "Afleveringer":
             e_ids, title, cmap = [1], "AFLEVERINGER", "Reds"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
@@ -147,22 +149,53 @@ def vis_side(dp=None):
             e_ids, title, cmap = [2, 15, 16], "DUELLER & AFSLUTNINGER", "Oranges"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (2, 15, 16) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
-            e_ids, title, cmap = [1], "GENNEMBRUD (SIDSTE TREDJEDEL)", "YlOrRd"
-            # Kun pasninger der ender i feltet/tæt på mål
+            e_ids, title, cmap = [1], "GENNEMBRUD (SIDSTE 3.)", "YlOrRd"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND EVENT_X > 70 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
 
         with col_pitch:
+            # Banen rykker nu helt op i toppen
             st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
             
-        with col_list:
+        with col_side:
             st.write(f"**Top 5: {view_opt_med}**")
             df_rank = conn.query(sql_rank)
             if not df_rank.empty:
-                # Formater til pæn liste ligesom på billedet
                 for i, row in df_rank.iterrows():
-                    st.write(f"{row['ANTAL']} **{row['PLAYER_NAME']}**")
-            else:
-                st.write("Ingen data fundet")
+                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
+
+    # --- T3: UDEN BOLDEN ---
+    with t3:
+        col_pitch, col_side = st.columns([2, 1])
+        
+        with col_side:
+            view_opt_uden = st.selectbox(
+                "Vælg fokusområde", 
+                ["Tacklinger", "Erobringer", "Defensiv Zone"],
+                key="uden_bolden_select"
+            )
+            st.divider()
+
+        # Logik-valg baseret på dropdown
+        if view_opt_uden == "Tacklinger":
+            e_ids, title, cmap, is_half = [7, 8], "TACKLINGER & BLOKS", "Blues", False
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+        elif view_opt_uden == "Erobringer":
+            e_ids, title, cmap, is_half = [127, 12], "EROBRINGER", "GnBu", False
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (127, 12) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+        else:
+            e_ids, title, cmap, is_half = [7, 127], "DEFENSIV ZONE", "PuBu", True
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 127, 12) AND EVENT_X < 40 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+
+        with col_pitch:
+            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=is_half, cmap=cmap, logo=hold_logo))
+            
+        with col_side:
+            st.write(f"**Top 5: {view_opt_uden}**")
+            df_rank = conn.query(sql_rank)
+            if not df_rank.empty:
+                for i, row in df_rank.iterrows():
+                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
+                    
     # --- T3: UDEN BOLDEN (3 KOLONNER - 2 FULDE, 1 HALV) ---
     with t3:
         c1, c2, c3 = st.columns(3)
