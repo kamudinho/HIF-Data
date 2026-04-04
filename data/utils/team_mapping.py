@@ -24,12 +24,12 @@ COMPETITIONS = {
 
 # --- Hold ---
 TEAMS = {
-    "Hvidovre": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"},
+    "Hvidovre IF": {"team_wyid": 7490, "opta_uuid": "8gxd9ry2580pu1b1dd5ny9ymy", "opta_id": 2397, "ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"},
     "AaB": {"team_wyid": 7454, "opta_uuid": "36g6ifzjliec1jqnbtf7yesme", "opta_id": 401, "ssid": "40d5387b-ac2f-4e9b-bb97-34456aeb69c4", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/283_120x120.png"},
-    "Horsens": {"team_wyid": 7465, "opta_uuid": "a9vw7ikerpr4cuweeeka5aneg", "opta_id": 2289, "ssid": "f2b45639-d8e6-4d9b-9371-6f9f1fe2a9d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/285_120x120.png"},
+    "AC Horsens": {"team_wyid": 7465, "opta_uuid": "a9vw7ikerpr4cuweeeka5aneg", "opta_id": 2289, "ssid": "f2b45639-d8e6-4d9b-9371-6f9f1fe2a9d9", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/285_120x120.png"},
     "Lyngby": {"team_wyid": 7484, "opta_uuid": "anga7587r1zv4ey71ge9zxol3", "opta_id": 272, "ssid": "15af1cc2-5ce6-4552-8a5f-7e233a65cedc", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2527_120x120.png"},
     "Esbjerg": {"team_wyid": 7451, "opta_uuid": "f1h34qp5zbfl489q8vnkhiq9s", "opta_id": 1409, "ssid": "bfc8edb9-96af-4152-a8b0-d096d4271f48", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/290_120x120.png"},
-    "Kolding": {"team_wyid": 7622, "opta_uuid": "b8oqgvx1ijeyn6y1cn6929ix4", "opta_id": 13253, "ssid": "04aaceac-8a20-422b-8417-9199a519c1b3", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g13383_120x120.png"},
+    "Kolding IF": {"team_wyid": 7622, "opta_uuid": "b8oqgvx1ijeyn6y1cn6929ix4", "opta_id": 13253, "ssid": "04aaceac-8a20-422b-8417-9199a519c1b3", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g13383_120x120.png"},
     "Hobro": {"team_wyid": 7510, "opta_uuid": "b2vft81kyjurzbmekvgrqwr64", "opta_id": 4802, "ssid": "e274c022-4cf1-4c4d-9555-4c6dd38b1224", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/2662_120x120.png"},
     "HB Køge": {"team_wyid": 7615, "opta_uuid": "8cfkisxf1fkxdqtt6tx1tup48", "opta_id": 4042, "ssid": "2dccb353-4598-4f35-845d-c6c55c9f5672", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/1941_120x120.png"},
     "Hillerød": {"team_wyid": 7699, "opta_uuid": "aqtkb4mgrz8c6iqfufj6qjbv9", "opta_id": 6463, "ssid": "e274c022-4cf1-4c4d-9555-4c6dd38b1224", "league": "1. Division", "logo": "https://cdn5.wyscout.com/photos/team/public/g19126_120x120.png"},
