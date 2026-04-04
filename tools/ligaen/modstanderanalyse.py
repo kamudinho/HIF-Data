@@ -10,7 +10,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- 1. KONFIGURATION (Sikrer at disse er defineret) ---
+# --- 1. KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
@@ -18,19 +18,14 @@ LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
-    """Henter logo URL fra TEAMS mapping og returnerer et Image objekt."""
-    # Finder URL baseret på UUID
     url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
-    if not url:
-        return None
+    if not url: return None
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content))
-    except:
-        return None
+    except: return None
 
 def build_team_map(df_matches):
-    """Mapper holdnavne til deres Opta UUIDs baseret på kørte kampe."""
     if df_matches.empty: return {}
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     team_map = {}
@@ -39,32 +34,39 @@ def build_team_map(df_matches):
         if pd.isna(u_raw): continue
         u_clean = str(u_raw).lower().strip().replace('t', '')
         matched_name = mapping_lookup.get(u_clean)
-        if matched_name: 
-            team_map[matched_name] = u_raw
+        if matched_name: team_map[matched_name] = u_raw
     return team_map
 
-def draw_logo_on_pitch(ax, logo_img):
-    """Placerer logoet i øverste venstre hjørne af banen."""
-    if logo_img:
-        # [venstre, bund, bredde, højde] i relative akse-koordinater
-        ax_logo = ax.inset_axes([0.02, 0.88, 0.10, 0.10], transform=ax.transAxes)
-        ax_logo.imshow(logo_img)
-        ax_logo.axis('off')
+def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+    """Tegner info-boks med begge logoer og kampinfo i nederste venstre hjørne."""
+    # Logo 1 (Scoring Team)
+    if scoring_team_logo:
+        ax_l1 = ax.inset_axes([0.02, 0.05, 0.08, 0.08], transform=ax.transAxes)
+        ax_l1.imshow(scoring_team_logo)
+        ax_l1.axis('off')
+    
+    # "vs." tekst
+    ax.text(0.11, 0.09, "vs.", transform=ax.transAxes, fontsize=10, fontweight='bold', va='center')
+    
+    # Logo 2 (Opponent)
+    if opp_team_logo:
+        ax_l2 = ax.inset_axes([0.14, 0.05, 0.08, 0.08], transform=ax.transAxes)
+        ax_l2.imshow(opp_team_logo)
+        ax_l2.axis('off')
+    
+    # Tekst info
+    info_text = f"Dato: {date_str}\n{score_str} ({min_str}. min)"
+    ax.text(0.02, 0.02, info_text, transform=ax.transAxes, fontsize=9, color='#333333', va='top')
 
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
-    if not conn:
-        st.error("Ingen forbindelse til Snowflake.")
-        return
+    if not conn: return
 
-    # --- DATA LOADING (Nu med DB og LIGA_UUID defineret) ---
     with st.spinner("Henter data..."):
-        # Hent generel kampinfo
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # Hent mål-sekvenser
         sql_seq = f"""
             WITH GoalEvents AS (
                 SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID
@@ -74,102 +76,97 @@ def vis_side(dp=None):
             SELECT e.*, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID, q.QUALIFIER_LIST
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
-            LEFT JOIN (
-                SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST 
-                FROM {DB}.OPTA_QUALIFIERS 
-                GROUP BY 1
-            ) q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN (SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST FROM {DB}.OPTA_QUALIFIERS GROUP BY 1) q 
+            ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TIMESTAMP BETWEEN (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds') AND ge.EVENT_TIMESTAMP
         """
         df_sequences = conn.query(sql_seq)
+        
+        # Data til Tab 1 & 3 (alle events)
+        df_all_events = conn.query(f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')")
 
-    if df_matches.empty:
-        st.warning("Ingen kampe fundet i databasen.")
-        return
-
-    # --- UI LAYOUT ---
     team_map = build_team_map(df_matches)
     col_spacer, col_hold = st.columns([3, 1])
     with col_hold:
-        valgte_navne = sorted(list(team_map.keys()))
-        valgt_hold = st.selectbox("Vælg hold", valgte_navne, index=0, label_visibility="collapsed")
-    
+        valgt_hold = st.selectbox("Vælg hold", sorted(list(team_map.keys())), index=0, label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
 
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
-    with t2:
-        if df_sequences.empty:
-            st.info("Ingen sekvens-data fundet for denne liga.")
+    # --- TAB 1: EVENTS ---
+    with t1:
+        st.subheader(f"Event-oversigt: {valgt_hold}")
+        df_t1 = df_all_events[df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
+        if not df_t1.empty:
+            event_summary = df_t1['EVENT_TYPEID'].map(lambda x: OPTA_EVENT_TYPES.get(str(x), x)).value_counts().reset_index()
+            event_summary.columns = ['Aktion', 'Antal']
+            st.dataframe(event_summary, use_container_width=True, hide_index=True)
         else:
-            team_seq = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
+            st.info("Ingen events fundet.")
+
+    # --- TAB 2: MÅL-SEKVENSER ---
+    with t2:
+        team_seq = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
+        if not team_seq.empty:
+            team_seq = team_seq.merge(
+                df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 
+                           'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE']], 
+                on='MATCH_OPTAUUID', how='left'
+            )
+
+            goal_list = team_seq[team_seq['EVENT_TYPEID'] == 16].drop_duplicates('SEQUENCEID')
+            goal_options = {}
+            for _, row in goal_list.iterrows():
+                is_h = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                opp_name = row['CONTESTANTAWAY_NAME'] if is_h else row['CONTESTANTHOME_NAME']
+                opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_h else row['CONTESTANTHOME_OPTAUUID']
+                score = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
+                date = pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m')
+                
+                goal_options[row['SEQUENCEID']] = {
+                    'label': f"Mål vs. {opp_name} ({row['EVENT_TIMEMIN']}. min)",
+                    'opp_uuid': opp_uuid, 'date': date, 'score': score, 'min': row['EVENT_TIMEMIN']
+                }
+
+            col_t, col_v = st.columns([2, 1])
+            sel_id = col_v.selectbox("Vælg", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'], label_visibility="collapsed")
             
-            if team_seq.empty:
-                st.info(f"Ingen scorede mål fundet for {valgt_hold}.")
-            else:
-                # Merge for at få modstander-detaljer
-                team_seq = team_seq.merge(
-                    df_matches[['MATCH_OPTAUUID', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']], 
-                    on='MATCH_OPTAUUID', how='left'
+            this_goal = team_seq[team_seq['SEQUENCEID'] == sel_id].sort_values('EVENT_TIMESTAMP')
+            col_b, col_tab = st.columns([2.5, 1])
+
+            with col_b:
+                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
+                fig, ax = pitch.draw(figsize=(10, 7))
+                
+                # INFO BOKS (Begge logoer + kampdata)
+                draw_match_info_box(
+                    ax, 
+                    get_logo_img(valgt_uuid), 
+                    get_logo_img(goal_options[sel_id]['opp_uuid']),
+                    goal_options[sel_id]['date'],
+                    goal_options[sel_id]['score'],
+                    goal_options[sel_id]['min']
                 )
 
-                goal_list = team_seq[team_seq['EVENT_TYPEID'] == 16].drop_duplicates('SEQUENCEID')
-                
-                goal_options = {}
-                for idx, row in goal_list.iterrows():
-                    is_h = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-                    opp_name = row['CONTESTANTAWAY_NAME'] if is_h else row['CONTESTANTHOME_NAME']
-                    opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_h else row['CONTESTANTHOME_OPTAUUID']
-                    
-                    goal_options[row['SEQUENCEID']] = {
-                        'label': f"Mål vs. {opp_name} ({row['EVENT_TIMEMIN']}. min)",
-                        'short': f"Mål vs. {opp_name}",
-                        'opp_uuid': opp_uuid
-                    }
+                for i in range(len(this_goal)):
+                    row = this_goal.iloc[i]
+                    is_g = row['EVENT_TYPEID'] == 16
+                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color='#cc0000' if is_g else 'red', 
+                               s=180 if is_g else 70, marker='s' if is_g else 'o', edgecolors='black', zorder=10)
+                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], fontsize=8, ha='center',
+                            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+                    if i < len(this_goal) - 1:
+                        n = this_goal.iloc[i+1]
+                        pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1.5, color='grey', ax=ax, alpha=0.3)
+                st.pyplot(fig)
 
-                col_titel, col_velger = st.columns([2, 1])
-                sel_id = col_velger.selectbox("Vælg scoring", list(goal_options.keys()), 
-                                             format_func=lambda x: goal_options[x]['label'], label_visibility="collapsed")
-                
-                col_titel.markdown(f"### {goal_options[sel_id]['short']}")
+            with col_tab:
+                st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
 
-                # Filter data for det valgte mål
-                this_goal = team_seq[team_seq['SEQUENCEID'] == sel_id].sort_values('EVENT_TIMESTAMP')
-                col_bane, col_tabel = st.columns([2, 1])
-
-                with col_bane:
-                    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
-                    fig, ax = pitch.draw(figsize=(10, 7))
-
-                    # TEGN LOGO
-                    opp_logo = get_logo_img(goal_options[sel_id]['opp_uuid'])
-                    draw_logo_on_pitch(ax, opp_logo)
-
-                    # Plot punkter og pile
-                    for i in range(len(this_goal)):
-                        row = this_goal.iloc[i]
-                        is_g = int(row['EVENT_TYPEID']) == 16
-                        
-                        ax.scatter(row['EVENT_X'], row['EVENT_Y'], 
-                                   color='#cc0000' if is_g else 'red', 
-                                   s=180 if is_g else 70, 
-                                   marker='s' if is_g else 'o', 
-                                   edgecolors='black', zorder=10)
-                        
-                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], 
-                                fontsize=8, ha='center', fontweight='bold',
-                                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
-                        
-                        if i < len(this_goal) - 1:
-                            n_row = this_goal.iloc[i+1]
-                            pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n_row['EVENT_X'], n_row['EVENT_Y'], 
-                                         width=1.5, color='grey', ax=ax, alpha=0.3)
-                    
-                    st.pyplot(fig)
-
-                with col_tabel:
-                    st.write("**Sekvens-detaljer:**")
-                    # Vend tabellen så det seneste event (målet) står øverst
-                    disp_df = this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].copy()
-                    disp_df.columns = ['Spiller', 'Aktion']
-                    st.dataframe(disp_df, hide_index=True, use_container_width=True)
+    # --- TAB 3: TOPSPILLERE ---
+    with t3:
+        st.subheader("Top-statistikker")
+        if not df_all_events.empty:
+            top_scorers = df_all_events[df_all_events['EVENT_TYPEID'] == 16]['PLAYER_NAME'].value_counts().reset_index()
+            top_scorers.columns = ['Spiller', 'Mål']
+            st.dataframe(top_scorers, use_container_width=True, hide_index=True)
