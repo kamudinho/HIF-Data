@@ -129,22 +129,40 @@ def vis_side(dp=None):
 
     # --- T2: MED BOLDEN ---
     with t2:
-        # Dropdown til at vælge visning
+        # 1. Valg af fokusområde
         view_opt_med = st.selectbox(
-            "Vælg visning", 
-            ["Pasningsflow", "Driblinger & Skud", "Gennembrudszoner"],
+            "Vælg fokusområde", 
+            ["Afleveringer", "Driblinger & Skud", "Gennembrud"],
             key="med_bolden_select"
         )
         
-        col_p, _ = st.columns([2, 1]) # Gør banen stor, men ikke overvældende
-        with col_p:
-            if view_opt_med == "Pasningsflow":
-                st.pyplot(plot_custom_pitch(df_all_h, [1], "PASNINGSFLOW (HALV BANE)", half=True, cmap='Reds', logo=hold_logo))
-            elif view_opt_med == "Driblinger & Skud":
-                st.pyplot(plot_custom_pitch(df_all_h, [2, 15], "DRIBLINGER OG AFSLUTNINGER", half=True, cmap='Oranges', logo=hold_logo))
-            else:
-                st.pyplot(plot_custom_pitch(df_all_h, [1], "GENNEMBRUD I FELTET", half=True, cmap='YlOrRd', logo=hold_logo))
+        # 2. Opsætning af kolonner (Banen til venstre, Listen til højre)
+        col_pitch, col_list = st.columns([2, 1])
+        
+        # Definer parametre baseret på valg
+        if view_opt_med == "Afleveringer":
+            e_ids, title, cmap = [1], "AFLEVERINGER", "Reds"
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+        elif view_opt_med == "Driblinger & Skud":
+            e_ids, title, cmap = [2, 15, 16], "DUELLER & AFSLUTNINGER", "Oranges"
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (2, 15, 16) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+        else:
+            e_ids, title, cmap = [1], "GENNEMBRUD (SIDSTE TREDJEDEL)", "YlOrRd"
+            # Kun pasninger der ender i feltet/tæt på mål
+            sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND EVENT_X > 70 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
 
+        with col_pitch:
+            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
+            
+        with col_list:
+            st.write(f"**Top 5: {view_opt_med}**")
+            df_rank = conn.query(sql_rank)
+            if not df_rank.empty:
+                # Formater til pæn liste ligesom på billedet
+                for i, row in df_rank.iterrows():
+                    st.write(f"{row['ANTAL']} **{row['PLAYER_NAME']}**")
+            else:
+                st.write("Ingen data fundet")
     # --- T3: UDEN BOLDEN (3 KOLONNER - 2 FULDE, 1 HALV) ---
     with t3:
         c1, c2, c3 = st.columns(3)
