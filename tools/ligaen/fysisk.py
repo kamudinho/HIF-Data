@@ -145,8 +145,9 @@ def vis_side(conn, name_map=None):
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_row = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]
             
-            # Find holdnavne fra beskrivelsen (f.eks. "HIF vs HOR")
-            teams_in_desc = m_row['DESCRIPTION'].replace(" vs. ", " vs ").split(" vs ")
+            # Find holdnavne fra beskrivelsen (f.eks. "HVI - HIL" eller "HVI vs HIL")
+            desc = m_row['DESCRIPTION'].replace(" vs. ", " - ").replace(" vs ", " - ")
+            teams_in_desc = desc.split(" - ")
             home_name = teams_in_desc[0].strip()
             away_name = teams_in_desc[1].strip() if len(teams_in_desc) > 1 else "Ude"
 
@@ -154,19 +155,27 @@ def vis_side(conn, name_map=None):
             df_m.columns = [c.upper() for c in df_m.columns]
             
             if not df_m.empty:
-                # Logik til at tildele holdnavn baseret på om spillerens TEAM_SSIID matcher HOME_SSIID
-                # Hvis kolonnen TEAM_SSIID ikke findes, tjekker vi andre ID kolonner
-                team_id_col = next((c for c in df_m.columns if 'TEAM' in c and 'ID' in c), None)
+                # Vi leder specifikt efter den kolonne, der indeholder holdets ID
+                # Vi tjekker de mest sandsynlige navne fra Snowflake
+                possible_team_cols = ['TEAM_SSIID', 'TEAMID', 'TEAM_ID', 'TEAM_UUID']
+                actual_team_col = next((c for c in possible_team_cols if c in df_m.columns), None)
                 
                 def map_team(row_data):
-                    if team_id_col and row_data[team_id_col] == m_row['HOME_SSIID']:
-                        return home_name
+                    # Hvis vi har fundet en team-kolonne, sammenligner vi med HOME_SSIID fra metadata
+                    if actual_team_col:
+                        if str(row_data[actual_team_col]) == str(m_row['HOME_SSIID']):
+                            return home_name
                     return away_name
 
                 df_m['HOLD'] = df_m.apply(map_team, axis=1)
+                
+                # Resten af formateringen
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
-                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get('OPTAID', r.get('OPTA_ID'))), r['PLAYER_NAME']), axis=1)
+                
+                # Navne-mapping
+                oid_col = next((c for c in ['OPTAID', 'OPTA_ID'] if c in df_m.columns), 'OPTAID')
+                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get(oid_col)), r['PLAYER_NAME']), axis=1)
                 df_m['DIST_VAL'] = df_m['DISTANCE']
                 
                 st.dataframe(
@@ -174,7 +183,7 @@ def vis_side(conn, name_map=None):
                     column_config={
                         "SPIL": "Spiller", 
                         "HOLD": "Hold", 
-                        "MINUTES": "Minutter", 
+                        "MINUTES": "Min", 
                         "SMART_DIST": "Distance", 
                         "HI_DISP": "HI-løb",
                         "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
