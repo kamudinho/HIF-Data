@@ -46,7 +46,7 @@ def vis_side(dp=None):
     with st.spinner("Henter data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser (Uden specialtegn i aliaser)
+        # SQL til sekvenser
         sql_base = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -75,7 +75,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_base)
 
-        # SQL til Spiller-stats (Rettet for 'ål' fejl)
+        # SQL til Spiller-stats: ALT filtreres nu via INNER JOIN på GoalPossessions
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -85,13 +85,13 @@ def vis_side(dp=None):
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            COUNT(CASE WHEN gp.POSSESSIONID IS NOT NULL THEN 1 END) as GOAL_ACTIONS,
+            COUNT(*) as GOAL_ACTIONS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 END) as PASSES,
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 END) as DUELS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 END) as INTERCEPTIONS
         FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
         ORDER BY GOALS DESC, GOAL_ACTIONS DESC
@@ -148,7 +148,7 @@ def vis_side(dp=None):
                 st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
 
     with t3:
-        # Filtrer og omdøb kolonner i Python i stedet for SQL
+        # Filtrer og omdøb
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
