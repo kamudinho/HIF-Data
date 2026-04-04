@@ -107,7 +107,7 @@ def vis_side(conn, name_map=None):
             )
 
         with t2:
-            # 1. Definer metrikker og deres foretrukne enhed
+            # 1. Definer metrikker og deres konfiguration
             metrics_config = {
                 "Total Distance": ("DISTANCE", True, "km"),
                 "High Speed Running": ("HIGH SPEED RUNNING", False, "m"),
@@ -116,17 +116,27 @@ def vis_side(conn, name_map=None):
                 "Topfart": ("TOP_SPEED", False, "km/t")
             }
             
-            valgt_label = st.selectbox("Vælg kategori til graf", list(metrics_config.keys()))
+            # 2. Layout: Dropdown til venstre, Caption til højre
+            col_select, col_cap = st.columns([1, 2])
+            
+            with col_select:
+                valgt_label = st.selectbox("Vælg kategori", list(metrics_config.keys()), key="graph_metric_select")
+            
             valgt_kolonne, skal_til_km, enhed = metrics_config[valgt_label]
             
-            # 2. Klargør data
+            with col_cap:
+                # Vi tilføjer lidt padding i toppen for at flugte med selectboxen
+                st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
+                st.caption(f"Viser **{valgt_label.lower()}** målt i **{enhed}** for alle spillere i den valgte periode.")
+
+            # 3. Klargør data
             plot_data = summary.copy()
             if skal_til_km:
                 plot_data[valgt_kolonne] = plot_data[valgt_kolonne] / 1000
             
             plot_data = plot_data.sort_values(valgt_kolonne, ascending=False)
 
-            # 3. Lav Bar Chart (uden title)
+            # 4. Lav Bar Chart
             fig_bar = px.bar(
                 plot_data, 
                 x='DISPLAY_NAME', 
@@ -136,7 +146,7 @@ def vis_side(conn, name_map=None):
                 color_discrete_sequence=[HIF_ROD]
             )
 
-            # 4. Formatering af værdier over søjlerne
+            # 5. Formatering af værdier over søjlerne
             if skal_til_km:
                 t_format = '%{text:.2f}'
             elif valgt_kolonne == 'TOP_SPEED':
@@ -152,16 +162,12 @@ def vis_side(conn, name_map=None):
             
             fig_bar.update_layout(
                 xaxis_tickangle=-45, 
-                height=450,
-                margin=dict(t=10, b=100), # Mindre top-margin nu hvor titlen er væk
+                height=550,
+                margin=dict(t=20, b=100), # t=20 fastholder afstanden til toppen
                 yaxis_title=f"{valgt_label} ({enhed})"
             )
             
-            # Vis grafen
             st.plotly_chart(fig_bar, use_container_width=True)
-            
-            # 5. Caption i stedet for titel
-            st.caption(f"**Figur:** Oversigt over **{valgt_label.lower()}** målt i **{enhed}** for alle spillere i den valgte periode.")
 
         with t3:
             summary['KM90_NUM'] = (summary['DISTANCE'] / 1000 / summary['MINS_DEC']) * 90
