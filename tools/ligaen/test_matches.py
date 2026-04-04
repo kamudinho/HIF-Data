@@ -226,17 +226,22 @@ def vis_side(dp=None):
                     a_diff_str = f"<span style='color:{'green' if ad>=0 else 'red'}; font-size:10px;'>({'+' if ad>=0 else ''}{ad:.{dec}f}{suf})</span> "
                     
                     h_pct = (hv / (hv + av) * 100) if (hv + av) > 0 else 50
+                    
+                    # Her er rettelsen: Tilføjet margin-bottom i style og lidt ekstra luft
                     st.markdown(f"""
                         <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
                             <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{h_diff_str}</div>
                             <div style='color:#888;'>{lbl.upper()}</div>
                             <div style='text-align:right;'>{a_diff_str}<b>{av:.{dec}f}{suf}</b></div>
                         </div>
-                        <div style='display:flex; height:10px; background:#eee; border-radius:4px; overflow:hidden;'>
+                        <div style='display:flex; height:10px; background:#eee; border-radius:4px; overflow:hidden; margin-bottom:12px;'>
                             <div style='width:{h_pct}%; background:{TEAM_COLORS.get(h_n, {}).get("primary", "#ccc") if h_uuid==valgt_uuid else "#ddd"};'></div>
                             <div style='width:{100-h_pct}%; background:{TEAM_COLORS.get(a_n, {}).get("primary", "#ccc") if a_uuid==valgt_uuid else "#ddd"};'></div>
                         </div>
                     """, unsafe_allow_html=True)
+                
+                # Giver lidt ekstra luft helt i bunden af containeren efter sidste bar
+                st.markdown("<div style='padding-bottom: 5px;'></div>", unsafe_allow_html=True)
 
     with tab2:
         future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
