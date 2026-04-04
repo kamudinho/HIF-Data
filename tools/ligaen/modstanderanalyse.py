@@ -43,7 +43,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Analyserer mål-sekvenser (inkl. tacklinger før mål)..."):
+    with st.spinner("Analyserer mål-sekvenser (inkl. dødbolde og tacklinger)..."):
         # 3.1 Find alle mål (inkl. selvmål via Qualifier 28)
         sql_goals = f"""
         SELECT 
@@ -59,7 +59,6 @@ def vis_side(dp=None):
         df_goals = conn.query(sql_goals)
 
         # 3.2 Hent alle hændelser der skete MAX 12 SEKUNDER før et mål
-        # Dette fanger tacklinger der starter målet!
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT 
@@ -74,7 +73,6 @@ def vis_side(dp=None):
         df_all_events = conn.query(sql_events)
 
     # --- 4. UI ---
-    # Mapping af hold
     ids = pd.concat([df_goals['CONTESTANTHOME_OPTAUUID'], df_goals['CONTESTANTAWAY_OPTAUUID']]).unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
@@ -86,7 +84,6 @@ def vis_side(dp=None):
     t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t2:
-        # Filtrer mål for det valgte hold
         this_team_goals = df_all_events[df_all_events['GOAL_TEAM_ID'] == valgt_uuid].copy()
         
         if not this_team_goals.empty:
@@ -103,7 +100,6 @@ def vis_side(dp=None):
             sel_key = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
             sel_data = goal_options[sel_key]
 
-            # Vis hændelser (Tacklinger, Interceptions, Pasninger)
             this_goal_events = this_team_goals[
                 (this_team_goals['MATCH_OPTAUUID'] == sel_data['match_id']) & 
                 (this_team_goals['GOAL_TIME'] == sel_data['goal_ts'])
@@ -115,13 +111,30 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
+                # Tegn linjer/pile mellem aktioner først (så de ligger under prikkerne)
+                for i in range(len(this_goal_events) - 1):
+                    curr = this_goal_events.iloc[i]
+                    nxt = this_goal_events.iloc[i+1]
+                    pitch.arrows(curr['EVENT_X'], curr['EVENT_Y'], nxt['EVENT_X'], nxt['EVENT_Y'], 
+                                 width=1.5, headwidth=3, color='black', alpha=0.2, ax=ax)
+
                 for i, row in this_goal_events.iterrows():
-                    # Farvekode: Mål=Guld, Tackling/Interception=Blå, Pasning=Rød
-                    color = 'gold' if row['EVENT_TYPEID'] == 16 else ('#0000FF' if row['EVENT_TYPEID'] in [7, 127] else '#cc0000')
-                    size = 200 if row['EVENT_TYPEID'] == 16 else 80
+                    # Definer ikoner og farver
+                    is_goal = row['EVENT_TYPEID'] == 16
+                    is_freekick = row['EVENT_TYPEID'] == 5
+                    is_defensive = row['EVENT_TYPEID'] in [7, 127]
                     
-                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=size, edgecolors='black', zorder=10)
-                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'))
+                    if is_goal:
+                        color, marker, size = 'red', 's', 180  # Firkant for mål
+                    elif is_freekick:
+                        color, marker, size = 'gold', 'P', 200 # 'P' for frispark/dødbold
+                    elif is_defensive:
+                        color, marker, size = '#0000FF', 'o', 100 # Blå for tackling/int
+                    else:
+                        color, marker, size = 'red', 'o', 80   # Rød cirkel for pasning
+                    
+                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=size, marker=marker, edgecolors='black', zorder=10)
+                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
 
                 st.pyplot(fig)
 
