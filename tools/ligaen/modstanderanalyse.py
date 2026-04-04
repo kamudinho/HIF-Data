@@ -77,33 +77,37 @@ def vis_side(dp=None):
         df_sequences = conn.query(sql_seq)
 
         # 3.3 SQL til Spiller-stats (RETTET: Inkluderer alle assist-typer 29, 30, 328)
+        # 3.3 SQL til Spiller-stats (RETTET LOGIK FOR ASSISTS)
         sql_stats = f"""
         WITH GoalPossessions AS (
+            -- Finder alle unikke boldbesiddelser, der endte i mål
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
-        QualifiersData AS (
-            SELECT 
-                EVENT_OPTAUUID,
-                -- 29: Assist, 30: Involvering, 328: New Opta Assist
-                MAX(CASE WHEN QUALIFIER_QID IN (29, 30, 328) THEN 1 ELSE 0 END) as IS_TOTAL_ASSIST
+        AssistsData AS (
+            -- Finder alle events, som Opta har markeret som en assist (uanset koden)
+            SELECT DISTINCT EVENT_OPTAUUID
             FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID IN (29, 30, 328) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-            GROUP BY EVENT_OPTAUUID
+            WHERE QUALIFIER_QID IN (29, 30, 328) -- 29/328 er assists, 30 er involvering
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
+            -- Tæller hvor mange unikke mål-besiddelser spilleren har været en del af
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
+            -- Mål (Type 16)
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
-            SUM(CASE WHEN qd.IS_TOTAL_ASSIST = 1 THEN 1 ELSE 0 END) as ASSISTS,
-            -- Opspils-pasninger er pasninger (Type 1), der IKKE er assists
-            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND qd.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
+            -- Assists (Hvis eventet findes i AssistsData og det IKKE er selve målet)
+            SUM(CASE WHEN ad.EVENT_OPTAUUID IS NOT NULL AND e.EVENT_TYPEID != 16 THEN 1 ELSE 0 END) as ASSISTS,
+            -- Opspils-pasninger (Pasninger i en målsekvens, der hverken er mål eller assist)
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND ad.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
+            -- Dueller vundet i sekvensen
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN QualifiersData qd ON e.EVENT_OPTAUUID = qd.EVENT_OPTAUUID
+        LEFT JOIN AssistsData ad ON e.EVENT_OPTAUUID = ad.EVENT_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY 1, 2
