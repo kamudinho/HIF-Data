@@ -46,7 +46,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l1.axis('off')
     
     # "vs." tekst
-    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
+    ax.text(0.02, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     
     # Logo 2
     if opp_team_logo:
