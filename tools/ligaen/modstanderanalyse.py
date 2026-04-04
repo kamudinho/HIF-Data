@@ -56,7 +56,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     
     # Info-linje (Rykket op fra 0.04 til 0.05)
     full_info = f"{date_str}  |  Resultat: {score_str}  ({min_str}. min)"
-    ax.text(0.08, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
+    ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
 
