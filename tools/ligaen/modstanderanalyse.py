@@ -115,21 +115,66 @@ def vis_side(dp=None):
         # Brug EVENT_CONTESTANT_OPTAUUID direkte til filtrering
         df_team_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
         st.write(f"Antal events fundet for {valgt_hold}: {len(df_team_events)}")
-        
-        # Eksempel på heatmap eller lignende her...
-        
+                
     with t2:
+        st.subheader("Analyse af scoringer (Sidste 20 sek. før mål)")
+        
         if df_sequences.empty:
-            st.info("Ingen sekvens-data fundet.")
+            st.info("Ingen sekvens-data fundet for denne turnering.")
         else:
-            # Filtrér sekvenser for det valgte hold
-            team_goals = df_sequences[df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
-            st.dataframe(team_goals[['EVENT_TIMEMIN', 'PLAYER_NAME', 'QUALIFIER_LIST']].tail(10))
+            # 1. Filtrér på det valgte hold
+            team_goals = df_sequences[df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
+            
+            if team_goals.empty:
+                st.warning(f"Ingen registrerede mål-sekvenser for {valgt_hold}.")
+            else:
+                # 2. Vælg hvilken scoring der skal vises
+                # Vi laver en læsevenlig liste over mål (Kamp + Tidspunkt)
+                goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
+                goal_options = {row['SEQUENCEID']: f"Mål v. {row['EVENT_TIMEMIN']}'" for _, row in goal_list.iterrows()}
+                
+                selected_goal_id = st.selectbox("Vælg en scoring at analysere:", 
+                                                options=list(goal_options.keys()), 
+                                                format_func=lambda x: goal_options[x])
 
+                # 3. Hent data for det specifikke mål
+                this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP')
+
+                # 4. Tegn banen
+                pitch = VerticalPitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', stripe=True)
+                fig, ax = pitch.draw(figsize=(8, 11))
+
+                # 5. Loop gennem events i målet og tegn pile/navne
+                for i in range(len(this_goal)):
+                    row = this_goal.iloc[i]
+                    
+                    # Tegn punkt for hver aktion
+                    ax.scatter(row['RAW_Y'], row['RAW_X'], color='yellow', s=100, edgecolors='black', zorder=5)
+                    
+                    # Skriv spillerens navn ved punktet
+                    ax.text(row['RAW_Y'] + 2, row['RAW_X'], row['PLAYER_NAME'], 
+                            color='white', fontsize=9, fontweight='bold', 
+                            bbox=dict(facecolor='black', alpha=0.5, edgecolor='none'))
+
+                    # Hvis det ikke er den sidste aktion (målet), så tegn en pil til næste punkt
+                    if i < len(this_goal) - 1:
+                        next_row = this_goal.iloc[i+1]
+                        pitch.arrows(row['RAW_X'], row['RAW_Y'], 
+                                     next_row['RAW_X'], next_row['RAW_Y'], 
+                                     width=2, headwidth=5, headlength=5, 
+                                     color='white', ax=ax, alpha=0.8)
+
+                st.pyplot(fig)
+
+                # 6. Detaljeret oversigt under grafen
+                st.write("**Sekvens-detaljer:**")
+                # Vi viser qualifiers, så man kan se om det var 'Assist', 'Head' osv.
+                st.dataframe(this_goal[['EVENT_TIMEMIN', 'PLAYER_NAME', 'QUALIFIER_LIST']], use_container_width=True)
+                
     with t3:
         # Nu bruger vi PLAYER_NAME direkte fra SQL
         if not df_team_events.empty:
             st.subheader("Flest involveringer (Top 5)")
-            top_players = df_team_events['PLAYER_NAME'].value_counts().head(5)
+            top_players = df_team_events['PLAYER_NAME'].value_counts().head(10)
             for name, count in top_players.items():
                 st.write(f"**{count}** - {name}")
