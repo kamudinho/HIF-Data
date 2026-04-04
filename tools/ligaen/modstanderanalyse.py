@@ -129,7 +129,6 @@ def vis_side(dp=None):
 
     # --- T2: MED BOLDEN ---
     with t2:
-        st.subheader("Offensiv Analyse")
         # Dropdown til at vælge visning
         view_opt_med = st.selectbox(
             "Vælg visning", 
