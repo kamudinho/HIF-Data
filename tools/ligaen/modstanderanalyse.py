@@ -100,12 +100,9 @@ def vis_side(dp=None):
         df_events = conn.query(sql_events)
         df_sequences = conn.query(sql_sequences)
 
-    # --- TOP LAYOUT: TITEL OG HOLDVÆLGER ---
-    # Vi bruger columns til at presse holdvælgeren helt til højre
-    col_titel, col_spacer, col_hold = st.columns([2, 1, 1.5])
+    # --- TOP LAYOUT: HOLDVÆLGER TIL HØJRE ---
+    col_spacer, col_hold = st.columns([3, 1])
     
-    with col_titel:
-        
     team_map = build_team_map(df_matches)
     valgte_hold_liste = sorted(list(team_map.keys()))
     
@@ -114,8 +111,8 @@ def vis_side(dp=None):
     
     valgt_uuid = team_map[valgt_hold]
 
-    # --- TABS ---
-    t1, t2, t3 = st.tabs(["Events", "MÅL-SEKVENSER", "TOPSPILLERE"])
+    # --- TABS (UDEN IKONER) ---
+    t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "TOPSPILLERE"])
 
     with t1:
         df_team_events = df_events[df_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid]
