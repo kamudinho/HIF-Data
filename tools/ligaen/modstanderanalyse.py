@@ -117,67 +117,67 @@ def vis_side(dp=None):
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
         else:
-            # 1. Rens data for 0,0 og filtrér på hold
+            # 1. Filtrering og rensning (Som før)
             team_goals = df_sequences[
                 (df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) & 
                 ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0))
             ].copy()
             
             if not team_goals.empty:
-                # 2. Vælg mål via Selectbox
                 goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
                 goal_options = {row['SEQUENCEID']: f"Mål v. {row['EVENT_TIMEMIN']}'" for _, row in goal_list.iterrows()}
                 selected_goal_id = st.selectbox("Vælg en scoring:", options=list(goal_options.keys()), format_func=lambda x: goal_options[x])
 
                 this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP').copy()
 
-                # --- NYT: Dekod Qualifiers og Events til tekst ---
+                # --- Dekodning af data til visning ---
                 def decode_q(q_string):
                     if not q_string: return ""
-                    # Slå op i din nye OPTA_QUALIFIERS mapping
                     names = [OPTA_QUALIFIERS.get(q.strip(), q) for q in str(q_string).split(',')]
-                    # Vi filtrerer de mest ligegyldige fra (f.eks. koordinat-qualifiers) for at holde det rent
                     ignore = ["Pass End X", "Pass End Y", "Zone", "Length", "Angle"]
                     return ", ".join([n for n in names if n not in ignore])
 
-                this_goal['Event_Type'] = this_goal['EVENT_TYPEID'].astype(str).apply(lambda x: OPTA_EVENT_TYPES.get(x, x))
-                this_goal['Detaljer'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
+                this_goal['Aktion'] = this_goal['EVENT_TYPEID'].astype(str).apply(lambda x: OPTA_EVENT_TYPES.get(x, x))
+                this_goal['Beskrivelse'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
 
-                # 3. Tegn banen (Pitch)
-                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
-                fig, ax = pitch.draw(figsize=(10, 7))
+                # --- 2. LAYOUT: Opret to kolonner ---
+                col_bane, col_tabel = st.columns([2, 1]) # Banen får 2/3, tabellen 1/3
 
-                for i in range(len(this_goal)):
-                    row = this_goal.iloc[i]
-                    is_goal = int(row['EVENT_TYPEID']) == 16
+                with col_bane:
+                    # Tegn banen (Pitch)
+                    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
+                    fig, ax = pitch.draw(figsize=(10, 7))
+
+                    for i in range(len(this_goal)):
+                        row = this_goal.iloc[i]
+                        is_goal = int(row['EVENT_TYPEID']) == 16
+                        marker_type = 's' if is_goal else 'o'
+                        
+                        ax.scatter(row['RAW_X'], row['RAW_Y'], color='red', s=130 if is_goal else 70, 
+                                   marker=marker_type, edgecolors='black', zorder=10 if is_goal else 5)
+                        
+                        ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
+                                fontsize=9, fontweight='bold' if is_goal else 'normal', ha='center',
+                                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1))
+
+                        if i < len(this_goal) - 1:
+                            next_row = this_goal.iloc[i+1]
+                            pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
+                                         width=1.5, color='grey', ax=ax, alpha=0.4)
                     
-                    # Markør og pil logik (som vi byggede før)
-                    marker_type = 's' if is_goal else 'o'
-                    ax.scatter(row['RAW_X'], row['RAW_Y'], color='red', s=130 if is_goal else 70, 
-                               marker=marker_type, edgecolors='black', zorder=10 if is_goal else 5)
+                    st.pyplot(fig, use_container_width=True)
+
+                with col_tabel:
+                    st.write("**Hvad skete der?**")
+                    # Vi vælger kun de relevante kolonner til den smalle tabel-visning
+                    display_df = this_goal[['Aktion', 'PLAYER_NAME', 'Beskrivelse']].rename(columns={
+                        'Aktion': 'Type',
+                        'PLAYER_NAME': 'Spiller',
+                        'Beskrivelse': 'Info'
+                    })
                     
-                    ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
-                            fontsize=8, fontweight='bold' if is_goal else 'normal', ha='center',
-                            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1))
-
-                    if i < len(this_goal) - 1:
-                        next_row = this_goal.iloc[i+1]
-                        pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
-                                     width=1.5, color='grey', ax=ax, alpha=0.4)
-
-                st.pyplot(fig)
-
-                # --- 4. DEN NYE TABEL (Nu med tekst i stedet for ID 16) ---
-                st.write("**Sekvens-detaljer:**")
-                display_df = this_goal[['EVENT_TIMEMIN', 'Event_Type', 'PLAYER_NAME', 'Detaljer']].rename(columns={
-                    'EVENT_TIMEMIN': 'Minut',
-                    'Event_Type': 'Aktion',
-                    'PLAYER_NAME': 'Spiller',
-                    'Detaljer': 'Beskrivelse'
-                })
-                
-                # Her bruger vi hide_index=True for at få det til at se rent ud
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    # Vi bruger st.dataframe med højere højde så den matcher banen
+                    st.dataframe(display_df, use_container_width=True, hide_index=True, height=500)
                 
     with t3:
         if not df_events.empty:
