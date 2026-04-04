@@ -138,57 +138,74 @@ def vis_side(conn, name_map=None):
                 st.dataframe(df_l_hi[['PLAYER_NAME', 'HI/90']], hide_index=True)
 
     with t5:
-        df_meta = conn.query(f"SELECT DISTINCT TO_VARCHAR(m.\"DATE\", 'YYYY-MM-DD') as DATE_STR, m.DESCRIPTION, m.MATCH_SSIID, m.HOME_SSIID, m.AWAY_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p ON m.MATCH_SSIID = p.MATCH_SSIID WHERE m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}' ORDER BY DATE_STR DESC")
+        # 1. Hent metadata for de relevante kampe
+        df_meta = conn.query(f"""
+            SELECT DISTINCT 
+                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
+                m.DESCRIPTION, 
+                m.MATCH_SSIID, 
+                m.HOME_SSIID, 
+                m.AWAY_SSIID,
+                m.HOME_PLAYERS,
+                m.AWAY_PLAYERS
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA s
+            JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
+            WHERE m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}'
+            ORDER BY DATE_STR DESC
+        """)
         
         if not df_meta.empty:
             df_meta['LABEL'] = df_meta['DATE_STR'] + " - " + df_meta['DESCRIPTION']
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_row = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]
             
-            # Find holdnavne fra beskrivelsen (f.eks. "HVI - HIL")
-            desc = m_row['DESCRIPTION'].replace(" vs. ", " - ").replace(" vs ", " - ")
-            teams_in_desc = desc.split(" - ")
-            home_label = teams_in_desc[0].strip()
-            away_label = teams_in_desc[1].strip() if len(teams_in_desc) > 1 else "Ude"
+            # Find holdnavne fra beskrivelsen (HVI - HIL)
+            desc_parts = m_row['DESCRIPTION'].replace(" vs. ", " - ").replace(" vs ", " - ").split(" - ")
+            home_label = desc_parts[0].strip()
+            away_label = desc_parts[1].strip() if len(desc_parts) > 1 else "Ude"
 
+            # 2. Hent de fysiske stats for kampen
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_row['MATCH_SSIID']}'")
-            df_m.columns = [c.upper() for c in df_m.columns]
+            # Vi tvinger optaId til at have små bogstaver da det står sådan i din oversigt (optaId)
             
             if not df_m.empty:
-                # Find den kolonne der indeholder hold-ID (ofte TEAM_SSIID i Second Spectrum)
-                team_col = next((c for c in ['TEAM_SSIID', 'TEAMID', 'TEAM_ID'] if c in df_m.columns), None)
+                # 3. Logik: Er spillerens optaId i HOME_PLAYERS eller AWAY_PLAYERS?
+                import json
                 
-                def identify_team(row_data):
-                    if team_col:
-                        # Vi sammenligner spillerens team_id med kampens HOME_SSIID
-                        # Vi bruger str() og strip() for at undgå mismatch på datatyper eller mellemrum
-                        curr_team_id = str(row_data[team_col]).strip()
-                        home_id = str(m_row['HOME_SSIID']).strip()
-                        
-                        if curr_team_id == home_id:
-                            return home_label
-                    return away_label
+                # Vi laver lister over optaIds for hvert hold fra metadata-arrayet
+                try:
+                    home_list = [str(p.get('optaId')) for p in m_row['HOME_PLAYERS']]
+                    away_list = [str(p.get('optaId')) for p in m_row['AWAY_PLAYERS']]
+                except:
+                    home_list, away_list = [], []
 
-                df_m['HOLD'] = df_m.apply(identify_team, axis=1)
+                def identify_team_from_arrays(row):
+                    p_id = str(row['optaId'])
+                    if p_id in home_list:
+                        return home_label
+                    elif p_id in away_list:
+                        return away_label
+                    return "Ukendt"
+
+                df_m['HOLD'] = df_m.apply(identify_team_from_arrays, axis=1)
                 
-                # Formatering af data
+                # 4. Formatering og Visning
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
                 
-                # Navne-mapping via p_map (load_local_players)
-                oid_col = next((c for c in ['OPTAID', 'OPTA_ID'] if c in df_m.columns), 'OPTAID')
-                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get(oid_col)).split('.')[0], r['PLAYER_NAME']), axis=1)
+                # Navne-mapping fra lokal fil
+                df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r['optaId']), r['PLAYER_NAME']), axis=1)
                 
                 st.dataframe(
                     df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DISTANCE']].sort_values('DISTANCE', ascending=False),
                     column_config={
-                        "SPIL": "Spillernavn", 
+                        "SPIL": "Spiller", 
                         "HOLD": "Hold", 
                         "MINUTES": "Min", 
                         "SMART_DIST": "Distance", 
                         "HI_DISP": "HI-løb",
                         "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
-                        "DISTANCE": None # Skjul den rå sorteringskolonne
+                        "DISTANCE": None 
                     },
                     use_container_width=True, hide_index=True
                 )
