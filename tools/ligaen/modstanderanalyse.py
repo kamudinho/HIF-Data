@@ -69,9 +69,9 @@ def vis_side(dp=None):
     valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
 
-    # --- DATA-HENTNING (Samlet for at undgå redundans) ---
+    # --- DATA-HENTNING ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # Mål-data (Til T2 og T3)
+        # Mål-sekvens data
         sql_goals = f"""
         SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
                e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
@@ -98,13 +98,11 @@ def vis_side(dp=None):
         df_all_events = conn.query(sql_events)
 
     # --- 4. TABS ---
-    t1, t2, t3 = st.tabs(["EVENTS", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
+    t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
-    # --- T1: EVENTS (Oversigt & Heatmaps) ---
+    # --- T1: OVERSIGT ---
     with t1:
-        st.subheader(f"Status & Analyse: {valgt_hold}")
-        
-        # Resultatoversigt
+        st.subheader(f"Seneste Resultater: {valgt_hold}")
         sql_res = f"""
             SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, 
                    TOTAL_HOME_SCORE as "MÅL H", TOTAL_AWAY_SCORE as "MÅL U"
@@ -115,27 +113,29 @@ def vis_side(dp=None):
         """
         st.dataframe(conn.query(sql_res), hide_index=True)
 
-        # Heatmaps (Med bolden / Uden bolden)
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**Med bolden (Opbygning)**")
-            sql_p = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-            df_p = conn.query(sql_p)
-            fig_p = plot_pass_heatmap(df_p, direction="down")
-            if fig_p: st.pyplot(fig_p)
-        
-        with c2:
-            st.write("**Uden bolden (Defensiv)**")
-            sql_d = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8, 12) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-            df_d = conn.query(sql_d)
-            if not df_d.empty:
-                p_def = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
-                fig_def, ax_def = p_def.draw()
-                p_def.kdeplot(df_d.EVENT_X, df_d.EVENT_Y, ax=ax_def, cmap='Greens', fill=True, alpha=0.5, levels=10)
-                st.pyplot(fig_def)
-
-    # --- T2: MÅL-SEKVENSER (LÅST - INGEN ÆNDRINGER) ---
+    # --- T2: MED BOLDEN ---
     with t2:
+        st.subheader("Offensiv Analyse (Heatmaps)")
+        sql_p = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+        df_p = conn.query(sql_p)
+        fig_p = plot_pass_heatmap(df_p, direction="up")
+        if fig_p: st.pyplot(fig_p)
+        else: st.info("Ingen pasningsdata fundet for dette hold.")
+
+    # --- T3: UDEN BOLDEN ---
+    with t3:
+        st.subheader("Defensiv Aktionsradius")
+        sql_d = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8, 12) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+        df_d = conn.query(sql_d)
+        if not df_d.empty:
+            p_def = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
+            fig_def, ax_def = p_def.draw()
+            p_def.kdeplot(df_d.EVENT_X, df_d.EVENT_Y, ax=ax_def, cmap='Greens', fill=True, alpha=0.5, levels=10)
+            st.pyplot(fig_def)
+        else: st.info("Ingen defensive data fundet.")
+
+    # --- T4: MÅL-SEKVENSER (LÅST) ---
+    with t4:
         if not df_all_events.empty:
             goal_list = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
             goal_options = {f"{row['MATCH_OPTAUUID']}_{row['GOAL_TIME']}": {
@@ -165,10 +165,9 @@ def vis_side(dp=None):
                 this_goal_events['Aktion'] = this_goal_events['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 st.write("**Sekvens:**")
                 st.dataframe(this_goal_events[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
-        else: st.info("Ingen mål fundet.")
 
-    # --- T3: SPILLEROVERSIGT (LÅST - INGEN ÆNDRINGER) ---
-    with t3:
+    # --- T5: SPILLEROVERSIGT (LÅST) ---
+    with t5:
         if not df_all_events.empty:
             stats = df_all_events.groupby('PLAYER_NAME').agg({'EVENT_TYPEID': [lambda x: (x == 16).sum(), lambda x: (x == 7).sum(), lambda x: (x == 127).sum(), lambda x: (x == 1).sum()]})
             stats.columns = ['Mål', 'Tacklinger før mål', 'Interceptions før mål', 'Pasninger i mål-sekvens']
