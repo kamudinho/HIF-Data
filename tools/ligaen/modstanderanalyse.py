@@ -7,7 +7,12 @@ from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_QUALIFIERS, OPTA_EVENT_TYPES, get_event_name
 
-# --- 1. HJÆLPEFUNKTION: BUILD TEAM MAP ---
+# --- 1. HJÆLPEFUNKTIONER (Fra din ligaoversigt) ---
+
+def get_logo_url(opta_uuid):
+    """Henter logo URL baseret på Opta UUID fra team_mapping."""
+    return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
+
 def build_team_map(df_matches):
     if df_matches.empty:
         return {}
@@ -107,7 +112,7 @@ def vis_side(dp=None):
             
             if not team_sequences_all.empty:
                 team_sequences_all = team_sequences_all.merge(
-                    df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']], 
+                    df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']], 
                     on='MATCH_OPTAUUID', how='left'
                 )
 
@@ -116,11 +121,14 @@ def vis_side(dp=None):
 
                 goal_options = {}
                 for idx, row in goal_list.iterrows():
-                    modstander = row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_NAME'] == valgt_hold else row['CONTESTANTHOME_NAME']
+                    is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                    modstander_navn = row['CONTESTANTAWAY_NAME'] if is_home else row['CONTESTANTHOME_NAME']
+                    modstander_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID']
+                    
                     goal_options[row['SEQUENCEID']] = {
-                        'full': f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)",
-                        'short': f"Mål #{idx + 1} vs. {modstander}",
-                        'modstander': modstander
+                        'full': f"Mål #{idx + 1} vs. {modstander_navn} ({row['EVENT_TIMEMIN']}. min)",
+                        'short': f"Mål #{idx + 1} vs. {modstander_navn}",
+                        'modstander_uuid': modstander_uuid
                     }
 
                 if goal_options:
@@ -135,14 +143,9 @@ def vis_side(dp=None):
                         (team_sequences_all['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)
                     ].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
 
-                    # --- LOGO HÅNDTERING ---
-                    modstander_navn = goal_options[selected_goal_id]['modstander']
-                    opp_logo_path = None
-                    if dp is not None:
-                        try:
-                            opp_logo_path = dp.load_team_logo(modstander_navn)
-                        except:
-                            opp_logo_path = None
+                    # --- LOGO HENTNING (Bruger den nye funktion) ---
+                    opp_uuid = goal_options[selected_goal_id]['modstander_uuid']
+                    opp_logo_url = get_logo_url(opp_uuid)
 
                     def decode_q(q_string):
                         if not q_string: return ""
@@ -158,8 +161,10 @@ def vis_side(dp=None):
                         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
                         fig, ax = pitch.draw(figsize=(10, 7))
 
-                        if opp_logo_path:
-                            pitch.logo(opp_logo_path, x=5, y=5, ax=ax, width=12, height=12)
+                        # Indsæt logoet hvis det findes
+                        if opp_logo_url:
+                            # x=5, y=5 placerer det i øverste venstre hjørne
+                            pitch.logo(opp_logo_url, x=5, y=5, ax=ax, width=12, height=12)
 
                         for i in range(len(this_goal)):
                             row = this_goal.iloc[i]
