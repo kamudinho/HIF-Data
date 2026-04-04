@@ -76,7 +76,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats - PRÆCIS OPTA LOGIK (Split Assist vs Second Assist)
+        # 3.3 SQL til Spiller-stats - PRÆCIS OPTA LOGIK (Assist, 2. Assist & Straffespark vundet)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -100,6 +100,7 @@ def vis_side(dp=None):
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
             SUM(COALESCE(ap.IS_OFFICIAL_ASSIST, 0)) as ASSISTS,
             SUM(COALESCE(ap.IS_SECOND_ASSIST, 0)) as SECOND_ASSISTS,
+            SUM(CASE WHEN e.EVENT_TYPEID = 172 THEN 1 ELSE 0 END) as PENALTIES_WON,
             SUM(CASE WHEN e.EVENT_TYPEID = 1 
                      AND COALESCE(ap.IS_OFFICIAL_ASSIST, 0) = 0 
                      AND COALESCE(ap.IS_SECOND_ASSIST, 0) = 0 THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
@@ -110,8 +111,8 @@ def vis_side(dp=None):
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY 1, 2
-        HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0)
-        ORDER BY ASSISTS DESC, GOALS DESC
+        HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0 OR PENALTIES_WON > 0)
+        ORDER BY GOALS DESC, ASSISTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
@@ -145,11 +146,11 @@ def vis_side(dp=None):
             if goal_options:
                 sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
                 
-                # Filtrering til visualisering: Kun egne spillere og væsentlige hændelser (Pasning/Mål)
+                # Filtrering til visualisering: Kun egne spillere og væsentlige hændelser (Pasning/Mål/Straffe vundet)
                 this_goal = team_seq[
                     (team_seq['GOAL_TIME'] == sel_ts) & 
                     (team_seq['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) &
-                    (team_seq['EVENT_TYPEID'].isin([1, 16]))
+                    (team_seq['EVENT_TYPEID'].isin([1, 16, 172]))
                 ].sort_values(['EVENT_TIMESTAMP', 'EVENT_EVENTID'])
 
                 col_b, col_tab = st.columns([2.5, 1])
@@ -161,10 +162,15 @@ def vis_side(dp=None):
                     for i in range(len(this_goal)):
                         row = this_goal.iloc[i]
                         is_g = row['EVENT_TYPEID'] == 16
-                        ax.scatter(row['EVENT_X'], row['EVENT_Y'], color='#cc0000' if is_g else 'red', s=150 if is_g else 60, marker='s' if is_g else 'o', edgecolors='black', zorder=10)
+                        is_p = row['EVENT_TYPEID'] == 172
                         
-                        # Dynamisk tekstplacering for at undgå overlap
-                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=0.1))
+                        # Definer farve og form baseret på hændelse
+                        color = '#cc0000' if is_g else ('#FFD700' if is_p else 'red')
+                        marker = 's' if is_g else ('P' if is_p else 'o')
+                        size = 180 if is_g else 80
+                        
+                        ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=size, marker=marker, edgecolors='black', zorder=10)
+                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.1))
                         
                         if i < len(this_goal) - 1:
                             n = this_goal.iloc[i+1]
@@ -178,10 +184,11 @@ def vis_side(dp=None):
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
-            'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
+            'GOAL_INVOLVEMENTS': 'Involveret i mål',
             'GOALS': 'Mål',
-            'ASSISTS': 'Assists (Officiel Opta)',
-            'SECOND_ASSISTS': '2. Assists (Hockey)',
+            'ASSISTS': 'Assists (Opta)',
+            'SECOND_ASSISTS': '2. Assists',
+            'PENALTIES_WON': 'Skaffede Straffe',
             'PASSES_IN_GOAL': 'Opspils-pasninger',
             'DUELS_IN_GOAL': 'Dueller vundet'
         })
