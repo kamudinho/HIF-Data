@@ -71,7 +71,7 @@ def vis_side(dp=None):
         df_sequences = conn.query(sql_seq)
 
         # 3.3 SQL til Spiller-stats (QID 213 LOGIK)
-        # 3.3 SQL til Spiller-stats (OPDATERET TIL QID 29 = ASSISTED)
+        # 3.3 SQL til Spiller-stats (INKLUDERER NU INVOLVERINGER / QID 30)
         sql_stats = f"""
         WITH GoalPoss AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -79,33 +79,39 @@ def vis_side(dp=None):
             WHERE EVENT_TYPEID = 16 
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
-        AssistsData AS (
-            -- Vi skifter fra 213 til 29 baseret på din liste
-            SELECT DISTINCT EVENT_OPTAUUID 
+        QualifiersData AS (
+            -- Vi henter både 29 (Assist) og 30 (Involveret)
+            SELECT 
+                EVENT_OPTAUUID,
+                MAX(CASE WHEN QUALIFIER_QID = 29 THEN 1 ELSE 0 END) as IS_ASSIST,
+                MAX(CASE WHEN QUALIFIER_QID = 30 THEN 1 ELSE 0 END) as IS_INVOLVED
             FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID = 29 
+            WHERE QUALIFIER_QID IN (29, 30)
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+            GROUP BY EVENT_OPTAUUID
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            -- Mål (Type 16)
+            -- Officielle mål
             COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 16 THEN e.EVENT_OPTAUUID END) as GOALS,
-            -- Assists (Qualifier 29)
-            COUNT(DISTINCT CASE WHEN ad.EVENT_OPTAUUID IS NOT NULL THEN e.EVENT_OPTAUUID END) as ASSISTS,
-            -- Pasninger (Type 1) der ikke er assists
-            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 1 AND ad.EVENT_OPTAUUID IS NULL THEN e.EVENT_OPTAUUID END) as PASSES_IN_GOAL
+            -- Officielle Assists (QID 29)
+            COUNT(DISTINCT CASE WHEN qd.IS_ASSIST = 1 THEN e.EVENT_OPTAUUID END) as ASSISTS,
+            -- Involveringer (QID 30) - Dette er ofte den "skjulte" assist
+            COUNT(DISTINCT CASE WHEN qd.IS_INVOLVED = 1 AND qd.IS_ASSIST = 0 THEN e.EVENT_OPTAUUID END) as INVOLVEMENTS,
+            -- Almindelige pasninger i sekvensen (uden 29/30 tag)
+            COUNT(DISTINCT CASE WHEN e.EVENT_TYPEID = 1 AND qd.EVENT_OPTAUUID IS NULL THEN e.EVENT_OPTAUUID END) as BUILDUP_PASSES
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPoss gp 
             ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID 
             AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN AssistsData ad 
-            ON e.EVENT_OPTAUUID = ad.EVENT_OPTAUUID
+        LEFT JOIN QualifiersData qd 
+            ON e.EVENT_OPTAUUID = qd.EVENT_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY 1, 2
-        HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0)
-        ORDER BY GOALS DESC, ASSISTS DESC
+        HAVING (GOALS > 0 OR ASSISTS > 0 OR INVOLVEMENTS > 0)
+        ORDER BY GOALS DESC, ASSISTS DESC, INVOLVEMENTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
