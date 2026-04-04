@@ -70,11 +70,18 @@ def vis_side(dp=None):
         df_goals = conn.query(sql_goals)
 
         # 3.3 Hent hændelser 12 sekunder før mål (KUN 1 RÆKKE PER EVENT_ID)
+        # 3.3 Hent hændelser 12 sekunder før mål (RETTET FOR DELETED EVENTS)
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT 
-            e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN,
-            g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID,
+            e.*, 
+            g.GOAL_TIME, 
+            g.SCORING_TEAM as GOAL_TEAM_ID, 
+            g.GOAL_MIN,
+            g.CONTESTANTHOME_NAME, 
+            g.CONTESTANTAWAY_NAME, 
+            g.CONTESTANTHOME_OPTAUUID, 
+            g.CONTESTANTAWAY_OPTAUUID,
             g.MATCH_LOCALDATE
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
@@ -82,7 +89,10 @@ def vis_side(dp=None):
         AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
         AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         AND e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        -- Løser problemet med de mange gentagelser af 'Goal'
+        -- HER FJERNER VI DELETED EVENTS (ID 43)
+        AND e.EVENT_TYPEID != 43 
+        AND e.EVENT_TYPEID != 84  -- (Valgfrit: 84 er "Deleted after review")
+        
         QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1
         """
         df_all_events = conn.query(sql_events)
