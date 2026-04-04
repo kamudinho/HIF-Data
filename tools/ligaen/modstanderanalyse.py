@@ -76,7 +76,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (RETTET: Inkluderer Assists (29) og Involveringer (30))
+        # 3.3 SQL til Spiller-stats (RETTET: Inkluderer alle assist-typer 29, 30, 328)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -86,10 +86,10 @@ def vis_side(dp=None):
         QualifiersData AS (
             SELECT 
                 EVENT_OPTAUUID,
-                MAX(CASE WHEN QUALIFIER_QID = 29 THEN 1 ELSE 0 END) as IS_ASSIST,
-                MAX(CASE WHEN QUALIFIER_QID = 30 THEN 1 ELSE 0 END) as IS_INVOLVED
+                -- 29: Assist, 30: Involvering, 328: New Opta Assist
+                MAX(CASE WHEN QUALIFIER_QID IN (29, 30, 328) THEN 1 ELSE 0 END) as IS_TOTAL_ASSIST
             FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID IN (29, 30) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+            WHERE QUALIFIER_QID IN (29, 30, 328) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
             GROUP BY EVENT_OPTAUUID
         )
         SELECT 
@@ -97,8 +97,8 @@ def vis_side(dp=None):
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
-            SUM(CASE WHEN qd.IS_ASSIST = 1 THEN 1 ELSE 0 END) as ASSISTS,
-            SUM(CASE WHEN qd.IS_INVOLVED = 1 AND COALESCE(qd.IS_ASSIST, 0) = 0 THEN 1 ELSE 0 END) as INVOLVEMENTS,
+            SUM(CASE WHEN qd.IS_TOTAL_ASSIST = 1 THEN 1 ELSE 0 END) as ASSISTS,
+            -- Opspils-pasninger er pasninger (Type 1), der IKKE er assists
             SUM(CASE WHEN e.EVENT_TYPEID = 1 AND qd.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
@@ -107,7 +107,7 @@ def vis_side(dp=None):
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY 1, 2
-        HAVING (GOALS > 0 OR ASSISTS > 0 OR INVOLVEMENTS > 0 OR PASSES_IN_GOAL > 0)
+        HAVING (GOALS > 0 OR ASSISTS > 0 OR PASSES_IN_GOAL > 0)
         ORDER BY GOAL_INVOLVEMENTS DESC
         """
         df_all_stats = conn.query(sql_stats)
@@ -139,36 +139,36 @@ def vis_side(dp=None):
                 'min': row['GOAL_MIN']
             } for _, row in goal_list.iterrows()}
 
-            sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
-            this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP')
+            if goal_options:
+                sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
+                this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP')
 
-            col_b, col_tab = st.columns([2.5, 1])
-            with col_b:
-                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
-                fig, ax = pitch.draw(figsize=(10, 7))
-                draw_match_info_box(ax, get_logo_img(valgt_uuid), get_logo_img(goal_options[sel_ts]['opp_uuid']), goal_options[sel_ts]['date'], goal_options[sel_ts]['score'], goal_options[sel_ts]['min'])
+                col_b, col_tab = st.columns([2.5, 1])
+                with col_b:
+                    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
+                    fig, ax = pitch.draw(figsize=(10, 7))
+                    draw_match_info_box(ax, get_logo_img(valgt_uuid), get_logo_img(goal_options[sel_ts]['opp_uuid']), goal_options[sel_ts]['date'], goal_options[sel_ts]['score'], goal_options[sel_ts]['min'])
 
-                for i in range(len(this_goal)):
-                    row = this_goal.iloc[i]
-                    is_g = row['EVENT_TYPEID'] == 16
-                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color='#cc0000' if is_g else 'red', s=150 if is_g else 60, marker='s' if is_g else 'o', edgecolors='black', zorder=10)
-                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'))
-                    if i < len(this_goal) - 1:
-                        n = this_goal.iloc[i+1]
-                        pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
-                st.pyplot(fig)
-            with col_tab:
-                this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                st.dataframe(this_goal[['PLAYER_NAME', 'Aktion_Navn']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','Aktion_Navn':'Aktion'}), hide_index=True)
+                    for i in range(len(this_goal)):
+                        row = this_goal.iloc[i]
+                        is_g = row['EVENT_TYPEID'] == 16
+                        ax.scatter(row['EVENT_X'], row['EVENT_Y'], color='#cc0000' if is_g else 'red', s=150 if is_g else 60, marker='s' if is_g else 'o', edgecolors='black', zorder=10)
+                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'))
+                        if i < len(this_goal) - 1:
+                            n = this_goal.iloc[i+1]
+                            pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
+                    st.pyplot(fig)
+                with col_tab:
+                    this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+                    st.dataframe(this_goal[['PLAYER_NAME', 'Aktion_Navn']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','Aktion_Navn':'Aktion'}), hide_index=True)
 
     with t3:
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
-            'GOAL_INVOLVEMENTS': 'Antal mål involveret i',
+            'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
-            'ASSISTS': 'Assists (Opta)',
-            'INVOLVEMENTS': 'Afgørende involvering',
+            'ASSISTS': 'Assists (Officiel Opta)',
             'PASSES_IN_GOAL': 'Opspils-pasninger',
             'DUELS_IN_GOAL': 'Dueller vundet'
         })
