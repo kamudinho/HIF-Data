@@ -136,20 +136,20 @@ def vis_side(dp=None):
 
                 this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP')
 
-                # --- RETTELSE: Vi skifter til horisontal bane ---
-                pitch = VerticalPitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', 
-                                      half=False, goal_type='box', orientation='horizontal')
+                # --- RETTELSE: Vi bruger 'Pitch' for horisontal visning ---
+                from mplsoccer import Pitch
+                pitch = Pitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', 
+                              goal_type='box', stripe=True)
                 fig, ax = pitch.draw(figsize=(12, 8))
 
-                # Ved horisontal 'opta' pitch: 
-                # x (længde) skal være på x-aksen, y (bredde) på y-aksen.
+                # Opta koordinater: RAW_X er længden (0-100), RAW_Y er bredden (0-100)
                 for i in range(len(this_goal)):
                     row = this_goal.iloc[i]
                     
-                    # Tegn punkt (x, y)
+                    # Plot punktet
                     ax.scatter(row['RAW_X'], row['RAW_Y'], color='yellow', s=120, edgecolors='black', zorder=5)
                     
-                    # Navn over punktet (vi lægger lidt til y for at navnet ikke dækker prikken)
+                    # Navn over punktet
                     ax.text(row['RAW_X'], row['RAW_Y'] + 2, row['PLAYER_NAME'], 
                             color='white', fontsize=10, fontweight='bold', ha='center',
                             bbox=dict(facecolor='black', alpha=0.6, edgecolor='none', pad=1))
@@ -157,7 +157,7 @@ def vis_side(dp=None):
                     # Pil til næste aktion
                     if i < len(this_goal) - 1:
                         next_row = this_goal.iloc[i+1]
-                        # Vi bruger pitch.arrows som håndterer orienteringen automatisk
+                        # Pitch.arrows tager (x_start, y_start, x_end, y_end)
                         pitch.arrows(row['RAW_X'], row['RAW_Y'], 
                                      next_row['RAW_X'], next_row['RAW_Y'], 
                                      width=2, headwidth=4, color='white', ax=ax, alpha=0.7)
