@@ -139,18 +139,20 @@ def vis_side(conn, name_map=None):
 
     with t5:
         # 1. Hent metadata for de relevante kampe
+        # Rettelse: Vi bruger m.DAY, m.MONTH, m.YEAR eller m.STARTTIME 
+        # da 'DATE' i din oversigt er angivet under SEASON_METADATA som DATE
         df_meta = conn.query(f"""
             SELECT DISTINCT 
-                TO_VARCHAR(m."DATE", 'YYYY-MM-DD') as DATE_STR, 
-                m.DESCRIPTION, 
-                m.MATCH_SSIID, 
-                m.HOME_SSIID, 
-                m.AWAY_SSIID,
+                TO_VARCHAR(s."DATE", 'YYYY-MM-DD') as DATE_STR, 
+                s.DESCRIPTION, 
+                s.MATCH_SSIID, 
+                s.HOME_SSIID, 
+                s.AWAY_SSIID,
                 m.HOME_PLAYERS,
                 m.AWAY_PLAYERS
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA s
             JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
-            WHERE m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}'
+            WHERE s.HOME_SSIID = '{v_ssid}' OR s.AWAY_SSIID = '{v_ssid}'
             ORDER BY DATE_STR DESC
         """)
         
@@ -166,24 +168,31 @@ def vis_side(conn, name_map=None):
 
             # 2. Hent de fysiske stats for kampen
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_row['MATCH_SSIID']}'")
-            # Vi tvinger optaId til at have små bogstaver da det står sådan i din oversigt (optaId)
             
             if not df_m.empty:
                 # 3. Logik: Er spillerens optaId i HOME_PLAYERS eller AWAY_PLAYERS?
+                # Vi bruger de rå data fra metadata-forespørgslen
                 import json
                 
-                # Vi laver lister over optaIds for hvert hold fra metadata-arrayet
-                try:
-                    home_list = [str(p.get('optaId')) for p in m_row['HOME_PLAYERS']]
-                    away_list = [str(p.get('optaId')) for p in m_row['AWAY_PLAYERS']]
-                except:
-                    home_list, away_list = [], []
+                # Snowflake returnerer ofte ARRAYS som strenge i Streamlit, så vi sikrer de er lister
+                def clean_player_list(plist):
+                    if isinstance(plist, str):
+                        try: return json.loads(plist)
+                        except: return []
+                    return plist if isinstance(plist, list) else []
+
+                home_players = clean_player_list(m_row['HOME_PLAYERS'])
+                away_players = clean_player_list(m_row['AWAY_PLAYERS'])
+                
+                home_ids = [str(p.get('optaId')) for p in home_players if isinstance(p, dict)]
+                away_ids = [str(p.get('optaId')) for p in away_players if isinstance(p, dict)]
 
                 def identify_team_from_arrays(row):
-                    p_id = str(row['optaId'])
-                    if p_id in home_list:
+                    # Vi tjekker kolonnen 'optaId' (bemærk lille 'o' som i din oversigt)
+                    p_id = str(row['optaId']).strip()
+                    if p_id in home_ids:
                         return home_label
-                    elif p_id in away_list:
+                    elif p_id in away_ids:
                         return away_label
                     return "Ukendt"
 
@@ -193,7 +202,7 @@ def vis_side(conn, name_map=None):
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
                 
-                # Navne-mapping fra lokal fil
+                # Navne-mapping
                 df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r['optaId']), r['PLAYER_NAME']), axis=1)
                 
                 st.dataframe(
