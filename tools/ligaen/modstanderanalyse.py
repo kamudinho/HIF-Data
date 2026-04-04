@@ -117,58 +117,52 @@ def vis_side(dp=None):
         st.write(f"Antal events fundet for {valgt_hold}: {len(df_team_events)}")
                 
     with t2:
-        st.subheader("Analyse af scoringer (Sidste 20 sek. før mål)")
+        st.subheader("Analyse af scoringer (Horisontal visning)")
         
         if df_sequences.empty:
-            st.info("Ingen sekvens-data fundet for denne turnering.")
+            st.info("Ingen sekvens-data fundet.")
         else:
-            # 1. Filtrér på det valgte hold
             team_goals = df_sequences[df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
             
             if team_goals.empty:
-                st.warning(f"Ingen registrerede mål-sekvenser for {valgt_hold}.")
+                st.warning(f"Ingen mål-sekvenser for {valgt_hold}.")
             else:
-                # 2. Vælg hvilken scoring der skal vises
-                # Vi laver en læsevenlig liste over mål (Kamp + Tidspunkt)
                 goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
                 goal_options = {row['SEQUENCEID']: f"Mål v. {row['EVENT_TIMEMIN']}'" for _, row in goal_list.iterrows()}
                 
-                selected_goal_id = st.selectbox("Vælg en scoring at analysere:", 
+                selected_goal_id = st.selectbox("Vælg en scoring:", 
                                                 options=list(goal_options.keys()), 
                                                 format_func=lambda x: goal_options[x])
 
-                # 3. Hent data for det specifikke mål
                 this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values('EVENT_TIMESTAMP')
 
-                # 4. Tegn banen
-                pitch = VerticalPitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', stripe=True)
-                fig, ax = pitch.draw(figsize=(8, 11))
+                # --- RETTELSE: Vi skifter til horisontal bane ---
+                pitch = VerticalPitch(pitch_type='opta', pitch_color='#1a472a', line_color='white', 
+                                      half=False, goal_type='box', orientation='horizontal')
+                fig, ax = pitch.draw(figsize=(12, 8))
 
-                # 5. Loop gennem events i målet og tegn pile/navne
+                # Ved horisontal 'opta' pitch: 
+                # x (længde) skal være på x-aksen, y (bredde) på y-aksen.
                 for i in range(len(this_goal)):
                     row = this_goal.iloc[i]
                     
-                    # Tegn punkt for hver aktion
-                    ax.scatter(row['RAW_Y'], row['RAW_X'], color='yellow', s=100, edgecolors='black', zorder=5)
+                    # Tegn punkt (x, y)
+                    ax.scatter(row['RAW_X'], row['RAW_Y'], color='yellow', s=120, edgecolors='black', zorder=5)
                     
-                    # Skriv spillerens navn ved punktet
-                    ax.text(row['RAW_Y'] + 2, row['RAW_X'], row['PLAYER_NAME'], 
-                            color='white', fontsize=9, fontweight='bold', 
-                            bbox=dict(facecolor='black', alpha=0.5, edgecolor='none'))
+                    # Navn over punktet (vi lægger lidt til y for at navnet ikke dækker prikken)
+                    ax.text(row['RAW_X'], row['RAW_Y'] + 2, row['PLAYER_NAME'], 
+                            color='white', fontsize=10, fontweight='bold', ha='center',
+                            bbox=dict(facecolor='black', alpha=0.6, edgecolor='none', pad=1))
 
-                    # Hvis det ikke er den sidste aktion (målet), så tegn en pil til næste punkt
+                    # Pil til næste aktion
                     if i < len(this_goal) - 1:
                         next_row = this_goal.iloc[i+1]
+                        # Vi bruger pitch.arrows som håndterer orienteringen automatisk
                         pitch.arrows(row['RAW_X'], row['RAW_Y'], 
                                      next_row['RAW_X'], next_row['RAW_Y'], 
-                                     width=2, headwidth=5, headlength=5, 
-                                     color='white', ax=ax, alpha=0.8)
+                                     width=2, headwidth=4, color='white', ax=ax, alpha=0.7)
 
                 st.pyplot(fig)
-
-                # 6. Detaljeret oversigt under grafen
-                st.write("**Sekvens-detaljer:**")
-                # Vi viser qualifiers, så man kan se om det var 'Assist', 'Head' osv.
                 st.dataframe(this_goal[['EVENT_TIMEMIN', 'PLAYER_NAME', 'QUALIFIER_LIST']], use_container_width=True)
                 
     with t3:
