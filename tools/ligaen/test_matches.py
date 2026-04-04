@@ -232,7 +232,7 @@ def vis_side(dp=None):
                             <div style='color:#888;'>{lbl.upper()}</div>
                             <div style='text-align:right;'>{a_diff_str}<b>{av:.{dec}f}{suf}</b></div>
                         </div>
-                        <div style='display:flex; height:8px; background:#eee; border-radius:4px; overflow:hidden;'>
+                        <div style='display:flex; height:10px; background:#eee; border-radius:4px; overflow:hidden;'>
                             <div style='width:{h_pct}%; background:{TEAM_COLORS.get(h_n, {}).get("primary", "#ccc") if h_uuid==valgt_uuid else "#ddd"};'></div>
                             <div style='width:{100-h_pct}%; background:{TEAM_COLORS.get(a_n, {}).get("primary", "#ccc") if a_uuid==valgt_uuid else "#ddd"};'></div>
                         </div>
