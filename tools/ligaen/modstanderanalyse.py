@@ -37,8 +37,8 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
+# --- OPPDATERET HJÆLPEFUNKTION MED MINDRE LOGO ---
 def plot_custom_pitch(df, event_ids, title, half=True, vertical=True, cmap='Reds', logo=None):
-    # Filtrer data
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     
     if vertical:
@@ -48,16 +48,16 @@ def plot_custom_pitch(df, event_ids, title, half=True, vertical=True, cmap='Reds
         
     fig, ax = pitch.draw(figsize=(6, 8))
     
-    # Indsæt logo i øverste venstre hjørne af aksen
+    # Mindre logo: Ændret fra 0.12 til 0.07 for bredde/højde
     if logo:
-        ax_logo = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.02, 0.90, 0.07, 0.07], transform=ax.transAxes)
         ax_logo.imshow(logo)
         ax_logo.axis('off')
 
     if not plot_data.empty:
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.7, levels=100)
     
-    ax.set_title(title, fontsize=10, pad=10)
+    ax.set_title(title, fontsize=9, pad=10, fontweight='bold')
     return fig
 
 # --- 3. HOVEDFUNKTION ---
