@@ -54,11 +54,11 @@ def vis_side(dp=None):
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
     # --- SQL QUERIES ---
-    # Vi inkluderer MATCHDATE for at kunne sortere mål kronologisk over hele sæsonen
+    # Vi bruger MATCH_LOCALDATE baseret på din skemaoversigt
     sql_matchinfo = f"""
         SELECT 
             MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
-            CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCHDATE 
+            CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_LOCALDATE 
         FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     """
@@ -125,32 +125,29 @@ def vis_side(dp=None):
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
         else:
-            # 1. Grundlæggende filtrering af data for det valgte hold
             team_goals = df_sequences[
                 (df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) & 
                 ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0) | (df_sequences['EVENT_TYPEID'] == 16))
             ].copy()
             
             if not team_goals.empty:
-                # Merge med matchinfo for at få modstander og dato
+                # Merge med matchinfo (brug MATCH_LOCALDATE)
                 team_goals = team_goals.merge(
-                    df_matches[['MATCH_OPTAUUID', 'MATCHDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']], 
+                    df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']], 
                     on='MATCH_OPTAUUID', 
                     how='left'
                 )
 
-                # Identificer modstanderen
                 team_goals['MODSTANDER'] = np.where(
                     team_goals['CONTESTANTHOME_NAME'] == valgt_hold, 
                     team_goals['CONTESTANTAWAY_NAME'], 
                     team_goals['CONTESTANTHOME_NAME']
                 )
 
-                # 2. Generer kronologisk mål-liste
+                # Generer kronologisk mål-liste baseret på MATCH_LOCALDATE
                 goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
-                goal_list = goal_list.sort_values(['MATCHDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
+                goal_list = goal_list.sort_values(['MATCH_LOCALDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
 
-                # Lav pæne labels til selectbox (Mål #1 vs. Modstander...)
                 goal_options = {}
                 for idx, row in goal_list.iterrows():
                     label = f"Mål #{idx + 1} vs. {row['MODSTANDER']} ({row['EVENT_TIMEMIN']}. min)"
@@ -162,10 +159,10 @@ def vis_side(dp=None):
                     format_func=lambda x: goal_options[x]
                 )
 
-                # Find data for det valgte mål og sortér efter tid + typeID for korrekt visning
+                # Sortering sikrer at mål (16) tegnes sidst og dermed øverst
                 this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
 
-                # --- Dekodning af data til visning ---
+                # Dekodning
                 def decode_q(q_string):
                     if not q_string: return ""
                     names = [OPTA_QUALIFIERS.get(q.strip(), q) for q in str(q_string).split(',')]
@@ -186,7 +183,6 @@ def vis_side(dp=None):
                         row = this_goal.iloc[i]
                         is_goal = int(row['EVENT_TYPEID']) == 16
                         
-                        # Markør og pil logik
                         marker_type = 's' if is_goal else 'o'
                         marker_color = '#e74c3c' if is_goal else 'red'
                         
@@ -211,7 +207,7 @@ def vis_side(dp=None):
 
                 with col_tabel:
                     st.write("**Sekvens-detaljer:**")
-                    # Målet vises øverst i tabellen
+                    # Målet øverst i tabellen
                     display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={
                         'PLAYER_NAME': 'Spiller',
                         'Aktion': 'Type',
