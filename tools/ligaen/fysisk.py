@@ -111,10 +111,9 @@ def vis_side(conn, name_map=None):
             fig = px.scatter(
                 summary, x='KM90_NUM', y='TOP_SPEED', text='DISPLAY_NAME',
                 labels={'KM90_NUM': 'KM pr. 90 min', 'TOP_SPEED': 'Topfart (km/t)'},
-                title=f"Fysisk profil: {valgt_hold}",
-                height=800  # Øget højde for bedre læsbarhed
+                height=650  # Øget højde for bedre læsbarhed
             )
-            fig.update_traces(textposition='top center', marker=dict(size=10, color=HIF_ROD))
+            fig.update_traces(textposition='top center', marker=dict(size=8.5, color=HIF_ROD))
             st.plotly_chart(fig, use_container_width=True)
 
     with t4:
