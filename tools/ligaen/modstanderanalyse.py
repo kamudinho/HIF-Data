@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.exports as plt
+import matplotlib.pyplot as plt  # RETTET FRA .exports
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
+from data.utils.mapping import OPTA_EVENT_TYPES, is_assist # Importerer fra din mapping fil
 import requests
 from PIL import Image
 from io import BytesIO
@@ -37,36 +38,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
-# --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
-
-def is_assist(qualifiers_list):
-    """
-    Tjekker om en liste af qualifiers indeholder en assist.
-    Vi tjekker både efter den officielle (210) og den tekniske (213),
-    da Opta bruger begge dele i forskellige rå-feeds.
-    """
-    # Lav listen til strings for sikker sammenligning
-    q_strs = [str(q) for q in qualifiers_list]
-    return "210" in q_strs or "213" in q_strs
-
-def get_event_label(row):
-    """Returnerer et pænt navn baseret på event type og qualifiers"""
-    e_id = str(row['EVENT_TYPEID'])
-    base_name = OPTA_EVENT_TYPES.get(e_id, f"Aktion {e_id}")
-    
-    # Hvis det er et mål, men vi vil vide om det er på hovedet, frispark etc.
-    if e_id == "16":
-        return "Mål"
-    if e_id == "1":
-        # Tjek om det er en assist via vores nye funktion
-        # (Antager at 'QUALIFIERS' kolonnen findes i din row)
-        if 'QUALIFIERS' in row and is_assist(row['QUALIFIERS']):
-            return "Assist"
-        return "Pasning"
-        
-    return base_name
-    
-# --- 4. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION ---
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
@@ -75,7 +47,7 @@ def vis_side(dp=None):
     with st.spinner("Henter data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser (Uændret, henter rå-data til banen)
+        # SQL til sekvenser
         sql_base = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -104,7 +76,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_base)
 
-        # SQL til Spiller-stats: Inkluderer nu Assists (Qualifier 213) og Alle Aktioner
+        # SQL til Spiller-stats: Inkluderer nu Assists (213) og Alle Aktioner
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -182,7 +154,9 @@ def vis_side(dp=None):
                         pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
                 st.pyplot(fig)
             with col_tab:
-                st.dataframe(this_goal[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','EVENT_TYPEID':'Aktion'}), hide_index=True)
+                # Vi bruger din mapping til at vise navnet på aktionen
+                this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+                st.dataframe(this_goal[['PLAYER_NAME', 'Aktion_Navn']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','Aktion_Navn':'Aktion'}), hide_index=True)
 
     with t3:
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
