@@ -1,4 +1,4 @@
-# data/utils/mappings.py
+# data/utils/mapping.py
 
 # --- 1. KOMPLET OPTA EVENT TYPE MAPPING (Fra OPTA_DECODE_EVENTTYPE) ---
 OPTA_EVENT_TYPES = {
