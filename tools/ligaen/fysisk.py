@@ -105,7 +105,52 @@ def vis_side(conn, name_map=None):
             )
 
         with t2:
-            st.info("Her kan du indsætte yderligere grafisk materiale.")
+        if not df_phys.empty:
+            # 1. Definer hvilke metrikker vi vil kunne vælge imellem
+            metrics_map = {
+                "Total Distance (m)": "DISTANCE",
+                "High Speed Running (m)": "HIGH SPEED RUNNING",
+                "Sprinting (m)": "SPRINTING",
+                "HI Løb (HSR + Sprint)": "HI_TOTAL",
+                "Topfart (km/t)": "TOP_SPEED"
+            }
+            
+            # 2. Dropdown til valg af kategori
+            valgt_metrik_navn = st.selectbox("Vælg kategori til graf", list(metrics_map.keys()))
+            valgt_kolonne = metrics_map[valgt_metrik_navn]
+
+            # 3. Forbered data til barchart (vi bruger summary fra t1)
+            # Sorter efter den valgte værdi for bedre overblik
+            plot_data = summary.sort_values(valgt_kolonne, ascending=False)
+
+            # 4. Lav Bar Chart
+            fig_bar = px.bar(
+                plot_data,
+                x='DISPLAY_NAME',
+                y=valgt_kolonne,
+                text=valgt_kolonne,  # Dette skriver værdien over baren
+                labels={valgt_kolonne: valgt_metrik_navn, 'DISPLAY_NAME': 'Spiller'},
+                title=f"{valgt_metrik_navn} pr. spiller (Sæson total)",
+                color_discrete_sequence=[HIF_ROD]
+            )
+
+            # 5. Konfiguration af udseende
+            fig_bar.update_traces(
+                texttemplate='%{text:.1f}' if valgt_kolonne == 'TOP_SPEED' else '%{text:d}', 
+                textposition='outside',
+                cliponaxis=False
+            )
+            
+            fig_bar.update_layout(
+                xaxis_tickangle=-45,
+                margin=dict(t=50, b=100),
+                height=600,
+                yaxis_title=valgt_metrik_navn
+            )
+
+            st.plotly_chart(fig_bar, use_container_width=True)
+        else:
+            st.warning("Ingen data fundet til generering af graf.")
 
         with t3:
             fig = px.scatter(
