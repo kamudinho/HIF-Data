@@ -44,7 +44,6 @@ def build_team_map(df_matches):
 
 # --- 2. HOVEDFUNKTION ---
 def vis_side(dp=None):
-    st.header("Modstanderanalyse")
     
     conn = _get_snowflake_conn()
     if not conn:
@@ -170,9 +169,9 @@ def vis_side(dp=None):
                 with col_tabel:
                     st.write("**Hvad skete der?**")
                     # Vi vælger kun de relevante kolonner til den smalle tabel-visning
-                    display_df = this_goal[['Aktion', 'PLAYER_NAME', 'Beskrivelse']].rename(columns={
-                        'Aktion': 'Type',
+                    display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].rename(columns={
                         'PLAYER_NAME': 'Spiller',
+                        'Aktion': 'Type',
                         'Beskrivelse': 'Info'
                     })
                     
