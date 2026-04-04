@@ -37,21 +37,27 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
-def plot_pass_heatmap(df, direction="up"):
-    pass_df = df[(df['EVENT_TYPEID'] == 1) & (df['EVENT_TYPEID'] != 43)].copy()
-    if pass_df.empty: return None
-    pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=(8, 10))
-    if direction == "down":
-        ax.invert_yaxis()
-        ax.invert_xaxis()
-        cmap = 'Blues'
-        plot_data = pass_df[pass_df['EVENT_X'] <= 50]
+def plot_custom_pitch(df, event_ids, title, half=True, vertical=True, cmap='Reds', logo=None):
+    # Filtrer data
+    plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
+    
+    if vertical:
+        pitch = VerticalPitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
     else:
-        cmap = 'Reds'
-        plot_data = pass_df[pass_df['EVENT_X'] >= 50]
+        pitch = Pitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
+        
+    fig, ax = pitch.draw(figsize=(6, 8))
+    
+    # Indsæt logo i øverste venstre hjørne af aksen
+    if logo:
+        ax_logo = ax.inset_axes([0.02, 0.88, 0.12, 0.12], transform=ax.transAxes)
+        ax_logo.imshow(logo)
+        ax_logo.axis('off')
+
     if not plot_data.empty:
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.7, levels=100)
+    
+    ax.set_title(title, fontsize=10, pad=10)
     return fig
 
 # --- 3. HOVEDFUNKTION ---
@@ -68,10 +74,11 @@ def vis_side(dp=None):
     col_spacer, col_hold = st.columns([3, 1])
     valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
+    hold_logo = get_logo_img(valgt_uuid)
 
     # --- DATA-HENTNING ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # Mål-sekvens data
+        # Mål-sekvens data (Låst logik)
         sql_goals = f"""
         SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
                e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
@@ -96,6 +103,10 @@ def vis_side(dp=None):
         QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1
         """
         df_all_events = conn.query(sql_events)
+        
+        # Generel event data til heatmaps
+        sql_all_h = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+        df_all_h = conn.query(sql_all_h)
 
     # --- 4. TABS ---
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
@@ -103,36 +114,28 @@ def vis_side(dp=None):
     # --- T1: OVERSIGT ---
     with t1:
         st.subheader(f"Seneste Resultater: {valgt_hold}")
-        sql_res = f"""
-            SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, 
-                   TOTAL_HOME_SCORE as "MÅL H", TOTAL_AWAY_SCORE as "MÅL U"
-            FROM {DB}.OPTA_MATCHINFO 
-            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}')
-            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-            ORDER BY MATCH_LOCALDATE DESC LIMIT 5
-        """
+        sql_res = f"SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, TOTAL_HOME_SCORE as 'MÅL H', TOTAL_AWAY_SCORE as 'MÅL U' FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' ORDER BY MATCH_LOCALDATE DESC LIMIT 5"
         st.dataframe(conn.query(sql_res), hide_index=True)
 
-    # --- T2: MED BOLDEN ---
+    # --- T2: MED BOLDEN (3 KOLONNER - HALVE BANER) ---
     with t2:
-        st.subheader("Offensiv Analyse (Heatmaps)")
-        sql_p = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-        df_p = conn.query(sql_p)
-        fig_p = plot_pass_heatmap(df_p, direction="up")
-        if fig_p: st.pyplot(fig_p)
-        else: st.info("Ingen pasningsdata fundet for dette hold.")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.pyplot(plot_custom_pitch(df_all_h, [1], "PASNINGER", half=True, cmap='Reds', logo=hold_logo))
+        with c2:
+            st.pyplot(plot_custom_pitch(df_all_h, [2, 15], "DRIBLINGER / SKUD", half=True, cmap='Oranges', logo=hold_logo))
+        with c3:
+            st.pyplot(plot_custom_pitch(df_all_h, [1], "GENNEMBRUD", half=True, cmap='YlOrRd', logo=hold_logo))
 
-    # --- T3: UDEN BOLDEN ---
+    # --- T3: UDEN BOLDEN (3 KOLONNER - 2 FULDE, 1 HALV) ---
     with t3:
-        st.subheader("Defensiv Aktionsradius")
-        sql_d = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8, 12) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-        df_d = conn.query(sql_d)
-        if not df_d.empty:
-            p_def = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
-            fig_def, ax_def = p_def.draw()
-            p_def.kdeplot(df_d.EVENT_X, df_d.EVENT_Y, ax=ax_def, cmap='Greens', fill=True, alpha=0.5, levels=10)
-            st.pyplot(fig_def)
-        else: st.info("Ingen defensive data fundet.")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.pyplot(plot_custom_pitch(df_all_h, [7, 8], "TACKLINGER & BLOKERINGER", half=False, cmap='Blues', logo=hold_logo))
+        with c2:
+            st.pyplot(plot_custom_pitch(df_all_h, [127, 12], "INTERCEPTIONS & CLEARANCES", half=False, cmap='GnBu', logo=hold_logo))
+        with c3:
+            st.pyplot(plot_custom_pitch(df_all_h, [7, 127], "DEFENSIV HALVLEJ", half=True, cmap='PuBu', logo=hold_logo))
 
     # --- T4: MÅL-SEKVENSER (LÅST) ---
     with t4:
@@ -153,7 +156,7 @@ def vis_side(dp=None):
             with col_pitch:
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
-                draw_match_info_box(ax, get_logo_img(valgt_uuid), get_logo_img(sel_data['opp_uuid']), sel_data['date'], "Mål", sel_data['min'])
+                draw_match_info_box(ax, hold_logo, get_logo_img(sel_data['opp_uuid']), sel_data['date'], "Mål", sel_data['min'])
                 for i in range(len(this_goal_events) - 1):
                     pitch.arrows(this_goal_events.iloc[i]['EVENT_X'], this_goal_events.iloc[i]['EVENT_Y'], this_goal_events.iloc[i+1]['EVENT_X'], this_goal_events.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
                 for i, row in this_goal_events.iterrows():
