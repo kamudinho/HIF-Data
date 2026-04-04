@@ -121,7 +121,6 @@ def vis_side(conn, name_map=None):
             fig_bar = px.bar(
                 plot_data, x='DISPLAY_NAME', y=valgt_kolonne, text=valgt_kolonne,
                 labels={valgt_kolonne: valgt_metrik_navn, 'DISPLAY_NAME': 'Spiller'},
-                title=f"{valgt_metrik_navn} pr. spiller (Sæson total)",
                 color_discrete_sequence=[HIF_ROD]
             )
             fig_bar.update_traces(
