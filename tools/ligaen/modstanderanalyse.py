@@ -103,50 +103,81 @@ def vis_side(dp=None):
 
     # --- T4: MÅL-SEKVENSER ---
     with t4:
-        # SQL til at finde mål og hændelser 12 sek. før (Din avancerede logik)
+        # 1. Find mål
         sql_goals = f"""
-            SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
-                   e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
-                   m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
+            SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_TIMEMIN as GOAL_MIN, 
+                   m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.MATCH_LOCALDATE
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
             AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28)
             AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1
         """
+        
+        # 2. Hent hændelser før mål
         sql_events = f"""
             WITH Goals AS ({sql_goals})
-            SELECT e.*, g.GOAL_TIME, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME
+            SELECT e.*, g.GOAL_TIME, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.MATCH_LOCALDATE
             FROM {DB}.OPTA_EVENTS e
             JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
+            WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) 
+            AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
             AND e.EVENT_TYPEID != 43
         """
         df_all_events = conn.query(sql_events)
 
         if not df_all_events.empty:
+            # Drop duplikater pr. målsekvens for at undgå dobbelt-tegning
+            df_all_events = df_all_events.drop_duplicates(subset=['EVENT_OPTAUUID', 'GOAL_TIME'])
+            
             goal_list = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
             goal_labels = {f"{r.MATCH_OPTAUUID}_{r.GOAL_TIME}": f"vs. {r.CONTESTANTAWAY_NAME if r.CONTESTANTHOME_NAME==valgt_hold else r.CONTESTANTHOME_NAME} ({r.GOAL_MIN}. min)" for r in goal_list.itertuples()}
-            sel_key = st.selectbox("Vælg mål", list(goal_labels.keys()), format_func=lambda x: goal_labels[x])
             
+            sel_key = st.selectbox("Vælg mål", list(goal_labels.keys()), format_func=lambda x: goal_labels[x])
             m_id, g_ts = sel_key.split('_', 1)
+            
+            # Filtrer til netop det valgte mål
             this_goal = df_all_events[(df_all_events.MATCH_OPTAUUID == m_id) & (df_all_events.GOAL_TIME == g_ts)].sort_values('EVENT_TIMESTAMP')
 
             col_p, col_l = st.columns([2.5, 1])
             with col_p:
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = p.draw(figsize=(10, 7))
+                
+                # Tegn pile først
                 for i in range(len(this_goal)-1):
-                    p.arrows(this_goal.iloc[i].EVENT_X, this_goal.iloc[i].EVENT_Y, this_goal.iloc[i+1].EVENT_X, this_goal.iloc[i+1].EVENT_Y, width=1.5, color='black', alpha=0.2, ax=ax)
+                    p.arrows(this_goal.iloc[i].EVENT_X, this_goal.iloc[i].EVENT_Y, 
+                             this_goal.iloc[i+1].EVENT_X, this_goal.iloc[i+1].EVENT_Y, 
+                             width=1.5, color='black', alpha=0.15, ax=ax)
+                
+                # Tegn hver hændelse ÉN gang
                 for i, row in this_goal.iterrows():
-                    color = 'red' if row['EVENT_TYPEID'] == 16 else ('gold' if row['EVENT_TYPEID'] == 5 else ('#0000FF' if row['EVENT_TYPEID'] in [7, 127] else 'red'))
-                    marker = 's' if row['EVENT_TYPEID'] == 16 else ('P' if row['EVENT_TYPEID'] == 5 else 'o')
-                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=150, marker=marker, edgecolors='black', zorder=10)
-                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+                    # Logik for farve og form
+                    if row['EVENT_TYPEID'] == 16:
+                        color, marker, size = 'red', 's', 180  # Mål (Firkant)
+                    elif row['EVENT_TYPEID'] == 5:
+                        color, marker, size = 'gold', 'P', 200 # Frispark
+                    elif row['EVENT_TYPEID'] in [7, 127]:
+                        color, marker, size = '#0000FF', 'o', 100 # Defensiv
+                    else:
+                        color, marker, size = '#cc0000', 'o', 80  # Pasning
+                    
+                    # Tegn punktet
+                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=size, 
+                               marker=marker, edgecolors='black', zorder=10)
+                    
+                    # Navn ovenover
+                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], 
+                            fontsize=7, ha='center', fontweight='bold', 
+                            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+                
                 st.pyplot(fig)
+            
             with col_l:
                 this_goal['Aktion'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+                st.write("**Sekvens:**")
                 st.dataframe(this_goal[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
 
     # --- T5: SPILLEROVERSIGT ---
