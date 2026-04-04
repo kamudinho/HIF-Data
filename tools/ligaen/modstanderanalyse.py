@@ -127,15 +127,24 @@ def vis_side(dp=None):
         """
         st.dataframe(conn.query(sql_res), hide_index=True)
 
-    # --- T2: MED BOLDEN (3 KOLONNER - HALVE BANER) ---
+    # --- T2: MED BOLDEN ---
     with t2:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.pyplot(plot_custom_pitch(df_all_h, [1], "PASNINGER", half=True, cmap='Reds', logo=hold_logo))
-        with c2:
-            st.pyplot(plot_custom_pitch(df_all_h, [2, 15], "DRIBLINGER / SKUD", half=True, cmap='Oranges', logo=hold_logo))
-        with c3:
-            st.pyplot(plot_custom_pitch(df_all_h, [1], "GENNEMBRUD", half=True, cmap='YlOrRd', logo=hold_logo))
+        st.subheader("Offensiv Analyse")
+        # Dropdown til at vælge visning
+        view_opt_med = st.selectbox(
+            "Vælg visning", 
+            ["Pasningsflow", "Driblinger & Skud", "Gennembrudszoner"],
+            key="med_bolden_select"
+        )
+        
+        col_p, _ = st.columns([2, 1]) # Gør banen stor, men ikke overvældende
+        with col_p:
+            if view_opt_med == "Pasningsflow":
+                st.pyplot(plot_custom_pitch(df_all_h, [1], "PASNINGSFLOW (HALV BANE)", half=True, cmap='Reds', logo=hold_logo))
+            elif view_opt_med == "Driblinger & Skud":
+                st.pyplot(plot_custom_pitch(df_all_h, [2, 15], "DRIBLINGER OG AFSLUTNINGER", half=True, cmap='Oranges', logo=hold_logo))
+            else:
+                st.pyplot(plot_custom_pitch(df_all_h, [1], "GENNEMBRUD I FELTET", half=True, cmap='YlOrRd', logo=hold_logo))
 
     # --- T3: UDEN BOLDEN (3 KOLONNER - 2 FULDE, 1 HALV) ---
     with t3:
