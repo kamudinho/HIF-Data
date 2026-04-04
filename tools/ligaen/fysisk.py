@@ -182,7 +182,7 @@ def vis_side(conn, name_map=None):
                 st.dataframe(
                     df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DISTANCE']].sort_values('DISTANCE', ascending=False),
                     column_config={
-                        "SPIL": "Spiller", 
+                        "SPIL": "Spillernavn", 
                         "HOLD": "Hold", 
                         "MINUTES": "Min", 
                         "SMART_DIST": "Distance", 
