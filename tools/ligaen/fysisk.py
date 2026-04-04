@@ -107,27 +107,57 @@ def vis_side(conn, name_map=None):
             )
 
         with t2:
-            metrics_map = {
-                "Total Distance (m)": "DISTANCE",
-                "High Speed Running (m)": "HIGH SPEED RUNNING",
-                "Sprinting (m)": "SPRINTING",
-                "HI Løb (HSR + Sprint)": "HI_TOTAL",
-                "Topfart (km/t)": "TOP_SPEED"
+            # 1. Definer metrikker og deres foretrukne enhed
+            # Format: "Navn": (Kolonne, Skal_omregnes_til_km)
+            metrics_config = {
+                "Total Distance (km)": ("DISTANCE", True),
+                "High Speed Running (m)": ("HIGH SPEED RUNNING", False),
+                "Sprinting (m)": ("SPRINTING", False),
+                "HI Løb (m)": ("HI_TOTAL", False),
+                "Topfart (km/t)": ("TOP_SPEED", False)
             }
-            valgt_metrik_navn = st.selectbox("Vælg kategori til graf", list(metrics_map.keys()))
-            valgt_kolonne = metrics_map[valgt_metrik_navn]
             
-            plot_data = summary.sort_values(valgt_kolonne, ascending=False)
+            valgt_metrik_navn = st.selectbox("Vælg kategori til graf", list(metrics_config.keys()))
+            valgt_kolonne, skal_til_km = metrics_config[valgt_metrik_navn]
+            
+            # 2. Klargør data og sorter
+            plot_data = summary.copy()
+            
+            if skal_til_km:
+                plot_data[valgt_kolonne] = plot_data[valgt_kolonne] / 1000
+            
+            plot_data = plot_data.sort_values(valgt_kolonne, ascending=False)
+
+            # 3. Lav Bar Chart
             fig_bar = px.bar(
-                plot_data, x='DISPLAY_NAME', y=valgt_kolonne, text=valgt_kolonne,
+                plot_data, 
+                x='DISPLAY_NAME', 
+                y=valgt_kolonne, 
+                text=valgt_kolonne,
                 labels={valgt_kolonne: valgt_metrik_navn, 'DISPLAY_NAME': 'Spiller'},
+                caption=f"{valgt_metrik_navn} pr. spiller (Sæson total)",
                 color_discrete_sequence=[HIF_ROD]
             )
+
+            # 4. Formatering af tekst over søjlerne
+            # Distance og Topfart får decimaler, de andre (meter-værdier) vises som hele tal
+            if skal_til_km or valgt_kolonne == 'TOP_SPEED':
+                t_format = '%{text:.2f}' if skal_til_km else '%{text:.1f}'
+            else:
+                t_format = '%{text:d}'
+
             fig_bar.update_traces(
-                texttemplate='%{text:.1f}' if valgt_kolonne == 'TOP_SPEED' else '%{text:d}', 
-                textposition='outside', cliponaxis=False
+                texttemplate=t_format, 
+                textposition='outside', 
+                cliponaxis=False
             )
-            fig_bar.update_layout(xaxis_tickangle=-45, height=450)
+            
+            fig_bar.update_layout(
+                xaxis_tickangle=-45, 
+                height=450,
+                yaxis_title=valgt_metrik_navn
+            )
+            
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with t3:
