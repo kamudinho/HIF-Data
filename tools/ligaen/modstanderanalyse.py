@@ -42,10 +42,8 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- 3.1 INITIALISERING AF HOLDVALG (Løser 'valgt_uuid' fejlen) ---
-    # Vi henter en liste over hold først for at kunne definere valgt_uuid
+    # 3.1 Hent holdliste først for at definere valgt_uuid
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
-    
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
@@ -54,8 +52,8 @@ def vis_side(dp=None):
     valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
 
-    with st.spinner(f"Analyserer mål for {valgt_hold}..."):
-        # 3.2 Find alle mål (KUN FOR DET VALGTE HOLD)
+    with st.spinner(f"Henter unikke målsekvenser for {valgt_hold}..."):
+        # 3.2 Find alle mål (Unikke rækker via QUALIFY)
         sql_goals = f"""
         SELECT 
             e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
@@ -67,31 +65,25 @@ def vis_side(dp=None):
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28)
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1
         """
         df_goals = conn.query(sql_goals)
 
-        # 3.3 Hent hændelser 12 sekunder før mål (RETTET JOIN)
+        # 3.3 Hent hændelser 12 sekunder før mål (KUN 1 RÆKKE PER EVENT_ID)
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT 
-            e.*, 
-            g.GOAL_TIME, 
-            g.SCORING_TEAM as GOAL_TEAM_ID, 
-            g.GOAL_MIN,
-            g.CONTESTANTHOME_NAME, 
-            g.CONTESTANTAWAY_NAME, 
-            g.CONTESTANTHOME_OPTAUUID, 
-            g.CONTESTANTAWAY_OPTAUUID,
+            e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN,
+            g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID,
             g.MATCH_LOCALDATE
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
-        -- Her sikrer vi, at eventet kun kobles til det mål, det faktisk leder op til
         WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME)
         AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
         AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         AND e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        -- Tilføj en DISTINCT eller GROUP BY hvis Opta-event-databasen har dubletter
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP) = 1
+        -- Løser problemet med de mange gentagelser af 'Goal'
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1
         """
         df_all_events = conn.query(sql_events)
 
@@ -124,17 +116,14 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
-                # Info boks med logoer og kampinfo
                 draw_match_info_box(ax, get_logo_img(valgt_uuid), get_logo_img(sel_data['opp_uuid']), sel_data['date'], "Mål", sel_data['min'])
                 
-                # Tegn linjer
                 for i in range(len(this_goal_events) - 1):
                     curr = this_goal_events.iloc[i]
                     nxt = this_goal_events.iloc[i+1]
                     pitch.arrows(curr['EVENT_X'], curr['EVENT_Y'], nxt['EVENT_X'], nxt['EVENT_Y'], 
                                  width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
 
-                # Tegn spillere/aktioner
                 for i, row in this_goal_events.iterrows():
                     is_goal = row['EVENT_TYPEID'] == 16
                     is_freekick = row['EVENT_TYPEID'] == 5
@@ -159,6 +148,7 @@ def vis_side(dp=None):
             st.info("Ingen mål fundet.")
 
     with t3:
+        # Samme statistik som før, uden ændringer
         stats = df_all_events.groupby('PLAYER_NAME').agg({
             'EVENT_TYPEID': [
                 lambda x: (x == 16).sum(),
