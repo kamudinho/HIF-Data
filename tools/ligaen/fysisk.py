@@ -39,7 +39,6 @@ def vis_side(conn, name_map=None):
         except: return 0.0
 
     def format_smart_dist(meter):
-        """Under 1000m -> m, over 1000m -> km"""
         try:
             m = float(meter)
             if m < 1000: return f"{int(m)} m"
@@ -67,10 +66,6 @@ def vis_side(conn, name_map=None):
     df_phys = get_phys_data(v_ssid)
     df_phys.columns = [c.upper() for c in df_phys.columns]
 
-    # SSID til Navn mapping (fra din TEAM_MAPPING.py)
-    ssid_to_name = {v['ssid']: k for k, v in TEAMS.items() if 'ssid' in v}
-
-    # Navne-mapping til spillere
     df_local = load_local_players()
     p_map = {}
     if df_local is not None:
@@ -79,7 +74,7 @@ def vis_side(conn, name_map=None):
         p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
 
     # --- 4. TABS ---
-    t1, t2, t3, t4 = st.tabs([f"{valgt_hold}-oversigt", "Scatterplot", "Top 5", "Kampanalyse"])
+    t1, t2, t3, t4, t5 = st.tabs([f"{valgt_hold}-oversigt", "Graf", "Scatterplot", "Top 5", "Kampanalyse"])
 
     if not df_phys.empty:
         df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_to_mins)
@@ -101,23 +96,28 @@ def vis_side(conn, name_map=None):
             st.dataframe(
                 summary[['DISPLAY_NAME', 'MINS_DEC', 'Total Distance', 'KM/90', 'HI pr. 90', 'TOP_SPEED', 'KM_TOTAL_NUM']].sort_values('KM_TOTAL_NUM', ascending=False),
                 column_config={
-                    "DISPLAY_NAME": "Spiller", "MINS_DEC": "Minutter", "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t"),
+                    "DISPLAY_NAME": "Spiller", 
+                    "MINS_DEC": st.column_config.NumberColumn("Minutter", format="%.2f"), 
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/t"),
                     "KM_TOTAL_NUM": None
                 },
                 use_container_width=True, hide_index=True, height=600
             )
 
         with t2:
+            st.info("Her kan du indsætte yderligere grafisk materiale.")
+
+        with t3:
             fig = px.scatter(
                 summary, x='KM90_NUM', y='TOP_SPEED', text='DISPLAY_NAME',
                 labels={'KM90_NUM': 'KM pr. 90 min', 'TOP_SPEED': 'Topfart (km/t)'},
-                title=f"Fysisk profil: {valgt_hold}"
+                title=f"Fysisk profil: {valgt_hold}",
+                height=800  # Øget højde for bedre læsbarhed
             )
-            fig.update_traces(textposition='top center', marker=dict(size=8, color=HIF_ROD))
+            fig.update_traces(textposition='top center', marker=dict(size=10, color=HIF_ROD))
             st.plotly_chart(fig, use_container_width=True)
 
-    with t3:
-        # Liga Top 5 logik
+    with t4:
         df_league = conn.query("""
             SELECT PLAYER_NAME, SUM(DISTANCE) as TOTAL_DIST, SUM("HIGH SPEED RUNNING" + SPRINTING) as TOTAL_HI, MAX(TOP_SPEED) as MAX_SPEED,
             SUM(CASE WHEN MINUTES LIKE '%:%' THEN CAST(SPLIT_PART(MINUTES, ':', 1) AS FLOAT) + CAST(SPLIT_PART(MINUTES, ':', 2) AS FLOAT)/60 ELSE CAST(MINUTES AS FLOAT) / 60 END) as TOTAL_MINS
@@ -138,7 +138,7 @@ def vis_side(conn, name_map=None):
                 df_l_hi['HI/90'] = ((df_l_hi['TOTAL_HI'] / df_l_hi['TOTAL_MINS']) * 90).astype(int)
                 st.dataframe(df_l_hi[['PLAYER_NAME', 'HI/90']], hide_index=True)
 
-    with t4:
+    with t5:
         df_meta = conn.query(f"SELECT DISTINCT TO_VARCHAR(m.\"DATE\", 'YYYY-MM-DD') as DATE_STR, m.DESCRIPTION, m.MATCH_SSIID, m.HOME_SSIID, m.AWAY_SSIID FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA m JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p ON m.MATCH_SSIID = p.MATCH_SSIID WHERE m.HOME_SSIID = '{v_ssid}' OR m.AWAY_SSIID = '{v_ssid}' ORDER BY DATE_STR DESC")
         
         if not df_meta.empty:
@@ -146,15 +146,25 @@ def vis_side(conn, name_map=None):
             v_kamp = st.selectbox("Vælg kamp", df_meta['LABEL'].unique())
             m_row = df_meta[df_meta['LABEL'] == v_kamp].iloc[0]
             
-            # Hent alle spillere fra denne kamp
+            # Find holdnavne fra beskrivelsen (f.eks. "HIF vs HOR")
+            teams_in_desc = m_row['DESCRIPTION'].replace(" vs. ", " vs ").split(" vs ")
+            home_name = teams_in_desc[0].strip()
+            away_name = teams_in_desc[1].strip() if len(teams_in_desc) > 1 else "Ude"
+
             df_m = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{m_row['MATCH_SSIID']}'")
             df_m.columns = [c.upper() for c in df_m.columns]
             
             if not df_m.empty:
-                # LOGIK: Vi ved fra metadata hvem der er HOME og hvem der er AWAY.
-                # Vi mapper holdnavnet baseret på om rækken matcher HOME_SSIID eller AWAY_SSIID
-                df_m['HOLD'] = df_m.apply(lambda r: ssid_to_name.get(m_row['HOME_SSIID'], "Hjemme") if r.get('TEAM_SSIID') == m_row['HOME_SSIID'] or r.get('HOME_SSIID') == m_row['HOME_SSIID'] else ssid_to_name.get(m_row['AWAY_SSIID'], "Ude"), axis=1)
+                # Logik til at tildele holdnavn baseret på om spillerens TEAM_SSIID matcher HOME_SSIID
+                # Hvis kolonnen TEAM_SSIID ikke findes, tjekker vi andre ID kolonner
+                team_id_col = next((c for c in df_m.columns if 'TEAM' in c and 'ID' in c), None)
                 
+                def map_team(row_data):
+                    if team_id_col and row_data[team_id_col] == m_row['HOME_SSIID']:
+                        return home_name
+                    return away_name
+
+                df_m['HOLD'] = df_m.apply(map_team, axis=1)
                 df_m['SMART_DIST'] = df_m['DISTANCE'].apply(format_smart_dist)
                 df_m['HI_DISP'] = (df_m['HIGH SPEED RUNNING'].fillna(0) + df_m['SPRINTING'].fillna(0)).apply(lambda x: f"{int(x)} m")
                 df_m['SPIL'] = df_m.apply(lambda r: p_map.get(str(r.get('OPTAID', r.get('OPTA_ID'))), r['PLAYER_NAME']), axis=1)
@@ -163,7 +173,11 @@ def vis_side(conn, name_map=None):
                 st.dataframe(
                     df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DIST_VAL']].sort_values('DIST_VAL', ascending=False),
                     column_config={
-                        "SPIL": "Spiller", "HOLD": "Hold", "MINUTES": "Minutter", "SMART_DIST": "Distance", "HI_DISP": "HI-løb",
+                        "SPIL": "Spiller", 
+                        "HOLD": "Hold", 
+                        "MINUTES": "Minutter", 
+                        "SMART_DIST": "Distance", 
+                        "HI_DISP": "HI-løb",
                         "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
                         "DIST_VAL": None
                     },
