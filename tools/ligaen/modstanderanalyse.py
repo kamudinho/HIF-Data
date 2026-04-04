@@ -146,12 +146,12 @@ def vis_side(dp=None):
                     row = this_goal.iloc[i]
                     
                     # Plot punktet
-                    ax.scatter(row['RAW_X'], row['RAW_Y'], color='yellow', s=120, edgecolors='black', zorder=5)
+                    ax.scatter(row['RAW_X'], row['RAW_Y'], color='red', s=80, edgecolors='black', zorder=5)
                     
                     # Navn over punktet
                     ax.text(row['RAW_X'], row['RAW_Y'] + 2, row['PLAYER_NAME'], 
                             color='black', fontsize=8, fontweight='bold', ha='center',
-                            bbox=dict(facecolor='black', alpha=0.6, edgecolor='none', pad=1))
+                            bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1))
 
                     # Pil til næste aktion
                     if i < len(this_goal) - 1:
