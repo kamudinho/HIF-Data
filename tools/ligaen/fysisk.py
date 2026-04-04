@@ -79,7 +79,7 @@ def vis_side(conn, name_map=None):
         p_map = df_local.set_index('clean_oid')['NAVN'].to_dict()
 
     # --- 4. TABS ---
-    t1, t2, t3, t4 = st.tabs([f"{valgt_hold} Oversigt", "Grafisk", "Top 5 (Liga)", "Kampanalyse"])
+    t1, t2, t3, t4 = st.tabs([f"{valgt_hold}-oversigt", "Scatterplot", "Top 5", "Kampanalyse"])
 
     if not df_phys.empty:
         df_phys['MINS_DEC'] = df_phys['MINUTES'].apply(parse_to_mins)
@@ -163,7 +163,7 @@ def vis_side(conn, name_map=None):
                 st.dataframe(
                     df_m[['SPIL', 'HOLD', 'MINUTES', 'SMART_DIST', 'HI_DISP', 'TOP_SPEED', 'DIST_VAL']].sort_values('DIST_VAL', ascending=False),
                     column_config={
-                        "SPIL": "Spiller", "HOLD": "Hold", "MINUTES": "Min", "SMART_DIST": "Distance", "HI_DISP": "HI løb",
+                        "SPIL": "Spiller", "HOLD": "Hold", "MINUTES": "Minutter", "SMART_DIST": "Distance", "HI_DISP": "HI-løb",
                         "TOP_SPEED": st.column_config.NumberColumn("Top", format="%.1f km/t"),
                         "DIST_VAL": None
                     },
