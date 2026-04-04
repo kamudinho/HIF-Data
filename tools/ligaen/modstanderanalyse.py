@@ -38,25 +38,25 @@ def build_team_map(df_matches):
     return team_map
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner info-boks med begge logoer og kampinfo i nederste venstre hjørne."""
-    # Logo 1 (Scoring Team)
+    """Tegner mindre logoer og info på én linje i nederste venstre hjørne."""
+    # Logo 1 (Mindre størrelse: 0.05)
     if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.05, 0.08, 0.08], transform=ax.transAxes)
+        ax_l1 = ax.inset_axes([0.02, 0.07, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo)
         ax_l1.axis('off')
     
-    # "vs." tekst
-    ax.text(0.11, 0.09, "vs.", transform=ax.transAxes, fontsize=10, fontweight='bold', va='center')
+    # "vs." tekst - rykket tættere på
+    ax.text(0.08, 0.095, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     
-    # Logo 2 (Opponent)
+    # Logo 2 (Mindre størrelse: 0.05)
     if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.14, 0.05, 0.08, 0.08], transform=ax.transAxes)
+        ax_l2 = ax.inset_axes([0.10, 0.07, 0.05, 0.05], transform=ax.transAxes)
         ax_l2.imshow(opp_team_logo)
         ax_l2.axis('off')
     
-    # Tekst info
-    info_text = f"Dato: {date_str}\n{score_str} ({min_str}. min)"
-    ax.text(0.02, 0.02, info_text, transform=ax.transAxes, fontsize=9, color='#333333', va='top')
+    # Info på én linje under logoerne
+    full_info = f"{date_str}  |  Resultat: {score_str}  ({min_str}. min)"
+    ax.text(0.02, 0.04, full_info, transform=ax.transAxes, fontsize=8, color='#555555', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
 
@@ -82,8 +82,9 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
         
-        # Data til Tab 1 & 3 (alle events)
-        df_all_events = conn.query(f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')")
+        # Hent data til Tab 1 (Events) og Tab 3 (Topspillere)
+        sql_all = f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')"
+        df_all_events = conn.query(sql_all)
 
     team_map = build_team_map(df_matches)
     col_spacer, col_hold = st.columns([3, 1])
@@ -95,14 +96,11 @@ def vis_side(dp=None):
 
     # --- TAB 1: EVENTS ---
     with t1:
-        st.subheader(f"Event-oversigt: {valgt_hold}")
         df_t1 = df_all_events[df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid].copy()
         if not df_t1.empty:
-            event_summary = df_t1['EVENT_TYPEID'].map(lambda x: OPTA_EVENT_TYPES.get(str(x), x)).value_counts().reset_index()
+            event_summary = df_t1['EVENT_TYPEID'].astype(str).map(lambda x: OPTA_EVENT_TYPES.get(x, x)).value_counts().reset_index()
             event_summary.columns = ['Aktion', 'Antal']
             st.dataframe(event_summary, use_container_width=True, hide_index=True)
-        else:
-            st.info("Ingen events fundet.")
 
     # --- TAB 2: MÅL-SEKVENSER ---
     with t2:
@@ -121,7 +119,7 @@ def vis_side(dp=None):
                 opp_name = row['CONTESTANTAWAY_NAME'] if is_h else row['CONTESTANTHOME_NAME']
                 opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_h else row['CONTESTANTHOME_OPTAUUID']
                 score = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
-                date = pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m')
+                date = pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
                 
                 goal_options[row['SEQUENCEID']] = {
                     'label': f"Mål vs. {opp_name} ({row['EVENT_TIMEMIN']}. min)",
@@ -138,7 +136,7 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
-                # INFO BOKS (Begge logoer + kampdata)
+                # INFO BOKS
                 draw_match_info_box(
                     ax, 
                     get_logo_img(valgt_uuid), 
@@ -165,8 +163,8 @@ def vis_side(dp=None):
 
     # --- TAB 3: TOPSPILLERE ---
     with t3:
-        st.subheader("Top-statistikker")
         if not df_all_events.empty:
-            top_scorers = df_all_events[df_all_events['EVENT_TYPEID'] == 16]['PLAYER_NAME'].value_counts().reset_index()
+            df_goals = df_all_events[(df_all_events['EVENT_TYPEID'] == 16) & (df_all_events['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)]
+            top_scorers = df_goals['PLAYER_NAME'].value_counts().reset_index()
             top_scorers.columns = ['Spiller', 'Mål']
             st.dataframe(top_scorers, use_container_width=True, hide_index=True)
