@@ -84,11 +84,6 @@ def vis_side(dp=None):
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        ),
-        ActualAssists AS (
-            SELECT DISTINCT EVENT_OPTAUUID, MATCH_OPTAUUID 
-            FROM {DB}.OPTA_QUALIFIERS 
-            WHERE QUALIFIER_QID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
@@ -96,15 +91,21 @@ def vis_side(dp=None):
             COUNT(*) as TOTAL_ACTIONS_IN_GOALS,
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
-            -- Her er fixet: Vi tæller kun assists hvis event_uuid findes i ActualAssists
-            COUNT(CASE WHEN aa.EVENT_OPTAUUID IS NOT NULL THEN 1 END) as ASSISTS,
-            -- Pasninger (mål) må ikke tælle assists med her for at undgå dobbelt-tælling
-            COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND aa.EVENT_OPTAUUID IS NULL THEN 1 END) as PASSES_IN_GOAL,
+            
+            -- FIX: Vi tæller kun assists ved at tjekke direkte i QUALIFIERS tabellen for hver række
+            (SELECT COUNT(*) 
+             FROM {DB}.OPTA_QUALIFIERS q 
+             WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
+             AND q.QUALIFIER_QID = 213) as ASSISTS,
+            
+            -- Pasninger er kun type 1, og vi trækker assists fra for at undgå overlap
+            COUNT(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 END) - 
+            (SELECT COUNT(*) FROM {DB}.OPTA_QUALIFIERS q2 WHERE q2.EVENT_OPTAUUID = e.EVENT_OPTAUUID AND q2.QUALIFIER_QID = 213) as PASSES_IN_GOAL,
+            
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 END) as DUELS_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN ActualAssists aa ON e.EVENT_OPTAUUID = aa.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = aa.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
