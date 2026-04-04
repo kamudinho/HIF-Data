@@ -44,11 +44,11 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Henter data fra Snowflake..."):
-        # 3.1 Hent kampe
+    with st.spinner("Henter data..."):
+        # 3.1 Kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # 3.2 SQL til målsekvenser (bruger OPTA_EVENTS)
+        # 3.2 Mål-sekvenser til visualisering
         sql_seq = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -77,7 +77,7 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (Bruger nu OPTA_QUALIFIERS med korrekte kolonnenavne)
+        # 3.3 SQL til Spiller-stats (Kun aktioner involveret i mål)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -92,7 +92,8 @@ def vis_side(dp=None):
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            COUNT(*) as TOTAL_ACTIONS,
+            -- Tæller kun aktioner der er i en GoalPossession
+            COUNT(CASE WHEN gp.POSSESSIONID IS NOT NULL THEN 1 END) as TOTAL_ACTIONS_IN_GOALS,
             COUNT(DISTINCT CASE WHEN gp.POSSESSIONID IS NOT NULL THEN gp.POSSESSIONID END) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
             COUNT(CASE WHEN a.EVENT_OPTAUUID IS NOT NULL THEN 1 END) as ASSISTS,
@@ -100,11 +101,11 @@ def vis_side(dp=None):
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as DUELS_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID = 8 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
         LEFT JOIN Assists a ON e.EVENT_OPTAUUID = a.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = a.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
-        ORDER BY GOALS DESC, ASSISTS DESC
+        ORDER BY GOAL_INVOLVEMENTS DESC, GOALS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
@@ -155,7 +156,6 @@ def vis_side(dp=None):
                         pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
                 st.pyplot(fig)
             with col_tab:
-                # Mapper tal til navne via din mapping.py
                 this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 st.dataframe(this_goal[['PLAYER_NAME', 'Aktion_Navn']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','Aktion_Navn':'Aktion'}), hide_index=True)
 
@@ -163,12 +163,12 @@ def vis_side(dp=None):
         df_team_stats = df_all_stats[df_all_stats['TEAM_ID'] == valgt_uuid].drop(columns=['TEAM_ID']).copy()
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
-            'TOTAL_ACTIONS': 'Aktioner (alle)',
+            'TOTAL_ACTIONS_IN_GOALS': 'Alle aktioner (mål)',
             'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
             'ASSISTS': 'Assists',
-            'PASSES_IN_GOAL': 'Pasninger i målsekvenser',
-            'DUELS_IN_GOAL': 'Dueller i målsekvenser',
-            'INTERCEPTIONS_IN_GOAL': 'Interceptions i målsekvenser'
+            'PASSES_IN_GOAL': 'Pasninger (mål)',
+            'DUELS_IN_GOAL': 'Dueller (mål)',
+            'INTERCEPTIONS_IN_GOAL': 'Interceptions (mål)'
         })
         st.dataframe(df_team_stats, use_container_width=True, hide_index=True)
