@@ -54,7 +54,7 @@ def vis_side(dp=None):
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
     # --- SQL QUERIES ---
-    # Vi bruger MATCH_LOCALDATE baseret på din skemaoversigt
+    # Vi bruger MATCH_LOCALDATE til kronologisk sortering
     sql_matchinfo = f"""
         SELECT 
             MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -73,15 +73,16 @@ def vis_side(dp=None):
         AND EVENT_TYPEID IN (1, 4, 5, 8, 49, 13, 14, 15, 16)
     """
 
+    # SQL er opdateret til at tracke GOAL_TEAM_ID, så vi ved hvem der scorede i sekvensen
     sql_sequences = f"""
         WITH GoalEvents AS (
-            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_EVENTID, SEQUENCEID
+            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_EVENTID, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID
             FROM {DB}.OPTA_EVENTS 
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')
             AND EVENT_TYPEID = 16
         ),
         SequenceWindow AS (
-            SELECT e.*, ge.EVENT_EVENTID as GOAL_REF_ID
+            SELECT e.*, ge.EVENT_EVENTID as GOAL_REF_ID, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds')
@@ -94,7 +95,7 @@ def vis_side(dp=None):
         SELECT 
             e.MATCH_OPTAUUID, e.GOAL_REF_ID AS SEQUENCEID, e.EVENT_TIMESTAMP,
             e.EVENT_TIMEMIN, e.PLAYER_NAME, e.EVENT_TYPEID, e.EVENT_CONTESTANT_OPTAUUID,
-            e.EVENT_X AS RAW_X, e.EVENT_Y AS RAW_Y, q.QUALIFIER_LIST
+            e.GOAL_TEAM_ID, e.EVENT_X AS RAW_X, e.EVENT_Y AS RAW_Y, q.QUALIFIER_LIST
         FROM SequenceWindow e
         LEFT JOIN EventQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
     """
@@ -125,95 +126,93 @@ def vis_side(dp=None):
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
         else:
-            team_goals = df_sequences[
-                (df_sequences['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) & 
-                ((df_sequences['RAW_X'] > 0) | (df_sequences['RAW_Y'] > 0) | (df_sequences['EVENT_TYPEID'] == 16))
-            ].copy()
+            # 1. Filtrér så vi KUN har sekvenser, hvor det valgte hold scorede målet
+            team_sequences_all = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
             
-            if not team_goals.empty:
-                # Merge med matchinfo (brug MATCH_LOCALDATE)
-                team_goals = team_goals.merge(
+            if not team_sequences_all.empty:
+                # Merge med matchinfo for at få datoer og navne
+                team_sequences_all = team_sequences_all.merge(
                     df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']], 
                     on='MATCH_OPTAUUID', 
                     how='left'
                 )
 
-                team_goals['MODSTANDER'] = np.where(
-                    team_goals['CONTESTANTHOME_NAME'] == valgt_hold, 
-                    team_goals['CONTESTANTAWAY_NAME'], 
-                    team_goals['CONTESTANTHOME_NAME']
-                )
-
-                # Generer kronologisk mål-liste baseret på MATCH_LOCALDATE
-                goal_list = team_goals.groupby('SEQUENCEID').first().reset_index()
-                goal_list = goal_list.sort_values(['MATCH_LOCALDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
+                # 2. Find unikke mål (Type 16) for at bygge dropdown-listen kronologisk
+                goal_events = team_sequences_all[team_sequences_all['EVENT_TYPEID'] == 16].copy()
+                goal_list = goal_events.sort_values(['MATCH_LOCALDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
 
                 goal_options = {}
                 for idx, row in goal_list.iterrows():
-                    label = f"Mål #{idx + 1} vs. {row['MODSTANDER']} ({row['EVENT_TIMEMIN']}. min)"
+                    modstander = row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_NAME'] == valgt_hold else row['CONTESTANTHOME_NAME']
+                    label = f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)"
                     goal_options[row['SEQUENCEID']] = label
 
-                selected_goal_id = st.selectbox(
-                    "Vælg en scoring:", 
-                    options=list(goal_options.keys()), 
-                    format_func=lambda x: goal_options[x]
-                )
+                if not goal_options:
+                    st.warning(f"Ingen scoringer fundet for {valgt_hold}.")
+                else:
+                    selected_goal_id = st.selectbox(
+                        "Vælg en scoring:", 
+                        options=list(goal_options.keys()), 
+                        format_func=lambda x: goal_options[x]
+                    )
 
-                # Sortering sikrer at mål (16) tegnes sidst og dermed øverst
-                this_goal = team_goals[team_goals['SEQUENCEID'] == selected_goal_id].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
+                    # 3. Hent data for den valgte sekvens (og vis kun det valgte holds egne aktioner)
+                    this_goal = team_sequences_all[
+                        (team_sequences_all['SEQUENCEID'] == selected_goal_id) & 
+                        (team_sequences_all['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)
+                    ].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
 
-                # Dekodning
-                def decode_q(q_string):
-                    if not q_string: return ""
-                    names = [OPTA_QUALIFIERS.get(q.strip(), q) for q in str(q_string).split(',')]
-                    ignore = ["Pass End X", "Pass End Y", "Zone", "Length", "Angle"]
-                    return ", ".join([n for n in names if n not in ignore])
+                    # --- Dekodning ---
+                    def decode_q(q_string):
+                        if not q_string: return ""
+                        names = [OPTA_QUALIFIERS.get(q.strip(), q) for q in str(q_string).split(',')]
+                        ignore = ["Pass End X", "Pass End Y", "Zone", "Length", "Angle"]
+                        return ", ".join([n for n in names if n not in ignore])
 
-                this_goal['Aktion'] = this_goal['EVENT_TYPEID'].astype(str).apply(lambda x: OPTA_EVENT_TYPES.get(x, x))
-                this_goal['Beskrivelse'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
+                    this_goal['Aktion'] = this_goal['EVENT_TYPEID'].astype(str).apply(lambda x: OPTA_EVENT_TYPES.get(x, x))
+                    this_goal['Beskrivelse'] = this_goal['QUALIFIER_LIST'].apply(decode_q)
 
-                # --- 3. LAYOUT: KOLONNER ---
-                col_bane, col_tabel = st.columns([2, 1]) 
+                    # --- 4. LAYOUT ---
+                    col_bane, col_tabel = st.columns([2, 1]) 
 
-                with col_bane:
-                    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
-                    fig, ax = pitch.draw(figsize=(10, 7))
+                    with col_bane:
+                        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
+                        fig, ax = pitch.draw(figsize=(10, 7))
 
-                    for i in range(len(this_goal)):
-                        row = this_goal.iloc[i]
-                        is_goal = int(row['EVENT_TYPEID']) == 16
+                        for i in range(len(this_goal)):
+                            row = this_goal.iloc[i]
+                            is_goal = int(row['EVENT_TYPEID']) == 16
+                            
+                            marker_type = 's' if is_goal else 'o'
+                            marker_color = '#e74c3c' if is_goal else 'red'
+                            
+                            ax.scatter(row['RAW_X'], row['RAW_Y'], 
+                                       color=marker_color, 
+                                       s=180 if is_goal else 70, 
+                                       marker=marker_type, 
+                                       edgecolors='black', 
+                                       linewidth=2 if is_goal else 1,
+                                       zorder=20 if is_goal else 5)
+                            
+                            ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
+                                    fontsize=9, fontweight='bold' if is_goal else 'normal', ha='center',
+                                    bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=1))
+
+                            if i < len(this_goal) - 1:
+                                next_row = this_goal.iloc[i+1]
+                                pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
+                                             width=1.5, headwidth=3, color='grey', ax=ax, alpha=0.4)
                         
-                        marker_type = 's' if is_goal else 'o'
-                        marker_color = '#e74c3c' if is_goal else 'red'
-                        
-                        ax.scatter(row['RAW_X'], row['RAW_Y'], 
-                                   color=marker_color, 
-                                   s=180 if is_goal else 70, 
-                                   marker=marker_type, 
-                                   edgecolors='black', 
-                                   linewidth=2 if is_goal else 1,
-                                   zorder=20 if is_goal else 5)
-                        
-                        ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], 
-                                fontsize=9, fontweight='bold' if is_goal else 'normal', ha='center',
-                                bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=1))
+                        st.pyplot(fig, use_container_width=True)
 
-                        if i < len(this_goal) - 1:
-                            next_row = this_goal.iloc[i+1]
-                            pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
-                                         width=1.5, headwidth=3, color='grey', ax=ax, alpha=0.4)
-                    
-                    st.pyplot(fig, use_container_width=True)
-
-                with col_tabel:
-                    st.write("**Sekvens-detaljer:**")
-                    # Målet øverst i tabellen
-                    display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={
-                        'PLAYER_NAME': 'Spiller',
-                        'Aktion': 'Type',
-                        'Beskrivelse': 'Info'
-                    })
-                    st.dataframe(display_df, use_container_width=True, hide_index=True, height=520)
+                    with col_tabel:
+                        st.write("**Sekvens-detaljer:**")
+                        display_df = this_goal[['PLAYER_NAME', 'Aktion', 'Beskrivelse']].iloc[::-1].rename(columns={
+                            'PLAYER_NAME': 'Spiller',
+                            'Aktion': 'Type',
+                            'Beskrivelse': 'Info'
+                        })
+                        st.dataframe(display_df, use_container_width=True, hide_index=True, height=520)
                 
     with t3:
         if not df_events.empty:
