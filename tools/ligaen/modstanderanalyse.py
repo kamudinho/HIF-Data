@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt  # RETTET FRA .exports
+import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
-from data.utils.mapping import OPTA_EVENT_TYPES, is_assist # Importerer fra din mapping fil
+from data.utils.mapping import OPTA_EVENT_TYPES, is_assist
 import requests
 from PIL import Image
 from io import BytesIO
@@ -44,11 +44,12 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Henter data..."):
+    with st.spinner("Henter data fra Snowflake..."):
+        # 3.1 Hent kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser
-        sql_base = f"""
+        # 3.2 SQL til målsekvenser (bruger OPTA_EVENTS)
+        sql_seq = f"""
         WITH GoalEvents AS (
             SELECT 
                 MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_CONTESTANT_OPTAUUID, EVENT_TIMEMIN, EVENT_TYPEID, POSSESSIONID, EVENT_EVENTID,
@@ -74,9 +75,9 @@ def vis_side(dp=None):
             AND e.POSSESSIONID = gl.POSSESSIONID
         WHERE e.EVENT_TIMESTAMP <= gl.GOAL_TIME
         """
-        df_sequences = conn.query(sql_base)
+        df_sequences = conn.query(sql_seq)
 
-        # SQL til Spiller-stats: Inkluderer nu Assists (213) og Alle Aktioner
+        # 3.3 SQL til Spiller-stats (Bruger nu OPTA_QUALIFIERS med korrekte kolonnenavne)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
@@ -84,9 +85,9 @@ def vis_side(dp=None):
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
         Assists AS (
-            SELECT EVENT_ID, MATCH_ID 
-            FROM {DB}.OPTA_EVENTQUALIFIERS 
-            WHERE QUALIFIER_ID = 213
+            SELECT EVENT_OPTAUUID, MATCH_OPTAUUID 
+            FROM {DB}.OPTA_QUALIFIERS 
+            WHERE QUALIFIER_QID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
@@ -94,20 +95,20 @@ def vis_side(dp=None):
             COUNT(*) as TOTAL_ACTIONS,
             COUNT(DISTINCT CASE WHEN gp.POSSESSIONID IS NOT NULL THEN gp.POSSESSIONID END) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
-            COUNT(CASE WHEN a.EVENT_ID IS NOT NULL THEN 1 END) as ASSISTS,
+            COUNT(CASE WHEN a.EVENT_OPTAUUID IS NOT NULL THEN 1 END) as ASSISTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as PASSES_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as DUELS_IN_GOAL,
             COUNT(CASE WHEN e.EVENT_TYPEID = 8 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         LEFT JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN Assists a ON e.EVENT_ID = a.EVENT_ID AND e.MATCH_OPTAUUID = a.MATCH_ID
+        LEFT JOIN Assists a ON e.EVENT_OPTAUUID = a.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = a.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
         ORDER BY GOALS DESC, ASSISTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
-    # Team Mapping
+    # 4. TEAM MAPPING & UI
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
@@ -154,7 +155,7 @@ def vis_side(dp=None):
                         pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
                 st.pyplot(fig)
             with col_tab:
-                # Vi bruger din mapping til at vise navnet på aktionen
+                # Mapper tal til navne via din mapping.py
                 this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 st.dataframe(this_goal[['PLAYER_NAME', 'Aktion_Navn']].iloc[::-1].rename(columns={'PLAYER_NAME':'Spiller','Aktion_Navn':'Aktion'}), hide_index=True)
 
