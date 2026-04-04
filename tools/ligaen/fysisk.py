@@ -127,7 +127,7 @@ def vis_side(conn, name_map=None):
                 texttemplate='%{text:.1f}' if valgt_kolonne == 'TOP_SPEED' else '%{text:d}', 
                 textposition='outside', cliponaxis=False
             )
-            fig_bar.update_layout(xaxis_tickangle=-45, height=600)
+            fig_bar.update_layout(xaxis_tickangle=-45, height=450)
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with t3:
