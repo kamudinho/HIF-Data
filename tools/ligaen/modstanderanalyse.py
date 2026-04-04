@@ -45,7 +45,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Synkroniserer kampdata..."):
+    with st.spinner("Henter og analyserer Opta data..."):
         # 3.1 Hent kampe
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
@@ -78,12 +78,17 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats (RETTET: Skudsikker EXISTS logik)
+        # 3.3 SQL til Spiller-stats (RETTET: Direkte kobling mellem Events og Qualifiers)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        ),
+        AssistsData AS (
+            SELECT DISTINCT EVENT_OPTAUUID, MATCH_OPTAUUID 
+            FROM {DB}.OPTA_QUALIFIERS 
+            WHERE QUALIFIER_QID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
@@ -91,25 +96,15 @@ def vis_side(dp=None):
             COUNT(*) as TOTAL_ACTIONS_IN_GOALS,
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
-            
-            -- ASSISTS: Tjekker direkte efter Qualifier 213
-            SUM(CASE WHEN EXISTS (
-                SELECT 1 FROM {DB}.OPTA_QUALIFIERS q 
-                WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
-                AND q.QUALIFIER_QID = 213
-            ) THEN 1 ELSE 0 END) as ASSISTS,
-            
-            -- PASNINGER: Type 1 (Pasning) minus dem der er assists
-            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND NOT EXISTS (
-                SELECT 1 FROM {DB}.OPTA_QUALIFIERS q 
-                WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
-                AND q.QUALIFIER_QID = 213
-            ) THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
-            
+            -- Tæl assists baseret på om event_optauuid findes i assist-tabellen
+            SUM(CASE WHEN ad.EVENT_OPTAUUID IS NOT NULL THEN 1 ELSE 0 END) as ASSISTS,
+            -- Tæl pasninger, som IKKE er assists
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND ad.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL,
             SUM(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 ELSE 0 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
+        LEFT JOIN AssistsData ad ON e.EVENT_OPTAUUID = ad.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = ad.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         AND e.PLAYER_NAME IS NOT NULL
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
@@ -117,7 +112,7 @@ def vis_side(dp=None):
         """
         df_all_stats = conn.query(sql_stats)
 
-    # 4. TEAM MAPPING & UI
+    # 4. MAPPING OG INTERFACE
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
@@ -172,7 +167,7 @@ def vis_side(dp=None):
         df_team_stats = df_team_stats.rename(columns={
             'PLAYER': 'Spiller',
             'TOTAL_ACTIONS_IN_GOALS': 'Alle aktioner (mål)',
-            'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
+            'GOAL_INVOLVEMENTS': 'Involveret i mål',
             'GOALS': 'Mål',
             'ASSISTS': 'Assists',
             'PASSES_IN_GOAL': 'Pasninger (mål)',
