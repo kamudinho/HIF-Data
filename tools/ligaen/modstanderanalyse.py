@@ -76,19 +76,18 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # 3.3 SQL til Spiller-stats - PRÆCIS OPTA LOGIK (328 & 29)
+        # 3.3 SQL til Spiller-stats - PRÆCIS OPTA LOGIK (Split Assist vs Second Assist)
         sql_stats = f"""
         WITH GoalPossessions AS (
-            -- Finder alle unikke boldbesiddelser, der endte i mål
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
         AssistsPerEvent AS (
-            -- Finder alle events der er markeret som assist i databasen (QID 29 eller 328)
             SELECT 
                 EVENT_OPTAUUID,
-                MAX(CASE WHEN QUALIFIER_QID IN (29, 328) THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST
+                MAX(CASE WHEN QUALIFIER_QID = 29 THEN 1 ELSE 0 END) as IS_OFFICIAL_ASSIST,
+                MAX(CASE WHEN QUALIFIER_QID = 328 THEN 1 ELSE 0 END) as IS_SECOND_ASSIST
             FROM {DB}.OPTA_QUALIFIERS 
             WHERE QUALIFIER_QID IN (29, 328)
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -97,15 +96,13 @@ def vis_side(dp=None):
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            -- Samlet antal mål-sekvenser spilleren har været en del af i den besiddelse
             COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
-            -- Mål (Type 16)
             SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as GOALS,
-            -- Assists (Kun dem med de officielle Opta-markører)
             SUM(COALESCE(ap.IS_OFFICIAL_ASSIST, 0)) as ASSISTS,
-            -- Opspils-pasninger (Pasninger i mål-sekvenser der IKKE er assists)
-            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND COALESCE(ap.IS_OFFICIAL_ASSIST, 0) = 0 THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
-            -- Dueller vundet i målsekvensen
+            SUM(COALESCE(ap.IS_SECOND_ASSIST, 0)) as SECOND_ASSISTS,
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 
+                     AND COALESCE(ap.IS_OFFICIAL_ASSIST, 0) = 0 
+                     AND COALESCE(ap.IS_SECOND_ASSIST, 0) = 0 THEN 1 ELSE 0 END) as PASSES_IN_GOAL,
             SUM(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 ELSE 0 END) as DUELS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
@@ -147,7 +144,13 @@ def vis_side(dp=None):
 
             if goal_options:
                 sel_ts = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
-                this_goal = team_seq[team_seq['GOAL_TIME'] == sel_ts].sort_values('EVENT_TIMESTAMP')
+                
+                # Filtrering til visualisering: Kun egne spillere og væsentlige hændelser (Pasning/Mål)
+                this_goal = team_seq[
+                    (team_seq['GOAL_TIME'] == sel_ts) & 
+                    (team_seq['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid) &
+                    (team_seq['EVENT_TYPEID'].isin([1, 16]))
+                ].sort_values(['EVENT_TIMESTAMP', 'EVENT_EVENTID'])
 
                 col_b, col_tab = st.columns([2.5, 1])
                 with col_b:
@@ -159,10 +162,13 @@ def vis_side(dp=None):
                         row = this_goal.iloc[i]
                         is_g = row['EVENT_TYPEID'] == 16
                         ax.scatter(row['EVENT_X'], row['EVENT_Y'], color='#cc0000' if is_g else 'red', s=150 if is_g else 60, marker='s' if is_g else 'o', edgecolors='black', zorder=10)
-                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'))
+                        
+                        # Dynamisk tekstplacering for at undgå overlap
+                        ax.text(row['EVENT_X'], row['EVENT_Y'] + 2, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=0.1))
+                        
                         if i < len(this_goal) - 1:
                             n = this_goal.iloc[i+1]
-                            pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1, color='black', ax=ax, alpha=0.2)
+                            pitch.arrows(row['EVENT_X'], row['EVENT_Y'], n['EVENT_X'], n['EVENT_Y'], width=1.5, color='black', ax=ax, alpha=0.3, zorder=9)
                     st.pyplot(fig)
                 with col_tab:
                     this_goal['Aktion_Navn'] = this_goal['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
@@ -175,6 +181,7 @@ def vis_side(dp=None):
             'GOAL_INVOLVEMENTS': 'Involveret i antal mål',
             'GOALS': 'Mål',
             'ASSISTS': 'Assists (Officiel Opta)',
+            'SECOND_ASSISTS': '2. Assists (Hockey)',
             'PASSES_IN_GOAL': 'Opspils-pasninger',
             'DUELS_IN_GOAL': 'Dueller vundet'
         })
