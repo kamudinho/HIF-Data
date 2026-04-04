@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
-from data.utils.mapping import OPTA_EVENT_TYPES, is_assist
+from data.utils.mapping import OPTA_EVENT_TYPES
 import requests
 from PIL import Image
 from io import BytesIO
@@ -15,7 +15,6 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
 # --- 2. HJÆLPEFUNKTIONER ---
-
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
     url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
@@ -39,15 +38,14 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
-
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    with st.spinner("Henter data..."):
+    with st.spinner("Henter og renser data..."):
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # SQL til sekvenser
+        # 3.2 SQL til mål-sekvenser
         sql_seq = f"""
         WITH GoalEvents AS (
             SELECT 
@@ -76,40 +74,40 @@ def vis_side(dp=None):
         """
         df_sequences = conn.query(sql_seq)
 
-        # RETTET SQL: Her adskiller vi nu Assists og Pasninger (mål) korrekt
+        # 3.3 NY OG FORBEDRET SQL STATS (Løser assist-problemet)
         sql_stats = f"""
         WITH GoalPossessions AS (
             SELECT DISTINCT MATCH_OPTAUUID, POSSESSIONID 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_TYPEID = 16 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
-        Assists AS (
-            SELECT EVENT_OPTAUUID, MATCH_OPTAUUID 
+        AssistsOnly AS (
+            SELECT DISTINCT EVENT_OPTAUUID, MATCH_OPTAUUID 
             FROM {DB}.OPTA_QUALIFIERS 
             WHERE QUALIFIER_QID = 213
         )
         SELECT 
             e.PLAYER_NAME as PLAYER,
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_ID,
-            COUNT(CASE WHEN gp.POSSESSIONID IS NOT NULL THEN 1 END) as TOTAL_ACTIONS_IN_GOALS,
-            COUNT(DISTINCT CASE WHEN gp.POSSESSIONID IS NOT NULL THEN gp.POSSESSIONID END) as GOAL_INVOLVEMENTS,
+            COUNT(*) as TOTAL_ACTIONS_IN_GOALS,
+            COUNT(DISTINCT e.MATCH_OPTAUUID || e.POSSESSIONID) as GOAL_INVOLVEMENTS,
             COUNT(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 END) as GOALS,
-            -- Vi tæller kun assists hvis aktionen findes i Assists-tabellen
-            COUNT(DISTINCT CASE WHEN a.EVENT_OPTAUUID IS NOT NULL THEN a.EVENT_OPTAUUID END) as ASSISTS,
-            -- Pasninger er kun type 1
-            COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as PASSES_IN_GOAL,
-            COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as DUELS_IN_GOAL,
-            COUNT(CASE WHEN e.EVENT_TYPEID = 8 AND gp.POSSESSIONID IS NOT NULL THEN 1 END) as INTERCEPTIONS_IN_GOAL
+            -- Tæl kun rækken som assist hvis den findes i AssistsOnly CTE
+            COUNT(CASE WHEN ao.EVENT_OPTAUUID IS NOT NULL THEN 1 END) as ASSISTS,
+            -- Pasninger (mål) må ikke tælle assists med i puljen her
+            COUNT(CASE WHEN e.EVENT_TYPEID = 1 AND ao.EVENT_OPTAUUID IS NULL THEN 1 END) as PASSES_IN_GOAL,
+            COUNT(CASE WHEN e.EVENT_TYPEID IN (3, 7, 44) THEN 1 END) as DUELS_IN_GOAL,
+            COUNT(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 END) as INTERCEPTIONS_IN_GOAL
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalPossessions gp ON e.MATCH_OPTAUUID = gp.MATCH_OPTAUUID AND e.POSSESSIONID = gp.POSSESSIONID
-        LEFT JOIN Assists a ON e.EVENT_OPTAUUID = a.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = a.MATCH_OPTAUUID
+        LEFT JOIN AssistsOnly ao ON e.EVENT_OPTAUUID = ao.EVENT_OPTAUUID AND e.MATCH_OPTAUUID = ao.MATCH_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY e.PLAYER_NAME, e.EVENT_CONTESTANT_OPTAUUID
-        ORDER BY GOAL_INVOLVEMENTS DESC, GOALS DESC
+        ORDER BY GOAL_INVOLVEMENTS DESC
         """
         df_all_stats = conn.query(sql_stats)
 
-    # 4. TEAM MAPPING & UI
+    # 4. UI LOGIK
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
