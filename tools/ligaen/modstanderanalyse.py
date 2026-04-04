@@ -11,7 +11,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- 1. KONFIGURATION (DEFINERET GLOBALT FOR AT UNDGÅ FEJL) ---
+# --- 1. KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
@@ -25,22 +25,11 @@ def get_logo_img(opta_uuid):
         return Image.open(BytesIO(response.content))
     except: return None
 
-def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l1.imshow(scoring_team_logo)
-        ax_l1.axis('off')
-    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
-    if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l2.imshow(opp_team_logo)
-        ax_l2.axis('off')
-    full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
-    ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
-
 def plot_pass_heatmap(df, team_name, direction="up"):
-    # Filtrer pasninger (1) og fjern slettede (43)
     pass_df = df[(df['EVENT_TYPEID'] == 1) & (df['EVENT_TYPEID'] != 43)].copy()
+    if pass_df.empty:
+        return None
+    
     pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(8, 10))
     
@@ -75,8 +64,14 @@ def vis_side(dp=None):
     # --- T1: OVERSIGT ---
     with t1:
         st.subheader(f"Status: {valgt_hold}")
+        # RETTET: SCOREHOME -> CONTESTANTHOME_SCORE, SCOREAWAY -> CONTESTANTAWAY_SCORE
         sql_res = f"""
-            SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, SCOREHOME, SCOREAWAY
+            SELECT 
+                MATCH_LOCALDATE as DATO, 
+                CONTESTANTHOME_NAME as HJEMMEHOLD, 
+                CONTESTANTAWAY_NAME as UDEHOLD, 
+                CONTESTANTHOME_SCORE as MÅL_H, 
+                CONTESTANTAWAY_SCORE as MÅL_U
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}')
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -88,36 +83,51 @@ def vis_side(dp=None):
 
     # --- T2: MED BOLD ---
     with t2:
-        sql_passes = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND EVENT_TYPEID != 43 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+        sql_passes = f"""
+            SELECT EVENT_X, EVENT_Y, EVENT_TYPEID 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
+            AND EVENT_TYPEID = 1 
+            AND EVENT_TYPEID != 43 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        """
         df_passes = conn.query(sql_passes)
         
         c1, c2 = st.columns(2)
         with c1:
             st.write("**Opbygning (Mål nedad)**")
-            st.pyplot(plot_pass_heatmap(df_passes, valgt_hold, direction="down"))
+            fig_d = plot_pass_heatmap(df_passes, valgt_hold, direction="down")
+            if fig_d: st.pyplot(fig_d)
         with c2:
             st.write("**Gennembrud (Mål opad)**")
-            st.pyplot(plot_pass_heatmap(df_passes, valgt_hold, direction="up"))
+            fig_u = plot_pass_heatmap(df_passes, valgt_hold, direction="up")
+            if fig_u: st.pyplot(fig_u)
 
     # --- T3: UDEN BOLD ---
     with t3:
         st.subheader("Defensiv Struktur")
-        # Henter Tacklinger (7), Interceptions (8) og Clearinger (12)
-        sql_def = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8, 12) AND EVENT_TYPEID != 43 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+        sql_def = f"""
+            SELECT EVENT_X, EVENT_Y, EVENT_TYPEID 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
+            AND EVENT_TYPEID IN (7, 8, 12) 
+            AND EVENT_TYPEID != 43 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        """
         df_def = conn.query(sql_def)
         
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-        fig, ax = pitch.draw()
-        pitch.kdeplot(df_def.EVENT_X, df_def.EVENT_Y, ax=ax, cmap='Greens', fill=True, alpha=0.6, levels=10)
-        st.pyplot(fig)
-        st.caption("Områder med højest defensiv intensitet.")
+        if not df_def.empty:
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+            fig, ax = pitch.draw()
+            pitch.kdeplot(df_def.EVENT_X, df_def.EVENT_Y, ax=ax, cmap='Greens', fill=True, alpha=0.6, levels=10)
+            st.pyplot(fig)
+            st.caption("Områder med højest defensiv intensitet (Tacklinger, Interceptions, Clearinger).")
 
     # --- T4: MÅL-SEKVENSER ---
     with t4:
         sql_goals_base = f"""
             SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_TIMEMIN as GOAL_MIN, 
-                   m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.MATCH_LOCALDATE,
-                   m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
+                   m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.MATCH_LOCALDATE
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND e.EVENT_TYPEID = 16 
@@ -126,8 +136,7 @@ def vis_side(dp=None):
         """
         sql_seq = f"""
             WITH G AS ({sql_goals_base})
-            SELECT e.*, g.GOAL_TIME, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.MATCH_LOCALDATE,
-                   g.CONTESTANTHOME_OPTAUUID as H_ID, g.CONTESTANTAWAY_OPTAUUID as A_ID
+            SELECT e.*, g.GOAL_TIME, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.MATCH_LOCALDATE
             FROM {DB}.OPTA_EVENTS e
             INNER JOIN G g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME
@@ -138,11 +147,13 @@ def vis_side(dp=None):
 
         if not df_all_seq.empty:
             goal_list = df_all_seq.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
-            goal_labels = {f"{r.MATCH_OPTAUUID}_{r.GOAL_TIME}": f"{pd.to_datetime(r.MATCH_LOCALDATE).strftime('%d/%m')} vs {r.CONTESTANTAWAY_NAME if r.CONTESTANTHOME_NAME==valgt_hold else r.CONTESTANTHOME_NAME} ({r.GOAL_MIN}')" for r in goal_list.itertuples()}
+            goal_labels = {
+                f"{r.MATCH_OPTAUUID}_{r.GOAL_TIME}": f"{pd.to_datetime(r.MATCH_LOCALDATE).strftime('%d/%m')} vs {r.CONTESTANTAWAY_NAME if r.CONTESTANTHOME_NAME==valgt_hold else r.CONTESTANTHOME_NAME} ({r.GOAL_MIN}')" 
+                for r in goal_list.itertuples()
+            }
             
             sel_goal_key = st.selectbox("Vælg mål-sekvens", list(goal_labels.keys()), format_func=lambda x: goal_labels[x])
             
-            # Filtrer til valgte mål
             m_id, g_ts = sel_goal_key.split('_', 1)
             this_goal = df_all_seq[(df_all_seq.MATCH_OPTAUUID == m_id) & (df_all_seq.GOAL_TIME == g_ts)].sort_values('EVENT_TIMESTAMP')
             
@@ -150,7 +161,6 @@ def vis_side(dp=None):
             with c_pitch:
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = p.draw()
-                # Tegn pile for sekvensen
                 for i in range(len(this_goal)-1):
                     curr, nxt = this_goal.iloc[i], this_goal.iloc[i+1]
                     p.arrows(curr.EVENT_X, curr.EVENT_Y, nxt.EVENT_X, nxt.EVENT_Y, color='black', alpha=0.3, ax=ax, width=1)
