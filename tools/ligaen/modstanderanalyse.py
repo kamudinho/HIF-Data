@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
+# Sørg for at 'dp' (Dataprovider) er importeret og tilgængelig her, eller sendt med som argument
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_QUALIFIERS, OPTA_EVENT_TYPES, get_event_name
 
@@ -41,7 +42,7 @@ def build_team_map(df_matches):
     return team_map
 
 # --- 2. HOVEDFUNKTION ---
-def vis_side(dp=None):
+def vis_side(dp=None): # Husk dp skal med her!
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Ingen forbindelse til Snowflake.")
@@ -133,19 +134,40 @@ def vis_side(dp=None):
                 goal_events = team_sequences_all[team_sequences_all['EVENT_TYPEID'] == 16].copy()
                 goal_list = goal_events.sort_values(['MATCH_LOCALDATE', 'EVENT_TIMEMIN']).reset_index(drop=True)
 
+                # Lav labels til dropdown
                 goal_options = {}
                 for idx, row in goal_list.iterrows():
                     modstander = row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_NAME'] == valgt_hold else row['CONTESTANTHOME_NAME']
-                    label = f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)"
-                    goal_options[row['SEQUENCEID']] = label
+                    # Label til brug i dropdown (med minut)
+                    label_full = f"Mål #{idx + 1} vs. {modstander} ({row['EVENT_TIMEMIN']}. min)"
+                    # Label til brug i titlen (uden minut)
+                    label_short = f"Mål #{idx + 1} vs. {modstander}"
+                    goal_options[row['SEQUENCEID']] = {'full': label_full, 'short': label_short}
 
                 if goal_options:
-                    selected_goal_id = st.selectbox("Vælg scoring", options=list(goal_options.keys()), format_func=lambda x: goal_options[x])
+                    # Layout over banen (Titel til venstre, Vælger til højre)
+                    col_titel, col_velger = st.columns([2, 1])
+
+                    # 1. NYHED: Vi gemmer valget i en variabel, så vi kan bruge 'short'-titlen nedenfor
+                    selected_goal_id = col_velger.selectbox(
+                        "Vælg scoring", 
+                        options=list(goal_options.keys()), 
+                        format_func=lambda x: goal_options[x]['full'], # dropdown viser fuld info
+                        label_visibility="collapsed"
+                    )
+                    
+                    # 2. NYHED: Stor tydelig titel til venstre
+                    titel_tekst = goal_options[selected_goal_id]['short']
+                    col_titel.markdown(f"## {titel_tekst}")
 
                     this_goal = team_sequences_all[
                         (team_sequences_all['SEQUENCEID'] == selected_goal_id) & 
                         (team_sequences_all['EVENT_CONTESTANT_OPTAUUID'] == valgt_uuid)
                     ].sort_values(['EVENT_TIMESTAMP', 'EVENT_TYPEID']).copy()
+
+                    # Find modstander for at kunne hente logo
+                    goal_row = goal_list[goal_list['SEQUENCEID'] == selected_goal_id].iloc[0]
+                    modstander_navn = goal_row['CONTESTANTAWAY_NAME'] if goal_row['CONTESTANTHOME_NAME'] == valgt_hold else goal_row['CONTESTANTHOME_NAME']
 
                     def decode_q(q_string):
                         if not q_string: return ""
@@ -159,16 +181,32 @@ def vis_side(dp=None):
                     col_bane, col_tabel = st.columns([2, 1]) 
 
                     with col_bane:
+                        # 3. NYHED: Forbered logo
+                        # Vi bruger dp (Dataprovider) til at hente det rigtige logo fra team_mapping.py
+                        opp_logo_path = dp.load_team_logo(modstander_navn)
+                        
                         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', goal_type='box')
                         fig, ax = pitch.draw(figsize=(10, 7))
+
+                        # 4. NYHED: Smid logo i venstre hjørne
+                        # Logoet placeres i øverste venstre hjørne. Vi bruger 'xy'-koordinater på aksen.
+                        # Opta X: 0-100, Y: 0-100 (Y=0 er toppen).
+                        if opp_logo_path:
+                            # offset=(5,5) flytter det lidt ind på banen
+                            pitch.logo(opp_logo_path, x=5, y=5, ax=ax, width=15, height=15)
+
                         for i in range(len(this_goal)):
                             row = this_goal.iloc[i]
                             is_goal = int(row['EVENT_TYPEID']) == 16
                             marker_color = '#e74c3c' if is_goal else 'red'
+                            
+                            # Vi sikrer, at logoet altid ligger *under* spillernavne, hvis de overlapper
                             ax.scatter(row['RAW_X'], row['RAW_Y'], color=marker_color, s=180 if is_goal else 70, 
                                        marker='s' if is_goal else 'o', edgecolors='black', linewidth=1, zorder=10)
+                            
                             ax.text(row['RAW_X'], row['RAW_Y'] + 2.5, row['PLAYER_NAME'], fontsize=9, ha='center',
                                     bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.5))
+                                    
                             if i < len(this_goal) - 1:
                                 next_row = this_goal.iloc[i+1]
                                 pitch.arrows(row['RAW_X'], row['RAW_Y'], next_row['RAW_X'], next_row['RAW_Y'], 
