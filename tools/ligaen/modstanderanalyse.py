@@ -159,7 +159,7 @@ def vis_side(dp=None):
                         # Pitch.arrows tager (x_start, y_start, x_end, y_end)
                         pitch.arrows(row['RAW_X'], row['RAW_Y'], 
                                      next_row['RAW_X'], next_row['RAW_Y'], 
-                                     width=2, headwidth=4, color='white', ax=ax, alpha=0.7)
+                                     width=2, headwidth=4, color='grey', ax=ax, alpha=0.7)
 
                 st.pyplot(fig)
                 st.dataframe(this_goal[['EVENT_TIMEMIN', 'PLAYER_NAME', 'QUALIFIER_LIST']], use_container_width=True)
