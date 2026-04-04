@@ -117,7 +117,6 @@ def vis_side(dp=None):
         st.write(f"Antal events fundet for {valgt_hold}: {len(df_team_events)}")
                 
     with t2:
-        st.subheader("Analyse af scoringer (Horisontal visning)")
         
         if df_sequences.empty:
             st.info("Ingen sekvens-data fundet.")
@@ -139,7 +138,7 @@ def vis_side(dp=None):
                 # --- RETTELSE: Vi bruger 'Pitch' for horisontal visning ---
                 from mplsoccer import Pitch
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey', 
-                              goal_type='box', stripe=True)
+                              goal_type='box', stripe=False)
                 fig, ax = pitch.draw(figsize=(10, 7))
 
                 # Opta koordinater: RAW_X er længden (0-100), RAW_Y er bredden (0-100)
@@ -151,7 +150,7 @@ def vis_side(dp=None):
                     
                     # Navn over punktet
                     ax.text(row['RAW_X'], row['RAW_Y'] + 2, row['PLAYER_NAME'], 
-                            color='white', fontsize=10, fontweight='bold', ha='center',
+                            color='black', fontsize=8, fontweight='bold', ha='center',
                             bbox=dict(facecolor='black', alpha=0.6, edgecolor='none', pad=1))
 
                     # Pil til næste aktion
