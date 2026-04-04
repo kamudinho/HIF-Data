@@ -113,8 +113,18 @@ def vis_side(dp=None):
 
     # --- T1: OVERSIGT ---
     with t1:
-        st.subheader(f"Seneste Resultater: {valgt_hold}")
-        sql_res = f"SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, TOTAL_HOME_SCORE as 'MÅL H', TOTAL_AWAY_SCORE as 'MÅL U' FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' ORDER BY MATCH_LOCALDATE DESC LIMIT 5"
+        sql_res = f"""
+            SELECT 
+                MATCH_LOCALDATE as DATO, 
+                CONTESTANTHOME_NAME as HJEMME, 
+                CONTESTANTAWAY_NAME as UDE, 
+                TOTAL_HOME_SCORE as "MÅL H", 
+                TOTAL_AWAY_SCORE as "MÅL U" 
+            FROM {DB}.OPTA_MATCHINFO 
+            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' 
+            ORDER BY MATCH_LOCALDATE DESC LIMIT 5
+        """
         st.dataframe(conn.query(sql_res), hide_index=True)
 
     # --- T2: MED BOLDEN (3 KOLONNER - HALVE BANER) ---
