@@ -27,6 +27,7 @@ def get_logo_img(opta_uuid):
 
 def build_team_map(df_matches):
     if df_matches.empty: return {}
+    # Bruger korrekte kolonnenavne fra dit skema: CONTESTANTHOME_OPTAUUID
     ids = pd.concat([df_matches['CONTESTANTHOME_OPTAUUID'], df_matches['CONTESTANTAWAY_OPTAUUID']]).unique()
     team_map = {}
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -37,25 +38,24 @@ def build_team_map(df_matches):
         if matched_name: team_map[matched_name] = u_raw
     return team_map
 
-def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner små logoer og info-tekst med stillingen på scoringstidspunktet."""
-    # Logo 1 (Scoring team)
+def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, min_str):
+    """Tegner logoer og kamp-info under banen."""
+    # Logo 1
     if scoring_team_logo:
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo)
         ax_l1.axis('off')
     
-    # "vs." tekst
     ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     
-    # Logo 2 (Opponent)
+    # Logo 2
     if opp_team_logo:
         ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l2.imshow(opp_team_logo)
         ax_l2.axis('off')
     
-    # Info-linje med stillingen på tidspunktet
-    full_info = f"{date_str}  |  Stilling: {score_str}  ({min_str}. min)"
+    # Info-linje (Uden den fejlagtige score)
+    full_info = f"{date_str}  |  Tidspunkt: {min_str}. min"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 # --- 3. HOVEDFUNKTION ---
@@ -65,25 +65,29 @@ def vis_side(dp=None):
     if not conn: return
 
     with st.spinner("Henter data..."):
+        # Henter matchinfo
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
         
-        # Vi inkluderer HOME_SCORE og AWAY_SCORE fra EVENTS tabellen for at få stillingen ved målet
+        # Rettet SQL: Fjernet HOME_SCORE/AWAY_SCORE da de ikke findes i OPTA_EVENTS
         sql_seq = f"""
             WITH GoalEvents AS (
-                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID, HOME_SCORE, AWAY_SCORE
+                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP, SEQUENCEID, EVENT_CONTESTANT_OPTAUUID
                 FROM {DB}.OPTA_EVENTS WHERE EVENT_TYPEID = 16
-                AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')
+                AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
             )
-            SELECT e.*, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID, ge.HOME_SCORE, ge.AWAY_SCORE, q.QUALIFIER_LIST
+            SELECT e.*, ge.EVENT_CONTESTANT_OPTAUUID as GOAL_TEAM_ID, q.QUALIFIER_LIST
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalEvents ge ON e.MATCH_OPTAUUID = ge.MATCH_OPTAUUID
-            LEFT JOIN (SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST FROM {DB}.OPTA_QUALIFIERS GROUP BY 1) q 
-            ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN (
+                SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST 
+                FROM {DB}.OPTA_QUALIFIERS 
+                GROUP BY 1
+            ) q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TIMESTAMP BETWEEN (ge.EVENT_TIMESTAMP - INTERVAL '20 seconds') AND ge.EVENT_TIMESTAMP
         """
         df_sequences = conn.query(sql_seq)
         
-        sql_all = f"SELECT * FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}')"
+        sql_all = f"SELECT * FROM {DB}.OPTA_EVENTS WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
         df_all_events = conn.query(sql_all)
 
     team_map = build_team_map(df_matches)
@@ -97,27 +101,24 @@ def vis_side(dp=None):
     with t2:
         team_seq = df_sequences[df_sequences['GOAL_TEAM_ID'] == valgt_uuid].copy()
         if not team_seq.empty:
+            # Join med matchinfo for at få navne og datoer
             team_seq = team_seq.merge(
                 df_matches[['MATCH_OPTAUUID', 'MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME', 
                            'CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']], 
                 on='MATCH_OPTAUUID', how='left'
             )
 
-            # Find unikke mål og brug HOME_SCORE/AWAY_SCORE fra selve eventet
             goal_list = team_seq[team_seq['EVENT_TYPEID'] == 16].drop_duplicates('SEQUENCEID')
             goal_options = {}
             for _, row in goal_list.iterrows():
                 is_h = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
                 opp_name = row['CONTESTANTAWAY_NAME'] if is_h else row['CONTESTANTHOME_NAME']
                 opp_uuid = row['CONTESTANTAWAY_OPTAUUID'] if is_h else row['CONTESTANTHOME_OPTAUUID']
-                
-                # Stillingen på tidspunktet (HOME_SCORE og AWAY_SCORE fra eventet)
-                current_score = f"{int(row['HOME_SCORE'])}-{int(row['AWAY_SCORE'])}"
                 date = pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
                 
                 goal_options[row['SEQUENCEID']] = {
                     'label': f"Mål vs. {opp_name} ({row['EVENT_TIMEMIN']}. min)",
-                    'opp_uuid': opp_uuid, 'date': date, 'score': current_score, 'min': row['EVENT_TIMEMIN']
+                    'opp_uuid': opp_uuid, 'date': date, 'min': row['EVENT_TIMEMIN']
                 }
 
             col_t, col_v = st.columns([2, 1])
@@ -135,7 +136,6 @@ def vis_side(dp=None):
                     get_logo_img(valgt_uuid), 
                     get_logo_img(goal_options[sel_id]['opp_uuid']),
                     goal_options[sel_id]['date'],
-                    goal_options[sel_id]['score'],
                     goal_options[sel_id]['min']
                 )
 
