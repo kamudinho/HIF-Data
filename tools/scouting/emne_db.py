@@ -89,7 +89,6 @@ def prepare_df(content):
     df.columns = [str(c).upper().strip() for c in df.columns]
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # Rens alle positionsfelter
     for col in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -107,7 +106,6 @@ def prepare_df(content):
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False) if 'Klub' in df.columns else False
     
-    # Sørg for at boolske værdier er rigtige
     for c in ['Emne', 'Skyggehold']:
         if c in df.columns:
             df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False}).fillna(False)
@@ -176,7 +174,7 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # --- DINE NYE LEGENDS PÅ BANEN ---
+            # --- DINE LEGENDS PÅ BANEN ---
             ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(25, 2, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
@@ -186,10 +184,7 @@ def vis_side():
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
             for pid, (px, py, lbl) in m.items():
-                # Positions-label (f.eks. VCB)
                 ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                
-                # Spillere på positionen
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     k_color = get_status_color(p_row['Kontrakt'])
