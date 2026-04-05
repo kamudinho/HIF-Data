@@ -203,7 +203,7 @@ def vis_side(dp=None):
                 'Touches v. feltet'
                 'Pasninger involveret', 
                 'Regains (Vundet bold)', 
-                'Mål',
+                'Mål'
             ]
 
             # Beregn en "Mål-involvering %" (Hvor mange af holdets mål er spilleren med i?)
@@ -213,7 +213,6 @@ def vis_side(dp=None):
             stats['Mål-involvering (antal)'] = involvering
 
             # Visning
-            st.write(f"### Spiller-impact i målsekvenser")
             st.info(f"Baseret på de sidste 12 sekunder før holdets mål (I alt {total_goals} mål analyseret).")
             
             # Sorter efter mest involverede spiller
