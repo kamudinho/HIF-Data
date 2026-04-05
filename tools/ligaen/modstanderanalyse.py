@@ -54,8 +54,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     if is_up:
         ax.set_ylim(0, 55)   # Kamera: Egen halvdel
-        logo_y = 0.08        # Relativ Y-position nederst
-        text_y = 0.04
+        logo_y = 0.10        # Relativ Y-position nederst
+        text_y = 0.05
     elif is_down:
         ax.set_ylim(45, 100) # Kamera: Sidste tredjedel (ændret til 45)
         logo_y = 0.97        # Relativ Y-position øverst
