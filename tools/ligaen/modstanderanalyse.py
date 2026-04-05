@@ -195,7 +195,7 @@ def vis_side(dp=None):
             if v_med == "Opbygning": ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
             elif v_med == "Gennembrud": ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
             else: ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
-            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(8)
             for _, r in df_top.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
@@ -206,7 +206,7 @@ def vis_side(dp=None):
             if v_uden == "Dueller": ids, tit, cm, zn = [7, 8], "DUELLER", "Blues", "up"
             elif v_uden == "Erobringer": ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
             else: ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
-            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(8)
             for _, r in df_top_u.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
