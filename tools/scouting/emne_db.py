@@ -139,38 +139,38 @@ def vis_side():
 
     with t3: # SKYGGELISTE
         st.subheader("Rediger Skyggehold & Positioner")
-        st.info("Ret positionerne herunder (f.eks. skriv 4, 3.5 eller 8) for at se dem på banen med det samme.")
+        st.info("Vælg position fra dropdown-menuen. Værdierne matcher formatet i din CSV (f.eks. 3.0).")
         
-        # Filtrer listen til dem der er på skyggeholdet
+        # Liste over de gyldige positioner som de ser ud i din CSV (med .0)
+        # Tilføj selv flere hvis der mangler nogen (f.eks. "3.5")
+        pos_options = ["", "1.0", "2.0", "3.0", "3.5", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.0", "11.0"]
+        
+        # Vi arbejder på dem der er markeret som skyggehold
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
         if not sky_df.empty:
-            # Vælg de kolonner der skal kunne redigeres
             cols = ['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']
             
-            # Lav editoren
             edited_sky = st.data_editor(
                 sky_df[cols],
                 column_config={
-                    "Pos_343": st.column_config.TextColumn("Pos 3-4-3"),
-                    "Pos_433": st.column_config.TextColumn("Pos 4-3-3"),
-                    "Pos_352": st.column_config.TextColumn("Pos 3-5-2"),
+                    # Her laver vi de tre positions-kolonner om til dropdowns
+                    "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=pos_options),
+                    "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=pos_options),
+                    "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=pos_options),
                     "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
                 },
-                disabled=["Navn", "Klub", "Pos"], # Lås de grundlæggende info
+                disabled=["Navn", "Klub", "Pos"],
                 use_container_width=True,
-                num_rows="fixed",
-                key="sky_editor"
+                key="sky_editor_dropdown"
             )
             
-            # KRITISK: Opdater master-df (df_all) med de nye værdier fra editoren
-            if st.session_state.get("sky_editor"):
-                # Vi fletter ændringerne tilbage i df_all så t4 (Bane) kan se dem
+            # Opdater master-df med valgene fra dropdown
+            if st.session_state.get("sky_editor_dropdown"):
                 for index, row in edited_sky.iterrows():
+                    # Vi tvinger værdierne ind i df_all
                     df_all.loc[df_all['Navn'] == row['Navn'], ['Pos_343', 'Pos_433', 'Pos_352']] = \
-                        [row['Pos_343'], row['Pos_433'], row['Pos_352']]
-        else:
-            st.warning("Ingen spillere er markeret som 'Skyggehold' i CSV-filen endnu.")
+                        [str(row['Pos_343']), str(row['Pos_433']), str(row['Pos_352'])]
 
     with t4: # BANE
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
