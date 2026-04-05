@@ -59,7 +59,7 @@ def save_to_github(df, path):
         payload = {"message": "Auto-update fra app", "content": encoded_content, "sha": sha}
         r = requests.put(url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
-            st.toast("✅ Gemt automatisk på GitHub", icon="💾")
+            st.toast("✅ Gemt på GitHub", icon="💾")
             return True
     except: pass
     return False
@@ -67,17 +67,21 @@ def save_to_github(df, path):
 # --- 3. DATA PROCESSING ---
 def prepare_df(content):
     if not content: return pd.DataFrame()
-    df = pd.read_csv(StringIO(content), dtype={'POS': str, 'POS_343': str, 'POS_433': str, 'POS_352': str})
+    df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     if 'Navn' not in df.columns: return pd.DataFrame()
     
-    # FIX: Fjern helt tomme rækker og rækker uden navn for at undgå Duplicate Keys fejl
+    # --- KRITISK RENSNING MOD DUPLIKATER ---
+    # 1. Fjern rækker hvor Navn er helt tomt
     df = df.dropna(subset=['Navn'])
-    df = df[df['Navn'].str.strip() != ""]
-    df = df.drop_duplicates(subset=['Navn'], keep='first') 
+    # 2. Fjern rækker hvor Navn kun er mellemrum
+    df = df[df['Navn'].astype(str).str.strip() != ""]
+    # 3. Fjern duplikater (hvis "E. Aby" står to gange, behold kun den første)
+    df = df.drop_duplicates(subset=['Navn'], keep='first')
     
+    # Rens alle POS-kolonner (343, 433, 352 osv)
     pos_cols = [c for c in df.columns if 'POS' in c]
     for col in pos_cols:
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -92,7 +96,11 @@ def prepare_df(content):
 
     col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
-    df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
+    
+    if 'Klub' in df.columns:
+        df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
+    else:
+        df['IS_HIF'] = False
     
     return df
 
@@ -100,16 +108,14 @@ def prepare_df(content):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Hvidovre Scouting")
     
-    st.markdown("""<style>
-        .stAppViewBlockContainer { padding-top: 1rem !important; }
-        div.block-container { max-width: 98% !important; }
-    </style>""", unsafe_allow_html=True)
+    # Mindre top-margin
+    st.markdown("<style>.stAppViewBlockContainer { padding-top: 1rem !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None:
-        st.error("Kunne ikke hente data fra GitHub")
+        st.error("Kunne ikke hente data")
         return
 
     df_all = prepare_df(content)
@@ -119,20 +125,23 @@ def vis_side():
 
     with t1:
         source = df_all[~df_all['IS_HIF']]
-        st.data_editor(source.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t1_editor")
+        # Her bruger vi en fast nøgle 't1_editor' og sørger for at index er unikt
+        st.data_editor(source.set_index('Navn'), column_config=date_cfg, use_container_width=True, height=600, key="t1_editor")
 
     with t2:
         hif = df_all[df_all['IS_HIF']]
-        st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_editor")
+        st.data_editor(hif.set_index('Navn'), column_config=date_cfg, use_container_width=True, height=600, key="t2_editor")
 
     with t3:        
-        st.info("Ændringer gemmes automatisk.")
+        st.caption("Ændringer gemmes automatisk.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
+        
+        # Vi arbejder kun på spillere, der er på skyggeholdet
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
-        # Vi bruger en reset key for at tvinge UI opdatering efter gem
-        if "sky_key" not in st.session_state: st.session_state.sky_key = 0
+        if "sky_key" not in st.session_state: st.session_state.sky_key = 100
         
+        # Editor
         edited_sky = st.data_editor(
             sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
             column_config={
@@ -147,16 +156,17 @@ def vis_side():
         )
         
         # AUTO-SAVE LOGIK
-        state_key = f"sky_editor_{st.session_state.sky_key}"
-        if st.session_state[state_key]["edited_rows"]:
-            changes = st.session_state[state_key]["edited_rows"]
+        current_key = f"sky_editor_{st.session_state.sky_key}"
+        if st.session_state[current_key]["edited_rows"]:
+            changes = st.session_state[current_key]["edited_rows"]
             has_changed = False
             
             for idx_str, updated_cols in changes.items():
-                real_idx = sky_df.index[int(idx_str)]
-                player_name = sky_df.loc[real_idx, 'Navn']
+                idx_int = int(idx_str)
+                player_name = sky_df.iloc[idx_int]['Navn']
                 
                 for col, val in updated_cols.items():
+                    # Konverter tilbage til .0 format til CSV'en
                     if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and val != "3.5" and "." not in str(val):
                         val = f"{val}.0"
                     df_all.loc[df_all['Navn'] == player_name, col] = val
@@ -164,7 +174,7 @@ def vis_side():
             
             if has_changed:
                 if save_to_github(df_all, SCOUT_DB_PATH):
-                    st.session_state.sky_key += 1 # Reset editor key
+                    st.session_state.sky_key += 1 # Skift nøgle for at tvinge reload
                     st.rerun()
 
     with t4:
@@ -179,7 +189,9 @@ def vis_side():
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
-            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
+            
+            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else \
+                   df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
             
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
