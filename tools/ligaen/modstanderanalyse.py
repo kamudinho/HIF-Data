@@ -39,7 +39,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     """
-    zone: 'up' (0-55), 'down' (55-105), eller 'full'
+    zone: 'up' (0-55), 'down' (45-105), eller 'full'
     """
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     
