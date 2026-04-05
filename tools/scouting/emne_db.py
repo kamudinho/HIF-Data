@@ -168,7 +168,7 @@ def vis_side():
 
     # Tab 4: Bane
     with t4:
-        c_pitch, c_ctrl = st.columns([7, 3])
+        c_pitch, c_ctrl = st.columns([9, 2])
         
         # Højre kolonne: Dropdown og Knapper
         with c_ctrl:
