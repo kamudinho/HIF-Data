@@ -76,9 +76,8 @@ def prepare_df(content):
     # FIX: Fjern helt tomme rækker og rækker uden navn for at undgå Duplicate Keys fejl
     df = df.dropna(subset=['Navn'])
     df = df[df['Navn'].str.strip() != ""]
-    df = df.drop_duplicates(subset=['Navn'], keep='first') # Sikrer unikke nøgler (Navne)
+    df = df.drop_duplicates(subset=['Navn'], keep='first') 
     
-    # Rens alle POS-kolonner for .0 og fjern "0"
     pos_cols = [c for c in df.columns if 'POS' in c]
     for col in pos_cols:
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -101,7 +100,6 @@ def prepare_df(content):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Hvidovre Scouting")
     
-    # CSS til at fjerne unødig luft i toppen
     st.markdown("""<style>
         .stAppViewBlockContainer { padding-top: 1rem !important; }
         div.block-container { max-width: 98% !important; }
@@ -128,9 +126,12 @@ def vis_side():
         st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_editor")
 
     with t3:        
-        st.info("Ændringer gemmes automatisk i baggrunden.")
+        st.info("Ændringer gemmes automatisk.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
+        
+        # Vi bruger en reset key for at tvinge UI opdatering efter gem
+        if "sky_key" not in st.session_state: st.session_state.sky_key = 0
         
         edited_sky = st.data_editor(
             sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
@@ -142,21 +143,20 @@ def vis_side():
             },
             disabled=["Navn", "Klub", "Pos"],
             use_container_width=True,
-            key="sky_editor"
+            key=f"sky_editor_{st.session_state.sky_key}"
         )
         
-        # AUTOMATISK GEM-LOGIK
-        if st.session_state.sky_editor["edited_rows"]:
-            changes = st.session_state.sky_editor["edited_rows"]
+        # AUTO-SAVE LOGIK
+        state_key = f"sky_editor_{st.session_state.sky_key}"
+        if st.session_state[state_key]["edited_rows"]:
+            changes = st.session_state[state_key]["edited_rows"]
             has_changed = False
             
-            for idx_int, updated_cols in changes.items():
-                # Find det rigtige navn baseret på rækkens index i det filtrerede sky_df
-                real_idx = sky_df.index[int(idx_int)]
+            for idx_str, updated_cols in changes.items():
+                real_idx = sky_df.index[int(idx_str)]
                 player_name = sky_df.loc[real_idx, 'Navn']
                 
                 for col, val in updated_cols.items():
-                    # Formater til .0 for at bevare din CSV-standard (undtagen 3.5 og tomme)
                     if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and val != "3.5" and "." not in str(val):
                         val = f"{val}.0"
                     df_all.loc[df_all['Navn'] == player_name, col] = val
@@ -164,6 +164,7 @@ def vis_side():
             
             if has_changed:
                 if save_to_github(df_all, SCOUT_DB_PATH):
+                    st.session_state.sky_key += 1 # Reset editor key
                     st.rerun()
 
     with t4:
@@ -178,7 +179,7 @@ def vis_side():
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
-            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende tildeling" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
+            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
             
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
@@ -188,10 +189,9 @@ def vis_side():
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
             if p_col in df_f.columns:
-                # Vi bruger de allerede rensede data fra prepare_df
+                df_f[p_col] = df_f[p_col].astype(str).str.replace('.0', '', regex=False).str.strip()
                 for pid, (px, py, lbl) in m.items():
                     ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    # Matcher den rensede pid (f.eks. "5" mod "5")
                     plist = df_f[df_f[p_col] == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         bg = "white" if p_row['IS_HIF'] else GRON_NY
