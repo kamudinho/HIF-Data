@@ -121,11 +121,11 @@ def vis_side():
         st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_edit")
 
     with t3:        
-        st.info("Ændringer gemmes automatisk.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
-        if "sky_key" not in st.session_state: st.session_state.sky_key = 100
+        # Unik nøgle der ikke ændrer sig konstant
+        editor_key = f"sky_editor_stable"
         
         edited_sky = st.data_editor(
             sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
@@ -137,26 +137,33 @@ def vis_side():
             },
             disabled=["Navn", "Klub", "Pos"],
             use_container_width=True,
-            key=f"sky_editor_{st.session_state.sky_key}"
+            key=editor_key
         )
         
-        # AUTO-SAVE LOGIK
-        curr_key = f"sky_editor_{st.session_state.sky_key}"
-        if st.session_state[curr_key]["edited_rows"]:
-            changes = st.session_state[curr_key]["edited_rows"]
-            has_changed = False
-            for idx_str, updated_cols in changes.items():
-                player_name = sky_df.iloc[int(idx_str)]['Navn']
-                for col, val in updated_cols.items():
-                    if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and val != "3.5" and "." not in str(val):
-                        val = f"{val}.0"
-                    df_all.loc[df_all['Navn'] == player_name, col] = val
-                    has_changed = True
-            
-            if has_changed:
-                if save_to_github(df_all, SCOUT_DB_PATH):
-                    st.session_state.sky_key += 1
-                    st.rerun()
+        # Tjek om der er faktiske ændringer i session_state for denne editor
+        if editor_key in st.session_state:
+            edits = st.session_state[editor_key].get("edited_rows", {})
+            if edits:
+                has_changed = False
+                for idx_str, updated_cols in edits.items():
+                    idx_int = int(idx_str)
+                    # Sikkerhedscheck for index
+                    if idx_int < len(sky_df):
+                        player_name = sky_df.iloc[idx_int]['Navn']
+                        for col, val in updated_cols.items():
+                            # Formatering af tal (bevar .0 undtagen for 3.5)
+                            if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val:
+                                if val != "3.5" and "." not in str(val):
+                                    val = f"{val}.0"
+                            
+                            df_all.loc[df_all['Navn'] == player_name, col] = val
+                            has_changed = True
+                
+                if has_changed:
+                    if save_to_github(df_all, SCOUT_DB_PATH):
+                        # VIGTIGT: Vi rydder 'edited_rows' manuelt for at stoppe løkken
+                        st.session_state[editor_key]["edited_rows"] = {}
+                        st.rerun()
 
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
