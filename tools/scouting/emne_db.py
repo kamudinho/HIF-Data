@@ -52,16 +52,43 @@ def get_github_file(path):
 
 def save_to_github(df, path):
     try:
+        # DEFINER DE 34 KOLONNER SOM DE SKAL SE UD I CSV
+        original_cols = [
+            'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
+            'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
+            'AGGRESIVITET','ATTITUDE','UDHOLDENHED','LEDEREGENSKABER','TEKNIK',
+            'SPILINTELLIGENS','SCOUT','KONTRAKT','PRIORITET','FORVENTNING',
+            'POS_PRIORITET','POS','LON','SKYGGEHOLD','KOMMENTAR','ER_EMNE',
+            'TRANSFER_VINDUE','POS_343','POS_433','POS_352','BIRTHDATE'
+        ]
+        
         _, sha = get_github_file(path)
-        # Vi gemmer uden index, da vi bruger Navn som identifikation i appen
-        csv_content = df.to_csv(index=False)
+        
+        # Lav en kopi og omdøb tilbage til CSV-standard før gem
+        # Vi skal vende dine 'Klub', 'Pos' osv. tilbage til STORE BOGSTAVER
+        save_df = df.copy()
+        
+        # Reverse mapping: Fra app-navne tilbage til CSV-navne
+        rev_map = {'Klub': 'KLUB', 'Pos': 'POS', 'Vindue': 'TRANSFER_VINDUE', 
+                   'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD', 'Navn': 'NAVN'}
+        save_df = save_df.rename(columns=rev_map)
+        
+        # Sørg for at alle 34 kolonner findes (hvis nogle mangler, lav dem tomme)
+        for col in original_cols:
+            if col not in save_df.columns:
+                save_df[col] = ""
+        
+        # Gem KUN de 34 kolonner i den rigtige rækkefølge
+        csv_content = save_df[original_cols].to_csv(index=False)
+        
         encoded_content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
         url = f"https://api.github.com/repos/{REPO}/contents/{path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Content-Type": "application/json"}
         payload = {"message": "Auto-update fra scouting app", "content": encoded_content, "sha": sha}
+        
         r = requests.put(url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
-            st.toast("✅ Gemt på GitHub", icon="💾")
+            st.toast("✅ Gemt korrekt på GitHub", icon="💾")
             return True
     except Exception as e:
         st.error(f"Fejl ved gem: {e}")
