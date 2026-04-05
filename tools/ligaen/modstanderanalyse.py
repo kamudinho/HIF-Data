@@ -115,7 +115,7 @@ def vis_side(dp=None):
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
-            v_med = st.selectbox("Fokus", ["EGEN HALVDEL: OPBYGNING", "OFF. HALVDEL: GENNEMBRUD", "OFF. HALVDEL: AFSLUTNINGER"], key="ms")
+            v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
             st.divider()
             
         if v_med == "Opbygning":
