@@ -102,10 +102,80 @@ def vis_side(dp=None):
 
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
+    # --- T1: OVERSIGT (Opdateret) ---
     with t1:
-        sql_res = f"SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, TOTAL_HOME_SCORE as \"MÅL H\", TOTAL_AWAY_SCORE as \"MÅL U\" FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' ORDER BY MATCH_LOCALDATE DESC LIMIT 5"
-        st.dataframe(conn.query(sql_res), hide_index=True)
+        # Hent de sidste 10 kampe for at få et bedre grundlag
+        sql_res = f"""
+            SELECT 
+                MATCH_LOCALDATE as DATO, 
+                CONTESTANTHOME_NAME as HJEMME, 
+                CONTESTANTAWAY_NAME as UDE, 
+                TOTAL_HOME_SCORE as "MÅL H", 
+                TOTAL_AWAY_SCORE as "MÅL U",
+                CONTESTANTHOME_OPTAUUID,
+                CONTESTANTAWAY_OPTAUUID
+            FROM {DB}.OPTA_MATCHINFO 
+            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
+            AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' 
+            ORDER BY MATCH_LOCALDATE DESC 
+            LIMIT 10
+        """
+        df_res = conn.query(sql_res)
+        
+        if not df_res.empty:
+            # Beregn Resultat (Vundet, Uafgjort, Tabt) for det valgte hold
+            def get_result(row):
+                is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                h_goal = row['MÅL H']
+                a_goal = row['MÅL U']
+                
+                if h_goal == a_goal: return "D"
+                if is_home:
+                    return "W" if h_goal > a_goal else "L"
+                else:
+                    return "W" if a_goal > h_goal else "L"
 
+            df_res['RES'] = df_res.apply(get_result, axis=1)
+            
+            # --- KPI Sektion ---
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+            
+            last_5 = df_res.head(5)
+            wins = (last_5['RES'] == "W").sum()
+            draws = (last_5['RES'] == "D").sum()
+            points = (wins * 3) + draws
+            
+            kpi1.metric("Point (Sidste 5)", f"{points}/15")
+            kpi2.metric("Sejre", wins)
+            
+            # Mål-statistik
+            mål_scoret = sum([r['MÅL H'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['MÅL U'] for _, r in last_5.iterrows()])
+            mål_lukket = sum([r['MÅL U'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['MÅL H'] for _, r in last_5.iterrows()])
+            
+            kpi3.metric("Mål Scoret", mål_scoret)
+            kpi4.metric("Mål Imod", mål_lukket, delta=int(mål_lukket), delta_color="inverse")
+
+            st.divider()
+
+            # --- Tabel med styling ---
+            st.write("**Seneste Resultater**")
+            
+            # Vi fjerner UUID'erne før visning
+            df_display = df_res[['DATO', 'HJEMME', 'MÅL H', 'MÅL U', 'UDE', 'RES']].copy()
+            df_display['DATO'] = pd.to_datetime(df_display['DATO']).dt.strftime('%d/%m/%Y')
+
+            st.dataframe(
+                df_display,
+                column_config={
+                    "RES": st.column_config.TextColumn("Resultat", help="W: Win, D: Draw, L: Loss"),
+                    "MÅL H": st.column_config.NumberColumn(width="small"),
+                    "MÅL U": st.column_config.NumberColumn(width="small"),
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.warning("Ingen kampdata fundet.")
     # --- T2: MED BOLDEN ---
     with t2:
         cp, cs = st.columns([2, 1])
