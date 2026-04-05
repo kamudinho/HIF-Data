@@ -51,7 +51,7 @@ def get_github_file(path):
 
 def save_to_github(df, path):
     try:
-        # DE PRÆCISE 34 KOLONNER FRA DIN CSV
+        # DE PRÆCISE 34 KOLONNER FRA DIN CSV (RENSER ALT ANDET FRA)
         original_cols = [
             'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
             'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
@@ -64,7 +64,7 @@ def save_to_github(df, path):
         _, sha = get_github_file(path)
         export_df = df.copy()
         
-        # VIGTIGT: Map ALLE app-navne tilbage til CSV-navne (Store bogstaver)
+        # VIGTIGT: Map ALLE app-navne tilbage til de STORE BOGSTAVER i CSV'en
         rev_map = {
             'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 
             'Vindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD',
@@ -106,10 +106,11 @@ def prepare_df(content):
     df['Navn'] = df['Navn'].astype(str).str.strip()
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-   for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
-    if col in df.columns:
-        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
-        df[col] = df[col].replace(['nan', 'None', '0', '0.0'], "")
+    # Position vask (Sikrer at eksisterende positioner indlæses rent)
+    for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
+            df[col] = df[col].replace(['nan', 'None', '0', '0.0', ''], "")
 
     # Beregn Alder og Kontrakt (Gemmes IKKE i CSV)
     if 'BIRTHDATE' in df.columns:
@@ -160,7 +161,7 @@ def vis_side():
         st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_edit")
 
     with t3:        
-        st.info("Ændringer i positioner gemmes automatisk.")
+        st.info("Eksisterende positioner bevares. Ændringer gemmes automatisk.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
@@ -187,8 +188,9 @@ def vis_side():
                     if idx_int < len(sky_df):
                         p_name = sky_df.iloc[idx_int]['Navn']
                         for col, val in updated_cols.items():
+                            # Formatér tal korrekt (.0) undtagen for 3.5
                             if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val:
-                                if val != "3.5" and "." not in str(val):
+                                if str(val) != "3.5" and "." not in str(val):
                                     val = f"{val}.0"
                             df_all.loc[df_all['Navn'] == p_name, col] = val
                             has_changed = True
@@ -227,6 +229,7 @@ def vis_side():
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 
+                # Filterer spillere baseret på position
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     bg = "white" if p_row['IS_HIF'] else GRON_NY
