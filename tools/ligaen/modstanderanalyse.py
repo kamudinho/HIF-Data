@@ -38,7 +38,6 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    # Her filtreres på de medsendte event_ids
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     pitch = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
@@ -64,12 +63,11 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
             fontweight='bold', ha='right', va='top', color='#333333')
 
     if not plot_data.empty:
-        # Øget levels og justeret alpha for bedre visning af høj volumen (2000+ events)
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
     
     return fig
 
-# --- 3. HOVEDFUNKTION (UNDERSIDE) ---
+# --- 3. HOVEDFUNKTION ---
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
@@ -85,9 +83,8 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # --- DATA HENTNING (Optimeret til 10 kampe / høj volumen) ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # 1. Find de 10 seneste kampe
+        # 1. Hent 10 seneste kampe
         sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
         df_res = conn.query(sql_res)
         
@@ -95,13 +92,16 @@ def vis_side(dp=None):
             st.warning("Ingen data fundet.")
             return
 
+        # VIGTIGT: Rens UUIDs med strip() for at sikre merge virker
+        df_res['MATCH_OPTAUUID'] = df_res['MATCH_OPTAUUID'].astype(str).str.strip()
         match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
         match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
 
-        # 2. Hent ALT event data for de 10 kampe for at sikre volumen på 2000-3000 events
+        # 2. Hent hændelser for alle 10 kampe (Vigtigt for T2/T3 volumen)
         df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
-        
-        # 3. Mål-sekvens data (Beholdes uændret)
+        df_all_h['MATCH_OPTAUUID'] = df_all_h['MATCH_OPTAUUID'].astype(str).str.strip()
+
+        # 3. Mål-sekvens data (Uændret som ønsket)
         sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
         sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
         df_all_events = conn.query(sql_events)
@@ -124,64 +124,64 @@ def vis_side(dp=None):
         
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         last_5 = df_res.head(5)
-        wins, draws = (last_5['RES'] == "W").sum(), (last_5['RES'] == "D").sum()
-        kpi1.metric("Point (Sidste 5)", f"{(wins*3)+draws}/15")
+        wins_5, draws_5 = (last_5['RES'] == "W").sum(), (last_5['RES'] == "D").sum()
+        kpi1.metric("Point (Sidste 5)", f"{(wins_5*3)+draws_5}/15")
         kpi2.metric("Vundne (Sidste 10)", (df_res['RES'] == "W").sum())
         
-        # Mål beregnet på de 10 kampe for at matche graferne
         mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
         mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
         kpi3.metric("Mål Scoret (10 k)", mål_s)
-        kpi4.metric("Mål Imod (10 k)", mål_i, delta=int(mål_i), delta_color="inverse")
+        kpi4.metric("Mål Imod (10 k)", mål_i)
 
-        # Tabel og Grafer samlet i én visning
-        with st.container():
-            st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
-            
-            # Aggreger volumen pr. kamp for de 10 kampe
-            df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
-                PASNINGER=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-                AFSLUTNINGER=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
-            ).reset_index()
-            
-            df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0).iloc[::-1]
-            df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+        st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
+        
+        # Grafer: Aggreger volumen pr. kamp
+        df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
+            PASNINGER=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            AFSLUTNINGER=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
+        ).reset_index()
+        
+        # Merge med kampskemaet for at få modstander-navne
+        df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0).iloc[::-1]
+        df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
 
-            g1, g2 = st.columns(2)
-            with g1:
-                st.write("**Pasninger (Sidste 10)**")
-                st.bar_chart(df_plot, x='MODSTANDER', y='PASNINGER', color='#0047AB')
-            with g2:
-                st.write("**Afslutninger (Sidste 10)**")
-                st.bar_chart(df_plot, x='MODSTANDER', y='AFSLUTNINGER', color='#C8102E')
+        g1, g2 = st.columns(2)
+        with g1:
+            st.write("**Pasninger (Sidste 10)**")
+            st.bar_chart(df_plot, x='MODSTANDER', y='PASNINGER', color='#0047AB')
+        with g2:
+            st.write("**Afslutninger (Sidste 10)**")
+            st.bar_chart(df_plot, x='MODSTANDER', y='AFSLUTNINGER', color='#C8102E')
 
-    # --- T2: MED BOLDEN (Høj volumen baseret på 10 kampe) ---
+    # --- T2: MED BOLDEN (2000-3000 events) ---
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
             v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
-            st.divider()
             if v_med == "Opbygning":
                 ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
+                filter_cond = df_all_h['EVENT_X'] <= 55
             elif v_med == "Gennembrud":
                 ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
+                filter_cond = df_all_h['EVENT_X'] > 55
             else:
                 ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
+                filter_cond = True
 
-            # Top 5 baseret på det store datasæt
-            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            df_filtered = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids) & filter_cond]
+            df_top = df_filtered.groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            
             st.write(f"**Top 5: {v_med}**")
             for _, r in df_top.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
-            st.info(f"Baseret på {len(df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)])} aktioner.")
+            st.caption(f"Baseret på {len(df_filtered)} aktioner over 10 kampe.")
 
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-    # --- T3: UDEN BOLDEN (Høj volumen baseret på 10 kampe) ---
+    # --- T3: UDEN BOLDEN (2000-3000 events) ---
     with t3:
         cp, cs = st.columns([2, 1])
         with cs:
             v_uden = st.selectbox("Fokus", ["Dueller", "Erobringer", "Defensiv Zone"], key="us")
-            st.divider()
             if v_uden == "Dueller":
                 ids, tit, cm, zn = [7, 8], "DUELLER", "Blues", "up"
             elif v_uden == "Erobringer":
@@ -189,14 +189,16 @@ def vis_side(dp=None):
             else:
                 ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
         
-            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            df_filtered_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)]
+            df_top_u = df_filtered_u.groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            
             st.write(f"**Top 5: {v_uden}**")
             for _, r in df_top_u.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
-            st.info(f"Baseret på {len(df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)])} aktioner.")
+            st.caption(f"Baseret på {len(df_filtered_u)} aktioner over 10 kampe.")
 
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-    # --- T4 & T5: BEHOLDES UÆNDRET ---
+    # --- T4 & T5 (UÆNDRET) ---
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
