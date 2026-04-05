@@ -77,7 +77,7 @@ def save_to_github(df, path):
         csv_content = export_df.to_csv(index=False)
         payload = {"message": "Update scout data", "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), "sha": sha}
         requests.put(f"https://api.github.com/repos/{REPO}/contents/{path}", headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        st.toast("✅ Gemt på GitHub", icon="💾")
+        st.toast("Database opdateret!", icon="💾")
         return True
     except Exception as e:
         st.error(f"Fejl ved gem: {e}"); return False
@@ -120,7 +120,7 @@ def vis_side():
     if content is None: return
     df_all = prepare_df(content)
 
-    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
     date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"), 
                 "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
 
@@ -159,7 +159,7 @@ def vis_side():
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27"])
+            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"])
             # st.markdown fjernet herfra da den nu er på banen
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
