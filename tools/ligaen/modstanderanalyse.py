@@ -174,54 +174,70 @@ def vis_side(dp=None):
                 st.write("**Sekvens:**"); st.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
 
     # --- T5: SPILLEROVERSIGT (Opdateret med Regains og Touches) ---
+    # --- T5: SPILLEROVERSIGT (Opdateret med korrekt kolonne-rækkefølge) ---
     with t5:
         if not df_all_events.empty:
-            # Vi definerer grupper af Event IDs baseret på din forespørgsel
-            # Regains: Tacklinger (7), Interceptions (8), Clearinger (12), Boldopsamling (49), 50/50 (67)
-            regain_ids = [7, 8, 12, 49, 67, 127]
+            # Definition af grupper
+            regain_ids = [7, 8, 12, 49, 67, 127, 73, 74] # Inkluderer også blokeret pasning og anden boldkontakt
             
-            # Hjælpe-kolonner til optælling
+            # 1. Forberedelse af flag på hændelsesniveau
             df_all_events['is_goal'] = (df_all_events['EVENT_TYPEID'] == 16).astype(int)
             df_all_events['is_pass'] = (df_all_events['EVENT_TYPEID'] == 1).astype(int)
             df_all_events['is_regain'] = df_all_events['EVENT_TYPEID'].isin(regain_ids).astype(int)
-            
-            # Touches omkring mål: Alle aktioner i målsekvensen udført på modstanderens sidste 3. del (X > 66)
-            df_all_events['is_deep_touch'] = (df_all_events['EVENT_X'] > 66).astype(int)
+            # Touches defineres som enhver aktion i modstanderens sidste 3. del (X > 66)
+            df_all_events['is_touch'] = (df_all_events['EVENT_X'] > 66).astype(int)
 
-            # Aggregering pr. spiller
+            # 2. Aggregering pr. spiller
+            # Vi bruger .agg til de simple tællinger
             stats = df_all_events.groupby('PLAYER_NAME').agg({
-                'EVENT_TYPEID': 'count',      # Totale aktioner i mål-sekvenser
-                'is_goal': 'sum',             # Selve målene
-                'is_pass': 'sum',             # Pasninger involveret i mål
-                'is_regain': 'sum',           # Forsvarsaktioner der startede/var i målsekvens
-                'is_deep_touch': 'sum'        # Touches i farlige zoner før mål
+                'EVENT_TYPEID': 'count',    # Antal aktioner
+                'is_pass': 'sum',           # Pasninger
+                'is_regain': 'sum',         # Regains
+                'is_touch': 'sum',          # Touches
+                'is_goal': 'sum'            # Mål
             })
 
-            # Navngivning af kolonner for klarhed
-            stats.columns = [
-                'Totale aktioner (før mål)',
-                'Touches v. feltet'
-                'Pasninger involveret', 
-                'Regains (Vundet bold)', 
+            # 3. Beregn Målinvolveringer (Unikke målsekvenser spilleren har deltaget i)
+            # Dette sikrer at en spiller ikke får 5 involveringer i samme mål pga. 5 pasninger
+            involvering = df_all_events.groupby('PLAYER_NAME')['GOAL_TIME'].nunique()
+            stats['Målinvolveringer'] = involvering
+
+            # 4. Omdøb og Sorter efter dine specifikke kolonne-ønsker
+            # Rækkefølge: Spiller (index), Målinvolveringer, Antal aktioner, Pasninger, Regains, Touches, Mål
+            stats = stats.rename(columns={
+                'EVENT_TYPEID': 'Antal aktioner',
+                'is_pass': 'Pasninger',
+                'is_regain': 'Regains',
+                'is_touch': 'Touches',
+                'is_goal': 'Mål'
+            })
+
+            # Reorganiser kolonnerne i den rækkefølge du bad om
+            kolonne_orden = [
+                'Målinvolveringer', 
+                'Antal aktioner', 
+                'Pasninger', 
+                'Regains', 
+                'Touches', 
                 'Mål'
             ]
-
-            # Beregn en "Mål-involvering %" (Hvor mange af holdets mål er spilleren med i?)
-            total_goals = df_all_events[df_all_events['EVENT_TYPEID'] == 16].shape[0]
-            # Vi finder unikke mål pr. spiller for at se involvering
-            involvering = df_all_events.groupby('PLAYER_NAME')['GOAL_TIME'].nunique()
-            stats['Mål-involvering (antal)'] = involvering
-
-            # Visning
-            st.info(f"Baseret på de sidste 12 sekunder før holdets mål (I alt {total_goals} mål analyseret).")
             
-            # Sorter efter mest involverede spiller
+            final_df = stats[kolonne_orden].sort_values('Målinvolveringer', ascending=False)
+
+            # 5. Visning
+            total_analyserede_maal = df_all_events['GOAL_TIME'].nunique()
+            st.info(f"Analyse af de sidste 12 sekunder før holdets mål (I alt {total_analyserede_maal} mål).")
+            
             st.dataframe(
-                stats.sort_values('Mål-involvering (antal)', ascending=False), 
-                use_container_width=True
+                final_df, 
+                use_container_width=True,
+                column_config={
+                    "Målinvolveringer": st.column_config.NumberColumn(help="Antal unikke målsekvenser spilleren har deltaget i"),
+                    "Touches": st.column_config.NumberColumn(help="Aktioner i modstanderens sidste 3. del før mål")
+                }
             )
         else:
-            st.warning("Ingen måldata fundet for den valgte periode.")
+            st.warning("Ingen hændelsesdata tilgængelig for mål-sekvenser.")
 
 if __name__ == "__main__":
     vis_side()
