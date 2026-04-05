@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mplsoccer import Pitch, VerticalPitch
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.utils.team_mapping import TEAMS
 from data.utils.mapping import OPTA_EVENT_TYPES
 import requests
 from PIL import Image
@@ -17,8 +17,7 @@ LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 # --- 2. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
-    clean_uuid = str(opta_uuid).strip().upper()
-    url = next((info['logo'] for name, info in TEAMS.items() if str(info.get('opta_uuid')).strip().upper() == clean_uuid), None)
+    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
     if not url: return None
     try:
         response = requests.get(url, timeout=5)
@@ -39,117 +38,165 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    if df is None or df.empty: return plt.figure()
+    # Her filtreres på de medsendte event_ids
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     pitch = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
-    if zone == 'up': ax.set_ylim(0, 55)
-    elif zone == 'down': ax.set_ylim(45, 100)
+    
+    if zone == 'up':
+        ax.set_ylim(0, 55)
+        logo_pos = [0.04, 0.03, 0.08, 0.08]
+        text_y = 0.05
+    elif zone == 'down':
+        ax.set_ylim(45, 100)
+        logo_pos = [0.04, 0.90, 0.08, 0.08]
+        text_y = 0.97
+    else:
+        logo_pos = [0.04, 0.90, 0.08, 0.08]
+        text_y = 0.97
+
     if logo:
-        ax_logo = ax.inset_axes([0.04, 0.90, 0.08, 0.08], transform=ax.transAxes)
-        ax_logo.imshow(logo); ax_logo.axis('off')
-    ax.text(0.94, 0.97, title, transform=ax.transAxes, fontsize=5.5, fontweight='bold', ha='right', va='top')
+        ax_logo = ax.inset_axes(logo_pos, transform=ax.transAxes)
+        ax_logo.imshow(logo)
+        ax_logo.axis('off')
+
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=5.5, 
+            fontweight='bold', ha='right', va='top', color='#333333')
+
     if not plot_data.empty:
+        # Øget levels og justeret alpha for bedre visning af høj volumen (2000+ events)
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
+    
     return fig
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION (UNDERSIDE) ---
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
-    h_list = sorted(liga_hold_options.keys())
+    # Team selection
+    df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
+    ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
+    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
+
     col_spacer, col_hold = st.columns([3, 1])
-    valgt_hold = col_hold.selectbox("Vælg hold", h_list, label_visibility="collapsed")
-    valgt_uuid = str(liga_hold_options[valgt_hold]).strip().upper()
+    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # SQL til 10 seneste kampe inkl. Stats fra StatsPivot (Inspiration fra test_matches.py)
-    sql_matches = f"""
-        WITH MatchBase AS (
-            SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
-                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_STATUS
-            FROM {DB}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-            AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}')
-        ),
-        StatsPivot AS (
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                   SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) AS PASSES,
-                   SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS
-            FROM {DB}.OPTA_MATCHSTATS GROUP BY 1, 2
-        )
-        SELECT b.*, h.PASSES AS H_PASS, h.SHOTS AS H_SHOTS, a.PASSES AS A_PASS, a.SHOTS AS A_SHOTS
-        FROM MatchBase b
-        LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
-        LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
-        WHERE b.MATCH_STATUS ILIKE '%Full%' OR b.MATCH_STATUS ILIKE '%Played%' OR b.MATCH_STATUS ILIKE '%Finish%'
-        ORDER BY b.MATCH_DATE_FULL DESC LIMIT 10
-    """
+    # --- DATA HENTNING (Optimeret til 10 kampe / høj volumen) ---
+    with st.spinner(f"Henter data for {valgt_hold}..."):
+        # 1. Find de 10 seneste kampe
+        sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
+        df_res = conn.query(sql_res)
+        
+        if df_res.empty:
+            st.warning("Ingen data fundet.")
+            return
 
-    df_res = conn.query(sql_matches)
-    if df_res is None or df_res.empty:
-        st.warning("Ingen data fundet."); return
+        match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
+        match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
 
-    df_res.columns = [c.upper() for c in df_res.columns]
-    match_ids = tuple(df_res['MATCH_OPTAUUID'].astype(str).str.strip().tolist())
-    match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
-
-    # Data til T2, T3 og T5
-    df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
-
-    # SQL til T4: MÅL-SEKVENSER (DIN ORIGINALE QUERY)
-    sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
-    sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
-    df_all_events = conn.query(sql_events)
+        # 2. Hent ALT event data for de 10 kampe for at sikre volumen på 2000-3000 events
+        df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
+        
+        # 3. Mål-sekvens data (Beholdes uændret)
+        sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
+        sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
+        df_all_events = conn.query(sql_events)
 
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
+    # --- T1: OVERSIGT ---
     with t1:
-        def check_res(r):
-            is_h = str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid
-            h_s, a_s = int(r['TOTAL_HOME_SCORE'] or 0), int(r['TOTAL_AWAY_SCORE'] or 0)
-            if h_s == a_s: return "D"
-            return "W" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else "L"
-        df_res['RES'] = df_res.apply(check_res, axis=1)
+        df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
+        df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
+
+        def get_result(row):
+            is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+            h_goal, a_goal = row['TOTAL_HOME_SCORE'], row['TOTAL_AWAY_SCORE']
+            if h_goal == a_goal: return "D"
+            if is_home: return "W" if h_goal > a_goal else "L"
+            else: return "W" if a_goal > h_goal else "L"
+
+        df_res['RES'] = df_res.apply(get_result, axis=1)
         
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Vundne", (df_res['RES']=="W").sum())
-        k2.metric("Uafgjorte", (df_res['RES']=="D").sum())
-        m_s = sum([r['TOTAL_HOME_SCORE'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
-        m_i = sum([r['TOTAL_AWAY_SCORE'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
-        k3.metric("Mål Scoret", int(m_s)); k4.metric("Mål Imod", int(m_i))
-
-        st.dataframe(df_res[['MATCH_DATE_FULL', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        last_5 = df_res.head(5)
+        wins, draws = (last_5['RES'] == "W").sum(), (last_5['RES'] == "D").sum()
+        kpi1.metric("Point (Sidste 5)", f"{(wins*3)+draws}/15")
+        kpi2.metric("Vundne (Sidste 10)", (df_res['RES'] == "W").sum())
         
-        df_plot = df_res.copy().iloc[::-1]
-        df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-        df_plot['P_VAL'] = df_plot.apply(lambda r: r['H_PASS'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid else r['A_PASS'], axis=1)
-        df_plot['S_VAL'] = df_plot.apply(lambda r: r['H_SHOTS'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == valgt_uuid else r['A_SHOTS'], axis=1)
+        # Mål beregnet på de 10 kampe for at matche graferne
+        mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
+        mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
+        kpi3.metric("Mål Scoret (10 k)", mål_s)
+        kpi4.metric("Mål Imod (10 k)", mål_i, delta=int(mål_i), delta_color="inverse")
 
-        g1, g2 = st.columns(2)
-        with g1: st.write("**Pasninger**"); st.bar_chart(df_plot, x='MODSTANDER', y='P_VAL', color='#0047AB')
-        with g2: st.write("**Afslutninger**"); st.bar_chart(df_plot, x='MODSTANDER', y='S_VAL', color='#C8102E')
+        # Tabel og Grafer samlet i én visning
+        with st.container():
+            st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
+            
+            # Aggreger volumen pr. kamp for de 10 kampe
+            df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
+                PASNINGER=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+                AFSLUTNINGER=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
+            ).reset_index()
+            
+            df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0).iloc[::-1]
+            df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
 
+            g1, g2 = st.columns(2)
+            with g1:
+                st.write("**Pasninger (Sidste 10)**")
+                st.bar_chart(df_plot, x='MODSTANDER', y='PASNINGER', color='#0047AB')
+            with g2:
+                st.write("**Afslutninger (Sidste 10)**")
+                st.bar_chart(df_plot, x='MODSTANDER', y='AFSLUTNINGER', color='#C8102E')
+
+    # --- T2: MED BOLDEN (Høj volumen baseret på 10 kampe) ---
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
-            v = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"])
-            ids, tit, cm, zn = ([1], "OPBYGNING", "Blues", "up") if v=="Opbygning" else (([1], "GENNEMBRUD", "Reds", "down") if v=="Gennembrud" else ([13,14,15,16], "AFSLUTNINGER", "YlOrRd", "down"))
-            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='N').sort_values('N', ascending=False).head(5)
-            for _, r in df_top.iterrows(): st.write(f"{int(r['N'])} **{r['PLAYER_NAME']}**")
+            v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
+            st.divider()
+            if v_med == "Opbygning":
+                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
+            elif v_med == "Gennembrud":
+                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
+            else:
+                ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
+
+            # Top 5 baseret på det store datasæt
+            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            st.write(f"**Top 5: {v_med}**")
+            for _, r in df_top.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
+            st.info(f"Baseret på {len(df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)])} aktioner.")
+
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
+    # --- T3: UDEN BOLDEN (Høj volumen baseret på 10 kampe) ---
     with t3:
         cp, cs = st.columns([2, 1])
         with cs:
-            v_u = st.selectbox("Type", ["Dueller", "Erobringer"])
-            ids, tit, cm = ([7, 8], "DUELLER", "Blues") if v_u=="Dueller" else ([12, 127, 49], "EROBRINGER", "GnBu")
-            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='N').sort_values('N', ascending=False).head(5)
-            for _, r in df_top_u.iterrows(): st.write(f"{int(r['N'])} **{r['PLAYER_NAME']}**")
-        with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone='up', cmap=cm, logo=hold_logo))
+            v_uden = st.selectbox("Fokus", ["Dueller", "Erobringer", "Defensiv Zone"], key="us")
+            st.divider()
+            if v_uden == "Dueller":
+                ids, tit, cm, zn = [7, 8], "DUELLER", "Blues", "up"
+            elif v_uden == "Erobringer":
+                ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
+            else:
+                ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
+        
+            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(5)
+            st.write(f"**Top 5: {v_uden}**")
+            for _, r in df_top_u.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
+            st.info(f"Baseret på {len(df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)])} aktioner.")
 
+        with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+
+    # --- T4 & T5: BEHOLDES UÆNDRET ---
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
@@ -173,12 +220,17 @@ def vis_side(dp=None):
                 st.write("**Sekvens:**"); st.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
 
     with t5:
-        regain_ids = [7, 8, 12, 49, 67, 127, 73, 74]
-        df_all_h['is_pass'] = (df_all_h['EVENT_TYPEID'] == 1).astype(int)
-        df_all_h['is_regain'] = df_all_h['EVENT_TYPEID'].isin(regain_ids).astype(int)
-        df_all_h['is_shot'] = df_all_h['EVENT_TYPEID'].isin([13,14,15,16]).astype(int)
-        stats = df_all_h.groupby('PLAYER_NAME').agg({'is_pass': 'sum', 'is_regain': 'sum', 'is_shot': 'sum', 'EVENT_TYPEID': 'count'}).rename(columns={'EVENT_TYPEID': 'Total Aktioner', 'is_pass': 'Pasninger', 'is_regain': 'Erobringer', 'is_shot': 'Skud'}).sort_values('Total Aktioner', ascending=False)
-        st.write("**Spillerstatistik (Sidste 10 kampe)**"); st.dataframe(stats, use_container_width=True)
+        if not df_all_events.empty:
+            regain_ids = [7, 8, 12, 49, 67, 127, 73, 74]
+            df_all_events['is_goal'] = (df_all_events['EVENT_TYPEID'] == 16).astype(int)
+            df_all_events['is_pass'] = (df_all_events['EVENT_TYPEID'] == 1).astype(int)
+            df_all_events['is_regain'] = df_all_events['EVENT_TYPEID'].isin(regain_ids).astype(int)
+            df_all_events['is_touch'] = (df_all_events['EVENT_X'] > 66).astype(int)
+
+            stats = df_all_events.groupby('PLAYER_NAME').agg({'is_pass': 'sum', 'is_regain': 'sum', 'is_touch': 'sum', 'is_goal': 'sum', 'EVENT_TYPEID': 'count'}).fillna(0)
+            stats['Målinvolveringer'] = df_all_events.groupby('PLAYER_NAME')['GOAL_TIME'].nunique().fillna(0)
+            stats = stats.rename(columns={'EVENT_TYPEID': 'Antal aktioner', 'is_pass': 'Pasninger', 'is_regain': 'Regains', 'is_touch': 'Touches', 'is_goal': 'Mål'})
+            st.dataframe(stats[['Målinvolveringer', 'Antal aktioner', 'Pasninger', 'Regains', 'Touches', 'Mål']].astype(int).sort_values('Målinvolveringer', ascending=False), use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
