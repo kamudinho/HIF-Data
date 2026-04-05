@@ -39,30 +39,46 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     """
-    zone: 'up' (0-55), 'down' (45-105), eller 'full'
+    zone: 'up' (Egen 3., 0-55), 'down' (Sidste 3., 45-100), eller 'full'
+    Udgave med dynamisk placering af UI-elementer.
     """
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     
-    # Konfigurer bane - vi tegner altid en fuld bane internt, men klipper visningen
+    # Konfigurer bane (Fuld vertikal)
     pitch = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
     
-    # Zoom ind på de ønskede zoner
-    if zone == 'up': # Opbygning (0 til 55)
-        ax.set_ylim(0, 55)
-    elif zone == 'down': # Gennembrud (55 til 105)
-        ax.set_ylim(45, 105)
-    
-    # Overskrift i øverste højre hjørne af det SYNLIGE område
-    ax.text(0.95, 0.95, title, transform=ax.transAxes, fontsize=7, 
-            fontweight='bold', ha='right', va='top', color='#333333')
-    
-    # Logo i øverste venstre hjørne af det SYNLIGE område
+    # 1. Definer 'Kamera'-zoom og UI-positioner
+    is_up = zone == 'up'
+    is_down = zone == 'down'
+
+    if is_up:
+        ax.set_ylim(0, 55)   # Kamera: Egen halvdel
+        logo_y = 0.15        # Relativ Y-position nederst
+        text_y = 0.10
+    elif is_down:
+        ax.set_ylim(45, 100) # Kamera: Sidste tredjedel (ændret til 45)
+        logo_y = 0.93        # Relativ Y-position øverst
+        text_y = 0.91
+    else:
+        # Full pitch logik (Valgfri, standardiseret til top)
+        logo_y = 0.93
+        text_y = 0.91
+
+    # 2. Placer Logo
+    # [x, y, bredde, højde] relativt til det synlige vindue (transAxes)
     if logo:
-        ax_logo = ax.inset_axes([0.04, 0.88, 0.08, 0.08], transform=ax.transAxes)
+        # Vi sikrer, at logoet er placeret nederst hvis 'up', ellers øverst
+        ax_logo = ax.inset_axes([0.04, logo_y - 0.08, 0.08, 0.08], transform=ax.transAxes)
         ax_logo.imshow(logo)
         ax_logo.axis('off')
 
+    # 3. Placer Overskrift
+    # Højrejusteret, dynamisk højde
+    ax.text(0.95, text_y, title, transform=ax.transAxes, fontsize=7, 
+            fontweight='bold', ha='right', va='top', color='#333333')
+
+    # 4. Tegn Heatmap
     if not plot_data.empty:
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
     
@@ -84,10 +100,7 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # Hent basis data til heatmaps
         df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
-        
-        # Mål-sekvenser (Data til T4)
         sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
         sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
         df_all_events = conn.query(sql_events)
@@ -106,10 +119,12 @@ def vis_side(dp=None):
             st.divider()
             
         if v_med == "Opbygning":
+            # Kamera: 0-55, UI: Nederst
             ids, tit, cm, zn = [1], "OPBYGNING (0-55)", "Blues", "up"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND EVENT_X <= 55 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         elif v_med == "Gennembrud":
-            ids, tit, cm, zn = [1], "GENNEMBRUD (55-105)", "Reds", "down"
+            # Kamera: 45-100, UI: Øverst
+            ids, tit, cm, zn = [1], "GENNEMBRUD (45-100)", "Reds", "down"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND EVENT_X > 55 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
             ids, tit, cm, zn = [1], "AFLEVERINGER (ALT)", "Greens", "full"
@@ -128,11 +143,11 @@ def vis_side(dp=None):
             v_uden = st.selectbox("Fokus", ["Tacklinger", "Erobringer", "Defensiv Zone"], key="us")
             st.divider()
         if v_uden == "Tacklinger":
-            ids, tit, cm, zn = [7, 8], "TACKLINGER", "Blues", "up" # Defensivt fokus (0-55)
+            ids, tit, cm, zn = [7, 8], "TACKLINGER", "Blues", "up" # Defensivt fokus (0-55, UI bund)
         elif v_uden == "Erobringer":
             ids, tit, cm, zn = [127, 12], "EROBRINGER", "GnBu", "full"
         else:
-            ids, tit, cm, zn = [7, 127, 12], "DEF. ZONE", "PuBu", "up"
+            ids, tit, cm, zn = [7, 127, 12], "DEF. ZONE (0-55)", "PuBu", "up"
         
         sql_u = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID IN {tuple(ids) if len(ids)>1 else '('+str(ids[0])+')'} AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         
@@ -142,7 +157,7 @@ def vis_side(dp=None):
             df_r = conn.query(sql_u)
             for _, r in df_r.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
 
-    # --- T4 & T5 forbliver som før ---
+    # --- T4 & T5 (Låst logik, ingen ændringer) ---
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
