@@ -37,23 +37,18 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
-def plot_custom_pitch(df, event_ids, title, half=True, vertical=True, cmap='Reds', logo=None):
+def plot_custom_pitch(df, event_ids, title, half=True, cmap='Reds', logo=None):
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     
-    if vertical:
-        # Mindre figsize gør banen mindre på skærmen
-        pitch = VerticalPitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
-        fig, ax = pitch.draw(figsize=(5, 7))
-        # Tekst i øverste højre hjørne (Opta y går til 100, x går til 100)
-        ax.text(95, 98, title, fontsize=9, color='#333333', 
-                fontweight='bold', ha='right', va='top', transform=ax.transData)
-    else:
-        pitch = Pitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
-        fig, ax = pitch.draw(figsize=(7, 5))
-        ax.text(98, 95, title, fontsize=9, color='#333333', 
-                fontweight='bold', ha='right', va='top', transform=ax.transData)
+    # Konfigurer bane (Altid Vertical til dette layout)
+    pitch = VerticalPitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=(5, 7))
     
-    # Logo i øverste venstre
+    # Overskrift i øverste højre hjørne (Inden for banens ramme)
+    ax.text(0.95, 0.97, title, transform=ax.transAxes, fontsize=10, 
+            fontweight='bold', ha='right', va='top', color='#333333')
+    
+    # Lille logo i øverste venstre hjørne
     if logo:
         ax_logo = ax.inset_axes([0.02, 0.91, 0.07, 0.07], transform=ax.transAxes)
         ax_logo.imshow(logo)
@@ -82,7 +77,7 @@ def vis_side(dp=None):
 
     # --- DATA-HENTNING ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # Mål-sekvens data (Låst logik)
+        # Mål-sekvens data
         sql_goals = f"""
         SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM,
                e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
@@ -94,8 +89,7 @@ def vis_side(dp=None):
         AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28)
         QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1
         """
-        df_goals = conn.query(sql_goals)
-
+        
         sql_events = f"""
         WITH Goals AS ({sql_goals})
         SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN,
@@ -107,10 +101,7 @@ def vis_side(dp=None):
         QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1
         """
         df_all_events = conn.query(sql_events)
-        
-        # Generel event data til heatmaps
-        sql_all_h = f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-        df_all_h = conn.query(sql_all_h)
+        df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
 
     # --- 4. TABS ---
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
@@ -118,12 +109,8 @@ def vis_side(dp=None):
     # --- T1: OVERSIGT ---
     with t1:
         sql_res = f"""
-            SELECT 
-                MATCH_LOCALDATE as DATO, 
-                CONTESTANTHOME_NAME as HJEMME, 
-                CONTESTANTAWAY_NAME as UDE, 
-                TOTAL_HOME_SCORE as "MÅL H", 
-                TOTAL_AWAY_SCORE as "MÅL U" 
+            SELECT MATCH_LOCALDATE as DATO, CONTESTANTHOME_NAME as HJEMME, CONTESTANTAWAY_NAME as UDE, 
+                   TOTAL_HOME_SCORE as "MÅL H", TOTAL_AWAY_SCORE as "MÅL U" 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' 
@@ -132,119 +119,77 @@ def vis_side(dp=None):
         st.dataframe(conn.query(sql_res), hide_index=True)
 
     # --- T2: MED BOLDEN ---
-    # --- T2: MED BOLDEN ---
     with t2:
         col_pitch, col_side = st.columns([2, 1])
-        
         with col_side:
-            view_opt_med = st.selectbox("Vælg fokusområde", ["Afleveringer", "Driblinger & Skud", "Gennembrud"], key="med_bolden_select")
+            view_opt_med = st.selectbox("Vælg fokusområde", ["Afleveringer", "Driblinger & Skud", "Gennembrud"], key="med_select")
             st.divider()
-
-        # Logik-valg (Ligesom før)
-        if view_opt_med == "Afleveringer":
-            e_ids, title, cmap = [1], "AFLEVERINGER", "Reds"
-        elif view_opt_med == "Driblinger & Skud":
-            e_ids, title, cmap = [2, 15, 16], "DUELLER / SKUD", "Oranges"
-        else:
-            e_ids, title, cmap = [1], "GENNEMBRUD", "YlOrRd"
-
-        with col_pitch:
-            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
-            
-        with col_side:
-            st.write(f"**Top 5: {view_opt_med}**")
-            df_rank = conn.query(sql_rank)
-            if not df_rank.empty:
-                for i, row in df_rank.iterrows():
-                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
-
-        # Logik-valg baseret på dropdown
+        
         if view_opt_med == "Afleveringer":
             e_ids, title, cmap = [1], "AFLEVERINGER", "Reds"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         elif view_opt_med == "Driblinger & Skud":
-            e_ids, title, cmap = [2, 15, 16], "DUELLER & AFSLUTNINGER", "Oranges"
+            e_ids, title, cmap = [2, 15, 16], "DUELLER / SKUD", "Oranges"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (2, 15, 16) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
-            e_ids, title, cmap = [1], "GENNEMBRUD (SIDSTE 3.)", "YlOrRd"
+            e_ids, title, cmap = [1], "GENNEMBRUD", "YlOrRd"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND EVENT_X > 70 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+
+        with col_pitch:
+            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
+        with col_side:
+            st.write(f"**Top 5: {view_opt_med}**")
+            df_r = conn.query(sql_rank)
+            for _, r in df_r.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
 
     # --- T3: UDEN BOLDEN ---
     with t3:
         col_pitch, col_side = st.columns([2, 1])
-        
         with col_side:
-            view_opt_uden = st.selectbox(
-                "Vælg fokusområde", 
-                ["Tacklinger", "Erobringer", "Defensiv Zone"],
-                key="uden_bolden_select"
-            )
+            view_opt_uden = st.selectbox("Vælg fokusområde", ["Tacklinger", "Erobringer", "Defensiv Zone"], key="uden_select")
             st.divider()
 
-        # Logik-valg baseret på dropdown
         if view_opt_uden == "Tacklinger":
-            e_ids, title, cmap, is_half = [7, 8], "TACKLINGER & BLOKS", "Blues", False
+            e_ids, title, cmap, is_half = [7, 8], "TACKLINGER", "Blues", False
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 8) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         elif view_opt_uden == "Erobringer":
             e_ids, title, cmap, is_half = [127, 12], "EROBRINGER", "GnBu", False
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (127, 12) AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
-            e_ids, title, cmap, is_half = [7, 127], "DEFENSIV ZONE", "PuBu", True
+            e_ids, title, cmap, is_half = [7, 127], "DEF. ZONE", "PuBu", True
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID IN (7, 127, 12) AND EVENT_X < 40 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
 
         with col_pitch:
             st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=is_half, cmap=cmap, logo=hold_logo))
-            
         with col_side:
             st.write(f"**Top 5: {view_opt_uden}**")
-            df_rank = conn.query(sql_rank)
-            if not df_rank.empty:
-                for i, row in df_rank.iterrows():
-                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
-                    
-    # --- T3: UDEN BOLDEN (3 KOLONNER - 2 FULDE, 1 HALV) ---
-    with t3:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.pyplot(plot_custom_pitch(df_all_h, [7, 8], "TACKLINGER & BLOKERINGER", half=False, cmap='Blues', logo=hold_logo))
-        with c2:
-            st.pyplot(plot_custom_pitch(df_all_h, [127, 12], "INTERCEPTIONS & CLEARANCES", half=False, cmap='GnBu', logo=hold_logo))
-        with c3:
-            st.pyplot(plot_custom_pitch(df_all_h, [7, 127], "DEFENSIV HALVLEJ", half=True, cmap='PuBu', logo=hold_logo))
+            df_r = conn.query(sql_rank)
+            for _, r in df_r.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
 
-    # --- T4: MÅL-SEKVENSER (LÅST) ---
+    # --- T4: MÅL-SEKVENSER ---
     with t4:
         if not df_all_events.empty:
             goal_list = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
-            goal_options = {f"{row['MATCH_OPTAUUID']}_{row['GOAL_TIME']}": {
-                'label': f"{pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} vs. {row['CONTESTANTAWAY_NAME'] if row['CONTESTANTHOME_OPTAUUID']==valgt_uuid else row['CONTESTANTHOME_NAME']} ({row['GOAL_MIN']}. min)",
-                'match_id': row['MATCH_OPTAUUID'], 'goal_ts': row['GOAL_TIME'],
-                'opp_uuid': row['CONTESTANTAWAY_OPTAUUID'] if row['CONTESTANTHOME_OPTAUUID']==valgt_uuid else row['CONTESTANTHOME_OPTAUUID'],
-                'min': row['GOAL_MIN'], 'date': pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
-            } for _, row in goal_list.iterrows()}
-
+            goal_options = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} vs. {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({r['GOAL_MIN']}. min)", 'match_id': r['MATCH_OPTAUUID'], 'goal_ts': r['GOAL_TIME'], 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 'min': r['GOAL_MIN'], 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} for _, r in goal_list.iterrows()}
             sel_key = st.selectbox("Vælg mål", list(goal_options.keys()), format_func=lambda x: goal_options[x]['label'])
             sel_data = goal_options[sel_key]
             this_goal_events = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sel_data['match_id']) & (df_all_events['GOAL_TIME'] == sel_data['goal_ts'])].sort_values('EVENT_TIMESTAMP')
-
-            col_pitch, col_list = st.columns([2.5, 1])
-            with col_pitch:
+            cp, cl = st.columns([2.5, 1])
+            with cp:
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_match_info_box(ax, hold_logo, get_logo_img(sel_data['opp_uuid']), sel_data['date'], "Mål", sel_data['min'])
-                for i in range(len(this_goal_events) - 1):
-                    pitch.arrows(this_goal_events.iloc[i]['EVENT_X'], this_goal_events.iloc[i]['EVENT_Y'], this_goal_events.iloc[i+1]['EVENT_X'], this_goal_events.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
-                for i, row in this_goal_events.iterrows():
-                    color, marker, size = ('red', 's', 180) if row['EVENT_TYPEID'] == 16 else (('gold', 'P', 200) if row['EVENT_TYPEID'] == 5 else ('red', 'o', 80))
-                    ax.scatter(row['EVENT_X'], row['EVENT_Y'], color=color, s=size, marker=marker, edgecolors='black', zorder=10)
-                    ax.text(row['EVENT_X'], row['EVENT_Y'] + 2.5, row['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+                for i in range(len(this_goal_events) - 1): pitch.arrows(this_goal_events.iloc[i]['EVENT_X'], this_goal_events.iloc[i]['EVENT_Y'], this_goal_events.iloc[i+1]['EVENT_X'], this_goal_events.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
+                for i, r in this_goal_events.iterrows():
+                    color, marker, size = ('red', 's', 180) if r['EVENT_TYPEID'] == 16 else (('gold', 'P', 200) if r['EVENT_TYPEID'] == 5 else ('red', 'o', 80))
+                    ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=color, s=size, marker=marker, edgecolors='black', zorder=10)
+                    ax.text(r['EVENT_X'], r['EVENT_Y'] + 2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
                 st.pyplot(fig)
-            with col_list:
+            with cl:
                 this_goal_events['Aktion'] = this_goal_events['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                st.write("**Sekvens:**")
-                st.dataframe(this_goal_events[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
+                st.write("**Sekvens:**"); st.dataframe(this_goal_events[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
 
-    # --- T5: SPILLEROVERSIGT (LÅST) ---
+    # --- T5: SPILLEROVERSIGT ---
     with t5:
         if not df_all_events.empty:
             stats = df_all_events.groupby('PLAYER_NAME').agg({'EVENT_TYPEID': [lambda x: (x == 16).sum(), lambda x: (x == 7).sum(), lambda x: (x == 127).sum(), lambda x: (x == 1).sum()]})
