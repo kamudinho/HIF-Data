@@ -156,18 +156,23 @@ def vis_side(df):
                 st.rerun()
 
     # --- Tab 4: Bane ---
-with tabs[3]:
-    # 1. TRANSFERVINDUE-DROPDOWN ØVERST
-    # Vi placerer den i en kolonne for at styre bredden, så den ikke fylder hele skærmen
+    with t4:
+    # --- A. TRANSFERVINDUE DROPDOWN (Øverst) ---
     c_top1, c_top2 = st.columns([2, 3])
     with c_top1:
-        # Antager at sel_v styres herinde eller hentes fra en overordnet variabel
-        # Hvis sel_v er defineret uden for fanerne, kan du blot vise værdien eller lave en ny selectbox:
-        ny_sel_v = st.selectbox("Vælg Transfervindue", ["Nuværende trup", "Sommer 2026", "Vinter 2027"], index=0, key="sb_vindue_tab4")
-    
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        # Vi sikrer os at vi har en liste af vinduer fra dit dataframe
+        vindue_options = sorted(df_scout['TRANSFER_VINDUE'].unique().tolist()) if 'TRANSFER_VINDUE' in df_scout.columns else []
+        if "Nuværende trup" not in vindue_options:
+            vindue_options.insert(0, "Nuværende trup")
+            
+        sel_v = st.selectbox("Vælg Transfervindue", vindue_options, key="sb_skygg_top")
 
-    # 2. FORMATIONS-KNAPPER (Lige under dropdown)
+    st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+
+    # --- B. FORMATIONS-KNAPPER ---
+    if 'form_skygge' not in st.session_state:
+        st.session_state.form_skygge = "4-3-3"
+    
     f = st.session_state.form_skygge
     p_col = f"POS_{f.replace('-', '')}"
     
@@ -185,22 +190,56 @@ with tabs[3]:
             st.session_state.form_skygge = "3-5-2"
             st.rerun()
 
-    # 3. DATA-FILTRERING (Bruger ny_sel_v fra dropdownen)
-    if ny_sel_v == "Nuværende trup":
+    # --- C. DATA-FILTRERING ---
+    if sel_v == "Nuværende trup":
         df_f = df_hif.drop_duplicates(subset=['Navn'])
     else:
         h_s = df_hif[df_hif['SKYGGEHOLD'] == True]
-        e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == ny_sel_v)]
+        e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
         df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
 
-    # 4. BANE-VISNING (Pitch logik...)
+    # --- D. BANE-VISNING ---
     pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
     fig, ax = pitch.draw(figsize=(10, 7))
-    # ... resten af din eksisterende ax.text og plotting logik ...
+    fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.98) 
+    
+    # Formations-mapping
+    m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
+         "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
+         "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[f]
 
-    # Husk at opdatere vindue-teksten nederst på banen til at bruge den nye variabel
-    ax.text(118, 2.3, f"Vindue: {ny_sel_v}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
+    for pid, (x, y, lbl) in m.items():
+        # Positions-label (Rød boks)
+        ax.text(x, y-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+        
+        # Spillere på positionen
+        plist = df_f[df_f[p_col].astype(str) == str(pid)].sort_values('PRIOR', ascending=True)
+        for i, (_, p_row) in enumerate(plist.iterrows()):
+            bg_color = "white"
+            if p_row['IS_HIF'] == False: 
+                bg_color = GRON_NY
+            elif str(p_row.get('PRIOR', '')).upper() == 'L':
+                bg_color = LEJE_GRA
+            else:
+                u_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) else p_row.get('KONTRAKT')
+                try:
+                    expiry = pd.to_datetime(u_val, dayfirst=True)
+                    days = (expiry - datetime.now()).days
+                    if days < 183: bg_color = ROD_ADVARSEL
+                    elif days <= 365: bg_color = GUL_ADVARSEL
+                except: bg_color = "white"
+            
+            ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', 
+                    bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
+
+    # --- E. LEGENDS & INFO ---
+    ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+    ax.text(12, 2.3, " 6-12 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+    ax.text(23, 2.3, " Transfer ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+    ax.text(118, 2.3, f"Vindue: {sel_v}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
     
     st.pyplot(fig, use_container_width=True)
+        
 if __name__ == "__main__":
     vis_side()
