@@ -45,12 +45,12 @@ def plot_custom_pitch(df, event_ids, title, half=True, cmap='Reds', logo=None):
     fig, ax = pitch.draw(figsize=(5, 7))
     
     # Overskrift i øverste højre hjørne (Inden for banens ramme)
-    ax.text(0.95, 0.88, title, transform=ax.transAxes, fontsize=6 , 
+    ax.text(0.95, 0.92, title, transform=ax.transAxes, fontsize=6 , 
             fontweight='bold', ha='right', va='top', color='#333333')
     
     # Lille logo i øverste venstre hjørne
     if logo:
-        ax_logo = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.04, 0.88, 0.07, 0.07], transform=ax.transAxes)
         ax_logo.imshow(logo)
         ax_logo.axis('off')
 
