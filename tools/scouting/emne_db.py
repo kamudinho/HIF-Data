@@ -106,11 +106,10 @@ def prepare_df(content):
     df['Navn'] = df['Navn'].astype(str).str.strip()
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-    # Rens positioner (fjern .0)
-    for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
-            df[col] = df[col].replace(['nan', 'None', '0', '0.0'], "")
+   for col in ['POS_343', 'POS_433', 'POS_352', 'POS']:
+    if col in df.columns:
+        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
+        df[col] = df[col].replace(['nan', 'None', '0', '0.0'], "")
 
     # Beregn Alder og Kontrakt (Gemmes IKKE i CSV)
     if 'BIRTHDATE' in df.columns:
