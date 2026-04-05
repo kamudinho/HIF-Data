@@ -37,27 +37,31 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
 
-# --- OPPDATERET HJÆLPEFUNKTION MED MINDRE LOGO ---
 def plot_custom_pitch(df, event_ids, title, half=True, vertical=True, cmap='Reds', logo=None):
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
     
     if vertical:
+        # Mindre figsize gør banen mindre på skærmen
         pitch = VerticalPitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
+        fig, ax = pitch.draw(figsize=(5, 7))
+        # Tekst i øverste højre hjørne (Opta y går til 100, x går til 100)
+        ax.text(95, 98, title, fontsize=9, color='#333333', 
+                fontweight='bold', ha='right', va='top', transform=ax.transData)
     else:
         pitch = Pitch(pitch_type='opta', half=half, pitch_color='#ffffff', line_color='#BDBDBD')
-        
-    fig, ax = pitch.draw(figsize=(6, 8))
+        fig, ax = pitch.draw(figsize=(7, 5))
+        ax.text(98, 95, title, fontsize=9, color='#333333', 
+                fontweight='bold', ha='right', va='top', transform=ax.transData)
     
-    # Mindre logo: Ændret fra 0.12 til 0.07 for bredde/højde
+    # Logo i øverste venstre
     if logo:
-        ax_logo = ax.inset_axes([0.02, 0.90, 0.07, 0.07], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.02, 0.91, 0.07, 0.07], transform=ax.transAxes)
         ax_logo.imshow(logo)
         ax_logo.axis('off')
 
     if not plot_data.empty:
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.7, levels=100)
     
-    ax.set_title(title, fontsize=9, pad=10, fontweight='bold')
     return fig
 
 # --- 3. HOVEDFUNKTION ---
@@ -128,18 +132,31 @@ def vis_side(dp=None):
         st.dataframe(conn.query(sql_res), hide_index=True)
 
     # --- T2: MED BOLDEN ---
+    # --- T2: MED BOLDEN ---
     with t2:
-        # Vi definerer kolonnerne med det samme for at få dropdown til højre
         col_pitch, col_side = st.columns([2, 1])
         
         with col_side:
-            # Dropdown placeret her for at spare plads i toppen
-            view_opt_med = st.selectbox(
-                "Vælg fokusområde", 
-                ["Afleveringer", "Driblinger & Skud", "Gennembrud"],
-                key="med_bolden_select"
-            )
-            st.divider() # En lille streg for at adskille dropdown fra listen
+            view_opt_med = st.selectbox("Vælg fokusområde", ["Afleveringer", "Driblinger & Skud", "Gennembrud"], key="med_bolden_select")
+            st.divider()
+
+        # Logik-valg (Ligesom før)
+        if view_opt_med == "Afleveringer":
+            e_ids, title, cmap = [1], "AFLEVERINGER", "Reds"
+        elif view_opt_med == "Driblinger & Skud":
+            e_ids, title, cmap = [2, 15, 16], "DUELLER / SKUD", "Oranges"
+        else:
+            e_ids, title, cmap = [1], "GENNEMBRUD", "YlOrRd"
+
+        with col_pitch:
+            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
+            
+        with col_side:
+            st.write(f"**Top 5: {view_opt_med}**")
+            df_rank = conn.query(sql_rank)
+            if not df_rank.empty:
+                for i, row in df_rank.iterrows():
+                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
 
         # Logik-valg baseret på dropdown
         if view_opt_med == "Afleveringer":
@@ -151,17 +168,6 @@ def vis_side(dp=None):
         else:
             e_ids, title, cmap = [1], "GENNEMBRUD (SIDSTE 3.)", "YlOrRd"
             sql_rank = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND EVENT_TYPEID = 1 AND EVENT_X > 70 AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
-
-        with col_pitch:
-            # Banen rykker nu helt op i toppen
-            st.pyplot(plot_custom_pitch(df_all_h, e_ids, title, half=True, cmap=cmap, logo=hold_logo))
-            
-        with col_side:
-            st.write(f"**Top 5: {view_opt_med}**")
-            df_rank = conn.query(sql_rank)
-            if not df_rank.empty:
-                for i, row in df_rank.iterrows():
-                    st.write(f"{int(row['ANTAL'])} **{row['PLAYER_NAME']}**")
 
     # --- T3: UDEN BOLDEN ---
     with t3:
