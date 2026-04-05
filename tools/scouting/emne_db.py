@@ -62,16 +62,27 @@ def prepare_df(content, is_hif=False):
     if 'Navn' not in df.columns: return pd.DataFrame()
     df = df.dropna(subset=['Navn'])
     
-    # Alder beregning
-    df['Alder'] = df['BIRTHDATE'].apply(calculate_age_str) if 'BIRTHDATE' in df.columns else "-"
+    # 1. Konverter BIRTHDATE til rigtige datoer (vigtigt for kalender-editoren)
+    if 'BIRTHDATE' in df.columns:
+        df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
+        # Vi beregner alder herfra
+        df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
+    else:
+        df['Fødselsdato'] = pd.NaT
+        df['Alder'] = "-"
 
-    # Map kolonner til danske navne for fremvisning
+    # 2. Håndter Kontrakt/Udløb datoer
+    k_src = 'UDLØB' if 'UDLØB' in df.columns else 'KONTRAKT'
+    if k_src in df.columns:
+        # Konverter til datetime, så st.column_config.DateColumn ikke fejler
+        df['Kontrakt'] = pd.to_datetime(df[k_src], dayfirst=True, errors='coerce')
+    else:
+        df['Kontrakt'] = pd.NaT
+
+    # 3. Map øvrige kolonner
     col_map = {
-        'BIRTHDATE': 'Fødselsdato',
         'KLUB': 'Klub',
         'POS': 'Pos',
-        'KONTRAKT': 'Kontrakt',
-        'UDLØB': 'Kontrakt',
         'TRANSFER_VINDUE': 'Vindue',
         'ER_EMNE': 'Emne',
         'SKYGGEHOLD': 'Skyggehold',
@@ -79,16 +90,15 @@ def prepare_df(content, is_hif=False):
         'POS_433': 'Pos_433',
         'POS_352': 'Pos_352'
     }
-    
-    # Omdøb eksisterende kolonner
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
+    # Standard booleans og vindue
     if 'Vindue' in df.columns:
         df['Vindue'] = df['Vindue'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
     
     for c in ['Emne', 'Skyggehold']:
-        if c not in df.columns: df[c] = False
-        else: df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
+        if c in df.columns:
+            df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
     
     df['IS_HIF'] = is_hif
     return df
