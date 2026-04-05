@@ -213,7 +213,7 @@ def vis_side(dp=None):
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] <= 50]
                 # Her bruger vi standard get_top_success (OUTCOME 1 = præcis aflevering)
                 df_top = get_top_success(df_fokuseret, ids)
-                label_txt = "Succes / Antal"
+                label_txt = "Succesfulde / Antal"
                 
             elif v_med == "Gennembrud":
                 ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD (50-100m)", "Reds", "down"
@@ -236,9 +236,9 @@ def vis_side(dp=None):
                     df_top = df_top.sort_values('TOTAL', ascending=False).head(5)
                 else:
                     df_top = pd.DataFrame()
-                label_txt = "Mål / Skud"
+                label_txt = "Mål / Skud (Konvertering %)"
 
-            st.write(f"**Top 5 ({label_txt}):**")
+            st.write(f"**Top 8 ({label_txt}):**")
             
             if not df_top.empty:
                 for _, r in df_top.iterrows():
@@ -258,7 +258,7 @@ def vis_side(dp=None):
             elif v_uden == "Erobringer": ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
             else: ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
             
-            st.write("**Top 8 (Succes / Antal):**")
+            st.write("**Top 8 (Succesfulde / Antal):**")
             df_top_u = get_top_success(df_all_h, ids)
             if not df_top_u.empty:
                 for _, r in df_top_u.iterrows():
