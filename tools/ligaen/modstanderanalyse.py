@@ -62,8 +62,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
         text_y = 0.97
     else:
         # Full pitch logik (Valgfri, standardiseret til top)
-        logo_y = 0.93
-        text_y = 0.91
+        logo_y = 0.97
+        text_y = 0.97
 
     # 2. Placer Logo
     # [x, y, bredde, højde] relativt til det synlige vindue (transAxes)
@@ -75,7 +75,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     # 3. Placer Overskrift
     # Højrejusteret, dynamisk højde
-    ax.text(0.97, text_y, title, transform=ax.transAxes, fontsize=5, 
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=5, 
             fontweight='bold', ha='right', va='top', color='#333333')
 
     # 4. Tegn Heatmap
