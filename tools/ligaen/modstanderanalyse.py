@@ -211,11 +211,11 @@ def vis_side(dp=None):
             # Definer filtre baseret på valg
             if v_med == "Opbygning":
                 # Kun pasninger (1) på egen halvdel (0-50)
-                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING (0-50m)", "Blues", "up"
+                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] <= 50]
             elif v_med == "Gennembrud":
                 # Kun pasninger (1) på modstanderens halvdel (50-100)
-                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD (50-100m)", "Reds", "down"
+                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] > 50]
             else:
                 # Afslutninger (13-16) - her kigger vi typisk på hele banen/sidste tredjedel
