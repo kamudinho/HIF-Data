@@ -133,14 +133,14 @@ def vis_side(dp=None):
     with t3:
         cp, cs = st.columns([2, 1])
         with cs:
-            v_uden = st.selectbox("Fokus", ["Tacklinger", "Erobringer", "Defensiv Zone"], key="us")
+            v_uden = st.selectbox("Fokus", ["Dueller", "Erobringer", "Defensiv Zone"], key="us")
             st.divider()
-        if v_uden == "Tacklinger":
-            ids, tit, cm, zn = [7, 8], "TACKLINGER & INTERCEPTIONS", "Blues", "up"
+        if v_uden == "Dueller":
+            ids, tit, cm, zn = [7, 8], "DUELLER", "Blues", "up"
         elif v_uden == "Erobringer":
-            ids, tit, cm, zn = [127, 12, 49], "BOLDOPSAMLINGER & CLEARINGER", "GnBu", "full"
+            ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
         else:
-            ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE (0-55)", "PuBu", "up"
+            ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
         
         sql_u = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID IN {tuple(ids) if len(ids)>1 else '('+str(ids[0])+')'} AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         
