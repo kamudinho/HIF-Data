@@ -115,7 +115,7 @@ def vis_side(dp=None):
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
-            v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afleveringer (Alt)"], key="ms")
+            v_med = st.selectbox("Fokus", ["EGEN HALVDEL: OPBYGNING", "OFF. HALVDEL: GENNEMBRUD", "OFF. HALVDEL: AFSLUTNINGER"], key="ms")
             st.divider()
             
         if v_med == "Opbygning":
@@ -127,7 +127,7 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND EVENT_X > 55 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
-            ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER (ALT)", "Greens", "down"
+            ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "Greens", "down"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=16 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
 
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
