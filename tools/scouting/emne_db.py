@@ -26,7 +26,7 @@ def calculate_age_str(born):
         if pd.isna(born_dt): return "-"
         today = datetime.now()
         age = today.year - born_dt.year - ((today.month, today.day) < (born_dt.month, born_dt.day))
-        return str(int(age))
+        return f"{int(age)} år"
     except: return "-"
 
 def get_color_by_date(val):
@@ -60,31 +60,35 @@ def prepare_df(content, is_hif=False):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     if 'Navn' not in df.columns: return pd.DataFrame()
-    
     df = df.dropna(subset=['Navn'])
     
-    # Alder som string for at kunne vise "-"
-    if 'BIRTHDATE' in df.columns:
-        df['Alder'] = df['BIRTHDATE'].apply(calculate_age_str)
-    else:
-        df['Alder'] = "-"
+    # Alder beregning
+    df['Alder'] = df['BIRTHDATE'].apply(calculate_age_str) if 'BIRTHDATE' in df.columns else "-"
 
-    # Rens dato-kolonner for visning
-    k_col = 'UDLØB' if 'UDLØB' in df.columns else 'KONTRAKT'
-    if k_col in df.columns:
-        df[k_col] = df[k_col].fillna("-")
-
-    if 'TRANSFER_VINDUE' in df.columns:
-        df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
+    # Map kolonner til danske navne for fremvisning
+    col_map = {
+        'BIRTHDATE': 'Fødselsdato',
+        'KLUB': 'Klub',
+        'POS': 'Pos',
+        'KONTRAKT': 'Kontrakt',
+        'UDLØB': 'Kontrakt',
+        'TRANSFER_VINDUE': 'Vindue',
+        'ER_EMNE': 'Emne',
+        'SKYGGEHOLD': 'Skyggehold',
+        'POS_343': 'Pos_343',
+        'POS_433': 'Pos_433',
+        'POS_352': 'Pos_352'
+    }
     
-    for c in ['ER_EMNE', 'SKYGGEHOLD']:
+    # Omdøb eksisterende kolonner
+    df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+    
+    if 'Vindue' in df.columns:
+        df['Vindue'] = df['Vindue'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
+    
+    for c in ['Emne', 'Skyggehold']:
         if c not in df.columns: df[c] = False
-        else:
-            df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
-    
-    for c in ['POS', 'POS_343', 'POS_433', 'POS_352', 'PRIOR']:
-        if c not in df.columns: df[c] = "0"
-        df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
+        else: df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
     
     df['IS_HIF'] = is_hif
     return df
@@ -95,69 +99,68 @@ def vis_side():
         .stAppViewBlockContainer { padding-top: 0px !important; } 
         div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        div.stButton > button { height: 2.2em !important; font-size: 0.85rem !important; margin-bottom: 0.1rem !important; }
+        div.stButton > button { height: 2.2em !important; font-size: 0.85rem !important; }
     </style>""", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    s_c, s_sha = get_github_file(SCOUT_DB_PATH)
-    h_c, h_sha = get_github_file(HIF_PATH)
+    s_c, _ = get_github_file(SCOUT_DB_PATH)
+    h_c, _ = get_github_file(HIF_PATH)
     
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
-    vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+    
+    # Konfiguration af kalender-input
+    date_cfg = {
+        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"),
+        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")
+    }
 
-    # TAB 1: EMNER
-    with t1:
-        source_df = df_scout[df_scout['ER_EMNE']==True]
-        if not source_df.empty:
-            cols = ['Navn', 'Alder', 'BIRTHDATE', 'KLUB', 'POS', 'KONTRAKT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD']
-            sub = source_df[[c for c in cols if c in source_df.columns or c in ['Navn', 'Alder']]].set_index('Navn')
-            st.data_editor(sub.style.applymap(get_color_by_date, subset=['KONTRAKT'] if 'KONTRAKT' in sub.columns else []), use_container_width=True, height=600)
+    with t1: # EMNER
+        source = df_scout[df_scout['Emne']==True]
+        if not source.empty:
+            cols = ['Navn', 'Alder', 'Fødselsdato', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
+            display = source[[c for c in cols if c in source.columns]].set_index('Navn')
+            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
+                           column_config=date_cfg, use_container_width=True, height=600)
 
-    # TAB 2: HIF
-    with t2:
+    with t2: # HIF
         if not df_hif.empty:
-            k_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
-            cols = ['Navn', 'Alder', 'BIRTHDATE', 'POS', k_col, 'SKYGGEHOLD']
-            sub = df_hif[[c for c in cols if c in df_hif.columns or c in ['Navn', 'Alder']]].set_index('Navn')
-            st.data_editor(sub.style.applymap(get_color_by_date, subset=[k_col] if k_col in sub.columns else []), use_container_width=True, height=600)
+            cols = ['Navn', 'Alder', 'Fødselsdato', 'Pos', 'Kontrakt', 'Skyggehold']
+            display = df_hif[[c for c in cols if c in df_hif.columns]].set_index('Navn')
+            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
+                           column_config=date_cfg, use_container_width=True, height=600)
 
-    # TAB 3: SKYGGELISTE
-    with t3:
-        df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
-        if not df_sky.empty:
-            k_col = 'UDLØB' if 'UDLØB' in df_sky.columns else 'KONTRAKT'
-            cols = ['Navn', 'Alder', 'KLUB', 'POS', k_col, 'POS_343', 'POS_433', 'POS_352']
-            sub = df_sky[[c for c in cols if c in df_sky.columns or c in ['Navn', 'Alder']]].set_index('Navn')
-            st.data_editor(sub.style.applymap(get_color_by_date, subset=[k_col] if k_col in sub.columns else []), use_container_width=True, height=600)
+    with t3: # SKYGGELISTE
+        sky = df_all[df_all['Skyggehold'] == True].drop_duplicates(subset=['Navn'])
+        if not sky.empty:
+            cols = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Pos_343', 'Pos_433', 'Pos_352']
+            display = sky[[c for c in cols if c in sky.columns]].set_index('Navn')
+            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
+                           column_config=date_cfg, use_container_width=True, height=600)
 
-    # TAB 4: BANE
-    with t4:
-        # Bredere dropdown kolonne (1.7 i stedet for 1.2)
-        c_pitch, c_ctrl = st.columns([8.3, 1.7])
+    with t4: # BANE
+        c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            sel_v = st.selectbox("Vindue", vindue_options, key="v_bane")
-            st.write("") 
+            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27"], key="v_bane")
+            st.write("")
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
                     st.session_state.form_skygge = form; st.rerun()
 
         with c_pitch:
-            p_col = f"POS_{st.session_state.form_skygge.replace('-', '')}"
-            df_f = df_hif if sel_v == "Nuværende trup" else pd.concat([df_hif[df_hif['SKYGGEHOLD']==True], df_scout[(df_scout['SKYGGEHOLD']==True) & (df_scout['TRANSFER_VINDUE']==sel_v)]]).drop_duplicates(subset=['Navn'])
+            p_col = f"Pos_{st.session_state.form_skygge.replace('-', '')}"
+            df_f = df_hif if sel_v == "Nuværende trup" else pd.concat([df_hif[df_hif['Skyggehold']==True], df_scout[(df_scout['Skyggehold']==True) & (df_scout['Vindue']==sel_v)]]).drop_duplicates(subset=['Navn'])
             
-            if 'PRIOR' in df_f.columns:
-                df_f = df_f.sort_values(by='PRIOR', ascending=True)
+            if 'PRIOR' in df_f.columns: df_f = df_f.sort_values(by='PRIOR')
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # Formations-koordinater
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
@@ -167,10 +170,8 @@ def vis_side():
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     bg = "white"
-                    u_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) and p_row.get('UDLØB') != "-" else p_row.get('KONTRAKT')
-                    
-                    if not p_row['IS_HIF']: 
-                        bg = GRON_NY
+                    u_val = p_row.get('Kontrakt')
+                    if not p_row['IS_HIF']: bg = GRON_NY
                     else:
                         try:
                             if u_val and u_val != "-":
@@ -178,14 +179,9 @@ def vis_side():
                                 if days < 183: bg = ROD_ADVARSEL
                                 elif days <= 365: bg = GUL_ADVARSEL
                         except: pass
-                    
                     if str(p_row.get('PRIOR', '')).upper() == 'L': bg = LEJE_GRA
-                        
                     ax.text(px, py + (i * 2.8), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
 
-            ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
-            ax.text(12, 2.3, " 6-12 mdr ", size=7, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
-            ax.text(23, 2.3, " Transfer ", size=7, weight='bold', bbox=dict(facecolor=GRON_NY))
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
