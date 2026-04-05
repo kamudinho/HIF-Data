@@ -143,7 +143,7 @@ def vis_side():
 
     # --- Tab 4: Bane ---
     with t4:
-        c_pitch, c_ctrl = st.columns([9, 3])
+        c_pitch, c_ctrl = st.columns([9, 1])
         
         with c_ctrl:
             # Låst rækkefølge
