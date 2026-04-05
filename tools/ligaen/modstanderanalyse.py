@@ -72,7 +72,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Initialisér variabler for at undgå NameError
+    # Initialisér variabler
     df_all_events = None 
 
     # --- 1. TEAM SELECTION ---
@@ -107,10 +107,14 @@ def vis_side(dp=None):
         match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
         match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
 
-        # Event data
-        df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
+        # Hent event data inklusiv OUTCOME
+        df_all_h = conn.query(f"""
+            SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, OUTCOME 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
+            AND MATCH_OPTAUUID IN {match_ids_str}
+        """)
         
-        # Mål-sekvenser (Defineres her så den altid eksisterer)
         try:
             sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
             sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
@@ -122,7 +126,6 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Data prep
         df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
         df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
         df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
@@ -134,11 +137,9 @@ def vis_side(dp=None):
             return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
         df_res['RES'] = df_res.apply(get_result, axis=1)
 
-        # Kolonne-styring for højde-match
         c1, c2 = st.columns([1, 3])
-        
         with c1:
-            st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
             wins = (df_res['RES'] == "W").sum()
             draws = (df_res['RES'] == "D").sum()
             st.metric("Point (10 k)", (wins*3)+draws)
@@ -148,17 +149,10 @@ def vis_side(dp=None):
             st.metric("Målscore", f"{mål_s} - {mål_i}")
 
         with c2:
-            # Tabel med fuld bredde og fast højde for at matche metrics
-            st.dataframe(
-                df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']],
-                use_container_width=True,
-                hide_index=True,
-                height=280 # Justeret til at matche de 3 metrics i venstre side
-            )
+            st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], use_container_width=True, hide_index=True, height=280)
 
         st.divider()
 
-        # Grafer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
@@ -187,7 +181,17 @@ def vis_side(dp=None):
             fig_a.update_layout(height=350, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
 
-    # --- RESTEN AF FANERNE (T2-T5) ---
+    # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
+    def get_top_success(df, event_ids):
+        relevant = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
+        if relevant.empty: return []
+        stats = relevant.groupby('PLAYER_NAME').agg(
+            TOTAL=('OUTCOME', 'count'),
+            SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
+        ).reset_index()
+        stats['PCT'] = (stats['SUCCESS'] / stats['TOTAL'] * 100).round(1)
+        return stats.sort_values('TOTAL', ascending=False).head(5)
+
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
@@ -195,8 +199,11 @@ def vis_side(dp=None):
             if v_med == "Opbygning": ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
             elif v_med == "Gennembrud": ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
             else: ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
-            df_top = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(8)
-            for _, r in df_top.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
+            
+            st.write("**Top 5 (Succes / Antal):**")
+            df_top = get_top_success(df_all_h, ids)
+            for _, r in df_top.iterrows():
+                st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
     with t3:
@@ -206,10 +213,14 @@ def vis_side(dp=None):
             if v_uden == "Dueller": ids, tit, cm, zn = [7, 8], "DUELLER", "Blues", "up"
             elif v_uden == "Erobringer": ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
             else: ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
-            df_top_u = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].groupby('PLAYER_NAME').size().reset_index(name='ANTAL').sort_values('ANTAL', ascending=False).head(8)
-            for _, r in df_top_u.iterrows(): st.write(f"{int(r['ANTAL'])} **{r['PLAYER_NAME']}**")
+            
+            st.write("**Top 5 (Succes / Antal):**")
+            df_top_u = get_top_success(df_all_h, ids)
+            for _, r in df_top_u.iterrows():
+                st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
+    # T4 og T5 forbliver som før...
     with t4:
         if df_all_events is not None and not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
@@ -231,8 +242,7 @@ def vis_side(dp=None):
             with l_c:
                 tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 st.write("**Sekvens:**"); st.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
-        else:
-            st.info("Ingen mål-sekvenser fundet.")
+        else: st.info("Ingen mål-sekvenser fundet.")
 
     with t5:
         if not df_all_h.empty:
@@ -242,5 +252,6 @@ def vis_side(dp=None):
             df_all_h['is_shot'] = df_all_h['EVENT_TYPEID'].isin([13,14,15,16]).astype(int)
             stats = df_all_h.groupby('PLAYER_NAME').agg({'is_pass': 'sum', 'is_regain': 'sum', 'is_shot': 'sum', 'EVENT_TYPEID': 'count'}).rename(columns={'EVENT_TYPEID': 'Aktioner', 'is_pass': 'Pasninger', 'is_regain': 'Erobringer', 'is_shot': 'Skud'}).sort_values('Aktioner', ascending=False)
             st.dataframe(stats, use_container_width=True)
+            
 if __name__ == "__main__":
     vis_side()
