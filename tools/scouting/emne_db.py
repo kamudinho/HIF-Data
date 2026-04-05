@@ -70,14 +70,22 @@ def prepare_df(content, is_hif=False):
 def vis_side():
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 20px !important; } 
+            .stAppViewBlockContainer { padding-top: 10px !important; } 
             div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
             .stTabs { margin-top: 0px !important; }
+            /* Gør knapperne lidt højere for bedre look i kolonnen */
+            div.stButton > button { height: 3em; margin-bottom: 0.5rem; }
         </style>
     """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: 
         st.session_state.form_skygge = "3-4-3"
+
+    # --- TOP SEKTION (OVER TABS) ---
+    c_empty, c_dropdown = st.columns([7, 3])
+    with c_dropdown:
+        vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+        sel_v = st.selectbox("Vælg Transfervindue", vindue_options, key="sb_skygg_top", label_visibility="collapsed")
 
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
@@ -88,7 +96,7 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Tab 1, 2, 3 (Uændret redigering) ...
+    # Tab 1, 2, 3 (Uændret)
     with t1:
         source_df = df_scout[df_scout['ER_EMNE']==True]
         if not source_df.empty:
@@ -127,9 +135,7 @@ def vis_side():
             ed_s = st.data_editor(d_sky_ed, use_container_width=True, height=500, key="sky_ed_final")
             if not ed_s.equals(d_sky_ed):
                 for path in [SCOUT_DB_PATH, HIF_PATH]:
-                    raw, sha = get_github_file(path)
-                    if not raw: continue
-                    df_tmp = pd.read_csv(StringIO(raw))
+                    raw, sha = get_github_file(path); df_tmp = pd.read_csv(StringIO(raw))
                     df_tmp.columns = [c.upper().strip() for c in df_tmp.columns]
                     if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
                     changed = False
@@ -143,21 +149,17 @@ def vis_side():
 
     # --- Tab 4: Bane ---
     with t4:
-        c_pitch, c_ctrl = st.columns([9, 2])
+        c_pitch, c_ctrl = st.columns([8.5, 1.5])
         
         with c_ctrl:
-            # Låst rækkefølge
-            vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-            sel_v = st.selectbox("Vælg Transfervindue", vindue_options, key="sb_skygg_top")
-            
-            st.write("**Formation:**")
+            st.markdown("<p style='font-weight: bold; margin-bottom: 5px;'>Formation</p>", unsafe_allow_html=True)
             f = st.session_state.form_skygge
-            c_b1, c_b2, c_b3 = st.columns(3)
-            if c_b1.button("3-4-3", use_container_width=True, type="primary" if f == "3-4-3" else "secondary"):
+            # Én knap pr. række i kolonnen
+            if st.button("3-4-3", use_container_width=True, type="primary" if f == "3-4-3" else "secondary"):
                 st.session_state.form_skygge = "3-4-3"; st.rerun()
-            if c_b2.button("4-3-3", use_container_width=True, type="primary" if f == "4-3-3" else "secondary"):
+            if st.button("4-3-3", use_container_width=True, type="primary" if f == "4-3-3" else "secondary"):
                 st.session_state.form_skygge = "4-3-3"; st.rerun()
-            if c_b3.button("3-5-2", use_container_width=True, type="primary" if f == "3-5-2" else "secondary"):
+            if st.button("3-5-2", use_container_width=True, type="primary" if f == "3-5-2" else "secondary"):
                 st.session_state.form_skygge = "3-5-2"; st.rerun()
 
         with c_pitch:
@@ -193,7 +195,7 @@ def vis_side():
                         except: bg_color = "white"
                     ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
 
-            # --- Legends & Info (Nederst) ---
+            # Legends (Nederst)
             ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 2.3, " 6-12 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(23, 2.3, " Transfer ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
