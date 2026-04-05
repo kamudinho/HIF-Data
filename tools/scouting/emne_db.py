@@ -137,13 +137,40 @@ def vis_side():
             st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
                            column_config=date_cfg, use_container_width=True, height=600, key=f"t2_{data_key}")
 
-    with t3: # SKYGGELISTE (Alle markeret med Skyggehold=True)
-        sky = df_all[df_all['Skyggehold'] == True]
-        if not sky.empty:
-            cols = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Pos_343', 'Pos_433', 'Pos_352']
-            display = sky[[c for c in cols if c in sky.columns]].set_index('Navn')
-            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
-                           column_config=date_cfg, use_container_width=True, height=600, key=f"t3_{data_key}")
+    with t3: # SKYGGELISTE
+        st.subheader("Rediger Skyggehold & Positioner")
+        st.info("Ret positionerne herunder (f.eks. skriv 4, 3.5 eller 8) for at se dem på banen med det samme.")
+        
+        # Filtrer listen til dem der er på skyggeholdet
+        sky_df = df_all[df_all['Skyggehold'] == True].copy()
+        
+        if not sky_df.empty:
+            # Vælg de kolonner der skal kunne redigeres
+            cols = ['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']
+            
+            # Lav editoren
+            edited_sky = st.data_editor(
+                sky_df[cols],
+                column_config={
+                    "Pos_343": st.column_config.TextColumn("Pos 3-4-3"),
+                    "Pos_433": st.column_config.TextColumn("Pos 4-3-3"),
+                    "Pos_352": st.column_config.TextColumn("Pos 3-5-2"),
+                    "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
+                },
+                disabled=["Navn", "Klub", "Pos"], # Lås de grundlæggende info
+                use_container_width=True,
+                num_rows="fixed",
+                key="sky_editor"
+            )
+            
+            # KRITISK: Opdater master-df (df_all) med de nye værdier fra editoren
+            if st.session_state.get("sky_editor"):
+                # Vi fletter ændringerne tilbage i df_all så t4 (Bane) kan se dem
+                for index, row in edited_sky.iterrows():
+                    df_all.loc[df_all['Navn'] == row['Navn'], ['Pos_343', 'Pos_433', 'Pos_352']] = \
+                        [row['Pos_343'], row['Pos_433'], row['Pos_352']]
+        else:
+            st.warning("Ingen spillere er markeret som 'Skyggehold' i CSV-filen endnu.")
 
     with t4: # BANE
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
