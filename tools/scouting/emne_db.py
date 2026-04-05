@@ -19,11 +19,12 @@ ROD_ADVARSEL = "#ffcccc"
 LEJE_GRA = "#e0e0e0"
 
 # --- 2. HJÆLPEFUNKTIONER ---
-def calculate_age(born):
+def calculate_age(born_series):
+    # Håndterer konvertering af hele serien for hastighed
     try:
-        born = pd.to_datetime(born, dayfirst=True)
+        born = pd.to_datetime(born_series, dayfirst=True, errors='coerce')
         today = datetime.now()
-        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+        return born.apply(lambda x: today.year - x.year - ((today.month, today.day) < (x.month, x.day)) if pd.notnull(x) else 0)
     except:
         return 0
 
@@ -59,14 +60,12 @@ def prepare_df(content, is_hif=False):
     df = df.dropna(subset=['Navn'])
     df['Navn'] = df['Navn'].astype(str).str.strip()
     
-    # Alder beregning
-    birth_col = next((c for c in df.columns if c in ['FØDT', 'BIRTH', 'BORN']), None)
-    if birth_col:
-        df['Alder'] = df[birth_col].apply(calculate_age)
+    # Alder beregning baseret på BIRTHDATE
+    if 'BIRTHDATE' in df.columns:
+        df['Alder'] = calculate_age(df['BIRTHDATE'])
     else:
         df['Alder'] = 0
 
-    # Standardisering af vindue og booleans
     if 'TRANSFER_VINDUE' in df.columns:
         df['TRANSFER_VINDUE'] = df['TRANSFER_VINDUE'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
     
@@ -75,7 +74,6 @@ def prepare_df(content, is_hif=False):
         else:
             df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
     
-    # Positioner til bane
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
@@ -108,7 +106,6 @@ def vis_side():
     with t1:
         source_df = df_scout[df_scout['ER_EMNE']==True]
         if not source_df.empty:
-            # Navn, Alder, Klub, Pos, Kontrakt, Vindue, Emne, Skyggehold
             cols = ['Navn', 'Alder', 'KLUB', 'POS', 'KONTRAKT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD']
             avail_cols = [c for c in cols if c in source_df.columns or c in ['Navn', 'Alder']]
             st.data_editor(source_df[avail_cols].set_index('Navn'), use_container_width=True, height=600, key="ed_emner")
@@ -116,7 +113,6 @@ def vis_side():
     # --- TAB 2: HIF ---
     with t2:
         if not df_hif.empty:
-            # Navn, Alder, Pos, Kontrakt, Skyggehold
             kontrakt_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
             cols = ['Navn', 'Alder', 'POS', kontrakt_col, 'SKYGGEHOLD']
             avail_cols = [c for c in cols if c in df_hif.columns or c in ['Navn', 'Alder']]
@@ -126,8 +122,7 @@ def vis_side():
     with t3:
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
-            # Navn, Alder, Klub, Pos, Kontrakt, Pos_343, Pos_433, Pos_352
-            kontrakt_col = 'KONTRAKT' # Vi prioriterer KONTRAKT her
+            kontrakt_col = 'UDLØB' if 'UDLØB' in df_sky.columns else 'KONTRAKT'
             cols = ['Navn', 'Alder', 'KLUB', 'POS', kontrakt_col, 'POS_343', 'POS_433', 'POS_352']
             avail_cols = [c for c in cols if c in df_sky.columns or c in ['Navn', 'Alder']]
             st.data_editor(df_sky[avail_cols].set_index('Navn'), use_container_width=True, height=600, key="ed_skyggeliste")
@@ -145,12 +140,16 @@ def vis_side():
 
         with c_pitch:
             p_col = f"POS_{st.session_state.form_skygge.replace('-', '')}"
-            df_f = df_hif if sel_v == "Nuværende trup" else pd.concat([df_hif[df_hif['SKYGGEHOLD']==True], df_scout[(df_scout['SKYGGEHOLD']==True) & (df_scout['TRANSFER_VINDUE']==sel_v)]])
+            if sel_v == "Nuværende trup":
+                df_f = df_hif
+            else:
+                h_part = df_hif[df_hif['SKYGGEHOLD']==True]
+                s_part = df_scout[(df_scout['SKYGGEHOLD']==True) & (df_scout['TRANSFER_VINDUE']==sel_v)]
+                df_f = pd.concat([h_part, s_part]).drop_duplicates(subset=['Navn'])
             
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # Formation positions
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
