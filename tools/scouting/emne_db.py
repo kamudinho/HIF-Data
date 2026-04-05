@@ -17,6 +17,15 @@ GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99" 
 ROD_ADVARSEL = "#ffcccc" 
 
+# Datoer for vinduernes start (bruges til filtrering og farveberegning)
+VINDUE_DATOER = {
+    "Nuværende trup": datetime.now(),
+    "Sommer 26": datetime(2026, 7, 1),
+    "Vinter 26": datetime(2027, 1, 1),
+    "Sommer 27": datetime(2027, 7, 1),
+    "Vinter 27": datetime(2028, 1, 1)
+}
+
 # --- 2. HJÆLPEFUNKTIONER ---
 def calculate_age_str(born):
     if pd.isna(born): return "-"
@@ -26,20 +35,23 @@ def calculate_age_str(born):
         return f"{int(age)} år"
     except: return "-"
 
-def get_status_color(val):
-    """Returnerer hex-farve baseret på kontraktlængde"""
+def get_status_color(val, ref_date=None):
+    """Returnerer hex-farve baseret på kontraktlængde ift. en referencedato"""
+    if ref_date is None: ref_date = datetime.now()
     try:
         if pd.isna(val): return None
         dt = pd.to_datetime(val, dayfirst=True, errors='coerce')
         if pd.isna(dt): return None
-        days = (dt - datetime.now()).days
+        
+        days = (dt - ref_date).days
+        if days < 0: return "#444444" # Grå hvis kontrakt er udløbet
         if days < 183: return ROD_ADVARSEL
         if days <= 365: return GUL_ADVARSEL
         return None
     except: return None
 
 def get_color_by_date(val):
-    """CSS-version til data_editor styling"""
+    """CSS-version til data_editor styling (bruger altid dags dato)"""
     color = get_status_color(val)
     return f'background-color: {color}' if color else ""
 
@@ -159,18 +171,29 @@ def vis_side():
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"])
-            # st.markdown fjernet herfra da den nu er på banen
+            sel_v = st.selectbox("Vindue", list(VINDUE_DATOER.keys()))
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
                     st.session_state.form_skygge = form; st.rerun()
 
         with c_pitch:
+            # Referencedato for det valgte vindue
+            ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
+            
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
-            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
             
+            # Filtrering baseret på vindue
+            if sel_v == "Nuværende trup":
+                df_f = df_all[df_all['IS_HIF']].copy()
+            else:
+                # Inkluder HIF-spillere og spillere markeret til dette specifikke vindue
+                df_f = df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
+            
+            # FJERN SPILLERE HVIS KONTRAKT ER UDLØBET VED VINDUE-START
+            df_f = df_f[~((df_f['Kontrakt'].notna()) & (df_f['Kontrakt'] < ref_dt))]
+
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
@@ -180,7 +203,6 @@ def vis_side():
             ax.text(25, 3, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             # --- VINDUE STATUS (HØJRE) ---
-            # x=99 placerer den i højre side, ha='right' sikrer den ikke ryger ud af billedet
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
 
@@ -193,8 +215,10 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
-                        k_color = get_status_color(p_row['Kontrakt'])
+                        # Beregn farve ift. vinduets startdato
+                        k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
                         bg = k_color if k_color else ("white" if p_row['IS_HIF'] else GRON_NY)
+                        
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             
             st.pyplot(fig, use_container_width=True)
