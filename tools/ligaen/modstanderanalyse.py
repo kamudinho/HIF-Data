@@ -68,12 +68,11 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
         pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
     return fig
 
-# --- 3. HOVEDFUNKTION (UNDERSIDE) ---
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Team selection
+    # --- TEAM SELECTION ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -86,7 +85,7 @@ def vis_side(dp=None):
 
     # --- DATA HENTNING ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # 1. Seneste 10 kampe (Sorteret på dato)
+        # 1. Seneste 10 kampe
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -106,7 +105,7 @@ def vis_side(dp=None):
         match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
         match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
 
-        # 2. Hent ALT event data for volumen
+        # 2. Hent ALT event data for volumen og spillerstatistik
         df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
         
         # 3. Mål-sekvens data
@@ -117,6 +116,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
+        # --- FORBEREDELSE AF DATA TIL OVERSIGT ---
         df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
         df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
 
@@ -129,37 +129,52 @@ def vis_side(dp=None):
 
         df_res['RES'] = df_res.apply(get_result, axis=1)
         
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        last_5 = df_res.head(5)
-        wins, draws = (last_5['RES'] == "W").sum(), (last_5['RES'] == "D").sum()
-        kpi1.metric("Point (Sidste 5)", f"{(wins*3)+draws}/15")
-        kpi2.metric("Vundne (Sidste 10)", (df_res['RES'] == "W").sum())
-        
-        mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
-        mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
-        kpi3.metric("Mål Scoret (10 k)", mål_s)
-        kpi4.metric("Mål Imod (10 k)", mål_i, delta=int(mål_i), delta_color="inverse")
+        # --- LAYOUT: METRICS OG TABEL ---
+        c_left, c_right = st.columns([1, 2.2])
 
-        st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
+        with c_left:
+            m1, m2 = st.columns(2)
+            wins = (df_res['RES'] == "W").sum()
+            draws = (df_res['RES'] == "D").sum()
+            m1.metric("Point (10 k)", (wins*3)+draws)
+            m2.metric("Vundne", wins)
+            
+            m3, m4 = st.columns(2)
+            mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
+            mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
+            m3.metric("Mål Scoret", mål_s)
+            m4.metric("Mål Imod", mål_i)
+
+        with c_right:
+            st.dataframe(
+                df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], 
+                hide_index=True, 
+                use_container_width=True,
+                height=165
+            )
+
+        st.divider()
         
-        # Volumen pr. kamp beregning
+        # --- GRAFER ---
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             PASNINGER=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             AFSLUTNINGER=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
         ).reset_index()
         
-        # Sortering: Ældste til nyeste (så nyeste er til højre i grafen)
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
         df_plot = df_plot.sort_values('MATCH_LOCALDATE', ascending=True)
         df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-        df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m') + " " + df_plot['MODSTANDER']
+        # Forkorter modstander for at undgå label-overlap
+        df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m') + " " + df_plot['MODSTANDER'].str[:3]
 
         g1, g2 = st.columns(2)
+        layout_cfg = dict(height=260, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+        
         with g1:
             fig_p = px.bar(df_plot, x='LABEL', y='PASNINGER', text='PASNINGER', title="Pasninger (Sidste 10)")
             fig_p.update_traces(textposition='outside', marker_color='#0047AB')
-            fig_p.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_p.update_layout(**layout_cfg)
             fig_p.update_yaxes(showgrid=False, visible=False)
             fig_p.update_xaxes(showgrid=False)
             st.plotly_chart(fig_p, use_container_width=True, config={'displayModeBar': False})
@@ -167,7 +182,7 @@ def vis_side(dp=None):
         with g2:
             fig_a = px.bar(df_plot, x='LABEL', y='AFSLUTNINGER', text='AFSLUTNINGER', title="Afslutninger (Sidste 10)")
             fig_a.update_traces(textposition='outside', marker_color='#C8102E')
-            fig_a.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_a.update_layout(**layout_cfg)
             fig_a.update_yaxes(showgrid=False, visible=False)
             fig_a.update_xaxes(showgrid=False)
             st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
