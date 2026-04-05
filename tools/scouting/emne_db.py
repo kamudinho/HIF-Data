@@ -12,6 +12,7 @@ REPO = "Kamudinho/HIF-data"
 SCOUT_DB_PATH = "data/scouting_db.csv"
 HIF_PATH = "data/players.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+
 HIF_ROD = "#df003b"
 GRON_NY = "#ccffcc" 
 GUL_ADVARSEL = "#ffff99" 
@@ -30,7 +31,6 @@ def calculate_age_str(born):
 def get_color_by_date(val):
     try:
         if pd.isna(val): return ""
-        # Håndter både strings og datetime objekter
         dt = pd.to_datetime(val, dayfirst=True, errors='coerce')
         if pd.isna(dt): return ""
         days = (dt - datetime.now()).days
@@ -41,7 +41,7 @@ def get_color_by_date(val):
 
 def get_github_file(path):
     try:
-        # Vi beholder tidsstemplet i URL for at sikre, at GitHub ikke sender gammelt data
+        # Tidsstempel tvinger GitHub til at sende den nyeste version af filen
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         r = requests.get(url, headers=headers)
@@ -62,7 +62,7 @@ def prepare_df(content, is_hif=False):
     if 'Navn' not in df.columns: return pd.DataFrame()
     df = df.dropna(subset=['Navn'])
     
-    # 1. Konverter BIRTHDATE og beregn Alder
+    # Fødselsdato og Alder
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
         df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
@@ -70,14 +70,14 @@ def prepare_df(content, is_hif=False):
         df['Fødselsdato'] = pd.NaT
         df['Alder'] = "-"
 
-    # 2. Håndter Kontrakt/Udløb
+    # Kontraktudløb
     k_src = 'UDLØB' if 'UDLØB' in df.columns else 'KONTRAKT'
     if k_src in df.columns:
         df['Kontrakt'] = pd.to_datetime(df[k_src], dayfirst=True, errors='coerce')
     else:
         df['Kontrakt'] = pd.NaT
 
-    # 3. Map øvrige kolonner
+    # Omdøbning af kolonner til pæne navne
     col_map = {
         'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue',
         'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold',
@@ -85,6 +85,7 @@ def prepare_df(content, is_hif=False):
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
+    # Standardisering af værdier
     if 'Vindue' in df.columns:
         df['Vindue'] = df['Vindue'].replace(['Nu', 'nu', 'NU'], 'Nuværende trup').fillna("Sommer 26")
     
@@ -106,11 +107,17 @@ def vis_side():
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
+    # HENT DATA
     s_c, _ = get_github_file(SCOUT_DB_PATH)
     h_c, _ = get_github_file(HIF_PATH)
     
+    if h_c is None: st.error(f"Kunne ikke finde: {HIF_PATH}")
+    if s_c is None: st.error(f"Kunne ikke finde: {SCOUT_DB_PATH}")
+
     df_scout = prepare_df(s_c, is_hif=False)
     df_hif = prepare_df(h_c, is_hif=True)
+    
+    # Flet data til lister der bruger begge filer
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
@@ -120,7 +127,7 @@ def vis_side():
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")
     }
 
-    with t1: # EMNER
+    with t1: # EMNER (Kun fra scouting_db)
         source = df_scout[df_scout['Emne']==True]
         if not source.empty:
             cols = ['Navn', 'Alder', 'Fødselsdato', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
@@ -128,14 +135,14 @@ def vis_side():
             st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
                            column_config=date_cfg, use_container_width=True, height=600)
 
-    with t2: # HIF
+    with t2: # HIF (Kun fra players.csv)
         if not df_hif.empty:
             cols = ['Navn', 'Alder', 'Fødselsdato', 'Pos', 'Kontrakt', 'Skyggehold']
             display = df_hif[[c for c in cols if c in df_hif.columns]].set_index('Navn')
             st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
                            column_config=date_cfg, use_container_width=True, height=600)
 
-    with t3: # SKYGGELISTE
+    with t3: # SKYGGELISTE (Både HIF og Scouting)
         sky = df_all[df_all['Skyggehold'] == True].drop_duplicates(subset=['Navn'])
         if not sky.empty:
             cols = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Pos_343', 'Pos_433', 'Pos_352']
@@ -155,11 +162,13 @@ def vis_side():
 
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
-            p_col = f"Pos_{f_suffix}" if f"Pos_{f_suffix}" in df_all.columns else f"POS_{f_suffix}"
+            p_col = f"Pos_{f_suffix}" 
             
+            # Find spillere til banen baseret på vindue
             if sel_v == "Nuværende trup":
                 df_f = df_hif.copy()
             else:
+                # Kombiner eksisterende spillere (Skyggehold=True) med nye emner for det valgte vindue
                 h_part = df_hif[df_hif['Skyggehold'] == True]
                 s_part = df_scout[(df_scout['Skyggehold'] == True) & (df_scout['Vindue'] == sel_v)]
                 df_f = pd.concat([h_part, s_part]).drop_duplicates(subset=['Navn'])
@@ -170,6 +179,7 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
+            # Overskrifter på banen
             ax.text(118, 2, f"Vindue: {sel_v}", size=10, weight='bold', color=HIF_ROD, ha='right')
             ax.text(2, 2, "< 6 mdr", size=8, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
             ax.text(14, 2, "6-12 mdr", size=8, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#333', boxstyle='round,pad=0.2'))
@@ -187,7 +197,8 @@ def vis_side():
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         bg = "white"
                         u_val = p_row.get('Kontrakt')
-                        if not p_row['IS_HIF']: bg = GRON_NY
+                        if not p_row['IS_HIF']: 
+                            bg = GRON_NY
                         else:
                             try:
                                 if pd.notna(u_val):
@@ -195,6 +206,7 @@ def vis_side():
                                     if days < 183: bg = ROD_ADVARSEL
                                     elif days <= 365: bg = GUL_ADVARSEL
                             except: pass
+                        
                         if str(p_row.get('PRIOR', '')).upper() == 'L': bg = LEJE_GRA
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             
