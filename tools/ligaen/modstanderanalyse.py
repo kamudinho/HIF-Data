@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.express as px
 from mplsoccer import Pitch, VerticalPitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
@@ -72,7 +73,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Team selection - Henter fra alle kalender-IDs for at være sikker på at få alle hold
+    # Team selection
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -85,7 +86,7 @@ def vis_side(dp=None):
 
     # --- DATA HENTNING ---
     with st.spinner(f"Henter data for {valgt_hold}..."):
-        # 1. Seneste 10 kampe på tværs af kalendere (Grundspil/Slutspil)
+        # 1. Seneste 10 kampe (Sorteret på dato)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -108,7 +109,7 @@ def vis_side(dp=None):
         # 2. Hent ALT event data for volumen
         df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
         
-        # 3. Mål-sekvens data (Din originale query - nu med match_ids fra de rigtige rækker)
+        # 3. Mål-sekvens data
         sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
         sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
         df_all_events = conn.query(sql_events)
@@ -141,24 +142,36 @@ def vis_side(dp=None):
 
         st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'CONTESTANTAWAY_NAME', 'RES']], hide_index=True, use_container_width=True)
         
-        # Volumen pr. kamp (Beregnes fra hændelser for at sikre det altid er fyldt)
+        # Volumen pr. kamp beregning
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             PASNINGER=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             AFSLUTNINGER=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
         ).reset_index()
         
-        df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0).iloc[::-1]
+        # Sortering: Ældste til nyeste (så nyeste er til højre i grafen)
+        df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
+        df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
+        df_plot = df_plot.sort_values('MATCH_LOCALDATE', ascending=True)
         df_plot['MODSTANDER'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+        df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m') + " " + df_plot['MODSTANDER']
 
         g1, g2 = st.columns(2)
         with g1:
-            st.write("**Pasninger (Sidste 10)**")
-            st.bar_chart(df_plot, x='MODSTANDER', y='PASNINGER', color='#0047AB')
+            fig_p = px.bar(df_plot, x='LABEL', y='PASNINGER', text='PASNINGER', title="Pasninger (Sidste 10)")
+            fig_p.update_traces(textposition='outside', marker_color='#0047AB')
+            fig_p.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_p.update_yaxes(showgrid=False, visible=False)
+            fig_p.update_xaxes(showgrid=False)
+            st.plotly_chart(fig_p, use_container_width=True, config={'displayModeBar': False})
+            
         with g2:
-            st.write("**Afslutninger (Sidste 10)**")
-            st.bar_chart(df_plot, x='MODSTANDER', y='AFSLUTNINGER', color='#C8102E')
+            fig_a = px.bar(df_plot, x='LABEL', y='AFSLUTNINGER', text='AFSLUTNINGER', title="Afslutninger (Sidste 10)")
+            fig_a.update_traces(textposition='outside', marker_color='#C8102E')
+            fig_a.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_a.update_yaxes(showgrid=False, visible=False)
+            fig_a.update_xaxes(showgrid=False)
+            st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
 
-    # --- T2-T5 beholder din logik men med det nye datasæt ---
     with t2:
         cp, cs = st.columns([2, 1])
         with cs:
