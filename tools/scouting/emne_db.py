@@ -143,9 +143,7 @@ def vis_side():
             st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
                            column_config=date_cfg, use_container_width=True, height=600, key=f"t2_{data_key}")
 
-    with t3:
-        st.subheader("Rediger Skyggehold & Positioner")
-        
+    with t3:        
         # VISUELLE valgmuligheder (uden .0)
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         
