@@ -175,13 +175,13 @@ def vis_side():
             fig, ax = pitch.draw(figsize=(10, 7))
             
             # --- LEGENDS (VENSTRE) ---
-            ax.text(1, 2, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(12, 2, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(25, 2, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(25, 3, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             # --- VINDUE STATUS (HØJRE) ---
             # x=99 placerer den i højre side, ha='right' sikrer den ikke ryger ud af billedet
-            ax.text(99, 2, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
+            ax.text(125, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
 
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
