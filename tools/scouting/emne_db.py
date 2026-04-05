@@ -65,7 +65,10 @@ def prepare_df(content, is_hif=False):
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
-    if is_hif and 'UDLØB' in df.columns:
+    # Check for udløbsdato (håndterer både UDLØB og KONTRAKT)
+    date_col = 'UDLØB' if 'UDLØB' in df.columns else ('KONTRAKT' if 'KONTRAKT' in df.columns else None)
+    
+    if is_hif and date_col:
         def calc_months(date_str):
             try:
                 expiry = pd.to_datetime(date_str, dayfirst=True)
@@ -73,7 +76,7 @@ def prepare_df(content, is_hif=False):
                 return (expiry.year - now.year) * 12 + (expiry.month - now.month)
             except:
                 return 99
-        df['MDR_TIL_UDLØB'] = df['UDLØB'].apply(calc_months)
+        df['MDR_TIL_UDLØB'] = df[date_col].apply(calc_months)
     else:
         df['MDR_TIL_UDLØB'] = 99
 
@@ -81,7 +84,7 @@ def prepare_df(content, is_hif=False):
     return df
 
 # --- 4. HOVEDFUNKTION ---
-def vis_side(dp):
+def vis_side():
     st.markdown("""
         <style>
             .stAppViewBlockContainer { padding-top: 40px !important; } 
@@ -101,7 +104,6 @@ def vis_side(dp):
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
-    # Tabs definition
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
     # Tab 1: Emner
@@ -125,7 +127,10 @@ def vis_side(dp):
     # Tab 2: HIF
     with t2:
         if not df_hif.empty:
-            cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD', 'UDLØB']
+            cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
+            if 'UDLØB' in df_hif.columns: cols_to_show.append('UDLØB')
+            elif 'KONTRAKT' in df_hif.columns: cols_to_show.append('KONTRAKT')
+            
             d_edit = df_hif.set_index('Navn')[cols_to_show]
             ed = st.data_editor(d_edit, use_container_width=True, height=500, key="ed_H")
             if not ed.equals(d_edit):
@@ -161,7 +166,7 @@ def vis_side(dp):
                     if changed: push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
                 st.rerun()
 
-    # --- Tab 4: Bane ---
+    # Tab 4: Bane
     with t4:
         # A. TRANSFERVINDUE DROPDOWN
         c_top1, c_top2 = st.columns([2, 3])
