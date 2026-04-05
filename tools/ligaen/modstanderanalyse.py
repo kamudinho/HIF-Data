@@ -50,12 +50,12 @@ def plot_custom_pitch(df, event_ids, title, half=True, cmap='Reds', logo=None):
     
     # Lille logo i øverste venstre hjørne
     if logo:
-        ax_logo = ax.inset_axes([0.04, 0.85, 0.07, 0.07], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.04, 0.86, 0.07, 0.07], transform=ax.transAxes)
         ax_logo.imshow(logo)
         ax_logo.axis('off')
 
     if not plot_data.empty:
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.7, levels=100)
+        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
     
     return fig
 
