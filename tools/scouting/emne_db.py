@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-# Vi skal bruge denne for at undgå at appen dør ved uventede tegn
 from io import StringIO
 import requests
 import base64
@@ -52,7 +51,7 @@ def get_github_file(path):
 
 def save_to_github(df, path):
     try:
-        # DEFINER DE 34 KOLONNER SOM DE SKAL SE UD I CSV
+        # DE 34 KOLONNER SOM ER LOVLIGE I CSV-FILEN
         original_cols = [
             'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
             'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
@@ -64,31 +63,35 @@ def save_to_github(df, path):
         
         _, sha = get_github_file(path)
         
-        # Lav en kopi og omdøb tilbage til CSV-standard før gem
-        # Vi skal vende dine 'Klub', 'Pos' osv. tilbage til STORE BOGSTAVER
-        save_df = df.copy()
+        # 1. Lav kopi så vi ikke ødelægger visningen i appen
+        export_df = df.copy()
         
-        # Reverse mapping: Fra app-navne tilbage til CSV-navne
-        rev_map = {'Klub': 'KLUB', 'Pos': 'POS', 'Vindue': 'TRANSFER_VINDUE', 
-                   'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD', 'Navn': 'NAVN'}
-        save_df = save_df.rename(columns=rev_map)
+        # 2. Map app-navne tilbage til de STORE BOGSTAVER i CSV'en
+        rev_map = {
+            'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 
+            'Vindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD'
+        }
+        export_df = export_df.rename(columns=rev_map)
         
-        # Sørg for at alle 34 kolonner findes (hvis nogle mangler, lav dem tomme)
+        # 3. Sørg for at alle krævede kolonner findes
         for col in original_cols:
-            if col not in save_df.columns:
-                save_df[col] = ""
+            if col not in export_df.columns:
+                export_df[col] = ""
         
-        # Gem KUN de 34 kolonner i den rigtige rækkefølge
-        csv_content = save_df[original_cols].to_csv(index=False)
+        # 4. FIREWALL: Behold KUN de 34 kolonner og smid resten (Alder, IS_HIF osv.) væk
+        export_df = export_df[original_cols]
         
+        # 5. Konverter til CSV og send
+        csv_content = export_df.to_csv(index=False)
         encoded_content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+        
         url = f"https://api.github.com/repos/{REPO}/contents/{path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Content-Type": "application/json"}
-        payload = {"message": "Auto-update fra scouting app", "content": encoded_content, "sha": sha}
+        payload = {"message": "Auto-update (Clean 34 cols)", "content": encoded_content, "sha": sha}
         
         r = requests.put(url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
-            st.toast("✅ Gemt korrekt på GitHub", icon="💾")
+            st.toast("✅ Gemt (Renset for ekstra kolonner)", icon="💾")
             return True
     except Exception as e:
         st.error(f"Fejl ved gem: {e}")
@@ -97,25 +100,22 @@ def save_to_github(df, path):
 # --- 3. DATA PROCESSING ---
 def prepare_df(content):
     if not content: return pd.DataFrame()
-    # 'on_bad_lines' sikrer at appen ikke crasher hvis en række i CSV'en er skæv
     df = pd.read_csv(StringIO(content), on_bad_lines='skip')
     df.columns = [str(c).upper().strip() for c in df.columns]
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # RENSNING: Fjern rækker uden navn og fjern duplikater (vigtigt!)
     df = df.dropna(subset=['Navn'])
     df['Navn'] = df['Navn'].astype(str).str.strip()
-    df = df[df['Navn'] != ""]
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-    # Vask af positioner (.0 fjernes så de kan matches på banen)
+    # Vask af positioner
     pos_cols = [c for c in df.columns if 'POS' in c]
     for col in pos_cols:
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
         df[col] = df[col].replace(['nan', 'None', '<NA>', '0', '0.0'], "")
 
-    # Datoer og Alder
+    # Datoer og Alder (Bliver IKKE gemt i CSV pga. firewall ovenfor)
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
         df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
@@ -123,7 +123,9 @@ def prepare_df(content):
     if 'KONTRAKT' in df.columns:
         df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
 
-    col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
+    col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 
+               'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 
+               'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
     if 'Klub' in df.columns:
@@ -162,11 +164,10 @@ def vis_side():
         st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_edit")
 
     with t3:        
-        st.info("Ændringer gemmes automatisk.")
+        st.info("Ændringer gemmes automatisk i den rene 34-kolonne struktur.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
-        # Stabil nøgle for at undgå UI-reloads
         editor_key = "sky_editor_stable"
         
         edited_sky = st.data_editor(
@@ -182,7 +183,6 @@ def vis_side():
             key=editor_key
         )
         
-        # AUTO-SAVE LOGIK (Rettet mod loops)
         if editor_key in st.session_state:
             edits = st.session_state[editor_key].get("edited_rows", {})
             if edits:
@@ -192,7 +192,6 @@ def vis_side():
                     if idx_int < len(sky_df):
                         player_name = sky_df.iloc[idx_int]['Navn']
                         for col, val in updated_cols.items():
-                            # Bevar .0 for alle tal undtagen 3.5
                             if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val:
                                 if val != "3.5" and "." not in str(val):
                                     val = f"{val}.0"
@@ -201,7 +200,6 @@ def vis_side():
                 
                 if has_changed:
                     if save_to_github(df_all, SCOUT_DB_PATH):
-                        # VIGTIGT: Tømmer ændringerne før rerun for at stoppe loopet
                         st.session_state[editor_key]["edited_rows"] = {}
                         st.rerun()
 
@@ -219,7 +217,6 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
             
-            # Filtrering baseret på vindue
             if sel_v == "Nuværende trup":
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
@@ -228,7 +225,6 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # Koordinater for formationer
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
@@ -236,7 +232,6 @@ def vis_side():
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                 
-                # Find spillere på denne position
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     bg = "white" if p_row['IS_HIF'] else GRON_NY
