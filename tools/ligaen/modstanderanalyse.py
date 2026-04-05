@@ -199,11 +199,11 @@ def vis_side(dp=None):
 
             # Navngivning af kolonner for klarhed
             stats.columns = [
-                'Totale aktioner (før mål)', 
-                'Mål', 
+                'Totale aktioner (før mål)',
+                'Touches v. feltet'
                 'Pasninger involveret', 
                 'Regains (Vundet bold)', 
-                'Touches v. feltet'
+                'Mål',
             ]
 
             # Beregn en "Mål-involvering %" (Hvor mange af holdets mål er spilleren med i?)
