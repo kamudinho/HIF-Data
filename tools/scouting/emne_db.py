@@ -51,34 +51,47 @@ def get_github_file(path):
     return None, None
 
 # --- 3. DATA PROCESSING ---
+# --- 3. DATA PROCESSING ---
 def prepare_df(content):
     if not content: return pd.DataFrame()
-    # Tvinger POS kolonner til tekst for at undgå rod med decimaler ved indlæsning
-    df = pd.read_csv(StringIO(content), dtype={'POS_343': str, 'POS_433': str, 'POS_352': str})
+    # Vi tvinger alle tænkelige positions-kolonner til tekst for at undgå .0 rod
+    df = pd.read_csv(StringIO(content), dtype={
+        'POS': str, 'POS_343': str, 'POS_433': str, 'POS_352': str
+    })
     df.columns = [str(c).upper().strip() for c in df.columns]
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     if 'Navn' not in df.columns: return pd.DataFrame()
     df = df.dropna(subset=['Navn'])
     
+    # --- RENSNING AF ALLE POS-KOLONNER ---
+    # Vi kører en "vaskemaskine" over alle kolonner der starter med POS
+    pos_cols = [c for c in df.columns if 'POS' in c]
+    for col in pos_cols:
+        df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
+        df[col] = df[col].replace(['nan', 'None', '<NA>'], "")
+
+    # Håndtering af fødselsdag og alder
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
         df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
     else:
         df['Alder'] = "-"
 
-    k_src = 'KONTRAKT' 
-    if k_src in df.columns:
-        df['Kontrakt'] = pd.to_datetime(df[k_src], dayfirst=True, errors='coerce')
+    # Kontraktudløb
+    if 'KONTRAKT' in df.columns:
+        df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
     else:
         df['Kontrakt'] = pd.NaT
 
+    # Map kolonner til pænere navne (vi beholder de rensede data)
     col_map = {
         'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue',
         'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold',
         'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+    
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
     
     if 'Vindue' in df.columns:
