@@ -49,7 +49,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     # Dynamisk konfiguration af UI og zoom
     if zone == 'up':
         ax.set_ylim(0, 55)   # Kamera: Egen halvdel
-        logo_pos = [0.04, 0.04, 0.08, 0.08] # [x, y, w, h] - nederst
+        logo_pos = [0.04, 0.03, 0.08, 0.08] # [x, y, w, h] - nederst
         text_y = 0.05
     elif zone == 'down':
         ax.set_ylim(45, 100) # Kamera: Modstanderens halvdel
