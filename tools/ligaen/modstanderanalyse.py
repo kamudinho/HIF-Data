@@ -107,14 +107,18 @@ def vis_side(dp=None):
         match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
         match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
 
-        # Hent event data inklusiv OUTCOME
+        # RETTET: Kolonnen hedder EVENT_OUTCOME i jeres OPTA_EVENTS tabel
         df_all_h = conn.query(f"""
-            SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, OUTCOME 
+            SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME 
             FROM {DB}.OPTA_EVENTS 
             WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
             AND MATCH_OPTAUUID IN {match_ids_str}
         """)
         
+        # Omdøb kolonnen internt i DataFrame for at matche din logik
+        if df_all_h is not None and not df_all_h.empty:
+            df_all_h = df_all_h.rename(columns={'EVENT_OUTCOME': 'OUTCOME'})
+
         try:
             sql_goals = f"SELECT e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP as GOAL_TIME, e.EVENT_CONTESTANT_OPTAUUID as SCORING_TEAM, e.EVENT_TIMEMIN as GOAL_MIN, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, m.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND (e.EVENT_TYPEID = 16 OR q.QUALIFIER_QID = 28) QUALIFY ROW_NUMBER() OVER (PARTITION BY e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP ORDER BY e.EVENT_EVENTID) = 1"
             sql_events = f"WITH Goals AS ({sql_goals}) SELECT e.*, g.GOAL_TIME, g.SCORING_TEAM as GOAL_TEAM_ID, g.GOAL_MIN, g.CONTESTANTHOME_NAME, g.CONTESTANTAWAY_NAME, g.CONTESTANTHOME_OPTAUUID, g.CONTESTANTAWAY_OPTAUUID, g.MATCH_LOCALDATE FROM {DB}.OPTA_EVENTS e INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID WHERE e.EVENT_TIMESTAMP >= DATEADD(second, -12, g.GOAL_TIME) AND e.EVENT_TIMESTAMP <= g.GOAL_TIME AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' QUALIFY ROW_NUMBER() OVER (PARTITION BY e.EVENT_OPTAUUID, g.GOAL_TIME ORDER BY e.EVENT_TIMESTAMP DESC) = 1"
@@ -126,6 +130,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
+        # Data prep
         df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
         df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
         df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
@@ -137,9 +142,9 @@ def vis_side(dp=None):
             return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
         df_res['RES'] = df_res.apply(get_result, axis=1)
 
-        c1, c2 = st.columns([1, 3])
+        c1, c2 = st.columns([1, 3.2]) # Øget bredde til tabellen
         with c1:
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
             wins = (df_res['RES'] == "W").sum()
             draws = (df_res['RES'] == "D").sum()
             st.metric("Point (10 k)", (wins*3)+draws)
@@ -149,10 +154,16 @@ def vis_side(dp=None):
             st.metric("Målscore", f"{mål_s} - {mål_i}")
 
         with c2:
-            st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], use_container_width=True, hide_index=True, height=280)
+            st.dataframe(
+                df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], 
+                use_container_width=True, 
+                hide_index=True, 
+                height=265 # Justeret højde for bedre alignment
+            )
 
         st.divider()
 
+        # Grafer med gennemsnitslinjer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
@@ -184,7 +195,7 @@ def vis_side(dp=None):
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
     def get_top_success(df, event_ids):
         relevant = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
-        if relevant.empty: return []
+        if relevant.empty: return pd.DataFrame()
         stats = relevant.groupby('PLAYER_NAME').agg(
             TOTAL=('OUTCOME', 'count'),
             SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
@@ -202,8 +213,9 @@ def vis_side(dp=None):
             
             st.write("**Top 5 (Succes / Antal):**")
             df_top = get_top_success(df_all_h, ids)
-            for _, r in df_top.iterrows():
-                st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
+            if not df_top.empty:
+                for _, r in df_top.iterrows():
+                    st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
     with t3:
@@ -216,8 +228,9 @@ def vis_side(dp=None):
             
             st.write("**Top 5 (Succes / Antal):**")
             df_top_u = get_top_success(df_all_h, ids)
-            for _, r in df_top_u.iterrows():
-                st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
+            if not df_top_u.empty:
+                for _, r in df_top_u.iterrows():
+                    st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
     # T4 og T5 forbliver som før...
