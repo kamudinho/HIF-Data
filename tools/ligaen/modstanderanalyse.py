@@ -120,15 +120,15 @@ def vis_side(dp=None):
             
         if v_med == "Opbygning":
             # Kamera: 0-55, UI: Nederst
-            ids, tit, cm, zn = [1], "OPBYGNING (0-55)", "Blues", "up"
+            ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND EVENT_X <= 55 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         elif v_med == "Gennembrud":
             # Kamera: 45-100, UI: Øverst
-            ids, tit, cm, zn = [1], "GENNEMBRUD (45-100)", "Reds", "down"
+            ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
             sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND EVENT_X > 55 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
         else:
-            ids, tit, cm, zn = [1], "AFLEVERINGER (ALT)", "Greens", "full"
-            sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=1 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
+            ids, tit, cm, zn = [1], "OFF. HALVDEL: AFSLUTNINGER (ALT)", "Greens", "down"
+            sql = f"SELECT PLAYER_NAME, COUNT(*) as ANTAL FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID='{valgt_uuid}' AND EVENT_TYPEID=16 AND TOURNAMENTCALENDAR_OPTAUUID='{LIGA_UUID}' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
 
         with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
         with cs:
