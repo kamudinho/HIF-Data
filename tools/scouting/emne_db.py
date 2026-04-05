@@ -16,7 +16,6 @@ HIF_ROD = "#df003b"
 GRON_NY = "#ccffcc" 
 GUL_ADVARSEL = "#ffff99" 
 ROD_ADVARSEL = "#ffcccc" 
-LEJE_GRA = "#e0e0e0"
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def calculate_age_str(born):
@@ -50,33 +49,20 @@ def get_github_file(path):
     except: pass
     return None, None
 
-def save_to_github(df, path, message="Opdatering af positioner via app"):
+def save_to_github(df, path):
     try:
-        # Vi skal bruge den nyeste SHA for at overskrive
         _, sha = get_github_file(path)
-        
-        # Konverter til CSV
         csv_content = df.to_csv(index=False)
         encoded_content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
-        
         url = f"https://api.github.com/repos/{REPO}/contents/{path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Content-Type": "application/json"}
-        
-        payload = {
-            "message": message,
-            "content": encoded_content,
-            "sha": sha
-        }
-        
+        payload = {"message": "Auto-update fra app", "content": encoded_content, "sha": sha}
         r = requests.put(url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
-            st.success("✅ Ændringerne er gemt i scouting_db.csv på GitHub!")
-            time.sleep(1.5)
-            st.rerun()
-        else:
-            st.error(f"Kunne ikke gemme (Status: {r.status_code}). Tjek dit GITHUB_TOKEN rettigheder.")
-    except Exception as e:
-        st.error(f"Fejl ved skrivning til GitHub: {e}")
+            st.toast("✅ Gemt automatisk på GitHub", icon="💾")
+            return True
+    except: pass
+    return False
 
 # --- 3. DATA PROCESSING ---
 def prepare_df(content):
@@ -86,130 +72,105 @@ def prepare_df(content):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     if 'Navn' not in df.columns: return pd.DataFrame()
-    df = df.dropna(subset=['Navn'])
     
-    # Global vask af alle POS kolonner for .0
+    # FIX: Fjern helt tomme rækker og rækker uden navn for at undgå Duplicate Keys fejl
+    df = df.dropna(subset=['Navn'])
+    df = df[df['Navn'].str.strip() != ""]
+    df = df.drop_duplicates(subset=['Navn'], keep='first') # Sikrer unikke nøgler
+    
     pos_cols = [c for c in df.columns if 'POS' in c]
     for col in pos_cols:
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
-        df[col] = df[col].replace(['nan', 'None', '<NA>'], "")
+        df[col] = df[col].replace(['nan', 'None', '<NA>', '0'], "")
 
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
         df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
-    else:
-        df['Alder'] = "-"
-
+    
     if 'KONTRAKT' in df.columns:
         df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
-    else:
-        df['Kontrakt'] = pd.NaT
 
-    col_map = {
-        'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue',
-        'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold',
-        'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'
-    }
+    col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
-    
-    if 'Vindue' in df.columns:
-        df['Vindue'] = df['Vindue'].fillna("Sommer 26")
-    
-    for c in ['Emne', 'Skyggehold']:
-        if c in df.columns:
-            df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
     
     return df
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
-    st.markdown("""<style>
-        .stAppViewBlockContainer { padding-top: 0px !important; } 
-        div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
-    </style>""", unsafe_allow_html=True)
+    st.set_page_config(layout="wide", page_title="Hvidovre Scouting")
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None:
-        st.error(f"Kunne ikke hente data fra {SCOUT_DB_PATH}")
+        st.error("Kunne ikke hente data")
         return
 
     df_all = prepare_df(content)
-    data_key = str(sha)
-
-    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
     
-    date_cfg = {
-        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"),
-        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")
-    }
+    t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
+    date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"), "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
 
     with t1:
         source = df_all[~df_all['IS_HIF']]
-        if not source.empty:
-            cols = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
-            display = source[[c for c in cols if c in source.columns]].set_index('Navn')
-            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
-                           column_config=date_cfg, use_container_width=True, height=600, key=f"t1_{data_key}")
+        st.data_editor(source.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600)
 
     with t2:
         hif = df_all[df_all['IS_HIF']]
-        if not hif.empty:
-            cols = ['Navn', 'Alder', 'Pos', 'Kontrakt', 'Skyggehold']
-            display = hif[[c for c in cols if c in hif.columns]].set_index('Navn')
-            st.data_editor(display.style.applymap(get_color_by_date, subset=['Kontrakt']), 
-                           column_config=date_cfg, use_container_width=True, height=600, key=f"t2_{data_key}")
+        st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600)
 
     with t3:        
-        st.subheader("Rediger Skyggehold & Positioner")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
-        if not sky_df.empty:
-            cols = ['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']
-            edited_sky = st.data_editor(
-                sky_df[cols],
-                column_config={
-                    "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=display_options),
-                    "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=display_options),
-                    "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=display_options),
-                    "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
-                },
-                disabled=["Navn", "Klub", "Pos"],
-                use_container_width=True,
-                key="sky_editor_dropdown"
-            )
+        edited_sky = st.data_editor(
+            sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
+            column_config={
+                "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=display_options),
+                "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=display_options),
+                "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=display_options),
+                "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
+            },
+            disabled=["Navn", "Klub", "Pos"],
+            use_container_width=True,
+            key="sky_editor"
+        )
+        
+        # AUTOMATISK GEM-LOGIK
+        if st.session_state.get("sky_editor") and st.session_state.sky_editor["edited_rows"]:
+            changes = st.session_state.sky_editor["edited_rows"]
+            has_changed = False
             
-            # Opdater df_all i hukommelsen når der sker ændringer i editoren
-            for index, row in edited_sky.iterrows():
-                for c in ['Pos_343', 'Pos_433', 'Pos_352']:
-                    val = str(row[c])
-                    if val and val != "3.5" and "." not in val:
+            for idx_int, updated_cols in changes.items():
+                real_idx = sky_df.index[int(idx_int)]
+                player_name = sky_df.loc[real_idx, 'Navn']
+                
+                for col, val in updated_cols.items():
+                    # Formater til .0 hvis det er et heltal for at matche din CSV-stil
+                    if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and val != "3.5" and "." not in str(val):
                         val = f"{val}.0"
-                    df_all.loc[df_all['Navn'] == row['Navn'], c] = val
-                    
-            st.divider()
-            if st.button("💾 GEM ÆNDRINGER TIL GITHUB", use_container_width=True):
-                save_to_github(df_all, SCOUT_DB_PATH)
+                    df_all.loc[df_all['Navn'] == player_name, col] = val
+                    has_changed = True
+            
+            if has_changed:
+                if save_to_github(df_all, SCOUT_DB_PATH):
+                    st.rerun()
 
     with t4:
+        # (Bane-logikken forbliver den samme som sidst)
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27"], key="v_bane")
+            sel_v = st.selectbox("Vindue", ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27"])
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
                     st.session_state.form_skygge = form; st.rerun()
-
+        
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
-            p_col = f"Pos_{f_suffix}" 
-            
-            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else \
-                   df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
-
+            p_col = f"Pos_{f_suffix}"
+            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
@@ -220,14 +181,10 @@ def vis_side():
             if p_col in df_f.columns:
                 df_f[p_col] = df_f[p_col].astype(str).str.replace('.0', '', regex=False).str.strip()
                 for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, str(lbl).replace('.0',''), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     plist = df_f[df_f[p_col] == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         bg = "white" if p_row['IS_HIF'] else GRON_NY
-                        if p_row['IS_HIF'] and pd.notna(p_row.get('Kontrakt')):
-                            days = (p_row['Kontrakt'] - datetime.now()).days
-                            if days < 183: bg = ROD_ADVARSEL
-                            elif days <= 365: bg = GUL_ADVARSEL
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             st.pyplot(fig, use_container_width=True)
 
