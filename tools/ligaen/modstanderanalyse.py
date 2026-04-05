@@ -207,16 +207,34 @@ def vis_side(dp=None):
         cp, cs = st.columns([2, 1])
         with cs:
             v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
-            if v_med == "Opbygning": ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
-            elif v_med == "Gennembrud": ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
-            else: ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
             
+            # Definer filtre baseret på valg
+            if v_med == "Opbygning":
+                # Kun pasninger (1) på egen halvdel (0-50)
+                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING (0-50m)", "Blues", "up"
+                df_fokuseret = df_all_h[df_all_h['EVENT_X'] <= 50]
+            elif v_med == "Gennembrud":
+                # Kun pasninger (1) på modstanderens halvdel (50-100)
+                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD (50-100m)", "Reds", "down"
+                df_fokuseret = df_all_h[df_all_h['EVENT_X'] > 50]
+            else:
+                # Afslutninger (13-16) - her kigger vi typisk på hele banen/sidste tredjedel
+                ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
+                df_fokuseret = df_all_h
+
             st.write("**Top 8 (Succes / Antal):**")
-            df_top = get_top_success(df_all_h, ids)
+            # Vi sender det filtrerede dataframe videre til succes-beregneren
+            df_top = get_top_success(df_fokuseret, ids)
+            
             if not df_top.empty:
                 for _, r in df_top.iterrows():
                     st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
-        with cp: st.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+            else:
+                st.info("Ingen data for dette område.")
+
+        with cp: 
+            # Vi bruger også det filtrerede dataframe til Heatmappet for at være konsistente
+            st.pyplot(plot_custom_pitch(df_fokuseret, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
     with t3:
         cp, cs = st.columns([2, 1])
