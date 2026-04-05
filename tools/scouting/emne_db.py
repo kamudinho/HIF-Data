@@ -163,45 +163,39 @@ def vis_side():
                     st.session_state.form_skygge = form; st.rerun()
 
         with c_pitch:
-            # Vi fjerner '-' fra formationen og danner kolonnenavnet (f.eks. Pos_343)
-            # Vi tjekker både for stort 'P' og lille 'p', da det ofte er her fejlen ligger
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col_dansk = f"Pos_{f_suffix}"
             p_col_original = f"POS_{f_suffix}"
             
             # --- DATAFILTRERING ---
             if sel_v == "Nuværende trup":
-                # Vis HELE Hvidovre truppen
                 df_f = df_hif.copy()
             else:
-                # Skyggehold = HIF spillere markeret som 'Skyggehold' + Emner markeret til det valgte vindue
                 h_part = df_hif[df_hif['Skyggehold'] == True]
                 s_part = df_scout[(df_scout['Skyggehold'] == True) & (df_scout['Vindue'] == sel_v)]
                 df_f = pd.concat([h_part, s_part]).drop_duplicates(subset=['Navn'])
             
-            # Sørg for at vi bruger den rigtige positions-kolonne (uanset casing)
             active_p_col = p_col_dansk if p_col_dansk in df_f.columns else p_col_original
 
-            # Sortering efter prioritet (A øverst)
             if 'PRIOR' in df_f.columns:
                 df_f = df_f.sort_values(by='PRIOR', ascending=True)
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # Formations-koordinater
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
             if active_p_col in df_f.columns:
+                # KONVERTER positions-kolonnen til renset tekst (fjerner .0) én gang for alle
+                df_f[active_p_col] = df_f[active_p_col].astype(str).str.replace('.0', '', regex=False).str.strip()
+                
                 for pid, (px, py, lbl) in m.items():
-                    # Tegn positions-label
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     
-                    # Find spillere til denne position
-                    # Vi konverterer til string for at være sikre på sammenligningen
-                    plist = df_f[df_f[active_p_col].astype(str) == str(pid)]
+                    # Match nu på de rensede strings
+                    plist = df_f[df_f[active_p_col] == str(pid)]
                     
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         bg = "white"
@@ -211,19 +205,17 @@ def vis_side():
                             bg = GRON_NY
                         else:
                             try:
-                                if pd.notna(u_val) and u_val != "-":
-                                    days = (pd.to_datetime(u_val, dayfirst=True) - datetime.now()).days
+                                # Tjekker om u_val er en valid dato (vi bruger pd.notna fordi det nu er datetime objekter)
+                                if pd.notna(u_val):
+                                    days = (u_val - datetime.now()).days
                                     if days < 183: bg = ROD_ADVARSEL
                                     elif days <= 365: bg = GUL_ADVARSEL
                             except: pass
                         
-                        # Leje-spillere får grå baggrund
                         if str(p_row.get('PRIOR', '')).upper() == 'L': bg = LEJE_GRA
                         
                         ax.text(px, py + (i * 2.8), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
-            else:
-                st.warning(f"Kolonnen {active_p_col} blev ikke fundet i data.")
-
+            
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
