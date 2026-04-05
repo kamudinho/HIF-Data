@@ -51,7 +51,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     if zone == 'up': # Opbygning (0 til 55)
         ax.set_ylim(0, 55)
     elif zone == 'down': # Gennembrud (55 til 105)
-        ax.set_ylim(55, 105)
+        ax.set_ylim(45, 105)
     
     # Overskrift i øverste højre hjørne af det SYNLIGE område
     ax.text(0.95, 0.95, title, transform=ax.transAxes, fontsize=7, 
