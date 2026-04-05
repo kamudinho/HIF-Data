@@ -201,7 +201,7 @@ def vis_side(dp=None):
             SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
         ).reset_index()
         stats['PCT'] = (stats['SUCCESS'] / stats['TOTAL'] * 100).round(1)
-        return stats.sort_values('TOTAL', ascending=False).head(5)
+        return stats.sort_values('TOTAL', ascending=False).head(8)
 
     with t2:
         cp, cs = st.columns([2, 1])
@@ -211,7 +211,7 @@ def vis_side(dp=None):
             elif v_med == "Gennembrud": ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
             else: ids, tit, cm, zn = [13, 14, 15, 16], "OFF. HALVDEL: AFSLUTNINGER", "YlOrRd", "down"
             
-            st.write("**Top 5 (Succes / Antal):**")
+            st.write("**Top 8 (Succes / Antal):**")
             df_top = get_top_success(df_all_h, ids)
             if not df_top.empty:
                 for _, r in df_top.iterrows():
@@ -226,7 +226,7 @@ def vis_side(dp=None):
             elif v_uden == "Erobringer": ids, tit, cm, zn = [127, 12, 49], "EROBRINGER", "GnBu", "up"
             else: ids, tit, cm, zn = [7, 12, 127], "DEFENSIV ZONE", "PuBu", "up"
             
-            st.write("**Top 5 (Succes / Antal):**")
+            st.write("**Top 8 (Succes / Antal):**")
             df_top_u = get_top_success(df_all_h, ids)
             if not df_top_u.empty:
                 for _, r in df_top_u.iterrows():
