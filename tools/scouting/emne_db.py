@@ -70,22 +70,20 @@ def prepare_df(content, is_hif=False):
 def vis_side():
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 10px !important; } 
-            div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
-            .stTabs { margin-top: 0px !important; }
-            /* Gør knapperne lidt højere for bedre look i kolonnen */
-            div.stButton > button { height: 3em; margin-bottom: 0.5rem; }
+            .stAppViewBlockContainer { padding-top: 0px !important; } 
+            div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
+            .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+            .stTabs [data-baseweb="tab"] {
+                height: 40px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            div.stButton > button { height: 2.8em; margin-bottom: 0.2rem; }
         </style>
     """, unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: 
         st.session_state.form_skygge = "3-4-3"
-
-    # --- TOP SEKTION (OVER TABS) ---
-    c_empty, c_dropdown = st.columns([7, 3])
-    with c_dropdown:
-        vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-        sel_v = st.selectbox("Vælg Transfervindue", vindue_options, key="sb_skygg_top", label_visibility="collapsed")
 
     s_c, s_sha = get_github_file(SCOUT_DB_PATH)
     h_c, h_sha = get_github_file(HIF_PATH)
@@ -94,23 +92,17 @@ def vis_side():
     df_hif = prepare_df(h_c, is_hif=True)
     df_all = pd.concat([df_scout, df_hif], ignore_index=True)
 
+    # Tabs er nu det øverste element
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Tab 1, 2, 3 (Uændret)
+    vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+
     with t1:
         source_df = df_scout[df_scout['ER_EMNE']==True]
         if not source_df.empty:
             cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
             d_edit = source_df.set_index('Navn')[cols_to_show]
-            ed = st.data_editor(d_edit, use_container_width=True, height=500, key="ed_E")
-            if not ed.equals(d_edit):
-                raw, sha = get_github_file(SCOUT_DB_PATH); df_s = pd.read_csv(StringIO(raw))
-                df_s.columns = [str(x).upper().strip() for x in df_s.columns]
-                if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
-                for n, r in ed.iterrows():
-                    mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
-                    df_s.loc[mask, cols_to_show] = [r[c] for c in cols_to_show]
-                push_to_github(SCOUT_DB_PATH, "Update Emner", df_s.to_csv(index=False), sha); st.rerun()
+            st.data_editor(d_edit, use_container_width=True, height=600, key="ed_E")
 
     with t2:
         if not df_hif.empty:
@@ -118,43 +110,27 @@ def vis_side():
             date_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
             cols_to_show.append(date_col)
             d_edit = df_hif.set_index('Navn')[cols_to_show]
-            ed = st.data_editor(d_edit, use_container_width=True, height=500, key="ed_H")
-            if not ed.equals(d_edit):
-                raw, sha = get_github_file(HIF_PATH); df_s = pd.read_csv(StringIO(raw))
-                df_s.columns = [str(x).upper().strip() for x in df_s.columns]
-                if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
-                for n, r in ed.iterrows():
-                    mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
-                    df_s.loc[mask, cols_to_show] = [r[c] for c in cols_to_show]
-                push_to_github(HIF_PATH, "Update HIF", df_s.to_csv(index=False), sha); st.rerun()
+            st.data_editor(d_edit, use_container_width=True, height=600, key="ed_H")
 
     with t3:
+        # Dropdown vises kun her
+        c1, c2 = st.columns([7, 3])
+        with c2:
+            sel_v_sky = st.selectbox("Filter: Vindue", vindue_options, key="v_sky")
+        
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
             d_sky_ed = df_sky.set_index('Navn')[['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']]
-            ed_s = st.data_editor(d_sky_ed, use_container_width=True, height=500, key="sky_ed_final")
-            if not ed_s.equals(d_sky_ed):
-                for path in [SCOUT_DB_PATH, HIF_PATH]:
-                    raw, sha = get_github_file(path); df_tmp = pd.read_csv(StringIO(raw))
-                    df_tmp.columns = [c.upper().strip() for c in df_tmp.columns]
-                    if 'NAVN' in df_tmp.columns: df_tmp = df_tmp.rename(columns={'NAVN': 'Navn'})
-                    changed = False
-                    for n, r in ed_s.iterrows():
-                        mask = df_tmp['Navn'].astype(str).str.strip() == str(n).strip()
-                        if mask.any():
-                            df_tmp.loc[mask, ['TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352']] = [r['TRANSFER_VINDUE'], r['POS_343'], r['POS_433'], r['POS_352']]
-                            changed = True
-                    if changed: push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
-                st.rerun()
+            st.data_editor(d_sky_ed, use_container_width=True, height=550, key="sky_ed_final")
 
-    # --- Tab 4: Bane ---
     with t4:
+        # Dropdown vises kun her i toppen af banen
         c_pitch, c_ctrl = st.columns([8.5, 1.5])
         
         with c_ctrl:
-            st.markdown("<p style='font-weight: bold; margin-bottom: 5px;'>Formation</p>", unsafe_allow_html=True)
+            sel_v_bane = st.selectbox("Vindue", vindue_options, key="v_bane")
+            st.markdown("<p style='font-weight: bold; margin-top: 15px; margin-bottom: 5px;'>Formation</p>", unsafe_allow_html=True)
             f = st.session_state.form_skygge
-            # Én knap pr. række i kolonnen
             if st.button("3-4-3", use_container_width=True, type="primary" if f == "3-4-3" else "secondary"):
                 st.session_state.form_skygge = "3-4-3"; st.rerun()
             if st.button("4-3-3", use_container_width=True, type="primary" if f == "4-3-3" else "secondary"):
@@ -164,11 +140,11 @@ def vis_side():
 
         with c_pitch:
             p_col = f"POS_{f.replace('-', '')}"
-            if sel_v == "Nuværende trup":
+            if sel_v_bane == "Nuværende trup":
                 df_f = df_hif.drop_duplicates(subset=['Navn'])
             else:
                 h_s = df_hif[df_hif['SKYGGEHOLD'] == True]
-                e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v)]
+                e_s = df_scout[(df_scout['SKYGGEHOLD'] == True) & (df_scout['TRANSFER_VINDUE'] == sel_v_bane)]
                 df_f = pd.concat([h_s, e_s], ignore_index=True).drop_duplicates(subset=['Navn'])
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
@@ -195,11 +171,11 @@ def vis_side():
                         except: bg_color = "white"
                     ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
 
-            # Legends (Nederst)
+            # Legends og Info
             ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 2.3, " 6-12 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(23, 2.3, " Transfer ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(118, 2.3, f"Vindue: {sel_v}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
+            ax.text(118, 2.3, f"Vindue: {sel_v_bane}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
 
             st.pyplot(fig, use_container_width=True)
 
