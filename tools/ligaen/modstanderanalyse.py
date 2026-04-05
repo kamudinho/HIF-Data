@@ -75,7 +75,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     # 3. Placer Overskrift
     # Højrejusteret, dynamisk højde
-    ax.text(0.95, text_y, title, transform=ax.transAxes, fontsize=7, 
+    ax.text(0.95, text_y, title, transform=ax.transAxes, fontsize=5, 
             fontweight='bold', ha='right', va='top', color='#333333')
 
     # 4. Tegn Heatmap
