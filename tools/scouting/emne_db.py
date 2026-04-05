@@ -20,13 +20,11 @@ LEJE_GRA = "#e0e0e0"
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def calculate_age(born_series):
-    # Håndterer konvertering af hele serien for hastighed
     try:
         born = pd.to_datetime(born_series, dayfirst=True, errors='coerce')
         today = datetime.now()
         return born.apply(lambda x: today.year - x.year - ((today.month, today.day) < (x.month, x.day)) if pd.notnull(x) else 0)
-    except:
-        return 0
+    except: return 0
 
 def get_github_file(path):
     try:
@@ -40,14 +38,6 @@ def get_github_file(path):
     except: pass
     return None, None
 
-def push_to_github(path, message, content, sha=None):
-    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    payload = {"message": message, "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
-    if sha: payload["sha"] = sha
-    r = requests.put(url, headers=headers, json=payload)
-    return r.status_code
-
 # --- 3. DATA PROCESSING ---
 def prepare_df(content, is_hif=False):
     if not content: return pd.DataFrame()
@@ -60,7 +50,6 @@ def prepare_df(content, is_hif=False):
     df = df.dropna(subset=['Navn'])
     df['Navn'] = df['Navn'].astype(str).str.strip()
     
-    # Alder beregning baseret på BIRTHDATE
     if 'BIRTHDATE' in df.columns:
         df['Alder'] = calculate_age(df['BIRTHDATE'])
     else:
@@ -74,7 +63,7 @@ def prepare_df(content, is_hif=False):
         else:
             df[c] = df[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, 'TRUE':True, 'FALSE':False}).fillna(False)
     
-    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
+    for c in ['POS', 'POS_343', 'POS_433', 'POS_352', 'PRIOR']:
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
@@ -87,7 +76,13 @@ def vis_side():
         .stAppViewBlockContainer { padding-top: 0px !important; } 
         div.block-container { padding-top: 0.5rem !important; max-width: 98% !important; }
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        div.stButton > button { height: 2.8em; margin-bottom: 0.2rem; }
+        /* Mindre formationsknapper */
+        div.stButton > button { 
+            height: 2.2em !important; 
+            padding: 0px 5px !important;
+            font-size: 0.85rem !important;
+            margin-bottom: 0.1rem !important; 
+        }
     </style>""", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -102,37 +97,32 @@ def vis_side():
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
     vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
-    # --- TAB 1: EMNER ---
+    # Tabs 1-3 (Data visning)
     with t1:
         source_df = df_scout[df_scout['ER_EMNE']==True]
         if not source_df.empty:
             cols = ['Navn', 'Alder', 'KLUB', 'POS', 'KONTRAKT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD']
-            avail_cols = [c for c in cols if c in source_df.columns or c in ['Navn', 'Alder']]
-            st.data_editor(source_df[avail_cols].set_index('Navn'), use_container_width=True, height=600, key="ed_emner")
+            st.data_editor(source_df[[c for c in cols if c in source_df.columns or c in ['Navn', 'Alder']]].set_index('Navn'), use_container_width=True, height=600)
 
-    # --- TAB 2: HIF ---
     with t2:
         if not df_hif.empty:
-            kontrakt_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
-            cols = ['Navn', 'Alder', 'POS', kontrakt_col, 'SKYGGEHOLD']
-            avail_cols = [c for c in cols if c in df_hif.columns or c in ['Navn', 'Alder']]
-            st.data_editor(df_hif[avail_cols].set_index('Navn'), use_container_width=True, height=600, key="ed_hif")
+            k_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
+            cols = ['Navn', 'Alder', 'POS', k_col, 'SKYGGEHOLD']
+            st.data_editor(df_hif[[c for c in cols if c in df_hif.columns or c in ['Navn', 'Alder']]].set_index('Navn'), use_container_width=True, height=600)
 
-    # --- TAB 3: SKYGGELISTE ---
     with t3:
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
-            kontrakt_col = 'UDLØB' if 'UDLØB' in df_sky.columns else 'KONTRAKT'
-            cols = ['Navn', 'Alder', 'KLUB', 'POS', kontrakt_col, 'POS_343', 'POS_433', 'POS_352']
-            avail_cols = [c for c in cols if c in df_sky.columns or c in ['Navn', 'Alder']]
-            st.data_editor(df_sky[avail_cols].set_index('Navn'), use_container_width=True, height=600, key="ed_skyggeliste")
+            k_col = 'UDLØB' if 'UDLØB' in df_sky.columns else 'KONTRAKT'
+            cols = ['Navn', 'Alder', 'KLUB', 'POS', k_col, 'POS_343', 'POS_433', 'POS_352']
+            st.data_editor(df_sky[[c for c in cols if c in df_sky.columns or c in ['Navn', 'Alder']]].set_index('Navn'), use_container_width=True, height=600)
 
     # --- TAB 4: BANE ---
     with t4:
-        c_pitch, c_ctrl = st.columns([8.5, 1.5])
+        c_pitch, c_ctrl = st.columns([8.8, 1.2])
         with c_ctrl:
             sel_v = st.selectbox("Vindue", vindue_options, key="v_bane")
-            st.markdown("---")
+            st.write("") # Spacer
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
@@ -147,6 +137,10 @@ def vis_side():
                 s_part = df_scout[(df_scout['SKYGGEHOLD']==True) & (df_scout['TRANSFER_VINDUE']==sel_v)]
                 df_f = pd.concat([h_part, s_part]).drop_duplicates(subset=['Navn'])
             
+            # SORTERING efter PRIOR (A, B, C...)
+            if 'PRIOR' in df_f.columns:
+                df_f = df_f.sort_values(by='PRIOR', ascending=True)
+
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
@@ -159,14 +153,21 @@ def vis_side():
                 plist = df_f[df_f[p_col].astype(str) == str(pid)]
                 for i, (_, p_row) in enumerate(plist.iterrows()):
                     bg = "white"
-                    if not p_row['IS_HIF']: bg = GRON_NY
+                    # Logik for farvekodning (nu ens for alle med en dato)
+                    u_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) else p_row.get('KONTRAKT')
+                    
+                    if not p_row['IS_HIF']: 
+                        bg = GRON_NY
                     else:
-                        u_val = p_row.get('UDLØB') if pd.notna(p_row.get('UDLØB')) else p_row.get('KONTRAKT')
                         try:
                             days = (pd.to_datetime(u_val, dayfirst=True) - datetime.now()).days
                             if days < 183: bg = ROD_ADVARSEL
                             elif days <= 365: bg = GUL_ADVARSEL
                         except: pass
+                    
+                    # Overstyr hvis det er leje
+                    if str(p_row.get('PRIOR', '')).upper() == 'L': bg = LEJE_GRA
+                        
                     ax.text(px, py + (i * 2.8), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
 
             ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
