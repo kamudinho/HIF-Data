@@ -18,8 +18,6 @@ GUL_ADVARSEL = "#ffff99" # 6-12 mdr.
 ROD_ADVARSEL = "#ffcccc" # < 6 mdr.
 LEJE_GRA = "#e0e0e0"
 
-VINDUE_OPTIONS_GLOBAL = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-
 # --- 2. GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
@@ -65,32 +63,16 @@ def prepare_df(content, is_hif=False):
         if c not in df.columns: df[c] = "0"
         df[c] = df[c].astype(str).str.replace('.0', '', regex=False).replace(['nan', 'None', ''], '0').str.strip()
     
-    date_col = 'UDLØB' if 'UDLØB' in df.columns else ('KONTRAKT' if 'KONTRAKT' in df.columns else None)
-    
-    if is_hif and date_col:
-        def calc_months(date_str):
-            try:
-                expiry = pd.to_datetime(date_str, dayfirst=True)
-                now = datetime.now()
-                return (expiry.year - now.year) * 12 + (expiry.month - now.month)
-            except:
-                return 99
-        df['MDR_TIL_UDLØB'] = df[date_col].apply(calc_months)
-    else:
-        df['MDR_TIL_UDLØB'] = 99
-
     df['IS_HIF'] = is_hif
     return df
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
-    st.set_page_config(layout="wide")
     st.markdown("""
         <style>
-            .stAppViewBlockContainer { padding-top: 2rem !important; } 
-            div.block-container { padding-top: 2rem !important; max-width: 98% !important; }
+            .stAppViewBlockContainer { padding-top: 20px !important; } 
+            div.block-container { padding-top: 1rem !important; max-width: 98% !important; }
             .stTabs { margin-top: 0px !important; }
-            div[data-testid="stSelectbox"] > label { font-weight: bold !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -106,7 +88,7 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emner", "Hvidovre IF", "Skyggeliste", "Bane"])
 
-    # Tab 1: Emner
+    # Tab 1, 2, 3 (Uændret redigering) ...
     with t1:
         source_df = df_scout[df_scout['ER_EMNE']==True]
         if not source_df.empty:
@@ -114,37 +96,30 @@ def vis_side():
             d_edit = source_df.set_index('Navn')[cols_to_show]
             ed = st.data_editor(d_edit, use_container_width=True, height=500, key="ed_E")
             if not ed.equals(d_edit):
-                raw, sha = get_github_file(SCOUT_DB_PATH)
-                df_s = pd.read_csv(StringIO(raw))
+                raw, sha = get_github_file(SCOUT_DB_PATH); df_s = pd.read_csv(StringIO(raw))
                 df_s.columns = [str(x).upper().strip() for x in df_s.columns]
                 if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
                 for n, r in ed.iterrows():
                     mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
                     df_s.loc[mask, cols_to_show] = [r[c] for c in cols_to_show]
-                push_to_github(SCOUT_DB_PATH, "Update Emner", df_s.to_csv(index=False), sha)
-                st.rerun()
+                push_to_github(SCOUT_DB_PATH, "Update Emner", df_s.to_csv(index=False), sha); st.rerun()
 
-    # Tab 2: HIF
     with t2:
         if not df_hif.empty:
             cols_to_show = ['TRANSFER_VINDUE', 'POS', 'SKYGGEHOLD']
             date_col = 'UDLØB' if 'UDLØB' in df_hif.columns else 'KONTRAKT'
             cols_to_show.append(date_col)
-            
             d_edit = df_hif.set_index('Navn')[cols_to_show]
             ed = st.data_editor(d_edit, use_container_width=True, height=500, key="ed_H")
             if not ed.equals(d_edit):
-                raw, sha = get_github_file(HIF_PATH)
-                df_s = pd.read_csv(StringIO(raw))
+                raw, sha = get_github_file(HIF_PATH); df_s = pd.read_csv(StringIO(raw))
                 df_s.columns = [str(x).upper().strip() for x in df_s.columns]
                 if 'NAVN' in df_s.columns: df_s = df_s.rename(columns={'NAVN': 'Navn'})
                 for n, r in ed.iterrows():
                     mask = df_s['Navn'].astype(str).str.strip() == str(n).strip()
                     df_s.loc[mask, cols_to_show] = [r[c] for c in cols_to_show]
-                push_to_github(HIF_PATH, "Update HIF", df_s.to_csv(index=False), sha)
-                st.rerun()
+                push_to_github(HIF_PATH, "Update HIF", df_s.to_csv(index=False), sha); st.rerun()
 
-    # Tab 3: Skyggeliste
     with t3:
         df_sky = df_all[df_all['SKYGGEHOLD'] == True].drop_duplicates(subset=['Navn'])
         if not df_sky.empty:
@@ -166,30 +141,25 @@ def vis_side():
                     if changed: push_to_github(path, "Skygge Update", df_tmp.to_csv(index=False), sha)
                 st.rerun()
 
-    # Tab 4: Bane
+    # --- Tab 4: Bane ---
     with t4:
-        c_pitch, c_ctrl = st.columns([9, 2])
+        c_pitch, c_ctrl = st.columns([9, 3])
         
-        # Højre kolonne: Dropdown og Knapper
         with c_ctrl:
-            vindue_options = sorted(df_scout['TRANSFER_VINDUE'].unique().tolist()) if 'TRANSFER_VINDUE' in df_scout.columns else []
-            if "Nuværende trup" not in vindue_options:
-                vindue_options.insert(0, "Nuværende trup")
+            # Låst rækkefølge
+            vindue_options = ["Nuværende trup", "Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
             sel_v = st.selectbox("Vælg Transfervindue", vindue_options, key="sb_skygg_top")
             
-            st.write("**Vælg Formation:**")
+            st.write("**Formation:**")
             f = st.session_state.form_skygge
-            if st.button("3-4-3", use_container_width=True, type="primary" if f == "3-4-3" else "secondary"):
-                st.session_state.form_skygge = "3-4-3"
-                st.rerun()
-            if st.button("4-3-3", use_container_width=True, type="primary" if f == "4-3-3" else "secondary"):
-                st.session_state.form_skygge = "4-3-3"
-                st.rerun()
-            if st.button("3-5-2", use_container_width=True, type="primary" if f == "3-5-2" else "secondary"):
-                st.session_state.form_skygge = "3-5-2"
-                st.rerun()
+            c_b1, c_b2, c_b3 = st.columns(3)
+            if c_b1.button("3-4-3", use_container_width=True, type="primary" if f == "3-4-3" else "secondary"):
+                st.session_state.form_skygge = "3-4-3"; st.rerun()
+            if c_b2.button("4-3-3", use_container_width=True, type="primary" if f == "4-3-3" else "secondary"):
+                st.session_state.form_skygge = "4-3-3"; st.rerun()
+            if c_b3.button("3-5-2", use_container_width=True, type="primary" if f == "3-5-2" else "secondary"):
+                st.session_state.form_skygge = "3-5-2"; st.rerun()
 
-        # Venstre kolonne: Bane
         with c_pitch:
             p_col = f"POS_{f.replace('-', '')}"
             if sel_v == "Nuværende trup":
@@ -202,6 +172,7 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
+            # Formation mapping
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[f]
@@ -221,6 +192,12 @@ def vis_side():
                             elif days <= 365: bg_color = GUL_ADVARSEL
                         except: bg_color = "white"
                     ax.text(x, y + (i * 2.8), p_row['Navn'], size=7.5, ha='center', va='center', weight='bold', bbox=dict(facecolor=bg_color, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2', linewidth=0.5))
+
+            # --- Legends & Info (Nederst) ---
+            ax.text(2, 2.3, " < 6 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(12, 2.3, " 6-12 mdr ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(23, 2.3, " Transfer ", size=7, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(118, 2.3, f"Vindue: {sel_v}", size=9, weight='bold', ha='right', va='bottom', color=HIF_ROD)
 
             st.pyplot(fig, use_container_width=True)
 
