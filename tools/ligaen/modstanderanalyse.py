@@ -58,8 +58,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
         text_y = 0.10
     elif is_down:
         ax.set_ylim(45, 100) # Kamera: Sidste tredjedel (ændret til 45)
-        logo_y = 0.93        # Relativ Y-position øverst
-        text_y = 0.91
+        logo_y = 0.97        # Relativ Y-position øverst
+        text_y = 0.97
     else:
         # Full pitch logik (Valgfri, standardiseret til top)
         logo_y = 0.93
@@ -75,7 +75,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     # 3. Placer Overskrift
     # Højrejusteret, dynamisk højde
-    ax.text(0.95, text_y, title, transform=ax.transAxes, fontsize=5, 
+    ax.text(0.97, text_y, title, transform=ax.transAxes, fontsize=5, 
             fontweight='bold', ha='right', va='top', color='#333333')
 
     # 4. Tegn Heatmap
