@@ -130,7 +130,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Data prep
+        # --- 1. DATA PREPARATION (Resultater & Tabel) ---
         df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
         df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
         df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
@@ -142,12 +142,13 @@ def vis_side(dp=None):
             return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
         df_res['RES'] = df_res.apply(get_result, axis=1)
 
-        c1, c2 = st.columns([1, 3.2]) # Øget bredde til tabellen
+        # Topsektion: Metrics til venstre, Tabel til højre
+        c1, c2 = st.columns([1, 3.2])
         with c1:
-            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
             wins = (df_res['RES'] == "W").sum()
             draws = (df_res['RES'] == "D").sum()
-            st.metric("Point (10 k)", (wins*3)+draws)
+            st.metric("Point (Sidste 10)", (wins*3)+draws)
             st.metric("Vundne kampe", wins)
             mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
             mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
@@ -158,12 +159,12 @@ def vis_side(dp=None):
                 df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], 
                 use_container_width=True, 
                 hide_index=True, 
-                height=265 # Justeret højde for bedre alignment
+                height=265
             )
 
         st.divider()
 
-        # Grafer med gennemsnitslinjer
+        # --- 2. HOVEDGRAFER (Søjler: Pasninger & Skud) ---
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum())
@@ -182,15 +183,65 @@ def vis_side(dp=None):
             fig_p = px.bar(df_plot, x='LABEL', y='P', text='P', title=f"Pasninger (Gns: {int(avg_p)})")
             fig_p.add_hline(y=avg_p, line_dash="dash", line_color="#808080", opacity=0.6)
             fig_p.update_traces(textposition='outside', marker_color='#0047AB')
-            fig_p.update_layout(height=350, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_p.update_layout(height=300, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig_p, use_container_width=True, config={'displayModeBar': False})
             
         with g2:
             fig_a = px.bar(df_plot, x='LABEL', y='A', text='A', title=f"Afslutninger (Gns: {round(avg_a, 1)})")
             fig_a.add_hline(y=avg_a, line_dash="dash", line_color="#808080", opacity=0.6)
             fig_a.update_traces(textposition='outside', marker_color='#C8102E')
-            fig_a.update_layout(height=350, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig_a.update_layout(height=300, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
+
+        # --- 3. DROP-DOWN TREND ANALYSE ---
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        stat_valg = st.selectbox(
+            "Vælg yderligere trend-data", 
+            ["Defensiv (Erobringer & Dueller)", "Disciplin (Frispark)", "Offensiv (Hjørnespark & Indlæg)"],
+            label_visibility="collapsed"
+        )
+
+        # Logik til at vælge data baseret på dropdown
+        if "Defensiv" in stat_valg:
+            df_extra = df_all_h.groupby('MATCH_OPTAUUID').agg(
+                V1=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()), # Dueller
+                V2=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()) # Erobringer
+            ).reset_index()
+            t1_tit, t2_tit = "Dueller (Antal)", "Erobringer (Antal)"
+            c1_col, c2_col = "#2E7D32", "#4CAF50"
+        elif "Disciplin" in stat_valg:
+            df_extra = df_all_h.groupby('MATCH_OPTAUUID').agg(
+                V1=('EVENT_TYPEID', lambda x: (x == 4).sum()), # Frispark begået
+                V2=('EVENT_TYPEID', lambda x: (x == 1).sum() / 100) # Flow-indikator
+            ).reset_index()
+            t1_tit, t2_tit = "Frispark begået", "Spil-flow (Relativ)"
+            c1_col, c2_col = "#D32F2F", "#FF9800"
+        else: # Offensiv
+            df_extra = df_all_h.groupby('MATCH_OPTAUUID').agg(
+                V1=('EVENT_TYPEID', lambda x: (x == 6).sum()), # Hjørnespark (ca.)
+                V2=('EVENT_TYPEID', lambda x: (x == 2).sum())  # Offside eller Indlæg-placeholder
+            ).reset_index()
+            t1_tit, t2_tit = "Hjørnespark", "Andre Off. aktioner"
+            c1_col, c2_col = "#1976D2", "#00BCD4"
+
+        df_extra_plot = df_plot[['MATCH_OPTAUUID', 'LABEL']].merge(df_extra, on='MATCH_OPTAUUID', how='left').fillna(0)
+        
+        g3, g4 = st.columns(2)
+        with g3:
+            avg_v1 = df_extra_plot['V1'].mean()
+            fig_v1 = px.line(df_extra_plot, x='LABEL', y='V1', title=t1_tit, markers=True)
+            fig_v1.add_hline(y=avg_v1, line_dash="dash", line_color="grey", opacity=0.5)
+            fig_v1.update_traces(line_color=c1_col)
+            fig_v1.update_layout(height=250, margin=dict(t=40, b=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            st.plotly_chart(fig_v1, use_container_width=True, config={'displayModeBar': False})
+
+        with g4:
+            avg_v2 = df_extra_plot['V2'].mean()
+            fig_v2 = px.line(df_extra_plot, x='LABEL', y='V2', title=t2_tit, markers=True)
+            fig_v2.add_hline(y=avg_v2, line_dash="dash", line_color="grey", opacity=0.5)
+            fig_v2.update_traces(line_color=c2_col)
+            fig_v2.update_layout(height=250, margin=dict(t=40, b=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            st.plotly_chart(fig_v2, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
     def get_top_success(df, event_ids):
