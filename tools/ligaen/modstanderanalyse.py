@@ -208,34 +208,48 @@ def vis_side(dp=None):
         with cs:
             v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
             
-            # Definer filtre baseret på valg
             if v_med == "Opbygning":
-                # Kun pasninger (1) på egen halvdel (0-50)
-                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
+                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING (0-50m)", "Blues", "up"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] <= 50]
+                # Her bruger vi standard get_top_success (OUTCOME 1 = præcis aflevering)
+                df_top = get_top_success(df_fokuseret, ids)
+                label_txt = "Succes / Antal"
+                
             elif v_med == "Gennembrud":
-                # Kun pasninger (1) på modstanderens halvdel (50-100)
-                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
+                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD (50-100m)", "Reds", "down"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] > 50]
-            else:
-                # Afslutninger (13-16) - her kigger vi typisk på hele banen/sidste tredjedel
+                df_top = get_top_success(df_fokuseret, ids)
+                label_txt = "Succes / Antal"
+                
+            else: # AFSLUTNINGER
                 ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
                 df_fokuseret = df_all_h
+                
+                # Special-beregning for konverteringsrate (Mål / Alle skud)
+                relevant_shots = df_fokuseret[df_fokuseret['EVENT_TYPEID'].isin(ids)].copy()
+                if not relevant_shots.empty:
+                    df_top = relevant_shots.groupby('PLAYER_NAME').agg(
+                        TOTAL=('EVENT_TYPEID', 'count'),
+                        SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum()) # Kun Type 16 er mål
+                    ).reset_index()
+                    df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
+                    df_top = df_top.sort_values('TOTAL', ascending=False).head(5)
+                else:
+                    df_top = pd.DataFrame()
+                label_txt = "Mål / Skud"
 
-            st.write("**Top 8 (Succes / Antal):**")
-            # Vi sender det filtrerede dataframe videre til succes-beregneren
-            df_top = get_top_success(df_fokuseret, ids)
+            st.write(f"**Top 5 ({label_txt}):**")
             
             if not df_top.empty:
                 for _, r in df_top.iterrows():
+                    # Vi viser konverteringsraten her
                     st.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
             else:
-                st.info("Ingen data for dette område.")
+                st.info("Ingen data fundet.")
 
         with cp: 
-            # Vi bruger også det filtrerede dataframe til Heatmappet for at være konsistente
             st.pyplot(plot_custom_pitch(df_fokuseret, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
-
+            
     with t3:
         cp, cs = st.columns([2, 1])
         with cs:
