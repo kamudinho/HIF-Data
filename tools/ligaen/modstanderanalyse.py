@@ -260,14 +260,14 @@ def vis_side(dp=None):
             v_med = st.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
             
             if v_med == "Opbygning":
-                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING (0-50m)", "Blues", "up"
+                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] <= 50]
                 # Her bruger vi standard get_top_success (OUTCOME 1 = præcis aflevering)
                 df_top = get_top_success(df_fokuseret, ids)
                 label_txt = "Succesfulde / Antal"
                 
             elif v_med == "Gennembrud":
-                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD (50-100m)", "Reds", "down"
+                ids, tit, cm, zn = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down"
                 df_fokuseret = df_all_h[df_all_h['EVENT_X'] > 50]
                 df_top = get_top_success(df_fokuseret, ids)
                 label_txt = "Succes / Antal"
