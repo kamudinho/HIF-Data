@@ -56,7 +56,7 @@ def save_to_github(df, path):
         encoded_content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
         url = f"https://api.github.com/repos/{REPO}/contents/{path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Content-Type": "application/json"}
-        payload = {"message": "Auto-update fra app", "content": encoded_content, "sha": sha}
+        payload = {"message": "Auto-update positioner", "content": encoded_content, "sha": sha}
         r = requests.put(url, headers=headers, json=payload)
         if r.status_code in [200, 201]:
             st.toast("✅ Gemt på GitHub", icon="💾")
@@ -71,17 +71,13 @@ def prepare_df(content):
     df.columns = [str(c).upper().strip() for c in df.columns]
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
-    if 'Navn' not in df.columns: return pd.DataFrame()
     
-    # --- KRITISK RENSNING MOD DUPLIKATER ---
-    # 1. Fjern rækker hvor Navn er helt tomt
+    # SIKKERHED MOD DUPLIKATER (Løser "Duplicate Keys" fejlen)
     df = df.dropna(subset=['Navn'])
-    # 2. Fjern rækker hvor Navn kun er mellemrum
     df = df[df['Navn'].astype(str).str.strip() != ""]
-    # 3. Fjern duplikater (hvis "E. Aby" står to gange, behold kun den første)
     df = df.drop_duplicates(subset=['Navn'], keep='first')
     
-    # Rens alle POS-kolonner (343, 433, 352 osv)
+    # Vask af positioner (.0 fjernes)
     pos_cols = [c for c in df.columns if 'POS' in c]
     for col in pos_cols:
         df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -96,20 +92,13 @@ def prepare_df(content):
 
     col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
-    
-    if 'Klub' in df.columns:
-        df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
-    else:
-        df['IS_HIF'] = False
+    df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False)
     
     return df
 
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="Hvidovre Scouting")
-    
-    # Mindre top-margin
-    st.markdown("<style>.stAppViewBlockContainer { padding-top: 1rem !important; }</style>", unsafe_allow_html=True)
     
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
@@ -125,23 +114,19 @@ def vis_side():
 
     with t1:
         source = df_all[~df_all['IS_HIF']]
-        # Her bruger vi en fast nøgle 't1_editor' og sørger for at index er unikt
-        st.data_editor(source.set_index('Navn'), column_config=date_cfg, use_container_width=True, height=600, key="t1_editor")
+        st.data_editor(source.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t1_edit")
 
     with t2:
         hif = df_all[df_all['IS_HIF']]
-        st.data_editor(hif.set_index('Navn'), column_config=date_cfg, use_container_width=True, height=600, key="t2_editor")
+        st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600, key="t2_edit")
 
     with t3:        
-        st.caption("Ændringer gemmes automatisk.")
+        st.info("Ændringer gemmes automatisk.")
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
-        
-        # Vi arbejder kun på spillere, der er på skyggeholdet
         sky_df = df_all[df_all['Skyggehold'] == True].copy()
         
         if "sky_key" not in st.session_state: st.session_state.sky_key = 100
         
-        # Editor
         edited_sky = st.data_editor(
             sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
             column_config={
@@ -156,17 +141,13 @@ def vis_side():
         )
         
         # AUTO-SAVE LOGIK
-        current_key = f"sky_editor_{st.session_state.sky_key}"
-        if st.session_state[current_key]["edited_rows"]:
-            changes = st.session_state[current_key]["edited_rows"]
+        curr_key = f"sky_editor_{st.session_state.sky_key}"
+        if st.session_state[curr_key]["edited_rows"]:
+            changes = st.session_state[curr_key]["edited_rows"]
             has_changed = False
-            
             for idx_str, updated_cols in changes.items():
-                idx_int = int(idx_str)
-                player_name = sky_df.iloc[idx_int]['Navn']
-                
+                player_name = sky_df.iloc[int(idx_str)]['Navn']
                 for col, val in updated_cols.items():
-                    # Konverter tilbage til .0 format til CSV'en
                     if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and val != "3.5" and "." not in str(val):
                         val = f"{val}.0"
                     df_all.loc[df_all['Navn'] == player_name, col] = val
@@ -174,7 +155,7 @@ def vis_side():
             
             if has_changed:
                 if save_to_github(df_all, SCOUT_DB_PATH):
-                    st.session_state.sky_key += 1 # Skift nøgle for at tvinge reload
+                    st.session_state.sky_key += 1
                     st.rerun()
 
     with t4:
@@ -189,25 +170,20 @@ def vis_side():
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
-            
-            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else \
-                   df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
+            df_f = df_all[df_all['IS_HIF']].copy() if sel_v == "Nuværende trup" else df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
             
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
-            
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
-            if p_col in df_f.columns:
-                df_f[p_col] = df_f[p_col].astype(str).str.replace('.0', '', regex=False).str.strip()
-                for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    plist = df_f[df_f[p_col] == str(pid)]
-                    for i, (_, p_row) in enumerate(plist.iterrows()):
-                        bg = "white" if p_row['IS_HIF'] else GRON_NY
-                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
+            for pid, (px, py, lbl) in m.items():
+                ax.text(px, py-4.5, str(lbl), size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                plist = df_f[df_f[p_col].astype(str) == str(pid)]
+                for i, (_, p_row) in enumerate(plist.iterrows()):
+                    bg = "white" if p_row['IS_HIF'] else GRON_NY
+                    ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
