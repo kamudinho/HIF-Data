@@ -239,15 +239,26 @@ def vis_side():
 
             drawn_players = []
             for pid, (px, py, lbl) in m.items():
-                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+                # Tegn positions-label (f.eks. 'DM')
+                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                        bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                 
+                # --- NY LOGIK FOR FORDELING AF 6/8 ---
+                # Vi leder efter spillere til denne specifikke plads (pid)
                 plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
                 
+                # HVIS pladsen er tom, og vi er ved at tegne 6 eller 8, 
+                # så tjekker vi om der er en "overskydende" spiller fra den anden position
+                if plist.empty and str(pid) in ["6", "8"]:
+                    modsat_pos = "8" if str(pid) == "6" else "6"
+                    plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
+
+                # Tegn de fundne spillere
                 for i, (_, r) in enumerate(plist.iterrows()):
                     drawn_players.append(r['PLAYER_WYID'])
                     k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                    txt_c, bg = "black", "white"
                     
+                    txt_c, bg = "black", "white"
                     if r['IS_HIF']:
                         bg = ROD_ADVARSEL if k_c == "#444444" else (k_c if k_c else "white")
                     else:
