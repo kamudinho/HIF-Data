@@ -72,22 +72,27 @@ def save_to_github(df):
         }
         requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", 
                      headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        st.toast("Gemt automatisk!", icon="✅")
+        st.toast("Gemt automatisk til GitHub!", icon="✅")
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
 
 def handle_auto_save(key, df_all, source_df):
+    """ Denne kører når data ændres i tabellen """
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
         for idx_str, updated_cols in changes.items():
+            # Find den rigtige spiller i hoved-datasættet baseret på index fra den filtrerede kilde
             p_name = source_df.iloc[int(idx_str)]['Navn']
             for col, val in updated_cols.items():
                 df_all.loc[df_all['Navn'] == p_name, col] = val
         
+        # Gem ændringerne
         save_to_github(df_all)
+        
+        # VIGTIGT: Fjern st.rerun() herfra for at undgå 'no-op' fejlen. 
+        # Streamlit genindlæser selv scriptet efter callback'en er færdig.
         st.session_state[state_key]["edited_rows"] = {}
-        st.rerun()
 
 # --- 3. DATA PROCESSING ---
 def clean_pos_val(val):
@@ -115,7 +120,6 @@ def prepare_df(content):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # FIX: Tvinger positioner til rene tal-strenge uden .0
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if c in df.columns: df[c] = df[c].apply(clean_pos_val)
 
@@ -185,7 +189,7 @@ def vis_side():
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
-                    st.session_state.form_skygge = form; st.rerun()
+                    st.session_state.form_skygge = form; st.rerun() # Her er rerun OK, da det ikke er en callback
 
         with c_pitch:
             ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
@@ -206,7 +210,7 @@ def vis_side():
             # --- LEGENDS (AX.TEXT) ---
             ax.text(1, 3, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
             ax.text(12, 3, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
-            ax.text(25, 3, " Transferfri ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY))
+            ax.text(25, 3, " Transfer (Fri) ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY))
             ax.text(40, 3, " Transferkøb ", size=8, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA))
 
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
