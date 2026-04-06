@@ -26,7 +26,7 @@ VINDUE_DATOER = {
     "Vinter 27": datetime(2028, 1, 1)
 }
 
-# Vigtigt: Disse skal matche 100% med indholdet i din editor
+# Definerer den præcise rækkefølge for dropdown og sortering
 VINDUE_ORDEN = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- 2. HJÆLPEFUNKTIONER ---
@@ -80,17 +80,13 @@ def save_to_github(df, path):
         _, sha = get_github_file(path)
         export_df = df.copy()
         
-        # Map tilbage til CSV-format (Vigtigt: 'Transfervindue' -> 'TRANSFER_VINDUE')
+        # Mapper tilbage til CSV-kolonnenavne
         rev_map = {
-            'Navn': 'NAVN', 
-            'Klub': 'KLUB', 
-            'Pos': 'POS', 
-            'Transfervindue': 'TRANSFER_VINDUE', 
-            'Emne': 'ER_EMNE', 
-            'Skyggehold': 'SKYGGEHOLD'
+            'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 
+            'Transfervindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD'
         }
-        
         export_df = export_df.rename(columns=rev_map)
+        
         for col in original_cols:
             if col not in export_df.columns: export_df[col] = ""
             
@@ -106,6 +102,7 @@ def save_to_github(df, path):
 def handle_editor_changes(df_all, edited_df, key):
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
+        # Manuel bekræftelse sikrer, at GitHub API ikke bliver overbelastet
         if st.button(f"Bekræft ændringer i {key}", type="primary", use_container_width=True):
             for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
                 p_name = edited_df.iloc[int(idx_str)]['Navn']
@@ -129,23 +126,17 @@ def prepare_df(content):
     if 'KONTRAKT' in df.columns:
         df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
 
-    # Omdøb kolonnen eksplicit til noget unikt: 'Transfervindue'
     col_map = {
-        'KLUB': 'Klub', 
-        'POS': 'Pos', 
-        'TRANSFER_VINDUE': 'Transfervindue', 
-        'ER_EMNE': 'Emne', 
-        'SKYGGEHOLD': 'Skyggehold', 
-        'POS_343': 'Pos_343', 
-        'POS_433': 'Pos_433', 
-        'POS_352': 'Pos_352'
+        'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Transfervindue', 
+        'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 
+        'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
-    # RENSNING AF VINDUE-DATA
+    # Renser Vindue-data for at sikre, at dropdown altid virker
     if 'Transfervindue' in df.columns:
         df['Transfervindue'] = df['Transfervindue'].astype(str).str.strip()
-        # Hvis den er gået i stykker (f.eks. "Som"), så tøm den, så dropdown kan overtage
+        # Retter forkortelser eller forkerte indtastninger til gyldige valg
         df['Transfervindue'] = df['Transfervindue'].apply(lambda x: x if x in VINDUE_ORDEN else None)
 
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False) if 'Klub' in df.columns else False
@@ -169,15 +160,13 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    # KRITISK: column_config nøglen skal være 'Transfervindue'
     col_cfg = {
         "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
         "Transfervindue": st.column_config.SelectboxColumn(
             "Transfervindue", 
             options=VINDUE_ORDEN, 
-            width="medium",
-            required=False
+            width="medium"
         ),
         "Emne": st.column_config.CheckboxColumn("Emne"),
         "Skyggehold": st.column_config.CheckboxColumn("Skygge")
@@ -186,7 +175,7 @@ def vis_side():
     with t1:
         source_t1 = df_all[~df_all['IS_HIF']].copy()
         
-        # Sortering: Vinter 26 før Sommer 27
+        # Sortering sikrer kronologisk rækkefølge
         source_t1['sort_val'] = source_t1['Transfervindue'].map(vindue_map).fillna(99)
         source_t1 = source_t1.sort_values('sort_val').reset_index(drop=True)
         
@@ -254,6 +243,12 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
+            # Legende for kontraktstatus
+            ax.text(1, 3, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
+            ax.text(12, 3, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
+            ax.text(25, 3, " Transfer (Fri) ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY))
+            ax.text(45, 3, " Transferkøb ", size=8, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA))
+
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
