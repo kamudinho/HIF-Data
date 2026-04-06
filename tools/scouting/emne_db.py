@@ -27,6 +27,8 @@ VINDUE_DATOER = {
     "Vinter 27": datetime(2028, 1, 1)
 }
 
+vindue_options = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+
 # --- 2. HJÆLPEFUNKTIONER ---
 def calculate_age_str(born):
     if pd.isna(born): return "-"
@@ -134,6 +136,7 @@ def prepare_df(content):
     return df
 
 # --- 4. HOVEDFUNKTION ---
+
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -143,27 +146,38 @@ def vis_side():
     df_all = prepare_df(content)
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
-    date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
-                "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
+    
+    # Konfiguration af kolonner (Nu med Dropdown for Vindue)
+    col_cfg = {
+        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
+        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
+        "Vindue": st.column_config.SelectboxColumn("Transfervindue", options=vindue_options, help="Vælg hvornår emnet er relevant")
+    }
 
     with t1:
         source_t1 = df_all[~df_all['IS_HIF']].reset_index(drop=True)
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
-        edited_t1 = st.data_editor(
+        st.data_editor(
             source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=date_cfg, use_container_width=True, height=600, key="editable_t1"
+            column_config=col_cfg, 
+            use_container_width=True, 
+            height=600, 
+            key="editable_t1",
+            on_change=None # Vi lader Streamlit køre uden tvungen rerun for fart
         )
         handle_editor_changes(df_all, source_t1, "t1")
 
     with t2:
         source_t2 = df_all[df_all['IS_HIF']].reset_index(drop=True)
         cols_t2 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold']
-        edited_t2 = st.data_editor(
+        st.data_editor(
             source_t2[cols_t2].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=date_cfg, use_container_width=True, height=600, key="editable_t2"
+            column_config=col_cfg, 
+            use_container_width=True, 
+            height=600, 
+            key="editable_t2"
         )
         handle_editor_changes(df_all, source_t2, "t2")
-
     with t3:
         source_t3 = df_all[df_all['Skyggehold'] == True].reset_index(drop=True)
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
