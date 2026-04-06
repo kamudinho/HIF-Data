@@ -14,11 +14,10 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 HIF_ROD = "#df003b"
 GRON_NY = "#ccffcc"         # Lysgrøn (Free Agent / Udløb)
-GRON_DARK = "#2e7d32"       # Mørkegrøn (Transferkøb)
-GUL_ADVARSEL = "#ffff99"    # 6-12 mdr
-ROD_ADVARSEL = "#ffcccc"    # < 6 mdr
+GRON_DARK = "#388e3c"       # Medium grøn (Transferkøb) - Lidt lysere end før
+GUL_ADVARSEL = "#ffff99"    
+ROD_ADVARSEL = "#ffcccc"    
 
-# Datoer for vinduernes start
 VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
     "Sommer 26": datetime(2026, 7, 1),
@@ -42,9 +41,8 @@ def get_status_color(val, ref_date=None):
         if pd.isna(val): return None
         dt = pd.to_datetime(val, dayfirst=True, errors='coerce')
         if pd.isna(dt): return None
-        
         days = (dt - ref_date).days
-        if days < 0: return "#444444" # Grå (Udløbet)
+        if days < 0: return "#444444" 
         if days < 183: return ROD_ADVARSEL
         if days <= 365: return GUL_ADVARSEL
         return None
@@ -93,6 +91,18 @@ def save_to_github(df, path):
     except Exception as e:
         st.error(f"Fejl ved gem: {e}"); return False
 
+def handle_editor_changes(df_all, edited_df, key):
+    """Håndterer ændringer fra data_editor og gemmer til GitHub"""
+    state_key = f"editable_{key}"
+    if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
+        for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
+            # Find det rigtige navn baseret på index i den viste dataframe
+            p_name = edited_df.iloc[int(idx_str)]['Navn']
+            for col, val in updated_cols.items():
+                df_all.loc[df_all['Navn'] == p_name, col] = val
+        if save_to_github(df_all, SCOUT_DB_PATH):
+            st.rerun()
+
 # --- 3. DATA PROCESSING ---
 def prepare_df(content):
     if not content: return pd.DataFrame()
@@ -132,40 +142,41 @@ def vis_side():
     df_all = prepare_df(content)
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
-    date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"), 
+    date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
                 "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
 
     with t1:
+        source_t1 = df_all[~df_all['IS_HIF']].reset_index(drop=True)
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
-        source = df_all[~df_all['IS_HIF']][cols_t1]
-        st.data_editor(source.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600)
+        edited_t1 = st.data_editor(
+            source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
+            column_config=date_cfg, use_container_width=True, height=600, key="editable_t1"
+        )
+        handle_editor_changes(df_all, source_t1, "t1")
 
     with t2:
+        source_t2 = df_all[df_all['IS_HIF']].reset_index(drop=True)
         cols_t2 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold']
-        hif = df_all[df_all['IS_HIF']][cols_t2]
-        st.data_editor(hif.set_index('Navn').style.applymap(get_color_by_date, subset=['Kontrakt']), column_config=date_cfg, use_container_width=True, height=600)
+        edited_t2 = st.data_editor(
+            source_t2[cols_t2].style.applymap(get_color_by_date, subset=['Kontrakt']),
+            column_config=date_cfg, use_container_width=True, height=600, key="editable_t2"
+        )
+        handle_editor_changes(df_all, source_t2, "t2")
 
     with t3:
+        source_t3 = df_all[df_all['Skyggehold'] == True].reset_index(drop=True)
         display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
-        sky_df = df_all[df_all['Skyggehold'] == True].copy()
-        edited_sky = st.data_editor(
-            sky_df[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
+        edited_t3 = st.data_editor(
+            source_t3[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
             column_config={
                 "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=display_options),
                 "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=display_options),
                 "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=display_options),
                 "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
             },
-            disabled=["Navn", "Klub", "Pos"], use_container_width=True, key="sky_edit_final"
+            disabled=["Navn", "Klub", "Pos"], use_container_width=True, key="editable_t3"
         )
-        if st.session_state.get("sky_edit_final") and st.session_state.sky_edit_final.get("edited_rows"):
-            for idx_str, updated_cols in st.session_state.sky_edit_final["edited_rows"].items():
-                p_name = sky_df.iloc[int(idx_str)]['Navn']
-                for col, val in updated_cols.items():
-                    if col in ['Pos_343', 'Pos_433', 'Pos_352'] and val and str(val) != "3.5" and "." not in str(val):
-                        val = f"{val}.0"
-                    df_all.loc[df_all['Navn'] == p_name, col] = val
-            if save_to_github(df_all, SCOUT_DB_PATH): st.rerun()
+        handle_editor_changes(df_all, source_t3, "t3")
 
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
@@ -181,7 +192,6 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
             
-            # --- FILTRERING ---
             if sel_v == "Nuværende trup":
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
@@ -190,7 +200,6 @@ def vis_side():
                 hif_spillere = hif_spillere[~((hif_spillere['Kontrakt'].notna()) & (hif_spillere['Kontrakt'] < ref_dt))]
                 df_f = pd.concat([hif_spillere, emner_til_vindue])
 
-            # --- TEGN BANEN ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
@@ -214,21 +223,18 @@ def vis_side():
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
                         txt_color = "black"
-                        
                         if p_row['IS_HIF']:
                             bg = k_color if k_color else "white"
                         else:
-                            # EKSTERNE EMNER
                             if k_color == "#444444":
                                 bg = "#444444"; txt_color = "white"
                             elif k_color == ROD_ADVARSEL:
-                                bg = GRON_NY # Transfer (Fri)
+                                bg = GRON_NY
                             else:
-                                bg = GRON_DARK; txt_color = "white" # Transferkøb
+                                bg = GRON_DARK; txt_color = "white"
 
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
                                 bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
-            
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
