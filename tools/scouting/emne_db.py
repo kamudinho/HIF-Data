@@ -124,6 +124,7 @@ def prepare_df(content):
     return df
 
 # --- 4. HOVEDFUNKTION ---
+# --- 4. HOVEDFUNKTION (OPDATERET FILTRERING) ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -136,6 +137,7 @@ def vis_side():
     date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"), 
                 "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
 
+    # ... (t1, t2, t3 er uændrede)
     with t1:
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
         source = df_all[~df_all['IS_HIF']][cols_t1]
@@ -178,31 +180,34 @@ def vis_side():
                     st.session_state.form_skygge = form; st.rerun()
 
         with c_pitch:
-            # Referencedato for det valgte vindue
             ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
-            
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
             
-            # Filtrering baseret på vindue
+            # --- NY LOGIK FOR FILTRERING ---
             if sel_v == "Nuværende trup":
+                # Kun nuværende HIF spillere
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
-                # Inkluder HIF-spillere og spillere markeret til dette specifikke vindue
-                df_f = df_all[(df_all['Skyggehold'] == True) & ((df_all['IS_HIF']) | (df_all['Vindue'] == sel_v))].copy()
-            
-            # FJERN SPILLERE HVIS KONTRAKT ER UDLØBET VED VINDUE-START
-            df_f = df_f[~((df_f['Kontrakt'].notna()) & (df_f['Kontrakt'] < ref_dt))]
+                # 1. Tag alle aktive HIF spillere
+                hif_spillere = df_all[df_all['IS_HIF']].copy()
+                # 2. Tag emner der er sat til det specifikke vindue
+                emner_til_vindue = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Vindue'] == sel_v)].copy()
+                
+                # 3. Fjern KUN HIF-spillere hvis deres kontrakt er udløbet
+                hif_spillere = hif_spillere[~((hif_spillere['Kontrakt'].notna()) & (hif_spillere['Kontrakt'] < ref_dt))]
+                
+                # Saml listen (Emnerne filtreres IKKE på kontrakt-dato, da de er sat manuelt til vinduet)
+                df_f = pd.concat([hif_spillere, emner_til_vindue])
 
+            # --- TEGN BANEN ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # --- LEGENDS (VENSTRE) ---
             ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(25, 3, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
-            # --- VINDUE STATUS (HØJRE) ---
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
 
@@ -215,13 +220,19 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
-                        # Beregn farve ift. vinduets startdato
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
                         bg = k_color if k_color else ("white" if p_row['IS_HIF'] else GRON_NY)
                         
-                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
+                        # Hvis det er et emne med udløbet kontrakt, farver vi dem mørkegrå som "Free Agent" indikation
+                        if not p_row['IS_HIF'] and k_color == "#444444":
+                            txt_color = "white"
+                        else:
+                            txt_color = "black"
+
+                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
+                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             
             st.pyplot(fig, use_container_width=True)
-
+            
 if __name__ == "__main__":
     vis_side()
