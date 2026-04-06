@@ -190,7 +190,7 @@ def vis_side():
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            # Vi definerer rækkefølgen her: Nuværende trup -> Startopstilling -> Resten af vinduerne
+            # Definition af rækkefølge: Nuværende -> Startopstilling -> Vinduer
             display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
             
             sel_v = st.selectbox("Visning", display_opts)
@@ -203,26 +203,30 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"POS_{f_suffix}"
             
-            # Logikken for filtrering af spillere
+            # --- FILTRERINGSLOGIK ---
             if sel_v == "Startopstilling (26/27)":
+                # KONTRAKT IGNORERES HER: Vi tager alle med flueben i Start_11
                 df_f = df_display[df_display['START_11_26_27'] == True].copy()
-                ref_dt = datetime(2026, 7, 1)
+                ref_dt = datetime(2026, 7, 1) # Bruges kun til farve-legende, ikke filtrering
+                
             elif sel_v == "Nuværende trup":
                 df_f = df_display[df_display['IS_HIF']].copy()
                 ref_dt = datetime.now()
+                
             else:
-                # For de fremtidige vinduer (Sommer 26, Vinter 26 osv.)
+                # FOR TRANSFERVINDUER: Her filtrerer vi stadig på kontraktudløb
                 ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
                 hif = df_display[df_display['IS_HIF']].copy()
                 emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
                 
-                # Fjern spillere hvis kontrakt er udløbet på det valgte tidspunkt
+                # Fjern kun spillere her, hvis deres kontrakt er udløbet før vinduet
                 hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
                 df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
 
+            # --- TEGNING AF BANE ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
-            
+                        
             # LEGENDS
             ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
             ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
