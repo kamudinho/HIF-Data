@@ -208,7 +208,7 @@ def vis_side():
             ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(25, 3, " Transferfri ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(42, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(38, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
