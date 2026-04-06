@@ -26,7 +26,7 @@ VINDUE_DATOER = {
     "Vinter 27": datetime(2028, 1, 1)
 }
 
-# Denne liste skal matche 100% med hvad der står i din CSV
+# Vigtigt: Disse skal matche 100% med indholdet i din editor
 VINDUE_ORDEN = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- 2. HJÆLPEFUNKTIONER ---
@@ -80,12 +80,17 @@ def save_to_github(df, path):
         _, sha = get_github_file(path)
         export_df = df.copy()
         
-        # Sørg for at 'Vindue' kolonnen mappes tilbage til TRANSFER_VINDUE
-        rev_map = {'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 'Vindue': 'TRANSFER_VINDUE', 
-                   'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD'}
+        # Map tilbage til CSV-format (Vigtigt: 'Transfervindue' -> 'TRANSFER_VINDUE')
+        rev_map = {
+            'Navn': 'NAVN', 
+            'Klub': 'KLUB', 
+            'Pos': 'POS', 
+            'Transfervindue': 'TRANSFER_VINDUE', 
+            'Emne': 'ER_EMNE', 
+            'Skyggehold': 'SKYGGEHOLD'
+        }
         
         export_df = export_df.rename(columns=rev_map)
-        
         for col in original_cols:
             if col not in export_df.columns: export_df[col] = ""
             
@@ -101,10 +106,8 @@ def save_to_github(df, path):
 def handle_editor_changes(df_all, edited_df, key):
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
-        # Vi viser en gem-knap for at undgå lag
         if st.button(f"Bekræft ændringer i {key}", type="primary", use_container_width=True):
             for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
-                # Brug Navn som unik nøgle til at finde rækken i hoved-dataframe
                 p_name = edited_df.iloc[int(idx_str)]['Navn']
                 for col, val in updated_cols.items():
                     df_all.loc[df_all['Navn'] == p_name, col] = val
@@ -119,12 +122,6 @@ def prepare_df(content):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # Standard rensning af positioner
-    for col in ['POS', 'POS_343', 'POS_433', 'POS_352']:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
-            df[col] = df[col].replace(['nan', 'None', '0', ''], "")
-
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
         df['Alder'] = df['Fødselsdato'].apply(calculate_age_str)
@@ -132,19 +129,24 @@ def prepare_df(content):
     if 'KONTRAKT' in df.columns:
         df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
 
-    # Map kolonner til pænere navne
-    col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 
-               'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
+    # Omdøb kolonnen eksplicit til noget unikt: 'Transfervindue'
+    col_map = {
+        'KLUB': 'Klub', 
+        'POS': 'Pos', 
+        'TRANSFER_VINDUE': 'Transfervindue', 
+        'ER_EMNE': 'Emne', 
+        'SKYGGEHOLD': 'Skyggehold', 
+        'POS_343': 'Pos_343', 
+        'POS_433': 'Pos_433', 
+        'POS_352': 'Pos_352'
+    }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
-    # --- KRITISK: VASKEMASKINE TIL VINDUE ---
-    # Dette sikrer at dropdown virker selvom data i CSV er "grim"
-    if 'Vindue' in df.columns:
-        df['Vindue'] = df['Vindue'].astype(str).str.strip()
-        # Hvis værdien starter med "Som", retter vi den til den fulde værdi
-        df.loc[df['Vindue'].str.startswith('Som', na=False), 'Vindue'] = 'Sommer 26' # Default hvis den er i stykker
-        # Tving kun gyldige værdier igennem (ellers None)
-        df['Vindue'] = df['Vindue'].apply(lambda x: x if x in VINDUE_ORDEN else None)
+    # RENSNING AF VINDUE-DATA
+    if 'Transfervindue' in df.columns:
+        df['Transfervindue'] = df['Transfervindue'].astype(str).str.strip()
+        # Hvis den er gået i stykker (f.eks. "Som"), så tøm den, så dropdown kan overtage
+        df['Transfervindue'] = df['Transfervindue'].apply(lambda x: x if x in VINDUE_ORDEN else None)
 
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False) if 'Klub' in df.columns else False
     
@@ -163,17 +165,16 @@ def vis_side():
     if content is None: return
     df_all = prepare_df(content)
 
-    # Sorterings-map til kronologi
     vindue_map = {val: i for i, val in enumerate(VINDUE_ORDEN)}
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    # Fælles column config
+    # KRITISK: column_config nøglen skal være 'Transfervindue'
     col_cfg = {
         "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Vindue": st.column_config.SelectboxColumn(
-            "Vindue", 
+        "Transfervindue": st.column_config.SelectboxColumn(
+            "Transfervindue", 
             options=VINDUE_ORDEN, 
             width="medium",
             required=False
@@ -185,11 +186,11 @@ def vis_side():
     with t1:
         source_t1 = df_all[~df_all['IS_HIF']].copy()
         
-        # Sortering: Vinter 26 (index 1) kommer før Sommer 27 (index 2)
-        source_t1['sort_val'] = source_t1['Vindue'].map(vindue_map).fillna(99)
+        # Sortering: Vinter 26 før Sommer 27
+        source_t1['sort_val'] = source_t1['Transfervindue'].map(vindue_map).fillna(99)
         source_t1 = source_t1.sort_values('sort_val').reset_index(drop=True)
         
-        cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
+        cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Transfervindue', 'Emne', 'Skyggehold']
         
         st.data_editor(
             source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
@@ -229,7 +230,6 @@ def vis_side():
         handle_editor_changes(df_all, source_t3, "t3")
 
     with t4:
-        # Skyggehold grafisk visning (pitch)
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
             sel_v = st.selectbox("Vindue", list(VINDUE_DATOER.keys()))
@@ -247,7 +247,7 @@ def vis_side():
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
                 hif = df_all[df_all['IS_HIF']].copy()
-                emner = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Vindue'] == sel_v)].copy()
+                emner = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Transfervindue'] == sel_v)].copy()
                 hif = hif[~((hif['Kontrakt'].notna()) & (hif['Kontrakt'] < ref_dt))]
                 df_f = pd.concat([hif, emner])
 
