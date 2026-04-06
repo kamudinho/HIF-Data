@@ -204,7 +204,9 @@ def vis_side():
             p_col = f"POS_{f_suffix}"
             
             # 1. FILTRERING
-            if sel_v == "Startopstilling (26/27)":
+            is_startopstilling = (sel_v == "Startopstilling (26/27)")
+            
+            if is_startopstilling:
                 df_f = df_display[df_display['START_11_26_27'] == True].copy()
                 ref_dt = datetime(2026, 7, 1)
             elif sel_v == "Nuværende trup":
@@ -239,19 +241,19 @@ def vis_side():
 
             drawn_players = []
             for pid, (px, py, lbl) in m.items():
-                # Tegn positions-label (f.eks. 'DM')
-                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
-                        bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                 
-                # --- LOGIK FOR FORDELING AF 6/8 ---
-                # Prøv først det præcise nummer
-                plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
+                # Find spillere til positionen
+                plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
                 
-                # Hvis pladsen er tom og det er central midtbane, tjek den anden "6/8"-plads for overskud
-                if plist.empty and str(pid) in ["6", "8"]:
-                    modsat_pos = "8" if str(pid) == "6" else "6"
-                    plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
-
+                # LOGIK: Hvis det er Startopstilling, må vi kun vise én og vi må "skubbe" 6/8
+                if is_startopstilling:
+                    plist = plist.head(1)
+                    if plist.empty and str(pid) in ["6", "8"]:
+                        modsat_pos = "8" if str(pid) == "6" else "6"
+                        plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
+                
+                # Tegn spillerne (stables kun hvis det IKKE er startopstilling)
                 for i, (_, r) in enumerate(plist.iterrows()):
                     drawn_players.append(r['PLAYER_WYID'])
                     k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
@@ -262,8 +264,9 @@ def vis_side():
                     else:
                         bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
                     
-                    # Tegn spilleren
-                    ax.text(px, py, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
+                    # Y-forskydning bruges kun når vi viser flere spillere (ikke i startopstilling)
+                    y_offset = (i * 3.2) if not is_startopstilling else 0
+                    ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
                             bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
             
             st.pyplot(fig, use_container_width=True)
