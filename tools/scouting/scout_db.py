@@ -103,6 +103,8 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
         with col_text:
             st.write("**Styrker**")
             st.info(nyeste.get('STYRKER', '-'))
+            st.write("**Udvikling**")
+            st.success(nyeste.get('UDVIKLING', '-'))
             st.write("**Vurdering**")
             st.success(nyeste.get('VURDERING', '-'))
 
