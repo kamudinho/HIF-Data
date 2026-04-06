@@ -220,15 +220,27 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
+                        # 1. Beregn kontraktfarven (gul/rød/grå)
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
-                        bg = k_color if k_color else ("white" if p_row['IS_HIF'] else GRON_NY)
                         
-                        # Hvis det er et emne med udløbet kontrakt, farver vi dem mørkegrå som "Free Agent" indikation
-                        if not p_row['IS_HIF'] and k_color == "#444444":
-                            txt_color = "white"
+                        # 2. Definer baggrundsfarven
+                        if p_row['IS_HIF']:
+                            # HIF-spillere er hvide som standard, eller rød/gul ved udløb
+                            bg = k_color if k_color else "white"
                         else:
-                            txt_color = "black"
-
+                            # EKSTERNE EMNER:
+                            # Hvis de har rød/gul status pga. kontrakt i nuværende klub, 
+                            # men du hellere vil se dem som "Transfer" (Grøn), så prioriterer vi GRON_NY.
+                            # Vi beholder dog k_color hvis den er #444444 (udløbet/Free Agent).
+                            
+                            if k_color == "#444444":
+                                bg = "#444444" # Free agent
+                            else:
+                                bg = GRON_NY # Altid grøn for emner (uanset om de har 1 eller 3 år tilbage)
+                        
+                        # Sæt tekstfarve baseret på baggrund
+                        txt_color = "white" if bg == "#444444" else "black"
+                    
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
                                 bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             
