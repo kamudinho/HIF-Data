@@ -228,7 +228,7 @@ def vis_side():
             ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
 
             # VALGT VINDUE (Øverst til højre)
-            ax.text(115, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', 
+            ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', 
                     bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
             m = {
