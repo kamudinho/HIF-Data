@@ -57,7 +57,8 @@ def save_to_github(df):
         export_df = df.copy()
         rev_map = {
             'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 
-            'Transfervindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD'
+            'Transfervindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD',
+            'Pos_343': 'POS_343', 'Pos_433': 'POS_433', 'Pos_352': 'POS_352'
         }
         export_df = export_df.rename(columns=rev_map)
         
@@ -77,28 +78,22 @@ def save_to_github(df):
         st.error(f"Fejl ved automatisk gem: {e}")
 
 def handle_auto_save(key, df_all, source_df):
-    """ Denne kører når data ændres i tabellen """
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
         for idx_str, updated_cols in changes.items():
-            # Find den rigtige spiller i hoved-datasættet baseret på index fra den filtrerede kilde
             p_name = source_df.iloc[int(idx_str)]['Navn']
             for col, val in updated_cols.items():
                 df_all.loc[df_all['Navn'] == p_name, col] = val
         
-        # Gem ændringerne
         save_to_github(df_all)
-        
-        # VIGTIGT: Fjern st.rerun() herfra for at undgå 'no-op' fejlen. 
-        # Streamlit genindlæser selv scriptet efter callback'en er færdig.
         st.session_state[state_key]["edited_rows"] = {}
 
 # --- 3. DATA PROCESSING ---
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
     v = str(val).replace('.0', '').strip()
-    return v if v in POS_OPTS else ""
+    return v
 
 def get_status_color(val, ref_date=None):
     if ref_date is None: ref_date = datetime.now()
@@ -120,8 +115,19 @@ def prepare_df(content):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
-        if c in df.columns: df[c] = df[c].apply(clean_pos_val)
+    # 1. Rens POS kolonnen først
+    if 'POS' in df.columns:
+        df['POS'] = df['POS'].astype(str).replace('nan', '').apply(clean_pos_val)
+    
+    # 2. Præ-sat formations-kolonner hvis de er tomme
+    for c in ['POS_343', 'POS_433', 'POS_352']:
+        if c in df.columns:
+            df[c] = df[c].astype(str).replace('nan', '').apply(clean_pos_val)
+            # Hvis feltet er tomt, brug værdien fra POS
+            df[c] = df.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
+        else:
+            # Hvis kolonnen slet ikke findes, opret den baseret på POS
+            df[c] = df['POS'] if 'POS' in df.columns else ""
 
     if 'BIRTHDATE' in df.columns:
         df['Fødselsdato'] = pd.to_datetime(df['BIRTHDATE'], dayfirst=True, errors='coerce')
@@ -189,7 +195,7 @@ def vis_side():
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
                 if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
-                    st.session_state.form_skygge = form; st.rerun() # Her er rerun OK, da det ikke er en callback
+                    st.session_state.form_skygge = form; st.rerun()
 
         with c_pitch:
             ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
@@ -207,7 +213,6 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # --- LEGENDS (AX.TEXT) ---
             ax.text(1, 3, " < 6 mdr ", size=8, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
             ax.text(12, 3, " 6-12 mdr ", size=8, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
             ax.text(25, 3, " Transfer (Fri) ", size=8, weight='bold', bbox=dict(facecolor=GRON_NY))
