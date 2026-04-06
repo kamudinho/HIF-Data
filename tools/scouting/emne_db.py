@@ -44,6 +44,7 @@ def get_github_file(path):
 
 def save_to_github(df):
     try:
+        # Præcis rækkefølge som i din CSV
         original_cols = [
             'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
             'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
@@ -55,16 +56,11 @@ def save_to_github(df):
         _, sha = get_github_file(SCOUT_DB_PATH)
         
         export_df = df.copy()
-        rev_map = {
-            'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 
-            'Transfervindue': 'TRANSFER_VINDUE', 'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD',
-            'Pos_343': 'POS_343', 'Pos_433': 'POS_433', 'Pos_352': 'POS_352',
-            'Start_11_26_27': 'START_11_26_27'
-        }
-        export_df = export_df.rename(columns=rev_map)
         
+        # Sørg for at alle kolonner eksisterer inden gem
         for col in original_cols:
-            if col not in export_df.columns: export_df[col] = ""
+            if col not in export_df.columns:
+                export_df[col] = ""
             
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
@@ -85,14 +81,14 @@ def handle_auto_save(key, df_display, source_df):
         full_db = st.session_state['full_db']
         
         for idx_str, updated_cols in changes.items():
-            # Bruger PLAYER_WYID fra source_df (selvom den er skjult i UI)
             wyid = source_df.iloc[int(idx_str)]['PLAYER_WYID']
             matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
+            
             if not matching_rows.empty:
                 idx_in_full = matching_rows.index[0]
                 for col, val in updated_cols.items():
-                    db_col = col.upper() if col.upper() in full_db.columns else col
-                    if col == 'Start_11_26_27': db_col = 'START_11_26_27'
+                    # Vi mapper altid tilbage til STORE bogstaver for databasen
+                    db_col = col.upper()
                     full_db.at[idx_in_full, db_col] = val
         
         save_to_github(full_db)
@@ -118,9 +114,13 @@ def get_status_color(val, ref_date=None):
 def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
+    
+    # TVING ALLE KOLONNER TIL STORE BOGSTAVER VED INDLÆSNING
     df.columns = [str(c).upper().strip() for c in df.columns]
     
-    for col in ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'DATO']:
+    # Sikkerheds-oprettelse af manglende kolonner
+    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'PLAYER_WYID', 'DATO']
+    for col in needed:
         if col not in df.columns: df[col] = ""
 
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
@@ -128,27 +128,24 @@ def prepare_df(content):
     
     st.session_state['full_db'] = df.copy()
     
-    # UNIK VISNING PR. SPILLER
+    # Unik visning pr spiller
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
 
-    if 'NAVN' in df_display.columns: df_display = df_display.rename(columns={'NAVN': 'Navn'})
-    if 'POS' in df_display.columns: df_display['POS'] = df_display['POS'].apply(clean_pos_val)
-    
-    for c in ['POS_343', 'POS_433', 'POS_352']:
+    # Rens positioner
+    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         df_display[c] = df_display[c].apply(clean_pos_val)
-        df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
+        if c != 'POS': # Hvis system-position er tom, brug standard POS
+            df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
 
     if 'KONTRAKT' in df_display.columns:
-        df_display['Kontrakt'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
+        df_display['KONTRAKT_DT'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
 
-    col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Transfervindue', 
-               'ER_EMNE': 'Emne', 'SKYGGEHOLD': 'Skyggehold', 'START_11_26_27': 'Start_11_26_27'}
-    df_display = df_display.rename(columns={k: v for k, v in col_map.items() if k in df_display.columns})
+    # Konverter boolean felter korrekt
+    for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27']:
+        df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
+        
+    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre", case=False, na=False)
     
-    df_display['IS_HIF'] = df_display['Klub'].str.contains("Hvidovre", case=False, na=False)
-    for c in ['Emne', 'Skyggehold', 'Start_11_26_27']:
-        if c in df_display.columns: 
-            df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     return df_display
 
 # --- 4. UI ---
@@ -162,32 +159,32 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    # Column config - PLAYER_WYID er sat til None (skjult)
+    # Column config bruger nu STORE bogstaver for at matche dataframe
     cfg = {
         "PLAYER_WYID": None,
-        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Transfervindue": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN),
-        "Emne": st.column_config.CheckboxColumn("Emne"),
-        "Skyggehold": st.column_config.CheckboxColumn("Skygge"),
-        "Start_11_26_27": st.column_config.CheckboxColumn("Start 11 (26/27)"),
-        "Pos_343": st.column_config.SelectboxColumn("3-4-3", options=POS_OPTS),
-        "Pos_433": st.column_config.SelectboxColumn("4-3-3", options=POS_OPTS),
-        "Pos_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
+        "KONTRAKT_DT": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
+        "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN),
+        "ER_EMNE": st.column_config.CheckboxColumn("Emne"),
+        "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge"),
+        "START_11_26_27": st.column_config.CheckboxColumn("Start 11 (26/27)"),
+        "POS_343": st.column_config.SelectboxColumn("3-4-3", options=POS_OPTS),
+        "POS_433": st.column_config.SelectboxColumn("4-3-3", options=POS_OPTS),
+        "POS_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
     }
 
     with t1:
         source_t1 = df_display[~df_display['IS_HIF']].copy()
-        st.data_editor(source_t1[['Navn', 'Klub', 'Pos', 'Kontrakt', 'Transfervindue', 'Emne', 'Skyggehold', 'PLAYER_WYID']],
+        st.data_editor(source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                        column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
 
     with t2:
         source_t2 = df_display[df_display['IS_HIF']].reset_index(drop=True)
-        st.data_editor(source_t2[['Navn', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold', 'PLAYER_WYID']],
+        st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                        column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
     with t3:
-        source_t3 = df_display[df_display['Skyggehold'] == True].reset_index(drop=True)
-        st.data_editor(source_t3[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Start_11_26_27', 'PLAYER_WYID']],
+        source_t3 = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
+        st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'PLAYER_WYID']],
                        column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
 
     with t4:
@@ -202,10 +199,10 @@ def vis_side():
 
         with c_pitch:
             f_suffix = st.session_state.form_skygge.replace('-', '')
-            p_col = f"Pos_{f_suffix}"
+            p_col = f"POS_{f_suffix}"
             
             if sel_v == "Startopstilling (26/27)":
-                df_f = df_display[df_display['Start_11_26_27'] == True].copy()
+                df_f = df_display[df_display['START_11_26_27'] == True].copy()
                 ref_dt = datetime(2026, 7, 1)
             elif sel_v == "Nuværende trup":
                 df_f = df_display[df_display['IS_HIF']].copy()
@@ -213,8 +210,8 @@ def vis_side():
             else:
                 ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
                 hif = df_display[df_display['IS_HIF']].copy()
-                emner = df_display[(df_display['Skyggehold'] == True) & (~df_display['IS_HIF']) & (df_display['Transfervindue'] == sel_v)].copy()
-                hif = hif[~((hif['Kontrakt'].notna()) & (hif['Kontrakt'] < ref_dt))]
+                emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
+                hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
                 df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
@@ -238,7 +235,7 @@ def vis_side():
                 
                 for i, (_, r) in enumerate(plist.iterrows()):
                     drawn_players.append(r['PLAYER_WYID'])
-                    k_c = get_status_color(r['Kontrakt'], ref_date=ref_dt)
+                    k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
                     txt_c, bg = "black", "white"
                     
                     if r['IS_HIF']:
@@ -246,7 +243,7 @@ def vis_side():
                     else:
                         bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
                     
-                    ax.text(px, py + (i * 3.2), r['Navn'], size=7.5, ha='center', weight='bold', color=txt_c, 
+                    ax.text(px, py + (i * 3.2), r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
                             bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
             
             st.pyplot(fig, use_container_width=True)
