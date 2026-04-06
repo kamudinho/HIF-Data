@@ -218,23 +218,34 @@ def vis_side():
 
             if p_col in df_f.columns:
                 for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
                         txt_color = "black"
+                        
                         if p_row['IS_HIF']:
-                            bg = k_color if k_color else "white"
-                        else:
+                            # HIF-spillere følger advarselslogikken
+                            # Hvis de er udløbet (grå fra get_status_color), gør vi dem røde for at vise de skal fikses
                             if k_color == "#444444":
-                                bg = "#444444"; txt_color = "white"
-                            elif k_color == ROD_ADVARSEL:
+                                bg = ROD_ADVARSEL
+                            else:
+                                bg = k_color if k_color else "white"
+                        else:
+                            # EKSTERNE EMNER
+                            if k_color == "#444444" or k_color == ROD_ADVARSEL:
+                                # Kontrakt er udløbet eller udløber om lidt = Transfer (Fri)
                                 bg = GRON_NY
                             else:
-                                bg = GRON_DARK; txt_color = "white"
-
+                                # Kontrakt løber stadig langt ud i fremtiden = Transferkøb
+                                bg = "#388e3c" 
+                                txt_color = "white"
+            
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
                                 bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
+                        
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
