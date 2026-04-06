@@ -14,8 +14,7 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 HIF_ROD = "#df003b"
 HIF_BLA = "#0057b7"
-GRON_NY = "#ccffcc"         
-GRON_DARK = "#388e3c"       
+GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99"    
 ROD_ADVARSEL = "#ffcccc"
 
@@ -27,6 +26,7 @@ VINDUE_DATOER = {
     "Vinter 27": datetime(2028, 1, 1)
 }
 
+# Denne liste skal matche 100% med hvad der står i din CSV
 VINDUE_ORDEN = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- 2. HJÆLPEFUNKTIONER ---
@@ -79,12 +79,16 @@ def save_to_github(df, path):
         ]
         _, sha = get_github_file(path)
         export_df = df.copy()
+        
+        # Sørg for at 'Vindue' kolonnen mappes tilbage til TRANSFER_VINDUE
         rev_map = {'Navn': 'NAVN', 'Klub': 'KLUB', 'Pos': 'POS', 'Vindue': 'TRANSFER_VINDUE', 
-                   'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD', 'Pos_343': 'POS_343', 
-                   'Pos_433': 'POS_433', 'Pos_352': 'POS_352'}
+                   'Emne': 'ER_EMNE', 'Skyggehold': 'SKYGGEHOLD'}
+        
         export_df = export_df.rename(columns=rev_map)
+        
         for col in original_cols:
             if col not in export_df.columns: export_df[col] = ""
+            
         export_df = export_df[original_cols]
         csv_content = export_df.to_csv(index=False)
         payload = {"message": "Update scout data", "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), "sha": sha}
@@ -95,11 +99,12 @@ def save_to_github(df, path):
         st.error(f"Fejl ved gem: {e}"); return False
 
 def handle_editor_changes(df_all, edited_df, key):
-    """Håndterer ændringer fra data_editor med en manuel gem-knap for hastighed"""
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
-        if st.button(f"Gem ændringer i {key}", type="primary", use_container_width=True):
+        # Vi viser en gem-knap for at undgå lag
+        if st.button(f"Bekræft ændringer i {key}", type="primary", use_container_width=True):
             for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
+                # Brug Navn som unik nøgle til at finde rækken i hoved-dataframe
                 p_name = edited_df.iloc[int(idx_str)]['Navn']
                 for col, val in updated_cols.items():
                     df_all.loc[df_all['Navn'] == p_name, col] = val
@@ -111,8 +116,10 @@ def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
+    
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
+    # Standard rensning af positioner
     for col in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -125,13 +132,19 @@ def prepare_df(content):
     if 'KONTRAKT' in df.columns:
         df['Kontrakt'] = pd.to_datetime(df['KONTRAKT'], dayfirst=True, errors='coerce')
 
+    # Map kolonner til pænere navne
     col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 
                'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     
-    # Rens Vindue-data for at sikre dropdown virker
+    # --- KRITISK: VASKEMASKINE TIL VINDUE ---
+    # Dette sikrer at dropdown virker selvom data i CSV er "grim"
     if 'Vindue' in df.columns:
         df['Vindue'] = df['Vindue'].astype(str).str.strip()
+        # Hvis værdien starter med "Som", retter vi den til den fulde værdi
+        df.loc[df['Vindue'].str.startswith('Som', na=False), 'Vindue'] = 'Sommer 26' # Default hvis den er i stykker
+        # Tving kun gyldige værdier igennem (ellers None)
+        df['Vindue'] = df['Vindue'].apply(lambda x: x if x in VINDUE_ORDEN else None)
 
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False) if 'Klub' in df.columns else False
     
@@ -144,44 +157,37 @@ def prepare_df(content):
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     
-    # 1. Definer rækkefølgen
-    vindue_orden = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-    vindue_map = {val: i for i, val in enumerate(vindue_orden)}
-    
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None: return
     df_all = prepare_df(content)
 
+    # Sorterings-map til kronologi
+    vindue_map = {val: i for i, val in enumerate(VINDUE_ORDEN)}
+
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    # 2. KONFIGURATION - Her skal nøglen "Vindue" matche kolonnenavnet præcis
+    # Fælles column config
     col_cfg = {
+        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
+        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
         "Vindue": st.column_config.SelectboxColumn(
-            "Transfervindue", 
-            options=vindue_orden, # SKAL matche indholdet i df
+            "Vindue", 
+            options=VINDUE_ORDEN, 
             width="medium",
             required=False
         ),
-        "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True),
         "Emne": st.column_config.CheckboxColumn("Emne"),
         "Skyggehold": st.column_config.CheckboxColumn("Skygge")
     }
 
     with t1:
-        # Lav en kopi til visning
         source_t1 = df_all[~df_all['IS_HIF']].copy()
         
-        # --- KRITISK FIX FOR DROPDOWN ---
-        # Vi tvinger alle værdier i 'Vindue' til at være en af de tilladte options.
-        # Hvis de ikke findes i listen (f.eks. hvis de er tomme eller stavet forkert), sættes de til None.
-        source_t1['Vindue'] = source_t1['Vindue'].apply(lambda x: x if x in vindue_orden else None)
-        
-        # Sortering (Vinter 26 før Sommer 27)
-        source_t1['sort_key'] = source_t1['Vindue'].map(vindue_map).fillna(99)
-        source_t1 = source_t1.sort_values('sort_key').reset_index(drop=True)
+        # Sortering: Vinter 26 (index 1) kommer før Sommer 27 (index 2)
+        source_t1['sort_val'] = source_t1['Vindue'].map(vindue_map).fillna(99)
+        source_t1 = source_t1.sort_values('sort_val').reset_index(drop=True)
         
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
         
@@ -192,8 +198,6 @@ def vis_side():
             height=600, 
             key="editable_t1"
         )
-        
-        # Gem knap (Gør opdatering hurtigere)
         handle_editor_changes(df_all, source_t1, "t1")
 
     with t2:
@@ -201,7 +205,10 @@ def vis_side():
         cols_t2 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold']
         st.data_editor(
             source_t2[cols_t2].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=col_cfg, use_container_width=True, height=600, key="editable_t2"
+            column_config=col_cfg, 
+            use_container_width=True, 
+            height=600, 
+            key="editable_t2"
         )
         handle_editor_changes(df_all, source_t2, "t2")
 
@@ -215,11 +222,14 @@ def vis_side():
                 "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=d_opts),
                 "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=d_opts),
             },
-            disabled=["Navn", "Klub", "Pos"], use_container_width=True, key="editable_t3"
+            disabled=["Navn", "Klub", "Pos"], 
+            use_container_width=True, 
+            key="editable_t3"
         )
         handle_editor_changes(df_all, source_t3, "t3")
 
     with t4:
+        # Skyggehold grafisk visning (pitch)
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
             sel_v = st.selectbox("Vindue", list(VINDUE_DATOER.keys()))
@@ -244,11 +254,6 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            ax.text(1, 3, " < 6 mdr ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc'))
-            ax.text(12, 3, " 6-12 mdr ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc'))
-            ax.text(25, 3, " Transferfri ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc'))
-            ax.text(40, 3, " Transferkøb ", size=8, weight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc'))
-
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
