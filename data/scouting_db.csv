@@ -28,7 +28,7 @@ PLAYER_WYID,DATO,NAVN,KLUB,POSITION,RATING_AVG,STATUS,POTENTIALE,STYRKER,UDVIKLI
 505392,2026-03-31,Marius Elvius,Hvidovre IF,MID,3.7,Kig nærmere,Højt,Stor hurtighed,Tekniske detaljer,Meget lovende,3.0,5.0,3.0,4.0,4.0,3.0,4.0,4.0,MR,2028-06-30,,,,5,,True,,False,,5,5,5,01.06.2002
 915831,2026-03-31,Mads Kaalund,Hvidovre IF,MID,3.8,Kig nærmere,Middel,Teknisk stærk,Skal være more dominerende,Gode fødder,4.0,3.0,3.0,4.0,4.0,3.0,5.0,4.0,CEO,2026-06-30,,,,8,,False,,False,,8,8,8,16.08.1996
 579393,2026-03-31,Nicolaj Jungvig,Hvidovre IF,DEF,3.0,Hold øje,Højt,God indstilling,Taktisk disciplin,Ung spiller i udvikling,3.0,3.0,3.0,4.0,3.0,3.0,3.0,3.0,KD,2027-12-31,,,,3,,True,,False,,3,3,3,26.10.2003
-624735,2026-03-31,Aksel Emil Halsgaard,Næstved,DEF,3.62,Interessant,Højt,"Duespil/god og rolig på bolden, Moden i sit spil",,Meget spændende spiller der skal følges tæt,4.0,4.0,3.0,3.0,4.0,3.0,4.0,4.0,ceo,,,Realistisk,,3,,False,Meget spændende spiller der skal følges tæt,True,Sommer 26,3,3,3,
+624735,2026-03-31,Aksel Emil Halsgaard,Næstved,DEF,3.62,Interessant,Højt,"Duespil/god og rolig på bolden, Moden i sit spil",,Meget spændende spiller der skal følges tæt,4.0,4.0,3.0,3.0,4.0,3.0,4.0,4.0,ceo,,,Realistisk,,3,,True,Meget spændende spiller der skal følges tæt,True,Sommer 26,3,3,3,
 766640,2026-03-31,Kasper Nyegaard,Roskilde,MID,3.0,Interessant,Højt,Fin på kuglen,Placering,Spændende på kuglen,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2027-06-30,,Realistisk,,8,,True,Spændende på kuglen,True,Sommer 26,8,8,8,
 400359,2026-03-31,Christian Tue Jensen,HB Køge,MID,3.0,Interessant,Middel,"Stærk 1 divisionsspiller, god i kombinationer, har lavet en del mål",,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-12-31,,Realistisk,,10,,True,,True,Vinter 26,10,10,10,
 481951,2026-03-31,Kasper Nygaard Andersen,Aarhus Fremad,MID,3.0,Interessant,Højt,God på kuglen. Kan droppe og holde fast i bolden som 9'er.,,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,,Svær,,9,,True,,True,Sommer 26,9,9,9,
@@ -40,5 +40,5 @@ PLAYER_WYID,DATO,NAVN,KLUB,POSITION,RATING_AVG,STATUS,POTENTIALE,STYRKER,UDVIKLI
 Beslutningsstærk.
 Teknisk god basispakke.
 God fysisk pakke ift. position mht. duelstyrke, adræthed og fart både på kort og længere distancer. 
-",,,5.0,4.0,3.0,5.0,5.0,3.0,4.0,5.0,jeppe,,,Realistisk,A - Start-11,5,17.000,False,"Aksels far var opsøgende på HIF cheftræner ved scoutingkamp mod FC Roskilde. Fremstod med indtryk af at det ønskes at Aksel flyttes til højere niveau snarest og at det var smigrende at HIF kiggede på ham. 
+",,,5.0,4.0,3.0,5.0,5.0,3.0,4.0,5.0,jeppe,,,Realistisk,A - Start-11,5,17.000,True,"Aksels far var opsøgende på HIF cheftræner ved scoutingkamp mod FC Roskilde. Fremstod med indtryk af at det ønskes at Aksel flyttes til højere niveau snarest og at det var smigrende at HIF kiggede på ham. 
 Aksel er ifølge faren flyttet hjem til forældre i forbindelse med skiftet til Næstved. ",False,Sommer 26,5,5,5,
