@@ -222,13 +222,13 @@ def vis_side():
             fig, ax = pitch.draw(figsize=(10, 7))
             
             # LEGENDS (Dem du manglede)
-            ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
-            ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
-            ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY))
-            ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA))
+            ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
+            ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+            ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+            ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
 
             # VALGT VINDUE (Øverst til højre)
-            ax.text(96, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', 
+            ax.text(115, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', 
                     bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
             m = {
