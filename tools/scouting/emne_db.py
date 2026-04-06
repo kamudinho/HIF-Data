@@ -204,7 +204,6 @@ def vis_side():
                 hif = df_all[df_all['IS_HIF']].copy()
                 emner = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Transfervindue'] == sel_v)].copy()
                 hif = hif[~((hif['Kontrakt'].notna()) & (hif['Kontrakt'] < ref_dt))]
-                # VI TILFØJER DROP_DUPLICATES HER:
                 df_f = pd.concat([hif, emner]).drop_duplicates(subset=['Navn'])
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
@@ -215,14 +214,28 @@ def vis_side():
             ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY))
             ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA))
 
+            # --- POSITIONSMAPPING ---
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
+            # --- LOGIK TIL FORDELING AF SPILLERE ---
+            drawn_players = [] # Hold styr på hvem der er tegnet
+
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
-                plist = df_f[df_f[p_col].astype(str) == str(pid)]
+                
+                # Særlig håndtering af 3-5-2 angribere (7 og 9) for at fordele dem
+                if st.session_state.form_skygge == "3-5-2" and pid in ["7", "9"]:
+                    # Find alle angribere (både 7 og 9) der ikke er tegnet endnu
+                    strikers = df_f[(df_f[p_col].isin(["7", "9"])) & (~df_f['Navn'].isin(drawn_players))]
+                    # Vi tager max 3 spillere pr. plads
+                    plist = strikers.head(3)
+                else:
+                    plist = df_f[df_f[p_col].astype(str) == str(pid)]
+
                 for i, (_, r) in enumerate(plist.iterrows()):
+                    drawn_players.append(r['Navn'])
                     k_c = get_status_color(r['Kontrakt'], ref_date=ref_dt)
                     txt_c, bg = "black", "white"
                     if r['IS_HIF']:
@@ -230,7 +243,9 @@ def vis_side():
                     else:
                         if k_c in ["#444444", ROD_ADVARSEL]: bg = GRON_NY
                         else: bg, txt_c = HIF_BLA, "white"
+                    
                     ax.text(px, py + (i * 3.2), r['Navn'], size=7.5, ha='center', weight='bold', color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9))
+            
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
