@@ -73,7 +73,7 @@ def save_to_github(df):
         }
         requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", 
                      headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        st.toast("Gemt automatisk til GitHub!", icon="✅")
+        st.toast("Gemt i databasen")
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
 
