@@ -85,12 +85,14 @@ def handle_auto_save(key, df_display, source_df):
         full_db = st.session_state['full_db']
         
         for idx_str, updated_cols in changes.items():
+            # Bruger PLAYER_WYID fra source_df (selvom den er skjult i UI)
             wyid = source_df.iloc[int(idx_str)]['PLAYER_WYID']
-            matching_rows = full_db[full_db['PLAYER_WYID'] == wyid]
+            matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
             if not matching_rows.empty:
                 idx_in_full = matching_rows.index[0]
                 for col, val in updated_cols.items():
                     db_col = col.upper() if col.upper() in full_db.columns else col
+                    if col == 'Start_11_26_27': db_col = 'START_11_26_27'
                     full_db.at[idx_in_full, db_col] = val
         
         save_to_github(full_db)
@@ -118,23 +120,23 @@ def prepare_df(content):
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
     
-    if 'DATO' in df.columns:
-        df['DATO_DT'] = pd.to_datetime(df['DATO'], dayfirst=True, errors='coerce')
-        df = df.sort_values(by='DATO_DT', ascending=False)
+    for col in ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'DATO']:
+        if col not in df.columns: df[col] = ""
 
+    df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
+    df = df.sort_values(by='DATO_DT', ascending=False)
+    
     st.session_state['full_db'] = df.copy()
-    # KUN ét navn pr PLAYER_WYID (den nyeste rapport)
+    
+    # UNIK VISNING PR. SPILLER
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
 
     if 'NAVN' in df_display.columns: df_display = df_display.rename(columns={'NAVN': 'Navn'})
     if 'POS' in df_display.columns: df_display['POS'] = df_display['POS'].apply(clean_pos_val)
     
     for c in ['POS_343', 'POS_433', 'POS_352']:
-        if c in df_display.columns:
-            df_display[c] = df_display[c].apply(clean_pos_val)
-            df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
-        else:
-            df_display[c] = df_display['POS']
+        df_display[c] = df_display[c].apply(clean_pos_val)
+        df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
 
     if 'KONTRAKT' in df_display.columns:
         df_display['Kontrakt'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
@@ -146,7 +148,7 @@ def prepare_df(content):
     df_display['IS_HIF'] = df_display['Klub'].str.contains("Hvidovre", case=False, na=False)
     for c in ['Emne', 'Skyggehold', 'Start_11_26_27']:
         if c in df_display.columns: 
-            df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False}).fillna(False)
+            df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     return df_display
 
 # --- 4. UI ---
@@ -160,7 +162,9 @@ def vis_side():
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
+    # Column config - PLAYER_WYID er sat til None (skjult)
     cfg = {
+        "PLAYER_WYID": None,
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
         "Transfervindue": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN),
         "Emne": st.column_config.CheckboxColumn("Emne"),
@@ -216,7 +220,7 @@ def vis_side():
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # --- DINE LEGENDS (FØRT TILBAGE) ---
+            # LEGENDS
             ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
             ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
             ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY))
@@ -230,11 +234,8 @@ def vis_side():
             for pid, (px, py, lbl) in m.items():
                 ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                 
-                if st.session_state.form_skygge == "3-5-2" and pid in ["7", "9"]:
-                    plist = df_f[(df_f[p_col].isin(["7", "9"])) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(3)
-                else:
-                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
-
+                plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
+                
                 for i, (_, r) in enumerate(plist.iterrows()):
                     drawn_players.append(r['PLAYER_WYID'])
                     k_c = get_status_color(r['Kontrakt'], ref_date=ref_dt)
