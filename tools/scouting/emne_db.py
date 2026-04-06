@@ -13,11 +13,12 @@ SCOUT_DB_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 HIF_ROD = "#df003b"
-GRON_NY = "#ccffcc" 
-GUL_ADVARSEL = "#ffff99" 
-ROD_ADVARSEL = "#ffcccc" 
+GRON_NY = "#ccffcc"         # Lysgrøn (Free Agent / Udløb)
+GRON_DARK = "#2e7d32"       # Mørkegrøn (Transferkøb)
+GUL_ADVARSEL = "#ffff99"    # 6-12 mdr
+ROD_ADVARSEL = "#ffcccc"    # < 6 mdr
 
-# Datoer for vinduernes start (bruges til filtrering og farveberegning)
+# Datoer for vinduernes start
 VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
     "Sommer 26": datetime(2026, 7, 1),
@@ -36,7 +37,6 @@ def calculate_age_str(born):
     except: return "-"
 
 def get_status_color(val, ref_date=None):
-    """Returnerer hex-farve baseret på kontraktlængde ift. en referencedato"""
     if ref_date is None: ref_date = datetime.now()
     try:
         if pd.isna(val): return None
@@ -44,14 +44,13 @@ def get_status_color(val, ref_date=None):
         if pd.isna(dt): return None
         
         days = (dt - ref_date).days
-        if days < 0: return "#444444" # Grå hvis kontrakt er udløbet
+        if days < 0: return "#444444" # Grå (Udløbet)
         if days < 183: return ROD_ADVARSEL
         if days <= 365: return GUL_ADVARSEL
         return None
     except: return None
 
 def get_color_by_date(val):
-    """CSS-version til data_editor styling (bruger altid dags dato)"""
     color = get_status_color(val)
     return f'background-color: {color}' if color else ""
 
@@ -124,7 +123,6 @@ def prepare_df(content):
     return df
 
 # --- 4. HOVEDFUNKTION ---
-# --- 4. HOVEDFUNKTION (OPDATERET FILTRERING) ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
@@ -137,7 +135,6 @@ def vis_side():
     date_cfg = {"Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY"), 
                 "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY")}
 
-    # ... (t1, t2, t3 er uændrede)
     with t1:
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
         source = df_all[~df_all['IS_HIF']][cols_t1]
@@ -184,29 +181,24 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"Pos_{f_suffix}"
             
-            # --- NY LOGIK FOR FILTRERING ---
+            # --- FILTRERING ---
             if sel_v == "Nuværende trup":
-                # Kun nuværende HIF spillere
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
-                # 1. Tag alle aktive HIF spillere
                 hif_spillere = df_all[df_all['IS_HIF']].copy()
-                # 2. Tag emner der er sat til det specifikke vindue
                 emner_til_vindue = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Vindue'] == sel_v)].copy()
-                
-                # 3. Fjern KUN HIF-spillere hvis deres kontrakt er udløbet
                 hif_spillere = hif_spillere[~((hif_spillere['Kontrakt'].notna()) & (hif_spillere['Kontrakt'] < ref_dt))]
-                
-                # Saml listen (Emnerne filtreres IKKE på kontrakt-dato, da de er sat manuelt til vinduet)
                 df_f = pd.concat([hif_spillere, emner_til_vindue])
 
             # --- TEGN BANEN ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
+            # --- LEGENDS ---
             ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(25, 3, " Transfer ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(25, 3, " Transfer (Fri) ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(42, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=GRON_DARK, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
@@ -215,46 +207,29 @@ def vis_side():
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
-            # --- Find loopet under 'with t4:' og erstat med dette ---
-
             if p_col in df_f.columns:
                 for pid, (px, py, lbl) in m.items():
-                    # Position label (f.eks. MM, VCB)
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
-                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    
+                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
-                        # 1. Beregn kontraktstatus ift. vinduet
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
-                        
-                        # Standardværdier
-                        display_name = p_row['Navn']
-                        bg = "white"
                         txt_color = "black"
                         
                         if p_row['IS_HIF']:
-                            # HIF-spillere følger din advarselslogik (rød/gul/hvid)
                             bg = k_color if k_color else "white"
                         else:
                             # EKSTERNE EMNER
                             if k_color == "#444444":
-                                # Kontrakt er udløbet = Free Agent
-                                bg = "#444444"
-                                txt_color = "white"
-                                display_name = f"{p_row['Navn']}\n(Free Agent)"
+                                bg = "#444444"; txt_color = "white"
+                            elif k_color == ROD_ADVARSEL:
+                                bg = GRON_NY # Transfer (Fri)
                             else:
-                                # Kontrakt er IKKE udløbet = Skal købes fri
-                                bg = "#2e7d32" # En mørkere, solid transfer-grøn
-                                txt_color = "white"
-                                display_name = f"{p_row['Navn']}\n(Transferkøb)"
-            
-                        # Tegn spilleren
-                        ax.text(px, py + (i * 4.5), display_name, # Øget i-afstand en smule pga. ekstra linje
-                                size=7, ha='center', weight='bold', color=txt_color,
-                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.3'))
+                                bg = GRON_DARK; txt_color = "white" # Transferkøb
+
+                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
+                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
             
             st.pyplot(fig, use_container_width=True)
-            
+
 if __name__ == "__main__":
     vis_side()
