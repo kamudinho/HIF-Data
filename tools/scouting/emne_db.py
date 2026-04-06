@@ -206,8 +206,8 @@ def vis_side():
             # --- LEGENDS ---
             ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(25, 3, " Transfer (Fri) ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(42, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=GRON_DARK, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(25, 3, " Transferfri ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(42, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor='#df003b', edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
@@ -240,7 +240,7 @@ def vis_side():
                                 bg = GRON_NY
                             else:
                                 # Kontrakt løber stadig langt ud i fremtiden = Transferkøb
-                                bg = "#388e3c" 
+                                bg = "#df003b" 
                                 txt_color = "white"
             
                         ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
