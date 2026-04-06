@@ -203,7 +203,7 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"POS_{f_suffix}"
             
-            # 1. Standard filtrering (Startopstilling uafhængig af kontrakt)
+            # 1. FILTRERING
             if sel_v == "Startopstilling (26/27)":
                 df_f = df_display[df_display['START_11_26_27'] == True].copy()
                 ref_dt = datetime(2026, 7, 1)
@@ -211,16 +211,22 @@ def vis_side():
                 df_f = df_display[df_display['IS_HIF']].copy()
                 ref_dt = datetime.now()
             else:
-                ref_dt = VINDUE_DATOer.get(sel_v, datetime.now())
+                ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
                 hif = df_display[df_display['IS_HIF']].copy()
                 emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
                 hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
                 df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
 
-            # 2. Bane-opbygning
+            # 2. BANE-SETUP
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
+            # LEGENDS (Dem du manglede)
+            ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL))
+            ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL))
+            ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY))
+            ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA))
+
             m = {
                 "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                 "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
@@ -228,21 +234,20 @@ def vis_side():
             }[st.session_state.form_skygge]
 
             drawn_players = []
-            
             for pid, (px, py, lbl) in m.items():
-                # Tegn positions-label
-                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+                # Tegn positions-label (f.eks. 'DM')
+                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                        bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                 
-                # --- LOGIK: FIND DEN RETTE SPILLER TIL PLADSEN ---
-                # 1. Prøv først at finde en spiller med præcis dette nummer (pid)
+                # --- LOGIK FOR FORDELING AF 6/8 ---
+                # Prøv først det præcise nummer
                 plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
                 
-                # 2. Hvis pladsen er tom, og det er en central midtbane (6 eller 8), så tjek "naboen"
+                # Hvis pladsen er tom og det er central midtbane, tjek den anden "6/8"-plads for overskud
                 if plist.empty and str(pid) in ["6", "8"]:
-                    target_alt = "8" if str(pid) == "6" else "6"
-                    plist = df_f[(df_f[p_col].astype(str) == target_alt) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
-                
-                # Tegn spilleren på banen
+                    modsat_pos = "8" if str(pid) == "6" else "6"
+                    plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
+
                 for i, (_, r) in enumerate(plist.iterrows()):
                     drawn_players.append(r['PLAYER_WYID'])
                     k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
@@ -253,6 +258,7 @@ def vis_side():
                     else:
                         bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
                     
+                    # Tegn spilleren
                     ax.text(px, py, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
                             bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
             
