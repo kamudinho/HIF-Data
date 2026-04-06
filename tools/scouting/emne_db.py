@@ -73,7 +73,7 @@ def save_to_github(df):
         }
         requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", 
                      headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        st.toast("Gemt i databasen")
+        st.toast("Gemt automatisk til GitHub!", icon="✅")
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
 
@@ -115,18 +115,14 @@ def prepare_df(content):
     
     if 'NAVN' in df.columns: df = df.rename(columns={'NAVN': 'Navn'})
     
-    # 1. Rens POS kolonnen først
     if 'POS' in df.columns:
         df['POS'] = df['POS'].astype(str).replace('nan', '').apply(clean_pos_val)
     
-    # 2. Præ-sat formations-kolonner hvis de er tomme
     for c in ['POS_343', 'POS_433', 'POS_352']:
         if c in df.columns:
             df[c] = df[c].astype(str).replace('nan', '').apply(clean_pos_val)
-            # Hvis feltet er tomt, brug værdien fra POS
             df[c] = df.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
         else:
-            # Hvis kolonnen slet ikke findes, opret den baseret på POS
             df[c] = df['POS'] if 'POS' in df.columns else ""
 
     if 'BIRTHDATE' in df.columns:
@@ -176,17 +172,17 @@ def vis_side():
         source_t1['sort'] = source_t1['Transfervindue'].map(vindue_map).fillna(99)
         source_t1 = source_t1.sort_values('sort').reset_index(drop=True)
         st.data_editor(source_t1[['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Transfervindue', 'Emne', 'Skyggehold']],
-                       column_config=cfg, use_container_width=True, key="editable_t1", on_change=handle_auto_save, args=("t1", df_all, source_t1))
+                       column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_all, source_t1))
 
     with t2:
         source_t2 = df_all[df_all['IS_HIF']].reset_index(drop=True)
         st.data_editor(source_t2[['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold']],
-                       column_config=cfg, use_container_width=True, key="editable_t2", on_change=handle_auto_save, args=("t2", df_all, source_t2))
+                       column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_all, source_t2))
 
     with t3:
         source_t3 = df_all[df_all['Skyggehold'] == True].reset_index(drop=True)
         st.data_editor(source_t3[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
-                       column_config=cfg, use_container_width=True, key="editable_t3", on_change=handle_auto_save, args=("t3", df_all, source_t3))
+                       column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_all, source_t3))
 
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
@@ -208,7 +204,8 @@ def vis_side():
                 hif = df_all[df_all['IS_HIF']].copy()
                 emner = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Transfervindue'] == sel_v)].copy()
                 hif = hif[~((hif['Kontrakt'].notna()) & (hif['Kontrakt'] < ref_dt))]
-                df_f = pd.concat([hif, emner])
+                # VI TILFØJER DROP_DUPLICATES HER:
+                df_f = pd.concat([hif, emner]).drop_duplicates(subset=['Navn'])
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
