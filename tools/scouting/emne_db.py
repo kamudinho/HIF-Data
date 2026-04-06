@@ -136,34 +136,54 @@ def prepare_df(content):
     return df
 
 # --- 4. HOVEDFUNKTION ---
-
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
+    
+    # 1. Definer den korrekte kronologiske rækkefølge
+    vindue_orden = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+    
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None: return
     df_all = prepare_df(content)
 
+    # 2. Logik til sortering: Lav en hjælpe-kolonne til sortering
+    # Vi mapper vinduerne til tal (0, 1, 2, 3), så de altid står rigtigt
+    vindue_map = {val: i for i, val in enumerate(vindue_orden)}
+
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
-    
-    # Konfiguration af kolonner (Nu med Dropdown for Vindue)
+
+    # 3. Opdateret Column Config (Vigtigt: Navnet skal matche 'Vindue')
     col_cfg = {
         "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Vindue": st.column_config.SelectboxColumn("Transfervindue", options=vindue_options, help="Vælg hvornår emnet er relevant")
+        "Vindue": st.column_config.SelectboxColumn(
+            "Transfervindue", 
+            options=vindue_orden, # Her bruger vi listen fra før
+            width="medium",
+            required=False
+        ),
+        "Emne": st.column_config.CheckboxColumn("Emne"),
+        "Skyggehold": st.column_config.CheckboxColumn("Skygge")
     }
 
     with t1:
-        source_t1 = df_all[~df_all['IS_HIF']].reset_index(drop=True)
+        source_t1 = df_all[~df_all['IS_HIF']].copy()
+        
+        # Påfør sorteringen her
+        source_t1['sort_key'] = source_t1['Vindue'].map(vindue_map).fillna(99)
+        source_t1 = source_t1.sort_values('sort_key').reset_index(drop=True)
+        
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
+        
+        # VIS EDITOREN
         st.data_editor(
             source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
             column_config=col_cfg, 
             use_container_width=True, 
             height=600, 
-            key="editable_t1",
-            on_change=None # Vi lader Streamlit køre uden tvungen rerun for fart
+            key="editable_t1"
         )
         handle_editor_changes(df_all, source_t1, "t1")
 
