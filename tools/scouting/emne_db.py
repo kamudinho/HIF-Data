@@ -14,8 +14,8 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 HIF_ROD = "#df003b"
 HIF_BLA = "#0057b7"
-GRON_NY = "#ccffcc"         # Lysgrøn (Free Agent / Udløb)
-GRON_DARK = "#388e3c"       # Medium grøn (Transferkøb) - Lidt lysere end før
+GRON_NY = "#ccffcc"         
+GRON_DARK = "#388e3c"       
 GUL_ADVARSEL = "#ffff99"    
 ROD_ADVARSEL = "#ffcccc"
 
@@ -27,7 +27,7 @@ VINDUE_DATOER = {
     "Vinter 27": datetime(2028, 1, 1)
 }
 
-vindue_options = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_ORDEN = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
 
 # --- 2. HJÆLPEFUNKTIONER ---
 def calculate_age_str(born):
@@ -95,16 +95,16 @@ def save_to_github(df, path):
         st.error(f"Fejl ved gem: {e}"); return False
 
 def handle_editor_changes(df_all, edited_df, key):
-    """Håndterer ændringer fra data_editor og gemmer til GitHub"""
+    """Håndterer ændringer fra data_editor med en manuel gem-knap for hastighed"""
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
-        for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
-            # Find det rigtige navn baseret på index i den viste dataframe
-            p_name = edited_df.iloc[int(idx_str)]['Navn']
-            for col, val in updated_cols.items():
-                df_all.loc[df_all['Navn'] == p_name, col] = val
-        if save_to_github(df_all, SCOUT_DB_PATH):
-            st.rerun()
+        if st.button(f"Gem ændringer i {key}", type="primary", use_container_width=True):
+            for idx_str, updated_cols in st.session_state[state_key]["edited_rows"].items():
+                p_name = edited_df.iloc[int(idx_str)]['Navn']
+                for col, val in updated_cols.items():
+                    df_all.loc[df_all['Navn'] == p_name, col] = val
+            if save_to_github(df_all, SCOUT_DB_PATH):
+                st.rerun()
 
 # --- 3. DATA PROCESSING ---
 def prepare_df(content):
@@ -128,6 +128,11 @@ def prepare_df(content):
     col_map = {'KLUB': 'Klub', 'POS': 'Pos', 'TRANSFER_VINDUE': 'Vindue', 'ER_EMNE': 'Emne', 
                'SKYGGEHOLD': 'Skyggehold', 'POS_343': 'Pos_343', 'POS_433': 'Pos_433', 'POS_352': 'Pos_352'}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+    
+    # Rens Vindue-data for at sikre dropdown virker
+    if 'Vindue' in df.columns:
+        df['Vindue'] = df['Vindue'].astype(str).str.strip()
+
     df['IS_HIF'] = df['Klub'].str.contains("Hvidovre", case=False, na=False) if 'Klub' in df.columns else False
     
     for c in ['Emne', 'Skyggehold']:
@@ -139,51 +144,35 @@ def prepare_df(content):
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     
-    # 1. Definer den korrekte kronologiske rækkefølge
-    vindue_orden = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
-    
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None: return
     df_all = prepare_df(content)
 
-    # 2. Logik til sortering: Lav en hjælpe-kolonne til sortering
-    # Vi mapper vinduerne til tal (0, 1, 2, 3), så de altid står rigtigt
-    vindue_map = {val: i for i, val in enumerate(vindue_orden)}
+    # Sorterings-map
+    vindue_map = {val: i for i, val in enumerate(VINDUE_ORDEN)}
 
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    # 3. Opdateret Column Config (Vigtigt: Navnet skal matche 'Vindue')
     col_cfg = {
         "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Vindue": st.column_config.SelectboxColumn(
-            "Transfervindue", 
-            options=vindue_orden, # Her bruger vi listen fra før
-            width="medium",
-            required=False
-        ),
+        "Vindue": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN, required=False),
         "Emne": st.column_config.CheckboxColumn("Emne"),
         "Skyggehold": st.column_config.CheckboxColumn("Skygge")
     }
 
     with t1:
         source_t1 = df_all[~df_all['IS_HIF']].copy()
-        
-        # Påfør sorteringen her
-        source_t1['sort_key'] = source_t1['Vindue'].map(vindue_map).fillna(99)
-        source_t1 = source_t1.sort_values('sort_key').reset_index(drop=True)
+        # Kronologisk sortering (Vinter 26 før Sommer 27)
+        source_t1['sort_val'] = source_t1['Vindue'].map(vindue_map).fillna(99)
+        source_t1 = source_t1.sort_values('sort_val').reset_index(drop=True)
         
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
-        
-        # VIS EDITOREN
         st.data_editor(
             source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=col_cfg, 
-            use_container_width=True, 
-            height=600, 
-            key="editable_t1"
+            column_config=col_cfg, use_container_width=True, height=600, key="editable_t1"
         )
         handle_editor_changes(df_all, source_t1, "t1")
 
@@ -192,22 +181,19 @@ def vis_side():
         cols_t2 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Emne', 'Skyggehold']
         st.data_editor(
             source_t2[cols_t2].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=col_cfg, 
-            use_container_width=True, 
-            height=600, 
-            key="editable_t2"
+            column_config=col_cfg, use_container_width=True, height=600, key="editable_t2"
         )
         handle_editor_changes(df_all, source_t2, "t2")
+
     with t3:
         source_t3 = df_all[df_all['Skyggehold'] == True].reset_index(drop=True)
-        display_options = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
-        edited_t3 = st.data_editor(
+        d_opts = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
+        st.data_editor(
             source_t3[['Navn', 'Klub', 'Pos', 'Pos_343', 'Pos_433', 'Pos_352', 'Skyggehold']],
             column_config={
-                "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=display_options),
-                "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=display_options),
-                "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=display_options),
-                "Skyggehold": st.column_config.CheckboxColumn("Aktiv"),
+                "Pos_343": st.column_config.SelectboxColumn("Pos 3-4-3", options=d_opts),
+                "Pos_433": st.column_config.SelectboxColumn("Pos 4-3-3", options=d_opts),
+                "Pos_352": st.column_config.SelectboxColumn("Pos 3-5-2", options=d_opts),
             },
             disabled=["Navn", "Klub", "Pos"], use_container_width=True, key="editable_t3"
         )
@@ -230,57 +216,35 @@ def vis_side():
             if sel_v == "Nuværende trup":
                 df_f = df_all[df_all['IS_HIF']].copy()
             else:
-                hif_spillere = df_all[df_all['IS_HIF']].copy()
-                emner_til_vindue = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Vindue'] == sel_v)].copy()
-                hif_spillere = hif_spillere[~((hif_spillere['Kontrakt'].notna()) & (hif_spillere['Kontrakt'] < ref_dt))]
-                df_f = pd.concat([hif_spillere, emner_til_vindue])
+                hif = df_all[df_all['IS_HIF']].copy()
+                emner = df_all[(df_all['Skyggehold'] == True) & (~df_all['IS_HIF']) & (df_all['Vindue'] == sel_v)].copy()
+                hif = hif[~((hif['Kontrakt'].notna()) & (hif['Kontrakt'] < ref_dt))]
+                df_f = pd.concat([hif, emner])
 
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
             fig, ax = pitch.draw(figsize=(10, 7))
             
-            # --- LEGENDS ---
-            ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(25, 3, " Transferfri ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(40, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-
-            ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
-                    bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
+            ax.text(1, 3, " < 6 mdr ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc'))
+            ax.text(12, 3, " 6-12 mdr ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc'))
+            ax.text(25, 3, " Transferfri ", size=8, weight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc'))
+            ax.text(40, 3, " Transferkøb ", size=8, weight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc'))
 
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
-            if p_col in df_f.columns:
-                for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
-                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
-                    
-                    plist = df_f[df_f[p_col].astype(str) == str(pid)]
-                    for i, (_, p_row) in enumerate(plist.iterrows()):
-                        k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
-                        txt_color = "black"
-                        
-                        if p_row['IS_HIF']:
-                            # HIF-spillere følger advarselslogikken
-                            # Hvis de er udløbet (grå fra get_status_color), gør vi dem røde for at vise de skal fikses
-                            if k_color == "#444444":
-                                bg = ROD_ADVARSEL
-                            else:
-                                bg = k_color if k_color else "white"
-                        else:
-                            # EKSTERNE EMNER
-                            if k_color == "#444444" or k_color == ROD_ADVARSEL:
-                                # Kontrakt er udløbet eller udløber om lidt = Transfer (Fri)
-                                bg = GRON_NY
-                            else:
-                                # Kontrakt løber stadig langt ud i fremtiden = Transferkøb
-                                bg = HIF_BLA 
-                                txt_color = "white"
-            
-                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
-                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
-                        
+            for pid, (px, py, lbl) in m.items():
+                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+                plist = df_f[df_f[p_col].astype(str) == str(pid)]
+                for i, (_, r) in enumerate(plist.iterrows()):
+                    k_c = get_status_color(r['Kontrakt'], ref_date=ref_dt)
+                    txt_c, bg = "black", "white"
+                    if r['IS_HIF']:
+                        bg = ROD_ADVARSEL if k_c == "#444444" else (k_c if k_c else "white")
+                    else:
+                        if k_c in ["#444444", ROD_ADVARSEL]: bg = GRON_NY
+                        else: bg, txt_c = HIF_BLA, "white"
+                    ax.text(px, py + (i * 3.2), r['Navn'], size=7.5, ha='center', weight='bold', color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9))
             st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
