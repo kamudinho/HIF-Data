@@ -144,36 +144,56 @@ def prepare_df(content):
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
     
+    # 1. Definer rækkefølgen
+    vindue_orden = ["Sommer 26", "Vinter 26", "Sommer 27", "Vinter 27"]
+    vindue_map = {val: i for i, val in enumerate(vindue_orden)}
+    
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, sha = get_github_file(SCOUT_DB_PATH)
     if content is None: return
     df_all = prepare_df(content)
 
-    # Sorterings-map
-    vindue_map = {val: i for i, val in enumerate(VINDUE_ORDEN)}
-
     t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
+    # 2. KONFIGURATION - Her skal nøglen "Vindue" matche kolonnenavnet præcis
     col_cfg = {
-        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True), 
+        "Vindue": st.column_config.SelectboxColumn(
+            "Transfervindue", 
+            options=vindue_orden, # SKAL matche indholdet i df
+            width="medium",
+            required=False
+        ),
         "Kontrakt": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
-        "Vindue": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN, required=False),
+        "Fødselsdato": st.column_config.DateColumn("Fødselsdato", format="DD/MM/YYYY", disabled=True),
         "Emne": st.column_config.CheckboxColumn("Emne"),
         "Skyggehold": st.column_config.CheckboxColumn("Skygge")
     }
 
     with t1:
+        # Lav en kopi til visning
         source_t1 = df_all[~df_all['IS_HIF']].copy()
-        # Kronologisk sortering (Vinter 26 før Sommer 27)
-        source_t1['sort_val'] = source_t1['Vindue'].map(vindue_map).fillna(99)
-        source_t1 = source_t1.sort_values('sort_val').reset_index(drop=True)
+        
+        # --- KRITISK FIX FOR DROPDOWN ---
+        # Vi tvinger alle værdier i 'Vindue' til at være en af de tilladte options.
+        # Hvis de ikke findes i listen (f.eks. hvis de er tomme eller stavet forkert), sættes de til None.
+        source_t1['Vindue'] = source_t1['Vindue'].apply(lambda x: x if x in vindue_orden else None)
+        
+        # Sortering (Vinter 26 før Sommer 27)
+        source_t1['sort_key'] = source_t1['Vindue'].map(vindue_map).fillna(99)
+        source_t1 = source_t1.sort_values('sort_key').reset_index(drop=True)
         
         cols_t1 = ['Navn', 'Alder', 'Klub', 'Pos', 'Kontrakt', 'Vindue', 'Emne', 'Skyggehold']
+        
         st.data_editor(
             source_t1[cols_t1].style.applymap(get_color_by_date, subset=['Kontrakt']),
-            column_config=col_cfg, use_container_width=True, height=600, key="editable_t1"
+            column_config=col_cfg, 
+            use_container_width=True, 
+            height=600, 
+            key="editable_t1"
         )
+        
+        # Gem knap (Gør opdatering hurtigere)
         handle_editor_changes(df_all, source_t1, "t1")
 
     with t2:
