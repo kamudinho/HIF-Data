@@ -190,7 +190,9 @@ def vis_side():
     with t4:
         c_pitch, c_ctrl = st.columns([8.2, 1.8])
         with c_ctrl:
-            display_opts = list(VINDUE_DATOER.keys()) + ["Startopstilling (26/27)"]
+            # Vi definerer rækkefølgen her: Nuværende trup -> Startopstilling -> Resten af vinduerne
+            display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
+            
             sel_v = st.selectbox("Visning", display_opts)
             f = st.session_state.form_skygge
             for form in ["3-4-3", "4-3-3", "3-5-2"]:
@@ -201,6 +203,7 @@ def vis_side():
             f_suffix = st.session_state.form_skygge.replace('-', '')
             p_col = f"POS_{f_suffix}"
             
+            # Logikken for filtrering af spillere
             if sel_v == "Startopstilling (26/27)":
                 df_f = df_display[df_display['START_11_26_27'] == True].copy()
                 ref_dt = datetime(2026, 7, 1)
@@ -208,9 +211,12 @@ def vis_side():
                 df_f = df_display[df_display['IS_HIF']].copy()
                 ref_dt = datetime.now()
             else:
+                # For de fremtidige vinduer (Sommer 26, Vinter 26 osv.)
                 ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
                 hif = df_display[df_display['IS_HIF']].copy()
                 emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
+                
+                # Fjern spillere hvis kontrakt er udløbet på det valgte tidspunkt
                 hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
                 df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
 
