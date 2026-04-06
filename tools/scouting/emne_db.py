@@ -208,14 +208,14 @@ def vis_side():
             ax.text(1, 3, " < 6 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=ROD_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(12, 3, " 6-12 mdr ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GUL_ADVARSEL, edgecolor='#ccc', boxstyle='round,pad=0.2'))
             ax.text(25, 3, " Transferfri ", size=8, fontweight='bold', va='bottom', bbox=dict(facecolor=GRON_NY, edgecolor='#ccc', boxstyle='round,pad=0.2'))
-            ax.text(38, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
+            ax.text(40, 3, " Transferkøb ", size=8, fontweight='bold', va='bottom', color='white', bbox=dict(facecolor=HIF_BLA, edgecolor='#ccc', boxstyle='round,pad=0.2'))
 
             ax.text(118, 3, f" Vindue: {sel_v} ", size=9, fontweight='bold', va='bottom', ha='right', 
                     bbox=dict(facecolor='white', edgecolor='#333', boxstyle='round,pad=0.3'))
 
             m = {"3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
-                 "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
+                 "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(58,32,'DM'), "2":(55,70,'HWB'), "8":(58,48,'DM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
             if p_col in df_f.columns:
                 for pid, (px, py, lbl) in m.items():
