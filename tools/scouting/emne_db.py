@@ -215,34 +215,44 @@ def vis_side():
                  "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                  "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,40,'DM'), "2":(55,70,'HWB'), "8":(75,28,'CM'), "10":(75,52,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}}[st.session_state.form_skygge]
 
+            # --- Find loopet under 'with t4:' og erstat med dette ---
+
             if p_col in df_f.columns:
                 for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    # Position label (f.eks. MM, VCB)
+                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                            bbox=dict(facecolor=HIF_ROD, edgecolor='white', boxstyle='round,pad=0.2'))
+                    
                     plist = df_f[df_f[p_col].astype(str) == str(pid)]
                     for i, (_, p_row) in enumerate(plist.iterrows()):
-                        # 1. Beregn kontraktfarven (gul/rød/grå)
+                        # 1. Beregn kontraktstatus ift. vinduet
                         k_color = get_status_color(p_row['Kontrakt'], ref_date=ref_dt)
                         
-                        # 2. Definer baggrundsfarven
+                        # Standardværdier
+                        display_name = p_row['Navn']
+                        bg = "white"
+                        txt_color = "black"
+                        
                         if p_row['IS_HIF']:
-                            # HIF-spillere er hvide som standard, eller rød/gul ved udløb
+                            # HIF-spillere følger din advarselslogik (rød/gul/hvid)
                             bg = k_color if k_color else "white"
                         else:
-                            # EKSTERNE EMNER:
-                            # Hvis de har rød/gul status pga. kontrakt i nuværende klub, 
-                            # men du hellere vil se dem som "Transfer" (Grøn), så prioriterer vi GRON_NY.
-                            # Vi beholder dog k_color hvis den er #444444 (udløbet/Free Agent).
-                            
+                            # EKSTERNE EMNER
                             if k_color == "#444444":
-                                bg = "#444444" # Free agent
+                                # Kontrakt er udløbet = Free Agent
+                                bg = "#444444"
+                                txt_color = "white"
+                                display_name = f"{p_row['Navn']}\n(Free Agent)"
                             else:
-                                bg = GRON_NY # Altid grøn for emner (uanset om de har 1 eller 3 år tilbage)
-                        
-                        # Sæt tekstfarve baseret på baggrund
-                        txt_color = "white" if bg == "#444444" else "black"
-                    
-                        ax.text(px, py + (i * 3.2), p_row['Navn'], size=7.5, ha='center', weight='bold', color=txt_color,
-                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.2'))
+                                # Kontrakt er IKKE udløbet = Skal købes fri
+                                bg = "#2e7d32" # En mørkere, solid transfer-grøn
+                                txt_color = "white"
+                                display_name = f"{p_row['Navn']}\n(Transferkøb)"
+            
+                        # Tegn spilleren
+                        ax.text(px, py + (i * 4.5), display_name, # Øget i-afstand en smule pga. ekstra linje
+                                size=7, ha='center', weight='bold', color=txt_color,
+                                bbox=dict(facecolor=bg, edgecolor="#333", alpha=0.9, boxstyle='square,pad=0.3'))
             
             st.pyplot(fig, use_container_width=True)
             
