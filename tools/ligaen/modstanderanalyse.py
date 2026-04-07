@@ -188,12 +188,27 @@ def vis_side(dp=None):
             f, ax = p.draw(figsize=(10, 7))
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], "Mål", sd['min'])
             
+            # Tegn pile mellem aktionerne
             for i in range(len(tge)-1):
-                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, color='black', alpha=0.2, ax=ax)
+                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
+                         tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
+                         width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
             
+            # Tegn punkter OG navne
             for _, r in tge.iterrows():
-                c = 'red' if r['EVENT_TYPEID'] == 16 else 'black'
-                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=c, s=100, edgecolors='white', zorder=10)
+                # Farve og markør: Guld stjerne hvis det er assist (type 5 er ofte assist i nogle mappings, men her bruger vi rød for mål)
+                is_goal = r['EVENT_TYPEID'] == 16
+                color = 'red' if is_goal else 'black'
+                size = 120 if is_goal else 70
+                
+                # Tegn selve punktet
+                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=color, s=size, edgecolors='white', zorder=10)
+                
+                # --- HER TILFØJES NAVNET ---
+                ax.text(r['EVENT_X'], r['EVENT_Y'] + 2.5, r['PLAYER_NAME'], 
+                        fontsize=7, ha='center', fontweight='bold', 
+                        bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1),
+                        zorder=11)
             
             p_c.pyplot(f)
             tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
