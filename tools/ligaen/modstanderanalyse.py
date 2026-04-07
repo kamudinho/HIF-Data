@@ -63,10 +63,6 @@ def draw_player_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_s
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
     ax.text(0.08, 0.105, "", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
-    if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
-    ax.text(0.03, 0.07, f"{date_str}", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
@@ -458,7 +454,7 @@ def vis_side(dp=None):
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 f, ax = p.draw(figsize=(10, 7))
                 
-                draw_player_info_box(ax, hold_logo, None, "Sæson 2025/2026", f"Spiller: {valgt_spiller}", visning)
+                draw_player_info_box(ax, hold_logo, None, f"Spiller: {valgt_spiller}", visning)
                 
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
