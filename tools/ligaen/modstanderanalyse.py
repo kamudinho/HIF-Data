@@ -173,20 +173,28 @@ def vis_side(dp=None):
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
 
         # Layout: Oversigt
-        main_col1, main_col2 = st.columns([1.5, 2])
-        
-        with main_col1:
+        main_col1, main_col2 = st.columns([1.2, 2])
+    
+    with main_col1:
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
             mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
             
+            # Injektion af CSS for at gøre metrics mindre
+            st.markdown("""
+                <style>
+                [data-testid="stMetricValue"] { font-size: 18px !important; }
+                [data-testid="stMetricLabel"] { font-size: 12px !important; }
+                </style>
+                """, unsafe_allow_html=True)
+    
             m_cols = st.columns(5)
-            m_cols[0].metric("Point", (wins*3)+draws)
+            m_cols[0].metric("Pts", (wins*3)+draws)
             m_cols[1].metric("V", wins)
             m_cols[2].metric("U", draws)
             m_cols[3].metric("T", losses)
             m_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
-
+    
             st.write("**Seneste 10 kampe**")
             for _, row in df_res.iterrows():
                 draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
