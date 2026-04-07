@@ -136,12 +136,12 @@ def vis_side(dp=None):
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
             mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
-            
+
+            st.write("**Seneste 10 kampe**")
             st.markdown("<style>[data-testid='stMetricValue'] {font-size: 18px !important;} [data-testid='stMetricLabel'] {font-size: 11px !important;}</style>", unsafe_allow_html=True)
             metrics = st.columns(5)
             metrics[0].metric("Pts", (wins*3)+draws); metrics[1].metric("V", wins); metrics[2].metric("U", draws); metrics[3].metric("T", losses); metrics[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
 
-            st.write("**Seneste 10 kampe**")
             st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
             for _, row in df_res.iterrows():
                 draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
