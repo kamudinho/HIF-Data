@@ -111,20 +111,33 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- 1. DATA PREP ---
+        # --- 1. DATA BEREGNING (Vigtigt: Her defineres df_vol!) ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
-        # (df_vol beregning...)
+        # Aggregering af stats per kamp
+        df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
+            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
+            A_suc=('EVENT_TYPEID', lambda x: (df_all_h.loc[x.index, 'EVENT_TYPEID'] == 16).sum()),
+            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
+            E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
+            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
+            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
+        ).reset_index()
+
+        # Merge og Labels
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
         df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- 2. ULTRA-COMPACT CSS ---
+        # --- 2. ULTRA-COMPACT CSS (Centrering og minimal luft) ---
         st.markdown("""
             <style>
-            /* Centrerer metrics og fjerner luft i toppen af rammen */
             [data-testid="stMetric"] {
                 text-align: center;
                 display: flex;
@@ -142,18 +155,16 @@ def vis_side(dp=None):
                 font-weight: 700;
                 justify-content: center;
             }
-            /* Trækker hele metrics-rækken helt op til kanten af st.container */
             .metric-row-wrapper {
                 margin-top: -25px; 
                 margin-bottom: -15px;
             }
-            /* Divideren skal være helt tæt på metrics */
             .compact-divider {
                 margin-top: 0px; 
                 margin-bottom: 10px; 
                 border-top: 1px solid #f0f2f6;
             }
-            /* Fjerner padding i Streamlits columns for at få grafer tættere på selectbox */
+            /* Fjerner luft mellem dropdown og graf */
             [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) {
                 margin-top: -15px !important;
             }
@@ -167,7 +178,6 @@ def vis_side(dp=None):
             st.write("**Seneste 10 kampe**")
             
             with st.container(border=True):
-                # Metrics række (rykkket op via metric-row-wrapper)
                 st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
                 mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
@@ -181,10 +191,8 @@ def vis_side(dp=None):
                 met_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Kompakt divider
                 st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
                 
-                # Kampliste
                 for _, row in df_res.iterrows():
                     draw_match_row(
                         pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), 
@@ -201,7 +209,7 @@ def vis_side(dp=None):
 
             def draw_stat_chart(chart_key, default_idx):
                 h_c, d_c = st.columns([2, 1])
-                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"x_{chart_key}", label_visibility="collapsed")
+                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"fin_{chart_key}", label_visibility="collapsed")
                 c_key = kat_map[val]
                 avg = df_plot[f'{c_key}_tot'].mean()
                 
@@ -214,14 +222,12 @@ def vis_side(dp=None):
                               annotation_text="Gns", annotation_position="top right")
                 
                 fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
-                
-                # margin-t er nu sat til 25 for at rykke selve graf-arealet helt op til teksten
                 fig.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
                                   xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             draw_stat_chart("c1", 0)
-            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True) # Mindre afstand mellem grafer
+            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
             draw_stat_chart("c2", 1)
             
     with t2:
