@@ -234,38 +234,56 @@ def vis_side(dp=None):
             }
             [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; }
             [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; }
+            .stSelectbox { width: 100%; }
             </style>
             """, unsafe_allow_html=True)
 
-        # --- 2. OPSÆTNING & FILTRERING ---
-        kat_options = ["Opbygning", "Gennembrud", "Afslutninger"]
-        col_title, col_sel = st.columns([2.5, 1])
-        v_med = col_sel.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
+        # --- 2. LAYOUT & DROPDOWN ---
+        kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
+        c_left, c_right = st.columns([2, 1])
+
+        v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
         
-        # Geografisk og type-filtrering
+        # --- 3. FILTRERINGSLOGIK ---
+        n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
+        total_minutes = n_matches * 90
+
         if v_med == "Opbygning":
             ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
             ids, tit, cm, zn = [1], "GENNEMBRUD (50-100m)", "Reds", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+        elif v_med == "Touches in Box":
+            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Greens", "down"
+            # Definition: Alle aktioner i feltet (X > 83, Y mellem 21.1 og 78.9)
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
+            # Til beregning af konvertering: Find afslutninger i samme datasæt
+            df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else: # Afslutninger
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
-        n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
-        total_minutes = n_matches * 90
         total_act = len(df_f)
 
-        # --- 3. LAYOUT ---
-        c_left, c_right = st.columns([2, 1])
-
+        # --- 4. PITCH (VENSTRE) ---
         with c_left:
-            st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+            # For "Touches in Box" bruger vi alle events i df_f til heatmap
+            st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
+        # --- 5. STATS & TABEL (HØJRE) ---
         with c_right:
-            # --- 4. METRICS PÅ ÉN LINJE ---
-            if v_med == "Afslutninger":
+            if v_med == "Touches in Box":
+                shots_total = len(df_shots)
+                touches_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
+                conv_box = (shots_total / total_act * 100) if total_act > 0 else 0
+                
+                m_cols = st.columns(3)
+                m_cols[0].metric("Touches", total_act)
+                m_cols[1].metric("p90", round(touches_p90, 1))
+                m_cols[2].metric("Afsl/Box %", f"{int(conv_box)}%")
+                
+            elif v_med == "Afslutninger":
                 goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
                 shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
                 goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
@@ -289,39 +307,51 @@ def vis_side(dp=None):
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}**")
             
-            # --- 5. TOP 8 SPILLERE (Mål / Afslutninger) ---
-            # Vi aggregerer manuelt her for at sikre at 'SUCCESS' altid er mål (type 16) når vi ser på afslutninger
+            # --- 6. TOP 8 SPILLERE ---
             if not df_f.empty:
-                if v_med == "Afslutninger":
-                    df_top = df_f.groupby('PLAYER_NAME').agg(
-                        TOTAL=('EVENT_TYPEID', 'count'),
-                        SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum())
-                    ).reset_index()
-                else:
-                    df_top = df_f.groupby('PLAYER_NAME').agg(
-                        TOTAL=('OUTCOME', 'count'),
-                        SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
-                    ).reset_index()
-                
-                df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
-                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
-
-                for _, r in df_top.iterrows():
-                    color = "#084594" if v_med == "Opbygning" else ("#cb181d" if v_med == "Gennembrud" else "#ec7014")
+                if v_med == "Touches in Box":
+                    s_box = df_f.groupby('PLAYER_NAME').size().to_frame('BOX')
+                    s_shots = df_shots.groupby('PLAYER_NAME').size().to_frame('SHOTS')
+                    df_top = s_box.join(s_shots, how='left').fillna(0)
+                    df_top['PCT'] = (df_top['SHOTS'] / df_top['BOX'] * 100).fillna(0).astype(int)
+                    df_top = df_top.sort_values('BOX', ascending=False).head(8).reset_index()
                     
-                    st.markdown(f"""
-                        <div style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
+                    for _, r in df_top.iterrows():
+                        display_val = f"{int(r['SHOTS'])} / {int(r['BOX'])} ({r['PCT']}%)"
+                        st.markdown(f"""
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                    <span>{r['PLAYER_NAME']}</span>
+                                    <span>{display_val}</span>
+                                </div>
+                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                    <div style="background-color: #238b45; height: 5px; width: {min(r['PCT'], 100)}%; border-radius: 4px;"></div>
+                                </div>
                             </div>
-                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
+                        """, unsafe_allow_html=True)
+                else:
+                    # Logik for øvrige kategorier
+                    if v_med == "Afslutninger":
+                        df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum())).reset_index()
+                    else:
+                        df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('OUTCOME', 'count'), SUCCESS=('OUTCOME', lambda x: (x == 1).sum())).reset_index()
+                    
+                    df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
+                    df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+
+                    for _, r in df_top.iterrows():
+                        color = "#084594" if v_med == "Opbygning" else "#cb181d"
+                        st.markdown(f"""
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                    <span>{r['PLAYER_NAME']}</span>
+                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
+                                </div>
+                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                    <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
+                                </div>
                             </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("Ingen data fundet.")
+                        """, unsafe_allow_html=True)
                 
     with t3:
         cp, cs = st.columns([2, 1])
