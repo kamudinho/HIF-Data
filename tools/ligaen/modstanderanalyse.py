@@ -461,7 +461,7 @@ def vis_side(dp=None):
                         ax.set_title(f"Tendenser: {valgt_spiller}", fontsize=9, fontweight='bold')
                     
                     elif visning == "Berøringer":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([61, 73])]
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([1, 61, 73])]
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='blue', s=20, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
                         ax.set_title(f"Berøringer: {valgt_spiller}", fontsize=9, fontweight='bold')
                         
