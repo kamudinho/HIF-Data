@@ -226,53 +226,40 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. DEFINER FORKLARINGER ---
+        # --- 1. CSS TIL STYLING (Kan godt stå øverst) ---
+        st.markdown("""
+            <style>
+            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+                text-align: center; align-items: center; justify-content: center; width: 100%;
+            }
+            [data-testid="stMetricLabel"] { 
+                justify-content: center !important; font-size: 10px !important; white-space: nowrap;
+                margin-bottom: -3px !important; 
+            }
+            [data-testid="stMetricValue"] { 
+                justify-content: center !important; font-size: 14px !important; font-weight: 700; 
+            }
+            .stSelectbox { width: 100%; }
+            </style>
+            """, unsafe_allow_html=True)
+
+        # --- 2. LAYOUT & DROPDOWN (Flyttet op, så v_med defineres først) ---
+        kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
+        c_left, c_right = st.columns([2, 1])
+
+        # Nu definerer vi v_med i kolonnen til højre
+        v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
+        
+        # --- 3. DEFINER FORKLARINGER ---
         forklaringer = {
             "Opbygning": "(Succesfulde pasninger / Pasninger (Pasning %))",
             "Gennembrud": "(Succesfulde pasninger / Pasninger (Pasning %))",
             "Touches in Box": "(Afslutninger / Touches in Box (Konv %))",
             "Afslutninger": "(Mål / Afslutninger (Konv %))"
         }
-    
-        # --- 2. DISPLAY AF TITEL ---
-        st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
-        
-        # Her sammensættes titlen dynamisk
         valgt_forklaring = forklaringer.get(v_med, "")
-        st.write(f"**Top 8: {v_med}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring}</span>", unsafe_allow_html=True)
 
-        
-        # --- 1. CSS TIL STYLING ---
-        st.markdown("""
-            <style>
-            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
-                text-align: center; 
-                align-items: center; 
-                justify-content: center; 
-                width: 100%;
-            }
-            [data-testid="stMetricLabel"] { 
-                justify-content: center !important; 
-                font-size: 10px !important; 
-                white-space: nowrap;
-                /* --- HER STYRER DU AFSTANDEN --- */
-                margin-bottom: -3px !important; 
-            }
-            [data-testid="stMetricValue"] { 
-                justify-content: center !important; 
-                font-size: 14px !important; 
-                font-weight: 700; 
-            }
-            .stSelectbox { width: 100%; }
-            </style>
-            """, unsafe_allow_html=True)
-        # --- 2. LAYOUT & DROPDOWN ---
-        kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
-        c_left, c_right = st.columns([2, 1])
-
-        v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
-        
-        # --- 3. FILTRERINGSLOGIK ---
+        # --- 4. FILTRERINGSLOGIK ---
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
         total_minutes = n_matches * 90
 
@@ -284,9 +271,7 @@ def vis_side(dp=None):
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Greens", "down"
-            # Definition: Alle aktioner i feltet (X > 83, Y mellem 21.1 og 78.9)
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
-            # Til beregning af konvertering: Find afslutninger i samme datasæt
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else: # Afslutninger
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
@@ -294,12 +279,11 @@ def vis_side(dp=None):
 
         total_act = len(df_f)
 
-        # --- 4. PITCH (VENSTRE) ---
+        # --- 5. PITCH (VENSTRE) ---
         with c_left:
-            # For "Touches in Box" bruger vi alle events i df_f til heatmap
             st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-        # --- 5. STATS & TABEL (HØJRE) ---
+        # --- 6. STATS & TABEL (HØJRE) ---
         with c_right:
             if v_med == "Touches in Box":
                 shots_total = len(df_shots)
@@ -332,10 +316,10 @@ def vis_side(dp=None):
                 m_cols[1].metric("Gns p90", round(avg_p90, 1))
                 m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
+            # --- DISPLAY AF TITEL OG TABEL (Nu virker det!) ---
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
-            st.write(f"**Top 8: {v_med} {valgt_forklaring}**")
+            st.write(f"**Top 8: {v_med}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring}</span>", unsafe_allow_html=True)
             
-            # --- 6. TOP 8 SPILLERE ---
             if not df_f.empty:
                 if v_med == "Touches in Box":
                     s_box = df_f.groupby('PLAYER_NAME').size().to_frame('BOX')
@@ -358,7 +342,6 @@ def vis_side(dp=None):
                             </div>
                         """, unsafe_allow_html=True)
                 else:
-                    # Logik for øvrige kategorier
                     if v_med == "Afslutninger":
                         df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum())).reset_index()
                     else:
@@ -380,6 +363,8 @@ def vis_side(dp=None):
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
+            else:
+                st.info("Ingen data fundet.")
                 
     with t3:
         cp, cs = st.columns([2, 1])
