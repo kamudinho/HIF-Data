@@ -264,10 +264,10 @@ def vis_side(dp=None):
         total_minutes = n_matches * 90
 
         if v_med == "Opbygning":
-            ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
+            ids, tit, cm, zn = [1], "OPBYGNING", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
-            ids, tit, cm, zn = [1], "GENNEMBRUD (50-100m)", "Reds", "down"
+            ids, tit, cm, zn = [1], "GENNEMBRUD", "Reds", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Greens", "down"
