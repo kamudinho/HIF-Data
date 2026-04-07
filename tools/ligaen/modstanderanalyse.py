@@ -226,7 +226,7 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. CSS TIL STYLING (Kan godt stå øverst) ---
+        # --- 1. CSS TIL STYLING ---
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
@@ -243,14 +243,10 @@ def vis_side(dp=None):
             </style>
             """, unsafe_allow_html=True)
 
-        # --- 2. LAYOUT & DROPDOWN (Flyttet op, så v_med defineres først) ---
         kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
         c_left, c_right = st.columns([2, 1])
-
-        # Nu definerer vi v_med i kolonnen til højre
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
         
-        # --- 3. DEFINER FORKLARINGER ---
         forklaringer = {
             "Opbygning": "(Succesfulde pasninger / Pasninger (Pasning %))",
             "Gennembrud": "(Succesfulde pasninger / Pasninger (Pasning %))",
@@ -259,7 +255,6 @@ def vis_side(dp=None):
         }
         valgt_forklaring = forklaringer.get(v_med, "")
 
-        # --- 4. FILTRERINGSLOGIK ---
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
         total_minutes = n_matches * 90
 
@@ -279,44 +274,33 @@ def vis_side(dp=None):
 
         total_act = len(df_f)
 
-        # --- 5. PITCH (VENSTRE) ---
         with c_left:
             st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-        # --- 6. STATS & TABEL (HØJRE) ---
         with c_right:
             if v_med == "Touches in Box":
                 shots_total = len(df_shots)
                 touches_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
                 conv_box = (shots_total / total_act * 100) if total_act > 0 else 0
-                
                 m_cols = st.columns(3)
                 m_cols[0].metric("Touches", total_act)
                 m_cols[1].metric("p90", round(touches_p90, 1))
                 m_cols[2].metric("Afsl/Box %", f"{int(conv_box)}%")
-                
             elif v_med == "Afslutninger":
                 goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
                 shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
                 goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
                 conv_rate = (goals / total_act * 100) if total_act > 0 else 0
-                
                 m_cols = st.columns(5)
-                m_cols[0].metric("Skud", total_act)
-                m_cols[1].metric("p90", round(shots_p90, 1))
-                m_cols[2].metric("Mål", goals)
-                m_cols[3].metric("p90", round(goals_p90, 1))
+                m_cols[0].metric("Skud", total_act); m_cols[1].metric("p90", round(shots_p90, 1))
+                m_cols[2].metric("Mål", goals); m_cols[3].metric("p90", round(goals_p90, 1))
                 m_cols[4].metric("Konv %", f"{int(conv_rate)}%")
             else:
                 acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
                 avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-                
                 m_cols = st.columns(3)
-                m_cols[0].metric("Total", total_act)
-                m_cols[1].metric("Gns p90", round(avg_p90, 1))
-                m_cols[2].metric("Succes", f"{int(acc_pct)}%")
+                m_cols[0].metric("Total", total_act); m_cols[1].metric("Gns p90", round(avg_p90, 1)); m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
-            # --- DISPLAY AF TITEL OG TABEL (Nu virker det!) ---
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring}</span>", unsafe_allow_html=True)
             
@@ -327,69 +311,28 @@ def vis_side(dp=None):
                     df_top = s_box.join(s_shots, how='left').fillna(0)
                     df_top['PCT'] = (df_top['SHOTS'] / df_top['BOX'] * 100).fillna(0).astype(int)
                     df_top = df_top.sort_values('BOX', ascending=False).head(8).reset_index()
-                    
                     for _, r in df_top.iterrows():
-                        display_val = f"{int(r['SHOTS'])} / {int(r['BOX'])} ({r['PCT']}%)"
-                        st.markdown(f"""
-                            <div style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                    <span>{r['PLAYER_NAME']}</span>
-                                    <span>{display_val}</span>
-                                </div>
-                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                    <div style="background-color: #238b45; height: 5px; width: {min(r['PCT'], 100)}%; border-radius: 4px;"></div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['SHOTS'])} / {int(r['BOX'])} ({r['PCT']}%)</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: #238b45; height: 5px; width: {min(r['PCT'], 100)}%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
                 else:
                     if v_med == "Afslutninger":
                         df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum())).reset_index()
+                        bar_c = "#d73027"
                     else:
                         df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('OUTCOME', 'count'), SUCCESS=('OUTCOME', lambda x: (x == 1).sum())).reset_index()
-                    
+                        bar_c = "#084594"
                     df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
                     df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
-
                     for _, r in df_top.iterrows():
-                        color = "#084594" if v_med == "Opbygning" else "#084594"
-                        st.markdown(f"""
-                            <div style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                    <span>{r['PLAYER_NAME']}</span>
-                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
-                                </div>
-                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                    <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.info("Ingen data fundet.")
-                
+                        st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: {bar_c}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
+
     with t3:
         # --- 1. CSS TIL STYLING ---
-        st.markdown("""
-            <style>
-            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
-                text-align: center; align-items: center; justify-content: center; width: 100%;
-            }
-            [data-testid="stMetricLabel"] { 
-                justify-content: center !important; font-size: 10px !important; white-space: nowrap;
-                margin-bottom: -3px !important; 
-            }
-            [data-testid="stMetricValue"] { 
-                justify-content: center !important; font-size: 14px !important; font-weight: 700; 
-            }
-            .stSelectbox { width: 100%; }
-            </style>
-            """, unsafe_allow_html=True)
+        st.markdown("""<style>[data-testid="stHorizontalBlock"] [data-testid="stMetric"] { text-align: center; align-items: center; justify-content: center; width: 100%; } [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; margin-bottom: -3px !important; } [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; } .stSelectbox { width: 100%; }</style>""", unsafe_allow_html=True)
 
-        # --- 2. LAYOUT & DROPDOWN ---
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
         c_left, c_right = st.columns([2, 1])
         v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
         
-        # --- 3. DEFINER FORKLARINGER ---
         forklaringer_u = {
             "Egen halvdel: Erobringer": "(Vundne aktioner / Forsøg (Succes %))",
             "Off. halvdel: Pres": "(Vundne aktioner / Forsøg (Succes %))",
@@ -398,75 +341,44 @@ def vis_side(dp=None):
         }
         valgt_forklaring_u = forklaringer_u.get(v_uden, "")
 
-        # --- 4. FILTRERINGSLOGIK ---
-        n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
-        total_minutes = n_matches * 90
-        
         erobring_ids = [7, 8, 12, 127] 
         duel_ids = [7, 44] 
 
-        # Logik for at ekskludere feltet (x < 17) på egen halvdel
-        if v_uden == "Egen halvdel: Erobringer":
+        if "Erobringer" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
-            # Vi tager fra x=17 til x=50 for at undgå målmandens opsamlinger
             df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        
-        elif v_uden == "Off. halvdel: Pres":
+        elif "Pres" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Off. halvdel: PRES", "Oranges", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        
-        elif v_uden == "Egen halvdel: Dueller":
+        elif "Egen halvdel: Dueller" in v_uden:
             ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
-            # Samme her: ekskluder feltet
             df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        
         else: # Off. halvdel: Dueller
             ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
 
         total_act = len(df_f)
 
-        # --- 5. PITCH (VENSTRE) ---
         with c_left:
             st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-        # --- 6. STATS & TABEL (HØJRE) ---
         with c_right:
             acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
             avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-            
             m_cols = st.columns(3)
-            m_cols[0].metric("Total", total_act)
-            m_cols[1].metric("p90", round(avg_p90, 1))
-            m_cols[2].metric("Succes", f"{int(acc_pct)}%")
+            m_cols[0].metric("Total", total_act); m_cols[1].metric("p90", round(avg_p90, 1)); m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_uden}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring_u}</span>", unsafe_allow_html=True)
             
             if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').agg(
-                    TOTAL=('OUTCOME', 'count'),
-                    SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
-                ).reset_index()
-                
+                df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('OUTCOME', 'count'), SUCCESS=('OUTCOME', lambda x: (x == 1).sum())).reset_index()
                 df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
                 df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
-
                 for _, r in df_top.iterrows():
-                    bar_color = "#2b8cbe" if "Erobringer" in v_uden or "Pres" in v_uden else "#ec7014"
-                    st.markdown(f"""
-                        <div style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
-                            </div>
-                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: {bar_color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: #ec7014; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
             else:
-                st.info("Ingen data fundet (målmandsfeltet er ekskluderet).")
+                st.info("Ingen data fundet.")
                 
     with t4:
         if not df_all_events.empty:
