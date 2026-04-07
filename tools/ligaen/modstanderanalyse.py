@@ -130,24 +130,42 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Vi opretter to hovedkolonner for hele siden
-        # [1.2, 1] giver lidt mere plads til tabellen i venstre side
+        # --- 1. DATA FORBEREDELSE (SKAL SKE FØR KOLONNERNE) ---
+        df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
+        df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
+        df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
+        
+        def get_result(row):
+            is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+            h, a = row['TOTAL_HOME_SCORE'], row['TOTAL_AWAY_SCORE']
+            if h == a: return "D"
+            return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
+        df_res['RES'] = df_res.apply(get_result, axis=1)
+
+        # Her beregner vi df_vol og df_plot så main_col2 kan bruge dem
+        df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
+            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
+            A_suc=('EVENT_TYPEID', lambda x: (df_all_h.loc[x.index, 'EVENT_TYPEID'] == 16).sum()),
+            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
+            E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
+            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
+            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
+        ).reset_index()
+
+        df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
+        df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
+        df_plot = df_plot.sort_values('MATCH_LOCALDATE', ascending=True)
+        df_plot['MOD'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+        df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m') + "<br>" + df_plot['MOD'].str[:8]
+
+        # --- 2. LAYOUT: TO HOVEDKOLONNER ---
         main_col1, main_col2 = st.columns([1.2, 1])
 
         with main_col1:
-            # --- 1. VENSTRE SIDE: METRICS & TABEL ---
-            df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
-            df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
-            df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
-            
-            def get_result(row):
-                is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-                h, a = row['TOTAL_HOME_SCORE'], row['TOTAL_AWAY_SCORE']
-                if h == a: return "D"
-                return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
-            df_res['RES'] = df_res.apply(get_result, axis=1)
-
-            # Metrics i små kolonner inde i main_col1
             m1, m2, m3 = st.columns(3)
             wins = (df_res['RES'] == "W").sum()
             draws = (df_res['RES'] == "D").sum()
@@ -157,12 +175,10 @@ def vis_side(dp=None):
             mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
             m3.metric("Målscore", f"{mål_s}-{mål_i}")
 
-            # Tabellen under metrics
             st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], 
-                         use_container_width=True, hide_index=True, height=450)
+                         use_container_width=True, hide_index=True, height=520)
 
         with main_col2:
-            # --- 2. HØJRE SIDE: TREND GRAFER (STABLET VERTIKALT) ---
             kat_map = {
                 "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0},
                 "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1},
@@ -172,9 +188,6 @@ def vis_side(dp=None):
             }
             alle_kategorier = list(kat_map.keys())
 
-            # Data aggregering (behold din eksisterende df_vol logik her)
-            # ... (indsæt din df_vol og df_plot beregning her) ...
-
             # Graf 1
             h_c1, d_c1 = st.columns([1.8, 1])
             v1 = d_c1.selectbox("Stat 1", alle_kategorier, index=0, key="v1_side", label_visibility="collapsed")
@@ -182,11 +195,14 @@ def vis_side(dp=None):
             avg1 = df_plot[f"{info1['col']}_tot"].mean()
             h_c1.markdown(f"**{v1} (Gns: {round(avg1, info1['round'])})**")
             
-            fig1 = px.bar(df_plot, x='LABEL', y=f"{info1['col']}_tot", text=df_plot.apply(lambda r: f"{int(r[f'{info1['col']}_tot'])}<br>({int(r[f'{info1['col']}_suc']/r[f'{info1['col']}_tot']*100) if r[f'{info1['col']}_tot']>0 else 0}%)", axis=1))
-            fig1.update_layout(height=280, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)')
+            df_plot['T1_TXT'] = df_plot.apply(lambda r: f"{int(r[f'{info1['col']}_tot'])}<br>({int(r[f'{info1['col']}_suc']/r[f'{info1['col']}_tot']*100) if r[f'{info1['col']}_tot']>0 else 0}%)", axis=1)
+            fig1 = px.bar(df_plot, x='LABEL', y=f"{info1['col']}_tot", text='T1_TXT')
+            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6)
+            fig1.update_traces(textposition='outside', marker_color=info1['color'], cliponaxis=False, textfont_size=10)
+            fig1.update_layout(height=260, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-            st.divider() # Lille adskiller mellem graferne
+            st.divider()
 
             # Graf 2
             h_c2, d_c2 = st.columns([1.8, 1])
@@ -196,8 +212,11 @@ def vis_side(dp=None):
             avg2 = df_plot[f"{info2['col']}_tot"].mean()
             h_c2.markdown(f"**{v2} (Gns: {round(avg2, info2['round'])})**")
             
-            fig2 = px.bar(df_plot, x='LABEL', y=f"{info2['col']}_tot", text=df_plot.apply(lambda r: f"{int(r[f'{info2['col']}_tot'])}<br>({int(r[f'{info2['col']}_suc']/r[f'{info2['col']}_tot']*100) if r[f'{info2['col']}_tot']>0 else 0}%)", axis=1))
-            fig2.update_layout(height=280, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)')
+            df_plot['T2_TXT'] = df_plot.apply(lambda r: f"{int(r[f'{info2['col']}_tot'])}<br>({int(r[f'{info2['col']}_suc']/r[f'{info2['col']}_tot']*100) if r[f'{info2['col']}_tot']>0 else 0}%)", axis=1)
+            fig2 = px.bar(df_plot, x='LABEL', y=f"{info2['col']}_tot", text='T2_TXT')
+            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
+            fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False, textfont_size=10)
+            fig2.update_layout(height=260, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
