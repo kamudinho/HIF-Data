@@ -130,18 +130,55 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- (Din eksisterende kode for metrics og tabel bibeholdes herfra) ---
+        # --- 1. METRICS & TABEL (BEVARET) ---
+        df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
+        df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
+        df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
         
+        def get_result(row):
+            is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+            h, a = row['TOTAL_HOME_SCORE'], row['TOTAL_AWAY_SCORE']
+            if h == a: return "D"
+            return "W" if (is_home and h > a) or (not is_home and a > h) else "L"
+        df_res['RES'] = df_res.apply(get_result, axis=1)
+
+        c1, c2 = st.columns([1, 3.2])
+        with c1:
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+            wins = (df_res['RES'] == "W").sum()
+            draws = (df_res['RES'] == "D").sum()
+            st.metric("Point (Sidste 10)", (wins*3)+draws)
+            st.metric("Vundne kampe", wins)
+            mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
+            mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
+            st.metric("Målscore", f"{mål_s} - {mål_i}")
+
+        with c2:
+            st.dataframe(df_res[['MATCH_LOCALDATE', 'CONTESTANTHOME_NAME', 'RESULTAT', 'CONTESTANTAWAY_NAME', 'RES']], 
+                         use_container_width=True, hide_index=True, height=265)
+
         st.divider()
 
-        # --- 2. HOVEDGRAFER MED DROPDOWNS PÅ LINJE ---
+        # --- 2. TREND ANALYSE MED DYNAMISKE DROPDOWNS ---
+        # Alle mulige kategorier og deres mapping
+        kat_map = {
+            "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0},
+            "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1},
+            "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0},
+            "Dueller": {'col': 'D', 'color': '#FF9800', 'round': 0},
+            "Frispark": {'col': 'F', 'color': '#D32F2F', 'round': 0}
+        }
+        alle_kategorier = list(kat_map.keys())
+
+        # Aggreger data for alle typer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
-            E=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()), # Erobringer
-            D=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum())         # Dueller
+            E=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
+            D=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
+            F=('EVENT_TYPEID', lambda x: (x == 4).sum())
         ).reset_index()
-        
+
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
         df_plot = df_plot.sort_values('MATCH_LOCALDATE', ascending=True)
@@ -149,44 +186,37 @@ def vis_side(dp=None):
         df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m') + "<br>" + df_plot['MOD'].str[:8]
 
         g1, g2 = st.columns(2)
-        
-        # VENSTRE GRAF
+
         with g1:
-            header_col1, drop_col1 = st.columns([1.5, 1])
-            header_col1.markdown("### Trend 1")
-            v1_choice = drop_col1.selectbox("Statistik 1", ["Pasninger", "Erobringer"], label_visibility="collapsed")
+            h_col1, d_col1 = st.columns([1, 1])
+            h_col1.markdown("### Trend 1")
+            # Valg 1
+            v1 = d_col1.selectbox("Vælg kategori 1", alle_kategorier, index=0, label_visibility="collapsed")
             
-            y_col = 'P' if v1_choice == "Pasninger" else 'E'
-            avg_v1 = df_plot[y_col].mean()
-            color_v1 = '#0047AB' if y_col == 'P' else '#2E7D32'
-            
-            fig_p = px.bar(df_plot, x='LABEL', y=y_col, text=y_col, title=f"{v1_choice} (Gns: {int(avg_v1)})")
-            fig_p.add_hline(y=avg_v1, line_dash="dash", line_color="#808080", opacity=0.6)
-            # cliponaxis=False sikrer at labels over de højeste barer ikke bliver væk
-            fig_p.update_traces(textposition='outside', marker_color=color_v1, cliponaxis=False)
-            # t=60 giver plads til labels over de højeste barer
-            fig_p.update_layout(height=350, margin=dict(t=60, b=0, l=0, r=0), 
-                              plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', 
-                              xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig_p, use_container_width=True, config={'displayModeBar': False})
-            
-        # HØJRE GRAF
+            # Graf 1 setup
+            info1 = kat_map[v1]
+            avg1 = df_plot[info1['col']].mean()
+            fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'], title=f"{v1} (Gns: {round(avg1, info1['round'])})")
+            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6)
+            fig1.update_traces(textposition='outside', marker_color=info1['color'], cliponaxis=False)
+            fig1.update_layout(height=350, margin=dict(t=80, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+
         with g2:
-            header_col2, drop_col2 = st.columns([1.5, 1])
-            header_col2.markdown("### Trend 2")
-            v2_choice = drop_col2.selectbox("Statistik 2", ["Afslutninger", "Dueller"], label_visibility="collapsed")
+            h_col2, d_col2 = st.columns([1, 1])
+            h_col2.markdown("### Trend 2")
+            # Filtrer listen for Graf 2 så den valgte i v1 ikke kan vælges her
+            mulige_v2 = [k for k in alle_kategorier if k != v1]
+            v2 = d_col2.selectbox("Vælg kategori 2", mulige_v2, index=0, label_visibility="collapsed")
             
-            y_col2 = 'A' if v2_choice == "Afslutninger" else 'D'
-            avg_v2 = df_plot[y_col2].mean()
-            color_v2 = '#C8102E' if y_col2 == 'A' else '#FF9800'
-            
-            fig_a = px.bar(df_plot, x='LABEL', y=y_col2, text=y_col2, title=f"{v2_choice} (Gns: {round(avg_v2, 1)})")
-            fig_a.add_hline(y=avg_v2, line_dash="dash", line_color="#808080", opacity=0.6)
-            fig_a.update_traces(textposition='outside', marker_color=color_v2, cliponaxis=False)
-            fig_a.update_layout(height=350, margin=dict(t=60, b=0, l=0, r=0), 
-                              plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', 
-                              xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
+            # Graf 2 setup
+            info2 = kat_map[v2]
+            avg2 = df_plot[info2['col']].mean()
+            fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'], title=f"{v2} (Gns: {round(avg2, info2['round'])})")
+            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
+            fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False)
+            fig2.update_layout(height=350, margin=dict(t=80, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})Bar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
     def get_top_success(df, event_ids):
