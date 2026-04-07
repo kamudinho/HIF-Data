@@ -226,14 +226,14 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. CSS TIL CENTRERING OG STYLING ---
+        # --- 1. CSS TIL STYLING ---
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
                 text-align: center; align-items: center; justify-content: center; width: 100%;
             }
-            [data-testid="stMetricLabel"] { justify-content: center !important; }
-            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 18px !important; }
+            [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 11px !important; }
+            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 16px !important; font-weight: 700; }
             </style>
             """, unsafe_allow_html=True)
 
@@ -242,7 +242,7 @@ def vis_side(dp=None):
         col_title, col_sel = st.columns([2.5, 1])
         v_med = col_sel.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
         
-        # Geografisk og type-filtrering
+        # Geografisk og type-filtrering baseret på X-koordinater
         if v_med == "Opbygning":
             ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
@@ -253,62 +253,60 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
-        # Grundlæggende stats
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
         total_minutes = n_matches * 90
         total_act = len(df_f)
 
-        # --- 3. DYNAMISKE METRICS (HOLDET) ---
-        if v_med == "Afslutninger":
-            goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
-            shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-            goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
-            conv_rate = (goals / total_act * 100) if total_act > 0 else 0
-            
-            m1_l, m1_v = "Skud p90", round(shots_p90, 2)
-            m2_l, m2_v = "Mål p90", round(goals_p90, 2)
-            m3_l, m3_v = "Konvertering", f"{int(conv_rate)}%"
-        else:
-            acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
-            avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-            
-            m1_l, m1_v = "Total", total_act
-            m2_l, m2_v = "Gns p90", round(avg_p90, 1)
-            m3_l, m3_v = "Succes", f"{int(acc_pct)}%"
-
-        # --- 4. LAYOUT ---
+        # --- 3. LAYOUT ---
         c_left, c_right = st.columns([2, 1])
 
         with c_left:
             st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
         with c_right:
-            # Metrics række
-            m_cols = st.columns(3)
-            m_cols[0].metric(m1_l, m1_v)
-            m_cols[1].metric(m2_l, m2_v)
-            m_cols[2].metric(m3_l, m3_v)
+            # --- 4. DYNAMISKE METRICS ---
+            if v_med == "Afslutninger":
+                goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
+                shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
+                goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
+                conv_rate = (goals / total_act * 100) if total_act > 0 else 0
+                
+                # To rækker af metrics for at få plads til alle 5 tal
+                m_row1 = st.columns(3)
+                m_row1[0].metric("Skud", total_act)
+                m_row1[1].metric("Skud p90", round(shots_p90, 1))
+                m_row1[2].metric("Konvertering", f"{int(conv_rate)}%")
+                
+                m_row2 = st.columns(2)
+                m_row2[0].metric("Mål", goals)
+                m_row2[1].metric("Mål p90", round(goals_p90, 1))
+            else:
+                acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
+                avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
+                
+                m_row1 = st.columns(3)
+                m_row1[0].metric("Total", total_act)
+                m_row1[1].metric("Gns p90", round(avg_p90, 1))
+                m_row1[2].metric("Succes", f"{int(acc_pct)}%")
             
-            st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}**")
             
-            # Top spillere logik
+            # --- 5. TOP 8 SPILLERE ---
             df_top = get_top_success(df_f, ids)
             
             if not df_top.empty:
                 for _, r in df_top.iterrows():
                     color = "#084594" if v_med == "Opbygning" else ("#cb181d" if v_med == "Gennembrud" else "#ec7014")
                     
-                    # Spiller-specifik tekst format (xxx / xxx (xx %))
-                    # For Afslutninger bliver det Mål / Skud (Konvertering %)
-                    # For Opbygning/Gennembrud bliver det Succes / Total (Pct %)
-                    display_text = f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)"
+                    # Format: Mål / Skud (Konvertering %) eller Succes / Total (Pct %)
+                    display_val = f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)"
                     
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{display_text}</span>
+                                <span>{display_val}</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
@@ -316,7 +314,7 @@ def vis_side(dp=None):
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("Ingen aktioner fundet.")
+                st.info("Ingen data for denne kategori.")
                 
     with t3:
         cp, cs = st.columns([2, 1])
