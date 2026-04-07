@@ -367,17 +367,108 @@ def vis_side(dp=None):
                 st.info("Ingen data fundet.")
                 
     with t3:
-        cp, cs = st.columns([2, 1])
-        v_uden = cs.selectbox("Fokus", ["Dueller", "Erobringer", "Defensiv Zone"], key="us")
-        if v_uden == "Dueller": ids, tit, cm = [7, 8], "DUELLER", "Oranges"
-        elif v_uden == "Erobringer": ids, tit, cm = [127, 12, 49], "EROBRINGER", "GnBu"
-        else: ids, tit, cm = [7, 12, 127], "DEFENSIV ZONE", "PuBu"
-        cs.write("**Top 8:**")
-        df_top_u = get_top_success(df_all_h, ids)
-        if not df_top_u.empty:
-            for _, r in df_top_u.iterrows(): cs.write(f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%) **{r['PLAYER_NAME']}**")
-        cp.pyplot(plot_custom_pitch(df_all_h, ids, tit, zone="up", cmap=cm, logo=hold_logo))
+        # --- 1. CSS TIL STYLING (Samme som t2) ---
+        st.markdown("""
+            <style>
+            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+                text-align: center; align-items: center; justify-content: center; width: 100%;
+            }
+            [data-testid="stMetricLabel"] { 
+                justify-content: center !important; font-size: 10px !important; white-space: nowrap;
+                margin-bottom: -3px !important; 
+            }
+            [data-testid="stMetricValue"] { 
+                justify-content: center !important; font-size: 14px !important; font-weight: 700; 
+            }
+            .stSelectbox { width: 100%; }
+            </style>
+            """, unsafe_allow_html=True)
 
+        # --- 2. LAYOUT & DROPDOWN ---
+        # Vi definerer de 4 sider du bad om
+        uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
+        c_left, c_right = st.columns([2, 1])
+        v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
+        
+        # --- 3. DEFINER FORKLARINGER (Til Top 8 titlen) ---
+        forklaringer_u = {
+            "Egen halvdel: Erobringer": "(Vundne aktioner / Forsøg (Succes %))",
+            "Off. halvdel: Pres": "(Vundne aktioner / Forsøg (Succes %))",
+            "Egen halvdel: Dueller": "(Vundne dueller / Dueller (Vundet %))",
+            "Off. halvdel: Dueller": "(Vundne dueller / Dueller (Vundet %))"
+        }
+        valgt_forklaring_u = forklaringer_u.get(v_uden, "")
+
+        # --- 4. FILTRERINGSLOGIK ---
+        n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
+        total_minutes = n_matches * 90
+        
+        # Definerer ID'er for Erobringer/Pres (Tackles, Interceptions, Blocks)
+        # Opta typisk: 7 (Tackle), 8 (Interception), 12 (Clearance), 44 (Aerial)
+        erobring_ids = [7, 8, 12, 127] # Justeret til dine erobrings-ids
+        duel_ids = [7, 44] # Dueller (Liggende og luft)
+
+        if v_uden == "Egen halvdel: Erobringer":
+            ids, tit, cm, zn = erobring_ids, "EROBRINGER (EGEN HALVDEL)", "GnBu", "up"
+            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        elif v_uden == "Off. halvdel: Pres":
+            ids, tit, cm, zn = erobring_ids, "PRES (OFF. HALVDEL)", "GnBu", "down"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        elif v_uden == "Egen halvdel: Dueller":
+            ids, tit, cm, zn = duel_ids, "DUELLER (EGEN HALVDEL)", "Oranges", "up"
+            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        else: # Off. halvdel: Dueller
+            ids, tit, cm, zn = duel_ids, "DUELLER (OFF. HALVDEL)", "Oranges", "down"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+
+        total_act = len(df_f)
+
+        # --- 5. PITCH (VENSTRE) ---
+        with c_left:
+            st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+
+        # --- 6. STATS & TABEL (HØJRE) ---
+        with c_right:
+            # Metrics (Total, p90, Succes rate)
+            acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
+            avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
+            
+            m_cols = st.columns(3)
+            m_cols[0].metric("Total", total_act)
+            m_cols[1].metric("Gns p90", round(avg_p90, 1))
+            m_cols[2].metric("Succes", f"{int(acc_pct)}%")
+            
+            # Titel med forklaring
+            st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
+            st.write(f"**Top 8: {v_uden}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring_u}</span>", unsafe_allow_html=True)
+            
+            # Top 8 Spillere
+            if not df_f.empty:
+                df_top = df_f.groupby('PLAYER_NAME').agg(
+                    TOTAL=('OUTCOME', 'count'),
+                    SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
+                ).reset_index()
+                
+                df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
+                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+
+                for _, r in df_top.iterrows():
+                    # Farve baseret på om det er Erobringer (Blå/Grøn) eller Dueller (Orange)
+                    bar_color = "#2b8cbe" if "Erobringer" in v_uden or "Pres" in v_uden else "#ec7014"
+                    
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                <span>{r['PLAYER_NAME']}</span>
+                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
+                            </div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: {bar_color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("Ingen data fundet for denne kategori.")
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
