@@ -189,48 +189,6 @@ def vis_side(dp=None):
             
             fig2.update_traces(marker_color=col_map[c2_key], textposition='outside', textfont_size=10)
             fig2.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})with m_col2:
-            kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
-            
-            # Farver der matcher heatmaps
-            col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
-            
-            # Vi opretter en pæn label til X-aksen: "01/04 vs FCK"
-            df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper() # F.eks. "01/04 BIF"
-
-            # --- GRAF 1 ---
-            h1, d1 = st.columns([2, 1])
-            v1 = d1.selectbox("Stat 1", list(kat_map.keys()), index=0, key="v1_new", label_visibility="collapsed")
-            c1_key = kat_map[v1]
-            h1.markdown(f"**{v1} (Gns: {round(df_plot[f'{c1_key}_tot'].mean(), 1)})**")
-            
-            fig1 = px.bar(df_plot, 
-                          x='X_AXIS_LABEL', 
-                          y=f"{c1_key}_tot", 
-                          text=f"{c1_key}_tot",
-                          hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c1_key}_tot': True})
-            
-            fig1.update_traces(marker_color=col_map[c1_key], textposition='outside', textfont_size=10)
-            fig1.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
-
-            st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
-
-            # --- GRAF 2 ---
-            h2, d2 = st.columns([2, 1])
-            v2 = d2.selectbox("Stat 2", [k for k in kat_map.keys() if k != v1], index=1, key="v2_new", label_visibility="collapsed")
-            c2_key = kat_map[v2]
-            h2.markdown(f"**{v2} (Gns: {round(df_plot[f'{c2_key}_tot'].mean(), 1)})**")
-            
-            fig2 = px.bar(df_plot, 
-                          x='X_AXIS_LABEL', 
-                          y=f"{c2_key}_tot", 
-                          text=f"{c2_key}_tot",
-                          hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c2_key}_tot': True})
-            
-            fig2.update_traces(marker_color=col_map[c2_key], textposition='outside', textfont_size=10)
-            fig2.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
