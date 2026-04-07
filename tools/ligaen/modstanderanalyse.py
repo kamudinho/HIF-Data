@@ -29,7 +29,7 @@ def get_logo_img(opta_uuid):
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
     # Smalle proportioner for at undgå spildplads
-    col1, col2, col3, col4, col5, col6, col7 = st.columns([0.4, 1.3, 0.25, 0.7, 0.25, 1.3, 0.3])
+    col1, col2, col3, col4, col5, col6, col7 = st.columns([0.5, 1.3, 0.25, 0.7, 0.25, 1.3, 0.3])
     
     with col1: st.markdown(f"<p style='font-size:10px; margin:8px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
     with col2: st.markdown(f"<p style='font-size:11px; font-weight:600; margin:8px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
