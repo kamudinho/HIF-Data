@@ -406,8 +406,9 @@ def vis_side(dp=None):
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
-            # Layout: Stats til venstre, Bane + Dropdown i midten/højre
-            c_p1, c_p2 = st.columns([1, 2.8])
+            # Layout: Stats [1], Tom buffer [0.2], Bane + Dropdown [2.2]
+            # Dette gør banen fysisk mindre og giver luft i designet
+            c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
             
             with c_p1:
                 valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
@@ -422,7 +423,6 @@ def vis_side(dp=None):
 
                 st.markdown(f"### {valgt_spiller}")
                 
-                # Metrics 2 og 2
                 m_col1, m_col2 = st.columns(2)
                 m_col1.metric("Aktioner", total_akt)
                 m_col2.metric("Pasning %", f"{int(pas_acc)}%")
@@ -431,7 +431,7 @@ def vis_side(dp=None):
                 m_col1.metric("Erobringer", len(erob_df))
                 m_col2.metric("Skud", len(skud_df))
                 
-                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True) # Rykket op
+                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
                 st.write("**Top Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
@@ -440,21 +440,20 @@ def vis_side(dp=None):
                     st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
             with c_p2:
-                # --- Kontrolrække til Dropdown ---
-                # Vi laver en under-række her for at få "Visning" og dropdown på samme linje
-                sel_col1, sel_col2 = st.columns([2, 1])
+                # --- Kontrolrække ---
+                sel_col1, sel_col2 = st.columns([2, 1.2])
+                with sel_col1:
+                    st.markdown(f"<p style='text-align:right; margin-top:5px; font-weight:bold;'>Visning:</p>", unsafe_allow_html=True)
                 with sel_col2:
                     visning = st.selectbox(
                         "Vælg visning", 
                         ["Heatmap (Tendenser)", "Berøringer", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"],
                         key="pitch_view_selector",
-                        label_visibility="collapsed" # Fjerner label over boxen for at flugte
+                        label_visibility="collapsed"
                     )
-                with sel_col1:
-                    st.markdown(f"<p style='text-align:right; margin-top:5px; font-weight:bold;'>Visning:</p>", unsafe_allow_html=True)
 
-                # --- Bane ---
-                fig, ax = plt.subplots(figsize=(7, 3.8), constrained_layout=True)
+                # --- Bane Plotting ---
+                fig, ax = plt.subplots(figsize=(7, 4), constrained_layout=True)
                 fig.patch.set_facecolor('none')
                 
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
@@ -462,34 +461,40 @@ def vis_side(dp=None):
                 
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
+                # --- Legend / Info Overlay på banen ---
+                # Logo (Hvidovre) og Tekst i øverste venstre hjørne
+                ax.text(2, 95, "HVIDOVRE IF", fontsize=12, fontweight='bold', color='#C8102E', alpha=0.8)
+                ax.text(2, 90, f"{valgt_spiller.upper()}", fontsize=9, color='black', alpha=0.7)
+                ax.text(2, 86, f"Kategori: {visning}", fontsize=8, color='grey', fontstyle='italic')
+
                 if not valid_events.empty:
                     if visning == "Heatmap (Tendenser)":
                         pitch.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
-                        pitch.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=8, alpha=0.2, zorder=2)
+                        pitch.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=6, alpha=0.2, zorder=2)
                     
                     elif visning == "Berøringer":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([1, 61, 73])]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='blue', s=20, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='#084594', s=20, edgecolors='white', linewidth=0.5, alpha=0.6)
                         
                     elif visning == "Afslutninger":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15])]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=45, edgecolors='black', linewidth=0.5, alpha=0.7)
 
                     elif visning == "Mål":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([16])]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.9, zorder=3)
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'] == 16]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='gold', s=80, marker='*', edgecolors='black', linewidth=0.5)
 
                     elif visning == "Pasninger":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'] == 1]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='#084594', s=20, edgecolors='white', linewidth=0.5, alpha=0.7, zorder=3)
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='#084594', s=15, alpha=0.5)
 
                     elif visning == "Erobringer":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='orange', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='orange', s=35, edgecolors='white', linewidth=0.5)
 
                     elif visning == "Hovedstød":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([44])]
-                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='green', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'] == 44]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='green', s=35, marker='^', alpha=0.8)
 
                 st.pyplot(fig, use_container_width=True)
             
