@@ -403,43 +403,47 @@ def vis_side(dp=None):
 
     with t6:
         if not df_all_h.empty:
+            # 1. Forberedelse af spillerliste
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
-            # Layout: Stats [1], Tom buffer [0.2], Bane + Dropdown [2.2]
+            # 2. Layout-struktur: [Stats, Buffer, Bane+Kontrol]
             c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
             
             with c_p1:
                 valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
                 df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
                 
-                # --- Stats ---
+                # --- Stats Beregning ---
                 total_akt = len(df_spiller)
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+                # Vi bruger 'OUTCOME' kolonnen fra din query
                 pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
                 skud_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                 erob_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
 
                 st.markdown(f"### {valgt_spiller}")
                 
-                m_col1, m_col2 = st.columns(2)
-                m_col1.metric("Aktioner", total_akt)
-                m_col2.metric("Pasning %", f"{int(pas_acc)}%")
+                # Metrics i 2x2 layout
+                m_row1_col1, m_row1_col2 = st.columns(2)
+                m_row1_col1.metric("Aktioner", total_akt)
+                m_row1_col2.metric("Pasning %", f"{int(pas_acc)}%")
                 
-                m_col1, m_col2 = st.columns(2)
-                m_col1.metric("Erobringer", len(erob_df))
-                m_col2.metric("Skud", len(skud_df))
+                m_row2_col1, m_row2_col2 = st.columns(2)
+                m_row2_col1.metric("Erobringer", len(erob_df))
+                m_row2_col2.metric("Skud", len(skud_df))
                 
+                # Divider rykket tæt på metrics
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
                 st.write("**Top Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
                 for akt, count in akt_counts.items():
-                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
             with c_p2:
-                # --- Kontrolrække ---
+                # --- Kontrolrække (Dropdown flugter horisontalt) ---
                 sel_col1, sel_col2 = st.columns([2, 1.2])
                 with sel_col1:
                     st.markdown(f"<p style='text-align:right; margin-top:5px; font-weight:bold;'>Visning:</p>", unsafe_allow_html=True)
@@ -451,30 +455,27 @@ def vis_side(dp=None):
                         label_visibility="collapsed"
                     )
 
-                # --- Bane Plotting ---
-                fig, ax = plt.subplots(figsize=(7, 4), constrained_layout=True)
+                # --- Bane Plotting (Gjort lidt mindre med figsize 7, 3.8) ---
+                fig, ax = plt.subplots(figsize=(7, 3.8), constrained_layout=True)
                 fig.patch.set_facecolor('none')
                 
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
                 pitch.draw(ax=ax)
                 
-                # --- LOGO PLACERING ---
+                # --- Logo og Legend Overlay ---
                 try:
                     import matplotlib.image as mpimg
-                    # Erstat 'hif_logo.png' med din faktiske sti til logo-filen
-                    img = mpimg.imread('hif_logo.png') 
-                    # Placering: [venstre, bund, bredde, højde] i akse-koordinater
+                    img = mpimg.imread('hif_logo.png') # Sørg for denne fil findes
                     ax_image = fig.add_axes([0.05, 0.82, 0.08, 0.08]) 
                     ax_image.imshow(img)
                     ax_image.axis('off')
                 except:
-                    # Hvis filen ikke findes, skriver den teksten som backup
-                    ax.text(2, 95, "HVIDOVRE IF", fontsize=12, fontweight='bold', color='#C8102E')
+                    ax.text(2, 95, "HVIDOVRE IF", fontsize=11, fontweight='bold', color='#C8102E')
 
-                # Info tekst ved siden af/under logo
-                ax.text(2, 90, f"{valgt_spiller.upper()}", fontsize=9, color='black', alpha=0.7)
-                ax.text(2, 86, f"Kategori: {visning}", fontsize=8, color='grey', fontstyle='italic')
+                ax.text(2, 89, f"{valgt_spiller.upper()}", fontsize=9, color='black', alpha=0.7)
+                ax.text(2, 84, f"Kategori: {visning}", fontsize=8, color='grey', fontstyle='italic')
 
+                # --- Data Visualisering ---
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
                 if not valid_events.empty:
