@@ -226,15 +226,27 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. OPSÆTNING & FILTRERING ---
-        # Vi definerer kategorierne først for at kunne filtrere data korrekt til heatmap
+        # --- 1. CSS TIL CENTRERING AF METRICS I T2 ---
+        st.markdown("""
+            <style>
+            /* Tvinger metrics i fanen til at være centreret */
+            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+                text-align: center;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+            }
+            [data-testid="stMetricLabel"] { justify-content: center !important; }
+            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 18px !important; }
+            </style>
+            """, unsafe_allow_html=True)
+
+        # --- 2. OPSÆTNING & FILTRERING ---
         kat_options = ["Opbygning", "Gennembrud", "Afslutninger"]
-        
-        # UI Layout: Dropdown øverst til højre
         col_title, col_sel = st.columns([2.5, 1])
         v_med = col_sel.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
         
-        # Logik for geografisk afgrænsning og event-typer
+        # Geografisk afgrænsning (0-50, 50-100)
         if v_med == "Opbygning":
             ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
@@ -245,37 +257,37 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
-        # Beregninger til metrics
+        # Beregninger
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
         total_act = len(df_f)
         acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
         avg_match = total_act / n_matches if n_matches > 0 else 0
 
-        # --- 2. HOVEDLAYOUT ---
+        # --- 3. LAYOUT ---
         c_left, c_right = st.columns([2, 1])
 
         with c_left:
-            # Heatmap / Pitch
+            # Heatmap baseret på filtreret data (df_f)
             st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
         with c_right:
-            # Metrics placeret over Top 8
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total", total_act)
-            m2.metric("Gns/kamp", round(avg_match, 1))
-            m3.metric("Succes", f"{int(acc_pct)}%")
+            # Metrics placeret direkte over Top 8
+            m_cols = st.columns(3)
+            m_cols[0].metric("Total", total_act)
+            m_cols[1].metric("Gns/K", round(avg_match, 1))
+            m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}**")
             
-            # Hent top spillere baseret på den filtrerede data (df_f)
+            # Hent top spillere baseret på den filtrerede data
             df_top = get_top_success(df_f, ids)
             
             if not df_top.empty:
                 for _, r in df_top.iterrows():
                     color = "#084594" if v_med == "Opbygning" else ("#cb181d" if v_med == "Gennembrud" else "#ec7014")
                     
-                    # Custom række med formatet: xxx / xxx (xx %)
+                    # Format: xxx / xxx (xx %)
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
@@ -288,7 +300,7 @@ def vis_side(dp=None):
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("Ingen aktioner i denne zone.")
+                st.info("Ingen aktioner fundet.")
 
     with t3:
         cp, cs = st.columns([2, 1])
