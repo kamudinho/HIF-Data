@@ -111,7 +111,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- 1. DATA BEREGNING & LABELS ---
+        # --- 1. DATA BEREGNING ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -130,30 +130,38 @@ def vis_side(dp=None):
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
-        
         df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- 2. CSS STYLING (Centrering og løft) ---
+        # --- 2. FINPUDSES CSS ---
         st.markdown("""
             <style>
-            /* Centrerer metrics horisontalt */
+            /* Centrerer ALT indhold i metrics (både label og tal) */
             [data-testid="stMetric"] {
                 text-align: center;
-                padding: 0px !important;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            [data-testid="stMetricLabel"] {
+                justify-content: center;
+                font-size: 11px !important;
+                margin-bottom: -5px !important; /* Trækker tallet tættere på overskriften */
             }
             [data-testid="stMetricValue"] {
                 font-size: 20px !important;
-                justify-content: center;
                 font-weight: 700;
-            }
-            [data-testid="stMetricLabel"] {
-                font-size: 11px !important;
                 justify-content: center;
             }
-            /* Løfter metrics tættere på kanten */
-            .metric-box-container {
+            /* Justerer margener i boksen for at minimere luft ved divideren */
+            .metric-row-wrapper {
                 margin-top: -15px;
+                margin-bottom: -10px;
+            }
+            .divider-line {
+                margin-top: 5px; 
+                margin-bottom: 15px; 
+                border-top: 1px solid #f0f2f6;
             }
             </style>
             """, unsafe_allow_html=True)
@@ -166,7 +174,7 @@ def vis_side(dp=None):
             
             with st.container(border=True):
                 # Metrics række
-                st.markdown('<div class="metric-box-container">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
                 mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
                 mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
@@ -179,7 +187,8 @@ def vis_side(dp=None):
                 met_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown("<div style='margin-top:15px; border-top: 1px solid #f0f2f6; padding-top:15px;'></div>", unsafe_allow_html=True)
+                # Custom divider med mindre luft
+                st.markdown('<div class="divider-line"></div>', unsafe_allow_html=True)
                 
                 # Kampliste
                 for _, row in df_res.iterrows():
@@ -198,7 +207,7 @@ def vis_side(dp=None):
 
             def draw_stat_chart(chart_key, default_idx):
                 h_c, d_c = st.columns([2, 1])
-                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"sel_{chart_key}", label_visibility="collapsed")
+                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"s_{chart_key}", label_visibility="collapsed")
                 c_key = kat_map[val]
                 avg = df_plot[f'{c_key}_tot'].mean()
                 
@@ -207,29 +216,19 @@ def vis_side(dp=None):
                 fig = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key}_tot", text=f"{c_key}_tot",
                               hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c_key}_tot': True})
                 
-                # Gennemsnitslinje med lav opacity (0.2) så tallene kan læses bagved
-                fig.add_hline(y=avg, 
-                              line_dash="dot", 
-                              line_color="rgba(0,0,0,0.2)", 
-                              line_width=1,
-                              annotation_text="Gns", 
-                              annotation_position="top right")
+                # Gns linje med lav opacity (0.2)
+                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1,
+                              annotation_text="Gns", annotation_position="top right")
                 
                 fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
-                fig.update_layout(
-                    height=280, 
-                    margin=dict(t=50, b=0, l=0, r=0), 
-                    plot_bgcolor='rgba(0,0,0,0)', 
-                    xaxis_title=None, 
-                    yaxis_title=None, 
-                    yaxis_showgrid=True, 
-                    yaxis_gridcolor='#eee'
-                )
+                fig.update_layout(height=280, margin=dict(t=50, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                                  xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             draw_stat_chart("c1", 0)
             st.markdown("<div style='margin-top:25px;'></div>", unsafe_allow_html=True)
             draw_stat_chart("c2", 1)
+            
     with t2:
         cp, cs = st.columns([2, 1])
         v_med = cs.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
