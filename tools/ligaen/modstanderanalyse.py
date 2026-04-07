@@ -440,7 +440,7 @@ def vis_side(dp=None):
                 st.write("") 
                 visning = st.selectbox(
                     "Vælg visning", 
-                    ["Heatmap (Tendenser)", "Skud & Mål", "Pasninger", "Erobringer", "Dueller & Frispark"],
+                    ["Heatmap (Tendenser)", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Dueller"],
                     key="pitch_view_selector"
                 )
 
@@ -460,8 +460,13 @@ def vis_side(dp=None):
                         pitch.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=8, alpha=0.2, zorder=2)
                         ax.set_title(f"Tendenser: {valgt_spiller}", fontsize=9, fontweight='bold')
 
-                    elif visning == "Skud & Mål":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                    elif visning == "Afslutninger":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15])]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
+                        ax.set_title(f"Skud & Mål: {valgt_spiller}", fontsize=9, fontweight='bold')
+
+                    elif visning == "Mål":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([16])]
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.9, zorder=3)
                         ax.set_title(f"Skud & Mål: {valgt_spiller}", fontsize=9, fontweight='bold')
 
@@ -475,7 +480,7 @@ def vis_side(dp=None):
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='orange', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
                         ax.set_title(f"Erobringer: {valgt_spiller}", fontsize=9, fontweight='bold')
 
-                    elif visning == "Dueller & Frispark":
+                    elif visning == "Dueller":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([4, 5, 6, 44])]
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='green', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
                         ax.set_title(f"Dueller & Frispark: {valgt_spiller}", fontsize=9, fontweight='bold')
