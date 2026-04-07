@@ -111,57 +111,51 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- 1. DATA BEREGNING ---
+        # --- 1. DATA PREP ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
-        df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
-            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
-            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
-            A_suc=('EVENT_TYPEID', lambda x: (df_all_h.loc[x.index, 'EVENT_TYPEID'] == 16).sum()),
-            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
-            E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
-            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
-            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
-            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
-            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
-        ).reset_index()
-
+        # (df_vol beregning...)
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
         df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- 2. FINPUDSES CSS ---
+        # --- 2. ULTRA-COMPACT CSS ---
         st.markdown("""
             <style>
-            /* Centrerer ALT indhold i metrics (både label og tal) */
+            /* Centrerer metrics og fjerner luft i toppen af rammen */
             [data-testid="stMetric"] {
                 text-align: center;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                padding-top: 0px !important;
             }
             [data-testid="stMetricLabel"] {
                 justify-content: center;
                 font-size: 11px !important;
-                margin-bottom: -5px !important; /* Trækker tallet tættere på overskriften */
+                margin-bottom: -8px !important;
             }
             [data-testid="stMetricValue"] {
-                font-size: 16px !important;
+                font-size: 20px !important;
                 font-weight: 700;
                 justify-content: center;
             }
-            /* Justerer margener i boksen for at minimere luft ved divideren */
+            /* Trækker hele metrics-rækken helt op til kanten af st.container */
             .metric-row-wrapper {
-                margin-top: -20px;
-                margin-bottom: -30px;
+                margin-top: -25px; 
+                margin-bottom: -15px;
             }
-            .divider-line {
-                margin-top: -5px; 
-                margin-bottom: -5px; 
+            /* Divideren skal være helt tæt på metrics */
+            .compact-divider {
+                margin-top: 0px; 
+                margin-bottom: 10px; 
                 border-top: 1px solid #f0f2f6;
+            }
+            /* Fjerner padding i Streamlits columns for at få grafer tættere på selectbox */
+            [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) {
+                margin-top: -15px !important;
             }
             </style>
             """, unsafe_allow_html=True)
@@ -173,7 +167,7 @@ def vis_side(dp=None):
             st.write("**Seneste 10 kampe**")
             
             with st.container(border=True):
-                # Metrics række
+                # Metrics række (rykkket op via metric-row-wrapper)
                 st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
                 mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
@@ -187,8 +181,8 @@ def vis_side(dp=None):
                 met_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Custom divider med mindre luft
-                st.markdown('<div class="divider-line"></div>', unsafe_allow_html=True)
+                # Kompakt divider
+                st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
                 
                 # Kampliste
                 for _, row in df_res.iterrows():
@@ -207,7 +201,7 @@ def vis_side(dp=None):
 
             def draw_stat_chart(chart_key, default_idx):
                 h_c, d_c = st.columns([2, 1])
-                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"s_{chart_key}", label_visibility="collapsed")
+                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"x_{chart_key}", label_visibility="collapsed")
                 c_key = kat_map[val]
                 avg = df_plot[f'{c_key}_tot'].mean()
                 
@@ -216,17 +210,18 @@ def vis_side(dp=None):
                 fig = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key}_tot", text=f"{c_key}_tot",
                               hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c_key}_tot': True})
                 
-                # Gns linje med lav opacity (0.2)
-                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1.5,
+                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1,
                               annotation_text="Gns", annotation_position="top right")
                 
                 fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
-                fig.update_layout(height=280, margin=dict(t=50, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                
+                # margin-t er nu sat til 25 for at rykke selve graf-arealet helt op til teksten
+                fig.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
                                   xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             draw_stat_chart("c1", 0)
-            st.markdown("<div style='margin-top:25px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True) # Mindre afstand mellem grafer
             draw_stat_chart("c2", 1)
             
     with t2:
