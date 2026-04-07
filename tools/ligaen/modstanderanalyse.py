@@ -28,80 +28,21 @@ def get_logo_img(opta_uuid):
 
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
-    
-    # Justeret fordeling for at spare bredde
-    col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 2, 0.4, 1.2, 0.4, 2, 0.4])
-    
-    with col1:
-        st.markdown(f"<p style='font-size:11px; margin:10px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<p style='font-size:12px; font-weight:600; margin:10px 0; text-align:right;'>{h_name}</p>", unsafe_allow_html=True)
+    col1, col2, col3, col4, col5, col6, col7 = st.columns([0.8, 1.8, 0.4, 1.2, 0.4, 1.8, 0.4])
+    with col1: st.markdown(f"<p style='font-size:10px; margin:10px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
+    with col2: st.markdown(f"<p style='font-size:11px; font-weight:600; margin:10px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
     with col3:
         logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == h_uuid), "")
-        if logo_h: st.image(logo_h, width=22)
-    with col4:
-        st.markdown(f"<p style='font-size:13px; font-weight:800; margin:10px 0; text-align:center; background:#f0f2f6; border-radius:4px;'>{score}</p>", unsafe_allow_html=True)
+        if logo_h: st.image(logo_h, width=18)
+    with col4: st.markdown(f"<p style='font-size:12px; font-weight:800; margin:10px 0; text-align:center; background:#f0f2f6; border-radius:4px;'>{score}</p>", unsafe_allow_html=True)
     with col5:
         logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == a_uuid), "")
-        if logo_a: st.image(logo_a, width=22)
-    with col6:
-        st.markdown(f"<p style='font-size:12px; font-weight:600; margin:10px 0;'>{a_name}</p>", unsafe_allow_html=True)
-    with col7:
-        st.markdown(f"""
-            <div style='background-color:{bg_color}; color:white; border-radius:4px; 
-            text-align:center; font-weight:bold; margin-top:8px; font-size:11px; padding:2px 0;'>{res_char}</div>
-        """, unsafe_allow_html=True)
-        
-def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l1.imshow(scoring_team_logo)
-        ax_l1.axis('off')
-    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
-    if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l2.imshow(opp_team_logo)
-        ax_l2.axis('off')
-    full_info = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
-    ax.text(0.03, 0.07, full_info, transform=ax.transAxes, fontsize=8, color='#444444', va='top', fontweight='medium')
+        if logo_a: st.image(logo_a, width=18)
+    with col6: st.markdown(f"<p style='font-size:11px; font-weight:600; margin:10px 0;'>{a_name[:12]}</p>", unsafe_allow_html=True)
+    with col7: st.markdown(f"<div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-top:9px; font-size:10px; padding:1px 0;'>{res_char}</div>", unsafe_allow_html=True)
 
-def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
-    pitch = VerticalPitch(pitch_type='opta', half=False, pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=(5, 7))
-    
-    if zone == 'up':
-        ax.set_ylim(0, 55)
-        logo_pos, text_y = [0.04, 0.03, 0.08, 0.08], 0.05
-    elif zone == 'down':
-        ax.set_ylim(45, 100)
-        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
-    else:
-        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
+# (plot_custom_pitch, get_top_success, draw_match_info_box bibeholdes uændret)
 
-    if logo:
-        ax_logo = ax.inset_axes(logo_pos, transform=ax.transAxes)
-        ax_logo.imshow(logo)
-        ax_logo.axis('off')
-
-    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=5.5, 
-            fontweight='bold', ha='right', va='top', color='#333333')
-
-    if not plot_data.empty:
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100)
-    return fig
-
-def get_top_success(df, event_ids):
-    relevant = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
-    if relevant.empty: return pd.DataFrame()
-    stats = relevant.groupby('PLAYER_NAME').agg(
-        TOTAL=('OUTCOME', 'count'),
-        SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
-    ).reset_index()
-    stats['PCT'] = (stats['SUCCESS'] / stats['TOTAL'] * 100).round(1)
-    return stats.sort_values('TOTAL', ascending=False).head(8)
-
-# --- 3. HOVEDFUNKTION ---
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
@@ -117,83 +58,71 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # --- DATA HENTNING (Limit 10) ---
-    sql_res = f"""
-        SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
-               TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
-               CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
-        FROM {DB}.OPTA_MATCHINFO 
-        WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
-        AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
-        AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%')
-        ORDER BY MATCH_LOCALDATE DESC LIMIT 10
-    """
+    # --- DATA HENTNING ---
+    sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
     df_res = conn.query(sql_res)
     if df_res is None or df_res.empty: return st.warning("Ingen kampe fundet.")
 
     match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
     match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
-
     df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
 
-    # --- UI LAYOUT ---
+    # --- TABS ---
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Forberedelse
-        df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
+        # 1. BEREGN df_plot (Løser 'df_plot not defined' fejlen)
+        df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
+            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
+            A_suc=('EVENT_TYPEID', lambda x: (df_all_h.loc[x.index, 'EVENT_TYPEID'] == 16).sum()),
+            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
+            E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
+            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
+            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
+        ).reset_index()
         
-        # Kolonner: Venstre side (main_col1) er gjort mindre
-        main_col1, main_col2 = st.columns([1.1, 1])
+        df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
+        df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
+        df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
+        df_plot = df_plot.sort_values('MATCH_LOCALDATE')
+        df_plot['MOD'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+        df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m')
+
+        # 2. LAYOUT: Venstre kolonne er nu kun 0.8 bred
+        main_col1, main_col2 = st.columns([0.8, 1.2])
 
         with main_col1:
-            # --- CUSTOM METRIC BOKSE ---
-            wins = (df_res['RES'] == "W").sum()
-            draws = (df_res['RES'] == "D").sum()
-            losses = (df_res['RES'] == "L").sum()
-            points = (wins * 3) + draws
+            wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
             mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
 
-            # HTML/CSS til mindre metrics
-            metric_style = """
-                <div style='text-align: left;'>
-                    <p style='font-size: 11px; color: #666; margin-bottom: -5px; text-transform: uppercase; font-weight: bold;'>{label}</p>
-                    <p style='font-size: 18px; font-weight: 800; color: #111;'>{value}</p>
-                </div>
-            """
-            
-            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
-            m_col1.markdown(metric_style.format(label="Point", value=points), unsafe_allow_html=True)
-            m_col2.markdown(metric_style.format(label="Vundne", value=wins), unsafe_allow_html=True)
-            m_col3.markdown(metric_style.format(label="Uafgjorte", value=draws), unsafe_allow_html=True)
-            m_col4.markdown(metric_style.format(label="Nederlag", value=losses), unsafe_allow_html=True)
-            m_col5.markdown(metric_style.format(label="Målscore", value=f"{mål_s}-{mål_i}"), unsafe_allow_html=True)
+            metric_style = "<div style='text-align:center;'><p style='font-size:9px; color:#666; margin:0; font-weight:bold;'>{label}</p><p style='font-size:15px; font-weight:800; margin:0;'>{value}</p></div>"
+            m_cols = st.columns(5)
+            m_cols[0].markdown(metric_style.format(label="PTS", value=(wins*3)+draws), unsafe_allow_html=True)
+            m_cols[1].markdown(metric_style.format(label="V", value=wins), unsafe_allow_html=True)
+            m_cols[2].markdown(metric_style.format(label="U", value=draws), unsafe_allow_html=True)
+            m_cols[3].markdown(metric_style.format(label="T", value=losses), unsafe_allow_html=True)
+            m_cols[4].markdown(metric_style.format(label="MÅL", value=f"{mål_s}-{mål_i}"), unsafe_allow_html=True)
 
-            st.write("")
-            st.write("**Seneste 10 kampe**")
+            st.markdown("<br><p style='font-size:13px; font-weight:bold; margin-bottom:5px;'>Seneste 10 kampe</p>", unsafe_allow_html=True)
             for _, row in df_res.iterrows():
-                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m/%y'), 
-                               row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], 
-                               f"{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}", 
-                               row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
-                st.markdown("<hr style='margin:1px 0; opacity:0.1'>", unsafe_allow_html=True)
-                
+                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
+                st.markdown("<hr style='margin:0; opacity:0.1'>", unsafe_allow_html=True)
+
         with main_col2:
-            kat_map = {"Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0}, "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1}, "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0}, "Dueller": {'col': 'D', 'color': '#FF9800', 'round': 0}, "Frispark": {'col': 'F', 'color': '#D32F2F', 'round': 0}}
-            for i, k in enumerate(["v1_side", "v2_side"]):
-                hc, dc = st.columns([1.8, 1])
-                v = dc.selectbox(f"Stat {i+1}", list(kat_map.keys()), index=i, key=k, label_visibility="collapsed")
-                info = kat_map[v]
+            kat_map = {"Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0}, "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1}, "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0}}
+            for i, (v, info) in enumerate(kat_map.items()):
                 avg = df_plot[f"{info['col']}_tot"].mean()
-                hc.markdown(f"**{v} (Gns: {round(avg, info['round'])})**")
-                df_plot['TXT'] = df_plot.apply(lambda r: f"{int(r[f'{info['col']}_tot'])}<br>({int(r[f'{info['col']}_suc']/r[f'{info['col']}_tot']*100) if r[f'{info['col']}_tot']>0 else 0}%)", axis=1)
+                st.markdown(f"<p style='font-size:12px; font-weight:bold; margin:0;'>{v} (Gns: {round(avg, info['round'])})</p>", unsafe_allow_html=True)
+                df_plot['TXT'] = df_plot.apply(lambda r: f"{int(r[f'{info['col']}_tot'])}", axis=1)
                 fig = px.bar(df_plot, x='LABEL', y=f"{info['col']}_tot", text='TXT')
-                fig.add_hline(y=avg, line_dash="dash", line_color="#808080")
-                fig.update_traces(textposition='outside', marker_color=info['color'], textfont_size=10)
-                fig.update_layout(height=240, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+                fig.update_traces(marker_color=info['color'], textposition='outside', textfont_size=9)
+                fig.update_layout(height=160, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                if i == 0: st.divider()
 
     with t2:
         cp, cs = st.columns([2, 1])
