@@ -367,7 +367,7 @@ def vis_side(dp=None):
                 st.info("Ingen data fundet.")
                 
     with t3:
-        # --- 1. CSS TIL STYLING (Samme som t2) ---
+        # --- 1. CSS TIL STYLING ---
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
@@ -385,12 +385,11 @@ def vis_side(dp=None):
             """, unsafe_allow_html=True)
 
         # --- 2. LAYOUT & DROPDOWN ---
-        # Vi definerer de 4 sider du bad om
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
         c_left, c_right = st.columns([2, 1])
         v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
         
-        # --- 3. DEFINER FORKLARINGER (Til Top 8 titlen) ---
+        # --- 3. DEFINER FORKLARINGER ---
         forklaringer_u = {
             "Egen halvdel: Erobringer": "(Vundne aktioner / Forsøg (Succes %))",
             "Off. halvdel: Pres": "(Vundne aktioner / Forsøg (Succes %))",
@@ -403,20 +402,24 @@ def vis_side(dp=None):
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
         total_minutes = n_matches * 90
         
-        # Definerer ID'er for Erobringer/Pres (Tackles, Interceptions, Blocks)
-        # Opta typisk: 7 (Tackle), 8 (Interception), 12 (Clearance), 44 (Aerial)
-        erobring_ids = [7, 8, 12, 127] # Justeret til dine erobrings-ids
-        duel_ids = [7, 44] # Dueller (Liggende og luft)
+        erobring_ids = [7, 8, 12, 127] 
+        duel_ids = [7, 44] 
 
+        # Logik for at ekskludere feltet (x < 17) på egen halvdel
         if v_uden == "Egen halvdel: Erobringer":
-            ids, tit, cm, zn = erobring_ids, "EROBRINGER (EGEN HALVDEL)", "GnBu", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            ids, tit, cm, zn = erobring_ids, "EROBRINGER (UDENFOR FELT)", "GnBu", "up"
+            # Vi tager fra x=17 til x=50 for at undgå målmandens opsamlinger
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        
         elif v_uden == "Off. halvdel: Pres":
             ids, tit, cm, zn = erobring_ids, "PRES (OFF. HALVDEL)", "GnBu", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        
         elif v_uden == "Egen halvdel: Dueller":
-            ids, tit, cm, zn = duel_ids, "DUELLER (EGEN HALVDEL)", "Oranges", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            ids, tit, cm, zn = duel_ids, "DUELLER (UDENFOR FELT)", "Oranges", "up"
+            # Samme her: ekskluder feltet
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        
         else: # Off. halvdel: Dueller
             ids, tit, cm, zn = duel_ids, "DUELLER (OFF. HALVDEL)", "Oranges", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
@@ -429,20 +432,17 @@ def vis_side(dp=None):
 
         # --- 6. STATS & TABEL (HØJRE) ---
         with c_right:
-            # Metrics (Total, p90, Succes rate)
             acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
             avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
             
             m_cols = st.columns(3)
             m_cols[0].metric("Total", total_act)
-            m_cols[1].metric("Gns p90", round(avg_p90, 1))
+            m_cols[1].metric("p90", round(avg_p90, 1))
             m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
-            # Titel med forklaring
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_uden}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring_u}</span>", unsafe_allow_html=True)
             
-            # Top 8 Spillere
             if not df_f.empty:
                 df_top = df_f.groupby('PLAYER_NAME').agg(
                     TOTAL=('OUTCOME', 'count'),
@@ -453,9 +453,7 @@ def vis_side(dp=None):
                 df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
 
                 for _, r in df_top.iterrows():
-                    # Farve baseret på om det er Erobringer (Blå/Grøn) eller Dueller (Orange)
                     bar_color = "#2b8cbe" if "Erobringer" in v_uden or "Pres" in v_uden else "#ec7014"
-                    
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
@@ -468,7 +466,8 @@ def vis_side(dp=None):
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("Ingen data fundet for denne kategori.")
+                st.info("Ingen data fundet (målmandsfeltet er ekskluderet).")
+                
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
