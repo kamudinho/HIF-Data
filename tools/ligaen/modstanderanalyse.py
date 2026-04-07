@@ -440,7 +440,7 @@ def vis_side(dp=None):
                 st.write("") 
                 visning = st.selectbox(
                     "Vælg visning", 
-                    ["Heatmap (Tendenser)", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"],
+                    ["Heatmap (Tendenser)", "Berøringer", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"],
                     key="pitch_view_selector"
                 )
 
@@ -459,7 +459,12 @@ def vis_side(dp=None):
                         pitch.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
                         pitch.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=8, alpha=0.2, zorder=2)
                         ax.set_title(f"Tendenser: {valgt_spiller}", fontsize=9, fontweight='bold')
-
+                    
+                    elif visning == "Berøringer":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([61])]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
+                        ax.set_title(f"Skud & Mål: {valgt_spiller}", fontsize=9, fontweight='bold')
+                        
                     elif visning == "Afslutninger":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15])]
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=40, edgecolors='white', linewidth=0.7, alpha=0.5, zorder=3)
