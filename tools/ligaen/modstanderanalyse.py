@@ -97,15 +97,22 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
+        # Metrics række
+        df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
+        wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
+        mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
+        mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
+        
+        st.markdown("<style>[data-testid='stMetricValue'] {font-size: 22px !important; font-weight: 800;}</style>", unsafe_allow_html=True)
+        met = st.columns(5)
+        met[0].metric("Point", (wins*3)+draws); met[1].metric("Vundne", wins); met[2].metric("Uafgjort", draws); met[3].metric("Tabte", losses); met[4].metric("Målscore", f"{int(mål_s)}-{int(mål_i)}")
+
+        # Grafer og liste
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
-            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            P_suc=('OUTCOME', lambda x: (x == 1).sum()),
-            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
-            A_suc=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
-            E_suc=('OUTCOME', lambda x: (x == 1).sum()),
-            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
-            D_suc=('OUTCOME', lambda x: (x == 1).sum()),
+            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()), P_suc=('OUTCOME', lambda x: (x == 1).sum()),
+            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()), A_suc=('EVENT_TYPEID', lambda x: (x == 16).sum()),
+            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()), E_suc=('OUTCOME', lambda x: (x == 1).sum()),
+            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()), D_suc=('OUTCOME', lambda x: (x == 1).sum()),
             T_tot=('EVENT_X', lambda x: ((df_all_h.loc[x.index, 'EVENT_X'] > 83) & (df_all_h.loc[x.index, 'EVENT_Y'] > 21.1) & (df_all_h.loc[x.index, 'EVENT_Y'] < 78.9)).sum())
         ).reset_index()
 
@@ -113,36 +120,34 @@ def vis_side(dp=None):
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
 
-        m_col1, m_spacer, m_col2 = st.columns([1.3, 0.2, 2.0])
+        m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         with m_col1:
-            st.write("**Seneste kampe**")
+            st.write("**Seneste 10 kampe**")
             for _, row in df_res.iterrows():
-                res = "D" if row['TOTAL_HOME_SCORE'] == row['TOTAL_AWAY_SCORE'] else ("W" if ((row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and row['TOTAL_HOME_SCORE'] > row['TOTAL_AWAY_SCORE']) or (row['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and row['TOTAL_AWAY_SCORE'] > row['TOTAL_HOME_SCORE'])) else "L")
-                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], res)
+                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
                 st.markdown("<hr style='margin:2px 0; opacity:0.05'>", unsafe_allow_html=True)
 
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Touches in Box": 'T'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'T': '#fb6a4a'}
             for k_idx, key_name in enumerate(["v1", "v2"]):
-                h, d = st.columns([2, 1])
-                v = d.selectbox(f"Stat {k_idx+1}", list(kat_map.keys()), index=k_idx, key=key_name, label_visibility="collapsed")
-                c_key = kat_map[v]
-                avg = df_plot[f'{c_key}_tot'].mean()
+                h, d = st.columns([2, 1]); v = d.selectbox(f"Stat {k_idx+1}", list(kat_map.keys()), index=k_idx, key=key_name, label_visibility="collapsed")
+                c_key = kat_map[v]; avg = df_plot[f'{c_key}_tot'].mean()
                 h.markdown(f"**{v} (Gns: {round(avg,1)})**")
                 df_plot['TXT'] = df_plot.apply(lambda r: f"{int(r[f'{c_key}_tot'])}" + (f"<br>({int(r[f'{c_key}_suc']/r[f'{c_key}_tot']*100)}%)" if c_key not in ['T'] and r[f'{c_key}_tot']>0 else ""), axis=1)
                 fig = px.bar(df_plot, x='LABEL', y=f"{c_key}_tot", text='TXT')
-                fig.add_hline(y=avg, line_dash="dot", line_color="#333", annotation_text="Gns")
+                fig.add_hline(y=avg, line_dash="dot", line_color="#333")
                 fig.update_traces(marker_color=col_map[c_key], textposition='outside', textfont_size=9)
-                fig.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+                fig.update_layout(height=210, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
         cp, cs = st.columns([2, 1])
-        v_med = cs.selectbox("Fokus", ["Opbygning", "Gennembrud", "I feltet (Touches)"], key="ms")
-        if v_med == "Opbygning": ids, tit, cm, zn, df_f = [1], "EGEN HALVDEL: OPBYGNING", "Blues", "up", df_all_h[df_all_h['EVENT_X'] <= 50]
-        elif v_med == "Gennembrud": ids, tit, cm, zn, df_f = [1], "OFF. HALVDEL: GENNEMBRUD", "Reds", "down", df_all_h[df_all_h['EVENT_X'] > 50]
-        else: ids, tit, cm, zn, df_f = [1, 7, 8, 12, 13, 14, 15, 16], "TOUCHES I FELTET", "YlOrRd", "down", df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)]
+        v_med = cs.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger", "Touches in Box"], key="ms")
+        if v_med == "Opbygning": ids, tit, cm, zn, df_f = [1], "OPBYGNING (0-50)", "Blues", "up", df_all_h[df_all_h['EVENT_X'] <= 50]
+        elif v_med == "Gennembrud": ids, tit, cm, zn, df_f = [1], "GENNEMBRUD (50-100)", "Reds", "down", df_all_h[df_all_h['EVENT_X'] > 50]
+        elif v_med == "Afslutninger": ids, tit, cm, zn, df_f = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down", df_all_h
+        else: ids, tit, cm, zn, df_f = [1, 7, 8, 12, 13, 14, 15, 16], "TOUCHES I FELTET", "PuRd", "down", df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)]
         cs.write("**Top 8:**")
         df_top = get_top_success(df_f, ids)
         if not df_top.empty:
@@ -151,21 +156,15 @@ def vis_side(dp=None):
 
     with t3:
         cp, cs = st.columns([2, 1])
-        v_uden = cs.selectbox("Fokus", ["Defensiv (Egen halvdel)", "Pres (Modstanders halvdel)", "Erobringer (Hele banen)", "Dueller (Hele banen)"], key="us")
+        v_uden = cs.selectbox("Fokus", ["Egen Halvdel (0-50)", "Offensiv Halvdel (50-100)"], key="us")
         mask_felt_egen = ~((df_all_h['EVENT_X'] < 17) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9))
         
-        if v_uden == "Defensiv (Egen halvdel)":
+        if v_uden == "Egen Halvdel (0-50)":
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & mask_felt_egen]
-            ids, tit, cm, zn = [7, 8, 12, 127, 49], "DEFENSIV: EGEN HALVDEL", "Oranges", "up"
-        elif v_uden == "Pres (Modstanders halvdel)":
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 50)]
-            ids, tit, cm, zn = [7, 8, 12, 127, 49], "PRES: MODSTANDERS HALVDEL", "GnBu", "down"
-        elif v_uden == "Erobringer (Hele banen)":
-            df_f = df_all_h
-            ids, tit, cm, zn = [12, 127, 49], "ALLE EROBRINGER", "Greens", "full"
+            ids, tit, cm, zn = [7, 8, 12, 127, 49], "DUELLER & EROBRINGER (0-50)", "Oranges", "up"
         else:
-            df_f = df_all_h
-            ids, tit, cm, zn = [7, 8], "ALLE DUELLER", "Blues", "full"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50)]
+            ids, tit, cm, zn = [7, 8, 12, 127, 49], "DUELLER & EROBRINGER (50-100)", "GnBu", "down"
             
         cs.write("**Top 8:**")
         df_top_u = get_top_success(df_f, ids)
@@ -178,11 +177,8 @@ def vis_side(dp=None):
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['GOAL_MIN'])}. min)", 'match_id': r['MATCH_OPTAUUID'], 'goal_ts': r['GOAL_TIME'], 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 'min': int(r['GOAL_MIN']), 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} for _, r in gl.iterrows()}
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
-            sd = opts[sk]
-            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
-            p_c, l_c = st.columns([2.5, 1])
-            p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
-            f, ax = p.draw(figsize=(10, 7))
+            sd = opts[sk]; tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
+            p_c, l_c = st.columns([2.5, 1]); p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey'); f, ax = p.draw(figsize=(10, 7))
             if hold_logo:
                 ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes); ax_l1.imshow(hold_logo); ax_l1.axis('off')
             ax.text(0.03, 0.07, f"{sd['date']} | {sd['min']}. min", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
@@ -190,30 +186,19 @@ def vis_side(dp=None):
             for _, r in tge.iterrows():
                 c = 'red' if r['EVENT_TYPEID'] == 16 else 'black'
                 ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=c, s=80, edgecolors='white', zorder=10)
-            p_c.pyplot(f)
-            l_c.write("**Sekvens:**")
-            tge_disp = tge.copy()
-            tge_disp['Aktion'] = tge_disp['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+            p_c.pyplot(f); l_c.write("**Sekvens:**")
+            tge_disp = tge.copy(); tge_disp['Aktion'] = tge_disp['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
             l_c.dataframe(tge_disp[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
         else: st.info("Ingen mål fundet.")
 
     with t5:
         if not df_all_h.empty:
-            # Beregn per spiller baseret på de samme definitioner som graferne
             df_all_h['is_pass'] = (df_all_h['EVENT_TYPEID'] == 1).astype(int)
             df_all_h['is_regain'] = df_all_h['EVENT_TYPEID'].isin([7, 8, 12, 49, 127]).astype(int)
             df_all_h['is_shot'] = df_all_h['EVENT_TYPEID'].isin([13,14,15,16]).astype(int)
             df_all_h['is_tib'] = ((df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)).astype(int)
-            
-            stats = df_all_h.groupby('PLAYER_NAME').agg(
-                Pasninger=('is_pass', 'sum'),
-                Erobringer_Dueller=('is_regain', 'sum'),
-                Skud=('is_shot', 'sum'),
-                Touches_in_Box=('is_tib', 'sum'),
-                Total_Aktioner=('EVENT_TYPEID', 'count')
-            ).sort_values('Total_Aktioner', ascending=False)
-            
-            st.write(f"**Statistik for de seneste 10 kampe (Totaler)**")
+            stats = df_all_h.groupby('PLAYER_NAME').agg(Pasninger=('is_pass', 'sum'), Erobringer_Dueller=('is_regain', 'sum'), Skud=('is_shot', 'sum'), Touches_in_Box=('is_tib', 'sum'), Total_Aktioner=('EVENT_TYPEID', 'count')).sort_values('Total_Aktioner', ascending=False)
+            st.write(f"**Statistik for de seneste 10 kampe**")
             st.dataframe(stats, use_container_width=True)
 
 if __name__ == "__main__":
