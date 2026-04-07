@@ -95,36 +95,34 @@ def vis_side(dp=None):
     match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
     match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
     
-    # Hent alle events for holdet
+    # Primær event-data til generel statistik
     df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
     
-    # Hent events til mål-sekvenser (RETTET SQL MED CTE)
+    # Sekvens-data med CTE til Tab 4
     sql_events = f"""
-    WITH GoalEvents AS (
-        SELECT 
-            e.*, 
-            m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-            (SELECT MAX(e2.EVENT_TIMESTAMP) 
-             FROM {DB}.OPTA_EVENTS e2 
-             WHERE e2.MATCH_OPTAUUID = e.MATCH_OPTAUUID 
-               AND e2.EVENT_TYPEID = 16 
-               AND e2.EVENT_TIMESTAMP >= e.EVENT_TIMESTAMP 
-               AND e2.EVENT_TIMESTAMP <= DATEADD(millisecond, 20000, e.EVENT_TIMESTAMP)) as GOAL_TIME
+    WITH BaseEvents AS (
+        SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID
         FROM {DB}.OPTA_EVENTS e 
         JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+    ),
+    Goals AS (
+        SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_PERIODID as G_PERIOD, EVENT_MINUTE as G_MIN
+        FROM {DB}.OPTA_EVENTS 
+        WHERE EVENT_TYPEID = 16 AND MATCH_OPTAUUID IN {match_ids_str}
     )
-    SELECT 
-        *,
-        (SELECT MAX(EVENT_PERIODID) FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID = GoalEvents.MATCH_OPTAUUID AND EVENT_TIMESTAMP = GoalEvents.GOAL_TIME) as GOAL_PERIOD,
-        (SELECT MAX(EVENT_MINUTE) FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID = GoalEvents.MATCH_OPTAUUID AND EVENT_TIMESTAMP = GoalEvents.GOAL_TIME) as GOAL_MIN
-    FROM GoalEvents
+    SELECT b.*, g.G_TIME as GOAL_TIME, g.G_PERIOD as GOAL_PERIOD, g.G_MIN as GOAL_MIN
+    FROM BaseEvents b
+    LEFT JOIN Goals g ON b.MATCH_OPTAUUID = g.MATCH_OPTAUUID 
+        AND g.G_TIME >= b.EVENT_TIMESTAMP 
+        AND g.G_TIME <= DATEADD(millisecond, 20000, b.EVENT_TIMESTAMP)
     """
     df_all_events = conn.query(sql_events)
 
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
+        # Statistik beregning
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
@@ -194,21 +192,34 @@ def vis_side(dp=None):
         if not df_all_events.empty and 'GOAL_TIME' in df_all_events.columns:
             gl = df_all_events.dropna(subset=['GOAL_TIME']).drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
             if not gl.empty:
-                opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {'match_id': r['MATCH_OPTAUUID'], 'goal_ts': r['GOAL_TIME'], 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 'min': r['GOAL_MIN'], 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} for _, r in gl.iterrows()}
-                sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: f"{opts[x]['date']} ({int(opts[x]['min'])}. min)")
+                opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
+                    'match_id': r['MATCH_OPTAUUID'], 
+                    'goal_ts': r['GOAL_TIME'], 
+                    'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
+                    'min': int(r['GOAL_MIN']), 
+                    'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} for _, r in gl.iterrows()}
+                
+                sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: f"{opts[x]['date']} ({opts[x]['min']}. min)")
                 sd = opts[sk]
+                
                 tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
                 p_c, l_c = st.columns([2.5, 1])
+                
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 f, ax = p.draw(figsize=(10, 7))
-                draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], "Mål", int(sd['min']))
-                for i in range(len(tge)-1): p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
+                draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], "Mål", sd['min'])
+                
+                for i in range(len(tge)-1): 
+                    p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
+                
                 for _, r in tge.iterrows():
                     c, m, s = ('red', 's', 180) if r['EVENT_TYPEID'] == 16 else (('gold', 'P', 200) if r['EVENT_TYPEID'] == 5 else ('red', 'o', 80))
                     ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=c, s=s, marker=m, edgecolors='black', zorder=10)
+                
                 p_c.pyplot(f)
                 tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                l_c.write("**Sekvens:**"); l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
+                l_c.write("**Sekvens:**")
+                l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
             else: st.info("Ingen mål fundet i perioden.")
 
     with t5:
