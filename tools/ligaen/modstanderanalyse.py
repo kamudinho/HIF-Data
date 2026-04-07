@@ -113,6 +113,7 @@ def vis_side(dp=None):
     with t1:
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
+        # Samme df_vol logik som før...
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -130,32 +131,51 @@ def vis_side(dp=None):
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
 
-        m_col1, m_spacer, m_col2 = st.columns([1.3, 0.2, 2.0])
+        m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
         with m_col1:
-            wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
-            mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
-            mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
+            # Vi bruger en st.container til at skabe rammen med custom CSS
+            st.markdown("""
+                <style>
+                .stats-box {
+                    border: 1px solid #e6e9ef;
+                    border-radius: 8px;
+                    padding: 15px;
+                    background-color: #ffffff;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+            
+            with st.container():
+                st.markdown('<div class="stats-box">', unsafe_allow_html=True)
+                
+                wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
+                mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
+                mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
 
-            st.write("**Seneste 10 kampe**")
-            st.markdown("<style>[data-testid='stMetricValue'] {font-size: 18px !important;} [data-testid='stMetricLabel'] {font-size: 11px !important;}</style>", unsafe_allow_html=True)
-            metrics = st.columns(5)
-            metrics[0].metric("Pts", (wins*3)+draws); metrics[1].metric("V", wins); metrics[2].metric("U", draws); metrics[3].metric("T", losses); metrics[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
+                st.markdown("<style>[data-testid='stMetricValue'] {font-size: 18px !important;} [data-testid='stMetricLabel'] {font-size: 11px !important;}</style>", unsafe_allow_html=True)
+                metrics = st.columns(5)
+                metrics[0].metric("Pts", (wins*3)+draws)
+                metrics[1].metric("V", wins)
+                metrics[2].metric("U", draws)
+                metrics[3].metric("T", losses)
+                metrics[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
 
-            st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
-            for _, row in df_res.iterrows():
-                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
-                st.markdown("<hr style='margin:2px 0; opacity:0.05'>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+                st.write("**Seneste 10 kampe**")
+                
+                for _, row in df_res.iterrows():
+                    draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
+                    st.markdown("<hr style='margin:2px 0; opacity:0.05'>", unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
 
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
-            
-            # Farver der matcher heatmaps
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
             
-            # Vi opretter en pæn label til X-aksen: "01/04 vs FCK"
             df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper() # F.eks. "01/04 BIF"
+            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
             # --- GRAF 1 ---
             h1, d1 = st.columns([2, 1])
@@ -163,17 +183,15 @@ def vis_side(dp=None):
             c1_key = kat_map[v1]
             h1.markdown(f"**{v1} (Gns: {round(df_plot[f'{c1_key}_tot'].mean(), 1)})**")
             
-            fig1 = px.bar(df_plot, 
-                          x='X_AXIS_LABEL', 
-                          y=f"{c1_key}_tot", 
-                          text=f"{c1_key}_tot",
+            fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c1_key}_tot", text=f"{c1_key}_tot",
                           hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c1_key}_tot': True})
             
-            fig1.update_traces(marker_color=col_map[c1_key], textposition='outside', textfont_size=10)
-            fig1.update_layout(height=240, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig1.update_traces(marker_color=col_map[c1_key], textposition='outside', cliponaxis=False, textfont_size=10)
+            # Øget margin top (t) og height for at undgå beskæring
+            fig1.update_layout(height=260, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-            st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:25px;'></div>", unsafe_allow_html=True)
 
             # --- GRAF 2 ---
             h2, d2 = st.columns([2, 1])
@@ -181,14 +199,12 @@ def vis_side(dp=None):
             c2_key = kat_map[v2]
             h2.markdown(f"**{v2} (Gns: {round(df_plot[f'{c2_key}_tot'].mean(), 1)})**")
             
-            fig2 = px.bar(df_plot, 
-                          x='X_AXIS_LABEL', 
-                          y=f"{c2_key}_tot", 
-                          text=f"{c2_key}_tot",
+            fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c2_key}_tot", text=f"{c2_key}_tot",
                           hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c2_key}_tot': True})
             
-            fig2.update_traces(marker_color=col_map[c2_key], textposition='outside', textfont_size=10)
-            fig2.update_layout(height=240, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig2.update_traces(marker_color=col_map[c2_key], textposition='outside', cliponaxis=False, textfont_size=10)
+            # Øget margin top (t) og height for at undgå beskæring
+            fig2.update_layout(height=260, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
