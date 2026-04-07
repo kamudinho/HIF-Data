@@ -58,11 +58,27 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def draw_player_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
-    ax.text(0.08, 0.105, "", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
+def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
+    """
+    Tegner spiller-info overlay på banen.
+    [logo] NAVN
+           Sæson | Kategori
+    """
+    # 1. Tegn Logoet (Hvidovre) helt ude til venstre
+    if team_logo:
+        # Placering: [x_start, y_start, bredde, højde]
+        ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
+        ax_l.imshow(team_logo)
+        ax_l.axis('off')
+    
+    # 2. Spillerens Navn (Fed og lidt større)
+    ax.text(0.10, 0.92, player_name.upper(), transform=ax.transAxes, 
+            fontsize=10, fontweight='bold', color='black', va='center')
+    
+    # 3. Sæson og Kategori (Mindre og grålig tekst nedenunder)
+    info_text = f"{season_str} | {category_str}"
+    ax.text(0.10, 0.89, info_text, transform=ax.transAxes, 
+            fontsize=8, color='#666666', va='center')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     plot_data = df[df['EVENT_TYPEID'].isin(event_ids)].copy()
