@@ -30,7 +30,7 @@ def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
     # Justerede proportioner for at gøre rækken mere kompakt
     col1, col2, col3, col4, col5, col6, col7 = st.columns([0.6, 1.6, 0.4, 1.0, 0.4, 1.6, 0.4])
-    with col1: st.markdown(f"<p style='font-size:12px; margin:6px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
+    with col1: st.markdown(f"<p style='font-size:12px; margin:2px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
     with col2: st.markdown(f"<p style='font-size:12px; font-weight:600; margin:6px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
     with col3:
         logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == h_uuid), "")
