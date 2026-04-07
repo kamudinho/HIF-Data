@@ -217,7 +217,7 @@ def vis_side(dp=None):
                               hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c_key}_tot': True})
                 
                 # Gns linje med lav opacity (0.2)
-                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1,
+                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1.5,
                               annotation_text="Gns", annotation_position="top right")
                 
                 fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
