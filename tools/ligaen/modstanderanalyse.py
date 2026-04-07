@@ -159,8 +159,8 @@ def vis_side(dp=None):
                 margin-bottom: -10px;
             }
             .divider-line {
-                margin-top: 5px; 
-                margin-bottom: 10px; 
+                margin-top: 2px; 
+                margin-bottom: 2px; 
                 border-top: 1px solid #f0f2f6;
             }
             </style>
