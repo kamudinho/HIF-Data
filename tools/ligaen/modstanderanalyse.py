@@ -240,7 +240,7 @@ def vis_side(dp=None):
                 font-size: 10px !important; 
                 white-space: nowrap;
                 /* --- HER STYRER DU AFSTANDEN --- */
-                margin-bottom: -8px !important; 
+                margin-bottom: -3px !important; 
             }
             [data-testid="stMetricValue"] { 
                 justify-content: center !important; 
