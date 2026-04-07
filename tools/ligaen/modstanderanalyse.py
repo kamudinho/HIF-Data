@@ -232,8 +232,8 @@ def vis_side(dp=None):
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
                 text-align: center; align-items: center; justify-content: center; width: 100%;
             }
-            [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 11px !important; }
-            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 16px !important; font-weight: 700; }
+            [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; }
+            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; }
             </style>
             """, unsafe_allow_html=True)
 
@@ -242,7 +242,7 @@ def vis_side(dp=None):
         col_title, col_sel = st.columns([2.5, 1])
         v_med = col_sel.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
         
-        # Geografisk og type-filtrering baseret på X-koordinater
+        # Geografisk og type-filtrering
         if v_med == "Opbygning":
             ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
@@ -264,49 +264,56 @@ def vis_side(dp=None):
             st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
         with c_right:
-            # --- 4. DYNAMISKE METRICS ---
+            # --- 4. METRICS PÅ ÉN LINJE ---
             if v_med == "Afslutninger":
                 goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
                 shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
                 goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
                 conv_rate = (goals / total_act * 100) if total_act > 0 else 0
                 
-                # To rækker af metrics for at få plads til alle 5 tal
-                m_row1 = st.columns(3)
-                m_row1[0].metric("Skud", total_act)
-                m_row1[1].metric("Skud p90", round(shots_p90, 1))
-                m_row1[2].metric("Konvertering", f"{int(conv_rate)}%")
-                
-                m_row2 = st.columns(2)
-                m_row2[0].metric("Mål", goals)
-                m_row2[1].metric("Mål p90", round(goals_p90, 1))
+                m_cols = st.columns(5)
+                m_cols[0].metric("Skud", total_act)
+                m_cols[1].metric("p90", round(shots_p90, 1))
+                m_cols[2].metric("Mål", goals)
+                m_cols[3].metric("p90", round(goals_p90, 1))
+                m_cols[4].metric("Konv %", f"{int(conv_rate)}%")
             else:
                 acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
                 avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
                 
-                m_row1 = st.columns(3)
-                m_row1[0].metric("Total", total_act)
-                m_row1[1].metric("Gns p90", round(avg_p90, 1))
-                m_row1[2].metric("Succes", f"{int(acc_pct)}%")
+                m_cols = st.columns(3)
+                m_cols[0].metric("Total", total_act)
+                m_cols[1].metric("Gns p90", round(avg_p90, 1))
+                m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}**")
             
-            # --- 5. TOP 8 SPILLERE ---
-            df_top = get_top_success(df_f, ids)
-            
-            if not df_top.empty:
+            # --- 5. TOP 8 SPILLERE (Mål / Afslutninger) ---
+            # Vi aggregerer manuelt her for at sikre at 'SUCCESS' altid er mål (type 16) når vi ser på afslutninger
+            if not df_f.empty:
+                if v_med == "Afslutninger":
+                    df_top = df_f.groupby('PLAYER_NAME').agg(
+                        TOTAL=('EVENT_TYPEID', 'count'),
+                        SUCCESS=('EVENT_TYPEID', lambda x: (x == 16).sum())
+                    ).reset_index()
+                else:
+                    df_top = df_f.groupby('PLAYER_NAME').agg(
+                        TOTAL=('OUTCOME', 'count'),
+                        SUCCESS=('OUTCOME', lambda x: (x == 1).sum())
+                    ).reset_index()
+                
+                df_top['PCT'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).round(1)
+                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+
                 for _, r in df_top.iterrows():
                     color = "#084594" if v_med == "Opbygning" else ("#cb181d" if v_med == "Gennembrud" else "#ec7014")
-                    
-                    # Format: Mål / Skud (Konvertering %) eller Succes / Total (Pct %)
-                    display_val = f"{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)"
                     
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{display_val}</span>
+                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
@@ -314,7 +321,7 @@ def vis_side(dp=None):
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("Ingen data for denne kategori.")
+                st.info("Ingen data fundet.")
                 
     with t3:
         cp, cs = st.columns([2, 1])
