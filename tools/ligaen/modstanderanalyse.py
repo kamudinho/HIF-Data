@@ -226,6 +226,22 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
+        # --- 1. DEFINER FORKLARINGER ---
+        forklaringer = {
+            "Opbygning": "(Succesfulde pasninger / Pasninger (Pasning %))",
+            "Gennembrud": "(Succesfulde pasninger / Pasninger (Pasning %))",
+            "Touches in Box": "(Afslutninger / Touches in Box (Konv %))",
+            "Afslutninger": "(Mål / Afslutninger (Konv %))"
+        }
+    
+        # --- 2. DISPLAY AF TITEL ---
+        st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
+        
+        # Her sammensættes titlen dynamisk
+        valgt_forklaring = forklaringer.get(v_med, "")
+        st.write(f"**Top 8: {v_med}** <span style='font-size:12px; color:#666; font-weight:normal;'>{valgt_forklaring}</span>", unsafe_allow_html=True)
+
+        
         # --- 1. CSS TIL STYLING ---
         st.markdown("""
             <style>
@@ -317,7 +333,7 @@ def vis_side(dp=None):
                 m_cols[2].metric("Succes", f"{int(acc_pct)}%")
             
             st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
-            st.write(f"**Top 8: {v_med}**")
+            st.write(f"**Top 8: {v_med} {valgt_forklaring}**")
             
             # --- 6. TOP 8 SPILLERE ---
             if not df_f.empty:
