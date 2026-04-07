@@ -161,21 +161,26 @@ def vis_side(dp=None):
 
         # --- 2. TREND ANALYSE MED DYNAMISKE DROPDOWNS ---
         kat_map = {
-            "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0},
-            "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1},
-            "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0},
-            "Dueller": {'col': 'D', 'color': '#FF9800', 'round': 0},
-            "Frispark": {'col': 'F', 'color': '#D32F2F', 'round': 0}
+            "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0, 'id': [1]},
+            "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1, 'id': [13,14,15,16]},
+            "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0, 'id': [12, 127, 49]},
+            "Dueller": {'col': 'D', 'color': '#FF9800', 'round': 0, 'id': [7, 8]},
+            "Frispark": {'col': 'F', 'color': '#D32F2F', 'round': 0, 'id': [4]}
         }
         alle_kategorier = list(kat_map.keys())
 
-        # Data aggregering
+        # Aggregering af både TOTAL og SUCCES (OUTCOME = 1)
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
-            P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
-            E=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
-            D=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
-            F=('EVENT_TYPEID', lambda x: (x == 4).sum())
+            P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            A_tot=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
+            A_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 16)).sum()), # Mål er succes for afslutninger
+            E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
+            E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
+            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
+            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
+            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum()) # Frispark har sjældent outcome i samme tabel
         ).reset_index()
 
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
@@ -186,36 +191,37 @@ def vis_side(dp=None):
 
         g1, g2 = st.columns(2)
 
-        with g1:
-            h_col1, d_col1 = st.columns([1.8, 1])
-            v1 = d_col1.selectbox("Stat 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
-            
-            info1 = kat_map[v1]
-            avg1 = df_plot[info1['col']].mean()
-            # Tekst med gennemsnit i parentes
-            h_col1.markdown(f"**{v1} (Gns: {round(avg1, info1['round'])})**")
-            
-            fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'])
-            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6)
-            fig1.update_traces(textposition='outside', marker_color=info1['color'], cliponaxis=False)
-            fig1.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
-
-        with g2:
-            h_col2, d_col2 = st.columns([1.8, 1])
-            mulige_v2 = [k for k in alle_kategorier if k != v1]
-            v2 = d_col2.selectbox("Stat 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
-            
-            info2 = kat_map[v2]
-            avg2 = df_plot[info2['col']].mean()
-            # Tekst med gennemsnit i parentes
-            h_col2.markdown(f"**{v2} (Gns: {round(avg2, info2['round'])})**")
-            
-            fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'])
-            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
-            fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False)
-            fig2.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+        for i, g_col in enumerate([g1, g2]):
+            with g_col:
+                h_c, d_c = st.columns([1.8, 1])
+                # Logik for valg og filtrering
+                if i == 0:
+                    v = d_c.selectbox("Stat 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
+                    v1_val = v # Gem til g2 filtrering
+                else:
+                    mulige_v2 = [k for k in alle_kategorier if k != v1_val]
+                    v = d_c.selectbox("Stat 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
+                
+                info = kat_map[v]
+                col_prefix = info['col']
+                
+                # Beregn labels med (xx%)
+                def make_label(row):
+                    tot = row[f'{col_prefix}_tot']
+                    suc = row[f'{col_prefix}_suc']
+                    pct = (suc / tot * 100) if tot > 0 else 0
+                    return f"{int(tot)}<br>({int(pct)}%)"
+                
+                df_plot[f'{v}_txt'] = df_plot.apply(make_label, axis=1)
+                avg = df_plot[f'{col_prefix}_tot'].mean()
+                
+                h_c.markdown(f"**{v} (Gns: {round(avg, info['round'])})**")
+                
+                fig = px.bar(df_plot, x='LABEL', y=f'{col_prefix}_tot', text=f'{v}_txt')
+                fig.add_hline(y=avg, line_dash="dash", line_color="#808080", opacity=0.6)
+                fig.update_traces(textposition='outside', marker_color=info['color'], cliponaxis=False, textfont_size=10)
+                fig.update_layout(height=300, margin=dict(t=50, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
     def get_top_success(df, event_ids):
