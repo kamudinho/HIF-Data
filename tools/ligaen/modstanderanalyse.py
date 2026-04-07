@@ -95,13 +95,13 @@ def vis_side(dp=None):
     match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
     match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
     
-    # Hent alle events for holdet (til generel statistik)
+    # Hent alle events for holdet
     df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
     
-    # Hent alle events for kampene (til mål-sekvenser i Tab 4)
+    # Hent events til mål-sekvenser (RETTET SQL TIL SNOWFLAKE)
     df_all_events = conn.query(f"""
         SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-        (SELECT MAX(EVENT_TIMESTAMP) FROM {DB}.OPTA_EVENTS e2 WHERE e2.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e2.EVENT_TYPEID = 16 AND e2.EVENT_TIMESTAMP >= e.EVENT_TIMESTAMP AND e2.EVENT_TIMESTAMP <= e.EVENT_TIMESTAMP + 20000) as GOAL_TIME,
+        (SELECT MAX(EVENT_TIMESTAMP) FROM {DB}.OPTA_EVENTS e2 WHERE e2.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e2.EVENT_TYPEID = 16 AND e2.EVENT_TIMESTAMP >= e.EVENT_TIMESTAMP AND e2.EVENT_TIMESTAMP <= DATEADD(millisecond, 20000, e.EVENT_TIMESTAMP)) as GOAL_TIME,
         (SELECT MAX(EVENT_PERIODID) FROM {DB}.OPTA_EVENTS e3 WHERE e3.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e3.EVENT_TIMESTAMP = GOAL_TIME) as GOAL_PERIOD,
         (SELECT MAX(EVENT_MINUTE) FROM {DB}.OPTA_EVENTS e4 WHERE e4.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e4.EVENT_TIMESTAMP = GOAL_TIME) as GOAL_MIN
         FROM {DB}.OPTA_EVENTS e 
@@ -194,7 +194,8 @@ def vis_side(dp=None):
                     c, m, s = ('red', 's', 180) if r['EVENT_TYPEID'] == 16 else (('gold', 'P', 200) if r['EVENT_TYPEID'] == 5 else ('red', 'o', 80))
                     ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=c, s=s, marker=m, edgecolors='black', zorder=10)
                 p_c.pyplot(f)
-                l_c.write("**Sekvens:**"); l_c.dataframe(tge[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1], hide_index=True)
+                tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+                l_c.write("**Sekvens:**"); l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
             else: st.info("Ingen mål fundet i perioden.")
 
     with t5:
