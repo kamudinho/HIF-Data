@@ -187,36 +187,34 @@ def vis_side(dp=None):
         g1, g2 = st.columns(2)
 
         with g1:
-            # Overlinje med tekst og dropdown
-            h_col1, d_col1 = st.columns([1.5, 1])
+            h_col1, d_col1 = st.columns([1.8, 1])
             v1 = d_col1.selectbox("Stat 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
-            # Bruger markdown i stedet for subheader for at holde skriften lille
-            h_col1.markdown(f"**{v1}**")
             
             info1 = kat_map[v1]
             avg1 = df_plot[info1['col']].mean()
+            # Tekst med gennemsnit i parentes
+            h_col1.markdown(f"**{v1} (Gns: {round(avg1, info1['round'])})**")
             
             fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'])
-            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6, 
-                         annotation_text=f"Gns: {round(avg1, info1['round'])}", annotation_position="top left")
+            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6)
             fig1.update_traces(textposition='outside', marker_color=info1['color'], cliponaxis=False)
-            fig1.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig1.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
         with g2:
-            h_col2, d_col2 = st.columns([1.5, 1])
+            h_col2, d_col2 = st.columns([1.8, 1])
             mulige_v2 = [k for k in alle_kategorier if k != v1]
             v2 = d_col2.selectbox("Stat 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
-            h_col2.markdown(f"**{v2}**")
             
             info2 = kat_map[v2]
             avg2 = df_plot[info2['col']].mean()
+            # Tekst med gennemsnit i parentes
+            h_col2.markdown(f"**{v2} (Gns: {round(avg2, info2['round'])})**")
             
             fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'])
-            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6,
-                         annotation_text=f"Gns: {round(avg2, info2['round'])}", annotation_position="top left")
+            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
             fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False)
-            fig2.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig2.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
