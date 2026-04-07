@@ -407,21 +407,21 @@ def vis_side(dp=None):
 
         # Logik for at ekskludere feltet (x < 17) på egen halvdel
         if v_uden == "Egen halvdel: Erobringer":
-            ids, tit, cm, zn = erobring_ids, "EROBRINGER (UDENFOR FELT)", "GnBu", "up"
+            ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Green", "up"
             # Vi tager fra x=17 til x=50 for at undgå målmandens opsamlinger
             df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         
         elif v_uden == "Off. halvdel: Pres":
-            ids, tit, cm, zn = erobring_ids, "PRES (OFF. HALVDEL)", "GnBu", "down"
+            ids, tit, cm, zn = erobring_ids, "Off. halvdel: PRES", "Green", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         
         elif v_uden == "Egen halvdel: Dueller":
-            ids, tit, cm, zn = duel_ids, "DUELLER (UDENFOR FELT)", "Oranges", "up"
+            ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
             # Samme her: ekskluder feltet
             df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         
         else: # Off. halvdel: Dueller
-            ids, tit, cm, zn = duel_ids, "DUELLER (OFF. HALVDEL)", "Oranges", "down"
+            ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
 
         total_act = len(df_f)
