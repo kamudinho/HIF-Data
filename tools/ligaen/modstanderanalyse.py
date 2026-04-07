@@ -111,10 +111,9 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- 1. DATA BEREGNING (Vigtigt: Her defineres df_vol!) ---
+        # --- 1. DATA BEREGNING ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
-        # Aggregering af stats per kamp
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -128,46 +127,21 @@ def vis_side(dp=None):
             F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
         ).reset_index()
 
-        # Merge og Labels
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
         df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- 2. ULTRA-COMPACT CSS (Centrering og minimal luft) ---
+        # --- 2. CSS ---
         st.markdown("""
             <style>
-            [data-testid="stMetric"] {
-                text-align: center;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                padding-top: 0px !important;
-            }
-            [data-testid="stMetricLabel"] {
-                justify-content: center;
-                font-size: 11px !important;
-                margin-bottom: -8px !important;
-            }
-            [data-testid="stMetricValue"] {
-                font-size: 20px !important;
-                font-weight: 700;
-                justify-content: center;
-            }
-            .metric-row-wrapper {
-                margin-top: -35px; 
-                margin-bottom: -25px;
-            }
-            .compact-divider {
-                margin-top: 0px; 
-                margin-bottom: -10px; 
-                border-top: 1px solid #f0f2f6;
-            }
-            /* Fjerner luft mellem dropdown og graf */
-            [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) {
-                margin-top: -15px !important;
-            }
+            [data-testid="stMetric"] { text-align: center; display: flex; flex-direction: column; align-items: center; padding-top: 0px !important; }
+            [data-testid="stMetricLabel"] { justify-content: center; font-size: 11px !important; margin-bottom: -10px !important; }
+            [data-testid="stMetricValue"] { font-size: 20px !important; font-weight: 700; justify-content: center; }
+            .metric-row-wrapper { margin-top: -35px; margin-bottom: -25px; }
+            .compact-divider { margin-top: -5px; margin-bottom: 5px; border-top: 1px solid #f0f2f6; }
+            [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) { margin-top: -20px !important; }
             </style>
             """, unsafe_allow_html=True)
 
@@ -176,13 +150,11 @@ def vis_side(dp=None):
         
         with m_col1:
             st.write("**Seneste 10 kampe**")
-            
             with st.container(border=True):
                 st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
                 mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
                 mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
-
                 met_cols = st.columns(5)
                 met_cols[0].metric("Pts", (wins*3)+draws)
                 met_cols[1].metric("V", wins)
@@ -190,45 +162,43 @@ def vis_side(dp=None):
                 met_cols[3].metric("T", losses)
                 met_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
                 st.markdown('</div>', unsafe_allow_html=True)
-
                 st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
-                
                 for _, row in df_res.iterrows():
-                    draw_match_row(
-                        pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), 
-                        row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], 
-                        f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", 
-                        row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], 
-                        row['RES']
-                    )
+                    draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
                     st.markdown("<hr style='margin:2px 0; opacity:0.05'>", unsafe_allow_html=True)
 
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
 
-            def draw_stat_chart(chart_key, default_idx):
-                h_c, d_c = st.columns([2, 1])
-                val = d_c.selectbox("Vælg", list(kat_map.keys()), index=default_idx, key=f"fin_{chart_key}", label_visibility="collapsed")
-                c_key = kat_map[val]
-                avg = df_plot[f'{c_key}_tot'].mean()
-                
-                h_c.markdown(f"**{val} (Gns: {round(avg, 1)})**")
-                
-                fig = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key}_tot", text=f"{c_key}_tot",
-                              hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c_key}_tot': True})
-                
-                fig.add_hline(y=avg, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1,
-                              annotation_text="Gns", annotation_position="top right")
-                
-                fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
-                fig.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
-                                  xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            # --- GRAF 1 ---
+            h_c1, d_c1 = st.columns([2, 1])
+            val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
+            c_key1 = kat_map[val1]
+            avg1 = df_plot[f'{c_key1}_tot'].mean()
+            h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
+            
+            fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
+            fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1, annotation_text="Gns", annotation_position="top right")
+            fig1.update_traces(marker_color=col_map[c_key1], textposition='outside', cliponaxis=False)
+            fig1.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
+            st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-            draw_stat_chart("c1", 0)
             st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-            draw_stat_chart("c2", 1)
+
+            # --- GRAF 2 (Ekskluderer valg fra Graf 1) ---
+            options_2 = [k for k in kat_map.keys() if k != val1]
+            h_c2, d_c2 = st.columns([2, 1])
+            val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
+            c_key2 = kat_map[val2]
+            avg2 = df_plot[f'{c_key2}_tot'].mean()
+            h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
+            
+            fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
+            fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1, annotation_text="Gns", annotation_position="top right")
+            fig2.update_traces(marker_color=col_map[c_key2], textposition='outside', cliponaxis=False)
+            fig2.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
+            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
         cp, cs = st.columns([2, 1])
