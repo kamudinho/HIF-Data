@@ -169,7 +169,7 @@ def vis_side(dp=None):
         }
         alle_kategorier = list(kat_map.keys())
 
-        # Data aggregering (bevares)
+        # Data aggregering
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
@@ -187,15 +187,15 @@ def vis_side(dp=None):
         g1, g2 = st.columns(2)
 
         with g1:
-            # Overskrift og Dropdown på samme linje
+            # Overlinje med tekst og dropdown
             h_col1, d_col1 = st.columns([1.5, 1])
-            # Vi definerer v1 herover så vi kan bruge den i overskriften
             v1 = d_col1.selectbox("Stat 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
-            h_col1.subheader(v1)
+            # Bruger markdown i stedet for subheader for at holde skriften lille
+            h_col1.markdown(f"**{v1}**")
             
             info1 = kat_map[v1]
             avg1 = df_plot[info1['col']].mean()
-            # Fjernet titlen fra selve figuren (title=None) da vi nu har subheader ovenover
+            
             fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'])
             fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6, 
                          annotation_text=f"Gns: {round(avg1, info1['round'])}", annotation_position="top left")
@@ -204,14 +204,14 @@ def vis_side(dp=None):
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
         with g2:
-            # Overskrift og Dropdown på samme linje (med filtrering)
             h_col2, d_col2 = st.columns([1.5, 1])
             mulige_v2 = [k for k in alle_kategorier if k != v1]
             v2 = d_col2.selectbox("Stat 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
-            h_col2.subheader(v2)
+            h_col2.markdown(f"**{v2}**")
             
             info2 = kat_map[v2]
             avg2 = df_plot[info2['col']].mean()
+            
             fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'])
             fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6,
                          annotation_text=f"Gns: {round(avg2, info2['round'])}", annotation_position="top left")
