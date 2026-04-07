@@ -204,7 +204,7 @@ def vis_side(dp=None):
             df_plot['TXT1'] = df_plot.apply(lambda r: f"{int(r[f'{info1['col']}_tot'])}<br>({int(r[f'{info1['col']}_suc']/r[f'{info1['col']}_tot']*100) if r[f'{info1['col']}_tot']>0 else 0}%)", axis=1)
             fig1 = px.bar(df_plot, x='LABEL', y=f"{info1['col']}_tot", text='TXT1')
             fig1.update_traces(marker_color=info1['color'], textposition='outside', textfont_size=10)
-            fig1.update_layout(height=240, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig1.update_layout(height=440, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
             st.divider()
@@ -220,7 +220,7 @@ def vis_side(dp=None):
             df_plot['TXT2'] = df_plot.apply(lambda r: f"{int(r[f'{info2['col']}_tot'])}<br>({int(r[f'{info2['col']}_suc']/r[f'{info2['col']}_tot']*100) if r[f'{info2['col']}_tot']>0 else 0}%)", axis=1)
             fig2 = px.bar(df_plot, x='LABEL', y=f"{info2['col']}_tot", text='TXT2')
             fig2.update_traces(marker_color=info2['color'], textposition='outside', textfont_size=10)
-            fig2.update_layout(height=240, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig2.update_layout(height=440, margin=dict(t=30, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
