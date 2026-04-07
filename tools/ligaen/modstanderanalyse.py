@@ -403,94 +403,89 @@ def vis_side(dp=None):
 
     with t6:
         if not df_all_h.empty:
-            # SIKKERHEDS-CHECK: Fjern None-værdier fra spillerliste før sortering
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
-            # Vi bruger tre kolonner for at "klemme" banen i midten, så den bliver mindre
-            # c_p1: Stats, c_p2: Banen (lille), c_p3: Luft/Buffer
-            c_p1, c_p2, c_p3 = st.columns([1.3, 1.2, 1.3])
+            # Layout: Stats til venstre, baner i midten, buffer til højre
+            c_p1, c_p2, c_p3 = st.columns([1.3, 1.5, 1.0])
             
             valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
             df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
             
+            # --- Stats Beregning ---
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
             pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
-            skud = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
-            erobringer = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])])
+            skud_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+            erob_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
 
             with c_p1:
                 st.markdown(f"### {valgt_spiller}")
                 p_cols = st.columns(2)
                 p_cols[0].metric("Aktioner", total_akt)
                 p_cols[1].metric("Pasning %", f"{int(pas_acc)}%")
-                p_cols[0].metric("Erobringer", erobringer)
-                p_cols[1].metric("Skud", skud)
+                p_cols[0].metric("Erobringer", len(erob_df))
+                p_cols[1].metric("Skud", len(skud_df))
                 
                 st.markdown("---")
                 st.write("**Top 5 Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
                 for akt, count in akt_counts.items():
-                    st.markdown(f"""
-                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
-                            <span>{akt}</span>
-                            <span style="font-weight: bold;">{count}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
             with c_p2:
-                # constrained_layout fjerner margener, og figsize (3.5, 5) holder højden nede
-                fig_p, ax_p = plt.subplots(figsize=(3.5, 5), constrained_layout=True)
-                fig_p.patch.set_facecolor('none')
+                # --- BANE 1: HEATMAP (ØVERST) ---
+                st.write("**Positionelle Tendenser (Heatmap)**")
+                fig_h, ax_h = plt.subplots(figsize=(4, 5), constrained_layout=True)
+                fig_h.patch.set_facecolor('none')
+                pitch_h = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_bottom=0.2)
+                pitch_h.draw(ax=ax_h)
                 
-                pitch_p = VerticalPitch(
-                    pitch_type='opta', 
-                    pitch_color='#ffffff', 
-                    line_color='#BDBDBD',
-                    pad_bottom=0.2, # Minimal luft i bunden
-                    pad_top=0.2     # Minimal luft i toppen
-                )
+                valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+                if not valid_events.empty:
+                    pitch_h.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax_h, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
+                    pitch_h.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax_h, color='#084594', s=10, alpha=0.3, zorder=2)
+                st.pyplot(fig_h, use_container_width=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # --- BANE 2: KATEGORIVALG (NEDERST) ---
+                kat_valg = st.selectbox("Vælg kategori til bane 2", ["Skud & Mål", "Pasninger", "Erobringer & Opspilsfejl", "Dueller", "Frispark"], key="kat_pitch_2")
                 
-                pitch_p.draw(ax=ax_p)
+                # Filtrering baseret på valg
+                if kat_valg == "Skud & Mål":
+                    df_kat = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                    dot_color = "red"
+                elif kat_valg == "Pasninger":
+                    df_kat = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+                    dot_color = "#084594"
+                elif kat_valg == "Erobringer & Opspilsfejl":
+                    df_kat = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
+                    dot_color = "orange"
+                elif kat_valg == "Dueller":
+                    df_kat = df_spiller[df_spiller['EVENT_TYPEID'].isin([4, 5, 6])] # Juster ID efter din OPTA_MAP
+                    dot_color = "purple"
+                else: # Frispark
+                    df_kat = df_spiller[df_spiller['EVENT_TYPEID'].isin([4, 44])]
+                    dot_color = "green"
+
+                fig_k, ax_k = plt.subplots(figsize=(4, 5), constrained_layout=True)
+                fig_k.patch.set_facecolor('none')
+                pitch_k = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_bottom=0.2)
+                pitch_k.draw(ax=ax_k)
                 
-                if not df_spiller.empty:
-                    valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
-                    
-                    if not valid_events.empty:
-                        # Heatmap (KDE)
-                        pitch_p.kdeplot(
-                            valid_events.EVENT_X, valid_events.EVENT_Y, 
-                            ax=ax_p, 
-                            cmap='Blues', 
-                            fill=True, 
-                            alpha=0.6, 
-                            levels=50, 
-                            zorder=1
-                        )
-                        
-                        # Prikker (Scatter)
-                        pitch_p.scatter(
-                            valid_events.EVENT_X, valid_events.EVENT_Y, 
-                            ax=ax_p, 
-                            color='#084594', 
-                            s=12, 
-                            alpha=0.5, 
-                            edgecolors='white', 
-                            linewidth=0.2,
-                            zorder=2
-                        )
+                if not df_kat.empty:
+                    valid_kat = df_kat.dropna(subset=['EVENT_X', 'EVENT_Y'])
+                    pitch_k.scatter(valid_kat.EVENT_X, valid_kat.EVENT_Y, ax=ax_k, color=dot_color, s=25, edgecolors='white', linewidth=0.5, alpha=0.8)
                 
-                ax_p.set_title(f"Tendenser: {valgt_spiller}", fontsize=9, pad=2, fontweight='bold')
-                
-                # Her skaleres banen ned til kolonnens bredde
-                st.pyplot(fig_p, use_container_width=True)
+                st.pyplot(fig_k, use_container_width=True)
                 
             with c_p3:
-                # Denne kolonne er tom buffer for at sikre, at banen i midten (c_p2) forbliver lille
+                # Buffer kolonne for at holde banerne kompakte
                 pass
         else:
             st.info("Ingen spillerdata tilgængelig.")
+            
 if __name__ == "__main__":
     vis_side()
