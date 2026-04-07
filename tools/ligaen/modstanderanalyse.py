@@ -403,10 +403,11 @@ def vis_side(dp=None):
 
     with t6:
         if not df_all_h.empty:
+            # Rens spillerliste
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
-            # Vi bruger et 1:3 layout for at give de horisontale baner plads i bredden
+            # Layout: Stats til venstre (c_p1), Bane til højre (c_p2)
             c_p1, c_p2 = st.columns([1, 3])
             
             valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
@@ -434,54 +435,54 @@ def vis_side(dp=None):
                     st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
             with c_p2:
-                # --- BANE 1: HORISONTALT HEATMAP (ØVERST) ---
-                st.write("**Positionelle Tendenser (Heatmap)**")
-                # Figsize (8, 5) fungerer bedst til horisontale baner
-                fig_h, ax_h = plt.subplots(figsize=(8, 5), constrained_layout=True)
-                fig_h.patch.set_facecolor('none')
+                # --- VALG AF VISNING ---
+                # Vi placerer dropdown over banen for nem adgang
+                visning = st.selectbox(
+                    "Vælg visning på banen", 
+                    ["Heatmap (Tendenser)", "Skud & Mål", "Pasninger", "Erobringer", "Dueller & Frispark"],
+                    key="pitch_view_selector"
+                )
+
+                # Figsize (8, 5) sikrer det rette horisontale format uden scroll
+                fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
+                fig.patch.set_facecolor('none')
                 
-                # Skift til Pitch (horisontal)
-                pitch_h = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
-                pitch_h.draw(ax=ax_h)
+                # Horisontal bane (Pitch)
+                pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
+                pitch.draw(ax=ax)
                 
+                # Rens koordinater
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+
                 if not valid_events.empty:
-                    pitch_h.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax_h, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
-                    pitch_h.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax_h, color='#084594', s=15, alpha=0.3, zorder=2)
-                st.pyplot(fig_h, use_container_width=True)
+                    if visning == "Heatmap (Tendenser)":
+                        # Heatmap + små gennemsigtige prikker for alle aktioner
+                        pitch.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
+                        pitch.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=10, alpha=0.2, zorder=2)
+                        ax.set_title(f"Positionelle Tendenser: {valgt_spiller}", fontsize=10, fontweight='bold')
 
-                st.markdown("---")
+                    elif visning == "Skud & Mål":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='red', s=45, edgecolors='white', linewidth=0.8, alpha=0.9, zorder=3)
+                        ax.set_title(f"Skud og Mål: {valgt_spiller}", fontsize=10, fontweight='bold')
 
-                # --- BANE 2: HORISONTALT KATEGORIVALG (NEDERST) ---
-                h_col1, h_col2 = st.columns([2, 1])
-                h_col1.write("**Specifikke Aktioner**")
-                kat_valg = h_col2.selectbox("Vælg kategori", ["Skud & Mål", "Pasninger", "Erobringer", "Dueller", "Frispark"], key="kat_pitch_2", label_visibility="collapsed")
-                
-                # Map valg til data
-                color_map = {"Skud & Mål": "red", "Pasninger": "#084594", "Erobringer": "orange", "Dueller": "purple", "Frispark": "green"}
-                id_map = {
-                    "Skud & Mål": [13, 14, 15, 16],
-                    "Pasninger": [1],
-                    "Erobringer": [7, 8, 12, 127, 49],
-                    "Dueller": [4, 5, 6],
-                    "Frispark": [4, 44]
-                }
-                
-                df_kat = df_spiller[df_spiller['EVENT_TYPEID'].isin(id_map[kat_valg])]
-                dot_color = color_map[kat_valg]
+                    elif visning == "Pasninger":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'] == 1]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='#084594', s=25, edgecolors='white', linewidth=0.5, alpha=0.7, zorder=3)
+                        ax.set_title(f"Pasningsdistribution: {valgt_spiller}", fontsize=10, fontweight='bold')
 
-                fig_k, ax_k = plt.subplots(figsize=(8, 5), constrained_layout=True)
-                fig_k.patch.set_facecolor('none')
-                pitch_k = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
-                pitch_k.draw(ax=ax_k)
-                
-                if not df_kat.empty:
-                    valid_kat = df_kat.dropna(subset=['EVENT_X', 'EVENT_Y'])
-                    pitch_k.scatter(valid_kat.EVENT_X, valid_kat.EVENT_Y, ax=ax_k, color=dot_color, s=40, edgecolors='white', linewidth=0.6, alpha=0.8)
-                
-                st.pyplot(fig_k, use_container_width=True)
-        else:
-            st.info("Ingen spillerdata tilgængelig.")
+                    elif visning == "Erobringer":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='orange', s=35, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
+                        ax.set_title(f"Erobringer og Defensive aktioner: {valgt_spiller}", fontsize=10, fontweight='bold')
+
+                    elif visning == "Dueller & Frispark":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([4, 5, 6, 44])]
+                        pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='green', s=35, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
+                        ax.set_title(f"Dueller og Frispark: {valgt_spiller}", fontsize=10, fontweight='bold')
+
+                # Vis banen i Streamlit
+                st.pyplot(fig, use_container_width=True)
             
 if __name__ == "__main__":
     vis_side()
