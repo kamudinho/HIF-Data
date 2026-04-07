@@ -195,7 +195,7 @@ def vis_side(dp=None):
             }
             
             # Graf 1
-            hc1, dc1 = st.columns([1.8, 1])
+            hc1, dc1 = st.columns([1.5, 1])
             v1 = dc1.selectbox("Stat 1", list(kat_map.keys()), index=0, key="v1_box", label_visibility="collapsed")
             info1 = kat_map[v1]
             avg1 = df_plot[f"{info1['col']}_tot"].mean()
@@ -210,7 +210,7 @@ def vis_side(dp=None):
             st.divider()
 
             # Graf 2 (Ekskluderer valg fra Graf 1)
-            hc2, dc2 = st.columns([1.8, 1])
+            hc2, dc2 = st.columns([1.5, 1])
             v2_options = [k for k in kat_map.keys() if k != v1]
             v2 = dc2.selectbox("Stat 2", v2_options, index=0, key="v2_box", label_visibility="collapsed")
             info2 = kat_map[v2]
