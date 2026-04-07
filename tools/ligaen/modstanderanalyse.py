@@ -407,13 +407,16 @@ def vis_side(dp=None):
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
-            c_p1, c_p2 = st.columns([1, 2])
-            valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
+            # Vi bruger tre kolonner for at "klemme" banen i midten, så den bliver mindre
+            # c_p1: Stats, c_p2: Banen (lille), c_p3: Luft/Buffer
+            c_p1, c_p2, c_p3 = st.columns([1.3, 1.2, 1.3])
             
+            valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
             df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
             
             total_akt = len(df_spiller)
-            pas_acc = (df_spiller[df_spiller['EVENT_TYPEID'] == 1]['OUTCOME'].sum() / len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]) * 100) if not df_spiller[df_spiller['EVENT_TYPEID'] == 1].empty else 0
+            pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+            pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
             skud = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
             erobringer = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])])
 
@@ -426,7 +429,7 @@ def vis_side(dp=None):
                 p_cols[1].metric("Skud", skud)
                 
                 st.markdown("---")
-                st.write("**Aktionstyper**")
+                st.write("**Top 5 Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
                 for akt, count in akt_counts.items():
@@ -438,27 +441,25 @@ def vis_side(dp=None):
                     """, unsafe_allow_html=True)
 
             with c_p2:
-                # 1. Vi bruger constrained_layout for at fjerne hvid luft omkring banen
-                # 2. Vi justerer figsize til et mere kvadratisk format (4, 5) for at mindske højden markant
-                fig_p, ax_p = plt.subplots(figsize=(4, 5), constrained_layout=True)
-                fig_p.patch.set_facecolor('none') # Gør figurens baggrund gennemsigtig
+                # constrained_layout fjerner margener, og figsize (3.5, 5) holder højden nede
+                fig_p, ax_p = plt.subplots(figsize=(3.5, 5), constrained_layout=True)
+                fig_p.patch.set_facecolor('none')
                 
                 pitch_p = VerticalPitch(
                     pitch_type='opta', 
                     pitch_color='#ffffff', 
                     line_color='#BDBDBD',
-                    pad_bottom=0.5, # Mindsker afstanden til bunden
-                    pad_top=0.5     # Mindsker afstanden til toppen
+                    pad_bottom=0.2, # Minimal luft i bunden
+                    pad_top=0.2     # Minimal luft i toppen
                 )
                 
                 pitch_p.draw(ax=ax_p)
                 
                 if not df_spiller.empty:
-                    # Rens data for None-værdier i koordinaterne for præcision
                     valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
                     
                     if not valid_events.empty:
-                        # Heatmap (KDE) - zorder=1 (ligger under prikkerne)
+                        # Heatmap (KDE)
                         pitch_p.kdeplot(
                             valid_events.EVENT_X, valid_events.EVENT_Y, 
                             ax=ax_p, 
@@ -469,25 +470,27 @@ def vis_side(dp=None):
                             zorder=1
                         )
                         
-                        # Prikker (Scatter) - zorder=2 (ligger ovenpå heatmap)
+                        # Prikker (Scatter)
                         pitch_p.scatter(
                             valid_events.EVENT_X, valid_events.EVENT_Y, 
                             ax=ax_p, 
                             color='#084594', 
-                            s=15,           # Lidt større prik for synlighed
+                            s=12, 
                             alpha=0.5, 
                             edgecolors='white', 
-                            linewidth=0.3,
+                            linewidth=0.2,
                             zorder=2
                         )
                 
-                # Titlen rykkes tættere på banen med en mindre pad
-                ax_p.set_title(f"Positionelle Tendenser: {valgt_spiller}", fontsize=10, pad=5, fontweight='bold')
+                ax_p.set_title(f"Tendenser: {valgt_spiller}", fontsize=9, pad=2, fontweight='bold')
                 
-                # VIGTIGT: use_container_width=True sørger for at den fylder kolonnen ud uden at blive for høj
+                # Her skaleres banen ned til kolonnens bredde
                 st.pyplot(fig_p, use_container_width=True)
+                
+            with c_p3:
+                # Denne kolonne er tom buffer for at sikre, at banen i midten (c_p2) forbliver lille
+                pass
         else:
             st.info("Ingen spillerdata tilgængelig.")
-
 if __name__ == "__main__":
     vis_side()
