@@ -438,17 +438,54 @@ def vis_side(dp=None):
                     """, unsafe_allow_html=True)
 
             with c_p2:
-                pitch_p = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-                fig_p, ax_p = pitch_p.draw(figsize=(2, 3)) 
+                # 1. Vi bruger constrained_layout for at fjerne hvid luft omkring banen
+                # 2. Vi justerer figsize til et mere kvadratisk format (4, 5) for at mindske højden markant
+                fig_p, ax_p = plt.subplots(figsize=(4, 5), constrained_layout=True)
+                fig_p.patch.set_facecolor('none') # Gør figurens baggrund gennemsigtig
+                
+                pitch_p = VerticalPitch(
+                    pitch_type='opta', 
+                    pitch_color='#ffffff', 
+                    line_color='#BDBDBD',
+                    pad_bottom=0.5, # Mindsker afstanden til bunden
+                    pad_top=0.5     # Mindsker afstanden til toppen
+                )
+                
+                pitch_p.draw(ax=ax_p)
                 
                 if not df_spiller.empty:
-                    pitch_p.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
-                                    cmap='Blues', fill=True, alpha=0.6, levels=50)
-                    pitch_p.scatter(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
-                                   color='#084594', s=10, alpha=0.3)
+                    # Rens data for None-værdier i koordinaterne for præcision
+                    valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+                    
+                    if not valid_events.empty:
+                        # Heatmap (KDE) - zorder=1 (ligger under prikkerne)
+                        pitch_p.kdeplot(
+                            valid_events.EVENT_X, valid_events.EVENT_Y, 
+                            ax=ax_p, 
+                            cmap='Blues', 
+                            fill=True, 
+                            alpha=0.6, 
+                            levels=50, 
+                            zorder=1
+                        )
+                        
+                        # Prikker (Scatter) - zorder=2 (ligger ovenpå heatmap)
+                        pitch_p.scatter(
+                            valid_events.EVENT_X, valid_events.EVENT_Y, 
+                            ax=ax_p, 
+                            color='#084594', 
+                            s=15,           # Lidt større prik for synlighed
+                            alpha=0.5, 
+                            edgecolors='white', 
+                            linewidth=0.3,
+                            zorder=2
+                        )
                 
-                ax_p.set_title(f"Positionelle Tendenser: {valgt_spiller}", fontsize=10, pad=10)
-                st.pyplot(fig_p)
+                # Titlen rykkes tættere på banen med en mindre pad
+                ax_p.set_title(f"Positionelle Tendenser: {valgt_spiller}", fontsize=10, pad=5, fontweight='bold')
+                
+                # VIGTIGT: use_container_width=True sørger for at den fylder kolonnen ud uden at blive for høj
+                st.pyplot(fig_p, use_container_width=True)
         else:
             st.info("Ingen spillerdata tilgængelig.")
 
