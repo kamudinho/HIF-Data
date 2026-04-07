@@ -156,7 +156,7 @@ def vis_side(dp=None):
                 justify-content: center;
             }
             .metric-row-wrapper {
-                margin-top: -25px; 
+                margin-top: -35px; 
                 margin-bottom: -15px;
             }
             .compact-divider {
