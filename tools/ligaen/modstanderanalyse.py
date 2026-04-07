@@ -78,10 +78,12 @@ def get_top_success(df, event_ids):
     stats['PCT'] = (stats['SUCCESS'] / stats['TOTAL'] * 100).round(1)
     return stats.sort_values('TOTAL', ascending=False).head(8)
 
+# --- 3. HOVEDFUNKTION ---
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
+    # Team mapping
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -134,6 +136,7 @@ def vis_side(dp=None):
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
             mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
+            
             st.markdown("<style>[data-testid='stMetricValue'] {font-size: 18px !important;} [data-testid='stMetricLabel'] {font-size: 11px !important;}</style>", unsafe_allow_html=True)
             metrics = st.columns(5)
             metrics[0].metric("Pts", (wins*3)+draws); metrics[1].metric("V", wins); metrics[2].metric("U", draws); metrics[3].metric("T", losses); metrics[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
@@ -146,8 +149,15 @@ def vis_side(dp=None):
 
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
-            # FARVER OPDATERET TIL AT MATCHE HEATMAPS: Blues, Reds, GnBu (Green/Blue), Blues
-            col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#2b8cbe', 'D': '#4292c6', 'F': '#ef3b2c'}
+            
+            # SYNKRONISERET FARVESKALA (matcher heatmaps)
+            col_map = {
+                'P': '#084594', # Mørkeblå (Blues)
+                'A': '#cb181d', # Rød (Reds)
+                'E': '#238b45', # Grøn (Greens/GnBu)
+                'D': '#ec7014', # Orange/Gul (Dueller/Oranges)
+                'F': '#6a51a3'  # Lilla (Frispark)
+            }
             
             h1, d1 = st.columns([2, 1])
             v1 = d1.selectbox("Stat 1", list(kat_map.keys()), index=0, key="v1", label_visibility="collapsed")
@@ -171,7 +181,6 @@ def vis_side(dp=None):
             fig2.update_layout(height=230, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
-    # T2-T5 sektioner
     with t2:
         cp, cs = st.columns([2, 1])
         v_med = cs.selectbox("Fokus", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
@@ -187,7 +196,7 @@ def vis_side(dp=None):
     with t3:
         cp, cs = st.columns([2, 1])
         v_uden = cs.selectbox("Fokus", ["Dueller", "Erobringer", "Defensiv Zone"], key="us")
-        if v_uden == "Dueller": ids, tit, cm = [7, 8], "DUELLER", "Blues"
+        if v_uden == "Dueller": ids, tit, cm = [7, 8], "DUELLER", "Oranges"
         elif v_uden == "Erobringer": ids, tit, cm = [127, 12, 49], "EROBRINGER", "GnBu"
         else: ids, tit, cm = [7, 12, 127], "DEFENSIV ZONE", "PuBu"
         cs.write("**Top 8:**")
