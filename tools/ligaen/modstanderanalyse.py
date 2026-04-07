@@ -77,6 +77,11 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
+    # --- INITIALISER VARIABLER (Sikrer mod "not defined" fejl) ---
+    df_res = pd.DataFrame()
+    df_all_h = pd.DataFrame()
+    df_all_events = pd.DataFrame()
+
     # --- TEAM SELECTION ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
@@ -89,21 +94,60 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     # --- DATA HENTNING ---
-    sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
-    df_res = conn.query(sql_res)
-    if df_res is None or df_res.empty: return st.warning("Ingen kampe fundet.")
+    with st.spinner("Henter data..."):
+        # 1. Kamphistorik
+        sql_res = f"""
+            SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
+                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
+                   CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
+            FROM {DB}.OPTA_MATCHINFO 
+            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
+            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} 
+            AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') 
+            ORDER BY MATCH_LOCALDATE DESC LIMIT 10
+        """
+        df_res = conn.query(sql_res)
+        
+        if df_res is not None and not df_res.empty:
+            match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
+            match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
+            
+            # 2. Alle events for holdet (til grafer og heatmap)
+            df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
 
-    match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
-    match_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
-    
-    df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
+            # 3. Målsekvenser (Særskilt SQL)
+            sql_seq = f"""
+                WITH Goals AS (
+                    SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN, EVENT_CONTESTANT_OPTAUUID
+                    FROM {DB}.OPTA_EVENTS 
+                    WHERE EVENT_TYPEID = 16 AND MATCH_OPTAUUID IN {match_ids_str} AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+                )
+                SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
+                       m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+                       g.G_TIME as GOAL_TIME, g.G_MIN as GOAL_MIN
+                FROM {DB}.OPTA_EVENTS e
+                JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+                INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID 
+                    AND e.EVENT_TIMESTAMP >= DATEADD(second, -15, g.G_TIME) 
+                    AND e.EVENT_TIMESTAMP <= g.G_TIME
+                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+            """
+            try:
+                df_all_events = conn.query(sql_seq)
+            except:
+                df_all_events = pd.DataFrame()
+        else:
+            st.warning("Ingen kampe fundet.")
+            return
 
+    # --- TABS ---
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Resultat logik
+        # Beregninger til oversigten
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
+        # Volumen data til grafer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -121,7 +165,7 @@ def vis_side(dp=None):
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
 
-        # Justeret kolonnebredde for main_col1 (smukkere layout)
+        # Layout: Oversigt
         main_col1, main_col2 = st.columns([1.1, 1])
         
         with main_col1:
@@ -129,7 +173,6 @@ def vis_side(dp=None):
             mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
             mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
             
-            # 5 metrics i træk
             m_cols = st.columns(5)
             m_cols[0].metric("Point", (wins*3)+draws)
             m_cols[1].metric("V", wins)
@@ -151,7 +194,7 @@ def vis_side(dp=None):
                 "Frispark": {'col': 'F', 'color': '#D32F2F'}
             }
             
-            # --- GRAF 1 ---
+            # Graf 1
             hc1, dc1 = st.columns([1.8, 1])
             v1 = dc1.selectbox("Stat 1", list(kat_map.keys()), index=0, key="v1_box", label_visibility="collapsed")
             info1 = kat_map[v1]
@@ -166,10 +209,10 @@ def vis_side(dp=None):
 
             st.divider()
 
-            # --- GRAF 2 (FILTERER VALG FRA GRAF 1) ---
+            # Graf 2 (Ekskluderer valg fra Graf 1)
             hc2, dc2 = st.columns([1.8, 1])
-            filtrerede_valg = [k for k in kat_map.keys() if k != v1]
-            v2 = dc2.selectbox("Stat 2", filtrerede_valg, index=0, key="v2_box", label_visibility="collapsed")
+            v2_options = [k for k in kat_map.keys() if k != v1]
+            v2 = dc2.selectbox("Stat 2", v2_options, index=0, key="v2_box", label_visibility="collapsed")
             info2 = kat_map[v2]
             avg2 = df_plot[f"{info2['col']}_tot"].mean()
             hc2.markdown(f"**{v2} (Gns: {round(avg2, 1)})**")
