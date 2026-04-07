@@ -156,7 +156,7 @@ def vis_side(dp=None):
             /* Justerer margener i boksen for at minimere luft ved divideren */
             .metric-row-wrapper {
                 margin-top: -20px;
-                margin-bottom: -20px;
+                margin-bottom: -30px;
             }
             .divider-line {
                 margin-top: -5px; 
