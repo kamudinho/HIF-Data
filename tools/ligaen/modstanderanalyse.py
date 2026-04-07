@@ -76,7 +76,6 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Team mapping
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -88,7 +87,6 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner("Henter data..."):
-        # Seneste 10 til T1, T2, T3
         sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
         df_res = conn.query(sql_res)
         
@@ -97,7 +95,6 @@ def vis_side(dp=None):
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {m_ids_str}")
             
-            # --- NY QUERY TIL T4: HELE SÆSONEN ---
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID 
@@ -362,6 +359,7 @@ def vis_side(dp=None):
             else:
                 st.info("Ingen data fundet.")
 
+    # --- T4 OPDATERET ---
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
@@ -369,12 +367,13 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
             
-            # UDREGN LIVE STILLING
             sql_live = f"SELECT SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as A FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID WHERE e.MATCH_OPTAUUID = '{sd['match_id']}' AND e.EVENT_TYPEID = 16 AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'"
             ls_df = conn.query(sql_live)
             stilling = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
             
-            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
+            # --- ÆNDRING 1: Filtrer 'Deleted event' (ID 43) fra ---
+            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts']) & (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP')
+            
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
@@ -386,8 +385,13 @@ def vis_side(dp=None):
                 ax.scatter(r['EVENT_X'], r['EVENT_Y'], color='red' if r['EVENT_TYPEID']==16 else 'black', s=100, edgecolors='white', zorder=10)
                 ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             p_c.pyplot(f)
+            
+            # --- ÆNDRING 2: Identificer Penalty Goal ---
             tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-            l_c.write("**Sekvens:**"); l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
+            tge.loc[(tge['EVENT_TYPEID'] == 16) & (tge['EVENT_X'] == 88.5) & (tge['EVENT_Y'] == 50.0), 'Aktion'] = "Penalty Goal"
+            
+            l_c.write("**Sekvens:**")
+            l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
         else: st.info("Ingen mål fundet.")
 
     with t5:
