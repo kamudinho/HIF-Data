@@ -170,7 +170,7 @@ def vis_side(dp=None):
                           hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c1_key}_tot': True})
             
             fig1.update_traces(marker_color=col_map[c1_key], textposition='outside', textfont_size=10)
-            fig1.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig1.update_layout(height=240, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
             st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
@@ -188,7 +188,7 @@ def vis_side(dp=None):
                           hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c2_key}_tot': True})
             
             fig2.update_traces(marker_color=col_map[c2_key], textposition='outside', textfont_size=10)
-            fig2.update_layout(height=220, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig2.update_layout(height=240, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
