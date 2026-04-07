@@ -169,6 +169,7 @@ def vis_side(dp=None):
         }
         alle_kategorier = list(kat_map.keys())
 
+        # Data aggregering (bevares)
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
@@ -186,31 +187,36 @@ def vis_side(dp=None):
         g1, g2 = st.columns(2)
 
         with g1:
-            h_col1, d_col1 = st.columns([1, 1])
-            h_col1.markdown("### Trend 1")
-            v1 = d_col1.selectbox("Statistik 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
+            # Overskrift og Dropdown på samme linje
+            h_col1, d_col1 = st.columns([1.5, 1])
+            # Vi definerer v1 herover så vi kan bruge den i overskriften
+            v1 = d_col1.selectbox("Stat 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
+            h_col1.subheader(v1)
             
             info1 = kat_map[v1]
             avg1 = df_plot[info1['col']].mean()
-            fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'], title=f"{v1} (Gns: {round(avg1, info1['round'])})")
-            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6)
+            # Fjernet titlen fra selve figuren (title=None) da vi nu har subheader ovenover
+            fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'])
+            fig1.add_hline(y=avg1, line_dash="dash", line_color="#808080", opacity=0.6, 
+                         annotation_text=f"Gns: {round(avg1, info1['round'])}", annotation_position="top left")
             fig1.update_traces(textposition='outside', marker_color=info1['color'], cliponaxis=False)
-            fig1.update_layout(height=350, margin=dict(t=80, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig1.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
         with g2:
-            h_col2, d_col2 = st.columns([1, 1])
-            h_col2.markdown("### Trend 2")
-            # Udelukker valg fra v1
+            # Overskrift og Dropdown på samme linje (med filtrering)
+            h_col2, d_col2 = st.columns([1.5, 1])
             mulige_v2 = [k for k in alle_kategorier if k != v1]
-            v2 = d_col2.selectbox("Statistik 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
+            v2 = d_col2.selectbox("Stat 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
+            h_col2.subheader(v2)
             
             info2 = kat_map[v2]
             avg2 = df_plot[info2['col']].mean()
-            fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'], title=f"{v2} (Gns: {round(avg2, info2['round'])})")
-            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
+            fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'])
+            fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6,
+                         annotation_text=f"Gns: {round(avg2, info2['round'])}", annotation_position="top left")
             fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False)
-            fig2.update_layout(height=350, margin=dict(t=80, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            fig2.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
