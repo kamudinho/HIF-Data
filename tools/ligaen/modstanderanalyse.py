@@ -270,7 +270,7 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
-            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "YlOrRd", "down"
+            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else: # Afslutninger
@@ -351,7 +351,7 @@ def vis_side(dp=None):
                     df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
 
                     for _, r in df_top.iterrows():
-                        color = "#084594" if v_med == "Opbygning" else "#cb181d"
+                        color = "#084594" if v_med == "Opbygning" else "#084594"
                         st.markdown(f"""
                             <div style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
