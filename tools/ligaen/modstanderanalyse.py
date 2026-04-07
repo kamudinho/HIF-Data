@@ -407,7 +407,7 @@ def vis_side(dp=None):
 
         # Logik for at ekskludere feltet (x < 17) på egen halvdel
         if v_uden == "Egen halvdel: Erobringer":
-            ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Green", "up"
+            ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "berlin", "up"
             # Vi tager fra x=17 til x=50 for at undgå målmandens opsamlinger
             df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         
