@@ -157,11 +157,11 @@ def vis_side(dp=None):
             }
             .metric-row-wrapper {
                 margin-top: -35px; 
-                margin-bottom: -15px;
+                margin-bottom: -25px;
             }
             .compact-divider {
                 margin-top: 0px; 
-                margin-bottom: 10px; 
+                margin-bottom: -10px; 
                 border-top: 1px solid #f0f2f6;
             }
             /* Fjerner luft mellem dropdown og graf */
