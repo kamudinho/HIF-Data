@@ -28,20 +28,21 @@ def get_logo_img(opta_uuid):
 
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
-    col1, col2, col3, col4, col5, col6, col7 = st.columns([0.8, 1.8, 0.4, 1.2, 0.4, 1.8, 0.4])
+    # Ultra-kompakt layout til venstre side
+    col1, col2, col3, col4, col5, col6, col7 = st.columns([0.7, 1.6, 0.4, 1.1, 0.4, 1.6, 0.4])
     with col1: st.markdown(f"<p style='font-size:10px; margin:10px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
     with col2: st.markdown(f"<p style='font-size:11px; font-weight:600; margin:10px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
     with col3:
         logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == h_uuid), "")
         if logo_h: st.image(logo_h, width=18)
-    with col4: st.markdown(f"<p style='font-size:12px; font-weight:800; margin:10px 0; text-align:center; background:#f0f2f6; border-radius:4px;'>{score}</p>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<p style='font-size:11px; font-weight:800; margin:10px 0; text-align:center; background:#f0f2f6; border-radius:3px;'>{score}</p>", unsafe_allow_html=True)
     with col5:
         logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == a_uuid), "")
         if logo_a: st.image(logo_a, width=18)
     with col6: st.markdown(f"<p style='font-size:11px; font-weight:600; margin:10px 0;'>{a_name[:12]}</p>", unsafe_allow_html=True)
     with col7: st.markdown(f"<div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-top:9px; font-size:10px; padding:1px 0;'>{res_char}</div>", unsafe_allow_html=True)
 
-# (plot_custom_pitch, get_top_success, draw_match_info_box bibeholdes uændret)
+# (plot_custom_pitch, get_top_success, draw_match_info_box bibeholdes)
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
@@ -71,7 +72,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # 1. BEREGN df_plot (Løser 'df_plot not defined' fejlen)
+        # Forbered df_plot til graferne
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -80,22 +81,20 @@ def vis_side(dp=None):
             E_tot=('EVENT_TYPEID', lambda x: x.isin([12, 127, 49]).sum()),
             E_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([12, 127, 49])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
             D_tot=('EVENT_TYPEID', lambda x: x.isin([7, 8]).sum()),
-            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
-            F_tot=('EVENT_TYPEID', lambda x: (x == 4).sum()),
-            F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
+            D_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'].isin([7, 8])) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum())
         ).reset_index()
         
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['MATCH_LOCALDATE'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'])
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
-        df_plot['MOD'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['LABEL'] = df_plot['MATCH_LOCALDATE'].dt.strftime('%d/%m')
 
-        # 2. LAYOUT: Venstre kolonne er nu kun 0.8 bred
+        # Layout: [Venstre (metrics + kampe), Højre (grafer)]
         main_col1, main_col2 = st.columns([0.8, 1.2])
 
         with main_col1:
+            # Metrics Række
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'] for _, r in df_res.iterrows()])
             mål_i = sum([r['TOTAL_AWAY_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_HOME_SCORE'] for _, r in df_res.iterrows()])
@@ -114,15 +113,29 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin:0; opacity:0.1'>", unsafe_allow_html=True)
 
         with main_col2:
-            kat_map = {"Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0}, "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1}, "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0}}
-            for i, (v, info) in enumerate(kat_map.items()):
-                avg = df_plot[f"{info['col']}_tot"].mean()
-                st.markdown(f"<p style='font-size:12px; font-weight:bold; margin:0;'>{v} (Gns: {round(avg, info['round'])})</p>", unsafe_allow_html=True)
-                df_plot['TXT'] = df_plot.apply(lambda r: f"{int(r[f'{info['col']}_tot'])}", axis=1)
-                fig = px.bar(df_plot, x='LABEL', y=f"{info['col']}_tot", text='TXT')
-                fig.update_traces(marker_color=info['color'], textposition='outside', textfont_size=9)
-                fig.update_layout(height=160, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            # Dropdowns + Grafer (Løsning: st.columns inde i loopet)
+            kat_map = {
+                "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0}, 
+                "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1}, 
+                "Erobringer": {'col': 'E', 'color': '#2E7D32', 'round': 0}
+            }
+            for i, (default_name, info) in enumerate(kat_map.items()):
+                # Header række med dropdown til højre
+                h_col, d_col = st.columns([1.8, 1])
+                valgt_kat = d_col.selectbox(f"Vælg {i}", list(kat_map.keys()), index=i, key=f"sel_{i}", label_visibility="collapsed")
+                
+                # Opdater info baseret på dropdown-valg
+                current_info = kat_map[valgt_kat]
+                avg = df_plot[f"{current_info['col']}_tot"].mean()
+                
+                h_col.markdown(f"<p style='font-size:12px; font-weight:bold; margin-top:5px;'>{valgt_kat} (Gns: {round(avg, current_info['round'])})</p>", unsafe_allow_html=True)
+                
+                df_plot['TXT'] = df_plot.apply(lambda r: f"{int(r[f'{current_info['col']}_tot'])}", axis=1)
+                fig = px.bar(df_plot, x='LABEL', y=f"{current_info['col']}_tot", text='TXT')
+                fig.update_traces(marker_color=current_info['color'], textposition='outside', textfont_size=9)
+                fig.update_layout(height=170, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                if i < 2: st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
     with t2:
         cp, cs = st.columns([2, 1])
