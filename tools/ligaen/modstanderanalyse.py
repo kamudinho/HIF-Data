@@ -121,8 +121,8 @@ def vis_side(dp=None):
             except: df_all_events = pd.DataFrame()
         else: return
 
-    t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
-
+    t1, t2, t3, t4, t5, t6 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT", "SPILLERPROFIL"])
+    
     with t1:
         # --- 1. DATA BEREGNING ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
@@ -401,6 +401,63 @@ def vis_side(dp=None):
             df_all_h['is_shot'] = df_all_h['EVENT_TYPEID'].isin([13,14,15,16]).astype(int)
             stats = df_all_h.groupby('PLAYER_NAME').agg({'is_pass': 'sum', 'is_regain': 'sum', 'is_shot': 'sum', 'EVENT_TYPEID': 'count'}).rename(columns={'EVENT_TYPEID': 'Aktioner', 'is_pass': 'Pasninger', 'is_regain': 'Erobringer', 'is_shot': 'Skud'}).sort_values('Aktioner', ascending=False)
             st.dataframe(stats, use_container_width=True)
+
+    # --- NY T6: SPILLERPROFIL ---
+    with t6:
+        if not df_all_h.empty:
+            # 1. Spiller Valg
+            spiller_liste = sorted(df_all_h['PLAYER_NAME'].unique())
+            c_p1, c_p2 = st.columns([1, 2])
+            valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
+            
+            # Filtrer data for den valgte spiller
+            df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
+            
+            # 2. Statistik Beregning
+            total_akt = len(df_spiller)
+            pas_acc = (df_spiller[df_spiller['EVENT_TYPEID'] == 1]['OUTCOME'].sum() / len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]) * 100) if not df_spiller[df_spiller['EVENT_TYPEID'] == 1].empty else 0
+            skud = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
+            erobringer = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])])
+
+            with c_p1:
+                st.markdown(f"### {valgt_spiller}")
+                p_cols = st.columns(2)
+                p_cols[0].metric("Aktioner", total_akt)
+                p_cols[1].metric("Pasning %", f"{int(pas_acc)}%")
+                p_cols[0].metric("Erobringer", erobringer)
+                p_cols[1].metric("Skud", skud)
+                
+                st.markdown("---")
+                st.write("**Aktionstyper**")
+                # Fordeling af top-aktioner
+                df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
+                akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
+                for akt, count in akt_counts.items():
+                    st.markdown(f"""
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
+                            <span>{akt}</span>
+                            <span style="font-weight: bold;">{count}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+            with c_p2:
+                # 3. Heatmap / Pitch Plot
+                # Vi bruger VerticalPitch for at matche din stil fra de andre tabs
+                pitch_p = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+                fig_p, ax_p = pitch_p.draw(figsize=(6, 8))
+                
+                if not df_spiller.empty:
+                    # Tegn heatmap (KDE)
+                    pitch_p.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
+                                   cmap='Blues', fill=True, alpha=0.6, levels=50)
+                    # Tegn de enkelte punkter svagt
+                    pitch_p.scatter(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
+                                   color='#084594', s=10, alpha=0.3)
+                
+                ax_p.set_title(f"Positionelle Tendenser: {valgt_spiller}", fontsize=10, pad=10)
+                st.pyplot(fig_p)
+        else:
+            st.info("Ingen spillerdata tilgængelig.")
 
 if __name__ == "__main__":
     vis_side()
