@@ -407,7 +407,6 @@ def vis_side(dp=None):
             spiller_liste = sorted(spiller_navne)
             
             # Layout: Stats [1], Tom buffer [0.2], Bane + Dropdown [2.2]
-            # Dette gør banen fysisk mindre og giver luft i designet
             c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
             
             with c_p1:
@@ -459,13 +458,24 @@ def vis_side(dp=None):
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', pad_left=0.2, pad_right=0.2)
                 pitch.draw(ax=ax)
                 
-                valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+                # --- LOGO PLACERING ---
+                try:
+                    import matplotlib.image as mpimg
+                    # Erstat 'hif_logo.png' med din faktiske sti til logo-filen
+                    img = mpimg.imread('hif_logo.png') 
+                    # Placering: [venstre, bund, bredde, højde] i akse-koordinater
+                    ax_image = fig.add_axes([0.05, 0.82, 0.08, 0.08]) 
+                    ax_image.imshow(img)
+                    ax_image.axis('off')
+                except:
+                    # Hvis filen ikke findes, skriver den teksten som backup
+                    ax.text(2, 95, "HVIDOVRE IF", fontsize=12, fontweight='bold', color='#C8102E')
 
-                # --- Legend / Info Overlay på banen ---
-                # Logo (Hvidovre) og Tekst i øverste venstre hjørne
-                ax.text(2, 95, "HVIDOVRE IF", fontsize=12, fontweight='bold', color='#C8102E', alpha=0.8)
+                # Info tekst ved siden af/under logo
                 ax.text(2, 90, f"{valgt_spiller.upper()}", fontsize=9, color='black', alpha=0.7)
                 ax.text(2, 86, f"Kategori: {visning}", fontsize=8, color='grey', fontstyle='italic')
+
+                valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
                 if not valid_events.empty:
                     if visning == "Heatmap (Tendenser)":
