@@ -160,7 +160,7 @@ def vis_side(dp=None):
             }
             .divider-line {
                 margin-top: 5px; 
-                margin-bottom: 15px; 
+                margin-bottom: 10px; 
                 border-top: 1px solid #f0f2f6;
             }
             </style>
