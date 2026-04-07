@@ -79,7 +79,13 @@ def vis_side(dp=None):
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
-    team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t',''))}
+    
+    # SIKKERHEDS-CHECK: Filtrer None-værdier fra team_map
+    team_map = {
+        mapping_lookup.get(str(u).lower().replace('t','')): u 
+        for u in ids 
+        if mapping_lookup.get(str(u).lower().replace('t','')) is not None
+    }
 
     col_spacer_top, col_hold = st.columns([3.5, 1])
     valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
@@ -124,7 +130,6 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5, t6 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT", "SPILLERPROFIL"])
     
     with t1:
-        # --- 1. DATA BEREGNING ---
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -146,7 +151,6 @@ def vis_side(dp=None):
         df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
         df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- 2. CSS ---
         st.markdown("""
             <style>
             [data-testid="stMetric"] { text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -205,7 +209,6 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. CSS TIL STYLING ---
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
@@ -305,7 +308,6 @@ def vis_side(dp=None):
                         st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: {bar_c}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
 
     with t3:
-        # --- 1. CSS TIL STYLING ---
         st.markdown("""<style>[data-testid="stHorizontalBlock"] [data-testid="stMetric"] { text-align: center; align-items: center; justify-content: center; width: 100%; } [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; margin-bottom: -3px !important; } [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; } .stSelectbox { width: 100%; }</style>""", unsafe_allow_html=True)
 
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
@@ -359,7 +361,6 @@ def vis_side(dp=None):
             else:
                 st.info("Ingen data fundet.")
 
-    # --- T4 OPDATERET ---
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
@@ -371,7 +372,6 @@ def vis_side(dp=None):
             ls_df = conn.query(sql_live)
             stilling = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
             
-            # --- ÆNDRING 1: Filtrer 'Deleted event' (ID 43) fra ---
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts']) & (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP')
             
             p_c, l_c = st.columns([2.5, 1])
@@ -386,7 +386,6 @@ def vis_side(dp=None):
                 ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             p_c.pyplot(f)
             
-            # --- ÆNDRING 2: Identificer Penalty Goal ---
             tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
             tge.loc[(tge['EVENT_TYPEID'] == 16) & (tge['EVENT_X'] == 88.5) & (tge['EVENT_Y'] == 50.0), 'Aktion'] = "Penalty Goal"
             
@@ -402,18 +401,17 @@ def vis_side(dp=None):
             stats = df_all_h.groupby('PLAYER_NAME').agg({'is_pass': 'sum', 'is_regain': 'sum', 'is_shot': 'sum', 'EVENT_TYPEID': 'count'}).rename(columns={'EVENT_TYPEID': 'Aktioner', 'is_pass': 'Pasninger', 'is_regain': 'Erobringer', 'is_shot': 'Skud'}).sort_values('Aktioner', ascending=False)
             st.dataframe(stats, use_container_width=True)
 
-    # --- NY T6: SPILLERPROFIL ---
     with t6:
         if not df_all_h.empty:
-            # 1. Spiller Valg
-            spiller_liste = sorted(df_all_h['PLAYER_NAME'].unique())
+            # SIKKERHEDS-CHECK: Fjern None-værdier fra spillerliste før sortering
+            spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
+            spiller_liste = sorted(spiller_navne)
+            
             c_p1, c_p2 = st.columns([1, 2])
             valgt_spiller = c_p1.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
             
-            # Filtrer data for den valgte spiller
             df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
             
-            # 2. Statistik Beregning
             total_akt = len(df_spiller)
             pas_acc = (df_spiller[df_spiller['EVENT_TYPEID'] == 1]['OUTCOME'].sum() / len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]) * 100) if not df_spiller[df_spiller['EVENT_TYPEID'] == 1].empty else 0
             skud = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
@@ -429,7 +427,6 @@ def vis_side(dp=None):
                 
                 st.markdown("---")
                 st.write("**Aktionstyper**")
-                # Fordeling af top-aktioner
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
                 for akt, count in akt_counts.items():
@@ -441,16 +438,12 @@ def vis_side(dp=None):
                     """, unsafe_allow_html=True)
 
             with c_p2:
-                # 3. Heatmap / Pitch Plot
-                # Vi bruger VerticalPitch for at matche din stil fra de andre tabs
                 pitch_p = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig_p, ax_p = pitch_p.draw(figsize=(6, 8))
                 
                 if not df_spiller.empty:
-                    # Tegn heatmap (KDE)
                     pitch_p.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
-                                   cmap='Blues', fill=True, alpha=0.6, levels=50)
-                    # Tegn de enkelte punkter svagt
+                                    cmap='Blues', fill=True, alpha=0.6, levels=50)
                     pitch_p.scatter(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
                                    color='#084594', s=10, alpha=0.3)
                 
