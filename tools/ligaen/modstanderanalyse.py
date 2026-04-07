@@ -166,7 +166,7 @@ def vis_side(dp=None):
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
 
         # Layout: Oversigt
-        main_col1, main_col2 = st.columns([1.2, 2])
+        main_col1, main_col2 = st.columns([1.5, 2])
         
         with main_col1:
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
