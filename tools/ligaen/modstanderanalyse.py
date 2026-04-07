@@ -31,17 +31,17 @@ def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     # Smalle proportioner for at undgå spildplads
     col1, col2, col3, col4, col5, col6, col7 = st.columns([0.5, 1.3, 0.25, 0.7, 0.25, 1.3, 0.3])
     
-    with col1: st.markdown(f"<p style='font-size:10px; margin:6px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
-    with col2: st.markdown(f"<p style='font-size:13px; font-weight:600; margin:6px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
+    with col1: st.markdown(f"<p style='font-size:12px; margin:6px 0; color:#666;'>{date}</p>", unsafe_allow_html=True)
+    with col2: st.markdown(f"<p style='font-size:15px; font-weight:600; margin:6px 0; text-align:right;'>{h_name[:12]}</p>", unsafe_allow_html=True)
     with col3:
         logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == h_uuid), "")
         if logo_h: st.image(logo_h, width=16)
-    with col4: st.markdown(f"<p style='font-size:11px; font-weight:800; margin:6px 0; text-align:center; background:#f0f2f6; border-radius:3px;'>{score}</p>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<p style='font-size:12px; font-weight:800; margin:6px 0; text-align:center; background:#f0f2f6; border-radius:3px;'>{score}</p>", unsafe_allow_html=True)
     with col5:
         logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == a_uuid), "")
         if logo_a: st.image(logo_a, width=16)
-    with col6: st.markdown(f"<p style='font-size:13px; font-weight:600; margin:6px 0;'>{a_name[:12]}</p>", unsafe_allow_html=True)
-    with col7: st.markdown(f"<div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-top:6px; font-size:10px; padding:1px 0;'>{res_char}</div>", unsafe_allow_html=True)
+    with col6: st.markdown(f"<p style='font-size:15px; font-weight:600; margin:6px 0;'>{a_name[:12]}</p>", unsafe_allow_html=True)
+    with col7: st.markdown(f"<div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-top:6px; font-size:12px; padding:1px 0;'>{res_char}</div>", unsafe_allow_html=True)
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
     if scoring_team_logo:
