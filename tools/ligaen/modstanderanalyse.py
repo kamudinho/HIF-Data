@@ -98,16 +98,29 @@ def vis_side(dp=None):
     # Hent alle events for holdet
     df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {match_ids_str}")
     
-    # Hent events til mål-sekvenser (RETTET SQL TIL SNOWFLAKE)
-    df_all_events = conn.query(f"""
-        SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-        (SELECT MAX(EVENT_TIMESTAMP) FROM {DB}.OPTA_EVENTS e2 WHERE e2.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e2.EVENT_TYPEID = 16 AND e2.EVENT_TIMESTAMP >= e.EVENT_TIMESTAMP AND e2.EVENT_TIMESTAMP <= DATEADD(millisecond, 20000, e.EVENT_TIMESTAMP)) as GOAL_TIME,
-        (SELECT MAX(EVENT_PERIODID) FROM {DB}.OPTA_EVENTS e3 WHERE e3.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e3.EVENT_TIMESTAMP = GOAL_TIME) as GOAL_PERIOD,
-        (SELECT MAX(EVENT_MINUTE) FROM {DB}.OPTA_EVENTS e4 WHERE e4.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND e4.EVENT_TIMESTAMP = GOAL_TIME) as GOAL_MIN
+    # Hent events til mål-sekvenser (RETTET SQL MED CTE)
+    sql_events = f"""
+    WITH GoalEvents AS (
+        SELECT 
+            e.*, 
+            m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+            (SELECT MAX(e2.EVENT_TIMESTAMP) 
+             FROM {DB}.OPTA_EVENTS e2 
+             WHERE e2.MATCH_OPTAUUID = e.MATCH_OPTAUUID 
+               AND e2.EVENT_TYPEID = 16 
+               AND e2.EVENT_TIMESTAMP >= e.EVENT_TIMESTAMP 
+               AND e2.EVENT_TIMESTAMP <= DATEADD(millisecond, 20000, e.EVENT_TIMESTAMP)) as GOAL_TIME
         FROM {DB}.OPTA_EVENTS e 
         JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         WHERE e.MATCH_OPTAUUID IN {match_ids_str} AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-    """)
+    )
+    SELECT 
+        *,
+        (SELECT MAX(EVENT_PERIODID) FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID = GoalEvents.MATCH_OPTAUUID AND EVENT_TIMESTAMP = GoalEvents.GOAL_TIME) as GOAL_PERIOD,
+        (SELECT MAX(EVENT_MINUTE) FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID = GoalEvents.MATCH_OPTAUUID AND EVENT_TIMESTAMP = GoalEvents.GOAL_TIME) as GOAL_MIN
+    FROM GoalEvents
+    """
+    df_all_events = conn.query(sql_events)
 
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
@@ -182,13 +195,13 @@ def vis_side(dp=None):
             gl = df_all_events.dropna(subset=['GOAL_TIME']).drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
             if not gl.empty:
                 opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {'match_id': r['MATCH_OPTAUUID'], 'goal_ts': r['GOAL_TIME'], 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 'min': r['GOAL_MIN'], 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')} for _, r in gl.iterrows()}
-                sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: f"{opts[x]['date']} ({opts[x]['min']}. min)")
+                sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: f"{opts[x]['date']} ({int(opts[x]['min'])}. min)")
                 sd = opts[sk]
                 tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
                 p_c, l_c = st.columns([2.5, 1])
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
                 f, ax = p.draw(figsize=(10, 7))
-                draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], "Mål", sd['min'])
+                draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], "Mål", int(sd['min']))
                 for i in range(len(tge)-1): p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, headwidth=3, color='black', alpha=0.15, ax=ax)
                 for _, r in tge.iterrows():
                     c, m, s = ('red', 's', 180) if r['EVENT_TYPEID'] == 16 else (('gold', 'P', 200) if r['EVENT_TYPEID'] == 5 else ('red', 'o', 80))
