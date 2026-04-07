@@ -130,7 +130,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # --- 1. METRICS & TABEL (BEVARET) ---
+        # --- 1. METRICS & TABEL ---
         df_res['TOTAL_HOME_SCORE'] = df_res['TOTAL_HOME_SCORE'].fillna(0).astype(int)
         df_res['TOTAL_AWAY_SCORE'] = df_res['TOTAL_AWAY_SCORE'].fillna(0).astype(int)
         df_res['RESULTAT'] = df_res['TOTAL_HOME_SCORE'].astype(str) + " - " + df_res['TOTAL_AWAY_SCORE'].astype(str)
@@ -160,7 +160,6 @@ def vis_side(dp=None):
         st.divider()
 
         # --- 2. TREND ANALYSE MED DYNAMISKE DROPDOWNS ---
-        # Alle mulige kategorier og deres mapping
         kat_map = {
             "Pasninger": {'col': 'P', 'color': '#0047AB', 'round': 0},
             "Afslutninger": {'col': 'A', 'color': '#C8102E', 'round': 1},
@@ -170,7 +169,6 @@ def vis_side(dp=None):
         }
         alle_kategorier = list(kat_map.keys())
 
-        # Aggreger data for alle typer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             A=('EVENT_TYPEID', lambda x: x.isin([13,14,15,16]).sum()),
@@ -190,10 +188,8 @@ def vis_side(dp=None):
         with g1:
             h_col1, d_col1 = st.columns([1, 1])
             h_col1.markdown("### Trend 1")
-            # Valg 1
-            v1 = d_col1.selectbox("Vælg kategori 1", alle_kategorier, index=0, label_visibility="collapsed")
+            v1 = d_col1.selectbox("Statistik 1", alle_kategorier, index=0, label_visibility="collapsed", key="v1_drop")
             
-            # Graf 1 setup
             info1 = kat_map[v1]
             avg1 = df_plot[info1['col']].mean()
             fig1 = px.bar(df_plot, x='LABEL', y=info1['col'], text=info1['col'], title=f"{v1} (Gns: {round(avg1, info1['round'])})")
@@ -205,18 +201,17 @@ def vis_side(dp=None):
         with g2:
             h_col2, d_col2 = st.columns([1, 1])
             h_col2.markdown("### Trend 2")
-            # Filtrer listen for Graf 2 så den valgte i v1 ikke kan vælges her
+            # Udelukker valg fra v1
             mulige_v2 = [k for k in alle_kategorier if k != v1]
-            v2 = d_col2.selectbox("Vælg kategori 2", mulige_v2, index=0, label_visibility="collapsed")
+            v2 = d_col2.selectbox("Statistik 2", mulige_v2, index=0, label_visibility="collapsed", key="v2_drop")
             
-            # Graf 2 setup
             info2 = kat_map[v2]
             avg2 = df_plot[info2['col']].mean()
             fig2 = px.bar(df_plot, x='LABEL', y=info2['col'], text=info2['col'], title=f"{v2} (Gns: {round(avg2, info2['round'])})")
             fig2.add_hline(y=avg2, line_dash="dash", line_color="#808080", opacity=0.6)
             fig2.update_traces(textposition='outside', marker_color=info2['color'], cliponaxis=False)
             fig2.update_layout(height=350, margin=dict(t=80, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
-            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})Bar': False})
+            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     # --- HJÆLPEFUNKTION TIL SUCCES-RATE ---
     def get_top_success(df, event_ids):
