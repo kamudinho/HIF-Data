@@ -454,7 +454,10 @@ def vis_side(dp=None):
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 f, ax = p.draw(figsize=(10, 7))
                 
-                draw_player_info_box(ax, hold_logo, None, f"Spiller: {valgt_spiller}", visning)
+                # Her bruger vi din specifikke match_info_box funktion
+                # Vi sender 'None' til modstander-logo og tomme strenge til score/min, 
+                # da det er en spiller-oversigt og ikke en specifik kamp-sekvens.
+                draw_player_info_box(ax, hold_logo, None, "Sæson 2025/2026", f"Spiller: {valgt_spiller}", visning)
                 
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
