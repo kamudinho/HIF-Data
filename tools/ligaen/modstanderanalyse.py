@@ -439,7 +439,7 @@ def vis_side(dp=None):
 
             with c_p2:
                 pitch_p = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-                fig_p, ax_p = pitch_p.draw(figsize=(6, 7.5)) 
+                fig_p, ax_p = pitch_p.draw(figsize=(2, 3)) 
                 
                 if not df_spiller.empty:
                     pitch_p.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax_p, 
