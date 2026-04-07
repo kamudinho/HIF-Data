@@ -209,7 +209,7 @@ def vis_side(dp=None):
             fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
 
             # --- GRAF 2 (Ekskluderer valg fra Graf 1) ---
             options_2 = [k for k in kat_map.keys() if k != val1]
