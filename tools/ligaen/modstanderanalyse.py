@@ -226,73 +226,69 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
-        # --- 1. OPSÆTNING AF KATEGORIER ---
-        cp, cs = st.columns([2, 1])
+        # --- 1. OPSÆTNING & FILTRERING ---
+        # Vi definerer kategorierne først for at kunne filtrere data korrekt til heatmap
+        kat_options = ["Opbygning", "Gennembrud", "Afslutninger"]
         
-        with cs:
-            v_med = st.selectbox("Vælg Fokusområde", ["Opbygning", "Gennembrud", "Afslutninger"], key="ms")
-            
-            # Konfiguration baseret på valg
-            if v_med == "Opbygning":
-                ids, tit, cm, zn = [1], "EGEN HALVDEL: OPBYGNING (PASNINGER)", "Blues", "up"
-                df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)]
-                label_stat = "Pasninger"
-            elif v_med == "Gennembrud":
-                ids, tit, cm, zn = [1], "OFFENSIV HALVDEL: GENNEMBRUD (PASNINGER)", "Reds", "down"
-                df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)]
-                label_stat = "Key Passes"
-            else: # Afslutninger
-                ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER & MÅL", "YlOrRd", "down"
-                df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)]
-                label_stat = "Skud"
+        # UI Layout: Dropdown øverst til højre
+        col_title, col_sel = st.columns([2.5, 1])
+        v_med = col_sel.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
+        
+        # Logik for geografisk afgrænsning og event-typer
+        if v_med == "Opbygning":
+            ids, tit, cm, zn = [1], "OPBYGNING (0-50m)", "Blues", "up"
+            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+        elif v_med == "Gennembrud":
+            ids, tit, cm, zn = [1], "GENNEMBRUD (50-100m)", "Reds", "down"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+        else: # Afslutninger
+            ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
+            df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
-        # --- 2. TOP METRICS FOR T2 ---
-        # Vi beregner gennemsnit per kamp for den valgte kategori
+        # Beregninger til metrics
         n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
-        total_actions = len(df_f)
-        success_actions = df_f['OUTCOME'].sum()
-        acc_pct = (success_actions / total_actions * 100) if total_actions > 0 else 0
-        avg_per_match = total_actions / n_matches if n_matches > 0 else 0
+        total_act = len(df_f)
+        acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
+        avg_match = total_act / n_matches if n_matches > 0 else 0
 
-        m1, m2, m3 = st.columns(3)
-        with m1: st.metric("Total aktioner", int(total_actions))
-        with m2: st.metric("Gns. pr. kamp", round(avg_per_match, 1))
-        with m3: st.metric("Succesrate", f"{round(acc_pct, 1)}%")
-        
-        st.markdown("---")
+        # --- 2. HOVEDLAYOUT ---
+        c_left, c_right = st.columns([2, 1])
 
-        # --- 3. VISUALISERING (PITCH & TOPLISTE) ---
-        col_pitch, col_stats = st.columns([2, 1])
-        
-        with col_pitch:
-            # Vi kalder din eksisterende pitch-funktion
-            fig_pitch = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo)
-            st.pyplot(fig_pitch)
+        with c_left:
+            # Heatmap / Pitch
+            st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
-        with col_stats:
+        with c_right:
+            # Metrics placeret over Top 8
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total", total_act)
+            m2.metric("Gns/kamp", round(avg_match, 1))
+            m3.metric("Succes", f"{int(acc_pct)}%")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
             st.write(f"**Top 8: {v_med}**")
+            
+            # Hent top spillere baseret på den filtrerede data (df_f)
             df_top = get_top_success(df_f, ids)
             
             if not df_top.empty:
-                # Vi bygger en pæn lille tabel med st.dataframe eller custom markdown
                 for _, r in df_top.iterrows():
-                    # Progress bar effekt ved hjælp af succesrate
-                    pct = int(r['PCT'])
                     color = "#084594" if v_med == "Opbygning" else ("#cb181d" if v_med == "Gennembrud" else "#ec7014")
                     
+                    # Custom række med formatet: xxx / xxx (xx %)
                     st.markdown(f"""
-                        <div style="margin-bottom: 10px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600;">
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])}</span>
+                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({int(r['PCT'])}%)</span>
                             </div>
-                            <div style="background-color: #eee; border-radius: 5px; height: 6px; width: 100%;">
-                                <div style="background-color: {color}; height: 6px; width: {pct}%; border-radius: 5px;"></div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: {color}; height: 5px; width: {r['PCT']}%; border-radius: 4px;"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("Ingen data fundet for denne kategori.")
+                st.info("Ingen aktioner i denne zone.")
 
     with t3:
         cp, cs = st.columns([2, 1])
