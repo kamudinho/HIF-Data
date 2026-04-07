@@ -130,34 +130,38 @@ def vis_side(dp=None):
         df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
         df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
         df_plot = df_plot.sort_values('MATCH_LOCALDATE')
+        df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+        df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-        # --- LAYOUT ---
         m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
         with m_col1:
-            st.write("**Seneste 10 kampe**") # Overskrift flyttet helt ud/op
+            # 1. Overskrift øverst, uden for boksen
+            st.write("**Seneste 10 kampe**")
             
+            # 2. CSS Definition
             st.markdown("""
                 <style>
-                .stats-box {
+                .main-stats-container {
                     border: 1px solid #e6e9ef;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     padding: 20px;
                     background-color: #ffffff;
-                    margin-top: 5px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
                 }
+                [data-testid='stMetricValue'] {font-size: 22px !important; font-weight: 700 !important;}
+                [data-testid='stMetricLabel'] {font-size: 12px !important;}
                 </style>
                 """, unsafe_allow_html=True)
             
-            # Start boks-containeren
-            st.markdown('<div class="stats-box">', unsafe_allow_html=True)
+            # 3. Start på den samlede boks
+            st.markdown('<div class="main-stats-container">', unsafe_allow_html=True)
             
-            # 1. Metrics indeni boksen
+            # Metrics
             wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
             mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_res.iterrows()])
             mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_res.iterrows()])
 
-            st.markdown("<style>[data-testid='stMetricValue'] {font-size: 18px !important;} [data-testid='stMetricLabel'] {font-size: 11px !important;}</style>", unsafe_allow_html=True)
             met_cols = st.columns(5)
             met_cols[0].metric("Pts", (wins*3)+draws)
             met_cols[1].metric("V", wins)
@@ -165,44 +169,46 @@ def vis_side(dp=None):
             met_cols[3].metric("T", losses)
             met_cols[4].metric("Mål", f"{int(mål_s)}-{int(mål_i)}")
 
-            st.markdown("<div style='margin-top:25px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
             
-            # 2. Kampliste indeni boksen
+            # Kampliste
             for _, row in df_res.iterrows():
-                draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
-                st.markdown("<hr style='margin:4px 0; opacity:0.1'>", unsafe_allow_html=True)
+                draw_match_row(
+                    pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), 
+                    row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], 
+                    f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", 
+                    row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], 
+                    row['RES']
+                )
+                st.markdown("<hr style='margin:4px 0; opacity:0.05'>", unsafe_allow_html=True)
             
-            st.markdown('</div>', unsafe_allow_html=True) # Slut boks-container
+            st.markdown('</div>', unsafe_allow_html=True) # Slut på samlet boks
 
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
-            
-            df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
 
-            def draw_stat_chart(key_prefix, title_label, color, chart_key):
-                avg_val = df_plot[f'{key_prefix}_tot'].mean()
-                h_chart, d_chart = st.columns([2, 1])
-                val_selected = d_chart.selectbox(f"Vælg {chart_key}", list(kat_map.keys()), index=(0 if chart_key=="c1" else 1), key=chart_key, label_visibility="collapsed")
-                actual_prefix = kat_map[val_selected]
-                actual_avg = df_plot[f'{actual_prefix}_tot'].mean()
+            def draw_clean_chart(chart_key, default_idx):
+                h_c, d_c = st.columns([2, 1])
+                val = d_c.selectbox("Stat", list(kat_map.keys()), index=default_idx, key=f"sel_{chart_key}", label_visibility="collapsed")
+                c_key = kat_map[val]
+                avg = df_plot[f'{c_key}_tot'].mean()
                 
-                h_chart.markdown(f"**{val_selected} (Gns: {round(actual_avg, 1)})**")
+                h_c.markdown(f"**{val} (Gns: {round(avg, 1)})**")
                 
-                fig = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{actual_prefix}_tot", text=f"{actual_prefix}_tot",
-                              hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{actual_prefix}_tot': True})
+                fig = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key}_tot", text=f"{c_key}_tot",
+                              hover_data={'X_AXIS_LABEL': False, 'OPP_NAME': True, f'{c_key}_tot': True})
                 
-                # Tilføj Gns-linje som i dit screenshot
-                fig.add_hline(y=actual_avg, line_dash="dot", line_color="#333", annotation_text="Gns", annotation_position="top right")
+                # Gns linje
+                fig.add_hline(y=avg, line_dash="dot", line_color="#333", annotation_text="Gns", annotation_position="top right")
                 
-                fig.update_traces(marker_color=col_map[actual_prefix], textposition='outside', cliponaxis=False)
-                fig.update_layout(height=260, margin=dict(t=40, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+                fig.update_traces(marker_color=col_map[c_key], textposition='outside', cliponaxis=False)
+                fig.update_layout(height=280, margin=dict(t=50, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-            draw_stat_chart('P', "Pasninger", col_map['P'], "c1")
-            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-            draw_stat_chart('A', "Afslutninger", col_map['A'], "c2")
+            draw_clean_chart("c1", 0)
+            st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
+            draw_clean_chart("c2", 1)
 
     with t2:
         cp, cs = st.columns([2, 1])
