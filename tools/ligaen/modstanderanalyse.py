@@ -149,18 +149,18 @@ def vis_side(dp=None):
                 margin-bottom: -5px !important; /* Trækker tallet tættere på overskriften */
             }
             [data-testid="stMetricValue"] {
-                font-size: 20px !important;
+                font-size: 16px !important;
                 font-weight: 700;
                 justify-content: center;
             }
             /* Justerer margener i boksen for at minimere luft ved divideren */
             .metric-row-wrapper {
-                margin-top: -15px;
+                margin-top: -10px;
                 margin-bottom: -10px;
             }
             .divider-line {
-                margin-top: 2px; 
-                margin-bottom: 2px; 
+                margin-top: -5px; 
+                margin-bottom: -5px; 
                 border-top: 1px solid #f0f2f6;
             }
             </style>
