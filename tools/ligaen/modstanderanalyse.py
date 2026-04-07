@@ -163,7 +163,7 @@ def vis_side(dp=None):
             df_plot['TXT1'] = df_plot.apply(lambda r: f"{int(r[f'{c1_key}_tot'])}<br>({int(r[f'{c1_key}_suc']/r[f'{c1_key}_tot']*100) if r[f'{c1_key}_tot']>0 else 0}%)", axis=1)
             f1 = px.bar(df_plot, x='LABEL', y=f"{c1_key}_tot", text='TXT1')
             f1.update_traces(marker_color=col_map[c1_key], textposition='outside', textfont_size=10)
-            f1.update_layout(height=200, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            f1.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(f1, use_container_width=True, config={'displayModeBar': False})
 
             # Graf 2 (Filter)
@@ -174,7 +174,7 @@ def vis_side(dp=None):
             df_plot['TXT2'] = df_plot.apply(lambda r: f"{int(r[f'{c2_key}_tot'])}<br>({int(r[f'{c2_key}_suc']/r[f'{c2_key}_tot']*100) if r[f'{c2_key}_tot']>0 else 0}%)", axis=1)
             f2 = px.bar(df_plot, x='LABEL', y=f"{c2_key}_tot", text='TXT2')
             f2.update_traces(marker_color=col_map[c2_key], textposition='outside', textfont_size=10)
-            f2.update_layout(height=200, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            f2.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
             st.plotly_chart(f2, use_container_width=True, config={'displayModeBar': False})
 
     with t2:
