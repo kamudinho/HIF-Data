@@ -270,7 +270,7 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
-            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Yl0rRd", "down"
+            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "YlOrRd", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else: # Afslutninger
