@@ -181,7 +181,7 @@ def vis_side(dp=None):
             fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
             fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1, annotation_text="Gns", annotation_position="top right")
             fig1.update_traces(marker_color=col_map[c_key1], textposition='outside', cliponaxis=False)
-            fig1.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
+            fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
             st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
@@ -197,7 +197,7 @@ def vis_side(dp=None):
             fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
             fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1, annotation_text="Gns", annotation_position="top right")
             fig2.update_traces(marker_color=col_map[c_key2], textposition='outside', cliponaxis=False)
-            fig2.update_layout(height=260, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
+            fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, yaxis_showgrid=True, yaxis_gridcolor='#eee')
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
