@@ -440,7 +440,7 @@ def vis_side(dp=None):
                 st.write("") 
                 visning = st.selectbox(
                     "Vælg visning", 
-                    ["Heatmap (Tendenser)", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Dueller"],
+                    ["Heatmap (Tendenser)", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"],
                     key="pitch_view_selector"
                 )
 
@@ -480,8 +480,8 @@ def vis_side(dp=None):
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='orange', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
                         ax.set_title(f"Erobringer: {valgt_spiller}", fontsize=9, fontweight='bold')
 
-                    elif visning == "Dueller":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([4, 5, 6, 44])]
+                    elif visning == "Hovedstød":
+                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([44])]
                         pitch.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, ax=ax, color='green', s=30, edgecolors='white', linewidth=0.6, alpha=0.8, zorder=3)
                         ax.set_title(f"Dueller & Frispark: {valgt_spiller}", fontsize=9, fontweight='bold')
 
