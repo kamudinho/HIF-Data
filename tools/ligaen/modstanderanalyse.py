@@ -230,14 +230,26 @@ def vis_side(dp=None):
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
-                text-align: center; align-items: center; justify-content: center; width: 100%;
+                text-align: center; 
+                align-items: center; 
+                justify-content: center; 
+                width: 100%;
             }
-            [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; }
-            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; }
+            [data-testid="stMetricLabel"] { 
+                justify-content: center !important; 
+                font-size: 10px !important; 
+                white-space: nowrap;
+                /* --- HER STYRER DU AFSTANDEN --- */
+                margin-bottom: -8px !important; 
+            }
+            [data-testid="stMetricValue"] { 
+                justify-content: center !important; 
+                font-size: 14px !important; 
+                font-weight: 700; 
+            }
             .stSelectbox { width: 100%; }
             </style>
             """, unsafe_allow_html=True)
-
         # --- 2. LAYOUT & DROPDOWN ---
         kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
         c_left, c_right = st.columns([2, 1])
