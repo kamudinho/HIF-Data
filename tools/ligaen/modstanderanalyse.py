@@ -137,8 +137,8 @@ def vis_side(dp=None):
         st.markdown("""
             <style>
             [data-testid="stMetric"] { text-align: center; display: flex; flex-direction: column; align-items: center; padding-top: 0px !important; }
-            [data-testid="stMetricLabel"] { justify-content: center; font-size: 10px !important; margin-bottom: -10px !important; }
-            [data-testid="stMetricValue"] { font-size: 14px !important; font-weight: 700; justify-content: center; }
+            [data-testid="stMetricLabel"] { justify-content: center; font-size: 11px !important; margin-bottom: -10px !important; }
+            [data-testid="stMetricValue"] { font-size: 16px !important; font-weight: 700; justify-content: center; }
             .metric-row-wrapper { margin-top: -35px; margin-bottom: -25px; }
             .compact-divider { margin-top: -15px; margin-bottom: 5px; border-top: 1px solid #f0f2f6; }
             [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) { margin-top: -20px !important; }
