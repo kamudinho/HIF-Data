@@ -176,70 +176,63 @@ def vis_side(dp=None):
 
     with t4:
         if not df_all_events.empty:
+            # 1. Byg dropdown (uden stilling i label)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('GOAL_TIME', ascending=False)
+            opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
+                'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['GOAL_MIN'])}. min)",
+                'match_id': r['MATCH_OPTAUUID'], 
+                'goal_ts': r['GOAL_TIME'], 
+                'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
+                'min': int(r['GOAL_MIN']), 
+                'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
+            } for _, r in gl.iterrows()}
             
-            # --- NY LOGIK: BEREGN STILLING VED HVERT MÅL ---
-            opts = {}
-            for _, r in gl.iterrows():
-                m_id = r['MATCH_OPTAUUID']
-                g_ts = r['GOAL_TIME']
-                
-                # Find alle mål i denne kamp der skete FØR eller PÅ SAMME TID som dette mål
-                # Vi bruger en hurtig query eller filtrerer i et eksisterende dataframe
-                sql_score = f"""
-                    SELECT 
-                        SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as HOME_SCORE,
-                        SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as AWAY_SCORE
-                    FROM {DB}.OPTA_EVENTS e
-                    JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-                    WHERE e.MATCH_OPTAUUID = '{m_id}' 
-                      AND e.EVENT_TYPEID = 16 
-                      AND e.EVENT_TIMESTAMP <= '{g_ts}'
-                """
-                score_df = conn.query(sql_score)
-                h_score = int(score_df['HOME_SCORE'].iloc[0]) if not score_df.empty else 0
-                a_score = int(score_df['AWAY_SCORE'].iloc[0]) if not score_df.empty else 0
-                stilling_str = f"{h_score}-{a_score}"
-
-                opts[f"{m_id}_{g_ts}"] = {
-                    'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['GOAL_MIN'])}. min) - [{stilling_str}]",
-                    'match_id': m_id,
-                    'goal_ts': g_ts,
-                    'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'],
-                    'min': int(r['GOAL_MIN']),
-                    'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
-                    'score': stilling_str # Gemmer stillingen her
-                }
-
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
-            
-            # Hent sekvensen som før
+
+            # 2. Beregn stillingen specifikt for det valgte mål
+            sql_score = f"""
+                SELECT 
+                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H,
+                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as A
+                FROM {DB}.OPTA_EVENTS e
+                JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+                WHERE e.MATCH_OPTAUUID = '{sd['match_id']}' 
+                  AND e.EVENT_TYPEID = 16 
+                  AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'
+            """
+            score_res = conn.query(sql_score)
+            stilling = f"{int(score_res['H'].iloc[0])}-{int(score_res['A'].iloc[0])}" if not score_res.empty else "0-0"
+
+            # 3. Hent sekvens-events
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP')
             
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # NU BRUGER VI sd['score'] I STEDET FOR BARE "Mål"
-            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score'], sd['min'])
+            # 4. Tegn info-boks med den beregnede stilling
+            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling, sd['min'])
             
-            # ... Resten af dit plot-loop (pile, dots og navne)
+            # Pile, prikker og navne
             for i in range(len(tge)-1):
-                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, color='black', alpha=0.15, ax=ax)
+                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
+                         tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
+                         width=1, color='black', alpha=0.15, ax=ax)
             
             for _, r in tge.iterrows():
                 c = 'red' if r['EVENT_TYPEID'] == 16 else 'black'
                 ax.scatter(r['EVENT_X'], r['EVENT_Y'], color=c, s=100, edgecolors='white', zorder=10)
-                ax.text(r['EVENT_X'], r['EVENT_Y'] + 2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
+                ax.text(r['EVENT_X'], r['EVENT_Y'] + 2.5, r['PLAYER_NAME'], 
+                        fontsize=7, ha='center', fontweight='bold', 
+                        bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             
             p_c.pyplot(f)
+            
+            # Tabel-visning
             tge['Aktion'] = tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
             l_c.write("**Sekvens:**")
             l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
-        else:
-            st.info("Ingen mål fundet for dette hold i sæsonen.")
-
     with t5:
         # Simpel spilleroversigt
         stats = df_all_h.groupby('PLAYER_NAME').size().to_frame('Aktioner').sort_values('Aktioner', ascending=False)
