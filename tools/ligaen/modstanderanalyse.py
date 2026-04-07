@@ -126,9 +126,40 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
-        # Logik for resultater (W, D, L)
-        df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
+        # --- LOGIK FOR RESULTATER, POINT OG MÅL ---
+def calculate_match_stats(r, v_uuid):
+    h_score = int(r['TOTAL_HOME_SCORE'])
+    a_score = int(r['TOTAL_AWAY_SCORE'])
+    
+    # Find ud af om vi er hjemme- eller udehold
+    is_home = r['CONTESTANTHOME_OPTAUUID'] == v_uuid
+    
+    # Mål scoret og lukket ind (vigtigt for målscore-metric)
+    goals_for = h_score if is_home else a_score
+    goals_against = a_score if is_home else h_score
+    
+    # Resultat og Point
+    if h_score == a_score:
+        res, pts = "D", 1
+    elif (is_home and h_score > a_score) or (not is_home and a_score > h_score):
+        res, pts = "W", 3
+    else:
+        res, pts = "L", 0
         
+    return pd.Series([res, pts, goals_for, goals_against])
+
+        # Vi kører beregningen og gemmer det i nye kolonner
+        df_res[['RES', 'PTS', 'GF', 'GA']] = df_res.apply(calculate_match_stats, axis=1, v_uuid=valgt_uuid)
+        
+        # --- SAMLEDE TALS TIL METRICS ---
+        wins = int((df_res['RES'] == "W").sum())
+        draws = int((df_res['RES'] == "D").sum())
+        losses = int((df_res['RES'] == "L").sum())
+        total_gf = int(df_res['GF'].sum())
+        total_ga = int(df_res['GA'].sum())
+        avg_ppg = round(df_res['PTS'].mean(), 2)
+        goal_diff_str = f"{total_gf}-{total_ga}"
+
         # Volumendata til grafer
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
@@ -150,10 +181,17 @@ def vis_side(dp=None):
         with m_col1:
             st.write("**Seneste 10 kampe**")
             with st.container(border=True):
-                wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
-                met_cols = st.columns(3)
-                met_cols[0].metric("V", wins); met_cols[1].metric("U", draws); met_cols[2].metric("T", losses)
+                # Vi laver 5 små kolonner til metrics
+                met_cols = st.columns(5)
+                met_cols[0].metric("V", wins)
+                met_cols[1].metric("U", draws)
+                met_cols[2].metric("T", losses)
+                met_cols[3].metric("Mål", goal_diff_str)
+                met_cols[4].metric("PPG", ppg)
+                
                 st.divider()
+                
+                # Herunder kommer dit loop med draw_match_row
                 for _, row in df_res.iterrows():
                     draw_match_row(pd.to_datetime(row['MATCH_LOCALDATE']).strftime('%d/%m'), row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}", row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], row['RES'])
 
