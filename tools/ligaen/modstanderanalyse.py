@@ -77,7 +77,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Team mapping
+    # 1. Hent hold-oversigt
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -89,37 +89,40 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner("Henter data..."):
+        # 2. Hent de 10 seneste kampe til OVERSIGTEN (Tab 1)
         sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
         df_res = conn.query(sql_res)
         
+        # 3. Hent alle mål for HELE SÆSONEN til Mål-sekvenser (Tab 4)
+        # Ved at køre denne forespørgsel uafhængigt af df_res, får vi alle mål
+        sql_seq = f"""
+        WITH Goals AS (
+            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN 
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_TYPEID = 16 
+              AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+              AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS})
+        ) 
+        SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, g.G_TIME as GOAL_TIME, g.G_MIN as GOAL_MIN 
+        FROM {DB}.OPTA_EVENTS e 
+        JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID 
+        INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID 
+            AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, g.G_TIME) 
+            AND e.EVENT_TIMESTAMP <= g.G_TIME 
+        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+        """
+        
         if df_res is not None and not df_res.empty:
+            # Hent event-data for de 10 kampe (bruges i Tab 1, 2, 3 og 5)
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {m_ids_str}")
             
-            # --- T4: HENT ALLE MÅL FOR SÆSONEN ---
-            sql_seq = f"""
-            WITH Goals AS (
-                SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN 
-                FROM {DB}.OPTA_EVENTS 
-                WHERE EVENT_TYPEID = 16 
-                  AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-                  AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS})
-            ) 
-            SELECT e.*, m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID, g.G_TIME as GOAL_TIME, g.G_MIN as GOAL_MIN 
-            FROM {DB}.OPTA_EVENTS e 
-            JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID 
-            INNER JOIN Goals g ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID 
-                AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, g.G_TIME) 
-                AND e.EVENT_TIMESTAMP <= g.G_TIME 
-            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-            """
+            # Hent mål-sekvenser separat
             try: df_all_events = conn.query(sql_seq)
             except: df_all_events = pd.DataFrame()
         else:
-            st.warning("Ingen data fundet for det valgte hold.")
             return
-
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
