@@ -520,7 +520,7 @@ def vis_side(dp=None):
                 m_row2[2].metric("Indlæg", cross_count)
                 m_row2[3].metric("Erob.", erob_count)
     
-                st.markdown("<hr style='margin: 8px 0; opacity: 0.2;'>", unsafe_allow_html=True)                
+                st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
                 exclude_labels = ["Collection End", "Possession", "Start", "End"]
                 df_top_filt = df_spiller[~df_spiller['EVENT_TYPEID'].isin([30, 32, 5, 6, 43])]
