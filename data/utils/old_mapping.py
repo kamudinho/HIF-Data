@@ -1,0 +1,265 @@
+# data/utils/mapping.py
+
+# --- 1. KOMPLET OPTA EVENT TYPE MAPPING (Fra OPTA_DECODE_EVENTTYPE) ---
+OPTA_EVENT_TYPES = {
+    "1": "Pasning", "2": "Offside Pass", "3": "Driblinger", "4": "Frispark", "5": "Bold ude af spil",
+    "6": "Hjørnespark", "7": "Tacklinger", "8": "Interceptions", "9": "Omstillinger", "10": "Redning",
+    "11": "Claim", "12": "Clearing", "13": "Brændt skud", "14": "Stolpeskud", "15": "Skud reddet",
+    "16": "Mål", "17": "Kort", "18": "Udskiftet", "19": "Indskiftet", "20": "Player retired",
+    "21": "Player returns", "22": "Player becomes goalkeeper", "23": "Goalkeeper becomes player",
+    "24": "Condition change", "25": "Official change", "26": "Possession", "27": "Start delay",
+    "28": "End delay", "29": "Temporary stop", "30": "End", "31": "Picked an orange",
+    "32": "Start", "33": "Start/End canceling", "34": "Team set up", "35": "Player changed position",
+    "36": "Player changed Jersey number", "37": "Collection End", "38": "Temp_Goal",
+    "39": "Temp_Attempt", "40": "Formation change", "41": "Punch", "42": "Good skill",
+    "43": "Deleted event", "44": "Hovedstød", "45": "Udfordringer", "46": "Postponed",
+    "47": "Rescinded card", "48": "Provisional lineup", "49": "Erobringer",
+    "50": "Boldtab", "51": "Error", "52": "Keeper pick-up", "53": "Cross not claimed",
+    "54": "Smother", "55": "Offside provoked", "56": "Shield ball oop", "57": "Foul throw in",
+    "58": "Skud mod", "59": "Keeper Sweeper", "60": "Chance Missed", "61": "Berøringer",
+    "62": "Event placeholder", "63": "Temp_Save", "64": "Resume", "65": "Contentious Referee Decisions",
+    "66": "Possession Data", "67": "50/50", "68": "Referee Drop Ball", "69": "Failed To Block",
+    "70": "Injury Time Announcement", "71": "Coach Setup", "72": "Caught Offside",
+    "73": "Berøringer", "74": "Blocked Pass", "75": "Delayed Start", "76": "Early End",
+    "77": "Player off pitch", "78": "Temp_Card", "79": "Coverage interruption", "80": "Drop of ball",
+    "81": "Obstacle", "82": "Control", "83": "Attempted tackle", "84": "Deleted after review",
+    "85": "Temp_Corner", "86": "Temp_Free_Kick", "87": "Temp_Offside", "88": "Temp_Error",
+    "AS": "Assist", "C_A": "Coach Appearance", "C_RC": "Coach Red Card", "C_SO": "Coach Sent Off",
+    "C_Y2C": "Coach 2nd/RC", "C_YC": "Coach Yellow Card", "G": "Goal", "L": "Line-up",
+    "O": "Other", "OG": "Own Goal", "PG": "Penalty goal", "PM": "Penalty missed",
+    "PS": "Penalty save", "PSG": "Pen SO Goal", "PSM": "Pen SO Miss", "RC": "Red card",
+    "SI": "Substitute in", "SO": "Substitute out", "SUB": "Sub on bench", "TG": "Temporary Goal",
+    "TOG": "Temporary Own Goal", "TPG": "Temporary Penalty Goal", "VAR": "Video Assistant Referee",
+    "Y2C": "Yellow 2nd/RC", "YC": "Yellow card"
+}
+
+# --- 2. KOMPLET OPTA QUALIFIER MAPPING (Alle 483 fra din liste) ---
+OPTA_QUALIFIERS = {
+    "1": "Lang aflevering", "2": "Indlæg", "3": "Aflevering (Hoved)", "4": "Stikning", "5": "Free kick taken",
+    "6": "Corner taken", "7": "Players caught offside", "8": "Goal disallowed", "9": "Straffespark",
+    "10": "Handball", "11": "6-seconds violation", "12": "Dangerous play", "13": "Foul",
+    "14": "Last line", "15": "Hovedstød", "16": "Small box-centre", "17": "Box-centre",
+    "18": "Out of box-centre", "19": "35+ centre", "20": "Right footed", "21": "Other body part",
+    "22": "Regular play", "23": "Fast break", "24": "Set piece", "25": "From corner",
+    "26": "Free kick", "27": "own goal attemp-attacking team", "28": "own goal attemp-defending team",
+    "29": "Assisted", "30": "Involved", "31": "Yellow Card", "32": "Second yellow", "33": "Red Card",
+    "34": "Referee abuse", "35": "Argument", "36": "Violent Conduct", "37": "Time wasting",
+    "38": "Excessive celebration", "39": "Crowd interaction", "40": "Other reason", "41": "Injury",
+    "42": "Tactical", "43": "Realignment", "44": "Player position", "45": "Temperature",
+    "46": "Conditions", "47": "Field Pitch", "48": "Lightings", "49": "Attendance figure",
+    "50": "Official position", "51": "Official Id", "52": "Possession time", "53": "Injured player id",
+    "54": "End cause", "55": "Related event ID", "56": "Zone", "57": "End type",
+    "58": "Temp stop status", "59": "Jersey Number", "60": "Small box-right", "61": "Small box-left",
+    "62": "Box-deep right", "63": "Box-right", "64": "Box-left", "65": "Box-deep left",
+    "66": "Out of box-deep right", "67": "Out of box-right", "68": "Out of box-left",
+    "69": "Out of box-deep left", "70": "35+ right", "71": "35+ left", "72": "Left footed",
+    "73": "Left", "74": "High", "75": "Right", "76": "Low Left", "77": "High Left", "78": "Low Centre",
+    "79": "High Centre", "80": "Low Right", "81": "High Right", "82": "Blocked", "83": "Close Left",
+    "84": "Close Right", "85": "Close High", "86": "Close Left and High", "87": "Close Right and High",
+    "88": "High claim", "89": "1 on 1", "90": "Deflected save", "91": "Dive and deflect",
+    "92": "Catch", "93": "Dive and catch", "94": "Def block", "95": "Back pass", "96": "Corner situation",
+    "97": "Direkte frispark", "98": "Pitch X Coordinate", "99": "Pitch Y Coordinate", "100": "Six Yard Blocked",
+    "101": "Saved Off Line", "102": "Goal Mouth Y Coordinate", "103": "Goal Mouth Z Coordinate",
+    "104": "Attempt Position X Coordinate", "105": "Attempt Position Y Coordinate", "106": "Offensiv aflevering",
+    "107": "Indkast", "108": "Flugter", "109": "Overhead", "110": "Halvflugter", "111": "Diving Header",
+    "112": "Scramble", "113": "Strong", "114": "Weak", "115": "Rising", "116": "Dipping", "117": "Lob",
+    "118": "One Bounce", "119": "Few Bounces", "120": "Swerve Left", "121": "Swerve Right",
+    "122": "Swerve Moving", "123": "Keeper Throw", "124": "Målpark",
+    "125": "Free Kick Position X Coordinate", "126": "Free Kick Position Y Coordinate",
+    "127": "Direction of Play", "128": "Punch", "129": "Ten Minute Possesion", "130": "Team Formation",
+    "131": "Team Player Formation", "132": "Simulation", "133": "Deflection", "134": "Far Wide Left",
+    "135": "Far Wide Right", "136": "Keeper Touched", "137": "Keeper Saved", "138": "Hit Woodwork",
+    "139": "Own Player", "140": "Pass End X", "141": "Pass End Y", "142": "Flag to Checker",
+    "143": "Star Rating", "144": "Deleted Event Type", "145": "Formation slot",
+    "146": "Blocked X Coordinate", "147": "Blocked Y Coordinate", "148": "Danger", "149": "Inside",
+    "150": "Outside", "151": "Short", "152": "Direct", "153": "Not past goal line",
+    "154": "Intentional Assist", "155": "Chipped", "156": "Lay-off", "157": "Launch",
+    "158": "Persistent Infringement", "159": "Foul and Abusive Language", "160": "Throw In set piece",
+    "161": "Encroachment", "162": "Leaving field", "163": "Entering field", "164": "Spitting",
+    "165": "Professional Foul Last Man", "166": "Professional Foul Handball", "167": "Out of play",
+    "168": "Flick-on", "169": "Leading to attempt", "170": "Leading to goal", "171": "Rescinded Card",
+    "172": "No impact on timing", "173": "Parried safe", "174": "Parried danger", "175": "Fingertip",
+    "176": "Caught", "177": "Collected", "178": "Standing", "179": "Diving", "180": "Stooping",
+    "181": "Reaching", "182": "Hands", "183": "Feet", "184": "Dissent", "185": "Blocked cross",
+    "186": "Scored", "187": "Saved", "188": "Missed", "189": "Not visible", "190": "From shot off target",
+    "191": "Off the ball foul", "192": "Block by hand", "193": "Quality measure", "194": "Captain",
+    "195": "Pull back", "196": "Switch of play", "197": "Team kit", "198": "GK hoof",
+    "199": "GK kick from hands", "200": "Referee stop", "201": "Referee delay", "202": "Weather problem",
+    "203": "Crowd trouble", "204": "Fire", "205": "Object thrown on pitch", "206": "Spectator on pitch",
+    "207": "Awaiting officials decision", "208": "Referee injury", "209": "Game end", "210": "Assist",
+    "211": "Overrun", "212": "Length", "213": "Angle", "214": "Big chance", "215": "Individual play",
+    "216": "2nd related event ID", "217": "2nd assisted", "218": "2nd assist", "219": "Players on both posts",
+    "220": "Player on near post", "221": "Player on far post", "222": "No players on posts",
+    "223": "Inswinger", "224": "Outswinger", "225": "Straight", "226": "Suspended", "227": "Resume",
+    "228": "Own shot blocked", "229": "Post match complete", "230": "GK X Coordinate",
+    "231": "GK Y Coordinate", "232": "Unchallenged", "233": "Opposite related event ID",
+    "234": "Home Team Possession", "235": "Away Team Possession", "236": "Blocked pass", "237": "Low",
+    "238": "Fair Play", "239": "By Wall", "240": "GK Start", "241": "Indirect", "242": "Obstruction",
+    "243": "Unsporting behaviour", "244": "Not Retreating", "245": "Serious Foul", "246": "Drinks Break",
+    "247": "Offside", "248": "Goal line", "249": "Temp_ShotOn", "250": "Temp_Blocked", "251": "Temp_Post",
+    "252": "Temp_Miss", "253": "Temp_MissNotPastGoalLine", "254": "Follows a Dribble", "255": "Open Roof",
+    "256": "Air Humidity", "257": "Air Pressure", "258": "Sold Out", "259": "Celsius degrees",
+    "260": "Floodlight", "261": "1 on 1 chip", "262": "Back heel", "263": "Direct corner",
+    "264": "Aerial Foul", "265": "Attempted Tackle", "266": "Put Through", "267": "Right Arm",
+    "268": "Left Arm", "269": "Both Arms", "270": "Right Leg", "271": "Left Leg", "272": "Both Legs",
+    "273": "Hit Right Post", "274": "Hit Left Post", "275": "Hit Bar", "276": "Out on sideline",
+    "277": "Minutes", "278": "Tap", "279": "Kick Off", "280": "Fantasy Assist Type",
+    "281": "Fantasy Assisted By", "282": "Fantasy Assist Team", "283": "Coach ID", "284": "Duel",
+    "285": "Defensive", "286": "Offensive", "287": "Over-arm", "288": "Out of play secs",
+    "289": "Denied goal-scoring opportunity", "290": "Coach types", "291": "Other Ball Contact Type",
+    "292": "Detailed Position Id", "293": "Position Side Id", "294": "Shove/Push",
+    "295": "Shirt Pull/Holding", "296": "Elbow/Violent Conduct", "297": "Follows Shot Rebound",
+    "298": "Follows Shot Blocked", "299": "Clock Affecting", "300": "Solo Run", "301": "Shot from cross",
+    "302": "Checks complete", "303": "Floodlight failure", "304": "Ball In Play", "305": "Ball Out of Play",
+    "306": "Kit Change", "307": "DFL Phase of possession Id", "308": "Goes to Extra Time",
+    "309": "Goes to Penalties", "310": "Player goes out", "311": "Player comes back",
+    "312": "DFL Phase of possession Start", "313": "Illegal Restart", "314": "End if Offside",
+    "315": "Related Event Player ID", "316": "Passed Penalty", "317": "Penalty Set Piece",
+    "318": "Expected Assist", "319": "Captain changed", "320": "Extra flag to checker",
+    "321": "Expected Goal", "322": "Expected Goal On Target", "323": "Follows a Rebound",
+    "324": "Follows a Take On", "325": "Abandonment to Follow", "326": "Shot Pressure",
+    "327": "Shot Clarity", "328": "First Touch", "329": "VAR - Goal awarded",
+    "330": "VAR - Penalty awarded", "331": "VAR - Penalty not awarded", "332": "VAR - Card upgrade",
+    "333": "VAR - Mistaken Identity", "334": "VAR - Other", "335": "Referee Decision Confirmed",
+    "336": "Referee Decision Cancelled", "337": "No Touch", "338": "Follows Rebound Event Id",
+    "339": "Foul during Take On", "340": "No Duel", "341": "VAR - Goal not awarded",
+    "342": "VAR - Red card given", "343": "Review", "344": "Video source lost", "345": "Overhit",
+    "346": "Out for goal kick", "347": "Out for throw-in", "348": "Penalty taker", "349": "Checker not synced",
+    "350": "Duels not synced", "351": "Negative Client sanity check", "352": "Non-attempt red flag",
+    "353": "2nd opposite related event ID", "354": "Ball hits referee", "355": "Entering referee review area",
+    "356": "Excessive usage of review signal", "357": "Entering video operations room",
+    "358": "Official body: Reviewed and confirmed", "359": "Official body: Reviewed and changed",
+    "360": "Event comment", "361": "Incorrect out of play decision", "362": "Viral",
+    "363": "Away attendance", "364": "VAR delay", "365": "Reviewed event ID", "366": "Video offset seconds",
+    "367": "Video sync done", "368": "Related event UUID", "369": "2nd related event UUID",
+    "370": "Reviewed event UUID", "371": "Follows rebound event UUID", "372": "Opposite related event UUID",
+    "373": "2nd opposite related event UUID", "374": "Goal shot timestamp", "375": "Goal shot game clock",
+    "376": "Low GK intervention", "377": "Medium GK intervention", "378": "High GK intervention",
+    "379": "Shot time sync done", "380": "Other obstacle", "381": "Fumble", "382": "Save from non-shot",
+    "383": "Touch type control", "384": "Touch type pass", "385": "Touch type clearance",
+    "386": "Driven cross", "387": "Floated cross", "388": "Jumping", "389": "Sliding", "390": "Causing player",
+    "391": "Mishit", "392": "Reckless Offence", "393": "Tactical Foul", "394": "Corner not taken",
+    "395": "GK X Coordinate time of goal", "396": "GK Y Coordinate time of goal", "397": "Blocked clearance",
+    "398": "GK Challenge", "399": "Intended tackle target", "400": "Keeper very close", "401": "Keeper close",
+    "402": "Keeper not close", "403": "Keeper inactive", "404": "Duel related event ID",
+    "405": "Duel related event UUID", "406": "Coverage complete", "407": "Video offset seconds 2",
+    "408": "Video offset seconds 3", "409": "Video offset seconds 4", "410": "Video offset seconds 5",
+    "411": "Video offset seconds 6", "412": "Video offset seconds 7", "413": "Video offset seconds 8",
+    "414": "Video offset seconds 9", "415": "Video offset seconds 10", "416": "Video source name",
+    "417": "Video source name 2", "418": "Video source name 3", "419": "Video source name 4",
+    "420": "Video source name 5", "421": "Video source name 6", "422": "Video source name 7",
+    "423": "Video source name 8", "424": "Video source name 9", "425": "Video source name 10",
+    "426": "Video source filename", "427": "Video source filename 2", "428": "Video source filename 3",
+    "429": "Video source filename 4", "430": "Video source filename 5", "431": "Video source filename 6",
+    "432": "Video source filename 7", "433": "Video source filename 8", "434": "Video source filename 9",
+    "435": "Video source filename 10", "436": "Pre-Review Event Type", "437": "Post-match completion",
+    "438": "VSP S1 completion", "439": "VSP S2 completion", "440": "VSP S3 completion",
+    "441": "VSP S4 completion", "442": "VSP S5 completion", "443": "VSP S6 completion",
+    "444": "VSP S7 completion", "445": "VSP S8 completion", "446": "VSP S9 completion",
+    "447": "TP S1 completion", "448": "TP S2 completion", "449": "TP S3 completion",
+    "450": "TP S4 completion", "451": "TP S5 completion", "452": "TP S6 completion",
+    "453": "TP S7 completion", "454": "TP S8 completion", "455": "TP S9 completion",
+    "456": "Missing BO/BP", "457": "Missing post-match data points", "458": "Not assisted",
+    "459": "Event type review", "460": "Expected Goal 2.0", "461": "Goal shot timestamp UTC",
+    "462": "Coverage complete UTC", "463": "TD complete", "464": "Take on space", "465": "Take on overtake",
+    "466": "Sync to later timestamp", "467": "Defensive 1 v 1", "468": "Related error 1 ID",
+    "469": "Related error 1 UUID", "470": "Leading to goal UUID", "471": "Leading to attempt UUID",
+    "472": "Fantasy assist ID", "473": "Fantasy assist UUID", "474": "Related error 2 ID",
+    "475": "Related error 2 UUID", "476": "New start time", "478": "Officially announced",
+    "479": "Estimated", "484": "Dubious scorer", "485": "Advantage played", "486": "Concussion",
+    "487": "Panenka", "488": "8-Second Violation"
+}
+
+EXCLUDE_EVENT_IDS = [
+    5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76, 212, # Dine nuværende
+    24, 25, 33, 38, 39, 46, 48, 58, 62, 65, 74, 79, 84, 130, 131, 209      # Nye anbefalede
+]
+# --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
+def get_event_name(event_id):
+    """Returnerer læsbart navn for et Event ID"""
+    return OPTA_EVENT_TYPES.get(str(event_id), f"Unknown ({event_id})")
+
+def get_qualifier_name(qual_id):
+    """Returnerer læsbart navn for et Qualifier ID"""
+    return OPTA_QUALIFIERS.get(str(qual_id), f"Qual {qual_id}")
+
+def is_offensive_event(event_id):
+    """Tjekker om eventet er en afslutning (Skud, mål etc.)"""
+    # Vi holder os til de numeriske ID'er, som Opta bruger i event-strømmen
+    shot_ids = ["13", "14", "15", "16"] 
+    return str(event_id) in shot_ids
+
+def get_offensive_map():
+    """Returnerer en mapping til brug i filtre eller overskrifter"""
+    return {
+        "13": "Miss",
+        "14": "Post",
+        "15": "Attempt Saved",
+        "16": "Goal"
+    }
+
+def is_assist(qualifiers_list):
+    """
+    Tjekker om en liste af qualifiers indeholder en assist (ID 210).
+    Bruges typisk på et Pass event (ID 1).
+    """
+    return "210" in [str(q) for q in qualifiers_list]
+
+def get_action_label(row):
+    """
+    Kategoriserer en Opta-aktion med høj præcision baseret på både Event ID og Qualifiers.
+    """
+    try:
+        eid = str(row['EVENT_TYPEID'])
+        # Vi antager at qualifiers ligger som en liste af strings i 'qual_list'
+        ql = row.get('qual_list', [])
+        if isinstance(ql, str):
+            ql = ql.split(',')
+        ql = [str(q).strip() for q in ql]
+
+        # --- 1. PRIORITET: DE VIGTIGSTE TAKTISKE QUALIFIERS ---
+        # Disse trumfer alt andet, da de beskriver aktionens unikke karakter
+        if "214" in ql: return "Big Chance"
+        if "4" in ql:   return "Stikning (Through ball)"
+        if "195" in ql: return "Pull back"
+        if "196" in ql: return "Switch of play"
+        if "156" in ql: return "Lay-off"
+        if "155" in ql: return "Chipped pass"
+        if "168" in ql: return "Flick-on"
+        if "138" in ql: return "Stolpe/Overligger"
+
+        # --- 2. PRIORITET: EVENT-SPECIFIK LOGIK ---
+        
+        # PASNINGER (Event 1)
+        if eid == "1":
+            if "2" in ql:   return "Indlæg"
+            if "107" in ql: return "Indkast"
+            if "124" in ql: return "Målspark"
+            if "1" in ql:   return "Lang aflevering"
+            return "Pasning"
+
+        # SKUD & MÅL (Event 13, 14, 15, 16)
+        if eid in ["13", "14", "15", "16"]:
+            suffix = " (Hoved)" if ("15" in ql or eid == "44") else ""
+            if eid == "16": return f"Mål{suffix}"
+            return f"Afslutning{suffix}"
+
+        # DEFENSIVT & DUEL
+        if eid == "7":  return "Tackling"
+        if eid == "8":  return "Interception"
+        if eid == "12": return "Clearing"
+        if eid == "49": return "Bold recovery"
+        if eid == "3":  return "Dribling (Take-on)"
+        if eid == "50": return "Bold tabt (Dispossessed)"
+        if eid == "44": return "Luftduel"
+
+        # MÅLMAND
+        if eid == "10": return "Redning"
+        if eid == "11": return "Felt-indgreb (Claim)"
+        if eid == "41": return "Boksning"
+
+        # --- 3. FALLBACK: BRUG STANDARD MAPPING ---
+        return OPTA_EVENT_TYPES.get(eid, f"Aktion {eid}")
+
+    except Exception:
+        return "Ukendt Aktion"
