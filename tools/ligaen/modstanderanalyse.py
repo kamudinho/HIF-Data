@@ -474,9 +474,7 @@ def vis_side(dp=None):
                 cross_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "2" in x)])
                 erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
                 hoved_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "15" in x)])
-    
-                st.markdown(f"### {valgt_spiller}")
-                
+                    
                 # Layout: 4 metrics pr. linje
                 m_row1 = st.columns(4)
                 m_row1[0].metric("Aktioner", total_akt)
