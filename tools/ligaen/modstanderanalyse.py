@@ -156,19 +156,16 @@ def vis_side(dp=None):
             """
             df_all_h = conn.query(sql_all_h)
             
-            # --- DATA-VASK OG ANALYTISK MAPPING ---
+            # --- DATA-VASK I MODSTANDERANALYSE.PY ---
             if not df_all_h.empty:
-                # Omdan Qualifiers til lister
+                # 1. Lav qual_list (vigtigt for get_action_label)
                 df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
                 
-                # Påfør din get_action_label. Den returnerer None for alt, der ikke er på whitelisten.
+                # 2. Påfør din hjerte-logik
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 
-                # Her fjerner vi automatisk "støjen" (alt det, der ikke fik en label)
+                # 3. Fjern alt det, din whitelist i mapping.py har markeret som None
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
-                
-                # Fjern administrative events fra din EXCLUDE liste
-                df_all_h = df_all_h[~df_all_h['EVENT_TYPEID'].astype(str).isin(EXCLUDE_EVENT_IDS)]
 
             # SQL for Mål-sekvenser
             sql_seq = f"""
