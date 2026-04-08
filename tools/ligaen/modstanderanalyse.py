@@ -508,7 +508,7 @@ def vis_side(dp=None):
                 m_row1 = st.columns(4)
                 m_row1[0].metric("Aktion", total_akt)
                 m_row1[1].metric("Berøringer", touch_count)
-                m_row1[2].metric("Pasninger", f"{int(pas_count)}%")
+                m_row1[2].metric("Pasninger", f"{int(pas_df)}%")
                 m_row1[3].metric("Pasning %", len(pas_acc))
                 
                 m_row2 = st.columns(4)
