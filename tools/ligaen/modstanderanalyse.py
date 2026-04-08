@@ -538,7 +538,7 @@ def vis_side(dp=None):
             player_stats = player_stats.sort_values('Involveringer', ascending=False)
 
             # 2. Layout
-            col_tabel, col_graf = st.columns([2, 1])
+            col_tabel, col_graf = st.columns([2.2, 1])
 
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
