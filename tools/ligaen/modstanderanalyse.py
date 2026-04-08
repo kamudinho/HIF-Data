@@ -507,14 +507,17 @@ def vis_side(dp=None):
             
     with t5:
         if not df_all_events.empty:
-            # 1. Databehandling - Vi definerer de forskellige aktionstyper
+            # 1. Databehandling
             df_mål_stats = df_all_events.copy()
             
-            # Hjælpe-kolonner til specifikke stats
+            # Definitioner af aktioner
             df_mål_stats['is_cross'] = df_mål_stats['qual_list'].apply(lambda x: '2' in x)
             df_mål_stats['is_shot_assist'] = df_mål_stats['qual_list'].apply(lambda x: '210' in x or '209' in x)
             df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
             df_mål_stats['is_goal'] = df_mål_stats['EVENT_TYPEID'] == 16
+
+            # Samlet antal unikke mål i hele datasættet til procent-beregning
+            total_goals_count = df_mål_stats['GOAL_TIME'].nunique()
 
             # Aggregér pr. spiller
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
@@ -528,39 +531,54 @@ def vis_side(dp=None):
                 Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum())
             ).reset_index()
 
-            player_stats = player_stats.sort_values('Målinvolveringer', ascending=False)
+            # Beregn procent af holdets samlede mål involveret i
+            player_stats['Involvering_Pct'] = (player_stats['Målinvolveringer'] / total_goals_count * 100).round(1)
 
-            # 2. Layout: Tabel til venstre, Progress-bars til højre
+            # Sortering: Mål først, derefter Målinvolveringer
+            player_stats = player_stats.sort_values(['Mål', 'Målinvolveringer'], ascending=False)
+
+            # 2. Layout
             col_tabel, col_graf = st.columns([1.8, 1])
 
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
-                # Omdøber til dine præcise navne
+                
+                # Konfiguration af kolonnebredder: Navn bred, resten ens (små)
                 st.dataframe(
                     player_stats.rename(columns={
                         'PLAYER_NAME': 'Spiller',
                         'Skud_Ass': 'Skud Ass.'
-                    }),
+                    })[['Spiller', 'Målinvolveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
+                    column_config={
+                        "Spiller": st.column_config.Column(width="medium"),
+                        "Målinvolveringer": st.column_config.Column(width="small"),
+                        "Aktioner": st.column_config.Column(width="small"),
+                        "Mål": st.column_config.Column(width="small"),
+                        "Pasninger": st.column_config.Column(width="small"),
+                        "Indlæg": st.column_config.Column(width="small"),
+                        "Skud": st.column_config.Column(width="small"),
+                        "Skud Ass.": st.column_config.Column(width="small"),
+                        "Erobringer": st.column_config.Column(width="small"),
+                    }
                 )
 
             with col_graf:
-                st.write(f"**Top 8: Målinvolveringer**")
+                st.write("**Top: Mål og Involvering**")
                 
-                # Her rammer vi T2-stylingen præcis med HTML/CSS progress bars
                 top_8_players = player_stats.head(8)
+                # Vi bruger Målinvolveringer til bar-længden
                 max_inv = player_stats['Målinvolveringer'].max() if not player_stats.empty else 1
 
                 for _, r in top_8_players.iterrows():
-                    # Beregn bredde i % relativt til topscoreren i kategorien
                     rel_width = int((r['Målinvolveringer'] / max_inv) * 100)
                     
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['Målinvolveringer'])} involveringer</span>
+                                <span>{int(r['Målinvolveringer'])} involveringer ({int(r['Involvering_Pct'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: #084594; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
