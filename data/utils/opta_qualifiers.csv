@@ -1,0 +1,585 @@
+qualifierId	QUALIFIER NAME	VALUE	DESCRIPTION	ASSOCIATED EVENT typeId VALUES
+1	Long ball	 	A pass over 32 metres in length	1, 2
+2	Cross	 	A ball played in from wide areas into the box	1, 2
+3	Head pass	 	A pass made with a player's head	1, 2
+4	Through ball	 	Ball played through for player making an attacking run to create a chance on goal	1, 2
+5	Free kick taken	 	Any free kick taken (direct or indirect)	1, 2
+6	Corner taken	 	All corners taken. Look for qualifierId 6 but excluding qualifier IDs 1 and 2 for short corners	1, 2
+7	Players caught offside	String (Alphanumeric - UUID)	The player was in an offside position when the pass was made. The value is the ID of the player caught offside.	2
+8	Goal disallowed	 	Pass led to a goal disallowed for a foul or offside	2
+9	Penalty	 	Indicates that a penalty has been taken (an attempt on goal was a penalty kick) or that a penalty has been awarded (with event typeId 4).	4, 10, 13, 14, 15, 16, 58, 65
+10	Handball	 	Free kick or card is given for handball	4, 17
+11	6-seconds violation	 	Goalkeeper held onto the ball longer than 6 seconds, resulting in a free kick	4
+12	Dangerous play	 	A free kick or card is given due to dangerous play	4, 17
+13	Foul	 	All fouls. A free kick or card is given for a foul	4, 17
+14	Last line	 	When a player makes a defensive action and they are the last player on their team between the opponent(s) and their own goal
+When using Last Line on Save in combination with Blocked (82) on a Save Event (TypeID=10), this indicates that a defender has made a goal-saving last line clearance	7, 8, 10
+15	Head	 	The action is made using the player's head - for example, any event where the player used their head, such as a shot or a clearance - and added for 'Live' data. Note: From June 2020, it can also be added 'Post-match' to all 'touch' events, if applicable, but only for some competitions. When added as a post-match qualifier it will be shown once the post-match analysis is complete.	8, 12, 13, 14, 15, 16
+16	Small box - Centre	 	A defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+17	Box - Centre	 	A defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+18	Out of box - Centre	 	A defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+19	35+ Centre	 	A defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+20	Right footed	 	The action is made with the player's right foot
+Note: This can be shown for 'Live' data (for example, for eventTypeId '13'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	13, 14, 15, 16
+21	Other body part	 	The action is made with a different body part to the player's head or feet - for example, using their knee or chest
+Note: This can be shown for 'Live' data (for example, for eventTypeId '13'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	10, 13, 14, 15, 16, 61, 73
+22	Regular play	 	The event occurred in open play (not from a set play situation)	1, 13, 14, 15, 16
+23	Fast break	 	The event occurred in open play and part of/following a fast break situation	1, 2, 3, 4, 13, 14, 15, 16, 50, 61
+24	Set piece	 	The event occurred following a free kick (not a directly-struck deadball).
+Note: A first time shot following a 'Tap' pass will be set to 'Free kick' (ID 26) instead of 'Set piece'	1, 13, 14, 15, 16
+25	From corner	 	The event occurred following a corner	1, 13, 14, 15, 16
+26	Free kick	 	A shot direct from a free kick (deadball struck directly) or first time shot following a “Tap” pass	13, 14, 15, 16, 65
+28	Own Goal	 	Indicates a goal event was an own goal.
+Note: Use the inverse coordinates of the goal location	16
+29	Assisted	 	Indicates that there was a shot or missed chance that was assisted - that is, there was a pass (assist) from another player to set up the goal opportunity	13, 14, 15, 16, 60
+30	Involved	String (array)	A list of comma-separated Player IDs or Coach IDs in an array, indicating the player/coach position in the team/coach lineup/setup. For players, it will show all players in the starting lineup and available as a substitute. Note: The values may be Opta IDs.	34, 40, 71
+31	Yellow Card	 	The person is given a yellow card	17
+32	Second yellow	 	The person is given a second yellow card	17
+33	Red Card	 	The person is given a straight red card	17, 65
+34	Referee abuse	 	A card is given to a person because of their abuse towards a match official	4
+35	Argument	 	A card is given for arguing	17
+36	Violent Conduct	 	A card is given for violent conduct	17
+37	Time wasting	 	A card is given for time wasting	17
+38	Excessive celebration	 	A card is given for excessively celebrating a goal	17
+39	Crowd interaction	 	A card is given because of contact or communication with the crowd	4
+40	Other reason	 	A card/match delay/contentious decision is given for some other/unspecified reason - added to cards if applicable only in very rare exceptions	17, 27, 65, 75
+41	Injury	String	A substitution or match delay occurs due to an injury	18, 19, 27
+42	Tactical	 	A substitution occurs for tactical reasons	18, 19
+43	Deleted event	 	An event has been deleted from the game file; usually, qualifierId 144 (Deleted Event Type) is present to describe the type of event that has been deleted and its value will give the event type ID for the previous instance of the event.
+Note: The event instance will also carry an event id value. The event ID is unique to each event instance - in this case, it is a reference for the event instance previously recorded in the feed. Therefore, the event ID remains the same in all instances, but the event type ID will be different.
+If you store feed samples, you will be able to use the event ID (the database ID) to cross-reference which specific event instance concerned - if you don't, this is not possible. Once we delete an event, the associated event's data will be removed from the feed.	 
+44	Player position	Dynamic - as follows:
+Event Type ID 34 or 40: Array
+Event Type ID 18 or 19: String
+qualifierId details
+
+The position of the player(s) in the team formation - these are the playing positions associated with each player for the given match	18, 19, 34, 40
+45	Temperature	
+Array - includes:
+1, 2, 3, 4, 5, 458
+ 
+
+qualifierId details
+
+Note - October 2019: This qualifier is no longer used
+The temperature conditions for the given match	24
+46	Conditions	
+String - possible values:
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+
+qualifierId details 
+
+The weather conditions
+Note: No longer used	24
+47	Field Pitch	
+String - possible values:
+1, 2, 3, 4, 5
+ 
+
+qualifierId details
+
+The condition of the playing surface
+Note: No longer used	24
+48	Lightings	String - possible values:
+1, 2, 3, 458
+ qualifierId details	The lighting conditions
+Note: No longer used	24
+49	Attendance figure	String	The attendance at the match (number of people in the crowd)	24
+50	Official position	
+String - possible values:
+1, 2, 3, 4, 5, 6, 458
+ 
+
+qualifierId details
+
+The position of a replacement official	25
+51	Official ID	String (Alphanumeric - UUID)	The unique ID (UUID) of the official being replaced	25
+52	Possession time	 	 	26
+53	Injured player ID	String (Alphanumeric - UUID)	The unique ID (UUID) of the injured player, causing a delay in the game	27
+54	End cause	
+Numeric - possible values:
+0, 1, 2, 3, 4, 5, 6, 7, 8, 99, 100, 101, 458
+ 
+
+qualifierId details
+
+The related reason that has caused the match to end early	76
+55	Related event ID	String	The event ID of the related event (example: 678 - this will have been previously returned in the feed as the value of eventId. Where the event type is a goal or shot, the related Event ID will be that of the assist and thus show the assisting player ID.	13, 14, 15, 16, 18, 19, 28, 60
+56	Zone	String - possible values: Back, Left, Center, Right	Defined zone of the pitch where an action takes place (for a 'Pass' this is where it ends). See: Appendix 3 - Pitch zones	1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 44, 45, 50, 56, 57, 58, 59, 60, 61, 67, 69, 74
+57	End type	String - 0 or 1	The end type. For example, value 1 = indicates when it is the end of collection (for example, the end event has a Period ID of 14 'Post Game'), whereas value 0 can appear with an event that has a Period ID where data collection can start/resume but does not normally end completely for the match - for example, periodId of 1 ('First Half') or 2 ('Second Half').	30
+58	Temp stop status	 	 	29
+59	Jersey Number	String/Array - value string	A single value or an array of values giving the jersey/shirt numbers of the players involved. This will be shown for substitutions (Player Off/Player On), lineups (Team set up), and lineup changes. The order that the values are listed here will be the same order as the positions listed on qualifierId 131. For more information, see Appendix 4 - Playing positions	18, 19, 34, 40
+60	Small box - Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+61	Small box - Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+62	Box - Deep Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+63	Box - Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+64	Box - Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+65	Box - Deep Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+66	Out of box - Deep Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+67	Out of box - Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+68	Out of box - Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+69	Out of box - Deep Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+70	35+ Right	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+71	35+ Left	 	Defined zone of the pitch where an action takes place. See: Appendix 3 - Pitch zones	13, 14, 15, 16
+72	Left footed	 	The action is performed with the left foot
+Note: This can be shown for 'Live' data (for example, for eventTypeId '13'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	13, 14, 15, 16
+73	Left	 	Indicates that: a corner is taken from the attacking left side; an off-target shot goes to the left of the goal or hits the left post; a goalkeeper facing a penalty dives to their left	6, 13, 14, 58
+74	High	 	Indicates that: a goal kick is launched high into the air; an off-target shot goes over the goal or hits the crossbar	1, 13, 14
+75	Right	 	Indicates that: a corner is taken from the attacking right side; an off-target shot goes to the right of the goal or hits the right post; a goalkeeper facing a penalty dives to their right	6, 13, 14, 58
+76	Low Left	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	15, 16
+77	High Left	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13, 15, 16
+78	Low Centre	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	15, 16
+79	High Centre	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	15, 16
+80	Low Right	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	15, 16
+81	High Right	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13, 15, 16
+82	Blocked	 	The shot is blocked	15
+83	Close Left	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13
+84	Close Right	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13
+85	Close High	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13
+86	Close Left and High	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13
+87	Close Right and High	 	Defined zone of the goalmouth where a shot goes/is aimed towards. See: Appendix 2 - Goalmouth coordinates	13
+88	High claim	 	The goalkeeper attempts to claim a high ball	11
+89	1 on 1	 	A player was in a 'one-on-one' situation with the opposition goalkeeper when they took a shot or missed a chance to shoot	13, 14, 15, 16, 60
+90	Deflected save	 	Note - October 2019: No longer collected as of June 2016
+For event typeId 10 ('Save'): When the goalkeeper saves a shot but does not catch the ball	13, 14, 15, 16
+91	Dive and deflect	 	Note - October 2019: No longer collected as of June 2016
+For event typeId 10 ('Save'): When the goalkeeper saves a shot while diving but does not catch the ball	13, 14, 15, 16
+92	Catch	 	Note - October 2019: No longer collected as of June 2016
+For event typeId 10 ('Save'): When the goalkeeper saves a shot and catches it	13, 14, 15, 16
+93	Dive and catch	 	Note - October 2019: No longer collected as of June 2016
+For event typeId 10 ('Save'): When the goalkeeper saves a shot while diving and catches it.	13, 14, 15, 16
+94	Def block	 	A shot is blocked by an outfield player/defender.	10
+95	Back pass	 	A free kick is awarded for a deliberate back pass (illegal pass) that is picked up or handled by the goalkeeper.	4
+96	Corner situation	 	Note - October 2019: No longer used
+'Pass' or 'Shot' event in a 'Corner' situation. Event typeId 25 is used when the goal is direct from corner and qualifierId 96 relates to 2nd phase attack.	13, 14, 15, 16
+97	Direct free	 	This qualifier is only used with Opta GoalData (game system 4) but not with full data; qualifierId 26 will be used for a shot directly from a free kick.	1
+98	Pitch X Coordinate	String	Note - October 2019: No longer used	1
+99	Pitch Y Coordinate	String	Note - October 2019: No longer used	1
+100	Six Yard Blocked	 	An Attempt on goal that was blocked by a defender inside the six yard box	15
+101	Saved Off Line	 	A last line attempt blocked where the block prevents a certain Goal (not possible for the Goalkeeper to make a save)	15
+102	Goalmouth Y Coordinate	String	The Y-coordinate (0-100) of where the shot/ball crossed/was projected to cross the goal line. See: Appendix 2 - Goalmouth coordinates	13, 14, 15, 16
+103	Goalmouth Z Coordinate	String	The Z-coordinate (0-100) for the height at which a shot/the ball crossed/was projected to cross the goal line. See: Appendix 2 - Goalmouth coordinates	13, 14, 15, 16
+104	Attempt Position X Coordinate	String	Note - October 2019: No longer used	13, 14, 15, 16, 38, 39
+105	Attempt Position Y Coordinate	String	Note - October 2019: No longer used	13, 14, 15, 16, 38, 39
+106	Attacking Pass	 	Note - October 2019: No longer collected as of June 2016
+A pass in the opposition's half of the pitch	13, 14, 15, 16
+107	Throw in	 	The pass was a throw-in	1
+108	Volley	 	The shot was a volley (the ball does not bounce before the shot)	13, 14, 15, 16
+109	Overhead	 	Note - October 2019: No longer collected as of June 2017
+The shot was an overhead kick	13, 14, 15, 16
+110	Half Volley	 	Note - October 2019: No longer used
+Shot on the half volley (hit immediately after the ball bounces)	13, 14, 15, 16
+111	Diving Header	 	Note - October 2019: No longer used
+Shot where the player dives to head the ball	13, 14, 15, 16
+112	Scramble	 	Note - October 2019: No longer used
+Goal where there was a scramble for possession of the ball and the defence had an opportunity to clear	13, 14, 15, 16
+113	Strong	 	The shot was subjectively judged to have been hit strongly by the player	13, 14, 15, 16
+114	Weak	 	The shot was subjectively judged to have been hit weakly by the player	13, 14, 15, 16
+115	Rising	 	Note - October 2019: No longer collected as of June 2016
+Shot was rising in the air	13, 14, 15, 16
+116	Dipping	 	Note - October 2019: No longer collected as of June 2016
+Shot was dipping towards the ground	13, 14, 15, 16
+117	Lob	 	Note - October 2019: No longer collected as of June 2017
+The shot lobbed/attempted to lob the opposition goalkeeper	13, 14, 15, 16
+118	One Bounce	 	Note - October 2019: No longer used
+Shot where the ball bounced once on its way towards the goal	13, 14, 15, 16
+119	Few Bounces	 	Note - October 2019: No longer used
+Shot where the ball bounced once on its way towards the goal	13, 14, 15, 16
+120	Swerve Left	 	A shot which swerves to the left - from the perspective of the attacker	13, 14, 15, 16
+121	Swerve Right	 	A shot which swerves to the right - from the perspective of the attacker	13, 14, 15, 16
+122	Swerve Moving	 	A shot which swerves, with the ball moving in several/different directions	13, 14, 15, 16
+123	Keeper Throw	 	The goalkeeper throws out the ball - describes a 'Pass' event	1, 2
+124	Goal Kick	 	A goal kick is taken (following an out; not from hands or open play) - describes a 'Pass' event	1
+125	Free Kick Position X Coordinate	String	Note - October 2019: No longer used	 
+126	Free Kick Position Y Coordinate	String	Note - October 2019: No longer used	 
+127	Direction of Play	String	This signifies the actual direction of play in relation to TV cameras. X/Y coordinates are always normalised to Left to Right - possible values: Left to Right or Right to Left	32
+128	Punch	 	The Goalkeeper uses a clenched fist (or both fists) to clear the ball	10, 11, 12
+129	Ten Minute Possession	 	Note - October 2019: No longer used	26
+130	Team Formation	String	The formation the team played. The value is the formation ID - check this ID against the corresponding team formation diagram in Appendix 5 - Formations Explained	34, 40
+131	Team Player Formation	String/Array - value string	The position of the players in the formation. Values are in the range 0-11 and should be cross-referenced in conjuction with the Team Formation ID - check this against the corresponding diagram in Appendix 5 - Formations Explained	34, 40
+132	Simulation	 	Free kick or card reason; When a player deliberately tries to deceive the referee by winning a free kick which was not a foul or by faking an injury	4, 17
+133	Deflection	 	Any attempt which is deflected by an opposition outfield player, when the deflection does not alter the outcome of the attempt. i.e a deflected attempt saved, when the attempt is on target and deflected, but the deflection still results in the ball going on target.	13, 14, 15, 16
+134	Far Wide Left	 	Note - October 2019: This qualifier is no longer used	 
+135	Far Wide Right	 	Note - October 2019: This qualifier is no longer used	 
+136	Keeper Touched	 	A goal was scored, but the goalkeeper got a touch on the ball	16
+137	Keeper Saved	 	The shot was going off target - for example, the shot was going wide or over the goal - but it was collected/saved by the goalkeeper anyway. This can appear with event typeId 10, 13 and 15, 458.	10, 13
+138	Hit Woodwork	 	Added to any event where the ball hits the post or crossbar - Note: This does not include 'Post' events)	1, 3, 8, 12, 13, 15, 16, 58, 61
+139	Own Player	 	The shot was saved by goalkeeper that was deflected by a defender/teammate	10, 15
+140	Pass End X	String	The X pitch coordinate for the end point of a pass/offside pass/clearance - a value in the range 0.0-100.0	1, 2, 12
+141	Pass End Y	String	The Y pitch coordinate for the end point of a pass/offside pass/clearance - a value in the range 0.0-100.0	1, 2, 12
+142	Flag to Checker	 	Note - October 2019: No longer used	 
+143	Star Rating	 	Note - October 2019: No longer used	 
+144	Deleted Event Type	String	This qualifier is used to inform you which match event/action has been deleted. The Qualifier value gives the Event Type ID of the deleted event - for example, a value of '1' would mean that the type of event that was deleted was a 'Pass'	43
+145	Formation slot	String	The position in the formation assumed by the substitute player coming on. Values are in the range 1-11 and should be cross-referenced in conjuction with the Team Formation ID - check this against the corresponding diagram in Appendix 5 - Formations Explained	19
+146	Blocked X Coordinate	String	The X-coordinate where a shot is blocked or an off target attempt is touched by an opposition player	13, 15
+147	Blocked Y Coordinate	String	The Y-coordinate where a shot is blocked or an off target attempt is touched by an opposition player	13, 15
+148	Danger	 	Note - October 2019: No longer used	 
+149	Inside	 	Note - October 2019: No longer used	 
+150	Outside	 	Note - October 2019: No longer used	 
+151	Short	 	Note - October 2019: No longer used	 
+152	Direct	 	A direct free kick	1, 2, 4
+153	Not past goal line	 	An off-target shot (missed shot) that fails to go past the goal line	13
+154	Intentional Assist	 	A pass that creates a goal scoring chance. (for example, a cross into the box or a through ball that sends an attacker on goal)	1, 13, 14, 15, 16, 60
+155	Chipped	 	A pass which was chipped/played through the air	1
+156	Lay-off	 	A lay off is a first-time pass played back by a player with their back fully to the opposition Goal, with pressure from an opposition player from behind	1
+157	Launch	 	A long, high ball which is played from a player's own half, aimed towards a zone rather than a specific player	1
+158	Persistent Infringement	 	A card is given to a player for committing persistent fouls	17
+159	Foul and Abusive Language	 	A card is given to a player for persistent foul and abusive language	17
+160	Throw-in set piece	 	The shot/pass came from a throw in (followed a set piece)	1, 13, 14, 15, 16
+161	Encroachment	 	A card is given for encroachment (to a player who moves within 10 yards of their opponent's free kick)	17
+162	Leaving field	 	A card is given to a player for leaving the field without permission	17
+163	Entering field	 	A card is given to a player for entering the field during play without the referee's permission	17
+164	Spitting	 	A card is given to the player for spitting	17
+165	Professional Foul Last Man	 	A card is given to a player for a deliberate tactical foul	17
+166	Professional Foul Handball	 	A card is given to the (outfield) player for deliberate handball/using their hand intentionally to keep the ball out of the goal	17
+167	Out of play	 	The tackle or clearance results in the ball going out of play	7, 12, 65
+168	Flick-on	 	A first time pass (played with head or foot) when a player has their back to the opposition goal, intended to help the ball on to a team mate	1
+169	Leading to attempt	 	A player error led to an opposition shot on goal (not scored)	51
+170	Leading to goal	 	A player error led to an opposition goal	51
+171	Rescinded Card	 	Note - October 2019: No longer used
+The referee rescinds a card after the match has finished (red card is rescinded/overturned)	17
+173	Parried safe	 	The goalkeeper saves the shot and parries the ball to safety	10
+174	Parried danger	 	The goalkeeper saves the shot and parries the ball into a dangerous area (for example, the ball is parried to another opponent)	10
+175	Fingertip	 	The goalkeeper saves the shot using their fingertips	10
+176	Caught	 	The goalkeeper saves the shot by catching the ball	10
+177	Collected	 	The goalkeeper makes a save by collecting the ball (from a shot travelling along the ground)	10
+178	Standing	 	Player involved in the event is standing. 
+Note: This can be shown for 'Live' data (for example, for eventTypeIds '10' and '58'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	10, 58
+179	Diving	 	The goalkeeper makes a save or faces a penalty and dives for the ball.
+Note: This can be shown for 'Live' data (for example, for eventTypeIds '10' and '58'). However, from June 2020 it can also be added 'Post-match' to all goalleeper 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	10, 58
+180	Stooping	 	The goalkeeper makes a save while stooping over	10
+181	Reaching	 	The goalkeeper makes a save by reaching for the ball	10
+182	Hands	 	The goalkeeper makes a save with their hand(s)	10
+183	Feet	 	The goalkeeper makes a save using their foot/feet	10
+184	Dissent	 	A card or free kick is given for dissent towards a match official - for example, when a player does not obey the referee's instructions	4, 17
+185	Blocked cross	 	The defending player blocks an attempted cross by an opponent	12
+186	Scored	 	The goalkeeper faces a penalty and does not save it, resulting in a goal (penalty shot scored)	58
+187	Saved	 	The goalkeeper faces a penalty and saves it (penalty shot saved)	58
+188	Missed	 	The goalkeeper faces a penalty and the shot went wide or over - it did not require a save (penalty shot missed)	58
+189	Not visible	 	The event occurred off camera and was not seen by the analyst (usually due to a replay being shown)	1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 27, 28, 30, 40, 41, 44, 45, 49, 50, 51, 52, 55, 57, 61, 65, 67, 68, 69, 74
+190	From shot off target	 	The goalkeeper saves a shot that was not on target - for example, the shot was going wide or over (off target)	10
+191	Off the ball foul	 	Foul committed by and on a player who is not in possession of the ball	17
+192	Block by hand	 	An outfield player blocks a shot with their hand	15
+193	Goal measure	 	Note - October 2019: No longer used (collected from 2013-2015)
+A subjective measure used to rate the quality of the goal (essentially a Goal Rating from 1-5), but it is only used for a limited about of competitions.	16
+194	Captain	String	The player who is the team captain - the value is the unique ID of the player	34, 40
+195	Pull back	 	The player in the opposition's penalty box reaches the by-line and passes (cuts) the ball backwards towards a teammate	1
+196	Switch of play	 	Any pass which crosses the centre zone of the pitch and in length is greater than 60 on the y axis of the pitch	1
+197	Team kit	String	The ID of the kit used by the team	34
+198	GK hoof	 	The goalkeeper drops the ball on the ground and kicks it long towards a position/area, rather than a specific player	1
+199	GK kick from hands	 	The goalkeeper kicks the ball forward, straight out of their hands	1
+200	Referee stop	 	The referee stops play	27
+201	Referee delay	 	Indicates a delay (interruption/stoppage) in play that has been instructed by the referee	27
+202	Weather problem	 	Indicates a delay (interruption/stoppage) in play due to adverse weather conditions	27, 75
+203	Crowd trouble	 	Indicates a delay (interruption/stoppage) in play due to to crowd trouble	27, 75
+204	Fire	 	A fire in the stadium grounds stops or delays play	27
+205	Object thrown on pitch	 	Indicates a delay (interruption/stoppage) in play because an object has been thrown onto the pitch	27
+206	Spectator on pitch	 	Indicates a delay (interruption/stoppage) in play because a spectator has come onto the pitch	27
+207	Awaiting official's decision	 	Indicates a delay (interruption/stoppage) in play because the referee still has to make a decision before the match can resume	27
+208	Referee injury	 	Indicates a delay (interruption/stoppage) in play because the referee/a match official has sustained an injury	27
+209	Game end	 	Signifies the related 'End' event (Event Type ID 30) is at the end of the match	30
+210	Assist	
+Numeric -possible values:
+13, 14, 15, 16  
+
+qualifierId details
+
+The pass assisted a shot (including goals) or a chance missed.	1
+211	Overrun	 	A player attempting to take on an opponent overhits the ball and it runs away from them out of play or to an opponent	3
+212	Length	String	The estimated length (in metres) that the ball has travelled during the associated pass/clearance	1, 12
+213	Angle	String	The angle the ball travels at during the associated pass/clearance relative to the direction of play. Value: 0.00 to 6.28 in Radians (can contain values upto 2 decimal points).	1, 12
+214	Big chance	 	A shot was subjectively judged by analysts to be an excellent goal-scoring opportunity and the player should have scored - a clear cut chance, such as a '1 on 1'. Includes where the shot resulted in a miss, hit post/woodwork, save, or goal.	13, 14, 15, 16
+215	Individual play	 	The player took a shot and created this chance by themselves. For example, they dribbled to create space for themselves and took a shot.	13, 14, 15, 16
+216	2nd related event ID	String	Note: Used for Major League Soccer (MLS) and German Bundesliga 1 and 2.
+Indicates that there was a 2nd assist for a goal, such as a pass to create the opportunity for the player making the assist, to show the second assisting player ID. The value gives the Event ID of the 2nd related event (example: 259) - this will have been previously returned in the feed as the value of eventId.	16
+217	2nd assisted	 	Indicates that this shot had a significant pass to create the opportunity for the pass which led to a goal	16
+218	2nd assist	 	The pass was deemed a 2nd assist - it created the opportunity for another player to assist a goal	1
+219	Players on both posts	 	Indicates that the team defending the corner had players on both posts when the corner was taken
+Note:
+• This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post
+• This is a qualifierId that previously existed and was retired, but has been reinstated (August 2020)	6
+220	Player on near post	 	Indicates that the team defending the corner had a player on only the near post when the corner was taken
+Note:
+• This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post
+• This is a qualifierId that previously existed and was retired, but has been reinstated (August 2020)	6
+221	Player on far post	 	Indicates that the team defending the corner had a player on only the far post when the corner was taken
+Note:
+• This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post
+• This is a qualifierId that previously existed and was retired, but has been reinstated (August 2020)	6
+222	No players on posts	 	Indicates that the team defending the corner had no players on either post when the corner was taken
+Note:
+• This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post
+• This is a qualifierId that previously existed and was retired, but has been reinstated (August 2020)	6
+223	In-swinger	 	The corner was crossed into the box swerving towards the goal (in-swinging)
+Note: This can be shown for 'Live' data (for example, for eventTypeId '1'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	1
+224	Out-swinger	 	The corner was crossed into the box swerving away from the goal (out-swinging)
+Note: This can be shown for 'Live' data (for example, for eventTypeId '1'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	1
+225	Straight	 	The corner was crossed into the box where the ball flight was straight (without swing)
+Note: This can be shown for 'Live' data (for example, for eventTypeId '1'). However, from June 2020 it can also be added 'Post-match' to all 'touch' events if applicable, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	1
+226	Suspended	 	The game has not finished but is suspended	27
+227	Resume	String/Array - value string	The team setup (lineup) for a match that has resumed at a later date after it was initially abandoned/suspended mid-way through the game/during gameplay.	34
+228	Own shot blocked	 	The player unintentionally/accidentally blocks an attacking shot from their teammate	61
+229	Post match complete	 	Collection has finished, the game has been reviewed, and post-match checks and quality control have been completed	37
+230	GK X Coordinate	String	The X-coordinate for the position of the goalkeeper (GK) for the shot
+Note: This can be shown for 'Live' data (for example, for eventTypeIds '14' and '16'). However, from June 2020 it can also be added 'Post-match' to 'Blocked Shot', 'Miss' (not past the goal line) and all shot events, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	14, 16
+231	GK Y Coordinate	String	The Y-coordinate for the position of the goalkeeper (GK) for the shot
+Note: This can be shown for 'Live' data (for example, for eventTypeIds '14' and '16'). However, from June 2020 it can also be added 'Post-match' to 'Blocked Shot', 'Miss' (not past the goal line) and all shot events, but only for some competitions. When added as a post-match qualifier it is only shown once the post-match analysis is complete.	14, 16
+232	Unchallenged	 	The goalkeeper smothers the ball and is unchallenged by an opponent	54
+233	Opposite related event ID	String	Used for any event where the same event applies to both teams with outcome 1 or 0. This links the two events together - for example, Aerial Duels. The feed will return two instances of the same event, each with a unique event ID, and this qualifier will be attached to each event.
+Value: The Event ID of the corresponding opposite related event by the opposition (example: 706 - it will have been returned in the feed as the eventId value.	1, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 27, 28, 41, 44, 45, 50, 54, 58, 67, 69, 74
+234	Home Team Possession	 	Note - October 2019: This qualifier is associated with event typeId 66 which is no longer recorded in the feed. We will update this record shortly to confirm if this qualifierId could appear in the output.
+Possession % (percentage) in last 5 mins	66
+235458	Away Team Possession	 	Note - October 2019: This qualifier is associated with event typeId 66 which is no longer recorded in the feed. We will update this record shortly to confirm if this qualifierId could appear in the output.
+Possession % (percentage) in last 5 mins	66
+236	Blocked pass	 	Assigned to a 'Pass' to indicate it was blocked by an opponent in close proximity. It is similar to an 'Interception' event but the player was already very close to ball, instead of a touch event in the past.	1
+237	Low	 	Indicates a low goal kick	1
+238	Fair Play	 	Indicates the ball was deliberately put out of play or returned to the opposition for fair play - for example, as following an injury	1, 61
+239	By Wall	 	A block was made by the wall in a free kick situation. It often appears alongside Qualifier IDs 94 (Def Block - indicates shot is blocked by an outfield player), 56 (Zone), and 233 (Opposite related event ID - gives the ID of the corresponding related event, to get the ID of the involved outfield player)	10
+240	GK Start	 	Automated Qualifier which appears on all goalkeeper (GK) Pass events after the keeper collects ball with their hands and then puts it on the ground	1
+241	Indirect	 	Indicates that the free kick was indirect	1, 2, 4
+242	Obstruction	 	The foul committed was for obstruction	4
+243	Unsporting behaviour	 	A card is given to the player for unsporting behaviour	17
+244	Not Retreating	 	A card is given to the player for not retreating to an appropriate distance away for a set-piece situation, such as a free kick or goal kick	17
+245	Serious Foul	 	A card is given to a player for committing a serious foul	17
+246	Drinks Break	 	The game/play is delayed due to a drinks break	27
+247	Offside	 	Indicates a contentious referee decision relating to offside - for example, giving or not giving an offside decision	65
+248	Goal line	 	Indicates a contentious referee decision relating to the ball crossing the goal line - for example, giving or not giving a goal	65
+249	Temp Shot On	 	A shot has occurred but it is pending additional detail qualifiers from Opta	13, 14, 15, 16
+250	Temp Blocked	 	A block has occurred but it is pending additional detail qualifiers from Opta	13, 14, 15, 16
+251	Temp Post	 	A shot has hit the post but it is pending additional detail qualifiers from Opta	13, 14, 15, 16
+252	Temp Missed	 	A shot has missed but it is pending additional detail qualifiers from Opta	13, 14, 15, 16
+253	Temp Miss Not Passed Goal Line	 	A shot has missed but not gone past the end/goal line but it is pending additional detail qualifiers from Opta	13, 14, 15, 16
+254	Follows a Dribble	 	A goal followed a dribble by the goalscorer	16
+255	Open Roof	 	Indicates that the roof of the stadium is open
+Note: No longer used	24
+256	Air Humidity	String	The air humidity in the stadium
+Note: No longer used	24
+257	Air Pressure	String	The air pressure in the stadium
+Note: No longer used	24
+258	Sold Out	Dynamic	Indicates whether the match is sold out
+Note: No longer used	24
+259	Celsius degrees	String	The temperature in degrees celcius
+Note: No longer used	24
+260	Floodlight	Dynamic	Indicates whether the match was played under floodlights
+Note: No longer used	24
+261	1 on 1 chip	 	Note - October 2019: No longer collected as of June 2017
+The goal was a 'one-on-one' chip, where the scorer chipped the ball over the goalkeeper and into the net	16
+262	Back heel	 	Note - October 2019: No longer collected as of June 2017
+The goal was scored with a back heel	16
+263	Direct corner	 	A shot or goal directly from a corner	15, 16
+264	Aerial Foul	 	A foul was committed aerially (in or via the air)	4
+265	Attempted Tackle	 	A foul was committed via an attempted tackle	4
+266	Put Through	 	Note - October 2019: No longer used (collected only for DFL between 2013/14 and 2016/17)
+Attacking player has passed/shot the ball past a defending player who attempted to stop the ball. A 'Put Through' is always linked to a 'Failed to block' event on the defending team's side. This qualifier is assigned to the defending player who should have denied the shot.	1, 13, 14, 15, 16
+267	Right Arm	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+The goalkeeper uses their right arm to make the save	10
+268	Left Arm	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+Goalkeeper uses their left arm to make the save	10
+269	Both Arms	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+Goalkeeper uses both of their arms to make the save	10
+270	Right Leg	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+Goalkeeper uses their right leg to make the save	10
+271	Left Leg	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+Goalkeeper uses their left leg to make the save	10
+271	Both Legs	 	Note - October 2019: No longer used (collected in 2013/14 season only)
+Goalkeeper uses both of their legs to make the save	10
+273	Hit Right Post	 	The shot hit the right post following a save	10, 13, 15, 16
+274	Hit Left Post	 	The shot hit the left post following a save	10, 13, 15, 16
+275	Hit Bar	 	The shot hit the crossbar following a save	10, 13, 15, 16
+276	Out on sideline	 	The shot missed/was off-target and went out on the sideline for a throw in. Note: In this context the accompanying 'Blocked' Qualifier IDs (147, 153) indicate where the ball goes out on the touchline.	13
+277	Minutes	String	The number of minutes of injury time given by the referee	70, 75
+278	Tap	 	The ball was tapped to a teammate (for example, from kick-off or a free kick)	1
+279	Kick Off	String (S or G)	Indicates the event was a starting pass/kick off - this is to enable exclusion from passing %
+S = kick-off to start a period (first half, second half, first half extra-time, second half extra-time)
+G = kick-off after a goal	1, 13
+280	Fantasy Assist Type	
+String - possible values:
+ 
+
+qualifierId details
+
+The type of Fantasy Assist for the goal	16
+281	Fantasy Assisted By	String	The player credited with making the Fantasy Assist - the value is the unique ID (UUID) of the player	16
+282	Fantasy Assist Team	String	The team (contestant) credited with making the Fantasy Assist - the value is the unique ID (UUID) of the team	16
+283	Coach ID	String	The ID of the team coach	17
+284	Duel	 	Note - October 2019: No longer used (collected for DFL competitions only between 2013/14 and 2016/17 seasons)
+Indicates the blocked shot/cross is a duel	10, 12, 15
+285	Defensive	 	Indicates a defensive dual	3, 4, 7, 10, 12, 44, 45, 50, 67, 69, 74
+286	Offensive	 	Indicates an offensive duel	1, 3, 4, 7, 13, 14, 15, 16, 44, 45, 50, 67
+287	Over-arm	 	Indicates an over-arm throw out of the ball by the goalkeeper	1
+288	Out of Play Secs	 	Note - October 2019: This qualifier is associated with event typeId 66 which is no longer recorded in the feed. We will update this record shortly to confirm if this qualifierId could appear in the output.
+Amount of time the ball was out of play in the last 5 minutes	66
+289	Denied goal-scoring opp	 	The foul committed by a player denies a goal-scoring opportunity	4, 17
+290	Coach types	
+String/Array - value string - in the range 1-61:
+ 
+
+qualiferId details
+
+Gives the IDs of all the coach types and roles involved in the coach setup.	71
+291	Other Ball Contact Type	 	Note - October 2019: No longer used (collected in 2013/14 season)
+This is an automated extra event for DFL. It comes with a tackle or an interception and indicates if the player who made the tackle/interception retained the ball after this action or if the tackle/interception was a single ball touch (other ball contact with event type 'Interception' (8), type 'Defensive Clearance', or type 'Tackle Retained Ball').	61, 73
+292	Detailed Position ID	
+String - possible values:
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+ 
+
+qualifierId details
+
+Indicates the detailed position that the substitute player comes on in	19
+293	Position Side ID	
+String - possible values:
+1, 2, 3, 4, 5, 6, 7, 458
+
+qualifierId details 
+
+Indicates the side of the pitch that the substitute player comes on in when they assume their position	19
+294	Shove/Push	 	The foul is given for a shove/push	4
+295	Shirt Pull/Holding	 	The foul is given given for shirt pulling/holding	4
+296	Elbow/Violent Conduct	 	The foul is given for elbowing or violent conduct	4
+297	Follows Shot Rebound	 	An offside pass that follows a rebounded shot - the player who followed-up after a rebound to make a pass is ruled offside	2
+298	Follows Shot Blocked	 	An offside pass that follows a blocked shot - the player who followed-up after the blocked shot to make a pass is ruled offside	2
+299	Clock Affecting	 	Indicates that the delay has affected the match clock	27, 28
+300	Solo Run	 	Shows that the goal came from a solo run made by the player	16
+301	Shot from cross	 	Shows that the attempt came from a shot that came from a cross (the attempt was saved)	15
+302	Checks complete/Live collection checks complete	 	Data/live data collection has ended and he initial post-match checks have been completed	37
+303	Floodlight failure	 	Shows that the delay is due to a floodlight failure	27
+304	Ball In Play	 	The player is off the pitch but the ball is in play	77
+305	Ball Out of Play	 	The ball is out of play due to the player being off the pitch	77
+306	Kit change	 	The player is off the pitch for a kit change	77
+307	Phase of possession ID	String	Note - October 2019: No longer used (collected only for DFL between 2013/14 and 2016/17)
+The ID for the phase of possession for the DFL	1, 2, 3, 4, 7, 8, 10, 11, 12, 13, 14, 15, 16, 41, 42, 50, 54, 57, 61, 74
+308	Goes to Extra Time	 	Indicates that the match will go to extra time and an additional period will be played	30
+309	Goes to Penalties	 	Indicates that the match will go to penalties and an additional period will be played	30
+310	Player goes out	 	The player goes off/leaves the pitch	77
+311	Player comes back	 	The player comes back onto the pitch	77
+312	Phase of possession start	String	Note - October 2019: No longer used (collected only for DFL between 2013/14 and 2016/17)
+Indicates that possession has started for DFL	3, 7, 8, 10, 11, 54, 74
+313	Illegal Restart	 	The foul is given for an illegal restart of play	4
+314	End of Offside	 	The foul is given for a shot hitting an offside player	13, 15
+315	Related Event Player ID	String	Note: This qualifier is no longer used.
+The ID of the player who performed the related event	13, 14, 15, 16
+316	Passed Penalty	 	The player chose to pass the ball to a teammate when taking a penalty instead of attempting a direct shot on goal	13, 14, 15, 16
+317	Penalty Set Piece	 	The shot or chance missed came from a situation where a penalty was taken and not directly shot at goal or scored	13, 14, 15, 16, 60
+319	Captain change	 	Indicates that the team has changed their captain	40
+323	Follows a Rebound	 	Note - October 2019: This qualifier is no longer used
+Shot follows another shot and is from the resulting rebound	13, 14, 15, 16
+324	Follows a Take On	 	Note - October 2019: This qualifier is no longer used
+Shot follows a successful take-on	13, 14, 15, 16
+325	Abandonment To Follow	 	Attached to 'End' event (typeId 30), this will flag when the game is about to be abandoned by Opta's collection system, rather than appearing as though the match has normally ended	30, 32, 34, 36, 40, 71
+328	First Touch	 	The shot was attempted by the player first time/on their first touch, without another touch to control the ball	13, 14, 15, 16
+329	VAR - Goal Awarded	 	The VAR has been asked to look at a goal that was awarded by the referee. Note: This was previously named "VAR - Goal"	65
+330	VAR - Penalty Awarded	 	The VAR has been asked to look at a penalty decision that was awarded by the referee	65
+331	VAR - Penalty Not Awarded	 	The VAR has been asked to look at a penalty decision that was originally not awarded by the referee	65
+332	VAR - (Red) Card Upgrade	 	The VAR has been asked to look at an event where a red card was not originally awarded by the referee. Note: This was previously named "VAR - Red Card"	65
+333	VAR - Mistaken Identity	 	The VAR has been asked to clarify a circumstance of mistaken identity	65
+334	VAR - Other	 	The VAR has been asked to look at another situation	65
+335	Referee Decision Confirmed	 	The decision has been confirmed	65
+336	Referee Decision Cancelled	 	The decision has been cancelled	65
+338	Follows a Rebound Event ID	 	Reference to the previous shot this has followed	13, 14, 15, 16
+341	VAR - Goal Not Awarded	 	The VAR has been asked to look at an event/shot that was not originally awarded as a goal by the referee (new - 16 April 2018)	 
+342	VAR - Red Card Given	 	The VAR has been asked to look at an event where a red card was awarded by the referee (new - 16 April 2018)	 
+343	Review	 	This ID is attached to the event that most closely relates to the situation being investigated by the VAR. It might be a shot, goal, foul, aerial, pass, take-on etc. and can be attached to almost any event type (released 16 April 2018)
+Possible values: 1, 2, 3 (1 = under review, 2 = reviewed, 3 = event added post review)	 
+344	Video coverage lost	 	Indicates that the game/coverage and our analysis has been interrupted (outcome 0 = start of interruption, outcome 1 = end of interruption)	79
+345	Overhit cross	 	Indicates when a cross clearly went over the intended target area	1 (may appear only with qualifierId 2)
+346	Next event Goal-Kick	 	Indicates that the next event in a game will be a goal-kick	5
+347	Next event Throw-In	 	Indicates that the next event in a game will be a throw-in	5
+348	Penalty taker ID	String	Value is the ID of the player that took the penalty. After a penalty is awarded, we collect the ID of the penalty taker before the kick is taken. This qualifier is only included in the Foul event of the attacking team (outcome = 1)	4 (qualifierId 9)
+349	Goalkeeper punch outcome	 	End xy coordinates for a Goalkeeper punch event. Qualifier IDs 140 (x) and 141 (y) indicate the end coordinates of the punch. It is included with a Goalkeeper punch event (typeId 41) and outcome 1 or 0.	41 (qualifierId 140, 141)
+353	Second (2nd) opposite related event ID	 	This qualifier links a second opposite related event to an action, and provides more detail about an action during the game. For example, if a penalty is saved, instead of only linking the offensive 'Penalty Taken' event to the defensive 'Penalty Saved' action (event typeId 58) we can also link it to a 'Penalty Faced' action (event typeId 10).
+Note: Applicable from 19 March 2019. Qualifier ID 233 is unchanged.	Various (see qualifierId 233, eg typeId 10, 15, 58)
+354	Ball hits referee	 	Added to a drop ball if the cause of the event was due to the ball hitting the referee.	68
+355	Entering referee review area	 	Added to a card event (typeId 17) where a yellow card was issued for a person entering the referee review area - this caution relates to a VAR decision. A qualifierId of 31 (yellow card) will also be present.	17
+356	Excessive usage of review signal	 	Added to a card event (typeId 17) where a yellow card was issued for a person excessively using the review signal - this caution relates to a VAR decision. A qualifierId of 31 (yellow card) will also be present.	17
+357	Entering video operations room	 	Added to a card event (typeId 17) where a red card was issued for a person entering the video operations room - this relates to a VAR decision. A qualifierId of 33 (red card) will also be present.	17
+358	Official body: Reviewed and confirmed	 	Added if a goal event (typeId 16) has been reviewed post-match by an official body, only where the goalscorer remains unchanged. It can also be added to assist events.	16, 1
+359	Official body: Reviewed and changed	 	Added if a goal event (typeId 16) has been reviewed post-match by an official body, only where the goalscorer is changed. It can also be added to assist events.	16, 1
+361	Incorrect out of play decision	 	Added when our analysts are very clear that the ball has gone out of play for either a goal kick or a corner, but the match official has given the opposite decision.	5, 6
+362	Viral	
+Numeric - possible values:
+1, 2, 3, 4, 5
+ 
+
+qualifierId details
+
+Informs customers* that something interesting has happened during the game which they may want to take a closer look at. The value gives the category the viral qualifier falls into.
+*Note: It is intended to help customers who use Opta data to aid with video clipping workflows. Some viral content will not be linked to a specific event collected by our analysts (eg an interesting event among the crowd) - in these situations our analysts will add the viral qualifier to the nearest on-pitch event. Examples of viral content could include: exceptional skill on a goal eg overhead kick, a player reacting poorly to being substituted, a manager and coach making the same signals on the touchline, a fan "tifo" display	All Event Type IDs
+363	Away attendance	Numeric	Gives the number of people who are fans of the away team in attendance at the match. This currently applies to matches in England and Scotland only. Value: the number of people who are away fans in attendance for the match. Note: Applicable from 22 July 2019	24
+364	VAR Delay	 	Used with a 'Start delay' event (typeId 27)	27
+365	Reviewed event ID	 	Used with a 'Contentious referee decision' event (typeId 65), which should also have a linked event ID number to the specific event that is under review	65
+374	Goal shot timestamp	 	Specifies the actual time of the shot for all goal events - the events will continue to have the timestamp of the goal itself
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	16
+375	Goal shot game clock	 	The match time of the shot for all goal events - the events will continue to have the match time of the goal itself
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	16
+376	Low GK intervention	 	Denotes a low-level (height) intervention by the Goalkeeper - for example, the Goalkeeper touched the ball below hip height.
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	Various goalkeeper events, such as 10, 11, 41, 52
+377	Medium GK intervention	 	Denotes a medium-level (height) intervention by the Goalkeeper - for example, the Goalkeeper touched the ball below hip height
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	Various goalkeeper events, such as 10, 11, 41, 52
+378	High GK intervention	 	Denotes a high-level (height) intervention by the Goalkeeper - for example, the Goalkeeper touched the ball above shoulder height
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	Various goalkeeper events, such as 10, 11, 41, 5
+380	Other obstacle	 	The ball has hit the referee, corner flag or any other non-player object on the field
+Note: New from 24 August 2020. Collection type: Live	81
+381	Fumble	 	A goalkeeper attempts to catch the ball when making a save but drops the ball in error
+Note: New from 24 August 2020. Collection type: Live	10
+383	Touch type control	 	A player made a touch on the ball - control type. The player's intention when making a tackle or interception: keep ball close in order to touch it again
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	7, 8, 10, 11
+384	Touch type pass	 	A player made a touch on the ball - a pass. The player's intention when making a tackle or interception: direct ball towards teammate
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	7, 8
+385	Touch type clearance	 	A player made a touch on the ball - a clearance. The player's intention when making a tackle or interception: direct ball away from intended receiver/area
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	7, 8
+386	Driven cross	 	Any cross which is struck hard and straight
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	1
+387	Floated cross	 	A straight cross that is in the air for a long period of time - a cross stood up to the back post
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. Collection type: Post	1
+388	Jumping	 	Added to all 'touch' events if applicable but only for some competitions, and only 'post-match'.
+Note: New from June 2020. This is a 'post-match' qualifier which means it is only shown once the post-match analysis is complete.	61, 73
+389	Sliding	 	Added to save events and temp saves (10 & 63) for all T12+ games. It can also be added 'Post-match' to all 'touch' events.
+Note: New from June 2020. When added as a post-match qualifier it will be shown once the post-match analysis is complete.	7, 10, 11, 12, 13, 14, 15, 16, 63
+390	Causing player	 	The ID of the player who conceded the penalty
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. New from 24 August 2020. Collection type: Post	13, 14, 16
+391	Mis-hit	 	An attempt where the offensive player hits the ball poorly which sends the ball in an unintended direction.
+Note: New from 24 August 2020. Collection type: Live	13, 14, 15, 16
+392	Reckless offence	 	Card reasons updated to match with Official IFAB reasons - a player is shown a card for committing a foul in a reckless manner
+Note: New from 24 August 2020. Collection type: Live	17
+393	Tactical Foul	 	Card reasons updated to match with Official IFAB reasons - a player is shown a card which interferes with or stops a promising attack, except where the referee awards a penalty kick for an offence which was an attempt to play the ball
+Note: New from 24 August 2020. Collection type: Live	17
+394	Corner not taken	 	A corner was awarded but the referee blew the whistle before it could be taken
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. New from 24 August 2020. Collection type: Post	6
+395	GK x coordinate time of goal	 	The x-coordinate of the Goalkeeper position at the time of the goal/when the ball crosses the line
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. New from 24 August 2020. Collection type: Post	16
+396	GK y coordinate time of goal	 	The y-coordinate of the Goalkeeper position at the time of the goal/when the ball crosses the line
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. New from 24 August 2020. Collection type: Post	16
+397	Blocked clearance	 	Added on 'Clearance' events and 'Blocked Pass' events. It would have been previously collected as 'Ball touch' (61). Note: New from June 2020	12, 74
+398	GK Challenge	 	Goalkeeper Challenge. Added on 'Foul' events, an exclusive option that is collected only for very rare exceptions. Note: New from June 2020	4
+399	Intended tackle target	 	Identifies which player was the intended target of an attempted tackle. Tier 14 and 15
+Note: This qualifier will only be visible if the match is re-analysed within 24 hours of the match end time and date. New from 24 August 2020. Collection type: Post	83
+406	Collection complete	 	Phase 5 (Millisecond timestamps and control touches) post-match collection has been completed. Please note these collected competitions are subject to different post match SLAs.
+Note: This qualifier will only be visible for coverage tier 14 or 15 matches. New from 28 September 2020. Collection type: Post	37
+436	Pre-Review Event Type	 	We are adding a new Event type_id (84, Deleted After Review) in order that the Contentious Referee Decision can be linked to it for all VAR cases.
+There will also be this new qualifier added, the value of which indicates the type_id of the Event before it was deleted after review. (Added March 2021)	84
+458	Not assisted	 	Instead of not adding any assist related qualifier we will be adding a “not assisted” qualifier to indicate that there was no assist to the attempt.	16
+459	Event type review	 	Event type review is a qualifier which is used to identify a potential data points which may not have been coded live but may change after review.	1, 3, 8, 13, 14, 15, 61
+464	Take on space	 	Space refers to take-ons when the attacking is trying to dribble past an opponent player in attempt to move into an empty space behind them, but must be going sideways, or backwards in direction (not towards the opposition Goal).	 
+465	Take on overtake	 	Overtake refers to take-ons attempted when the player is trying to progress up past them in the direction of the opposition team's Goal/Goal Line. The players dribble must in the direction of the opposition Goal, with an opposition player in front of them (in a 1 v 1 situation).	 
+467	Defensive 1 v 1	Player ID of the opposing team’s defensive player	Take on: Defensive 1 v 1 is an attempted dribble which is stopped by a defensive player who prevents the attacker from progressing past them and forces the attacker to either abruptly end the take on or perform a different action without making a tackle (includes attempted dribbles which are stopped due to a foul by the defensive player).	 
+468	Related error 1 ID	Event ID 	Link to identify an error leading to the shot/goal 	13, 14, 15, 16 
+472	Fantasy assist ID 	Event ID 	Link to the identify the fantasy assist event 	16 
+474	Related error 2 ID	Event ID 	Link to identify an additional error leading to the shot/goal 	13, 14, 15, 16 
+476	New start time	Entry timestamp	Expected new start time of the match 	75
+478	Officially announced	 	Source of delay information as an official announcement	75
+479	Estimated	 	Source of delay information as an estimation	75
+484	Dubious scorer	 	When a goalscorer decision is under review	16
+485	Advantage played	 	The card has been shown with a delay after the offence as the referee did not interrupt the game and signaled advantage	17
+487	Panenka	 	A qualifier added to penalty attempts if a “Panenka” technique is used by the penalty taker.
+Note:This can only appear when the event also has the “Penalty” qualifier (ID 9).	13, 14, 15, 16
+486	Concussion	 	The substitution is related to a concussion injury.
+Note: This can only appear when the event also has the “Injury” qualifier (ID 41).	18, 19
+488	8-Second Violation	 	This violation occurs when a goalkeeper holds the ball for 8 seconds or longer without releasing it into play.
+According to the new IFAB rule, if this happens, the opposing team is awarded a corner kick as a penalty for time-wasting.
+Note: New from 14 June 2025	6
+490	Betting review type, will have associated type value	Numeric - in the range 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17  
+qualiferId details
+
+This will let you know what type of review the event is undergoing.	1, 2, 3, 4, 5, 6, 8, 13, 14, 15, 16, 44, 50, 60, 61
+491	Betting review player, will be referencing a player UUID	String (Alphanumeric - UUID)	This will give you the ID of the player with which the event might be changed to after review is finished. Note: This qualifier will always be accompanied by id=490. The values of id=490 where you can expect to get qualifier id=491 are: 1, 12, 14 and 16	 1, 2, 3, 4, 5, 6, 8, 13, 14, 15, 16, 44, 50, 60, 61
