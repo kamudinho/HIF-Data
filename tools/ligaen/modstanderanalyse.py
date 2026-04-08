@@ -521,7 +521,7 @@ def vis_side(dp=None):
 
             # Aggregér pr. spiller
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
-                Målinvolveringer=('GOAL_TIME', 'nunique'),
+                Involveringer=('GOAL_TIME', 'nunique'),
                 Aktioner=('EVENT_TYPEID', 'count'),
                 Mål=('is_goal', 'sum'),
                 Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
@@ -547,7 +547,7 @@ def vis_side(dp=None):
                     player_stats.rename(columns={
                         'PLAYER_NAME': 'Spiller',
                         'Skud_Ass': 'Skud Ass.'
-                    })[['Spiller', 'Målinvolveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
+                    })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
                     use_container_width=True,
                     hide_index=True,
                     column_config={
