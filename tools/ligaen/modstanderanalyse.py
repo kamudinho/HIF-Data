@@ -443,18 +443,20 @@ def vis_side(dp=None):
             c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
             
             with c_p1:
-                valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select_v3")
+                valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select_vfinal")
                 df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
                 df_spiller['qual_ids'] = df_spiller['QUALIFIERS'].fillna('').astype(str).apply(lambda x: x.split(',') if x else [])
     
-                # --- DYNAMISK OVERSÆTTELSE ---
+                # --- DYNAMISK OVERSÆTTELSE (Qualifiers & Typer) ---
                 def get_profile_label(row):
                     qids = row['qual_ids']
                     eid = str(row['EVENT_TYPEID'])
-                    priority_details = ["1", "2", "3", "4", "107", "155", "195", "196", "210", "214"]
+                    # Vi tjekker alle qualifiers først for at få detaljerne med
                     for q in qids:
-                        if q in priority_details and q in OPTA_QUALIFIERS:
-                            return OPTA_QUALIFIERS[q]
+                        if q in OPTA_QUALIFIERS:
+                            # Vi udelukker kun rent tekniske qualifiers (som f.eks. zone-id'er)
+                            if q not in ["56", "140", "141"]: 
+                                return OPTA_QUALIFIERS[q]
                     return OPTA_EVENT_TYPES.get(eid, f"Aktion {eid}")
     
                 df_spiller['Display_Label'] = df_spiller.apply(get_profile_label, axis=1)
@@ -464,21 +466,22 @@ def vis_side(dp=None):
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_count = len(pas_df)
                 pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
-                
-                # Afslutninger (Event 13, 14, 15, 16)
                 shots_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                 shot_count = len(shots_df)
                 mål_count = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
-                
                 assist_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "210" in x)])
                 cross_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "2" in x)])
                 erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
                 hoved_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "15" in x)])
-                    
+                
+                # Berøringer (Alle on-ball events)
+                touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
+                touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
+    
                 # Layout: 4 metrics pr. linje
                 m_row1 = st.columns(4)
                 m_row1[0].metric("Aktioner", total_akt)
-                m_row1[1].metric("Pasninger", pas_count)
+                m_row1[1].metric("Berøringer", touch_count)
                 m_row1[2].metric("Pasning %", f"{int(pas_acc)}%")
                 m_row1[3].metric("Afslutninger", shot_count)
                 
@@ -488,13 +491,12 @@ def vis_side(dp=None):
                 m_row2[2].metric("Indlæg", cross_count)
                 m_row2[3].metric("Erobringer", erob_count)
     
-                # --- TOP 10 AKTIONER (Renset for generiske tags) ---
+                # --- TOP 10 AKTIONER ---
                 st.markdown("---")
                 st.write("**Top 10: Aktioner (Detaljeret)**")
                 
-                # Vi fjerner 'Pasning' (1) og 'Berøringer' (61, 73) fra listen for at se detaljerne
-                exclude_labels = ["Pasning", "Berøringer", "Collection End", "Possession", "Start", "End"]
-                exclude_ids = [30, 32, 5, 6, 43, 61, 73, 1] 
+                exclude_labels = ["Collection End", "Possession", "Start", "End"]
+                exclude_ids = [30, 32, 5, 6, 43] 
                 
                 df_top_filt = df_spiller[~df_spiller['EVENT_TYPEID'].isin(exclude_ids)]
                 akt_counts = df_top_filt['Display_Label'].value_counts().head(10)
@@ -507,18 +509,24 @@ def vis_side(dp=None):
                             </div>''', unsafe_allow_html=True)
     
             with c_p2:
-                # Dropdown og Caption
-                c_top1, c_top2 = st.columns([1, 1])
-                with c_top2:
+                # --- NAVIGATION / KONTROL (Caption ved siden af Dropdown) ---
+                # Vi bruger 2 kolonner inde i c_p2 for at få dem på linje og mindske spildplads
+                c_p2_1, c_p2_2 = st.columns([1.5, 1])
+                with c_p2_1:
                     visning = st.selectbox(
-                        "Vælg visning på banen", 
+                        "Visning på banen", 
                         ["Heatmap", "Berøringer", "Afslutninger", "Mål", "Assists", "Indlæg", "Erobringer"], 
-                        key="pitch_view_final_v3"
+                        key="pitch_view_final_v4",
+                        label_visibility="collapsed" # Fjerner selectbox label for at spare plads
                     )
-                    st.caption(f"Viser nuværende plot for: **{visning}**")
+                with c_p2_2:
+                    # Vi bruger en tynd st.markdown i stedet for caption for bedre vertikal flugtning
+                    st.markdown(f"<p style='margin-top: 10px; font-size: 0.8rem; color: gray;'>Valgt: <b>{visning}</b></p>", unsafe_allow_html=True)
                 
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 f, ax = p.draw(figsize=(10, 7))
+                
+                # Tegn overlay (Logo, Navn osv)
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
                 
                 df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
@@ -528,22 +536,19 @@ def vis_side(dp=None):
                         p.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
                     
                     elif visning == "Berøringer":
-                        # Opta Touches er normalt alt undtagen defensive aktioner uden boldkontakt
-                        # Her bruger vi de officielle touch-relaterede events
-                        touch_events = df_plot[df_plot['EVENT_TYPEID'].isin([1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61])]
-                        ax.scatter(touch_events.EVENT_X, touch_events.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                        d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                     
                     elif visning == "Afslutninger":
                         d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                        # Farvekod mål vs brændt
                         goals = d[d['EVENT_TYPEID'] == 16]
                         misses = d[d['EVENT_TYPEID'] != 16]
                         ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=100, edgecolors='black', alpha=0.6)
-                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=200, marker='*', edgecolors='black')
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=200, marker='*', edgecolors='black', zorder=5)
                     
                     elif visning == "Mål":
                         d = df_plot[df_plot['EVENT_TYPEID'] == 16]
-                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='gold', s=300, marker='*', edgecolors='black')
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='gold', s=300, marker='*', edgecolors='black', zorder=5)
                     
                     elif visning == "Assists":
                         d = df_plot[df_plot['qual_ids'].apply(lambda x: "210" in x)]
