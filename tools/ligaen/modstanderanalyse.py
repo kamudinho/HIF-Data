@@ -572,8 +572,8 @@ def vis_side(dp=None):
                 max_inv = player_stats['Målinvolveringer'].max() if not player_stats.empty else 1
 
                 for _, r in top_8_players.iterrows():
-                    rel_width = int((r['Målinvolveringer'] / max_inv) * 100)
-                    
+                    rel_width = r['Involvering_Pct'] 
+
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
