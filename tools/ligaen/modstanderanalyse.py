@@ -168,12 +168,12 @@ def vis_side(dp=None):
                 # 3. Fjern alt det, din whitelist i mapping.py har markeret som None
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # SQL for Mål-sekvenser (Opdateret med score og korrekt Group By)
+            # SQL for Mål-sekvenser
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                        MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
-                       HOME_SCORE, AWAY_SCORE
+                       TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE  -- <--- RETTET HER
                 FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
             ),
@@ -186,7 +186,7 @@ def vis_side(dp=None):
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
                    m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-                   m.HOME_SCORE, m.AWAY_SCORE,
+                   m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, -- <--- RETTET HER
                    tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
@@ -444,19 +444,19 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            # 1. Dropdown med stilling (efter målet)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
             
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
-                'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])})", 
+                # RETTET TIL TOTAL_HOME_SCORE OG TOTAL_AWAY_SCORE HERUNDER:
+                'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])})", 
                 'match_id': r['MATCH_OPTAUUID'], 
                 'goal_ts': r['GOAL_TIME'], 
                 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
                 'min': int(r['GOAL_MIN']), 
                 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
-                'score_str': f"{int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])}"
+                'score_str': f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
             } for _, r in gl.iterrows()}
             
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
