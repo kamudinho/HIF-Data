@@ -516,7 +516,13 @@ def vis_side(dp=None):
 
             # 5. SEKVENSTABEL
             l_c.write("**Målsekvens:**")
-            l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
+            
+            # Vi omdøber kolonnen i et "snuptag" lige før den vises
+            l_c.dataframe(
+                tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), 
+                hide_index=True,
+                use_container_width=True
+            )
             
         else: 
             st.info("Ingen mål fundet.")
