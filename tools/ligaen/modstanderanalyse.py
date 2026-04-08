@@ -443,7 +443,7 @@ def vis_side(dp=None):
             c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
             
             with c_p1:
-                valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select_vfinal")
+                valgt_spiller = spiller_liste, key="player_profile_select_vfinal")
                 df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
                 df_spiller['qual_ids'] = df_spiller['QUALIFIERS'].fillna('').astype(str).apply(lambda x: x.split(',') if x else [])
     
