@@ -438,7 +438,7 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            # 1. Sortering: Dato (nyeste først) og minut (kronologisk)
+            # 1. SORTERING: Nyeste kampe øverst, mål i kampen kronologisk (0-90 min)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
@@ -455,47 +455,71 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
 
-            # 2. Live score kald
-            sql_live = f"SELECT SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as A FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID WHERE e.MATCH_OPTAUUID = '{sd['match_id']}' AND e.EVENT_TYPEID = 16 AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'"
+            # 2. LIVE SCORE: Henter stillingen PÅ det præcise tidspunkt for målet
+            sql_live = f"""
+                SELECT 
+                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, 
+                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as A 
+                FROM {DB}.OPTA_EVENTS e 
+                JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID 
+                WHERE e.MATCH_OPTAUUID = '{sd['match_id']}' 
+                  AND e.EVENT_TYPEID = 16 
+                  AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'
+            """
             ls_df = _get_snowflake_conn().query(sql_live)
             stilling = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
 
-            # 3. Hent sekvens (fjern 43)
-            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts']) & (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
+            # 3. DATA-PREP: Hent sekvensen og klargør labels
+            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
+                                (df_all_events['GOAL_TIME'] == sd['goal_ts']) & 
+                                (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
 
-            # 4. Tegn bane
+            # --- NY FINAL LABEL LOGIK (Koblet til din mapping.py) ---
+            def get_final_label_t4(row):
+                # Tjek for straffespark først (Event 16 + Qualifier 9)
+                ql = row.get('qual_list', [])
+                if isinstance(ql, str): ql = ql.split(',')
+                ql = [str(q).strip() for q in ql]
+                
+                if str(row['EVENT_TYPEID']) == "16" and "9" in ql:
+                    return "STRAFFESPARK"
+                
+                # Brug din hjerte-logik fra mapping.py
+                label = get_action_label(row)
+                return label if label else "Opbygning"
+
+            tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
+
+            # 4. VISUALISERING
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
+            
+            # Tegn logoer og info via din funktion
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling, sd['min'])
 
+            # Pile og punkter
             for i in range(len(tge)-1):
-                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, color='black', alpha=0.15, ax=ax)
+                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
+                         tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
+                         width=1, color='black', alpha=0.15, ax=ax)
             
             for _, r in tge.iterrows():
-                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color='red' if r['EVENT_TYPEID']==16 else 'black', s=100, edgecolors='white', zorder=10)
-                ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
+                is_goal = str(r['EVENT_TYPEID']) == "16"
+                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color='red' if is_goal else 'black', 
+                           s=100, edgecolors='white', zorder=10)
+                ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], 
+                        fontsize=7, ha='center', fontweight='bold', 
+                        bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             
             p_c.pyplot(f)
 
-            # 5. AKTION LOGIK (Håndterer Penalty korrekt på samme linje)
-            def get_final_label(row):
-                # Hvis det er et mål (16), tjekker vi for Qualifier 9 i samme række
-                if row['EVENT_TYPEID'] == 16:
-                    if '9' in str(row.get('QUALIFIERS', '')):
-                        return "Penalty Goal"
-                    return "Mål"
-                
-                # Ellers brug standard label fra get_action_label eller mapping
-                label = get_action_label(row)
-                if label is None:
-                    label = OPTA_EVENT_TYPES.get(str(row['EVENT_TYPEID']), "Opbygning")
-                return label
-
-            tge['Aktion'] = tge.apply(get_final_label, axis=1)
-
-            l_c.write("**Sekvens:**")
+            # 5. SEKVENSTABEL
+            l_c.write("**Målsekvens:**")
             l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
+            
+        else: 
+            st.info("Ingen mål fundet.")
             
     with t5:
         if not df_all_h.empty:
