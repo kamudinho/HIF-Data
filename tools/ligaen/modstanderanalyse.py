@@ -353,9 +353,35 @@ def vis_side(dp=None):
             st.write(f"**Top 8: {v_med}**")
             
             if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').size().to_frame('TOTAL').sort_values('TOTAL', ascending=False).head(8).reset_index()
+                # Gruppér for at beregne rater
+                df_top = df_f.groupby('PLAYER_NAME').agg(
+                    TOTAL=('EVENT_TYPEID', 'count'),
+                    SUCCESS=('OUTCOME', 'sum')
+                ).reset_index()
+
+                if v_med == "Afslutninger":
+                    # For afslutninger er succes = mål (ID 16)
+                    df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
+                    label_text = "Konv.%"
+                else:
+                    label_text = "Succes%"
+
+                df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
+                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+
                 for _, r in df_top.iterrows():
-                    st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['TOTAL'])}</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: #084594; height: 5px; width: 70%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
+                    rate = int(r['RATE'])
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                <span>{r['PLAYER_NAME']} <span style='color:#666; font-weight:400;'>({int(r['TOTAL'])})</span></span>
+                                <span>{rate}% {label_text}</span>
+                            </div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: #084594; height: 5px; width: {rate}%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
     with t3:
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
@@ -393,10 +419,27 @@ def vis_side(dp=None):
             st.write(f"**Top 8: {v_uden}**")
             
             if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').size().to_frame('TOTAL').sort_values('TOTAL', ascending=False).head(8).reset_index()
-                for _, r in df_top.iterrows():
-                    st.markdown(f"""<div style="margin-bottom: 12px;"><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;"><span>{r['PLAYER_NAME']}</span><span>{int(r['TOTAL'])}</span></div><div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;"><div style="background-color: #ec7014; height: 5px; width: 70%; border-radius: 4px;"></div></div></div>""", unsafe_allow_html=True)
+                df_top = df_f.groupby('PLAYER_NAME').agg(
+                    TOTAL=('EVENT_TYPEID', 'count'),
+                    SUCCESS=('OUTCOME', 'sum')
+                ).reset_index()
 
+                df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
+                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+
+                for _, r in df_top.iterrows():
+                    rate = int(r['RATE'])
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                <span>{r['PLAYER_NAME']} <span style='color:#666; font-weight:400;'>({int(r['TOTAL'])})</span></span>
+                                <span>{rate}% Succes</span>
+                            </div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: #ec7014; height: 5px; width: {rate}%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
