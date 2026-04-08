@@ -493,9 +493,12 @@ def vis_side(dp=None):
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_count = len(pas_df)
                 pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
-                shots_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                
+                shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
                 mål_count = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
-                assist_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "210" in x)])
+                
+                # Chancer skabt (Key Passes / Assists)
+                chancer_skabt = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "210" in x or "208" in x)])
                 cross_count = len(df_spiller[df_spiller['qual_ids'].apply(lambda x: "2" in x)])
                 erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
                 
@@ -504,18 +507,18 @@ def vis_side(dp=None):
     
                 st.markdown(f"#### {valgt_spiller}")
                 
-                # 4 metrics pr. linje (Kompakt)
+                # 4 metrics pr. linje
                 m_row1 = st.columns(4)
                 m_row1[0].metric("Aktion", total_akt)
-                m_row1[1].metric("Berøringer", touch_count)
-                m_row1[2].metric("Pasninger", f"{int(pas_df)}%")
-                m_row1[3].metric("Pasning %", len(pas_acc))
+                m_row1[1].metric("Touch", touch_count)
+                m_row1[2].metric("Pasninger", pas_count)
+                m_row1[3].metric("Pasning %", f"{int(pas_acc)}%")
                 
                 m_row2 = st.columns(4)
-                m_row2[0].metric("Afslutninger", shots_df)
-                m_row2[1].metric("Chancer skabt", assist_count)
+                m_row2[0].metric("Skud", shots_count)
+                m_row2[1].metric("Chancer", chancer_skabt)
                 m_row2[2].metric("Indlæg", cross_count)
-                m_row2[3].metric("Erobringer", erob_count)
+                m_row2[3].metric("Erob.", erob_count)
     
                 st.markdown("---")
                 st.write("**Top 10 Aktioner**")
