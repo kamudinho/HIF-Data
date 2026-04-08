@@ -58,13 +58,13 @@ OPTA_QUALIFIERS = {
     "84": "Close Right", "85": "Close High", "86": "Close Left and High", "87": "Close Right and High",
     "88": "High claim", "89": "1 on 1", "90": "Deflected save", "91": "Dive and deflect",
     "92": "Catch", "93": "Dive and catch", "94": "Def block", "95": "Back pass", "96": "Corner situation",
-    "97": "Direct free", "98": "Pitch X Coordinate", "99": "Pitch Y Coordinate", "100": "Six Yard Blocked",
+    "97": "Direkte frispark", "98": "Pitch X Coordinate", "99": "Pitch Y Coordinate", "100": "Six Yard Blocked",
     "101": "Saved Off Line", "102": "Goal Mouth Y Coordinate", "103": "Goal Mouth Z Coordinate",
-    "104": "Attempt Position X Coordinate", "105": "Attempt Position Y Coordinate", "106": "Attacking Pass",
-    "107": "Throw In", "108": "Volley", "109": "Overhead", "110": "Half Volley", "111": "Diving Header",
+    "104": "Attempt Position X Coordinate", "105": "Attempt Position Y Coordinate", "106": "Offensiv aflevering",
+    "107": "Indkast", "108": "Volley", "109": "Overhead", "110": "Half Volley", "111": "Diving Header",
     "112": "Scramble", "113": "Strong", "114": "Weak", "115": "Rising", "116": "Dipping", "117": "Lob",
     "118": "One Bounce", "119": "Few Bounces", "120": "Swerve Left", "121": "Swerve Right",
-    "122": "Swerve Moving", "123": "Keeper Throw", "124": "Goal Kick",
+    "122": "Swerve Moving", "123": "Keeper Throw", "124": "Målpark",
     "125": "Free Kick Position X Coordinate", "126": "Free Kick Position Y Coordinate",
     "127": "Direction of Play", "128": "Punch", "129": "Ten Minute Possesion", "130": "Team Formation",
     "131": "Team Player Formation", "132": "Simulation", "133": "Deflection", "134": "Far Wide Left",
@@ -170,7 +170,7 @@ OPTA_QUALIFIERS = {
     "487": "Panenka", "488": "8-Second Violation"
 }
 
-EXCLUDE_EVENT_IDS = [5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76]
+EXCLUDE_EVENT_IDS = [5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76,212]
 # --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
 def get_event_name(event_id):
     """Returnerer læsbart navn for et Event ID"""
