@@ -456,12 +456,12 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 
                 # --- Top Aktioner (Filtreret) ---
-                st.write("**Top Aktioner (Renset)**")
+                st.write("**Top 10: Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
                 
                 # Vi fjerner exclude_ids før vi tæller top 15
                 df_top_filt = df_spiller[~df_spiller['EVENT_TYPEID'].isin(exclude_ids)]
-                akt_counts = df_top_filt['Aktion_Navn'].value_counts().head(15)
+                akt_counts = df_top_filt['Aktion_Navn'].value_counts().head(10)
                 
                 for akt, count in akt_counts.items():
                     st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
