@@ -204,37 +204,59 @@ def is_assist(qualifiers_list):
 
 def get_action_label(row):
     """
-    Returnerer et læsbart navn for en Opta-aktion baseret på EVENT_TYPEID og QUALIFIERS.
+    Kategoriserer en Opta-aktion med høj præcision baseret på både Event ID og Qualifiers.
     """
     try:
         eid = str(row['EVENT_TYPEID'])
+        # Vi antager at qualifiers ligger som en liste af strings i 'qual_list'
         ql = row.get('qual_list', [])
-        
-        # Sørg for ql er en liste
         if isinstance(ql, str):
             ql = ql.split(',')
+        ql = [str(q).strip() for q in ql]
 
-        # Specifik logik for vigtige sub-typer (f.eks. Indlæg og Hovedstød)
-        if eid == "1":
-            return "Indlæg" if "2" in ql else "Pasning"
-        elif eid == "16": 
-            return "Mål"
-        elif eid in ["13", "14", "15"]: 
-            return "Afslutning"
-        elif eid == "7": 
-            return "Tackling"
-        elif eid == "8": 
-            return "Interception"
-        elif eid == "12": 
-            return "Rydning"
-        elif eid == "49": 
-            return "Gen-erobring"
-        elif eid == "50": 
-            return "Dribling"
-        elif eid == "44" or "15" in ql: 
-            return "Hovedstød"
+        # --- 1. PRIORITET: DE VIGTIGSTE TAKTISKE QUALIFIERS ---
+        # Disse trumfer alt andet, da de beskriver aktionens unikke karakter
+        if "214" in ql: return "Big Chance"
+        if "4" in ql:   return "Stikning (Through ball)"
+        if "195" in ql: return "Pull back"
+        if "196" in ql: return "Switch of play"
+        if "156" in ql: return "Lay-off"
+        if "155" in ql: return "Chipped pass"
+        if "168" in ql: return "Flick-on"
+        if "138" in ql: return "Stolpe/Overligger"
+
+        # --- 2. PRIORITET: EVENT-SPECIFIK LOGIK ---
         
-        # Fallback til den generelle mapping ordbog (OPTA_EVENT_TYPES)
-        return OPTA_EVENT_TYPES.get(eid, f"Event {eid}")
+        # PASNINGER (Event 1)
+        if eid == "1":
+            if "2" in ql:   return "Indlæg"
+            if "107" in ql: return "Indkast"
+            if "124" in ql: return "Målspark"
+            if "1" in ql:   return "Lang aflevering"
+            return "Pasning"
+
+        # SKUD & MÅL (Event 13, 14, 15, 16)
+        if eid in ["13", "14", "15", "16"]:
+            suffix = " (Hoved)" if ("15" in ql or eid == "44") else ""
+            if eid == "16": return f"Mål{suffix}"
+            return f"Afslutning{suffix}"
+
+        # DEFENSIVT & DUEL
+        if eid == "7":  return "Tackling"
+        if eid == "8":  return "Interception"
+        if eid == "12": return "Clearing"
+        if eid == "49": return "Bold recovery"
+        if eid == "3":  return "Dribling (Take-on)"
+        if eid == "50": return "Bold tabt (Dispossessed)"
+        if eid == "44": return "Luftduel"
+
+        # MÅLMAND
+        if eid == "10": return "Redning"
+        if eid == "11": return "Felt-indgreb (Claim)"
+        if eid == "41": return "Boksning"
+
+        # --- 3. FALLBACK: BRUG STANDARD MAPPING ---
+        return OPTA_EVENT_TYPES.get(eid, f"Aktion {eid}")
+
     except Exception:
         return "Ukendt Aktion"
