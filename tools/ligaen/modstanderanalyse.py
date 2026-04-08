@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import plotly.express as px
 from mplsoccer import Pitch, VerticalPitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
@@ -10,12 +9,11 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- IMPORT FRA DIN MAPPING.PY ---
+# --- IMPORT FRA DIN MAPPING.PY (Korrekt nu) ---
 from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
-    EXCLUDE_EVENT_IDS, 
-    get_action_label,  # <--- Det er denne der mangler i mapping.py 
+    get_action_label, 
     is_offensive_event,
     get_offensive_map
 )
