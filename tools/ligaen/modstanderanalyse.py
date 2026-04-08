@@ -438,24 +438,26 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            # 1. SORTERING: Nyeste kampe øverst, mål i kampen kronologisk (0-90 min)
+            # 1. SORTERING: Dato (nyeste først) og minut (kronologisk)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
             
+            # 2. OPTS med SLUTRESULTAT i parentes i stedet for minuttal
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
-                'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['GOAL_MIN'])}. min)", 
+                # Her ændres label til at vise score i parentes
+                'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])})", 
                 'match_id': r['MATCH_OPTAUUID'], 
                 'goal_ts': r['GOAL_TIME'], 
                 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
-                'min': int(r['GOAL_MIN']), 
+                'min': int(r['GOAL_MIN']), # Beholdes til draw_match_info_box
                 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
             } for _, r in gl.iterrows()}
             
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
 
-            # 2. LIVE SCORE: Henter stillingen PÅ det præcise tidspunkt for målet
+            # 3. LIVE SCORE (Stillingen DA målet blev scoret - til info-boksen)
             sql_live = f"""
                 SELECT 
                     SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, 
@@ -467,36 +469,19 @@ def vis_side(dp=None):
                   AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'
             """
             ls_df = _get_snowflake_conn().query(sql_live)
-            stilling = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
+            stilling_nu = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
 
-            # 3. DATA-PREP: Hent sekvensen og klargør labels
+            # 4. DATA & PLOT
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts']) & 
                                 (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
 
-            # --- NY FINAL LABEL LOGIK (Koblet til din mapping.py) ---
-            def get_final_label_t4(row):
-                # Tjek for straffespark først (Event 16 + Qualifier 9)
-                ql = row.get('qual_list', [])
-                if isinstance(ql, str): ql = ql.split(',')
-                ql = [str(q).strip() for q in ql]
-                
-                if str(row['EVENT_TYPEID']) == "16" and "9" in ql:
-                    return "STRAFFESPARK"
-                
-                # Brug din hjerte-logik fra mapping.py
-                label = get_action_label(row)
-                return label if label else "Opbygning"
-
-            tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
-
-            # 4. VISUALISERING
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # Tegn logoer og info via din funktion
-            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling, sd['min'])
+            # draw_match_info_box bruger 'stilling_nu' (f.eks. 1-0) og 'min' (minuttet)
+            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling_nu, sd['min'])
 
             # Pile og punkter
             for i in range(len(tge)-1):
