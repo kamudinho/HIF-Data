@@ -444,39 +444,37 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            # 1. SORTERING: Nyeste dato først, derefter mål-minut kronologisk
+            # 1. Dropdown med stilling (efter målet)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
             
-            # 2. OPTS: Nu med LIVE STILLING (stillingen ved målet) i parentes
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
-                # Her bruger vi HOME_SCORE og AWAY_SCORE fra selve mål-rækken
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])})", 
                 'match_id': r['MATCH_OPTAUUID'], 
                 'goal_ts': r['GOAL_TIME'], 
                 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
                 'min': int(r['GOAL_MIN']), 
                 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
-                'stilling': f"{int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])}" # Gemt til infoboks
+                'score_str': f"{int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])}"
             } for _, r in gl.iterrows()}
             
-            sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
+            sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
-
-            # 3. DATA & PLOT
+    
+            # 2. Filtrér sekvensen
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
-                                (df_all_events['GOAL_TIME'] == sd['goal_ts']) & 
-                                (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
-
+                                (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
+    
+            # 3. Tegn Pitch
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # Vi bruger stillingen direkte fra vores sd (selected) i stedet for nyt SQL kald
-            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['stilling'], sd['min'])
-
-            # Pile og hændelser
+            # BRUGER DIN FUNKTION HER - nu med score_str direkte
+            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score_str'], sd['min'])
+    
+            # Pile og spillernavne
             for i in range(len(tge)-1):
                 p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
                          tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
@@ -484,25 +482,28 @@ def vis_side(dp=None):
             
             for _, r in tge.iterrows():
                 is_goal = str(r['EVENT_TYPEID']) == "16"
-                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color='red' if is_goal else 'black', 
-                           s=100, edgecolors='white', zorder=10)
-                ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], 
-                        fontsize=7, ha='center', fontweight='bold', 
-                        bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
+                ax.scatter(r['EVENT_X'], r['EVENT_Y'], color='red' if is_goal else 'black', s=100, edgecolors='white', zorder=10)
+                ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             
             p_c.pyplot(f)
-
-            # 4. SEKVENSTABEL (Oversat til Spiller og ingen None)
-            tge['Aktion'] = tge.apply(get_action_label, axis=1).fillna("Opbygning")
+    
+            # 4. Tabel med omdøbning og Penalty-tjek
+            def get_final_label_t4(row):
+                if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
+                    return "STRAFFESPARK"
+                label = get_action_label(row)
+                return label if label else "Opbygning"
+    
+            tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
             
             l_c.write("**Målsekvens:**")
             l_c.dataframe(
                 tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), 
                 hide_index=True,
                 use_container_width=True
-            )            
-        else: 
-            st.info("Ingen mål fundet.")
+            )
+        else:
+            st.info("Ingen mål fundet for denne sæson.")
             
     with t5:
         if not df_all_h.empty:
