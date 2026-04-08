@@ -452,7 +452,7 @@ def vis_side(dp=None):
             }
     
             # Top-række layout
-            t_col1, t_col2, t_col3 = st.columns([0.8, 0.8, 1.2])
+            t_col1, t_col2, t_col3 = st.columns([0.9, 0.9, 1.2])
             
             with t_col1:
                 valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select_final_v5", label_visibility="collapsed")
@@ -485,7 +485,7 @@ def vis_side(dp=None):
             df_spiller['Display_Label'] = df_spiller.apply(get_profile_label, axis=1)
     
             # --- 3. Hovedlayout ---
-            c_p1, c_buffer, c_p2 = st.columns([0.8, 0.1, 2.3])
+            c_p1, c_buffer, c_p2 = st.columns([0.9, 0.1, 2.2])
             
             with c_p1:
                 # METRICS BEREGNING
@@ -516,7 +516,7 @@ def vis_side(dp=None):
                 
                 m_row2 = st.columns(4)
                 m_row2[0].metric("Afslutninger", shots_count)
-                m_row2[1].metric("Chancer", chancer_skabt)
+                m_row2[1].metric("Chancer skabt", chancer_skabt)
                 m_row2[2].metric("Indlæg", cross_count)
                 m_row2[3].metric("Erobringer", erob_count)
     
