@@ -436,75 +436,138 @@ def vis_side(dp=None):
             st.dataframe(stats, use_container_width=True)
 
     with t6:
-        if not df_all_h.empty:
-            spiller_liste = sorted([n for n in df_all_h['PLAYER_NAME'].unique() if n is not None])
-            c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
+    if not df_all_h.empty:
+        # --- 1. Grundlæggende Dataforberedelse ---
+        spiller_liste = sorted([n for n in df_all_h['PLAYER_NAME'].unique() if n is not None])
+        
+        c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
+        
+        with c_p1:
+            valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
             
-            with c_p1:
-                valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
-                df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
-                
-                # Metrics baseret på din mapping logik
-                total_akt = len(df_spiller)
-                pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
-                pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
-                assist_df = df_spiller[df_spiller['Action_Label'] == "Assist"]
-                cross_df = df_spiller[df_spiller['Action_Label'] == "Indlæg"]
-                skud_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                erob_df = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
+            # Lav en kopi af spillerens data og forbered qualifiers
+            df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
+            df_spiller['qual_list'] = df_spiller['QUALIFIERS'].fillna('').astype(str).apply(lambda x: x.split(',') if x else [])
 
-                st.markdown(f"### {valgt_spiller}")
-                m_c1, m_c2 = st.columns(2)
-                m_c1.metric("Aktioner", total_akt); m_c2.metric("Pasning %", f"{int(pas_acc)}%")
-                m_c1, m_c2 = st.columns(2)
-                m_c1.metric("Assists", len(assist_df)); m_c2.metric("Indlæg", len(cross_df))
+            # --- 2. Definition af Action Labels (Logik baseret på Opta IDs) ---
+            def map_opta_action(row):
+                eid = int(row['EVENT_TYPEID'])
+                ql = row['qual_list']
                 
-                st.write("**Top 10: Aktioner**")
-                akt_counts = df_spiller['Action_Label'].value_counts().head(10)
-                for akt, count in akt_counts.items():
-                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
+                if eid == 1:
+                    return "Indlæg" if "2" in ql else "Pasning"
+                elif eid == 16: return "Mål"
+                elif eid in [13, 14, 15]: return "Afslutning"
+                elif eid == 7: return "Tackling"
+                elif eid == 8: return "Interception"
+                elif eid == 12: return "Rydning"
+                elif eid == 49: return "Gen-erobring"
+                elif eid == 50: return "Dribling"
+                elif eid == 44: return "Hovedstød"
+                elif "15" in ql: return "Hovedstød"
+                
+                # Fallback til din overordnede ordbog hvis den findes
+                return OPTA_EVENT_TYPES.get(str(eid), f"Event {eid}")
 
-            with c_p2:
-                visning = st.selectbox("Visning", ["Heatmap", "Berøringer", "Afslutninger", "Mål", "Assists", "Indlæg", "Erobringer"], key="pitch_view_selector")
-                p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-                f, ax = p.draw(figsize=(10, 7))
+            df_spiller['Action_Label'] = df_spiller.apply(map_opta_action, axis=1)
+
+            # --- 3. Beregning af Metrics ---
+            total_akt = len(df_spiller)
+            
+            # Pasninger
+            pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+            pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
+            
+            # Assists (Qualifier 210)
+            assist_df = df_spiller[df_spiller['qual_list'].apply(lambda x: "210" in x)]
+            
+            # Indlæg (Event 1 + Qualifier 2)
+            cross_df = df_spiller[(df_spiller['EVENT_TYPEID'] == 1) & (df_spiller['qual_list'].apply(lambda x: "2" in x))]
+
+            # Visning af Header og Metrics
+            st.markdown(f"### {valgt_spiller}")
+            m_c1, m_c2 = st.columns(2)
+            m_c1.metric("Aktioner", total_akt)
+            m_c2.metric("Pasning %", f"{int(pas_acc)}%")
+            
+            m_c3, m_c4 = st.columns(2)
+            m_c3.metric("Assists", len(assist_df))
+            m_c4.metric("Indlæg", len(cross_df))
+
+            # --- 4. Top 10 Aktioner Liste ---
+            st.markdown("---")
+            st.write("**Top 10: Aktioner**")
+            
+            # Ekskludér tekniske period-events
+            exclude_ids = [30, 32, 5, 6, 43]
+            df_top_filt = df_spiller[~df_spiller['EVENT_TYPEID'].isin(exclude_ids)]
+            akt_counts = df_top_filt['Action_Label'].value_counts().head(10)
+            
+            for akt, count in akt_counts.items():
+                st.markdown(f'''
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 2px 0;">
+                        <span>{akt}</span><b>{count}</b>
+                    </div>''', unsafe_allow_html=True)
+
+        with c_p2:
+            # --- 5. Pitch Visualisering ---
+            visning = st.selectbox(
+                "Visning", 
+                ["Heatmap", "Berøringer", "Afslutninger", "Mål", "Assists", "Indlæg", "Erobringer", "Hovedstød"], 
+                key="pitch_view_selector"
+            )
+            
+            p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+            f, ax = p.draw(figsize=(10, 7))
+            
+            # Tegn infoboks (antager du har denne funktion defineret i din app)
+            if 'draw_player_info_box' in globals():
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
+            
+            # Filtrér rækker uden koordinater til plot
+            df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+            
+            if not df_plot.empty:
+                if visning == "Heatmap":
+                    try:
+                        # Ekskluderer tekniske events for et rent heatmap
+                        h_data = df_plot[~df_plot['EVENT_TYPEID'].isin(exclude_ids)]
+                        p.kdeplot(h_data.EVENT_X, h_data.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
+                        p.scatter(h_data.EVENT_X, h_data.EVENT_Y, ax=ax, color='#084594', s=10, alpha=0.1, zorder=2)
+                    except:
+                        st.warning("Ikke nok data til at generere heatmap.")
                 
-                # Plot logik (forkortet for plads, men bruger df_spiller)
-                if visning == "Heatmap (Tendenser)":
-                        heatmap_data = valid_events[~valid_events['EVENT_TYPEID'].isin(exclude_ids)]
-                        p.kdeplot(heatmap_data.EVENT_X, heatmap_data.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
-                        p.scatter(heatmap_data.EVENT_X, heatmap_data.EVENT_Y, ax=ax, color='#084594', s=15, alpha=0.1, zorder=2)
-                    
-                    elif visning == "Berøringer":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([1, 61, 73])]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#084594', s=60, edgecolors='white', alpha=0.6, zorder=3)
-                    
-                    elif visning == "Afslutninger":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([13, 14, 15])]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='red', s=100, edgecolors='black', alpha=0.7, zorder=3)
-
-                    elif visning == "Mål":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'] == 16]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=4)
-
-                    elif visning == "Assists":
-                        df_filt = valid_events[valid_events.apply(lambda x: "210" in x['qual_list'], axis=1)]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#00ffcc', s=100, edgecolors='black', marker='P', zorder=3)
-
-                    elif visning == "Indlæg":
-                        df_filt = valid_events[valid_events.apply(lambda x: "2" in x['qual_list'], axis=1)]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#cc00ff', s=80, edgecolors='white', zorder=3)
-
-                    elif visning == "Erobringer":
-                        df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='orange', s=80, edgecolors='white', zorder=3)
-
-                    elif visning == "Hovedstød":
-                        df_filt = valid_events[valid_events.apply(lambda x: x['EVENT_TYPEID'] == 44 or "15" in x['qual_list'], axis=1)]
-                        ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='green', s=80, marker='^', alpha=0.8, zorder=3)
+                elif visning == "Berøringer":
+                    # Alle aktive boldberøringer (Pasninger, Skud, Erobringer osv.)
+                    touch_ids = [1, 13, 14, 15, 16, 7, 8, 10, 11, 12, 44, 49, 50, 51, 61, 73]
+                    df_filt = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#084594', s=60, edgecolors='white', alpha=0.6, zorder=3)
                 
-                st.pyplot(f, use_container_width=True)
+                elif visning == "Afslutninger":
+                    df_filt = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15])]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='red', s=100, edgecolors='black', alpha=0.7, zorder=3)
 
+                elif visning == "Mål":
+                    df_filt = df_plot[df_plot['EVENT_TYPEID'] == 16]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='gold', s=200, marker='*', edgecolors='black', zorder=4)
+
+                elif visning == "Assists":
+                    df_filt = df_plot[df_plot['qual_list'].apply(lambda x: "210" in x)]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#00ffcc', s=120, edgecolors='black', marker='P', zorder=3)
+
+                elif visning == "Indlæg":
+                    df_filt = df_plot[(df_plot['EVENT_TYPEID'] == 1) & (df_plot['qual_list'].apply(lambda x: "2" in x))]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='#cc00ff', s=80, edgecolors='white', zorder=3)
+
+                elif visning == "Erobringer":
+                    # Kombination af interceptions, tackles og recoveries
+                    df_filt = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 127, 49])]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='orange', s=80, edgecolors='white', zorder=3)
+
+                elif visning == "Hovedstød":
+                    df_filt = df_plot[(df_plot['EVENT_TYPEID'] == 44) | (df_plot['qual_list'].apply(lambda x: "15" in x))]
+                    ax.scatter(df_filt.EVENT_X, df_filt.EVENT_Y, color='green', s=100, marker='^', edgecolors='white', zorder=3)
+
+            st.pyplot(f, use_container_width=True)
 if __name__ == "__main__":
     vis_side()
