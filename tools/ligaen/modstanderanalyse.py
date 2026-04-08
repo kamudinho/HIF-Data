@@ -544,25 +544,52 @@ def vis_side(dp=None):
                 st.write("**Statistik i målsekvenser**")
                 
                 st.dataframe(
-                player_stats.rename(columns={
-                    'PLAYER_NAME': 'Spiller',
-                    'Målinvolveringer': 'Involveringer', # Sikrer match med dit valg af navn
-                    'Skud_Ass': 'Skud Ass.'
-                })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Spiller": st.column_config.Column(width="medium"),
-                    "Involveringer": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Aktioner": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Mål": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Pasninger": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Indlæg": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Skud": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Skud Ass.": st.column_config.NumberColumn(width="small", alignment="center"),
-                    "Erobringer": st.column_config.NumberColumn(width="small", alignment="center"),
-                }
-            )
+                    player_stats.rename(columns={
+                        'PLAYER_NAME': 'Spiller',
+                        'Målinvolveringer': 'Involveringer',
+                        'Skud_Ass': 'Skud Ass.'
+                    })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Spiller": st.column_config.Column(
+                            width="medium", 
+                            alignment="left" # Spilleren holdes til venstre for læsbarhed
+                        ),
+                        "Involveringer": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center" # Centrerer både overskrift og tal
+                        ),
+                        "Aktioner": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Mål": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Pasninger": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Indlæg": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Skud": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Skud Ass.": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                        "Erobringer": st.column_config.NumberColumn(
+                            width="small", 
+                            alignment="center"
+                        ),
+                    }
+                )
             with col_graf:
                 st.write(f"**Top involvering (Hold total: {total_goals_count} mål)**")
                 
