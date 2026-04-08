@@ -15,7 +15,7 @@ from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
     EXCLUDE_EVENT_IDS, 
-    get_action_label, 
+    get_action_label,  # <--- Det er denne der mangler i mapping.py 
     is_offensive_event,
     get_offensive_map
 )
