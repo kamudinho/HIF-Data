@@ -506,6 +506,21 @@ def vis_side(dp=None):
             st.info("Ingen mål fundet for denne sæson.")
             
     with t5:
+        # CSS der tvinger overskrifter til at centrere (undtagen den første kolonne)
+        st.markdown("""
+            <style>
+                /* Centrerer tekst i alle header-celler undtagen den første */
+                [data-testid="stTable"] th:not(:first-child), 
+                [data-testid="stDataFrame"] th:not(:first-child) {
+                    text-align: center !important;
+                }
+                /* Sikrer at selve indholdet i cellerne også lystrer */
+                [data-testid="stTable"] td:not(:first-child) {
+                    text-align: center !important;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
         if not df_all_events.empty:
             # 1. Databehandling
             df_mål_stats = df_all_events.copy()
@@ -543,6 +558,7 @@ def vis_side(dp=None):
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
                 
+                # Din dataframe med alignment="center" i config (vigtigt for selve tallene)
                 st.dataframe(
                     player_stats.rename(columns={
                         'PLAYER_NAME': 'Spiller',
@@ -552,42 +568,15 @@ def vis_side(dp=None):
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "Spiller": st.column_config.Column(
-                            width="medium", 
-                            alignment="left" # Spilleren holdes til venstre for læsbarhed
-                        ),
-                        "Involveringer": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center" # Centrerer både overskrift og tal
-                        ),
-                        "Aktioner": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Mål": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Pasninger": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Indlæg": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Skud": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Skud Ass.": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
-                        "Erobringer": st.column_config.NumberColumn(
-                            width="small", 
-                            alignment="center"
-                        ),
+                        "Spiller": st.column_config.Column(width="medium", alignment="left"),
+                        "Involveringer": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Aktioner": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Mål": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Pasninger": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Indlæg": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Skud": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Skud Ass.": st.column_config.NumberColumn(width="small", alignment="center"),
+                        "Erobringer": st.column_config.NumberColumn(width="small", alignment="center"),
                     }
                 )
             with col_graf:
