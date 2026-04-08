@@ -170,7 +170,10 @@ OPTA_QUALIFIERS = {
     "487": "Panenka", "488": "8-Second Violation"
 }
 
-EXCLUDE_EVENT_IDS = [5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76,212]
+EXCLUDE_EVENT_IDS = [
+    5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76, 212, # Dine nuværende
+    24, 25, 33, 38, 39, 46, 48, 58, 62, 65, 74, 79, 84, 130, 131, 209      # Nye anbefalede
+]
 # --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
 def get_event_name(event_id):
     """Returnerer læsbart navn for et Event ID"""
