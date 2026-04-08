@@ -588,7 +588,7 @@ def vis_side(dp=None):
 
         else:
             st.info("Ingen data fundet for de valgte målsekvenser.")
-
+            
     with t6:
         if not df_all_h.empty:
             # --- 1. Top-kontrolbar ---
