@@ -507,74 +507,69 @@ def vis_side(dp=None):
             
     with t5:
         if not df_all_events.empty:
-            # 1. Databehandling
+            # 1. Databehandling - Vi definerer de forskellige aktionstyper
             df_mål_stats = df_all_events.copy()
-            df_mål_stats['Aktion'] = df_mål_stats.apply(get_action_label, axis=1)
+            
+            # Hjælpe-kolonner til specifikke stats
+            df_mål_stats['is_cross'] = df_mål_stats['qual_list'].apply(lambda x: '2' in x)
+            df_mål_stats['is_shot_assist'] = df_mål_stats['qual_list'].apply(lambda x: '210' in x or '209' in x)
+            df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
+            df_mål_stats['is_goal'] = df_mål_stats['EVENT_TYPEID'] == 16
 
             # Aggregér pr. spiller
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
-                Mål_Involveringer=('GOAL_TIME', 'nunique'), 
+                Målinvolveringer=('GOAL_TIME', 'nunique'),
+                Aktioner=('EVENT_TYPEID', 'count'),
+                Mål=('is_goal', 'sum'),
                 Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-                Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum()),
-                Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15]).sum()),
-                Mål=('EVENT_TYPEID', lambda x: (x == 16).sum())
+                Indlæg=('is_cross', 'sum'),
+                Skud=('is_shot', 'sum'),
+                Skud_Ass=('is_shot_assist', 'sum'),
+                Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum())
             ).reset_index()
 
-            player_stats['Total_Aktioner'] = player_stats['Pasninger'] + player_stats['Erobringer'] + player_stats['Afslutninger'] + player_stats['Mål']
-            player_stats = player_stats.sort_values('Mål_Involveringer', ascending=False)
+            player_stats = player_stats.sort_values('Målinvolveringer', ascending=False)
 
-            # 2. Layout: Tabel til venstre, Graf til højre
-            col_tabel, col_graf = st.columns([1.2, 1])
+            # 2. Layout: Tabel til venstre, Progress-bars til højre
+            col_tabel, col_graf = st.columns([1.8, 1])
 
             with col_tabel:
-                st.write("**Spillerinvolvering i målsekvenser**")
+                st.write("**Statistik i målsekvenser**")
+                # Omdøber til dine præcise navne
                 st.dataframe(
                     player_stats.rename(columns={
                         'PLAYER_NAME': 'Spiller',
-                        'Mål_Involveringer': 'Sekvenser',
-                        'Total_Aktioner': 'Aktioner'
-                    })[['Spiller', 'Sekvenser', 'Aktioner', 'Pasninger', 'Mål']],
+                        'Skud_Ass': 'Skud Ass.'
+                    }),
                     use_container_width=True,
                     hide_index=True
                 )
 
             with col_graf:
-                # Vi viser de 10 mest aktive spillere i grafen
-                df_plot_t5 = player_stats.head(10).sort_values('Mål_Involveringer', ascending=True)
-                avg_inv = player_stats['Mål_Involveringer'].mean()
+                st.write(f"**Top 8: Målinvolveringer**")
                 
-                st.write(f"**Top involveringer (Gns: {round(avg_inv, 1)})**")
-                
-                fig_t5 = px.bar(
-                    df_plot_t5, 
-                    x='Mål_Involveringer', 
-                    y='PLAYER_NAME', 
-                    orientation='h',
-                    text='Mål_Involveringer'
-                )
-                
-                # Styling magen til T2/T3
-                fig_t5.add_vline(x=avg_inv, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
-                fig_t5.update_traces(
-                    marker_color='#084594', 
-                    textposition='outside',
-                    cliponaxis=False
-                )
-                
-                fig_t5.update_layout(
-                    height=400, 
-                    margin=dict(t=20, b=20, l=0, r=40), 
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis_title=None,
-                    yaxis_title=None,
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False)
-                )
-                
-                st.plotly_chart(fig_t5, use_container_width=True, config={'displayModeBar': False})
+                # Her rammer vi T2-stylingen præcis med HTML/CSS progress bars
+                top_8_players = player_stats.head(8)
+                max_inv = player_stats['Målinvolveringer'].max() if not player_stats.empty else 1
+
+                for _, r in top_8_players.iterrows():
+                    # Beregn bredde i % relativt til topscoreren i kategorien
+                    rel_width = int((r['Målinvolveringer'] / max_inv) * 100)
+                    
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                <span>{r['PLAYER_NAME']}</span>
+                                <span>{int(r['Målinvolveringer'])} involveringer</span>
+                            </div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: #084594; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
         else:
-            st.info("Ingen målsekvenser fundet for dette hold.")
+            st.info("Ingen data fundet for de valgte målsekvenser.")
 
     with t6:
         if not df_all_h.empty:
