@@ -579,7 +579,7 @@ def vis_side(dp=None):
                                 <span>{int(r['Involveringer'])} involveringer ({int(r['Involvering_Pct'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #084594; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
+                                <div style="background-color: #df003b; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
