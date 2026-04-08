@@ -2,7 +2,7 @@
 
 # --- 1. KOMPLET OPTA EVENT TYPE MAPPING (Fra OPTA_DECODE_EVENTTYPE) ---
 OPTA_EVENT_TYPES = {
-    "1": "Pasning", "2": "Offside Pass", "3": "Take On", "4": "Frispark", "5": "Bold ude af spil",
+    "1": "Pasning", "2": "Offside Pass", "3": "Driblinger", "4": "Frispark", "5": "Bold ude af spil",
     "6": "Hjørnespark", "7": "Tacklinger", "8": "Interceptions", "9": "Omstillinger", "10": "Redning",
     "11": "Claim", "12": "Clearing", "13": "Brændt skud", "14": "Stolpeskud", "15": "Skud reddet",
     "16": "Mål", "17": "Kort", "18": "Udskiftet", "19": "Indskiftet", "20": "Player retired",
@@ -14,7 +14,7 @@ OPTA_EVENT_TYPES = {
     "39": "Temp_Attempt", "40": "Formation change", "41": "Punch", "42": "Good skill",
     "43": "Deleted event", "44": "Hovedstød", "45": "Udfordringer", "46": "Postponed",
     "47": "Rescinded card", "48": "Provisional lineup", "49": "Erobringer",
-    "50": "Dispossessed", "51": "Error", "52": "Keeper pick-up", "53": "Cross not claimed",
+    "50": "Boldtab", "51": "Error", "52": "Keeper pick-up", "53": "Cross not claimed",
     "54": "Smother", "55": "Offside provoked", "56": "Shield ball oop", "57": "Foul throw in",
     "58": "Skud mod", "59": "Keeper Sweeper", "60": "Chance Missed", "61": "Berøringer",
     "62": "Event placeholder", "63": "Temp_Save", "64": "Resume", "65": "Contentious Referee Decisions",
@@ -36,9 +36,9 @@ OPTA_EVENT_TYPES = {
 # --- 2. KOMPLET OPTA QUALIFIER MAPPING (Alle 483 fra din liste) ---
 OPTA_QUALIFIERS = {
     "1": "Lang aflevering", "2": "Indlæg", "3": "Aflevering (Hoved)", "4": "Stikning", "5": "Free kick taken",
-    "6": "Corner taken", "7": "Players caught offside", "8": "Goal disallowed", "9": "Penalty",
+    "6": "Corner taken", "7": "Players caught offside", "8": "Goal disallowed", "9": "Straffespark",
     "10": "Handball", "11": "6-seconds violation", "12": "Dangerous play", "13": "Foul",
-    "14": "Last line", "15": "Head", "16": "Small box-centre", "17": "Box-centre",
+    "14": "Last line", "15": "Hovedstød", "16": "Small box-centre", "17": "Box-centre",
     "18": "Out of box-centre", "19": "35+ centre", "20": "Right footed", "21": "Other body part",
     "22": "Regular play", "23": "Fast break", "24": "Set piece", "25": "From corner",
     "26": "Free kick", "27": "own goal attemp-attacking team", "28": "own goal attemp-defending team",
@@ -61,7 +61,7 @@ OPTA_QUALIFIERS = {
     "97": "Direkte frispark", "98": "Pitch X Coordinate", "99": "Pitch Y Coordinate", "100": "Six Yard Blocked",
     "101": "Saved Off Line", "102": "Goal Mouth Y Coordinate", "103": "Goal Mouth Z Coordinate",
     "104": "Attempt Position X Coordinate", "105": "Attempt Position Y Coordinate", "106": "Offensiv aflevering",
-    "107": "Indkast", "108": "Volley", "109": "Overhead", "110": "Half Volley", "111": "Diving Header",
+    "107": "Indkast", "108": "Flugter", "109": "Overhead", "110": "Halvflugter", "111": "Diving Header",
     "112": "Scramble", "113": "Strong", "114": "Weak", "115": "Rising", "116": "Dipping", "117": "Lob",
     "118": "One Bounce", "119": "Few Bounces", "120": "Swerve Left", "121": "Swerve Right",
     "122": "Swerve Moving", "123": "Keeper Throw", "124": "Målpark",
