@@ -425,6 +425,9 @@ def vis_side(dp=None):
 
     with t6:
         if not df_all_h.empty:
+            # --- 1. KONFIGURATION AF FILTRERING ---
+            exclude_ids = [43, 30, 32, 5, 6, 17] 
+            
             spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
             spiller_liste = sorted(spiller_navne)
             
@@ -435,7 +438,7 @@ def vis_side(dp=None):
                 valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="player_profile_select")
                 df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
                 
-                # Stats beregning
+                # Stats beregning (baseret på rå data for præcision)
                 total_akt = len(df_spiller)
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if not pas_df.empty else 0
@@ -451,42 +454,52 @@ def vis_side(dp=None):
                 m_c2.metric("Skud", len(skud_df))
                 
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                st.write("**Top Aktioner**")
+                
+                # --- Top Aktioner (Filtreret) ---
+                st.write("**Top Aktioner (Renset)**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                akt_counts = df_spiller['Aktion_Navn'].value_counts().head(15)
+                
+                # Vi fjerner exclude_ids før vi tæller top 15
+                df_top_filt = df_spiller[~df_spiller['EVENT_TYPEID'].isin(exclude_ids)]
+                akt_counts = df_top_filt['Aktion_Navn'].value_counts().head(15)
+                
                 for akt, count in akt_counts.items():
-                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
             with c_p2:
                 # Kontrolrække til dropdown
                 sel_col1, sel_col2 = st.columns([2, 1.2])
                 with sel_col1:
-                    st.markdown(f"<p style='text-align:right; margin-top:5px; font-weight:bold;'>Kategori:</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:right; margin-top:5px; font-weight:bold;'>Visning:</p>", unsafe_allow_html=True)
                 with sel_col2:
-                    visning = st.selectbox("Visning", ["Heatmap (Tendenser)", "Berøringer", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"], key="pitch_view_selector", label_visibility="collapsed")
+                    visning = st.selectbox(
+                        "Vælg visning", 
+                        ["Heatmap (Tendenser)", "Berøringer", "Afslutninger", "Mål", "Pasninger", "Erobringer", "Hovedstød"], 
+                        key="pitch_view_selector", 
+                        label_visibility="collapsed"
+                    )
 
                 # --- Bane Plotting ---
-                # Vi bruger de samme indstillinger som i dit t4 eksempel
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 f, ax = p.draw(figsize=(10, 7))
                 
-                # Her bruger vi din specifikke match_info_box funktion
-                # Vi sender 'None' til modstander-logo og tomme strenge til score/min, 
-                # da det er en spiller-oversigt og ikke en specifik kamp-sekvens.
-                # Vi bruger hold_logo som vi hentede tidligere
+                # Info boks med Logo og Navn
                 draw_player_info_box(
-                        ax, 
-                        hold_logo, 
-                        valgt_spiller, 
-                        "Seneste 10 kampe", 
-                        visning
-                    )                
+                    ax, 
+                    hold_logo, 
+                    valgt_spiller, 
+                    "Seneste 10 kampe", 
+                    visning
+                )                
+                
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
                 if not valid_events.empty:
                     if visning == "Heatmap (Tendenser)":
-                        p.kdeplot(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
-                        p.scatter(valid_events.EVENT_X, valid_events.EVENT_Y, ax=ax, color='#084594', s=15, alpha=0.2, zorder=2)
+                        # Heatmap filtreres også for uønskede aktioner for at vise reel position
+                        heatmap_data = valid_events[~valid_events['EVENT_TYPEID'].isin(exclude_ids)]
+                        p.kdeplot(heatmap_data.EVENT_X, heatmap_data.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50, zorder=1)
+                        p.scatter(heatmap_data.EVENT_X, heatmap_data.EVENT_Y, ax=ax, color='#084594', s=15, alpha=0.1, zorder=2)
                     
                     elif visning == "Berøringer":
                         df_filt = valid_events[valid_events['EVENT_TYPEID'].isin([1, 61, 73])]
