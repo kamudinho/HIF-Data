@@ -2,7 +2,7 @@
 
 # --- 1. KOMPLET OPTA EVENT TYPE MAPPING (Fra OPTA_DECODE_EVENTTYPE) ---
 OPTA_EVENT_TYPES = {
-    "1": "Pasninger", "2": "Offside Pass", "3": "Take On", "4": "Frispark", "5": "Bold ude af spil",
+    "1": "Pasning", "2": "Offside Pass", "3": "Take On", "4": "Frispark", "5": "Bold ude af spil",
     "6": "Hjørnespark", "7": "Tacklinger", "8": "Interceptions", "9": "Omstillinger", "10": "Redning",
     "11": "Claim", "12": "Clearing", "13": "Brændt skud", "14": "Stolpeskud", "15": "Skud reddet",
     "16": "Mål", "17": "Kort", "18": "Udskiftet", "19": "Indskiftet", "20": "Player retired",
@@ -35,7 +35,7 @@ OPTA_EVENT_TYPES = {
 
 # --- 2. KOMPLET OPTA QUALIFIER MAPPING (Alle 483 fra din liste) ---
 OPTA_QUALIFIERS = {
-    "1": "Long ball", "2": "Cross", "3": "Head pass", "4": "Through ball", "5": "Free kick taken",
+    "1": "Lang aflevering", "2": "Indlæg", "3": "Aflevering (Hoved)", "4": "Stikning", "5": "Free kick taken",
     "6": "Corner taken", "7": "Players caught offside", "8": "Goal disallowed", "9": "Penalty",
     "10": "Handball", "11": "6-seconds violation", "12": "Dangerous play", "13": "Foul",
     "14": "Last line", "15": "Head", "16": "Small box-centre", "17": "Box-centre",
