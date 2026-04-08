@@ -506,14 +506,70 @@ def vis_side(dp=None):
             st.info("Ingen mål fundet for denne sæson.")
             
     with t5:
-        if not df_all_h.empty:
-            stats = df_all_h.groupby('PLAYER_NAME').agg(
-                Aktioner=('EVENT_TYPEID', 'count'),
+        if not df_all_events.empty:
+            # Vi laver en kopi for at kunne arbejde med data
+            df_mål_stats = df_all_events.copy()
+            
+            # 1. Map aktioner specifikt for denne oversigt
+            df_mål_stats['Aktion'] = df_mål_stats.apply(get_action_label, axis=1)
+
+            # 2. Aggregér data pr. spiller
+            # Vi tæller hvor mange unikke mål-sekvenser hver spiller har været en del af
+            player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
+                Mål_Involveringer=('GOAL_TIME', 'nunique'), 
                 Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
                 Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum()),
-                Skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum())
-            ).sort_values('Aktioner', ascending=False)
-            st.dataframe(stats, use_container_width=True)
+                Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15]).sum()),
+                Mål=('EVENT_TYPEID', lambda x: (x == 16).sum())
+            ).reset_index()
+
+            # 3. Beregn totaler og sorter
+            player_stats['Total_Aktioner'] = player_stats['Pasninger'] + player_stats['Erobringer'] + player_stats['Afslutninger'] + player_stats['Mål']
+            player_stats = player_stats.sort_values('Mål_Involveringer', ascending=False)
+
+            # 4. Visning af Tabel uden ikoner eller specialtegn
+            st.subheader("Spilleroversigt: Involvering i mål")
+            st.write("Statistik over de sidste 20 sekunder før alle holdets mål i sæsonen.")
+            
+            st.dataframe(
+                player_stats.rename(columns={
+                    'PLAYER_NAME': 'Spiller',
+                    'Mål_Involveringer': 'Mål-deltagelser',
+                    'Total_Aktioner': 'Total aktioner'
+                }),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Mål-deltagelser": st.column_config.NumberColumn(
+                        help="Antal mål-sekvenser spilleren har haft mindst én aktion i"
+                    ),
+                    "Mål": st.column_config.NumberColumn() # Ingen formatting her
+                }
+            )
+            
+            # 5. Bar-chart uden farveskalaer eller ikoner
+            st.write("Top involveringer i målsekvenser")
+            fig_impact = px.bar(
+                player_stats.head(8), 
+                x='Mål_Involveringer', 
+                y='PLAYER_NAME', 
+                orientation='h',
+                labels={'PLAYER_NAME': 'Spiller', 'Mål_Involveringer': 'Antal målsekvenser'}
+            )
+            
+            # Stilren graf uden dikkedarer
+            fig_impact.update_traces(marker_color='#084594')
+            fig_impact.update_layout(
+                height=300, 
+                xaxis_title="Antal unikke målsekvenser",
+                yaxis_title=None,
+                margin=dict(l=0, r=10, t=10, b=0),
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_impact, use_container_width=True, config={'displayModeBar': False})
+
+        else:
+            st.info("Ingen data fundet for de valgte kriterier.")
 
     with t6:
         if not df_all_h.empty:
