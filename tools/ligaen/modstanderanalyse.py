@@ -488,10 +488,6 @@ def vis_side(dp=None):
                 m_row2[2].metric("Indlæg", cross_count)
                 m_row2[3].metric("Erobringer", erob_count)
     
-                # Ekstra række hvis der er flere (her Hovedstød)
-                m_row3 = st.columns(4)
-                m_row3[0].metric("Hovedstød", hoved_count)
-    
                 # --- TOP 10 AKTIONER (Renset for generiske tags) ---
                 st.markdown("---")
                 st.write("**Top 10: Aktioner (Detaljeret)**")
