@@ -438,40 +438,27 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            # 1. SORTERING: Dato (nyeste først) og minut (kronologisk)
+            # 1. SORTERING: Nyeste dato først, derefter mål-minut kronologisk
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
             
-            # 2. OPTS med SLUTRESULTAT i parentes i stedet for minuttal
+            # 2. OPTS: Nu med LIVE STILLING (stillingen ved målet) i parentes
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
-                # Her ændres label til at vise score i parentes
+                # Her bruger vi HOME_SCORE og AWAY_SCORE fra selve mål-rækken
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])})", 
                 'match_id': r['MATCH_OPTAUUID'], 
                 'goal_ts': r['GOAL_TIME'], 
                 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
-                'min': int(r['GOAL_MIN']), # Beholdes til draw_match_info_box
-                'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y')
+                'min': int(r['GOAL_MIN']), 
+                'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
+                'stilling': f"{int(r['HOME_SCORE'])}-{int(r['AWAY_SCORE'])}" # Gemt til infoboks
             } for _, r in gl.iterrows()}
             
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
 
-            # 3. LIVE SCORE (Stillingen DA målet blev scoret - til info-boksen)
-            sql_live = f"""
-                SELECT 
-                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, 
-                    SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) as A 
-                FROM {DB}.OPTA_EVENTS e 
-                JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID 
-                WHERE e.MATCH_OPTAUUID = '{sd['match_id']}' 
-                  AND e.EVENT_TYPEID = 16 
-                  AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'
-            """
-            ls_df = _get_snowflake_conn().query(sql_live)
-            stilling_nu = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
-
-            # 4. DATA & PLOT
+            # 3. DATA & PLOT
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts']) & 
                                 (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
@@ -480,10 +467,10 @@ def vis_side(dp=None):
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # draw_match_info_box bruger 'stilling_nu' (f.eks. 1-0) og 'min' (minuttet)
-            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling_nu, sd['min'])
+            # Vi bruger stillingen direkte fra vores sd (selected) i stedet for nyt SQL kald
+            draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['stilling'], sd['min'])
 
-            # Pile og punkter
+            # Pile og hændelser
             for i in range(len(tge)-1):
                 p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
                          tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
@@ -499,16 +486,15 @@ def vis_side(dp=None):
             
             p_c.pyplot(f)
 
-            # 5. SEKVENSTABEL
-            l_c.write("**Målsekvens:**")
+            # 4. SEKVENSTABEL (Oversat til Spiller og ingen None)
+            tge['Aktion'] = tge.apply(get_action_label, axis=1).fillna("Opbygning")
             
-            # Vi omdøber kolonnen i et "snuptag" lige før den vises
+            l_c.write("**Målsekvens:**")
             l_c.dataframe(
                 tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), 
                 hide_index=True,
                 use_container_width=True
-            )
-            
+            )            
         else: 
             st.info("Ingen mål fundet.")
             
