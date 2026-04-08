@@ -115,14 +115,39 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner("Henter data..."):
-        sql_res = f"SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') ORDER BY MATCH_LOCALDATE DESC LIMIT 10"
+        # 1. Hent de seneste 10 kampe (uændret)
+        sql_res = f"""
+            SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
+                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
+                   CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
+            FROM {DB}.OPTA_MATCHINFO 
+            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
+            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} 
+            AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') 
+            ORDER BY MATCH_LOCALDATE DESC LIMIT 10
+        """
         df_res = conn.query(sql_res)
         
         if df_res is not None and not df_res.empty:
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
-            df_all_h = conn.query(f"SELECT EVENT_X, EVENT_Y, EVENT_TYPEID, PLAYER_NAME, MATCH_OPTAUUID, EVENT_TIMESTAMP, EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS WHERE EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND MATCH_OPTAUUID IN {m_ids_str}")
             
+            # --- 2. HENT ALLE EVENTS MED QUALIFIERS (Til OVERSIGT, MED BOLDEN, UDENS BOLDEN, SPILLERPROFIL) ---
+            # Vi bruger LISTAGG for at samle alle qualifiers i én celle pr. event
+            sql_all_h = f"""
+                SELECT 
+                    e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.MATCH_OPTAUUID, 
+                    e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
+                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+                FROM {DB}.OPTA_EVENTS e
+                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
+                AND e.MATCH_OPTAUUID IN {m_ids_str}
+                GROUP BY 1, 2, 3, 4, 5, 6, 7
+            """
+            df_all_h = conn.query(sql_all_h)
+            
+            # --- 3. MÅL-SEKVENSER MED QUALIFIERS ---
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID 
@@ -137,18 +162,20 @@ def vis_side(dp=None):
             )
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-                   tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN
+                   tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
+                   LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
             JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
                 AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
                 AND e.EVENT_TIMESTAMP <= tg.G_TIME
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
             """
             try: df_all_events = conn.query(sql_seq)
             except: df_all_events = pd.DataFrame()
         else: return
-
     t1, t2, t3, t4, t5, t6 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT", "SPILLERPROFIL"])
     
     with t1:
