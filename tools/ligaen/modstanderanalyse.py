@@ -438,7 +438,11 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values('MATCH_LOCALDATE', ascending=False)
+            # 1. SORTERING: Nyeste dato først, derefter minutter i kampen (lavest til højest)
+            gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
+                ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
+            )
+            
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['GOAL_MIN'])}. min)", 
                 'match_id': r['MATCH_OPTAUUID'], 
@@ -451,7 +455,7 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål (Hele sæsonen)", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
 
-            # 1. LIVE SCORE LOGIK
+            # 2. LIVE SCORE (Hent stilling på tidspunktet for målet)
             sql_live = f"""
                 SELECT 
                     SUM(CASE WHEN EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) as H, 
@@ -462,21 +466,19 @@ def vis_side(dp=None):
                   AND e.EVENT_TYPEID = 16 
                   AND e.EVENT_TIMESTAMP <= '{sd['goal_ts']}'
             """
-            # Sørg for at bruge din faktiske connector her (conn eller _get_snowflake_conn())
             ls_df = _get_snowflake_conn().query(sql_live)
             stilling = f"{int(ls_df['H'].iloc[0])}-{int(ls_df['A'].iloc[0])}"
 
-            # 2. HENT SEKVENSSEN (Filterer 43 fra som i din kode)
+            # 3. HENT SEKVENSSEN (Filterer 43 fra)
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts']) & 
                                 (df_all_events['EVENT_TYPEID'] != 43)].sort_values('EVENT_TIMESTAMP').copy()
 
-            # 3. TEGN BANEN
+            # 4. TEGN BANEN
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # Bruger dine logo- og infobox-funktioner
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], stilling, sd['min'])
 
             for i in range(len(tge)-1):
@@ -493,20 +495,23 @@ def vis_side(dp=None):
             
             p_c.pyplot(f)
 
-            # 4. TABEL LOGIK - HER FIKSER VI "NONE"
-            # Vi bruger get_action_label hvis muligt, ellers fallback til din mapping
-            tge['Aktion'] = tge.apply(get_action_label, axis=1).fillna(
-                tge['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-            ).fillna("Opbygning")
+            # 5. AKTION LOGIK (Inkl. Straffespark tjek via Qualifier 9)
+            tge['Aktion'] = tge.apply(get_action_label, axis=1).fillna("Opbygning")
             
-            # Straffespark check
-            tge.loc[(tge['EVENT_TYPEID'] == 16) & (tge['EVENT_X'] == 88.5) & (tge['EVENT_Y'] == 50.0), 'Aktion'] = "Penalty Goal"
+            # Tjek for Straffespark (Event 16 + Qualifier 9)
+            # Vi antager her at din dataframe har en kolonne eller liste med qualifiers pr. event
+            def check_penalty(row):
+                if row['EVENT_TYPEID'] == 16:
+                    # Tjekker om '9' findes i din QUALIFIERS kolonne (afhænger af hvordan din SQL/data ser ud)
+                    if '9' in str(row.get('QUALIFIERS', '')):
+                        return "Penalty Goal"
+                return row['Aktion']
+
+            tge['Aktion'] = tge.apply(check_penalty, axis=1)
 
             l_c.write("**Sekvens:**")
             l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1], hide_index=True)
             
-        else: 
-            st.info("Ingen mål fundet.")
     with t5:
         if not df_all_h.empty:
             stats = df_all_h.groupby('PLAYER_NAME').agg(
