@@ -13,9 +13,7 @@ from io import BytesIO
 from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
-    get_action_label, 
-    is_offensive_event,
-    get_offensive_map
+    get_action_label
 )
 
 # --- 1. KONFIGURATION (OPDATERET 2026) ---
