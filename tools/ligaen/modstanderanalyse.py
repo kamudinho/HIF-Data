@@ -453,7 +453,7 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 st.write("**Top Aktioner**")
                 df_spiller['Aktion_Navn'] = df_spiller['EVENT_TYPEID'].astype(str).map(OPTA_EVENT_TYPES)
-                akt_counts = df_spiller['Aktion_Navn'].value_counts().head(5)
+                akt_counts = df_spiller['Aktion_Navn'].value_counts().head(15)
                 for akt, count in akt_counts.items():
                     st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 12px;"><span>{akt}</span><b>{count}</b></div>', unsafe_allow_html=True)
 
@@ -478,7 +478,7 @@ def vis_side(dp=None):
                         ax, 
                         hold_logo, 
                         valgt_spiller, 
-                        "Sæson 2025/2026", 
+                        "Seneste 10 kampe", 
                         visning
                     )                
                 valid_events = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
