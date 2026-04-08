@@ -2,7 +2,7 @@
 
 # --- 1. KOMPLET OPTA EVENT TYPE MAPPING (Fra OPTA_DECODE_EVENTTYPE) ---
 OPTA_EVENT_TYPES = {
-    "1": "Pass", "2": "Offside Pass", "3": "Take On", "4": "Free kick", "5": "Out",
+    "1": "Pasninger", "2": "Offside Pass", "3": "Take On", "4": "Free kick", "5": "Out",
     "6": "Corner", "7": "Tackle", "8": "Interception", "9": "Turnover", "10": "Save",
     "11": "Claim", "12": "Clearance", "13": "Miss", "14": "Post", "15": "Attempt Saved",
     "16": "Goal", "17": "Card", "18": "Player off", "19": "Player on", "20": "Player retired",
