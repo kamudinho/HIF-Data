@@ -516,7 +516,7 @@ def vis_side(dp=None):
             df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
             df_mål_stats['is_goal'] = df_mål_stats['EVENT_TYPEID'] == 16
 
-            # Samlet antal unikke mål i hele datasættet til procent-beregning
+            # Samlet antal unikke mål for hele holdet
             total_goals_count = df_mål_stats['GOAL_TIME'].nunique()
 
             # Aggregér pr. spiller
@@ -531,11 +531,11 @@ def vis_side(dp=None):
                 Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum())
             ).reset_index()
 
-            # Beregn procent af holdets samlede mål involveret i
+            # Beregn procent af holdets samlede mål (Markedsandel)
             player_stats['Involvering_Pct'] = (player_stats['Målinvolveringer'] / total_goals_count * 100).round(1)
 
-            # Sortering: Mål først, derefter Målinvolveringer
-            player_stats = player_stats.sort_values(['Mål', 'Målinvolveringer'], ascending=False)
+            # Sortering: KUN på Målinvolveringer (flest involveringer øverst)
+            player_stats = player_stats.sort_values('Målinvolveringer', ascending=False)
 
             # 2. Layout
             col_tabel, col_graf = st.columns([1.8, 1])
@@ -543,7 +543,6 @@ def vis_side(dp=None):
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
                 
-                # Konfiguration af kolonnebredder: Navn bred, resten ens (små)
                 st.dataframe(
                     player_stats.rename(columns={
                         'PLAYER_NAME': 'Spiller',
@@ -565,15 +564,14 @@ def vis_side(dp=None):
                 )
 
             with col_graf:
-                st.write("**Top: Mål og Involvering**")
+                st.write(f"**Top involvering (Hold total: {total_goals_count} mål)**")
                 
                 top_8_players = player_stats.head(8)
-                # Vi bruger Målinvolveringer til bar-længden
-                max_inv = player_stats['Målinvolveringer'].max() if not player_stats.empty else 1
 
                 for _, r in top_8_players.iterrows():
-                    rel_width = r['Involvering_Pct'] 
-
+                    # Baren fyldes i forhold til holdets samlede antal mål (f.eks. 50% bredde hvis 20/40)
+                    rel_width = r['Involvering_Pct']
+                    
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
