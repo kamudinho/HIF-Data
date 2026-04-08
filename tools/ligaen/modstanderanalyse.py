@@ -451,7 +451,7 @@ def vis_side(dp=None):
             st.dataframe(stats, use_container_width=True)
 
     with t6:
-    if not df_all_h.empty:
+        if not df_all_h.empty:
         # --- 1. KONFIGURATION AF FILTRERING ---
         exclude_ids = [43, 30, 32, 5, 6, 17] 
         
