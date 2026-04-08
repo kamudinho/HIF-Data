@@ -506,35 +506,37 @@ def vis_side(dp=None):
             st.info("Ingen mål fundet for denne sæson.")
             
     with t5:
-        # CSS der tvinger overskrifter til at centrere (undtagen den første kolonne)
+        # Ny CSS der specifikt rammer st.table (som genererer ren HTML)
         st.markdown("""
             <style>
-                /* Centrerer tekst i alle header-celler undtagen den første */
-                [data-testid="stTable"] th:not(:first-child), 
-                [data-testid="stDataFrame"] th:not(:first-child) {
+                /* Centrerer tekst i alle header-celler i st.table */
+                [data-testid="stTable"] th {
                     text-align: center !important;
+                    vertical-align: middle !important;
                 }
-                /* Sikrer at selve indholdet i cellerne også lystrer */
-                [data-testid="stTable"] td:not(:first-child) {
+                /* Centrerer alle celler */
+                [data-testid="stTable"] td {
                     text-align: center !important;
+                    vertical-align: middle !important;
+                }
+                /* Tvinger dog første kolonne (Spiller) til at være venstrestillet */
+                [data-testid="stTable"] td:first-child, 
+                [data-testid="stTable"] th:first-child {
+                    text-align: left !important;
                 }
             </style>
         """, unsafe_allow_html=True)
 
         if not df_all_events.empty:
-            # 1. Databehandling
+            # 1. Databehandling (samme som før)
             df_mål_stats = df_all_events.copy()
-            
-            # Definitioner af aktioner
             df_mål_stats['is_cross'] = df_mål_stats['qual_list'].apply(lambda x: '2' in x)
             df_mål_stats['is_shot_assist'] = df_mål_stats['qual_list'].apply(lambda x: '210' in x or '209' in x)
             df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
             df_mål_stats['is_goal'] = df_mål_stats['EVENT_TYPEID'] == 16
 
-            # Samlet antal unikke mål for hele holdet
             total_goals_count = df_mål_stats['GOAL_TIME'].nunique()
 
-            # Aggregér pr. spiller
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
                 Involveringer=('GOAL_TIME', 'nunique'),
                 Aktioner=('EVENT_TYPEID', 'count'),
@@ -546,10 +548,7 @@ def vis_side(dp=None):
                 Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 127, 49]).sum())
             ).reset_index()
 
-            # Beregn procent af holdets samlede mål (Markedsandel)
             player_stats['Involvering_Pct'] = (player_stats['Involveringer'] / total_goals_count * 100).round(1)
-
-            # Sortering: KUN på Målinvolveringer (flest involveringer øverst)
             player_stats = player_stats.sort_values('Involveringer', ascending=False)
 
             # 2. Layout
@@ -558,36 +557,21 @@ def vis_side(dp=None):
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
                 
-                # Din dataframe med alignment="center" i config (vigtigt for selve tallene)
-                st.dataframe(
-                    player_stats.rename(columns={
-                        'PLAYER_NAME': 'Spiller',
-                        'Målinvolveringer': 'Involveringer',
-                        'Skud_Ass': 'Skud Ass.'
-                    })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Spiller": st.column_config.Column(width="medium", alignment="left"),
-                        "Involveringer": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Aktioner": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Mål": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Pasninger": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Indlæg": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Skud": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Skud Ass.": st.column_config.NumberColumn(width="small", alignment="center"),
-                        "Erobringer": st.column_config.NumberColumn(width="small", alignment="center"),
-                    }
-                )
+                # Vi klargør præcis de kolonner der skal vises
+                df_visning = player_stats.rename(columns={
+                    'PLAYER_NAME': 'Spiller',
+                    'Skud_Ass': 'Skud Ass.'
+                })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']]
+                
+                # Vi bruger st.table i stedet for st.dataframe for at få CSS-kontrol over overskrifterne
+                st.table(df_visning)
+
             with col_graf:
                 st.write(f"**Top involvering (Hold total: {total_goals_count} mål)**")
-                
                 top_8_players = player_stats.head(8)
 
                 for _, r in top_8_players.iterrows():
-                    # Baren fyldes i forhold til holdets samlede antal mål (f.eks. 50% bredde hvis 20/40)
                     rel_width = r['Involvering_Pct']
-                    
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
@@ -599,7 +583,6 @@ def vis_side(dp=None):
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
-
         else:
             st.info("Ingen data fundet for de valgte målsekvenser.")
             
