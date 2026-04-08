@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.express as px
 from mplsoccer import Pitch, VerticalPitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
