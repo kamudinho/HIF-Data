@@ -532,10 +532,10 @@ def vis_side(dp=None):
             ).reset_index()
 
             # Beregn procent af holdets samlede mål (Markedsandel)
-            player_stats['Involvering_Pct'] = (player_stats['Målinvolveringer'] / total_goals_count * 100).round(1)
+            player_stats['Involvering_Pct'] = (player_stats['Involveringer'] / total_goals_count * 100).round(1)
 
             # Sortering: KUN på Målinvolveringer (flest involveringer øverst)
-            player_stats = player_stats.sort_values('Målinvolveringer', ascending=False)
+            player_stats = player_stats.sort_values('Involveringer', ascending=False)
 
             # 2. Layout
             col_tabel, col_graf = st.columns([1.8, 1])
@@ -576,7 +576,7 @@ def vis_side(dp=None):
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['Målinvolveringer'])} involveringer ({int(r['Involvering_Pct'])}%)</span>
+                                <span>{int(r['Involveringer'])} involveringer ({int(r['Involvering_Pct'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: #084594; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
