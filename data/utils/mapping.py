@@ -201,3 +201,40 @@ def is_assist(qualifiers_list):
     Bruges typisk på et Pass event (ID 1).
     """
     return "210" in [str(q) for q in qualifiers_list]
+
+def get_action_label(row):
+    """
+    Returnerer et læsbart navn for en Opta-aktion baseret på EVENT_TYPEID og QUALIFIERS.
+    """
+    try:
+        eid = str(row['EVENT_TYPEID'])
+        ql = row.get('qual_list', [])
+        
+        # Sørg for ql er en liste
+        if isinstance(ql, str):
+            ql = ql.split(',')
+
+        # Specifik logik for vigtige sub-typer (f.eks. Indlæg og Hovedstød)
+        if eid == "1":
+            return "Indlæg" if "2" in ql else "Pasning"
+        elif eid == "16": 
+            return "Mål"
+        elif eid in ["13", "14", "15"]: 
+            return "Afslutning"
+        elif eid == "7": 
+            return "Tackling"
+        elif eid == "8": 
+            return "Interception"
+        elif eid == "12": 
+            return "Rydning"
+        elif eid == "49": 
+            return "Gen-erobring"
+        elif eid == "50": 
+            return "Dribling"
+        elif eid == "44" or "15" in ql: 
+            return "Hovedstød"
+        
+        # Fallback til den generelle mapping ordbog (OPTA_EVENT_TYPES)
+        return OPTA_EVENT_TYPES.get(eid, f"Event {eid}")
+    except Exception:
+        return "Ukendt Aktion"
