@@ -468,10 +468,8 @@ def vis_side(dp=None):
             
             with t_col3:
                 # Dynamisk caption baseret på dit valg ovenfor
-                st.caption(f"ℹ️ {descriptions.get(visning)}")
-    
-            st.markdown("---")
-    
+                st.caption(f"{descriptions.get(visning)}")
+        
             # --- 2. Dataforberedelse ---
             df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
             df_spiller['qual_ids'] = df_spiller['QUALIFIERS'].fillna('').astype(str).apply(lambda x: x.split(',') if x else [])
