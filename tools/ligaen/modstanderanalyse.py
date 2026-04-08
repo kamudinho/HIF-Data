@@ -453,11 +453,11 @@ def vis_side(dp=None):
     with t6:
         if not df_all_h.empty:
         # --- 1. KONFIGURATION AF FILTRERING ---
-        exclude_ids = [43, 30, 32, 5, 6, 17] 
-        
+            exclude_ids = [43, 30, 32, 5, 6, 17] 
+            
         spiller_navne = [n for n in df_all_h['PLAYER_NAME'].unique() if n is not None]
         spiller_liste = sorted(spiller_navne)
-        
+            
         c_p1, c_buffer, c_p2 = st.columns([1, 0.2, 2.2])
         
         with c_p1:
