@@ -510,15 +510,15 @@ def vis_side(dp=None):
                 # 4 metrics pr. linje
                 m_row1 = st.columns(4)
                 m_row1[0].metric("Aktion", total_akt)
-                m_row1[1].metric("Touch", touch_count)
+                m_row1[1].metric("Berøringer", touch_count)
                 m_row1[2].metric("Pasninger", pas_count)
                 m_row1[3].metric("Pasning %", f"{int(pas_acc)}%")
                 
                 m_row2 = st.columns(4)
-                m_row2[0].metric("Skud", shots_count)
+                m_row2[0].metric("Afslutninger", shots_count)
                 m_row2[1].metric("Chancer", chancer_skabt)
                 m_row2[2].metric("Indlæg", cross_count)
-                m_row2[3].metric("Erob.", erob_count)
+                m_row2[3].metric("Erobringer", erob_count)
     
                 st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
