@@ -171,7 +171,9 @@ def vis_side(dp=None):
             # SQL for Mål-sekvenser
             sql_seq = f"""
             WITH SeasonMatches AS (
-                SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID 
+                SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
+                       MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
+                       HOME_SCORE, AWAY_SCORE  -- <--- TILFØJET HER
                 FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
             ),
@@ -182,7 +184,9 @@ def vis_side(dp=None):
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
             )
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
-                   m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+                   m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
+                   m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+                   m.HOME_SCORE, m.AWAY_SCORE, -- <--- TILFØJET HER
                    tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
@@ -192,7 +196,7 @@ def vis_side(dp=None):
                 AND e.EVENT_TIMESTAMP <= tg.G_TIME
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 -- Opdateret GROUP BY
             """
             try: 
                 df_all_events = conn.query(sql_seq)
