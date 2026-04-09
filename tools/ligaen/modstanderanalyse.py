@@ -718,9 +718,18 @@ def vis_side(dp=None):
                                    color='gold', s=150, marker='*',
                                    edgecolors='black', zorder=5, label='Mål')
                         
-                        # Legend placeret i nederste højre hjørne
+                        # Legend på én linje i øverste højre hjørne
                         if not d.empty:
-                            ax.legend(loc='upper right', fontsize=8, frameon=True, facecolor='white', framealpha=0.8)
+                            ax.legend(
+                                loc='upper right', 
+                                bbox_to_anchor=(1, 1), # Placerer den præcis i øverste højre hjørne af banen
+                                ncol=2,                # Tvinger "Afslutning" og "Mål" til at stå ved siden af hinanden
+                                fontsize=8, 
+                                frameon=True, 
+                                facecolor='white', 
+                                edgecolor='#BDBDBD',
+                                handletextpad=0.5      # Giver lidt luft mellem ikon og tekst
+                            )
 
                     elif visning == "Mål":
                         # Viser kun mål (ID 16)
