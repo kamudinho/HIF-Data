@@ -564,8 +564,8 @@ def vis_side(dp=None):
                 )
 
             with col_graf:
-                st.write(f"**Top involvering**")
-                for _, r in player_stats.head(8).iterrows():
+                st.write(f"**Målinvolveringer**")
+                for _, r in player_stats.head(12).iterrows():
                     rel_width = r['Involvering_Pct']
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
