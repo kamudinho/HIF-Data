@@ -149,17 +149,41 @@ def prepare_df(content):
     return df_display
 
 # --- 4. UI ---
+# --- 4. UI ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="HIF Scouting")
+    
+    # HENT BRUGER-RESRIKTIONER (Antager st.session_state.user er sat ved login)
+    current_user = st.session_state.get("user", "default")
+    # Vi henter fra din 'users' struktur. Hvis ingen user, er alt restricted som default
+    user_data = users.get(current_user, {"restricted": ["ADMIN", "TRUPPEN", "Skyggeliste", "Skyggehold"]})
+    user_restricted = user_data.get("restricted", [])
+
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
     content, _ = get_github_file(SCOUT_DB_PATH)
     if content is None: return
     df_display = prepare_df(content)
 
-    t1, t2, t3, t4 = st.tabs(["Emneliste", "Hvidovre IF", "Skyggeliste", "Skyggehold"])
+    # --- DYNAMISK TAB-FILTRERING ---
+    # Vi mapper dine restricted-tags til de faktiske faner
+    tabs_to_show = []
+    if "EMNELISTE" not in user_restricted: tabs_to_show.append("Emneliste")
+    if "TRUPPEN" not in user_restricted: tabs_to_show.append("Hvidovre IF")
+    if "Skyggeliste" not in user_restricted: tabs_to_show.append("Skyggeliste")
+    if "Skyggehold" not in user_restricted: tabs_to_show.append("Skyggehold")
 
-    # Column config bruger nu STORE bogstaver for at matche dataframe
+    if not tabs_to_show:
+        st.error("Du har ingen rettigheder til at se modulerne. Kontakt admin.")
+        return
+
+    # Opret kun de tilladte tabs
+    tabs_obj = st.tabs(tabs_to_show)
+    
+    # Lav et opslag for at placere indholdet i den rigtige tab-index
+    tab_map = {name: i for i, name in enumerate(tabs_to_show)}
+
+    # Column config
     cfg = {
         "PLAYER_WYID": None,
         "KONTRAKT_DT": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
@@ -172,104 +196,96 @@ def vis_side():
         "POS_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
     }
 
-    with t1:
-        source_t1 = df_display[~df_display['IS_HIF']].copy()
-        st.data_editor(source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
-                       column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
+    # --- TAB INDHOLD (Kun hvis de findes i tab_map) ---
 
-    with t2:
-        source_t2 = df_display[df_display['IS_HIF']].reset_index(drop=True)
-        st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
-                       column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
+    if "Emneliste" in tab_map:
+        with tabs_obj[tab_map["Emneliste"]]:
+            source_t1 = df_display[~df_display['IS_HIF']].copy()
+            st.data_editor(source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
+                            column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
 
-    with t3:
-        source_t3 = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
-        st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'PLAYER_WYID']],
-                       column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
+    if "Hvidovre IF" in tab_map:
+        with tabs_obj[tab_map["Hvidovre IF"]]:
+            source_t2 = df_display[df_display['IS_HIF']].reset_index(drop=True)
+            st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
+                            column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
-    with t4:
-        c_pitch, c_ctrl = st.columns([8.2, 1.8])
-        with c_ctrl:
-            # Definition af rækkefølge: Nuværende -> Startopstilling -> Vinduer
-            display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
-            
-            sel_v = st.selectbox("Visning", display_opts)
-            f = st.session_state.form_skygge
-            for form in ["3-4-3", "4-3-3", "3-5-2"]:
-                if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
-                    st.session_state.form_skygge = form; st.rerun()
+    if "Skyggeliste" in tab_map:
+        with tabs_obj[tab_map["Skyggeliste"]]:
+            source_t3 = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
+            st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'PLAYER_WYID']],
+                            column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
 
-        with c_pitch:
-            f_suffix = st.session_state.form_skygge.replace('-', '')
-            p_col = f"POS_{f_suffix}"
-            
-            # 1. FILTRERING
-            is_startopstilling = (sel_v == "Startopstilling (26/27)")
-            
-            if is_startopstilling:
-                df_f = df_display[df_display['START_11_26_27'] == True].copy()
-                ref_dt = datetime(2026, 7, 1)
-            elif sel_v == "Nuværende trup":
-                df_f = df_display[df_display['IS_HIF']].copy()
-                ref_dt = datetime.now()
-            else:
-                ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
-                hif = df_display[df_display['IS_HIF']].copy()
-                emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
-                hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
-                df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
+    if "Skyggehold" in tab_map:
+        with tabs_obj[tab_map["Skyggehold"]]:
+            # --- Din uændrede Skyggehold kode her ---
+            c_pitch, c_ctrl = st.columns([8.2, 1.8])
+            with c_ctrl:
+                display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
+                sel_v = st.selectbox("Visning", display_opts)
+                f = st.session_state.form_skygge
+                for form in ["3-4-3", "4-3-3", "3-5-2"]:
+                    if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
+                        st.session_state.form_skygge = form; st.rerun()
 
-            # 2. BANE-SETUP
-            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
-            fig, ax = pitch.draw(figsize=(10, 7))
-            
-            # LEGENDS (Dem du manglede)
-            ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
-            ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
-            ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
-            ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-
-            # VALGT VINDUE (Øverst til højre)
-            ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', 
-                    bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
-
-            m = {
-                "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
-                "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
-                "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}
-            }[st.session_state.form_skygge]
-
-            drawn_players = []
-            for pid, (px, py, lbl) in m.items():
-                ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+            with c_pitch:
+                f_suffix = st.session_state.form_skygge.replace('-', '')
+                p_col = f"POS_{f_suffix}"
+                is_startopstilling = (sel_v == "Startopstilling (26/27)")
                 
-                # Find spillere til positionen
-                plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
-                
-                # LOGIK: Hvis det er Startopstilling, må vi kun vise én og vi må "skubbe" 6/8
                 if is_startopstilling:
-                    plist = plist.head(1)
-                    if plist.empty and str(pid) in ["6", "8"]:
-                        modsat_pos = "8" if str(pid) == "6" else "6"
-                        plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
-                
-                # Tegn spillerne (stables kun hvis det IKKE er startopstilling)
-                for i, (_, r) in enumerate(plist.iterrows()):
-                    drawn_players.append(r['PLAYER_WYID'])
-                    k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                    
-                    txt_c, bg = "black", "white"
-                    if r['IS_HIF']:
-                        bg = ROD_ADVARSEL if k_c == "#444444" else (k_c if k_c else "white")
-                    else:
-                        bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
-                    
-                    # Y-forskydning bruges kun når vi viser flere spillere (ikke i startopstilling)
-                    y_offset = (i * 3.2) if not is_startopstilling else 0
-                    ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
-                            bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
-            
-            st.pyplot(fig, use_container_width=True)
+                    df_f = df_display[df_display['START_11_26_27'] == True].copy()
+                    ref_dt = datetime(2026, 7, 1)
+                elif sel_v == "Nuværende trup":
+                    df_f = df_display[df_display['IS_HIF']].copy()
+                    ref_dt = datetime.now()
+                else:
+                    ref_dt = VINDUE_DATOER.get(sel_v, datetime.now())
+                    hif = df_display[df_display['IS_HIF']].copy()
+                    emner = df_display[(df_display['SKYGGEHOLD'] == True) & (~df_display['IS_HIF']) & (df_display['TRANSFER_VINDUE'] == sel_v)].copy()
+                    hif = hif[~((hif['KONTRAKT_DT'].notna()) & (hif['KONTRAKT_DT'] < ref_dt))]
+                    df_f = pd.concat([hif, emner]).drop_duplicates(subset=['PLAYER_WYID'])
 
+                pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
+                fig, ax = pitch.draw(figsize=(10, 7))
+                
+                ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+                ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
+                ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
+
+                m = {
+                    "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
+                    "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
+                    "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}
+                }[st.session_state.form_skygge]
+
+                drawn_players = []
+                for pid, (px, py, lbl) in m.items():
+                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
+                    
+                    if is_startopstilling:
+                        plist = plist.head(1)
+                        if plist.empty and str(pid) in ["6", "8"]:
+                            modsat_pos = "8" if str(pid) == "6" else "6"
+                            plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
+                    
+                    for i, (_, r) in enumerate(plist.iterrows()):
+                        drawn_players.append(r['PLAYER_WYID'])
+                        k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
+                        txt_c, bg = "black", "white"
+                        if r['IS_HIF']:
+                            bg = ROD_ADVARSEL if k_c == "#444444" else (k_c if k_c else "white")
+                        else:
+                            bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
+                        
+                        y_offset = (i * 3.2) if not is_startopstilling else 0
+                        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
+                                bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
+                
+                st.pyplot(fig, use_container_width=True)
+                
 if __name__ == "__main__":
     vis_side()
