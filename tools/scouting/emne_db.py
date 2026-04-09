@@ -221,16 +221,38 @@ def vis_side():
                 }[st.session_state.form_skygge]
 
                 drawn_players = []
-                for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
-                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
-                    if is_startopstilling: plist = plist.head(1)
-                    for i, (_, r) in enumerate(plist.iterrows()):
-                        drawn_players.append(r['PLAYER_WYID'])
-                        k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                        txt_c, bg = ("white", HIF_BLA) if not r['IS_HIF'] else ("black", (k_c if k_c else "white"))
-                        y_offset = (i * 3.2) if not is_startopstilling else 0
-                        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
+for pid, (px, py, lbl) in m.items():
+    # Tegn positions-label (Rød boks)
+    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+            bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
+    
+    # Filtrer spillere til denne position
+    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
+    if is_startopstilling: 
+        plist = plist.head(1)
+
+    for i, (_, r) in enumerate(plist.iterrows()):
+        drawn_players.append(r['PLAYER_WYID'])
+        
+        # 1. LOGIK FOR EMNER (IKKE HIF)
+        if not r['IS_HIF']:
+            # Hvis kontrakten udløber senest på vinduesdatoen = Transferfri (Grøn)
+            if r['KONTRAKT_DT'] <= ref_dt:
+                txt_c, bg = "black", GRON_NY
+            else:
+                # Ellers er det et køb (Blå)
+                txt_c, bg = "white", HIF_BLA
+        
+        # 2. LOGIK FOR HVIDOVRE SPILLERE
+        else:
+            k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
+            txt_c = "black"
+            bg = k_c if k_c else "white" # Hvid hvis over 12 mdr
+
+        # Tegn spilleren
+        y_offset = (i * 3.2) if not is_startopstilling else 0
+        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', 
+                color=txt_c, bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
                 st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
