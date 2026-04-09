@@ -36,7 +36,6 @@ def get_users():
                 "Opret emne", 
                 "Emnedatabase", 
                 "Sammenligning",
-                "Database"
             ] 
         }
     }
