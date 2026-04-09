@@ -669,25 +669,35 @@ def vis_side(dp=None):
                 if not df_plot.empty:
                     if visning == "Heatmap":
                         p.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+                    
                     elif visning == "Berøringer":
                         d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
                         ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                    
                     elif visning == "Afslutninger":
                         d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                        goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'] != 16]
-                        ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=100, edgecolors='black', alpha=0.6)
-                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=200, marker='*', edgecolors='black', zorder=5)
+                        goals = d[d['EVENT_TYPEID'] == 16]
+                        misses = d[d['EVENT_TYPEID'] != 16]
+                        # Missere: Røde cirkler
+                        ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
+                        # Mål: Guld cirkler (lidt større for at skille sig ud)
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, edgecolors='black', zorder=5)
+                    
                     elif visning == "Assists":
-                        # Viser alt med qualifier 210 (Key Pass og Assists)
+                        # Key Pass og Assists: Turkise cirkler
                         d = df_plot[df_plot['qual_list'].apply(lambda x: "210" in x)]
-                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='#00ffcc', s=150, marker='P', edgecolors='black')
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='#00ffcc', s=100, edgecolors='black')
+                    
                     elif visning == "Indlæg":
+                        # Indlæg: Lilla cirkler
                         d = df_plot[df_plot['qual_list'].apply(lambda x: "2" in x)]
                         ax.scatter(d.EVENT_X, d.EVENT_Y, color='#cc00ff', s=80, edgecolors='white')
+                    
                     elif visning == "Erobringer":
+                        # Erobringer: Orange cirkler
                         d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, marker='D', edgecolors='white')
-    
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
+                
                 st.pyplot(f, use_container_width=True)
             
 if __name__ == "__main__":
