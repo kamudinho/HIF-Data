@@ -6,6 +6,7 @@ import base64
 from mplsoccer import Pitch
 import time
 from datetime import datetime
+from data.users import get_users
 
 # --- 1. KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -44,7 +45,6 @@ def get_github_file(path):
 
 def save_to_github(df):
     try:
-        # Præcis rækkefølge som i din CSV
         original_cols = [
             'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
             'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
@@ -54,14 +54,10 @@ def save_to_github(df):
             'TRANSFER_VINDUE','POS_343','POS_433','POS_352','BIRTHDATE', 'START_11_26_27'
         ]
         _, sha = get_github_file(SCOUT_DB_PATH)
-        
         export_df = df.copy()
-        
-        # Sørg for at alle kolonner eksisterer inden gem
         for col in original_cols:
             if col not in export_df.columns:
                 export_df[col] = ""
-            
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
             "message": "Auto-update scouting data", 
@@ -79,22 +75,16 @@ def handle_auto_save(key, df_display, source_df):
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
         full_db = st.session_state['full_db']
-        
         for idx_str, updated_cols in changes.items():
             wyid = source_df.iloc[int(idx_str)]['PLAYER_WYID']
             matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
-            
             if not matching_rows.empty:
                 idx_in_full = matching_rows.index[0]
                 for col, val in updated_cols.items():
-                    # Vi mapper altid tilbage til STORE bogstaver for databasen
-                    db_col = col.upper()
-                    full_db.at[idx_in_full, db_col] = val
-        
+                    full_db.at[idx_in_full, col.upper()] = val
         save_to_github(full_db)
         st.session_state[state_key]["edited_rows"] = {}
 
-# --- 3. DATA PROCESSING ---
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
     return str(val).replace('.0', '').strip()
@@ -114,50 +104,31 @@ def get_status_color(val, ref_date=None):
 def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
-    
-    # TVING ALLE KOLONNER TIL STORE BOGSTAVER VED INDLÆSNING
     df.columns = [str(c).upper().strip() for c in df.columns]
-    
-    # Sikkerheds-oprettelse af manglende kolonner
     needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'PLAYER_WYID', 'DATO']
     for col in needed:
         if col not in df.columns: df[col] = ""
-
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     df = df.sort_values(by='DATO_DT', ascending=False)
-    
     st.session_state['full_db'] = df.copy()
-    
-    # Unik visning pr spiller
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
-
-    # Rens positioner
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         df_display[c] = df_display[c].apply(clean_pos_val)
-        if c != 'POS': # Hvis system-position er tom, brug standard POS
+        if c != 'POS':
             df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
-
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
-
-    # Konverter boolean felter korrekt
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
-        
     df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre", case=False, na=False)
-    
     return df_display
 
 # --- 4. UI ---
-# --- 4. UI ---
 def vis_side():
-    st.set_page_config(layout="wide", page_title="HIF Scouting")
-    
-    # HENT BRUGER-RESRIKTIONER (Antager st.session_state.user er sat ved login)
     current_user = st.session_state.get("user", "default")
-    # Vi henter fra din 'users' struktur. Hvis ingen user, er alt restricted som default
-    user_data = users.get(current_user, {"restricted": ["ADMIN", "TRUPPEN", "Skyggeliste", "Skyggehold"]})
-    user_restricted = user_data.get("restricted", [])
+    user_db = get_users()
+    user_data = user_db.get(current_user, {})
+    res = [r.lower().strip() for r in user_data.get("restricted", [])]
 
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
@@ -165,25 +136,19 @@ def vis_side():
     if content is None: return
     df_display = prepare_df(content)
 
-    # --- DYNAMISK TAB-FILTRERING ---
-    # Vi mapper dine restricted-tags til de faktiske faner
+    # DYNAMISK TAB-FILTRERING
     tabs_to_show = []
-    if "EMNELISTE" not in user_restricted: tabs_to_show.append("Emneliste")
-    if "TRUPPEN" not in user_restricted: tabs_to_show.append("Hvidovre IF")
-    if "Skyggeliste" not in user_restricted: tabs_to_show.append("Skyggeliste")
-    if "Skyggehold" not in user_restricted: tabs_to_show.append("Skyggehold")
+    if "emnedatabase" not in res: tabs_to_show.append("Emneliste")
+    if "truppen" not in res:
+        tabs_to_show.extend(["Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
     if not tabs_to_show:
-        st.error("Du har ingen rettigheder til at se modulerne. Kontakt admin.")
+        st.error("Du har ingen rettigheder til modulerne.")
         return
 
-    # Opret kun de tilladte tabs
     tabs_obj = st.tabs(tabs_to_show)
-    
-    # Lav et opslag for at placere indholdet i den rigtige tab-index
     tab_map = {name: i for i, name in enumerate(tabs_to_show)}
 
-    # Column config
     cfg = {
         "PLAYER_WYID": None,
         "KONTRAKT_DT": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
@@ -195,8 +160,6 @@ def vis_side():
         "POS_433": st.column_config.SelectboxColumn("4-3-3", options=POS_OPTS),
         "POS_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
     }
-
-    # --- TAB INDHOLD (Kun hvis de findes i tab_map) ---
 
     if "Emneliste" in tab_map:
         with tabs_obj[tab_map["Emneliste"]]:
@@ -218,7 +181,6 @@ def vis_side():
 
     if "Skyggehold" in tab_map:
         with tabs_obj[tab_map["Skyggehold"]]:
-            # --- Din uændrede Skyggehold kode her ---
             c_pitch, c_ctrl = st.columns([8.2, 1.8])
             with c_ctrl:
                 display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
@@ -249,12 +211,6 @@ def vis_side():
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
-                ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
-                ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
-
                 m = {
                     "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                     "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
@@ -265,27 +221,14 @@ def vis_side():
                 for pid, (px, py, lbl) in m.items():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                     plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
-                    
-                    if is_startopstilling:
-                        plist = plist.head(1)
-                        if plist.empty and str(pid) in ["6", "8"]:
-                            modsat_pos = "8" if str(pid) == "6" else "6"
-                            plist = df_f[(df_f[p_col].astype(str) == modsat_pos) & (~df_f['PLAYER_WYID'].isin(drawn_players))].head(1)
-                    
+                    if is_startopstilling: plist = plist.head(1)
                     for i, (_, r) in enumerate(plist.iterrows()):
                         drawn_players.append(r['PLAYER_WYID'])
                         k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                        txt_c, bg = "black", "white"
-                        if r['IS_HIF']:
-                            bg = ROD_ADVARSEL if k_c == "#444444" else (k_c if k_c else "white")
-                        else:
-                            bg, txt_c = (GRON_NY, "black") if k_c in ["#444444", ROD_ADVARSEL] else (HIF_BLA, "white")
-                        
+                        txt_c, bg = ("white", HIF_BLA) if not r['IS_HIF'] else ("black", (k_c if k_c else "white"))
                         y_offset = (i * 3.2) if not is_startopstilling else 0
-                        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, 
-                                bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
-                
+                        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', color=txt_c, bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
                 st.pyplot(fig, use_container_width=True)
-                
+
 if __name__ == "__main__":
     vis_side()
