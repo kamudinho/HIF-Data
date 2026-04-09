@@ -564,14 +564,19 @@ def vis_side(dp=None):
                 )
 
             with col_graf:
-                st.write(f"**Målinvolveringer**")
+                # Viser holdets samlede mål i overskriften
+                st.write(f"**Målinvolveringer (Hold total: {total_goals_count})**")
+                
+                # Vi tager de 12 mest involverede spillere
                 for _, r in player_stats.head(12).iterrows():
                     rel_width = r['Involvering_Pct']
+                    
+                    # Markdown opdateret til formatet: xx målinvolveringer (xx %)
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['Involveringer'])} ({int(r['Involvering_Pct'])}%)</span>
+                                <span>{int(r['Involveringer'])} målinvolveringer ({int(r['Involvering_Pct'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: #df003b; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
