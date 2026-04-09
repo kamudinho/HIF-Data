@@ -565,7 +565,7 @@ def vis_side(dp=None):
 
             with col_graf:
                 # Viser holdets samlede mål i overskriften
-                st.write(f"**Målinvolveringer (Hold total: {total_goals_count})**")
+                st.write(f"**Målinvolveringer (Samlet mål: {total_goals_count})**")
                 
                 # Vi tager de 12 mest involverede spillere
                 for _, r in player_stats.head(12).iterrows():
