@@ -56,7 +56,6 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    # CSS til login-skærm
     st.markdown(f"""
         <style>
             [data-testid="stAppViewContainer"] {{ padding: 0 !important; }}
@@ -148,9 +147,6 @@ try:
         elif sel == "Database":
             import tools.scouting.scout_db as sdb
             sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
-        elif sel == "Opret emne":
-            import tools.scouting.emneliste_input as el
-            el.vis_side(dp, st.session_state["user"])
         elif sel == "Emnedatabase":
             import tools.scouting.emne_db as edb
             edb.vis_side()
