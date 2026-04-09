@@ -647,38 +647,40 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
                 
-                # 1. Definer hvad der skal fjernes
+                # 1. Definer ekskluderinger
                 ekskluder = ['Pasning', 'Indkast']
                 
-                # 2. Filtrér og gruppér
+                # 2. Filtrér
                 df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(ekskluder)]
                 
                 if not df_filtreret.empty:
+                    # Gruppér
                     akt_stats = df_filtreret.groupby('Action_Label').agg(
                         Total=('OUTCOME', 'count'),
                         Succes=('OUTCOME', 'sum')
                     ).sort_values('Total', ascending=False).head(10)
                 
-                    # Liste over aktioner der altid er succeser eller bare skal vises som et råt tal
-                    bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet']
-                    
+                    # 3. Definer binære labels (Sørg for at disse matcher dine vaskede navne 100%)
+                    bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud']
+                
                     for akt, row in akt_stats.iterrows():
                         total = int(row['Total'])
                         succes = int(row['Succes'])
                         
                         if akt in bare_antal:
-                            # Vis kun det samlede antal for binære events
-                            stats_text = f"<b>{total}</b>"
+                            # For binære events bruger vi kun total-tallet, 
+                            # men vi pakker det ind i samme struktur for at holde alignment
+                            stats_html = f"<b>{total}</b>"
                         else:
-                            # Vis succesrate for dueller, pasninger og driblinger
                             pct = int((succes / total * 100)) if total > 0 else 0
-                            stats_text = f"{succes} / {total} <b style='margin-left: 8px;'>({pct}%)</b>"
+                            # Vi bruger faste mellemrum eller spans til at sikre kolonne-look
+                            stats_html = f"{succes} / {total} <span style='display: inline-block; width: 45px; margin-left: 5px;'><b>({pct}%)</b></span>"
                         
                         st.markdown(f'''
-                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
-                                <span style="flex-grow: 1;">{akt}</span>
-                                <span style="min-width: 100px; text-align: right; font-family: monospace;">
-                                    {stats_text}
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 5px 0;">
+                                <span style="flex-grow: 1; color: #31333F;">{akt}</span>
+                                <span style="min-width: 110px; text-align: right; font-family: 'Courier New', monospace;">
+                                    {stats_html}
                                 </span>
                             </div>''', unsafe_allow_html=True)
                 else:
