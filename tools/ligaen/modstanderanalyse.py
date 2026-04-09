@@ -659,18 +659,26 @@ def vis_side(dp=None):
                         Succes=('OUTCOME', 'sum')
                     ).sort_values('Total', ascending=False).head(10)
                 
-                    # 3. Vis listen med justeret layout
+                    # Liste over aktioner der altid er succeser eller bare skal vises som et råt tal
+                    bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet']
+                    
                     for akt, row in akt_stats.iterrows():
                         total = int(row['Total'])
                         succes = int(row['Succes'])
-                        pct = int((succes / total * 100)) if total > 0 else 0
                         
-                        # Her bruger vi flex-basis eller en fast bredde på tal-containeren
+                        if akt in bare_antal:
+                            # Vis kun det samlede antal for binære events
+                            stats_text = f"<b>{total}</b>"
+                        else:
+                            # Vis succesrate for dueller, pasninger og driblinger
+                            pct = int((succes / total * 100)) if total > 0 else 0
+                            stats_text = f"{succes} / {total} <b style='margin-left: 8px;'>({pct}%)</b>"
+                        
                         st.markdown(f'''
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
                                 <span style="flex-grow: 1;">{akt}</span>
                                 <span style="min-width: 100px; text-align: right; font-family: monospace;">
-                                    {succes} / {total} <b style="margin-left: 8px;">({pct}%)</b>
+                                    {stats_text}
                                 </span>
                             </div>''', unsafe_allow_html=True)
                 else:
