@@ -703,11 +703,11 @@ def vis_side(dp=None):
                     elif visning == "Afslutninger":
                         d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                         goals = d[d['EVENT_TYPEID'] == 16]
-                        misses = d[d['EVENT_TYPEID'] != 16]
+                        misses = d[d['EVENT_TYPEID'] != ([13, 14, 15])]
                         # Missere: Røde cirkler
                         ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
                         # Mål: Guld cirkler (lidt større for at skille sig ud)
-                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=80, edgecolors='black', zorder=0.6)
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=80, edgecolors='black', zorder=0.6)
                     
                     elif visning == "Skudassists":
                         # Key Pass og Assists: Turkise cirkler
