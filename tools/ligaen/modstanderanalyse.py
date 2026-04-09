@@ -594,8 +594,8 @@ def vis_side(dp=None):
                 "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
                 "Afslutninger": "Oversigt over alle skudforsøg (Mål markeres med stjerne).",
                 "Mål": "Kun de aktioner der resulterede i scoring.",
-                "Assists": "Afleveringer der direkte førte til en afslutning og mål.",
-                "Indlæg": "Bolde spillet fra kanten ind i feltet.",
+                "Skudassists": "Afleveringer der direkte førte til en afslutning og mål.",
+                "Indlæg": "Indlæg der fører til afslutning eller duel i feltet.",
                 "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
             }
 
@@ -647,8 +647,11 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
                 
-                # 1. Filtrér 'Pasning' fra og tæl aktioner
-                akt_counts = df_spiller[df_spiller['Action_Label'] != 'Pasning']['Action_Label'].value_counts().head(10)
+                # 1. Definer hvad der skal fjernes
+                ekskluder = ['Pasning', 'Indkast']
+                
+                # 2. Filtrér ved hjælp af ~ og .isin()
+                akt_counts = df_spiller[~df_spiller['Action_Label'].isin(ekskluder)]['Action_Label'].value_counts().head(10)
                 
                 # 2. Vis listen (kun én gang!)
                 if not akt_counts.empty:
@@ -683,7 +686,7 @@ def vis_side(dp=None):
                         # Mål: Guld cirkler (lidt større for at skille sig ud)
                         ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=80, edgecolors='black', zorder=0.6)
                     
-                    elif visning == "Assists":
+                    elif visning == "Skudassists":
                         # Key Pass og Assists: Turkise cirkler
                         d = df_plot[df_plot['qual_list'].apply(lambda x: "210" in x)]
                         ax.scatter(d.EVENT_X, d.EVENT_Y, color='#00ffcc', s=100, edgecolors='black')
