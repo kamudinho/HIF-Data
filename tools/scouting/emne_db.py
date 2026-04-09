@@ -56,8 +56,7 @@ def save_to_github(df):
         _, sha = get_github_file(SCOUT_DB_PATH)
         export_df = df.copy()
         for col in original_cols:
-            if col not in export_df.columns:
-                export_df[col] = ""
+            if col not in export_df.columns: export_df[col] = ""
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
             "message": "Auto-update scouting data", 
@@ -136,14 +135,12 @@ def vis_side():
     if content is None: return
     df_display = prepare_df(content)
 
-    # DYNAMISK TAB-FILTRERING
     tabs_to_show = []
     if "emnedatabase" not in res: tabs_to_show.append("Emneliste")
-    if "truppen" not in res:
-        tabs_to_show.extend(["Hvidovre IF", "Skyggeliste", "Skyggehold"])
+    if "truppen" not in res: tabs_to_show.extend(["Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
     if not tabs_to_show:
-        st.error("Du har ingen rettigheder til modulerne.")
+        st.error("Ingen rettigheder.")
         return
 
     tabs_obj = st.tabs(tabs_to_show)
@@ -185,9 +182,8 @@ def vis_side():
             with c_ctrl:
                 display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
                 sel_v = st.selectbox("Visning", display_opts)
-                f = st.session_state.form_skygge
                 for form in ["3-4-3", "4-3-3", "3-5-2"]:
-                    if st.button(form, use_container_width=True, type="primary" if f == form else "secondary"):
+                    if st.button(form, use_container_width=True, type="primary" if st.session_state.form_skygge == form else "secondary"):
                         st.session_state.form_skygge = form; st.rerun()
 
             with c_pitch:
@@ -211,6 +207,13 @@ def vis_side():
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
+                # --- GENINDSAT: LEGENDS & VINDUE LABEL ---
+                ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+                ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
+                ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
+
                 m = {
                     "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
                     "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
