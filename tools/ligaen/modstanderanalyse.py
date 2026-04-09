@@ -681,7 +681,7 @@ def vis_side(dp=None):
                         # Missere: Røde cirkler
                         ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
                         # Mål: Guld cirkler (lidt større for at skille sig ud)
-                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, edgecolors='black', zorder=5)
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=80, edgecolors='black', zorder=0.6)
                     
                     elif visning == "Assists":
                         # Key Pass og Assists: Turkise cirkler
