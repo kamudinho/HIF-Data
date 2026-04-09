@@ -650,26 +650,28 @@ def vis_side(dp=None):
                 # 1. Definer hvad der skal fjernes
                 ekskluder = ['Pasning', 'Indkast']
                 
-                # 2. Filtrér og gruppér for at få både antal og succesrate
+                # 2. Filtrér og gruppér
                 df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(ekskluder)]
                 
                 if not df_filtreret.empty:
-                    # Aggregér: tæl total og sum af succeser (OUTCOME=1)
                     akt_stats = df_filtreret.groupby('Action_Label').agg(
                         Total=('OUTCOME', 'count'),
                         Succes=('OUTCOME', 'sum')
                     ).sort_values('Total', ascending=False).head(10)
                 
-                    # 3. Vis listen
+                    # 3. Vis listen med justeret layout
                     for akt, row in akt_stats.iterrows():
                         total = int(row['Total'])
                         succes = int(row['Succes'])
                         pct = int((succes / total * 100)) if total > 0 else 0
                         
+                        # Her bruger vi flex-basis eller en fast bredde på tal-containeren
                         st.markdown(f'''
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
-                                <span>{akt}</span>
-                                <span>{succes} / {total} <b>({pct}%)</b></span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
+                                <span style="flex-grow: 1;">{akt}</span>
+                                <span style="min-width: 100px; text-align: right; font-family: monospace;">
+                                    {succes} / {total} <b style="margin-left: 8px;">({pct}%)</b>
+                                </span>
                             </div>''', unsafe_allow_html=True)
                 else:
                     st.caption("Ingen øvrige aktioner fundet.")
