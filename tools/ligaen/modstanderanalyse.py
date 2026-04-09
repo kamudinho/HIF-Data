@@ -720,7 +720,7 @@ def vis_side(dp=None):
                         
                         # Legend placeret i nederste højre hjørne
                         if not d.empty:
-                            ax.legend(loc='lower right', fontsize=8, frameon=True, facecolor='white', framealpha=0.8)
+                            ax.legend(loc='top right', fontsize=8, frameon=True, facecolor='white', framealpha=0.8)
 
                     elif visning == "Mål":
                         # Viser kun mål (ID 16)
