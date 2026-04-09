@@ -647,10 +647,10 @@ def vis_side(dp=None):
                 st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
                 
-                # Vi filtrerer 'Pasning' ud, da den allerede vises i metrics
-                # Vi bruger 'Action_Label' og fjerner rækker hvor label er 'Pasning'
+                # 1. Filtrér 'Pasning' fra og tæl aktioner
                 akt_counts = df_spiller[df_spiller['Action_Label'] != 'Pasning']['Action_Label'].value_counts().head(10)
                 
+                # 2. Vis listen (kun én gang!)
                 if not akt_counts.empty:
                     for akt, count in akt_counts.items():
                         st.markdown(f'''
@@ -659,12 +659,6 @@ def vis_side(dp=None):
                             </div>''', unsafe_allow_html=True)
                 else:
                     st.caption("Ingen øvrige aktioner fundet.")
-                
-                for akt, count in akt_counts.items():
-                    st.markdown(f'''
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
-                            <span>{akt}</span><b>{count}</b>
-                        </div>''', unsafe_allow_html=True)
     
             with c_p2:
                 p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
