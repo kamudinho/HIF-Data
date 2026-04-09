@@ -713,14 +713,19 @@ def vis_side(dp=None):
                                    color='red', s=80, edgecolors='black', 
                                    alpha=0.6, label='Afslutning')
                         
-                        # Tegn Mål (Guld stjerner - de skiller sig bedre ud end cirkler)
+                        # Tegn Mål (Guld stjerner)
                         ax.scatter(goals.EVENT_X, goals.EVENT_Y, 
-                                   color='gold', s=150, marker='*', 
+                                   color='gold', s=150, marker='*',
                                    edgecolors='black', zorder=5, label='Mål')
                         
-                        # Tilføj en lille legend direkte på banen hvis der er data
+                        # Legend placeret i nederste højre hjørne
                         if not d.empty:
-                            ax.legend(loc='lower left', fontsize=8, frameon=True)
+                            ax.legend(loc='lower right', fontsize=8, frameon=True, facecolor='white', framealpha=0.8)
+
+                    elif visning == "Mål":
+                        # Viser kun mål (ID 16)
+                        d = df_plot[df_plot['EVENT_TYPEID'] == 16]
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='gold', s=180, marker='*', edgecolors='black', zorder=5)
                     
                     elif visning == "Skudassists":
                         # Key Pass og Assists: Turkise cirkler
