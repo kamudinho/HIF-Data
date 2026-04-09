@@ -701,13 +701,26 @@ def vis_side(dp=None):
                         ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                     
                     elif visning == "Afslutninger":
+                        # Filtrer alle skudforsøg (13: Miss, 14: Post, 15: Saved, 16: Goal)
                         d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                        
+                        # Opdel i mål og øvrige afslutninger
                         goals = d[d['EVENT_TYPEID'] == 16]
-                        misses = d[d['EVENT_TYPEID'] != ([13, 14, 15])]
-                        # Missere: Røde cirkler
-                        ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
-                        # Mål: Guld cirkler (lidt større for at skille sig ud)
-                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=80, edgecolors='black', zorder=0.6)
+                        misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                        
+                        # Tegn øvrige afslutninger (Røde cirkler)
+                        ax.scatter(misses.EVENT_X, misses.EVENT_Y, 
+                                   color='red', s=80, edgecolors='black', 
+                                   alpha=0.6, label='Afslutning')
+                        
+                        # Tegn Mål (Guld stjerner - de skiller sig bedre ud end cirkler)
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, 
+                                   color='gold', s=150, marker='*', 
+                                   edgecolors='black', zorder=5, label='Mål')
+                        
+                        # Tilføj en lille legend direkte på banen hvis der er data
+                        if not d.empty:
+                            ax.legend(loc='lower left', fontsize=8, frameon=True)
                     
                     elif visning == "Skudassists":
                         # Key Pass og Assists: Turkise cirkler
