@@ -650,15 +650,26 @@ def vis_side(dp=None):
                 # 1. Definer hvad der skal fjernes
                 ekskluder = ['Pasning', 'Indkast']
                 
-                # 2. Filtrér ved hjælp af ~ og .isin()
-                akt_counts = df_spiller[~df_spiller['Action_Label'].isin(ekskluder)]['Action_Label'].value_counts().head(10)
+                # 2. Filtrér og gruppér for at få både antal og succesrate
+                df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(ekskluder)]
                 
-                # 2. Vis listen (kun én gang!)
-                if not akt_counts.empty:
-                    for akt, count in akt_counts.items():
+                if not df_filtreret.empty:
+                    # Aggregér: tæl total og sum af succeser (OUTCOME=1)
+                    akt_stats = df_filtreret.groupby('Action_Label').agg(
+                        Total=('OUTCOME', 'count'),
+                        Succes=('OUTCOME', 'sum')
+                    ).sort_values('Total', ascending=False).head(10)
+                
+                    # 3. Vis listen
+                    for akt, row in akt_stats.iterrows():
+                        total = int(row['Total'])
+                        succes = int(row['Succes'])
+                        pct = int((succes / total * 100)) if total > 0 else 0
+                        
                         st.markdown(f'''
                             <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
-                                <span>{akt}</span><b>{count}</b>
+                                <span>{akt}</span>
+                                <span>{succes} / {total} <b>({pct}%)</b></span>
                             </div>''', unsafe_allow_html=True)
                 else:
                     st.caption("Ingen øvrige aktioner fundet.")
