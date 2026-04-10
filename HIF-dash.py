@@ -105,7 +105,7 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    alle_omraader = ["TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "ADMIN"]
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
 
@@ -115,12 +115,12 @@ with st.sidebar:
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
-    if hoved_omraade == "TRUPPEN":
+    if hoved_omraade == "HVIDOVRE IF":
         sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
-    elif hoved_omraade == "HIF ANALYSE":
-        sel = option_menu(None, options=["Modstanderanalyse", "Charts"])
-    elif hoved_omraade == "BETINIA LIGAEN":
+    elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Afslutninger - liga", "Fysisk data"]))
+    elif hoved_omraade == "SPILLERANALYSE":
+        sel = option_menu(None, options=["Modstanderanalyse", "Charts"])
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
@@ -130,7 +130,7 @@ with st.sidebar:
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
-    if hoved_omraade == "TRUPPEN":
+    if hoved_omraade == "HVIDOVRE IF":
         dp_quick = hif_load.get_squad_only()
         if sel == "Oversigt":
             import tools.truppen.players as pl
@@ -154,7 +154,7 @@ try:
             import tools.scouting.comparison as comp
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
 
-    elif hoved_omraade == "HIF ANALYSE":
+    elif hoved_omraade == "SPILLERANALYSE":
         if sel == "Charts":
             import tools.ligaen.chart as pc
             pc.vis_side()
@@ -162,7 +162,7 @@ try:
             import tools.ligaen.modstanderanalyse as ma
             ma.vis_side()
 
-    elif hoved_omraade == "BETINIA LIGAEN":
+    elif hoved_omraade == "HOLDANALYSE":
         if sel == "Holdoversigt":
             import tools.ligaen.test_teams as tt
             tt.vis_side()
