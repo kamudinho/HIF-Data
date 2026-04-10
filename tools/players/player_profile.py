@@ -61,22 +61,21 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     # 2. Hent Data med FULL NAME fra OPTA_PLAYERS
-    with st.spinner("Henter spillerdata..."):
+    with st.spinner("Opdaterer spillerprofil..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 COALESCE(p.MATCH_NAME, e.PLAYER_NAME) as FULL_PLAYER_NAME, 
                 e.MATCH_OPTAUUID, 
-                TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR, 
                 e.EVENT_OUTCOME as OUTCOME,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
-            AND e.EVENT_TIMESTAMP >= '2026-01-01'
+            -- Vi bruger sæson-id i stedet for hård dato for at fange alle i truppen
             AND e.PLAYER_NAME IS NOT NULL
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
+            GROUP BY 1, 2, 3, 4, 5, 6
         """
         df_all_h = conn.query(sql)
         
