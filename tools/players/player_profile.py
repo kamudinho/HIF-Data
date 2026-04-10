@@ -36,12 +36,12 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def vis_side(dp=None):
-    # CSS til centrering og metrics
+    # CSS: Centreret og mindre metrics
     st.markdown("""
         <style>
         [data-testid="stMetric"] { text-align: center; display: flex; flex-direction: column; align-items: center; }
         [data-testid="stMetricValue"] { font-size: 18px !important; justify-content: center; }
-        [data-testid="stMetricLabel"] { font-size: 12px !important; justify-content: center; }
+        [data-testid="stMetricLabel"] { font-size: 11px !important; justify-content: center; }
         [data-testid="stMetricLabel"] > div { justify-content: center; }
         </style>
         """, unsafe_allow_html=True)
@@ -49,66 +49,60 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. Team & Interval Selection
+    # 1. Team Mapping
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t','')) is not None}
 
-    col_hold, col_interval = st.columns([1.5, 2.5])
-    with col_hold:
-        valgt_hold = st.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
-    with col_interval:
-        interval = st.radio("Sæson-periode", ["Forår 2026 (Nuværende)", "Efterår 2025 (Tidl.)"], horizontal=True, label_visibility="collapsed")
-    
-    date_filter = ">= '2026-01-01'" if "2026" in interval else "< '2026-01-01'"
+    col_spacer, col_hold = st.columns([3.5, 1])
+    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Sæson-data (RETTET SQL)
-    with st.spinner(f"Henter data for {interval}..."):
-        sql_all_season = f"""
+    # 2. Hent Data med FULL NAME fra OPTA_PLAYERS
+    with st.spinner("Henter spillerdata..."):
+        sql = f"""
             SELECT 
-                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.MATCH_OPTAUUID, 
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                COALESCE(p.MATCH_NAME, e.PLAYER_NAME) as FULL_PLAYER_NAME, 
+                e.MATCH_OPTAUUID, 
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR, 
                 e.EVENT_OUTCOME as OUTCOME,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
+            LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
-            AND e.EVENT_TIMESTAMP {date_filter}
+            AND e.EVENT_TIMESTAMP >= '2026-01-01'
             AND e.PLAYER_NAME IS NOT NULL
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
-        df_all_h = conn.query(sql_all_season)
+        df_all_h = conn.query(sql)
         
         if df_all_h is not None and not df_all_h.empty:
             df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
             df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
             df_all_h = df_all_h.dropna(subset=['Action_Label'])
         else:
-            st.warning(f"Ingen data fundet for {valgt_hold} i perioden.")
+            st.warning("Ingen data fundet for 2026.")
             return
 
-    t_pitch, t_stats = st.tabs(["Spillerprofil", "Statistik & Grafer"])
+    t_pitch, t_stats = st.tabs(["Spillerprofil", "Statistik"])
 
     with t_pitch:
-        spiller_liste = sorted(df_all_h['PLAYER_NAME'].unique())
+        spiller_liste = sorted(df_all_h['FULL_PLAYER_NAME'].unique())
         
-        t_col1, t_col2, t_col3 = st.columns([0.9, 0.9, 1.2])
-        valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, key="p_sel_v7")
+        t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
+        valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, label_visibility="collapsed")
+        visning = t_col2.selectbox("Visning", ["Heatmap", "Berøringer", "Afslutninger", "Skudassists", "Indlæg", "Erobringer"], label_visibility="collapsed")
         
-        visninger = ["Heatmap", "Berøringer", "Afslutninger", "Mål", "Skudassists", "Indlæg", "Erobringer"]
-        visning = t_col2.selectbox("Visning", visninger, key="v_sel_v7")
+        df_spiller = df_all_h[df_all_h['FULL_PLAYER_NAME'] == valgt_spiller].copy()
         
-        df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
-        
-        # --- P90 BEREGNING ---
-        antal_kampe = df_spiller['MATCH_OPTAUUID'].nunique()
-        # Vi antager 90 min pr. unik kamp for at få P90
-        p90_factor = 1 / antal_kampe if antal_kampe > 0 else 1
+        kampe = df_spiller['MATCH_OPTAUUID'].nunique()
+        p90_factor = 1 / kampe if kampe > 0 else 1
 
-        c_p1, c_buffer, c_p2 = st.columns([0.9, 0.1, 2.2])
+        c_p1, c_buffer, c_p2 = st.columns([1, 0.1, 2.2])
         
         with c_p1:
             st.markdown(f"#### {valgt_spiller}")
@@ -128,29 +122,24 @@ def vis_side(dp=None):
             r2[2].metric("Indlæg", m_p90(len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x)])))
             r2[3].metric("Erob.", m_p90(len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])))
 
-            st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 8px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.write("**Top 10: Aktioner (Total)**")
             
             df_akt = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_akt.empty:
                 akt_stats = df_akt.groupby('Action_Label').agg(T=('OUTCOME','count'), S=('OUTCOME','sum')).sort_values('T', ascending=False).head(10)
                 for akt, row in akt_stats.iterrows():
-                    # For binære ting som erobringer viser vi kun total
                     if akt in ['Erobring', 'Clearing', 'Boldtab', 'Blokeret skud', 'Frispark vundet']:
                         res = f"<b>{int(row['T'])}</b>"
                     else:
                         pct = int(row['S']/row['T']*100) if row['T'] > 0 else 0
                         res = f"{int(row['S'])} / {int(row['T'])} <b>({pct}%)</b>"
-                    
-                    st.markdown(f'''
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
-                            <span>{akt}</span><span>{res}</span>
-                        </div>''', unsafe_allow_html=True)
+                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;"><span>{akt}</span><span>{res}</span></div>', unsafe_allow_html=True)
 
         with c_p2:
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             f, ax = p.draw(figsize=(10, 7))
-            draw_player_info_box(ax, hold_logo, valgt_spiller, interval, visning)
+            draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
             
             d_pl = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
             if not d_pl.empty:
@@ -159,17 +148,9 @@ def vis_side(dp=None):
                 elif visning == "Berøringer":
                     ax.scatter(d_pl.EVENT_X, d_pl.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
-                    mål = d_pl[d_pl['EVENT_TYPEID']==16]
-                    skud = d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])]
-                    ax.scatter(skud.EVENT_X, skud.EVENT_Y, color='red', s=80, alpha=0.6, label='Skud')
-                    ax.scatter(mål.EVENT_X, mål.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', label='Mål', zorder=5)
+                    ax.scatter(d_pl[d_pl['EVENT_TYPEID']==16].EVENT_X, d_pl[d_pl['EVENT_TYPEID']==16].EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', label='Mål', zorder=5)
+                    ax.scatter(d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])].EVENT_X, d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])].EVENT_Y, color='red', s=80, alpha=0.6, label='Skud')
                     ax.legend(loc='upper right', fontsize=8)
-                elif visning == "Skudassists":
-                    d_sa = d_pl[d_pl['qual_list'].apply(lambda x: "210" in x)]
-                    ax.scatter(d_sa.EVENT_X, d_sa.EVENT_Y, color='#00ffcc', s=100, edgecolors='black')
-                elif visning == "Indlæg":
-                    d_in = d_pl[d_pl['qual_list'].apply(lambda x: "2" in x)]
-                    ax.scatter(d_in.EVENT_X, d_in.EVENT_Y, color='#cc00ff', s=80, edgecolors='white')
                 elif visning == "Erobringer":
                     d_er = d_pl[d_pl['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     ax.scatter(d_er.EVENT_X, d_er.EVENT_Y, color='orange', s=100, edgecolors='white')
