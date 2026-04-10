@@ -44,11 +44,29 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
 def vis_side(dp=None):
     st.markdown("""
         <style>
+        /* Centrerer hele metric-containeren */
+        [data-testid="stMetric"] {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* Justerer størrelse på værdien (tallet) */
         [data-testid="stMetricValue"] {
             font-size: 18px !important;
+            justify-content: center;
         }
+        
+        /* Justerer størrelse på label (teksten) */
         [data-testid="stMetricLabel"] {
             font-size: 12px !important;
+            justify-content: center;
+        }
+        
+        /* Fjerner default padding for at gøre det mere kompakt */
+        [data-testid="stMetricLabel"] > div {
+            justify-content: center;
         }
         </style>
         """, unsafe_allow_html=True)
