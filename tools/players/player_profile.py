@@ -55,15 +55,17 @@ def vis_side(dp=None):
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t','')) is not None}
 
-    col_hold, col_interval = st.columns([1, 1])
-    valgt_hold = col_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
-    interval = col_interval.radio("Periode", ["Forår 2026", "Efterår 2025"], horizontal=True, label_visibility="collapsed")
+    col_hold, col_interval = st.columns([1.5, 2.5])
+    with col_hold:
+        valgt_hold = st.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    with col_interval:
+        interval = st.radio("Sæson-periode", ["Forår 2026 (Nuværende)", "Efterår 2025 (Tidl.)"], horizontal=True, label_visibility="collapsed")
     
-    date_filter = ">= '2026-01-01'" if interval == "Forår 2026" else "< '2026-01-01'"
+    date_filter = ">= '2026-01-01'" if "2026" in interval else "< '2026-01-01'"
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Sæson-data (Rettet SQL-fejl ved at fjerne tidsstempel fra ORDER BY i LISTAGG)
+    # 2. Hent Sæson-data (RETTET SQL)
     with st.spinner(f"Henter data for {interval}..."):
         sql_all_season = f"""
             SELECT 
@@ -85,7 +87,7 @@ def vis_side(dp=None):
             df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
             df_all_h = df_all_h.dropna(subset=['Action_Label'])
         else:
-            st.warning(f"Ingen data fundet for {valgt_hold} i den valgte periode.")
+            st.warning(f"Ingen data fundet for {valgt_hold} i perioden.")
             return
 
     t_pitch, t_stats = st.tabs(["Spillerprofil", "Statistik & Grafer"])
@@ -94,17 +96,17 @@ def vis_side(dp=None):
         spiller_liste = sorted(df_all_h['PLAYER_NAME'].unique())
         
         t_col1, t_col2, t_col3 = st.columns([0.9, 0.9, 1.2])
-        valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, key="p_sel_v6")
+        valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, key="p_sel_v7")
         
         visninger = ["Heatmap", "Berøringer", "Afslutninger", "Mål", "Skudassists", "Indlæg", "Erobringer"]
-        visning = t_col2.selectbox("Visning", visninger, key="v_sel_v6")
+        visning = t_col2.selectbox("Visning", visninger, key="v_sel_v7")
         
         df_spiller = df_all_h[df_all_h['PLAYER_NAME'] == valgt_spiller].copy()
         
         # --- P90 BEREGNING ---
-        kampe = df_spiller['MATCH_OPTAUUID'].nunique()
-        minutter_est = kampe * 90 if kampe > 0 else 90
-        p90_factor = 90 / minutter_est if minutter_est > 0 else 1
+        antal_kampe = df_spiller['MATCH_OPTAUUID'].nunique()
+        # Vi antager 90 min pr. unik kamp for at få P90
+        p90_factor = 1 / antal_kampe if antal_kampe > 0 else 1
 
         c_p1, c_buffer, c_p2 = st.columns([0.9, 0.1, 2.2])
         
@@ -133,9 +135,17 @@ def vis_side(dp=None):
             if not df_akt.empty:
                 akt_stats = df_akt.groupby('Action_Label').agg(T=('OUTCOME','count'), S=('OUTCOME','sum')).sort_values('T', ascending=False).head(10)
                 for akt, row in akt_stats.iterrows():
-                    pct_str = f"({int(row['S']/row['T']*100)}%)" if row['T'] > 0 else ""
-                    res = f"{int(row['S'])} / {int(row['T'])} <b>{pct_str}</b>" if akt not in ['Erobring', 'Clearing', 'Boldtab'] else f"<b>{int(row['T'])}</b>"
-                    st.markdown(f'<div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;"><span>{akt}</span><span>{res}</span></div>', unsafe_allow_html=True)
+                    # For binære ting som erobringer viser vi kun total
+                    if akt in ['Erobring', 'Clearing', 'Boldtab', 'Blokeret skud', 'Frispark vundet']:
+                        res = f"<b>{int(row['T'])}</b>"
+                    else:
+                        pct = int(row['S']/row['T']*100) if row['T'] > 0 else 0
+                        res = f"{int(row['S'])} / {int(row['T'])} <b>({pct}%)</b>"
+                    
+                    st.markdown(f'''
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; border-bottom: 0.5px solid #eee; padding: 4px 0;">
+                            <span>{akt}</span><span>{res}</span>
+                        </div>''', unsafe_allow_html=True)
 
         with c_p2:
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
@@ -149,12 +159,20 @@ def vis_side(dp=None):
                 elif visning == "Berøringer":
                     ax.scatter(d_pl.EVENT_X, d_pl.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
-                    ax.scatter(d_pl[d_pl['EVENT_TYPEID']==16].EVENT_X, d_pl[d_pl['EVENT_TYPEID']==16].EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', label='Mål', zorder=5)
-                    ax.scatter(d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])].EVENT_X, d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])].EVENT_Y, color='red', s=80, alpha=0.6, label='Skud')
+                    mål = d_pl[d_pl['EVENT_TYPEID']==16]
+                    skud = d_pl[d_pl['EVENT_TYPEID'].isin([13,14,15])]
+                    ax.scatter(skud.EVENT_X, skud.EVENT_Y, color='red', s=80, alpha=0.6, label='Skud')
+                    ax.scatter(mål.EVENT_X, mål.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', label='Mål', zorder=5)
                     ax.legend(loc='upper right', fontsize=8)
+                elif visning == "Skudassists":
+                    d_sa = d_pl[d_pl['qual_list'].apply(lambda x: "210" in x)]
+                    ax.scatter(d_sa.EVENT_X, d_sa.EVENT_Y, color='#00ffcc', s=100, edgecolors='black')
+                elif visning == "Indlæg":
+                    d_in = d_pl[d_pl['qual_list'].apply(lambda x: "2" in x)]
+                    ax.scatter(d_in.EVENT_X, d_in.EVENT_Y, color='#cc00ff', s=80, edgecolors='white')
                 elif visning == "Erobringer":
-                    d_erob = d_pl[d_pl['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-                    ax.scatter(d_erob.EVENT_X, d_erob.EVENT_Y, color='orange', s=100, edgecolors='white')
+                    d_er = d_pl[d_pl['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                    ax.scatter(d_er.EVENT_X, d_er.EVENT_Y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(f, use_container_width=True)
 
