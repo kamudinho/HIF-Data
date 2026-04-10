@@ -120,7 +120,7 @@ with st.sidebar:
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
-        sel = option_menu(None, options=["Modstanderanalyse", "Charts"])
+        sel = option_menu(None, options=["Spillerprofil", "Modstanderanalyse", "Charts"])
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
@@ -161,6 +161,9 @@ try:
         elif sel == "Modstanderanalyse":
             import tools.ligaen.modstanderanalyse as ma
             ma.vis_side()
+        elif sel == "Spillerprofil":
+            import tools.players.player_profile as pp
+            pp.vis_side()
 
     elif hoved_omraade == "HOLDANALYSE":
         if sel == "Ligaoversigt":
