@@ -118,7 +118,7 @@ with st.sidebar:
     if hoved_omraade == "HVIDOVRE IF":
         sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
     elif hoved_omraade == "HOLDANALYSE":
-        sel = option_menu(None, options=filtrer_menu(["Holdoversigt", "Kampe", "Afslutninger - liga", "Fysisk data"]))
+        sel = option_menu(None, options=filtrer_menu(["Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
         sel = option_menu(None, options=["Modstanderanalyse", "Charts"])
     elif hoved_omraade == "SCOUTING":
@@ -163,13 +163,13 @@ try:
             ma.vis_side()
 
     elif hoved_omraade == "HOLDANALYSE":
-        if sel == "Holdoversigt":
+        if sel == "Ligaoversigt":
             import tools.ligaen.test_teams as tt
             tt.vis_side()
-        elif sel == "Kampe":
+        elif sel == "Kampoversigt":
             import tools.ligaen.test_matches as tm
             tm.vis_side()
-        elif sel == "Afslutninger - liga":
+        elif sel == "Afslutninger":
             import tools.ligaen.leagueshots as ls
             ls.vis_side()
         elif sel == "Fysisk data":
