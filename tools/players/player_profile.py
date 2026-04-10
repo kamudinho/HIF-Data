@@ -42,6 +42,17 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def vis_side(dp=None):
+    st.markdown("""
+        <style>
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 12px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
     conn = _get_snowflake_conn()
     if not conn: return
 
