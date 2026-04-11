@@ -129,6 +129,8 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
 
+    st.write(f"DEBUG: Leder efter fysisk data med ID: {valgt_player_uuid}")
+    
     # --- TABS ---
     t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"
