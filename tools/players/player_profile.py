@@ -111,8 +111,6 @@ def vis_side(dp=None):
     m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
     m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
 
-    st.markdown("---")
-
     # 3. TABS
     t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"
