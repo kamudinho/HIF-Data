@@ -251,7 +251,7 @@ def vis_side(dp=None):
                 mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
                 col, div, suffix = mapping[cat_choice]
 
-                df_chart = df_phys.head(32).copy().sort_values('MATCH_DATE', ascending=True)
+                df_chart = df_phys.head(16).copy().sort_values('MATCH_DATE', ascending=True)
                 def get_opponent(teams_str, my_team):
                     if not teams_str: return "?"
                     parts = [p.strip() for p in teams_str.split('-')]
