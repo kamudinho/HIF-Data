@@ -134,7 +134,7 @@ def vis_side(dp=None):
 
     # FILTRERING: Kun spillere aktive i 2026
     spiller_liste = sorted(df_all[df_all['EVENT_TIMESTAMP'] >= '2026-01-01']['VISNINGSNAVN'].unique())
-    if not spiller_liste: # Fallback hvis ingen data i 2026 endnu
+    if not spiller_liste:
         spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
         
     valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
@@ -143,12 +143,6 @@ def vis_side(dp=None):
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
     t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"])
-
-    # --- TAB: SPILLERPROFIL ---
-    with t_pitch:
-        descriptions = {"Heatmap": "...", "Berøringer": "...", "Afslutninger": "...", "Mål": "...", "Skudassists": "...", "Indlæg": "...", "Erobringer": "..."}
-        # (Behold din eksisterende logik for t_pitch her...)
-        st.info("Spillerprofil indlæst.")
 
     # --- TAB: FYSISK DATA ---
     with t_phys:
@@ -179,9 +173,21 @@ def vis_side(dp=None):
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
             with t_sub_charts:
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Top Speed (km/t)"], default="HSR (m)", key="phys_graph_control")
-                mapping = {"HSR (m)": ("HSR", 1), "Sprint (m)": ("SPRINTING", 1), "Distance (km)": ("DISTANCE", 1000), "Top Speed (km/t)": ("TOP_SPEED", 1)}
-                col, div = mapping[cat_choice]
+                cat_choice = st.segmented_control(
+                    "Vælg metrik", 
+                    options=["HSR (m)", "Sprint (m)", "Distance (km)", "Top Speed (km/t)"], 
+                    default="HSR (m)", 
+                    key="phys_graph_control"
+                )
+                
+                # --- KONFIGURATION AF SUFFIX OG MAPPING ---
+                mapping = {
+                    "HSR (m)": ("HSR", 1, "m"), 
+                    "Sprint (m)": ("SPRINTING", 1, "m"), 
+                    "Distance (km)": ("DISTANCE", 1000, "km"), 
+                    "Top Speed (km/t)": ("TOP_SPEED", 1, "km/t")
+                }
+                col, div, suffix = mapping[cat_choice]
 
                 # Sorter: Sidste dato til højre
                 df_chart = df_phys.head(15).copy().sort_values('MATCH_DATE', ascending=True)
@@ -198,19 +204,33 @@ def vis_side(dp=None):
                 y_vals = df_chart[col] / div
                 season_avg = y_vals.mean()
 
+                # --- PLOTLY FIGUR ---
                 fig = go.Figure()
+                
+                # Bar trace med dynamisk suffix
                 fig.add_trace(go.Bar(
-                    x=df_chart['Label'], y=y_vals,
-                    text=y_vals.apply(lambda x: f"{x:.1f}" if x < 50 else f"{int(x)}"),
-                    textposition='outside', marker_color='#cc0000'
+                    x=df_chart['Label'], 
+                    y=y_vals,
+                    text=y_vals.apply(lambda x: f"{x:.1f} {suffix}" if x < 50 else f"{int(x)} {suffix}"),
+                    textposition='outside', 
+                    marker_color='#cc0000',
+                    textfont=dict(size=10, color="black")
                 ))
-                # Gennemsnitslinje
-                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, line=dict(color="black", width=2, dash="dash"))
+                
+                # Underspillet gennemsnitslinje (lysegrå og tyndere)
+                fig.add_shape(
+                    type="line", 
+                    x0=-0.5, x1=len(df_chart)-0.5, 
+                    y0=season_avg, y1=season_avg, 
+                    line=dict(color="#D3D3D3", width=1.5, dash="dash")
+                )
                 
                 fig.update_layout(
-                    plot_bgcolor="white", height=350, margin=dict(t=30, b=0, l=0, r=0),
+                    plot_bgcolor="white", 
+                    height=380, 
+                    margin=dict(t=40, b=0, l=0, r=0),
                     xaxis=dict(showgrid=False, tickfont=dict(size=10)),
-                    yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+                    yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.2]),
                     showlegend=False
                 )
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
