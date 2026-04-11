@@ -270,7 +270,7 @@ def vis_side(dp=None):
                 ))
                 fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                             line=dict(color="#D3D3D3", width=1.5, dash="dash"))
-                fig.update_layout(plot_bgcolor="white", height=380, margin=dict(t=40, b=0, l=0, r=0),
+                fig.update_layout(plot_bgcolor="white", height=330, margin=dict(t=40, b=0, l=0, r=0),
                                 xaxis=dict(showgrid=False), yaxis=dict(showgrid=False, showticklabels=False, range=[0, y_vals.max()*1.2]))
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
