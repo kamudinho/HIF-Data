@@ -109,7 +109,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # Team Mapping
+    # --- 1. HENT HOLD MAPPING ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -126,7 +126,7 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner("Henter data..."):
-        # SQL for seneste 10 kampe
+        # SQL for seneste 10 kampe (Metadata)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -143,13 +143,16 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # SQL for alle events med qualifiers samlet via LISTAGG
+            # --- RETTET SQL: JOINER MED PLAYERS FOR KORREKTE NAVNE ---
             sql_all_h = f"""
                 SELECT 
-                    e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.MATCH_OPTAUUID, 
-                    e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
+                    e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
+                    e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
+                JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+                    ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
                 AND e.MATCH_OPTAUUID IN {m_ids_str}
@@ -157,23 +160,17 @@ def vis_side(dp=None):
             """
             df_all_h = conn.query(sql_all_h)
             
-            # --- DATA-VASK I MODSTANDERANALYSE.PY ---
-            if not df_all_h.empty:
-                # 1. Lav qual_list (vigtigt for get_action_label)
+            if df_all_h is not None and not df_all_h.empty:
                 df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
-                
-                # 2. Påfør din hjerte-logik
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
-                
-                # 3. Fjern alt det, din whitelist i mapping.py har markeret som None
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # SQL for Mål-sekvenser
+            # --- RETTET SQL: MÅL-SEKVENSER MED JOIN PÅ PLAYERS ---
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                        MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
-                       TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE  -- <--- RETTET HER
+                       TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
                 FROM {DB}.OPTA_MATCHINFO 
                 WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
             ),
@@ -183,13 +180,17 @@ def vis_side(dp=None):
                 WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
             )
-            SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.PLAYER_NAME, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
+            SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                   TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
+                   e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
                    m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-                   m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE, -- <--- RETTET HER
+                   m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE,
                    tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
                 AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
@@ -200,17 +201,16 @@ def vis_side(dp=None):
             """
             
             try: 
-                df_all_events = _get_snowflake_conn().query(sql_seq)
-                if not df_all_events.empty:
+                df_all_events = conn.query(sql_seq)
+                if df_all_events is not None and not df_all_events.empty:
                     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
-                    # Vi venter med Action_Label til selve loopet for at sikre Penalty-tjek
             except Exception as e:
                 st.error(f"Fejl i SQL: {e}")
                 df_all_events = pd.DataFrame()
         else:
             st.error("Ingen data fundet for det valgte hold.")
             return
-
+            
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     # --- HER STARTER TABS INTEGRATIONEN ---
