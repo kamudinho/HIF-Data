@@ -43,10 +43,18 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, db_conn):
+    """
+    Søger ekstremt bredt efter spilleren. 
+    Matcher hvis bare ét af navnene (fornavn, mellemnavn eller efternavn) findes.
+    """
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = player_name.split(' ')
-    fornavn = navne_dele[0]
-    efternavn = navne_dele[-1] if len(navne_dele) > 1 else ""
+    
+    # Split navnet op i alle dets dele (f.eks. ['Morten', 'Brander', 'Knudsen'])
+    navne_dele = [del_navn.strip() for del_navn in player_name.split(' ') if len(del_navn.strip()) > 2]
+    
+    # Opbyg en række LIKE statements forbundet med OR
+    # Det betyder: Find rækker hvor navnet indeholder 'Morten' ELLER 'Brander' ELLER 'Knudsen'
+    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
     
     sql = f"""
         SELECT 
@@ -60,7 +68,7 @@ def get_physical_data(player_name, player_opta_uuid, db_conn):
             AVERAGE_SPEED,
             NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE (PLAYER_NAME ILIKE '%{fornavn}%' AND PLAYER_NAME ILIKE '%{efternavn}%')
+        WHERE ({name_conditions})
            OR ("optaId" LIKE '%{clean_id}%')
         ORDER BY MATCH_DATE DESC
     """
