@@ -47,6 +47,7 @@ def vis_side(dp=None):
         <style>
         [data-testid="stMetricValue"] { font-size: 16px !important; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; }
+        .player-header { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -62,15 +63,14 @@ def vis_side(dp=None):
         if uuid_clean in mapping_lookup:
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
-    # --- TOPBAR: DROP-DOWNS HELT TIL HØJRE ---
+    # --- TOPBAR ---
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2.5, 1, 1])
-    
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
     # 2. HENT DATA
-    with st.spinner("Indlæser..."):
+    with st.spinner("Indlæser data..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -89,7 +89,6 @@ def vis_side(dp=None):
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all_h = conn.query(sql)
-        
         if df_all_h is None or df_all_h.empty:
             st.warning("Ingen data fundet.")
             return
@@ -119,18 +118,13 @@ def vis_side(dp=None):
             "Erobringer": "Vundne tacklinger og interceptions."
         }
 
-        # Beskrivelse til venstre, Dropdown til højre
-        col_desc, col_vis_sel = st.columns([2.5, 1])
-        visning = col_vis_sel.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
-        col_desc.write(f"**{visning}:** {descriptions[visning]}")
-        
-        st.markdown("<br>", unsafe_allow_html=True) # Lille mellemrum
-
-        # HOVEDLAYOUT: Metrics + Liste til venstre, Bane til højre
+        # HOVEDLAYOUT
         c_stats_side, c_pitch_side = st.columns([1, 2.2])
         
         with c_stats_side:
-            # METRICS PLACERET OVER TOP 10 AKTIONER
+            # NAVN OG METRICS
+            st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
+            
             m_col1, m_col2 = st.columns(2)
             m_col1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
             m_col2.metric("Aktioner", len(df_spiller))
@@ -152,6 +146,12 @@ def vis_side(dp=None):
                     st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><b>{total}</b></div>", unsafe_allow_html=True)
 
         with c_pitch_side:
+            # Kontrolpanel over banen i højre kolonne
+            c_desc_sub, c_vis_sel_sub = st.columns([2, 1])
+            visning = c_vis_sel_sub.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
+            c_desc_sub.write(f"**{visning}:** {descriptions[visning]}")
+            
+            # Bane tegnes
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
@@ -180,14 +180,6 @@ def vis_side(dp=None):
             trend = df_spiller.groupby('DATO').size()
             st.line_chart(trend)
             st.bar_chart(df_spiller['Action_Label'].value_counts())
-
-    with t_phys:
-        st.subheader("Fysisk Data")
-        st.info("Sektion til GPS-data.")
-
-    with t_compare:
-        st.subheader("Benchmark")
-        st.write("Sammenligning mod ligaen.")
 
 if __name__ == "__main__":
     vis_side()
