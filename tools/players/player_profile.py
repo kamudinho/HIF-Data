@@ -42,6 +42,26 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
+def get_physical_data(player_opta_uuid, db_conn):
+    # Vi stripper eventuelle præfikser for at matche SS' format hvis nødvendigt
+    # Ofte er det lettest at matche på PLAYER_OPTAUUID direkte hvis de er synkroniserede
+    sql = f"""
+        SELECT 
+            MATCH_DATE,
+            MATCH_TEAMS,
+            MINUTES,
+            DISTANCE,
+            "HIGH SPEED RUNNING" as HSR,
+            SPRINTING,
+            TOP_SPEED,
+            AVERAGE_SPEED,
+            NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE optaId = '{player_opta_uuid}'
+        ORDER BY MATCH_DATE DESC
+    """
+    return db_conn.query(sql)
+
 def vis_side(dp=None):
     st.markdown("""
         <style>
@@ -224,6 +244,27 @@ def vis_side(dp=None):
                 st.pyplot(fig, use_container_width=True)
 
     # --- TAB: STATISTIK & GRAFER ---
+    with t_phys:
+        df_phys = get_physical_data(valgt_uuid_spiller, conn) # Du skal bruge spillerens UUID her
+        
+        if df_phys is not None and not df_phys.empty:
+            # Top metrics for seneste kamp
+            latest = df_phys.iloc[0]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Distance (km)", round(latest['DISTANCE']/1000, 2))
+            m2.metric("HSR (m)", int(latest['HSR']))
+            m3.metric("Sprint (m)", int(latest['SPRINTING']))
+            m4.metric("Top Fart (km/t)", round(latest['TOP_SPEED'], 1))
+    
+            # Tabel over de seneste kampe
+            st.write("**Historik (Seneste kampe)**")
+            st.dataframe(df_phys, use_container_width=True)
+            
+            # Graf over udvikling i High Intensity Runs
+            st.line_chart(df_phys.set_index('MATCH_DATE')['HI_RUNS'])
+        else:
+            st.info("Ingen fysiske data tilgængelige for denne spiller i Second Spectrum.")
+    
     with t_stats:
         st.subheader(f"Sæsonudvikling: {valgt_spiller}")
         if not df_spiller.empty:
