@@ -45,7 +45,7 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
 def vis_side(dp=None):
     st.markdown("""
         <style>
-        [data-testid="stMetricValue"] { font-size: 18px !important; }
+        [data-testid="stMetricValue"] { font-size: 16px !important; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; }
         </style>
         """, unsafe_allow_html=True)
@@ -70,7 +70,7 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid)
 
     # 2. HENT DATA
-    with st.spinner("Henter data..."):
+    with st.spinner("Indlæser..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -109,15 +109,6 @@ def vis_side(dp=None):
 
     # --- TAB: SPILLERPROFIL ---
     with t_pitch:
-        # METRICS VISES NU UNDER SPILLEREN INDE I TABBEN
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
-        m2.metric("Aktioner", len(df_spiller))
-        m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
-        m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
-        
-        st.markdown("---")
-
         descriptions = {
             "Heatmap": "Bevægelsesmønster og intensitet på banen.",
             "Berøringer": "Alle tekniske aktioner med bolden.",
@@ -128,13 +119,27 @@ def vis_side(dp=None):
             "Erobringer": "Vundne tacklinger og interceptions."
         }
 
+        # Beskrivelse til venstre, Dropdown til højre
         col_desc, col_vis_sel = st.columns([2.5, 1])
         visning = col_vis_sel.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
         col_desc.write(f"**{visning}:** {descriptions[visning]}")
         
+        st.markdown("<br>", unsafe_allow_html=True) # Lille mellemrum
+
+        # HOVEDLAYOUT: Metrics + Liste til venstre, Bane til højre
         c_stats_side, c_pitch_side = st.columns([1, 2.2])
         
         with c_stats_side:
+            # METRICS PLACERET OVER TOP 10 AKTIONER
+            m_col1, m_col2 = st.columns(2)
+            m_col1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
+            m_col2.metric("Aktioner", len(df_spiller))
+            
+            m_col3, m_col4 = st.columns(2)
+            m_col3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
+            m_col4.metric("Chancer", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
+            
+            st.markdown("---")
             st.write("**Top 10: Aktioner**")
             df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_filtreret.empty:
