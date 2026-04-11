@@ -47,13 +47,14 @@ def vis_side(dp=None):
         <style>
         [data-testid="stMetricValue"] { font-size: 18px !important; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; }
+        div[data-testid="stExpander"] { border: none !important; }
         </style>
         """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. Team Mapping
+    # 1. HENT HOLD MAPPING
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
     team_map = {}
@@ -62,14 +63,15 @@ def vis_side(dp=None):
         if uuid_clean in mapping_lookup:
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
-    # Holdvælger i toppen
-    col_spacer, col_hold = st.columns([3.5, 1])
-    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    # --- TOPBAR: HOLD OG SPILLER VED SIDEN AF HINANDEN ---
+    col_h1, col_h2, col_spacer = st.columns([1.2, 1.2, 2])
+    
+    valgt_hold = col_h1.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Sæson-data
-    with st.spinner(f"Henter data for {valgt_hold}..."):
+    # 2. Hent Sæson-data for det valgte hold
+    with st.spinner(f"Indlæser data..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -90,34 +92,31 @@ def vis_side(dp=None):
         """
         df_all_h = conn.query(sql)
         
-        if df_all_h is not None and not df_all_h.empty:
-            df_all_h['EVENT_TIMESTAMP'] = pd.to_datetime(df_all_h['EVENT_TIMESTAMP_STR'])
-            df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
-            df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
-            df_all_h = df_all_h.dropna(subset=['Action_Label'])
-        else:
-            st.warning("Ingen data fundet.")
+        if df_all_h is None or df_all_h.empty:
+            st.warning("Ingen data fundet for det valgte hold.")
             return
 
-    # --- GLOBAL SPILLERVÆLGER OG METRICS ---
+        df_all_h['EVENT_TIMESTAMP'] = pd.to_datetime(df_all_h['EVENT_TIMESTAMP_STR'])
+        df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
+        df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
+        df_all_h = df_all_h.dropna(subset=['Action_Label'])
+
+    # --- SPILLER DROP-DOWN (I TOPBAR VED SIDEN AF HOLD) ---
     spiller_liste = sorted(df_all_h['VISNINGSNAVN'].unique())
-    
-    c_sel, c_met = st.columns([1, 3])
-    with c_sel:
-        valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="global_player_select")
+    valgt_spiller = col_h2.selectbox("Vælg spiller", spiller_liste, label_visibility="collapsed")
     
     df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
-    
-    with c_met:
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
-        m2.metric("Aktioner", len(df_spiller))
-        m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
-        m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
+
+    # --- QUICK METRICS ---
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
+    m2.metric("Aktioner", len(df_spiller))
+    m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
+    m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
 
     st.markdown("---")
 
-    # 3. Tabs opdeling
+    # 3. TABS
     t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"
     ])
@@ -134,9 +133,9 @@ def vis_side(dp=None):
             "Erobringer": "Tacklinger og opspillede bolde."
         }
 
-        t_col1, t_col2 = st.columns([1, 2])
-        visning = t_col1.selectbox("Visning", list(descriptions.keys()), key="prof_vis", label_visibility="collapsed")
-        t_col2.caption(descriptions.get(visning))
+        t_col_vis, t_col_cap = st.columns([1, 2])
+        visning = t_col_vis.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
+        t_col_cap.caption(descriptions.get(visning))
         
         c_left, c_right = st.columns([1, 2.2])
         
@@ -178,7 +177,6 @@ def vis_side(dp=None):
     # --- TAB: STATISTIK & GRAFER ---
     with t_stats:
         st.subheader("Sæsonudvikling")
-        # Beskrivelse følger under koden
         if not df_spiller.empty:
             df_spiller['DATO'] = df_spiller['EVENT_TIMESTAMP'].dt.date
             trend_data = df_spiller.groupby('DATO').size()
@@ -190,11 +188,11 @@ def vis_side(dp=None):
 
     with t_phys:
         st.subheader("Fysisk Data")
-        st.info("Sektion til GPS-data.")
+        st.info("Sektion til GPS-data (Distance, Sprint, Intensitet).")
 
     with t_compare:
-        st.subheader("Sammenligning")
-        st.write("Benchmark mod ligaen.")
+        st.subheader("Benchmark")
+        st.write("Sammenligning mod liga-gennemsnit.")
 
 if __name__ == "__main__":
     vis_side()
