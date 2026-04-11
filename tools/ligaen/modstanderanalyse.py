@@ -368,10 +368,16 @@ def vis_side(dp=None):
                     df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
                 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+                
+                # --- NY FILTRERING OG SORTERING ---
+                # Kræv mindst 100 aktioner og sorter efter RATE (primær) og TOTAL (sekundær)
+                df_top = df_top[df_top['TOTAL'] >= 100]
+                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
-                for _, r in df_top.iterrows():
-                    rate = int(r['RATE'])
+                if df_top.empty:
+                    st.info("Ingen spillere har nået grænsen på 100 aktioner endnu.")
+                else:
+                    for _, r in df_top.iterrows():
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
