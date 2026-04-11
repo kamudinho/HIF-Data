@@ -10,7 +10,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- IMPORT FRA DIN MAPPING.PY (Korrekt nu) ---
+# --- IMPORT FRA DIN MAPPING.PY ---
 from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
@@ -129,8 +129,8 @@ def vis_side(dp=None):
         # SQL for seneste 10 kampe (Metadata)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
-                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
-                   CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
+                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
+                    CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} 
@@ -143,7 +143,7 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # --- RETTET SQL: JOINER MED PLAYERS FOR KORREKTE NAVNE ---
+            # --- SQL: HENTER EVENTS MED JOIN PÅ PLAYERS FOR FULDE NAVNE ---
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -165,7 +165,7 @@ def vis_side(dp=None):
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # --- RETTET SQL: MÅL-SEKVENSER MED JOIN PÅ PLAYERS ---
+            # --- SQL: MÅL-SEKVENSER MED JOIN PÅ PLAYERS FOR FULDE NAVNE ---
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -212,8 +212,6 @@ def vis_side(dp=None):
             return
             
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
-    
-    # --- HER STARTER TABS INTEGRATIONEN ---
     
     with t1:
         # 1. Resultat logik
@@ -363,7 +361,6 @@ def vis_side(dp=None):
                 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # NY REGEL: 100 aktioner for pasningskategorier, ellers bare rate
                 min_limit = 100 if v_med in ["Opbygning", "Gennembrud"] else 1
                 df_top = df_top[df_top['TOTAL'] >= min_limit]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
@@ -392,7 +389,6 @@ def vis_side(dp=None):
             )
             
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
-                # RETTET TIL TOTAL_HOME_SCORE OG TOTAL_AWAY_SCORE HERUNDER:
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])})", 
                 'match_id': r['MATCH_OPTAUUID'], 
                 'goal_ts': r['GOAL_TIME'], 
@@ -414,7 +410,6 @@ def vis_side(dp=None):
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
-            # BRUGER DIN FUNKTION HER - nu med score_str direkte
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score_str'], sd['min'])
     
             # Pile og spillernavne
@@ -514,7 +509,6 @@ def vis_side(dp=None):
                 for _, r in player_stats.head(12).iterrows():
                     rel_width = r['Involvering_Pct']
                     
-                    # Markdown opdateret til formatet: xx målinvolveringer (xx %)
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
