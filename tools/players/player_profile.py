@@ -224,52 +224,60 @@ def vis_side(dp=None):
             
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB: FYSISK DATA ---
-    with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
+    # --- TAB: FYSISK DATA (OPDATERET VISNING) ---
+with t_phys:
+    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
+    
+    if df_phys is not None and not df_phys.empty:
+        # KPI'er øverst
+        avg_hsr = df_phys['HSR'].mean()
+        latest = df_phys.iloc[0]
         
-        if df_phys is not None and not df_phys.empty:
-            avg_hsr = df_phys['HSR'].mean()
-            latest = df_phys.iloc[0]
-            
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
-            m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m vs snit")
-            m3.metric("Max Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
-            m4.metric("HI Runs", int(latest['HI_RUNS']))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
+        m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m vs snit")
+        m3.metric("Max Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
+        m4.metric("HI Runs", int(latest['HI_RUNS']))
 
-            st.markdown("---")
-            st.subheader("Match Log - Fysisk Performance")
-            
-            st.data_editor(
-                df_phys,
-                column_config={
-                    "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
-                    "MATCH_TEAMS": "Kamp",
-                    "MINUTES": "Min",
-                    "DISTANCE": st.column_config.NumberColumn("Total Dist", format="%d m"),
-                    "HSR": st.column_config.BarChartColumn(
-                        "HSR Intensitet (m)",
-                        y_min=0, y_max=max(df_phys['HSR'].max(), 1000)
-                    ),
-                    "SPRINTING": st.column_config.ProgressColumn(
-                        "Sprint",
-                        min_value=0, max_value=max(df_phys['SPRINTING'].max(), 400),
-                        format="%d m"
-                    ),
-                    "TOP_SPEED": st.column_config.NumberColumn("Top (km/t)", format="%.1f"),
-                    "AVERAGE_SPEED": None,
-                    "HI_RUNS": "HI Akt."
-                },
-                hide_index=True,
-                use_container_width=True,
-                disabled=True
-            )
-            
-            st.markdown("### HSR Udvikling")
-            st.area_chart(df_phys.set_index('MATCH_DATE')['HSR'], color="#1e88e5")
-        else:
-            st.error(f"Ingen fysiske data fundet for {valgt_spiller}.")
+        st.markdown("---")
+        st.subheader("Match Log - Fysisk Performance")
+        
+        # Vi definerer de maksimale værdier for at skalaen i barerne giver mening
+        max_hsr = max(df_phys['HSR'].max(), 1000)
+        max_sprint = max(df_phys['SPRINTING'].max(), 400)
+
+        st.data_editor(
+            df_phys,
+            column_config={
+                "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
+                "MATCH_TEAMS": "Kamp",
+                "MINUTES": "Min",
+                "DISTANCE": st.column_config.NumberColumn("Total Dist", format="%d m"),
+                "HSR": st.column_config.ProgressColumn(
+                    "HSR (m)",
+                    help="High Speed Running meter",
+                    min_value=0,
+                    max_value=max_hsr,
+                    format="%d m" # Dette gør at tallet står ved siden af baren!
+                ),
+                "SPRINTING": st.column_config.ProgressColumn(
+                    "Sprint (m)",
+                    help="Meter sprintet (>25.2 km/t)",
+                    min_value=0,
+                    max_value=max_sprint,
+                    format="%d m"
+                ),
+                "TOP_SPEED": st.column_config.NumberColumn("Top (km/t)", format="%.1f"),
+                "AVERAGE_SPEED": None, # Skjul hvis den ikke bruges
+                "HI_RUNS": "HI Akt."
+            },
+            hide_index=True,
+            use_container_width=True,
+            disabled=True
+        )
+        
+        st.markdown("### HSR Udvikling")
+        st.area_chart(df_phys.set_index('MATCH_DATE')['HSR'], color="#FF0000") # Rød for at matche Hvidovre/Aarhus Fremad
 
     # --- TAB: UDVIKLING ---
     with t_stats:
