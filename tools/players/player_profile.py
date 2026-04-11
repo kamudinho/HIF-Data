@@ -248,7 +248,7 @@ def vis_side(dp=None):
             
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Top Speed (km/t)": ("TOP_SPEED", 1, "km/t")}
+                mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
                 col, div, suffix = mapping[cat_choice]
 
                 df_chart = df_phys.head(32).copy().sort_values('MATCH_DATE', ascending=True)
