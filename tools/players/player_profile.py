@@ -43,7 +43,7 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, db_conn):
-    """Robust søgning på alle navnedele (fornavn, mellemnavn, efternavn)."""
+    """Henter fysiske data for én spiller i intervallet 1. juli 2025 til 30. juni 2026."""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
     name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
@@ -51,17 +51,17 @@ def get_physical_data(player_name, player_opta_uuid, db_conn):
     sql = f"""
         SELECT 
             MATCH_DATE,
-            MATCH_TEAMS,
-            MINUTES,
-            DISTANCE,
-            "HIGH SPEED RUNNING" as HSR,
-            SPRINTING,
-            TOP_SPEED,
-            AVERAGE_SPEED,
-            NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
+            ANY_VALUE(MATCH_TEAMS) as MATCH_TEAMS,
+            MAX(MINUTES) as MINUTES,
+            SUM(DISTANCE) as DISTANCE,
+            SUM("HIGH SPEED RUNNING") as HSR,
+            SUM(SPRINTING) as SPRINTING,
+            MAX(TOP_SPEED) as TOP_SPEED,
+            SUM(NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE ({name_conditions})
-           OR ("optaId" LIKE '%{clean_id}%')
+        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
+          AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+        GROUP BY MATCH_DATE, PLAYER_NAME
         ORDER BY MATCH_DATE DESC
     """
     return db_conn.query(sql)
