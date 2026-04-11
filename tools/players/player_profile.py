@@ -251,19 +251,22 @@ def vis_side(dp=None):
                 mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
                 col, div, suffix = mapping[cat_choice]
 
-                # Filtrér for indeværende sæson og fjern head(32) for at få alle kampe
+                # 1. Præcis filtrering og rensning af data
                 df_chart = df_phys[df_phys['MATCH_DATE'] >= '2025-07-01'].copy()
+                
+                # Fjern eventuelle dubletter på dato/kamp for at undgå visuel støj
+                df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
                 df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
                 
                 if not df_chart.empty:
                     def get_opponent(teams_str, my_team):
                         if not teams_str: return "?"
                         parts = [p.strip() for p in teams_str.split('-')]
-                        # Robust tjek for modstander
                         if len(parts) < 2: return teams_str
                         return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
 
                     df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
+                    # Tilføj årstal til datoen hvis nødvendigt, ellers hold det kort
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
                     
                     y_vals = df_chart[col] / div
@@ -271,42 +274,40 @@ def vis_side(dp=None):
 
                     fig = go.Figure()
                     
-                    # Bar trace
                     fig.add_trace(go.Bar(
                         x=df_chart['Label'], 
                         y=y_vals,
-                        text=y_vals.apply(lambda x: f"{x:.1f} {suffix}" if x < 50 else f"{int(x)} {suffix}"),
+                        text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"), # Dynamisk formatering
                         textposition='outside', 
                         marker_color='#cc0000', 
-                        textfont=dict(size=10, color="black"),
-                        cliponaxis=False # Sikrer at teksten ikke bliver skåret af
+                        textfont=dict(size=9, color="black"),
+                        cliponaxis=False
                     ))
                     
-                    # Gennemsnitslinje
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                                line=dict(color="#D3D3D3", width=1.5, dash="dash"))
+                                line=dict(color="#D3D3D3", width=2, dash="dash"))
                     
-                    # Layout optimeret til mange kampe (alle kampe i sæsonen)
+                    # 2. Layout-fix til X-aksen
                     fig.update_layout(
                         plot_bgcolor="white", 
-                        height=350, 
-                        margin=dict(t=40, b=0, l=0, r=0),
+                        height=400, # Lidt mere højde giver plads til labels
+                        margin=dict(t=50, b=80, l=10, r=10), # Mere bundmargin til de skrå labels
                         xaxis=dict(
                             showgrid=False,
-                            tickangle=-45, # Skrå tekst så der er plads til alle kampe
-                            tickfont=dict(size=9)
+                            tickangle=-45, 
+                            tickfont=dict(size=10),
+                            type='category' # Tvinger Plotly til at behandle labels som diskrete kategorier
                         ),
                         yaxis=dict(
-                            showgrid=False, 
+                            showgrid=True, # Svage hjælpelinjer gør det nemmere at læse
+                            gridcolor='#f0f0f0',
                             showticklabels=False, 
                             zeroline=False,
-                            range=[0, y_vals.max() * 1.25] # Ekstra plads til tekst over søjler
+                            range=[0, y_vals.max() * 1.3] 
                         ),
                         showlegend=False
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                else:
-                    st.info("Ingen fysiske data fundet for denne sæson.")
 
             with t_sub_log:
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
