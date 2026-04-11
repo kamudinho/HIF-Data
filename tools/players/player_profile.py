@@ -70,7 +70,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. HENT DATA (Baseline for alle faner)
+    # 2. HENT DATA
     with st.spinner("Henter data..."):
         sql = f"""
             SELECT 
@@ -120,8 +120,7 @@ def vis_side(dp=None):
                 "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
             }
 
-            # Pre-calculation for at sikre synkroniserede tal
-            df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
+            # Pre-calculation for synkroniserede tal
             df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             akt_stats = pd.DataFrame()
             if not df_filtreret.empty:
@@ -130,27 +129,26 @@ def vis_side(dp=None):
                 ).sort_values('Total', ascending=False)
 
             # --- HOVEDLAYOUT ---
-            # Vi definerer de to hovedkolonner med det samme
             c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
             
             # VENSTRE SIDE (Stats)
             with c_stats_side:
-                # Navnet starter helt i top
                 st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
                 
-                # Beregninger
                 total_akt = len(df_spiller)
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_count = len(pas_df)
                 pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
+                
+                # Metric synkronisering (Key Pass + Assist + Stor chance)
                 chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
+                
                 shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
                 cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x)])
                 erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
                 touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
                 touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
 
-                # Metrics i 4 per række
                 st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
                 m_r1 = st.columns(4)
                 m_r1[0].metric("Aktion", total_akt)
@@ -176,17 +174,17 @@ def vis_side(dp=None):
 
             # HØJRE SIDE (Bane og kontrol)
             with c_pitch_side:
-                # Vi laver en indre række her for at få tekst og dropdown på samme linje som navnet til venstre
-                c_desc_text, c_vis_dropdown = st.columns([2.5, 1])
-                
-                with c_desc_text:
-                    # Denne tekst vil nu flugte med navnet til venstre
-                    st.caption(f"<div style='margin-top: 5px;'> <span style='color: #666;'>{descriptions.get(visning if 'visning' in locals() else 'Heatmap')}</span></div>", unsafe_allow_html=True)
-                
+                # 1. RÆKKE: Her placerer vi dropdown helt til højre
+                c_spacer, c_vis_dropdown = st.columns([2.5, 1])
                 with c_vis_dropdown:
                     visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
                 
-                # Banen tegnes direkte under kontrol-rækken
+                # 2. RÆKKE: Her placerer vi beskrivelsen, så den starter under dropdown
+                c_text_spacer, c_desc_text = st.columns([2.5, 1])
+                with c_desc_text:
+                    st.caption(descriptions.get(visning))
+                
+                # Banen
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
