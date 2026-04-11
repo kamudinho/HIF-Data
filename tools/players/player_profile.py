@@ -142,7 +142,7 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"])
+    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk Data", "Statistik", "Sammenligning"])
 
     # --- TAB: FYSISK DATA ---
     with t_phys:
@@ -235,13 +235,6 @@ def vis_side(dp=None):
 
             with t_sub_kpi:
                 st.caption("Sæson KPI")
-                # (Din KPI logik...)
-
-    # --- TAB: STATISTIK ---
-    with t_stats:
-        if not df_spiller.empty:
-            df_spiller['DATO'] = df_spiller['EVENT_TIMESTAMP'].dt.date
-            st.line_chart(df_spiller.groupby('DATO').size())
 
 if __name__ == "__main__":
     vis_side()
