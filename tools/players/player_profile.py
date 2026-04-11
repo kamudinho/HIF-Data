@@ -43,7 +43,7 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, db_conn):
-    """Henter fysiske data for én spiller i intervallet 1. juli 2025 til 30. juni 2026."""
+    """Henter fysiske data samlet pr. kamp ved at summere segmenter."""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
     name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
@@ -52,7 +52,9 @@ def get_physical_data(player_name, player_opta_uuid, db_conn):
         SELECT 
             MATCH_DATE,
             ANY_VALUE(MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(MINUTES) as MINUTES,
+            -- Vi bruger MAX her, da minutter ofte er akkumuleret i segmenterne, 
+            -- eller SUM hvis de er delt op (prøv SUM hvis tallene bliver for lave)
+            MAX(MINUTES) as MINUTES, 
             SUM(DISTANCE) as DISTANCE,
             SUM("HIGH SPEED RUNNING") as HSR,
             SUM(SPRINTING) as SPRINTING,
