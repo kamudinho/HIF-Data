@@ -181,7 +181,7 @@ def vis_side(dp=None):
                 
                 with c_desc_text:
                     # Denne tekst vil nu flugte med navnet til venstre
-                    st.markdown(f"<div style='margin-top: 5px;'><b>{valgt_spiller}:</b> <span style='color: #666;'>{descriptions.get(visning if 'visning' in locals() else 'Heatmap')}</span></div>", unsafe_allow_html=True)
+                    st.caption(f"<div style='margin-top: 5px;'> <span style='color: #666;'>{descriptions.get(visning if 'visning' in locals() else 'Heatmap')}</span></div>", unsafe_allow_html=True)
                 
                 with c_vis_dropdown:
                     visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
