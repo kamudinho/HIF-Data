@@ -125,7 +125,7 @@ def vis_side(dp=None):
             # NAVN OG METRICS
             st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
             
-            m_col1, m_col2 = st.columns(2)
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
             m_col1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
             m_col2.metric("Aktioner", len(df_spiller))
             
