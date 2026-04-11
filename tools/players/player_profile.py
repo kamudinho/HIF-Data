@@ -128,6 +128,8 @@ def vis_side(dp=None):
             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
             m_col1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
             m_col2.metric("Aktioner", len(df_spiller))
+            m_col3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
+            m_col4.metric("Chancer", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
             
             m_col3, m_col4 = st.columns(2)
             m_col3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
@@ -143,7 +145,7 @@ def vis_side(dp=None):
                 
                 for akt, row in akt_stats.iterrows():
                     total = int(row['Total'])
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><b>{total}</b></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><b>{total}</b></div>", unsafe_allow_html=True)
 
         with c_pitch_side:
             # Kontrolpanel over banen i højre kolonne
