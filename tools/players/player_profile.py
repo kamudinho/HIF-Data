@@ -62,12 +62,13 @@ def vis_side(dp=None):
         if uuid_clean in mapping_lookup:
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
+    # Holdvælger i toppen
     col_spacer, col_hold = st.columns([3.5, 1])
     valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Sæson-data med Automatisk Navne-oversættelse
+    # 2. Hent Sæson-data
     with st.spinner(f"Henter data for {valgt_hold}..."):
         sql = f"""
             SELECT 
@@ -98,6 +99,24 @@ def vis_side(dp=None):
             st.warning("Ingen data fundet.")
             return
 
+    # --- GLOBAL SPILLERVÆLGER OG METRICS ---
+    spiller_liste = sorted(df_all_h['VISNINGSNAVN'].unique())
+    
+    c_sel, c_met = st.columns([1, 3])
+    with c_sel:
+        valgt_spiller = st.selectbox("Vælg spiller", spiller_liste, key="global_player_select")
+    
+    df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
+    
+    with c_met:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
+        m2.metric("Aktioner", len(df_spiller))
+        m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
+        m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
+
+    st.markdown("---")
+
     # 3. Tabs opdeling
     t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"
@@ -105,45 +124,24 @@ def vis_side(dp=None):
 
     # --- TAB: SPILLERPROFIL ---
     with t_pitch:
-        spiller_liste = sorted(df_all_h['VISNINGSNAVN'].unique())
-        
         descriptions = {
-            "Heatmap": "Viser bevægelsesmønster og intensitet.",
-            "Berøringer": "Alle tekniske aktioner med bolden.",
-            "Afslutninger": "Skudforsøg (Mål = Guldstjerne).",
+            "Heatmap": "Bevægelsesmønster og intensitet.",
+            "Berøringer": "Tekniske aktioner med bolden.",
+            "Afslutninger": "Skudforsøg (Mål = Stjerne).",
             "Mål": "Kun scoringer.",
             "Skudassists": "Afleveringer til afslutning.",
-            "Indlæg": "Bolde ind i feltet.",
+            "Indlæg": "Bolde i feltet.",
             "Erobringer": "Tacklinger og opspillede bolde."
         }
 
-        t_col1, t_col2, t_col3 = st.columns([0.9, 0.9, 1.2])
-        valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, key="prof_spiller", label_visibility="collapsed")
-        visning = t_col2.selectbox("Visning", list(descriptions.keys()), key="prof_vis", label_visibility="collapsed")
-        t_col3.caption(descriptions.get(visning))
+        t_col1, t_col2 = st.columns([1, 2])
+        visning = t_col1.selectbox("Visning", list(descriptions.keys()), key="prof_vis", label_visibility="collapsed")
+        t_col2.caption(descriptions.get(visning))
         
-        df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
+        c_left, c_right = st.columns([1, 2.2])
         
-        c_p1, c_buffer, c_p2 = st.columns([0.9, 0.1, 2.2])
-        
-        with c_p1:
-            # Metrics beregning
-            kampe = df_spiller['MATCH_OPTAUUID'].nunique()
-            pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
-            pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if len(pas_df) > 0 else 0
-            
-            st.markdown(f"#### {valgt_spiller}")
-            m_row1 = st.columns(2)
-            m_row1[0].metric("Aktioner", len(df_spiller))
-            m_row1[1].metric("Kampe", kampe)
-            
-            m_row2 = st.columns(2)
-            m_row2[0].metric("Pasninger", len(pas_df))
-            m_row2[1].metric("Pasning %", f"{int(pas_acc)}%")
-
-            st.markdown("<hr style='margin: 8px 0; opacity: 0.7;'>", unsafe_allow_html=True)
+        with c_left:
             st.write("**Top 10: Aktioner**")
-            
             df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_filtreret.empty:
                 akt_stats = df_filtreret.groupby('Action_Label').agg(
@@ -153,10 +151,10 @@ def vis_side(dp=None):
                 bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud']
                 for akt, row in akt_stats.iterrows():
                     total, succes = int(row['Total']), int(row['Succes'])
-                    stats_val = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><span>{stats_val}</span></div>", unsafe_allow_html=True)
+                    val = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><span>{val}</span></div>", unsafe_allow_html=True)
 
-        with c_p2:
+        with c_right:
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
@@ -167,31 +165,36 @@ def vis_side(dp=None):
             elif visning == "Berøringer":
                 ax.scatter(x, y, color='#084594', s=40, edgecolors='white', alpha=0.5)
             elif visning == "Afslutninger":
-                goals = df_spiller[df_spiller['EVENT_TYPEID'] == 16]
-                misses = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15])]
-                ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, alpha=0.6, label='Skud')
-                ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', label='Mål')
-                ax.legend(loc='upper right', fontsize=8)
+                g = df_spiller[df_spiller['EVENT_TYPEID'] == 16]
+                m = df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15])]
+                ax.scatter(m.EVENT_X, m.EVENT_Y, color='red', s=80, alpha=0.6)
+                ax.scatter(g.EVENT_X, g.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black')
             elif visning == "Erobringer":
-                erob = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-                ax.scatter(erob.EVENT_X, erob.EVENT_Y, color='orange', s=100, edgecolors='white')
+                e = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                ax.scatter(e.EVENT_X, e.EVENT_Y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
-    # --- ØVRIGE TABS ---
-    with t_phys:
-        st.subheader("Fysisk Data")
-        st.info("Her integreres GPS-data (Distance, Sprint, Intensitet).")
-
+    # --- TAB: STATISTIK & GRAFER ---
     with t_stats:
         st.subheader("Sæsonudvikling")
+        # Beskrivelse følger under koden
         if not df_spiller.empty:
             df_spiller['DATO'] = df_spiller['EVENT_TIMESTAMP'].dt.date
-            st.line_chart(df_spiller.groupby('DATO').size())
+            trend_data = df_spiller.groupby('DATO').size()
+            st.line_chart(trend_data)
+            
+            st.markdown("---")
+            st.write("**Aktionsfordeling i sæsonen**")
+            st.bar_chart(df_spiller['Action_Label'].value_counts())
+
+    with t_phys:
+        st.subheader("Fysisk Data")
+        st.info("Sektion til GPS-data.")
 
     with t_compare:
-        st.subheader("Benchmark")
-        st.write("Sammenligning af spillerens stats mod liga-gennemsnittet.")
+        st.subheader("Sammenligning")
+        st.write("Benchmark mod ligaen.")
 
 if __name__ == "__main__":
     vis_side()
