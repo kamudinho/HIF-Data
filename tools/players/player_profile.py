@@ -255,13 +255,11 @@ def vis_side(dp=None):
             m3.metric("Top Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
             m4.metric("HI Akt.", int(latest['HI_RUNS']))
 
-            st.markdown("---")
-
             # 3. UNDER-TABS til Fysisk Data
             t_sub_log, t_sub_charts, t_sub_kpi = st.tabs([
-                "📋 Kampoversigt", 
-                "📈 Performance Grafer", 
-                "🎯 Fysiske KPI'er"
+                "Kampoversigt", 
+                "Performance Grafer", 
+                "Fysiske KPI'er"
             ])
 
             # --- SUB-TAB: KAMP OVERSIGT ---
@@ -295,7 +293,7 @@ def vis_side(dp=None):
                 mapping = {"HSR (m)": ("HSR", 1), "Sprint (m)": ("SPRINTING", 1), "Distance (km)": ("DISTANCE", 1000), "Top Speed (km/t)": ("TOP_SPEED", 1)}
                 col, div = mapping[cat_choice]
 
-                df_chart = df_phys.head(10).copy().sort_values('MATCH_DATE', ascending=True)
+                df_chart = df_phys.head(20).copy().sort_values('MATCH_DATE', ascending=True)
                 df_chart['Dato'] = df_chart['MATCH_DATE'].dt.strftime('%d/%m')
                 
                 chart_data = pd.DataFrame({'Dato': df_chart['Dato'], cat_choice: df_chart[col] / div}).set_index('Dato')
