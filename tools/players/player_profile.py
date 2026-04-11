@@ -235,7 +235,7 @@ def vis_side(dp=None):
 
     # --- TAB: FYSISK DATA ---
     with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
             avg_hsr = df_phys['HSR'].mean()
