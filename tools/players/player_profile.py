@@ -47,7 +47,6 @@ def vis_side(dp=None):
         <style>
         [data-testid="stMetricValue"] { font-size: 18px !important; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; }
-        div[data-testid="stExpander"] { border: none !important; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -63,15 +62,15 @@ def vis_side(dp=None):
         if uuid_clean in mapping_lookup:
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
-    # --- TOPBAR: HOLD OG SPILLER VED SIDEN AF HINANDEN ---
-    col_h1, col_h2, col_spacer = st.columns([1.2, 1.2, 2])
+    # --- TOPBAR: DROP-DOWNS RUKKET HELT TIL HØJRE ---
+    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2.5, 1, 1])
     
-    valgt_hold = col_h1.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Sæson-data for det valgte hold
-    with st.spinner(f"Indlæser data..."):
+    # 2. HENT DATA
+    with st.spinner("Henter data..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -86,28 +85,26 @@ def vis_side(dp=None):
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
-            AND e.EVENT_X BETWEEN 0 AND 100 AND e.EVENT_Y BETWEEN 0 AND 100
             AND p.FIRST_NAME IS NOT NULL
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all_h = conn.query(sql)
         
         if df_all_h is None or df_all_h.empty:
-            st.warning("Ingen data fundet for det valgte hold.")
+            st.warning("Ingen data fundet.")
             return
 
         df_all_h['EVENT_TIMESTAMP'] = pd.to_datetime(df_all_h['EVENT_TIMESTAMP_STR'])
         df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
         df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
-        df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-    # --- SPILLER DROP-DOWN (I TOPBAR VED SIDEN AF HOLD) ---
+    # SPILLER DROP-DOWN TIL HØJRE
     spiller_liste = sorted(df_all_h['VISNINGSNAVN'].unique())
-    valgt_spiller = col_h2.selectbox("Vælg spiller", spiller_liste, label_visibility="collapsed")
+    valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
     
     df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    # --- QUICK METRICS ---
+    # QUICK METRICS
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
     m2.metric("Aktioner", len(df_spiller))
@@ -124,22 +121,26 @@ def vis_side(dp=None):
     # --- TAB: SPILLERPROFIL ---
     with t_pitch:
         descriptions = {
-            "Heatmap": "Bevægelsesmønster og intensitet.",
-            "Berøringer": "Tekniske aktioner med bolden.",
-            "Afslutninger": "Skudforsøg (Mål = Stjerne).",
-            "Mål": "Kun scoringer.",
-            "Skudassists": "Afleveringer til afslutning.",
-            "Indlæg": "Bolde i feltet.",
-            "Erobringer": "Tacklinger og opspillede bolde."
+            "Heatmap": "Bevægelsesmønster og intensitet på banen.",
+            "Berøringer": "Alle tekniske aktioner, hvor spilleren har været i kontakt med bolden.",
+            "Afslutninger": "Oversigt over skudforsøg. Guldstjerne markerer mål.",
+            "Mål": "Visualisering af spillerens scoringer i sæsonen.",
+            "Skudassists": "Afleveringer der direkte har ført til en afslutning.",
+            "Indlæg": "Bolde spillet ind i modstanderens felt.",
+            "Erobringer": "Vundne tacklinger og opsnappede afleveringer."
         }
 
-        t_col_vis, t_col_cap = st.columns([1, 2])
-        visning = t_col_vis.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
-        t_col_cap.caption(descriptions.get(visning))
+        # --- BANELAYOUT-KONTROL ---
+        # Beskrivelse til venstre, Dropdown til højre
+        col_desc, col_vis_sel = st.columns([2.5, 1])
         
-        c_left, c_right = st.columns([1, 2.2])
+        # Her hentes beskrivelsen først, men vises kun hvis visningstypen er valgt
+        visning = col_vis_sel.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
+        col_desc.write(f"**{visning}:** {descriptions[visning]}")
         
-        with c_left:
+        c_stats_side, c_pitch_side = st.columns([1, 2.2])
+        
+        with c_stats_side:
             st.write("**Top 10: Aktioner**")
             df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_filtreret.empty:
@@ -147,13 +148,11 @@ def vis_side(dp=None):
                     Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
                 ).sort_values('Total', ascending=False).head(10)
                 
-                bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud']
                 for akt, row in akt_stats.iterrows():
                     total, succes = int(row['Total']), int(row['Succes'])
-                    val = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><span>{val}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><b>{total}</b></div>", unsafe_allow_html=True)
 
-        with c_right:
+        with c_pitch_side:
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
@@ -177,22 +176,23 @@ def vis_side(dp=None):
     # --- TAB: STATISTIK & GRAFER ---
     with t_stats:
         st.subheader("Sæsonudvikling")
+        # Sæsonudvikling beskrivelse:
+        # En visualisering af spillerens aktivitetsniveau kamp for kamp. 
+        # Grafen viser volumen af tekniske aktioner pr. dato, hvilket gør det muligt
+        # at identificere formtop, perioder med høj involvering eller taktiske udsving.
         if not df_spiller.empty:
             df_spiller['DATO'] = df_spiller['EVENT_TIMESTAMP'].dt.date
-            trend_data = df_spiller.groupby('DATO').size()
-            st.line_chart(trend_data)
-            
-            st.markdown("---")
-            st.write("**Aktionsfordeling i sæsonen**")
+            trend = df_spiller.groupby('DATO').size()
+            st.line_chart(trend)
             st.bar_chart(df_spiller['Action_Label'].value_counts())
 
     with t_phys:
         st.subheader("Fysisk Data")
-        st.info("Sektion til GPS-data (Distance, Sprint, Intensitet).")
+        st.info("Sektion til GPS-data.")
 
     with t_compare:
-        st.subheader("Benchmark")
-        st.write("Sammenligning mod liga-gennemsnit.")
+        st.subheader("Sammenligning")
+        st.write("Benchmark mod ligaen.")
 
 if __name__ == "__main__":
     vis_side()
