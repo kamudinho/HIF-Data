@@ -233,20 +233,20 @@ def vis_side(dp=None):
             
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB: FYSISK DATA ---
+    # --- TAB: FYSISK DATA (Hovedfane) ---
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
-            # Sørg for at datoer er datetime og sorteret
+            # 1. Databehandling
             df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
             df_phys = df_phys.sort_values('MATCH_DATE', ascending=False)
             
-            # Metrics (Sæson-snit beregnes på hele df)
             avg_dist = df_phys['DISTANCE'].mean()
             avg_hsr = df_phys['HSR'].mean()
             latest = df_phys.iloc[0]
-            
+
+            # 2. Overordnede Metrics (Altid synlige i toppen)
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Seneste Dist", f"{round(latest['DISTANCE']/1000, 2)} km", 
                       delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
@@ -257,54 +257,71 @@ def vis_side(dp=None):
 
             st.markdown("---")
 
-            # --- BAR CHART SEKTION ---
-            st.subheader("Kamp-for-kamp Performance (Seneste 10)")
-            
-            # Segmented control til valg af kategori
-            cat_choice = st.segmented_control(
-                "Vælg metrik", 
-                options=["HSR (m)", "Sprint (m)", "Distance (km)", "Top Speed (km/t)"],
-                default="HSR (m)"
-            )
-            
-            # Map valget til kolonne og skalering
-            mapping = {
-                "HSR (m)": ("HSR", 1),
-                "Sprint (m)": ("SPRINTING", 1),
-                "Distance (km)": ("DISTANCE", 1000),
-                "Top Speed (km/t)": ("TOP_SPEED", 1)
-            }
-            col, div = mapping[cat_choice]
+            # 3. UNDER-TABS til Fysisk Data
+            t_sub_log, t_sub_charts, t_sub_kpi = st.tabs([
+                "📋 Kampoversigt", 
+                "📈 Performance Grafer", 
+                "🎯 Fysiske KPI'er"
+            ])
 
-            # Tag de seneste 10 kampe og vend dem om (så de går fra venstre mod højre tidsmæssigt)
-            df_chart = df_phys.head(10).copy().sort_values('MATCH_DATE', ascending=True)
-            
-            # Lav en læsbar label til X-aksen (Dato + evt. modstander hvis du har den i MATCH_TEAMS)
-            df_chart['Display_Date'] = df_chart['MATCH_DATE'].dt.strftime('%d/%m')
-            
-            # Opret selve barchart-dataet
-            chart_data = pd.DataFrame({
-                'Dato': df_chart['Display_Date'],
-                cat_choice: df_chart[col] / div
-            }).set_index('Dato')
+            # --- SUB-TAB: KAMP OVERSIGT ---
+            with t_sub_log:
+                st.subheader("Match Log")
+                st.data_editor(
+                    df_phys,
+                    column_config={
+                        "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
+                        "MATCH_TEAMS": "Kamp",
+                        "MINUTES": "Min",
+                        "DISTANCE": st.column_config.NumberColumn("Total Dist", format="%d m"),
+                        "HSR": st.column_config.ProgressColumn("HSR (m)", min_value=0, max_value=max(df_phys['HSR'].max(), 1000), format="%d m"),
+                        "SPRINTING": st.column_config.ProgressColumn("Sprint (m)", min_value=0, max_value=max(df_phys['SPRINTING'].max(), 400), format="%d m"),
+                        "TOP_SPEED": st.column_config.NumberColumn("Top (km/t)", format="%.1f"),
+                        "HI_RUNS": "HI Akt."
+                    },
+                    hide_index=True, use_container_width=True, disabled=True
+                )
 
-            # Vis Bar Chart med klubfarven
-            st.bar_chart(chart_data, color="#cc0000", use_container_width=True)
+            # --- SUB-TAB: GRAFER ---
+            with t_sub_charts:
+                st.subheader("Kamp-for-kamp Trends")
+                cat_choice = st.segmented_control(
+                    "Vælg metrik til graf", 
+                    options=["HSR (m)", "Sprint (m)", "Distance (km)", "Top Speed (km/t)"],
+                    default="HSR (m)",
+                    key="phys_graph_control"
+                )
+                
+                mapping = {"HSR (m)": ("HSR", 1), "Sprint (m)": ("SPRINTING", 1), "Distance (km)": ("DISTANCE", 1000), "Top Speed (km/t)": ("TOP_SPEED", 1)}
+                col, div = mapping[cat_choice]
 
-            st.markdown("---")
-            # --- MATCH LOG (Som før) ---
-            st.subheader("Match Log")
-            st.data_editor(
-                df_phys,
-                column_config={
-                    "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
-                    "HSR": st.column_config.ProgressColumn("HSR (m)", min_value=0, max_value=max(df_phys['HSR'].max(), 1000)),
-                    "SPRINTING": st.column_config.ProgressColumn("Sprint (m)", min_value=0, max_value=max(df_phys['SPRINTING'].max(), 400)),
-                },
-                hide_index=True, use_container_width=True, disabled=True
-            )
+                df_chart = df_phys.head(10).copy().sort_values('MATCH_DATE', ascending=True)
+                df_chart['Dato'] = df_chart['MATCH_DATE'].dt.strftime('%d/%m')
+                
+                chart_data = pd.DataFrame({'Dato': df_chart['Dato'], cat_choice: df_chart[col] / div}).set_index('Dato')
+                st.bar_chart(chart_data, color="#cc0000", use_container_width=True)
+
+            # --- SUB-TAB: KPI ---
+            with t_sub_kpi:
+                st.subheader("Sæson KPI & Benchmarks")
+                k_col1, k_col2 = st.columns(2)
+                
+                with k_col1:
+                    st.markdown("**Volumen KPI**")
+                    st.write(f"Snit distance pr. kamp: **{round(avg_dist/1000, 2)} km**")
+                    st.write(f"Total distance i perioden: **{round(df_phys['DISTANCE'].sum()/1000, 1)} km**")
+                    st.write(f"Højeste distance målt: **{round(df_phys['DISTANCE'].max()/1000, 2)} km**")
+                
+                with k_col2:
+                    st.markdown("**Intensitet KPI**")
+                    st.write(f"Snit HSR pr. kamp: **{int(avg_hsr)} m**")
+                    st.write(f"Topfart (Sæson max): **{round(df_phys['TOP_SPEED'].max(), 1)} km/t**")
+                    st.write(f"HI Runs snit: **{round(df_phys['HI_RUNS'].mean(), 1)}**")
+                
+                st.info("KPI er beregnet ud fra alle registrerede kampe i det valgte dato-interval.")
+
         else:
-            st.error(f"Ingen fysiske data fundet for {valgt_spiller} i denne periode.")
+            st.error(f"Ingen fysiske data fundet for {valgt_spiller}.")
 
     # --- TAB: UDVIKLING ---
     with t_stats:
