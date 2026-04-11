@@ -73,7 +73,6 @@ def vis_side(dp=None):
         [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
         [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; }
         .player-header { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
-        .debug-box { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 11px; margin-bottom: 20px; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -143,20 +142,17 @@ def vis_side(dp=None):
             "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
         }
 
-        # Filtrering til aktionstabel (fjern almindelige pasninger for overblik)
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
         akt_stats = pd.DataFrame()
         if not df_filtreret.empty:
-            akt_stats = df_filtreret.groupby('Action_Label').agg(
-                Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
-            ).sort_values('Total', ascending=False)
+            akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')).sort_values('Total', ascending=False)
 
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
         
         with c_stats_side:
             st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
             
-            # Beregn Metrics
+            # Metrics beregning
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
             pas_count = len(pas_df)
@@ -193,7 +189,6 @@ def vis_side(dp=None):
                     st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
         with c_pitch_side:
-            # Menu og Caption
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
             with c_menu_col:
                 visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
@@ -213,71 +208,65 @@ def vis_side(dp=None):
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                    goals = d[d['EVENT_TYPEID'] == 16]
-                    misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6, label='Afslutning')
-                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=5, label='Mål')
-                    ax.legend(loc='upper right', ncol=2, fontsize=8, frameon=True)
+                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
+                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=5)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB: FYSISK DATA (OPDATERET VISNING) ---
-with t_phys:
-    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
-    
-    if df_phys is not None and not df_phys.empty:
-        # KPI'er øverst
-        avg_hsr = df_phys['HSR'].mean()
-        latest = df_phys.iloc[0]
+    # --- TAB: FYSISK DATA ---
+    with t_phys:
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
         
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
-        m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m vs snit")
-        m3.metric("Max Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
-        m4.metric("HI Runs", int(latest['HI_RUNS']))
+        if df_phys is not None and not df_phys.empty:
+            avg_hsr = df_phys['HSR'].mean()
+            latest = df_phys.iloc[0]
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
+            m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m vs snit")
+            m3.metric("Max Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
+            m4.metric("HI Runs", int(latest['HI_RUNS']))
 
-        st.markdown("---")
-        st.subheader("Match Log - Fysisk Performance")
-        
-        # Vi definerer de maksimale værdier for at skalaen i barerne giver mening
-        max_hsr = max(df_phys['HSR'].max(), 1000)
-        max_sprint = max(df_phys['SPRINTING'].max(), 400)
+            st.markdown("---")
+            st.subheader("Match Log - Fysisk Performance")
+            
+            max_hsr = max(df_phys['HSR'].max(), 1000)
+            max_sprint = max(df_phys['SPRINTING'].max(), 400)
 
-        st.data_editor(
-            df_phys,
-            column_config={
-                "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
-                "MATCH_TEAMS": "Kamp",
-                "MINUTES": "Min",
-                "DISTANCE": st.column_config.NumberColumn("Total Dist", format="%d m"),
-                "HSR": st.column_config.ProgressColumn(
-                    "HSR (m)",
-                    help="High Speed Running meter",
-                    min_value=0,
-                    max_value=max_hsr,
-                    format="%d m" # Dette gør at tallet står ved siden af baren!
-                ),
-                "SPRINTING": st.column_config.ProgressColumn(
-                    "Sprint (m)",
-                    help="Meter sprintet (>25.2 km/t)",
-                    min_value=0,
-                    max_value=max_sprint,
-                    format="%d m"
-                ),
-                "TOP_SPEED": st.column_config.NumberColumn("Top (km/t)", format="%.1f"),
-                "AVERAGE_SPEED": None, # Skjul hvis den ikke bruges
-                "HI_RUNS": "HI Akt."
-            },
-            hide_index=True,
-            use_container_width=True,
-            disabled=True
-        )
-        
-        st.markdown("### HSR Udvikling")
-        st.area_chart(df_phys.set_index('MATCH_DATE')['HSR'], color="#FF0000") # Rød for at matche Hvidovre/Aarhus Fremad
+            st.data_editor(
+                df_phys,
+                column_config={
+                    "MATCH_DATE": st.column_config.DateColumn("Dato", format="DD/MM/YY"),
+                    "MATCH_TEAMS": "Kamp",
+                    "MINUTES": "Min",
+                    "DISTANCE": st.column_config.NumberColumn("Total Dist", format="%d m"),
+                    "HSR": st.column_config.ProgressColumn(
+                        "HSR (m)",
+                        min_value=0, max_value=max_hsr,
+                        format="%d m"
+                    ),
+                    "SPRINTING": st.column_config.ProgressColumn(
+                        "Sprint (m)",
+                        min_value=0, max_value=max_sprint,
+                        format="%d m"
+                    ),
+                    "TOP_SPEED": st.column_config.NumberColumn("Top (km/t)", format="%.1f"),
+                    "AVERAGE_SPEED": None,
+                    "HI_RUNS": "HI Akt."
+                },
+                hide_index=True,
+                use_container_width=True,
+                disabled=True
+            )
+            
+            st.markdown("### HSR Udvikling")
+            st.area_chart(df_phys.set_index('MATCH_DATE')['HSR'], color="#FF0000")
+        else:
+            st.error(f"Kunne ikke finde fysiske data for {valgt_spiller}.")
 
     # --- TAB: UDVIKLING ---
     with t_stats:
