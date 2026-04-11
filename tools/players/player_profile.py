@@ -42,28 +42,43 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(player_name, player_opta_uuid, db_conn):
-    """Henter fysiske data samlet pr. kamp med korrekt håndtering af minutter."""
+def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
+    """Henter fysiske data baseret på det valgte holds SSIID fra dropdown."""
+    
+    # 1. Hent SSIID for det valgte hold (fra din TEAMS mapping)
+    # Jeg antager her, at dit SSIID ligger i din TEAMS-config
+    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssiid')
+    
+    if not target_ssiid:
+        # Fallback til Hvidovre hvis intet er valgt/fundet
+        target_ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
+
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
     name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
     
     sql = f"""
         SELECT 
-            MATCH_DATE,
-            ANY_VALUE(MATCH_TEAMS) as MATCH_TEAMS,
-            -- Vi tager den højeste værdi af minutter for at undgå dubletter fra segmenter
-            MAX(MINUTES) as MINUTES, 
-            SUM(DISTANCE) as DISTANCE,
-            SUM("HIGH SPEED RUNNING") as HSR,
-            SUM(SPRINTING) as SPRINTING,
-            MAX(TOP_SPEED) as TOP_SPEED,
-            SUM(NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            p.MATCH_DATE,
+            ANY_VALUE(p.MATCH_TEAMS) as MATCH_TEAMS,
+            MAX(p.MINUTES) as MINUTES,
+            SUM(p.DISTANCE) as DISTANCE,
+            SUM(p."HIGH SPEED RUNNING") as HSR,
+            SUM(p.SPRINTING) as SPRINTING,
+            MAX(p.TOP_SPEED) as TOP_SPEED,
+            SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
         WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
-          AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-        GROUP BY MATCH_DATE, PLAYER_NAME
-        ORDER BY MATCH_DATE DESC
+          AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+          -- Dynamisk SSIID tjek: Sørger for at kampen tilhører det valgte hold
+          AND p.MATCH_SSIID IN (
+              SELECT MATCH_SSIID 
+              FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+              WHERE HOME_SSIID = '{target_ssiid}' 
+                 OR AWAY_SSIID = '{target_ssiid}'
+          )
+        GROUP BY p.MATCH_DATE, p.PLAYER_NAME
+        ORDER BY p.MATCH_DATE DESC
     """
     return db_conn.query(sql)
 
