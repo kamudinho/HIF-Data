@@ -12,12 +12,16 @@ from data.utils.mapping import get_action_label
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
+# Liste over relevante liga- og turnerings-IDs
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
+    """Henter klublogo baseret på Opta UUID fra TEAMS mapping."""
     if not opta_uuid: return None
-    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+    # Rens UUID for 't' for at matche mapping-logik
+    uuid_lookup = str(opta_uuid).lower().replace('t', '')
+    url = next((info['logo'] for name, info in TEAMS.items() if str(info.get('opta_uuid', '')).lower().replace('t','') == uuid_lookup), None)
     if not url: return None
     try:
         response = requests.get(url, timeout=5)
@@ -25,9 +29,11 @@ def get_logo_img(opta_uuid):
     except: return None
 
 def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
+    """Tegner infoboksen øverst på banen med logo og spillernavn."""
     if team_logo:
         ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
-        ax_l.imshow(team_logo); ax_l.axis('off')
+        ax_l.imshow(team_logo)
+        ax_l.axis('off')
     ax.text(0.10, 0.92, str(player_name).upper(), transform=ax.transAxes, 
             fontsize=10, fontweight='bold', color='black', va='center')
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
@@ -45,7 +51,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. Team Mapping (Vasker 't' og sikrer match)
+    # 1. Team Mapping - Brobygning mellem Snowflake og TEAMS.py
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     
     mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
@@ -60,20 +66,20 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
-    # 2. Hent Data - Med navne-oversættelse og koordinat-vask
-    with st.spinner("Henter data..."):
+    # 2. Hent Data - Her sker den automatiske navne-oversættelse via SQL JOIN
+    with st.spinner(f"Henter data for {valgt_hold}..."):
         sql = f"""
             SELECT 
                 e.EVENT_X, 
                 e.EVENT_Y, 
                 e.EVENT_TYPEID, 
-                -- Oversætter navn ved at klistre First og Last name sammen
+                -- OVERSÆTTELSE: Klistrer for- og efternavn sammen fra spiller-tabellen
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.MATCH_OPTAUUID, 
                 e.EVENT_OUTCOME as OUTCOME,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            -- JOIN på bindeleddet og fjern dubletter i spiller-tabellen
+            -- JOIN: Vi bruger PLAYER_OPTAUUID som bindeled og henter kun unikke navne
             LEFT JOIN (
                 SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
                 FROM {DB}.OPTA_PLAYERS
@@ -81,7 +87,7 @@ def vis_side(dp=None):
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
-            -- Vigtigt: Hold koordinater på banen
+            -- Rens data: Kun aktioner på banen og hvor vi har fundet et navn
             AND e.EVENT_X BETWEEN 0 AND 100
             AND e.EVENT_Y BETWEEN 0 AND 100
             AND p.FIRST_NAME IS NOT NULL
@@ -93,9 +99,10 @@ def vis_side(dp=None):
             df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
             df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
         else:
-            st.warning(f"Ingen data fundet for {valgt_hold}.")
+            st.warning(f"Ingen data fundet for {valgt_hold} i denne periode.")
             return
 
+    # 3. UI - Tabs og Visualisering
     t_pitch, t_stats = st.tabs(["Spillerprofil", "Statistik"])
 
     with t_pitch:
@@ -104,8 +111,10 @@ def vis_side(dp=None):
         valgt_spiller = t_col1.selectbox("Vælg spiller", spiller_liste, label_visibility="collapsed")
         visning = t_col2.selectbox("Visning", ["Heatmap", "Berøringer", "Afslutninger", "Erobringer"], label_visibility="collapsed")
         
+        # Filtrer data til den valgte spiller
         df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
         
+        # Beregn P90 metrics
         kampe = df_spiller['MATCH_OPTAUUID'].nunique()
         p90_factor = 1 / kampe if kampe > 0 else 1
 
@@ -118,6 +127,7 @@ def vis_side(dp=None):
             m2.metric("Kampe", kampe)
             
             st.markdown("---")
+            # Vis top 8 aktionstyper (eksklusiv standard pasninger)
             df_akt = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_akt.empty:
                 stats = df_akt.groupby('Action_Label').size().sort_values(ascending=False).head(8)
@@ -125,11 +135,13 @@ def vis_side(dp=None):
                     st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:12px;'><span>{akt}</span><b>{count}</b></div>", unsafe_allow_html=True)
 
         with c_right:
+            # Opsætning af fodboldbanen
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
             
             if not df_spiller.empty:
+                # Konvertér koordinater til floats for korrekt plotting
                 x, y = df_spiller.EVENT_X.astype(float), df_spiller.EVENT_Y.astype(float)
                 
                 if visning == "Heatmap":
@@ -142,6 +154,7 @@ def vis_side(dp=None):
                     pitch.scatter(skud.EVENT_X, skud.EVENT_Y, ax=ax, color='red', s=80, alpha=0.6)
                     pitch.scatter(mål.EVENT_X, mål.EVENT_Y, ax=ax, color='gold', s=150, marker='*', edgecolors='black')
                 elif visning == "Erobringer":
+                    # TypeID 7: Tackling, 8: Interception, 12: Clearance, 49: Ball Recovery
                     erob = df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     pitch.scatter(erob.EVENT_X, erob.EVENT_Y, ax=ax, color='orange', s=100, edgecolors='white')
             
