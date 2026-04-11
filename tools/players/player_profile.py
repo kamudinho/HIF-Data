@@ -62,7 +62,7 @@ def vis_side(dp=None):
         if uuid_clean in mapping_lookup:
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
-    # --- TOPBAR: DROP-DOWNS RUKKET HELT TIL HØJRE ---
+    # --- TOPBAR: DROP-DOWNS HELT TIL HØJRE ---
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2.5, 1, 1])
     
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
@@ -98,41 +98,37 @@ def vis_side(dp=None):
         df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
         df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
 
-    # SPILLER DROP-DOWN TIL HØJRE
     spiller_liste = sorted(df_all_h['VISNINGSNAVN'].unique())
     valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
-    
     df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    # QUICK METRICS
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
-    m2.metric("Aktioner", len(df_spiller))
-    m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
-    m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
-
-    # 3. TABS
+    # --- TABS ---
     t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"
     ])
 
     # --- TAB: SPILLERPROFIL ---
     with t_pitch:
+        # METRICS VISES NU UNDER SPILLEREN INDE I TABBEN
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Kampe", df_spiller['MATCH_OPTAUUID'].nunique())
+        m2.metric("Aktioner", len(df_spiller))
+        m3.metric("Mål", len(df_spiller[df_spiller['EVENT_TYPEID']==16]))
+        m4.metric("Chancer skabt", len(df_spiller[df_spiller['qual_list'].apply(lambda x: '210' in x)]))
+        
+        st.markdown("---")
+
         descriptions = {
             "Heatmap": "Bevægelsesmønster og intensitet på banen.",
-            "Berøringer": "Alle tekniske aktioner, hvor spilleren har været i kontakt med bolden.",
-            "Afslutninger": "Oversigt over skudforsøg. Guldstjerne markerer mål.",
-            "Mål": "Visualisering af spillerens scoringer i sæsonen.",
-            "Skudassists": "Afleveringer der direkte har ført til en afslutning.",
+            "Berøringer": "Alle tekniske aktioner med bolden.",
+            "Afslutninger": "Skudforsøg (Mål = Guldstjerne).",
+            "Mål": "Visualisering af spillerens scoringer.",
+            "Skudassists": "Afleveringer til afslutning.",
             "Indlæg": "Bolde spillet ind i modstanderens felt.",
-            "Erobringer": "Vundne tacklinger og opsnappede afleveringer."
+            "Erobringer": "Vundne tacklinger og interceptions."
         }
 
-        # --- BANELAYOUT-KONTROL ---
-        # Beskrivelse til venstre, Dropdown til højre
         col_desc, col_vis_sel = st.columns([2.5, 1])
-        
-        # Her hentes beskrivelsen først, men vises kun hvis visningstypen er valgt
         visning = col_vis_sel.selectbox("Vælg visning", list(descriptions.keys()), label_visibility="collapsed")
         col_desc.write(f"**{visning}:** {descriptions[visning]}")
         
@@ -143,11 +139,11 @@ def vis_side(dp=None):
             df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
             if not df_filtreret.empty:
                 akt_stats = df_filtreret.groupby('Action_Label').agg(
-                    Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
+                    Total=('OUTCOME', 'count')
                 ).sort_values('Total', ascending=False).head(10)
                 
                 for akt, row in akt_stats.iterrows():
-                    total, succes = int(row['Total']), int(row['Succes'])
+                    total = int(row['Total'])
                     st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:0.5px solid #eee;'><span>{akt}</span><b>{total}</b></div>", unsafe_allow_html=True)
 
         with c_pitch_side:
@@ -174,10 +170,6 @@ def vis_side(dp=None):
     # --- TAB: STATISTIK & GRAFER ---
     with t_stats:
         st.subheader("Sæsonudvikling")
-        # Sæsonudvikling beskrivelse:
-        # En visualisering af spillerens aktivitetsniveau kamp for kamp. 
-        # Grafen viser volumen af tekniske aktioner pr. dato, hvilket gør det muligt
-        # at identificere formtop, perioder med høj involvering eller taktiske udsving.
         if not df_spiller.empty:
             df_spiller['DATO'] = df_spiller['EVENT_TIMESTAMP'].dt.date
             trend = df_spiller.groupby('DATO').size()
@@ -189,8 +181,8 @@ def vis_side(dp=None):
         st.info("Sektion til GPS-data.")
 
     with t_compare:
-        st.subheader("Sammenligning")
-        st.write("Benchmark mod ligaen.")
+        st.subheader("Benchmark")
+        st.write("Sammenligning mod ligaen.")
 
 if __name__ == "__main__":
     vis_side()
