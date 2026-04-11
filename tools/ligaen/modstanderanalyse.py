@@ -370,7 +370,7 @@ def vis_side(dp=None):
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
                 # Sortering: Procent først, dernæst volumen. Minimum 100 aktioner.
-                df_top = df_top[df_top['TOTAL'] >= 100]
+                df_top = df_top[df_top['TOTAL'] >= 10]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
@@ -434,7 +434,7 @@ def vis_side(dp=None):
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
                 # Sortering: Procent først, dernæst volumen. Minimum 100 aktioner.
-                df_top = df_top[df_top['TOTAL'] >= 100]
+                df_top = df_top[df_top['TOTAL'] >= 10]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
     
                 if df_top.empty:
