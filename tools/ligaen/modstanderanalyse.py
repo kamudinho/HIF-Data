@@ -211,7 +211,7 @@ def vis_side(dp=None):
             st.error("Ingen data fundet for det valgte hold.")
             return
 
-    t1, t2, t3, t4, t5, t6 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
+    t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     # --- HER STARTER TABS INTEGRATIONEN ---
     
