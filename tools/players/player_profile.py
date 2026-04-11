@@ -165,8 +165,6 @@ def vis_side(dp=None):
             m3.metric("Top Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
             m4.metric("HI Akt.", int(latest['HI_RUNS']))
 
-            st.markdown("---")
-
             t_sub_log, t_sub_charts, t_sub_kpi = st.tabs(["Kampoversigt", "Performance Grafer", "Fysiske KPI'er"])
 
             with t_sub_log:
@@ -190,7 +188,7 @@ def vis_side(dp=None):
                 col, div, suffix = mapping[cat_choice]
 
                 # Sorter: Sidste dato til højre
-                df_chart = df_phys.head(15).copy().sort_values('MATCH_DATE', ascending=True)
+                df_chart = df_phys.head(32).copy().sort_values('MATCH_DATE', ascending=True)
                 
                 # Udtræk modstander
                 def get_opponent(teams_str, my_team):
@@ -236,7 +234,7 @@ def vis_side(dp=None):
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             with t_sub_kpi:
-                st.subheader("Sæson KPI")
+                st.caption("Sæson KPI")
                 # (Din KPI logik...)
 
     # --- TAB: STATISTIK ---
