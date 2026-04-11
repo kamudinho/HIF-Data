@@ -43,9 +43,8 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, db_conn):
-    """Henter fysisk data baseret på både Navn og ID for maksimal sikkerhed."""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    # Vi tager det sidste navn (efternavnet) som wildcard søgning hvis fulde navn fejler
+    # Bruger efternavn som wildcard til robust navnesøgning
     last_name = player_name.split(' ')[-1] if ' ' in player_name else player_name
     
     sql = f"""
@@ -82,9 +81,18 @@ def vis_side(dp=None):
 
     # 1. HOLDVALG
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
-    team_map = {mapping_lookup[str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','')]: r['CONTESTANTHOME_OPTAUUID'] 
-                for _, r in df_teams_raw.iterrows() if str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','') in mapping_lookup}
+    mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
+    
+    team_map = {}
+    if df_teams_raw is not None:
+        for _, r in df_teams_raw.iterrows():
+            uuid_clean = str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','')
+            if uuid_clean in mapping_lookup:
+                team_map[mapping_lookup[uuid_clean]] = r['CONTESTANTHOME_OPTAUUID']
+
+    if not team_map:
+        st.error("Kunne ikke mappe hold-data. Tjek TEAMS konfiguration.")
+        return
 
     col_spacer, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
@@ -101,16 +109,21 @@ def vis_side(dp=None):
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            LEFT JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all = conn.query(sql)
+        
         if df_all is None or df_all.empty:
-            st.warning("Ingen data fundet.")
+            st.warning("Ingen hændelsesdata fundet for valgte hold.")
             return
+        
+        # FIX: Fjern rækker hvor VISNINGSNAVN er None før sortering
+        df_all = df_all.dropna(subset=['VISNINGSNAVN'])
         
         df_all['EVENT_TIMESTAMP'] = pd.to_datetime(df_all['EVENT_TIMESTAMP_STR'])
         df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
@@ -129,18 +142,18 @@ def vis_side(dp=None):
         c1, _, c2 = st.columns([1, 0.05, 2.2])
         with c1:
             st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
-            st.metric("Kamphændelser", len(df_spiller))
+            st.metric("Total aktioner", len(df_spiller))
         with c2:
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", "Aktions-Heatmap")
-            pitch.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+            if not df_spiller.empty:
+                pitch.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
             st.pyplot(fig)
 
-    # --- TAB: FYSISK DATA (Navne-baseret søgning) ---
+    # --- TAB: FYSISK DATA ---
     with t_phys:
-        st.markdown(f"""<div class="debug-box"><b>Debug:</b> Søger efter '{valgt_spiller.split(' ')[-1]}' eller ID '{valgt_player_uuid}'</div>""", unsafe_allow_html=True)
-        
+        st.markdown(f"""<div class="debug-box"><b>Debug:</b> Søger efter '{valgt_spiller}' / ID '{valgt_player_uuid}'</div>""", unsafe_allow_html=True)
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
         
         if df_phys is not None and not df_phys.empty:
@@ -150,10 +163,9 @@ def vis_side(dp=None):
             m[1].metric("HSR (m)", int(latest['HSR']))
             m[2].metric("Sprint (m)", int(latest['SPRINTING']))
             m[3].metric("Top (km/t)", round(latest['TOP_SPEED'], 1))
-            
             st.dataframe(df_phys, use_container_width=True, hide_index=True)
         else:
-            st.info(f"Ingen fysiske data fundet for {valgt_spiller} i denne sæson.")
+            st.info(f"Ingen fysiske data fundet i tabellen for {valgt_spiller}.")
 
     # --- TAB: UDVIKLING ---
     with t_stats:
