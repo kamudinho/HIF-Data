@@ -64,7 +64,7 @@ def vis_side(dp=None):
             team_map[mapping_lookup[uuid_clean]] = row['CONTESTANTHOME_OPTAUUID']
 
     # --- TOPBAR ---
-    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2.5, 1, 1])
+    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
