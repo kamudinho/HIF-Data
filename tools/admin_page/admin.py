@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import datetime
 import time
 
-# --- KONFIGURATION (Hent fra st.secrets) ---
+# --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
 PATH = "data/action_log.csv"
 TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -20,34 +20,30 @@ def get_github_headers():
 
 def save_action_log(bruger, handling, mal):
     """
-    Denne funktion skal kaldes andre steder i din app for at gemme en hændelse.
-    Den løser '25/3-problemet' ved altid at hente den nyeste SHA-nøgle før skrivning.
+    Gemmer en hændelse i GitHub CSV-filen.
+    Henter altid nyeste SHA for at undgå konflikter.
     """
     url = f"https://api.github.com/repos/{REPO}/contents/{PATH}"
     headers = get_github_headers()
 
     try:
-        # 1. Hent den nuværende fil for at få fat i den korrekte 'sha'
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
             file_data = r.json()
             sha = file_data['sha']
             content = base64.b64decode(file_data['content']).decode('utf-8')
             
-            # 2. Forbered ny linje (Sikr at mal ikke indeholder kommaer der ødelægger CSV)
             clean_mal = str(mal).replace(",", ";")
             tidsstempel = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ny_linje = f"{tidsstempel},{bruger},{handling},{clean_mal}\n"
             
-            # Sørg for at filen slutter med newline hvis den er tom
             if content and not content.endswith('\n'):
                 content += '\n'
             
             opdateret_indhold = content + ny_linje
             
-            # 3. Push tilbage til GitHub
             payload = {
-                "message": f"Log: {handling} af {bruger}",
+                "message": f"Log update: {bruger}",
                 "content": base64.b64encode(opdateret_indhold.encode('utf-8')).decode('utf-8'),
                 "sha": sha
             }
@@ -59,8 +55,9 @@ def save_action_log(bruger, handling, mal):
         return False
 
 def vis_log():
-    st.markdown("### System Action Log")
+    st.markdown("### 📋 System Action Log")
     
+    # Cache-busting t=timestamp sikrer at vi henter det nyeste data hver gang
     url = f"https://api.github.com/repos/{REPO}/contents/{PATH}?t={int(time.time())}"
     headers = get_github_headers()
 
@@ -68,83 +65,63 @@ def vis_log():
         r = requests.get(url, headers=headers)
         
         if r.status_code == 200:
-            content = base64.b64decode(r.json()['content']).decode('utf-8')
-            df = pd.read_csv(StringIO(content))
+            raw_content = base64.b64decode(r.json()['content']).decode('utf-8')
             
-            # Robust dato-konvertering (vigtigt for filteret)
-            df['Dato'] = pd.to_datetime(df['Dato'], dayfirst=False, errors='coerce')
+            # on_bad_lines='skip' sikrer at den klippede linje fra 25/3 ikke ødelægger appen
+            df = pd.read_csv(StringIO(raw_content), on_bad_lines='skip')
+            
+            # Konverter datoer og ryd op
+            df['Dato'] = pd.to_datetime(df['Dato'], errors='coerce')
+            df = df.dropna(subset=['Dato']) # Fjern linjer der er korrupte
             
             # --- FILTRERING ---
-            with st.container(border=True):
+            with st.expander("Filter og Søgning", expanded=True):
                 c1, c2, c3 = st.columns(3)
-                
                 with c1:
-                    brugere = sorted(df["Bruger"].dropna().unique().tolist())
-                    valgte_brugere = st.multiselect("Filtrer på Bruger", options=brugere)
-                
+                    brugere = sorted(df["Bruger"].unique().tolist())
+                    valgte_brugere = st.multiselect("Bruger", options=brugere)
                 with c2:
-                    handlinger = sorted(df["Handling"].dropna().unique().tolist())
-                    valgte_handlinger = st.multiselect("Filtrer på Handling", options=handlinger)
-                
+                    handlinger = sorted(df["Handling"].unique().tolist())
+                    valgte_handlinger = st.multiselect("Handling", options=handlinger)
                 with c3:
-                    # Dato filter - tjek for gyldige datoer
-                    valid_df = df.dropna(subset=['Dato'])
-                    if not valid_df.empty:
-                        min_d = valid_df["Dato"].min().date()
-                        max_d = valid_df["Dato"].max().date()
-                        # date_input returnerer en tuple (start, slut)
-                        dato_valg = st.date_input("Dato interval", value=(min_d, max_d))
-                    else:
-                        dato_valg = None
+                    min_d = df["Dato"].min().date()
+                    max_d = df["Dato"].max().date()
+                    dato_valg = st.date_input("Dato interval", value=(min_d, max_d))
 
-                search = st.text_input("Søg i kontekst (Mål)", placeholder="Søg efter spillernavne, hold osv...")
+                search = st.text_input("Søg i detaljer", placeholder="Søg efter fane, spiller eller hold...")
 
-            # --- ANVEND LOGIK ---
+            # --- LOGIK ---
             df_final = df.copy()
-            
             if valgte_brugere:
                 df_final = df_final[df_final["Bruger"].isin(valgte_brugere)]
-            
             if valgte_handlinger:
                 df_final = df_final[df_final["Handling"].isin(valgte_handlinger)]
-                
-            if dato_valg and isinstance(dato_valg, (list, tuple)) and len(dato_valg) == 2:
-                df_final = df_final[
-                    (df_final["Dato"].dt.date >= dato_valg[0]) & 
-                    (df_final["Dato"].dt.date <= dato_valg[1])
-                ]
-                
+            if isinstance(dato_valg, (list, tuple)) and len(dato_valg) == 2:
+                df_final = df_final[(df_final["Dato"].dt.date >= dato_valg[0]) & (df_final["Dato"].dt.date <= dato_valg[1])]
             if search:
-                # Vi tjekker kolonnen 'Mål' som i din CSV svarer til kontekst
                 df_final = df_final[df_final["Mål"].astype(str).str.contains(search, case=False, na=False)]
 
             # --- VISNING ---
-            st.write(f"Viser **{len(df_final)}** hændelser")
-            
             st.dataframe(
                 df_final.sort_values("Dato", ascending=False),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
                     "Dato": st.column_config.DatetimeColumn("Tidspunkt", format="DD/MM/YYYY HH:mm"),
-                    "Bruger": st.column_config.TextColumn("Bruger"),
-                    "Handling": st.column_config.TextColumn("Handling"),
-                    "Mål": st.column_config.TextColumn("Kontekst / Detaljer")
+                    "Mål": st.column_config.TextColumn("Detaljer")
                 }
             )
-
-            # En lille 'Refresh' knap til manuel genindlæsning
-            if st.button("Opdater log"):
+            
+            if st.button("🔄 Opdater nu"):
                 st.rerun()
 
         elif r.status_code == 401:
-            st.error("GitHub fejl: Din TOKEN er udløbet eller ugyldig (401).")
+            st.error("Fejl: GitHub Token er ugyldig.")
         else:
-            st.error(f"Kunne ikke hente log fra GitHub (Fejl {r.status_code})")
+            st.info("Loggen er tom eller kunne ikke hentes.")
 
     except Exception as e:
-        st.error(f"Der opstod en uventet fejl: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
 
-# Hvis du vil teste funktionen direkte
 if __name__ == "__main__":
     vis_log()
