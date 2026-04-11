@@ -173,7 +173,8 @@ def vis_side(dp=None):
                         st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
             # HØJRE SIDE (Bane og kontrol)
-                with c_pitch_side:
+            with c_pitch_side:
+                # Vi deler kolonne 2 op i 3 dele for at få dropdown helt til højre og tekst lige til venstre
                 c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
                 
                 with c_menu_col:
@@ -185,7 +186,7 @@ def vis_side(dp=None):
                     )
                 
                 with c_desc_col:
-                    # Vi bruger 'line-height' og 'margin-top' for at ramme dropdown'ens midte præcis
+                    # Teksten højrejusteres så den mødes med dropdown-menuen
                     st.markdown(
                         f"""
                         <div style="text-align: right; margin-top: 8px; line-height: 1.2;">
@@ -197,7 +198,7 @@ def vis_side(dp=None):
                         unsafe_allow_html=True
                     )
                 
-                # Banen tegnes herunder
+                # Banen tegnes herunder (husk indrykning her!)
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
