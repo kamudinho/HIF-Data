@@ -174,17 +174,23 @@ def vis_side(dp=None):
 
             # HØJRE SIDE (Bane og kontrol)
             with c_pitch_side:
-                # 1. RÆKKE: Her placerer vi dropdown helt til højre
-                c_spacer, c_vis_dropdown = st.columns([2.5, 1])
+                # Vi deler kolonne 2 op i tre: en spacer, tekst-plads, og dropdown-plads
+                # Det gør at teksten kan stå til venstre for dropdownen, men stadig i højre side af skærmen
+                c_spacer, c_desc_text, c_vis_dropdown = st.columns([0.5, 2.5, 1.2])
+                
                 with c_vis_dropdown:
                     visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
                 
-                # 2. RÆKKE: Her placerer vi beskrivelsen, så den starter under dropdown
-                c_text_spacer, c_desc_text = st.columns([2.5, 1])
                 with c_desc_text:
-                    st.caption(descriptions.get(visning))
+                    # Vi bruger styling til at højrejustere teksten, så den flugter mod dropdown-menuen
+                    desc_html = f"""
+                        <div style="text-align: right; margin-top: 5px;">
+                            <span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span>
+                        </div>
+                    """
+                    st.markdown(desc_html, unsafe_allow_html=True)
                 
-                # Banen
+                # Banen tegnes herunder
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
