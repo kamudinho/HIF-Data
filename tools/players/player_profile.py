@@ -43,10 +43,11 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, db_conn):
-    """Henter fysisk data. Bruger ILIKE på navnet for at fange navne som 'Andreas Smed'."""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
+    navne_dele = player_name.split(' ')
+    fornavn = navne_dele[0]
+    efternavn = navne_dele[-1] if len(navne_dele) > 1 else ""
     
-    # Vi søger både på det fulde navn og ID for at være helt sikre
     sql = f"""
         SELECT 
             MATCH_DATE,
@@ -59,8 +60,8 @@ def get_physical_data(player_name, player_opta_uuid, db_conn):
             AVERAGE_SPEED,
             NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE PLAYER_NAME ILIKE '%{player_name}%'
-           OR "optaId" LIKE '%{clean_id}%'
+        WHERE (PLAYER_NAME ILIKE '%{fornavn}%' AND PLAYER_NAME ILIKE '%{efternavn}%')
+           OR ("optaId" LIKE '%{clean_id}%')
         ORDER BY MATCH_DATE DESC
     """
     return db_conn.query(sql)
@@ -130,18 +131,9 @@ def vis_side(dp=None):
 
     t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk Data", "Statistik & Grafer", "Sammenligning"])
 
-    # --- TAB: SPILLERPROFIL (DIN KODE) ---
+    # --- TAB: SPILLERPROFIL ---
     with t_pitch:
-        descriptions = {
-            "Heatmap": "Viser spillerens generelle bevægelsesmønster.",
-            "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
-            "Afslutninger": "Oversigt over alle skudforsøg.",
-            "Mål": "Kun scoringer.",
-            "Skudassists": "Afleveringer der direkte førte til en afslutning.",
-            "Indlæg": "Indlæg ind i feltet.",
-            "Erobringer": "Defensive aktioner."
-        }
-
+        descriptions = {"Heatmap": "Bevægelsesmønster.", "Berøringer": "Touch punkter.", "Afslutninger": "Skud.", "Mål": "Scoringer.", "Skudassists": "Chancer.", "Indlæg": "Crosses.", "Erobringer": "Defensive."}
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
         akt_stats = pd.DataFrame()
         if not df_filtreret.empty:
@@ -150,13 +142,11 @@ def vis_side(dp=None):
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
         with c_stats_side:
             st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
-            m_r1 = st.columns(4)
-            m_r1[0].metric("Aktion", len(df_spiller))
-            # ... (Resten af din metrik-logik her) ...
+            st.metric("Total aktioner", len(df_spiller))
             if not akt_stats.empty:
                 st.write("**Top 10: Aktioner**")
                 for akt, row in akt_stats.head(10).iterrows():
-                    st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px;"><span>{akt}</span><b>{int(row["Total"])}</b></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:2px 0;"><span>{akt}</span><b>{int(row["Total"])}</b></div>', unsafe_allow_html=True)
 
         with c_pitch_side:
             visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
@@ -167,9 +157,14 @@ def vis_side(dp=None):
                 pitch.kdeplot(df_spiller.EVENT_X, df_spiller.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB: FYSISK DATA (OPTIMERET MED NAVN) ---
+    # --- TAB: FYSISK DATA (NY ROBUST SØGNING) ---
     with t_phys:
-        st.markdown(f"""<div class="debug-box"><b>SQL Søgning:</b> PLAYER_NAME ILIKE '%{valgt_spiller}%'</div>""", unsafe_allow_html=True)
+        navne_dele = valgt_spiller.split(' ')
+        f_navn = navne_dele[0]
+        e_navn = navne_dele[-1] if len(navne_dele) > 1 else ""
+        
+        st.markdown(f"""<div class="debug-box"><b>SQL Søgning:</b> PLAYER_NAME LIKE '%{f_navn}%' AND '%{e_navn}%'</div>""", unsafe_allow_html=True)
+        
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, conn)
         
         if df_phys is not None and not df_phys.empty:
@@ -181,7 +176,7 @@ def vis_side(dp=None):
             m[3].metric("Top (km/t)", round(latest['TOP_SPEED'], 1))
             st.dataframe(df_phys, use_container_width=True, hide_index=True)
         else:
-            st.error(f"Ingen fysiske data fundet for {valgt_spiller}.")
+            st.error(f"Ingen fysiske data fundet for {valgt_spiller}. Prøv eventuelt at tjekke navnestavning i Second Spectrum.")
 
     # --- TAB: UDVIKLING ---
     with t_stats:
