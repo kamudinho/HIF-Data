@@ -173,24 +173,29 @@ def vis_side(dp=None):
                         st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
             # HØJRE SIDE (Bane og kontrol)
+            # HØJRE SIDE (Bane og kontrol)
             with c_pitch_side:
-                # Vi deler kolonne 2 op i tre: en spacer, tekst-plads, og dropdown-plads
-                # Det gør at teksten kan stå til venstre for dropdownen, men stadig i højre side af skærmen
-                c_spacer, c_desc_text, c_vis_dropdown = st.columns([0.5, 2.5, 1.2])
+                # Vi bruger én række og HTML/CSS til at samle tekst og dropdown i højre side
+                # Dette sikrer at de flugter perfekt med navnet til venstre
+                st.markdown(
+                    f"""
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: -32px;">
+                        <div style="color: #666; font-size: 0.85rem; padding-top: 5px;">
+                            {descriptions.get(visning if 'visning' in locals() else 'Heatmap')}
+                        </div>
+                        <div style="width: 150px;">
+                            </div>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
                 
+                # Vi placerer dropdownen i sin egen kolonne-struktur for at få den helt til højre
+                c_spacer, c_vis_dropdown = st.columns([2.5, 1])
                 with c_vis_dropdown:
                     visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
                 
-                with c_desc_text:
-                    # Vi bruger styling til at højrejustere teksten, så den flugter mod dropdown-menuen
-                    desc_html = f"""
-                        <div style="text-align: right; margin-top: 5px;">
-                            <span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span>
-                        </div>
-                    """
-                    st.markdown(desc_html, unsafe_allow_html=True)
-                
-                # Banen tegnes herunder
+                # Banen tegnes direkte herunder
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
