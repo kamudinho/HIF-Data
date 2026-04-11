@@ -47,7 +47,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     
     # 1. Hent SSIID for det valgte hold (fra din TEAMS mapping)
     # Jeg antager her, at dit SSIID ligger i din TEAMS-config
-    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssiid')
+    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
     
     if not target_ssiid:
         # Fallback til Hvidovre hvis intet er valgt/fundet
