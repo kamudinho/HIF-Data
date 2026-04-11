@@ -43,7 +43,9 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_opta_uuid, db_conn):
-    # SQL skræddersyet til din SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS tabel
+    # Vi fjerner 'p' fra starten af UUID'en, hvis det findes
+    clean_id = str(player_opta_uuid).replace('p', '')
+    
     sql = f"""
         SELECT 
             MATCH_DATE,
@@ -56,7 +58,8 @@ def get_physical_data(player_opta_uuid, db_conn):
             AVERAGE_SPEED,
             NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE "optaId" = '{player_opta_uuid}'
+        WHERE "optaId" = '{clean_id}'
+        OR "optaId" = '{player_opta_uuid}'
         ORDER BY MATCH_DATE DESC
     """
     return db_conn.query(sql)
