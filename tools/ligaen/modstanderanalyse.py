@@ -367,18 +367,20 @@ def vis_side(dp=None):
                 if v_med == "Afslutninger":
                     df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
                 
+                # --- LOGIK FOR T2 ---
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # Sortering: Procent først, dernæst volumen. Minimum 100 aktioner.
-                df_top = df_top[df_top['TOTAL'] >= 10]
+                # Sæt grænsen: 100 for pasnings-kategorier, ellers 1 (for at undgå division med 0)
+                min_limit = 100 if v_med in ["Opbygning", "Gennembrud"] else 1
+                
+                df_top = df_top[df_top['TOTAL'] >= min_limit]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
-                    st.info("Ingen spillere med +100 aktioner")
+                    st.info(f"Ingen spillere har nået grænsen på {min_limit} aktioner.")
                 else:
                     for _, r in df_top.iterrows():
                         current_rate = int(r['RATE'])
-                        st.markdown(f"""
                             <div style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                     <span>{r['PLAYER_NAME']}</span>
