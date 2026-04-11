@@ -369,26 +369,26 @@ def vis_side(dp=None):
                 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # --- NY FILTRERING OG SORTERING ---
-                # Kræv mindst 100 aktioner og sorter efter RATE (primær) og TOTAL (sekundær)
+                # Sortering: Procent først, dernæst volumen. Minimum 100 aktioner.
                 df_top = df_top[df_top['TOTAL'] >= 100]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
-                    st.info("Ingen spillere har nået grænsen på 100 aktioner endnu.")
+                    st.info("Ingen spillere med +100 aktioner")
                 else:
                     for _, r in df_top.iterrows():
-                    st.markdown(f"""
-                        <div style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate}%)</span>
+                        current_rate = int(r['RATE'])
+                        st.markdown(f"""
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                    <span>{r['PLAYER_NAME']}</span>
+                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({current_rate}%)</span>
+                                </div>
+                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                    <div style="background-color: #084594; height: 5px; width: {current_rate}%; border-radius: 4px;"></div>
+                                </div>
                             </div>
-                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #084594; height: 5px; width: {rate}%; border-radius: 4px;"></div>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
     with t3:
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
@@ -432,21 +432,27 @@ def vis_side(dp=None):
                 ).reset_index()
     
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-                df_top = df_top.sort_values('TOTAL', ascending=False).head(8)
+                
+                # Sortering: Procent først, dernæst volumen. Minimum 100 aktioner.
+                df_top = df_top[df_top['TOTAL'] >= 100]
+                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
     
-                for _, r in df_top.iterrows():
-                    rate = int(r['RATE'])
-                    st.markdown(f"""
-                        <div style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate}%)</span>
+                if df_top.empty:
+                    st.info("Ingen spillere med +100 aktioner")
+                else:
+                    for _, r in df_top.iterrows():
+                        current_rate = int(r['RATE'])
+                        st.markdown(f"""
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                    <span>{r['PLAYER_NAME']}</span>
+                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({current_rate}%)</span>
+                                </div>
+                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                    <div style="background-color: #ec7014; height: 5px; width: {current_rate}%; border-radius: 4px;"></div>
+                                </div>
                             </div>
-                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #ec7014; height: 5px; width: {rate}%; border-radius: 4px;"></div>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                 
     with t4:
         if not df_all_events.empty:
