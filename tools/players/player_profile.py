@@ -120,23 +120,25 @@ def vis_side(dp=None):
                 "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
             }
 
-            # 1. Hovedlayout (Definerer højden for begge sider)
+            # Pre-calculation for at sikre synkroniserede tal
+            df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
+            df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+            akt_stats = pd.DataFrame()
+            if not df_filtreret.empty:
+                akt_stats = df_filtreret.groupby('Action_Label').agg(
+                    Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
+                ).sort_values('Total', ascending=False)
+
+            # --- HOVEDLAYOUT ---
+            # Vi definerer de to hovedkolonner med det samme
             c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
             
+            # VENSTRE SIDE (Stats)
             with c_stats_side:
-                # Navnet starter her
-                st.markdown(f'<div class="player-header" style="margin-top:0;">{valgt_spiller}</div>', unsafe_allow_html=True)
+                # Navnet starter helt i top
+                st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
                 
-                # --- DATA PROCESSERING ---
-                df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
-                df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
-                akt_stats = pd.DataFrame()
-                if not df_filtreret.empty:
-                    akt_stats = df_filtreret.groupby('Action_Label').agg(
-                        Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
-                    ).sort_values('Total', ascending=False)
-
-                # Beregninger til Metrics
+                # Beregninger
                 total_akt = len(df_spiller)
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_count = len(pas_df)
@@ -148,7 +150,8 @@ def vis_side(dp=None):
                 touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
                 touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
 
-                # Metrics Grid (4 pr. række)
+                # Metrics i 4 per række
+                st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
                 m_r1 = st.columns(4)
                 m_r1[0].metric("Aktion", total_akt)
                 m_r1[1].metric("Touch", touch_count)
@@ -161,7 +164,7 @@ def vis_side(dp=None):
                 m_r2[2].metric("Indlæg", cross_count)
                 m_r2[3].metric("Erob.", erob_count)
                 
-                st.markdown("<hr style='margin: 12px 0; opacity: 0.7;'>", unsafe_allow_html=True)                
+                st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)                
                 st.write("**Top 10: Aktioner**")
                 
                 if not akt_stats.empty:
@@ -171,17 +174,19 @@ def vis_side(dp=None):
                         stats_html = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
                         st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
+            # HØJRE SIDE (Bane og kontrol)
             with c_pitch_side:
-                # Her sikrer vi, at dropdown og beskrivelse starter i samme højde som navnet til venstre
-                c_pitch_desc, c_pitch_sel = st.columns([2.5, 1])
+                # Vi laver en indre række her for at få tekst og dropdown på samme linje som navnet til venstre
+                c_desc_text, c_vis_dropdown = st.columns([2.5, 1])
                 
-                with c_pitch_sel:
+                with c_desc_text:
+                    # Denne tekst vil nu flugte med navnet til venstre
+                    st.markdown(f"<div style='margin-top: 5px;'><b>{valgt_spiller}:</b> <span style='color: #666;'>{descriptions.get(visning if 'visning' in locals() else 'Heatmap')}</span></div>", unsafe_allow_html=True)
+                
+                with c_vis_dropdown:
                     visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
                 
-                with c_pitch_desc:
-                    st.markdown(f"**{visning}:** <span style='color: #666; font-size: 14px;'>{descriptions.get(visning)}</span>", unsafe_allow_html=True)
-                
-                # Banen
+                # Banen tegnes direkte under kontrol-rækken
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
