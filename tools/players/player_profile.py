@@ -138,9 +138,9 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk Data", "Statistik", "Sammenligning"])
+    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk data", "Statistik", "Sammenligning"])
 
-    # --- TAB: SPILLERPROFIL ---
+    # --- TAB: SPILLERPROFIL (GENETABLERET) ---
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
@@ -149,6 +149,9 @@ def vis_side(dp=None):
             "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
         }
 
+        # Definer touch_ids tidligt til brug i metrics
+        touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
+        
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
         akt_stats = pd.DataFrame()
         if not df_filtreret.empty:
@@ -159,26 +162,36 @@ def vis_side(dp=None):
         with c_stats_side:
             st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
             
+            # Beregn alle 8 metrics
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
-            pas_acc = (pas_df['OUTCOME'].sum() / len(pas_df) * 100) if len(pas_df) > 0 else 0
+            pas_count = len(pas_df)
+            pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
             
             chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
             shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
-            cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x)])
+            cross_count = len(df_spiller[df_all['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)]) # Sikrer match mod indlæg
             erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
-            touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
             touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
 
             st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-            m_r1 = st.columns(4); m_r2 = st.columns(4)
-            m_r1[0].metric("Aktion", total_akt); m_r1[1].metric("Touch", touch_count)
-            m_r1[2].metric("Pasn.", len(pas_df)); m_r1[3].metric("Acc %", f"{int(pas_acc)}%")
-            m_r2[0].metric("Skud", shots_count); m_r2[1].metric("Chancer", int(chancer_skabt))
-            m_r2[2].metric("Indlæg", cross_count); m_r2[3].metric("Erob.", erob_count)
+            # Række 1: De første 4 metrics
+            m_r1 = st.columns(4)
+            m_r1[0].metric("Aktioner", total_akt)
+            m_r1[1].metric("Berøringer", touch_count)
+            m_r1[2].metric("Pasninger", pas_count)
+            m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
+            
+            # Række 2: De næste 4 metrics
+            m_r2 = st.columns(4)
+            m_r2[0].metric("Skud", shots_count)
+            m_r2[1].metric("Chancer", int(chancer_skabt))
+            m_r2[2].metric("Indlæg", cross_count)
+            m_r2[3].metric("Erobringer", erob_count)
             
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)                
             st.write("**Top 10: Aktioner**")
+            
             if not akt_stats.empty:
                 bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
                 for akt, row in akt_stats.head(10).iterrows():
@@ -198,23 +211,24 @@ def vis_side(dp=None):
             draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
             
             df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
-            if visning == "Heatmap":
-                pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-            elif visning == "Berøringer":
-                d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
-                ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
-            elif visning == "Afslutninger":
-                d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-                ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
-                ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=5)
-            elif visning == "Erobringer":
-                d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-                ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
+            if not df_plot.empty:
+                if visning == "Heatmap":
+                    pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+                elif visning == "Berøringer":
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+                    ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                elif visning == "Afslutninger":
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
+                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=5)
+                elif visning == "Erobringer":
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                    ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
-    # --- TAB: FYSISK DATA ---
+    # --- TAB: FYSISK DATA (MED BAR-CHARTS) ---
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         if df_phys is not None and not df_phys.empty:
@@ -225,16 +239,15 @@ def vis_side(dp=None):
             latest = df_phys.iloc[0]
 
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Seneste Dist", f"{round(latest['DISTANCE']/1000, 2)} km", delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
+            m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km", delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
             m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m")
-            m3.metric("Top Speed", f"{round(latest['TOP_SPEED'], 1)} km/t")
-            m4.metric("HI Akt.", int(latest['HI_RUNS']))
+            m3.metric("Topfart", f"{round(latest['TOP_SPEED'], 1)} km/t")
+            m4.metric("Højintense Akt.", int(latest['HI_RUNS']))
 
-            st.markdown("---")
-            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Performance Grafer"])
+            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
             
             with t_sub_charts:
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Top Speed (km/t)"], default="HSR (m)", key="phys_graph_control")
+                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
                 mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Top Speed (km/t)": ("TOP_SPEED", 1, "km/t")}
                 col, div, suffix = mapping[cat_choice]
 
