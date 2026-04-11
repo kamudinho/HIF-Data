@@ -120,33 +120,28 @@ def vis_side(dp=None):
                 "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
             }
 
-            # 1. Top-kontrolbar: Kun visningstype (Spiller styres nu KUN øverst på siden)
-            col_spacer_top, col_h_visning = st.columns([3.5, 1])
-            visning = col_h_visning.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
-
-            # 2. Forberedelse af Top 10 (Sikrer synkronisering af tal)
-            df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
-            akt_stats = pd.DataFrame()
-            if not df_filtreret.empty:
-                akt_stats = df_filtreret.groupby('Action_Label').agg(
-                    Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
-                ).sort_values('Total', ascending=False)
-            
-            # 3. Hovedlayout
+            # 1. Hovedlayout (Definerer højden for begge sider)
             c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
             
             with c_stats_side:
-                st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
+                # Navnet starter her
+                st.markdown(f'<div class="player-header" style="margin-top:0;">{valgt_spiller}</div>', unsafe_allow_html=True)
                 
-                # Beregninger
+                # --- DATA PROCESSERING ---
+                df_spiller = df_all_h[df_all_h['VISNINGSNAVN'] == valgt_spiller].copy()
+                df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+                akt_stats = pd.DataFrame()
+                if not df_filtreret.empty:
+                    akt_stats = df_filtreret.groupby('Action_Label').agg(
+                        Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')
+                    ).sort_values('Total', ascending=False)
+
+                # Beregninger til Metrics
                 total_akt = len(df_spiller)
                 pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
                 pas_count = len(pas_df)
                 pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
-                
-                # CHANCER SKABT: Synkroniseret med listen nedenfor
                 chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
-                
                 shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
                 cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x)])
                 erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
@@ -177,19 +172,37 @@ def vis_side(dp=None):
                         st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
             with c_pitch_side:
-                # Beskrivelse flugter nu med banen i kolonne 2
-                st.markdown(f"**{visning}:** <span style='color: #666;'>{descriptions.get(visning)}</span>", unsafe_allow_html=True)
+                # Her sikrer vi, at dropdown og beskrivelse starter i samme højde som navnet til venstre
+                c_pitch_desc, c_pitch_sel = st.columns([2.5, 1])
                 
+                with c_pitch_sel:
+                    visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
+                
+                with c_pitch_desc:
+                    st.markdown(f"**{visning}:** <span style='color: #666; font-size: 14px;'>{descriptions.get(visning)}</span>", unsafe_allow_html=True)
+                
+                # Banen
                 pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 draw_player_info_box(ax, hold_logo, valgt_spiller, "2025/2026", visning)
                 
-                # Plotting logik (Heatmap, Berøringer, etc.)
                 df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
                 if not df_plot.empty:
                     if visning == "Heatmap":
                         pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-                    # ... (resten af din plotting logik her)
+                    elif visning == "Berøringer":
+                        d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                    elif visning == "Afslutninger":
+                        d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+                        goals = d[d['EVENT_TYPEID'] == 16]
+                        misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                        ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6, label='Afslutning')
+                        ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='*', edgecolors='black', zorder=5, label='Mål')
+                        ax.legend(loc='upper right', ncol=2, fontsize=8, frameon=True)
+                    elif visning == "Erobringer":
+                        d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                        ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
                 
                 st.pyplot(fig, use_container_width=True)
 
