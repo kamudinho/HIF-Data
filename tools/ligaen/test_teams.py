@@ -14,20 +14,24 @@ def get_logo_html(uuid):
     return f'<img src="{url}" width="20">' if url else ""
 
 def style_form(f):
+    if not f: return ""
     res = ""
+    # Tag de sidste 5 kampe
     for char in f[-5:]:
         color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
-# --- 2. DATA LOADING ---
+# --- 2. DATA LOADING (RETTET TIL AT BRUGE .QUERY FOR SESSION STABILITET) ---
 
 @st.cache_data(ttl=3600)
 def load_liga_data():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     query = f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'"
-    return pd.read_sql(query, conn)
+    # Vi bruger .query() i stedet for pd.read_sql for at undgå session-timeout fejl
+    df = conn.query(query)
+    return df
 
 @st.cache_data(ttl=3600)
 def get_wyscout_stats():
@@ -53,7 +57,7 @@ def get_wyscout_stats():
         WHERE tm.COMPETITION_WYID = 328
         GROUP BY t.TEAMNAME
     """
-    return pd.read_sql(query, conn)
+    return conn.query(query)
 
 # --- 3. CHART FUNKTION (HEAD-TO-HEAD) ---
 
@@ -62,8 +66,15 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     col_width = 0.18
     gap = 0.05
 
-    u1 = df_liga[df_liga['HOLD'] == team1]['UUID'].values[0]
-    u2 = df_liga[df_liga['HOLD'] == team2]['UUID'].values[0]
+    # Find UUIDs for logoer
+    t1_data = df_liga[df_liga['HOLD'] == team1]
+    t2_data = df_liga[df_liga['HOLD'] == team2]
+    
+    if t1_data.empty or t2_data.empty:
+        st.error("Kunne ikke finde holddata til grafen.")
+        return
+
+    u1, u2 = t1_data['UUID'].values[0], t2_data['UUID'].values[0]
     l1, l2 = get_logo_url(u1), get_logo_url(u2)
 
     for i, m in enumerate(metrics):
@@ -72,13 +83,13 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         
         d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
+        
         v1 = float(d1[m.upper()].iloc[0] if not d1.empty else 0)
         v2 = float(d2[m.upper()].iloc[0] if not d2.empty else 0)
         
         prec = ".2f" if 'XG' in m.upper() else ".1f"
         max_y = max(v1, v2, 0.5)
 
-        # 1. Søjler
         fig.add_trace(go.Bar(
             x=[0, 1], y=[v1, v2],
             marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), 
@@ -86,7 +97,6 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
             width=0.7, showlegend=False, xaxis=xref, yaxis=yref
         ))
 
-        # 2. VÆRDIER OVER BARENE (Hvid skrift)
         fig.add_annotation(dict(
             x=0, y=v1, xref=xref, yref=yref, text=f"<b>{format(v1, prec)}</b>",
             showarrow=False, yshift=15, font=dict(size=13, color="black")
@@ -96,14 +106,12 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
             showarrow=False, yshift=15, font=dict(size=13, color="black")
         ))
 
-        # 3. KATEGORI UNDER BARENE
         fig.add_annotation(dict(
             x=0.5, y=-0.1, xref=f"{xref} domain", yref=f"{yref} domain",
             text=f"<b>{labels[i]}</b>", showarrow=False, 
             font=dict(size=12, color="black"), yanchor="top"
         ))
 
-        # 4. LOGOER I TOPPEN
         if l1:
             fig.add_layout_image(dict(
                 source=l1, xref=xref, yref="paper", x=0, y=1.05,
@@ -115,7 +123,6 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
                 sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"
             ))
 
-        # 5. AKSE SETUP
         fig.update_layout({
             f"xaxis{suffix}": dict(
                 domain=[i*(col_width+gap), i*(col_width+gap)+col_width], 
@@ -135,16 +142,22 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
 # --- 4. HOVEDFUNKTION ---
 
 def vis_side(dp_unused=None):
-    df_opta = load_liga_data()
-    df_wy = get_wyscout_stats()
+    try:
+        df_opta = load_liga_data()
+        df_wy = get_wyscout_stats()
+    except Exception as e:
+        st.error(f"Fejl ved hentning af data: {e}")
+        if st.button("Prøv igen"):
+            st.cache_data.clear()
+            st.rerun()
+        return
     
-    if df_opta.empty:
-        st.warning("Data ikke fundet."); return
+    if df_opta is None or df_opta.empty:
+        st.warning("Ingen kampdata fundet."); return
 
     df_opta.columns = [c.upper() for c in df_opta.columns]
     df_opta['MATCH_DATE_FULL'] = pd.to_datetime(df_opta['MATCH_DATE_FULL'])
     
-    # Beregn Tabel-data
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
         h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -152,7 +165,8 @@ def vis_side(dp_unused=None):
             if uuid not in stats:
                 stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
         
-        if str(row['MATCH_STATUS']).strip().capitalize() == 'Played':
+        status = str(row['MATCH_STATUS']).strip().lower()
+        if status in ['played', 'full-time', 'finished']:
             h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
             stats[h_uuid]['K'] += 1; stats[a_uuid]['K'] += 1
             stats[h_uuid]['M+'] += h_g; stats[h_uuid]['M-'] += a_g
@@ -164,9 +178,9 @@ def vis_side(dp_unused=None):
             else:
                 stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['U'] += 1; stats[a_uuid]['U'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
 
-    # Næste modstander
     next_opp = {}
-    df_future = df_opta[df_opta['MATCH_STATUS'].str.strip().str.capitalize() != 'Played'].sort_values('MATCH_DATE_FULL')
+    df_future = df_opta[~df_opta['MATCH_STATUS'].str.strip().str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
+    
     for uuid in stats.keys():
         f = df_future[(df_future['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_future['CONTESTANTAWAY_OPTAUUID'] == uuid)]
         if not f.empty:
@@ -180,7 +194,7 @@ def vis_side(dp_unused=None):
     df_liga = pd.DataFrame(stats.values())
     df_liga['MD'] = df_liga['M+'] - df_liga['M-']
     df_liga['NÆSTE'] = df_liga['UUID'].map(next_opp).fillna("-")
-    df_liga = df_liga.sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
+    df_liga = df_liga.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     df_liga.insert(0, '#', df_liga.index + 1)
 
     t_liga, t_h2h = st.tabs(["Ligaoversigt", "Head-to-head"])
@@ -188,50 +202,18 @@ def vis_side(dp_unused=None):
     with t_liga:
         st.markdown("""
             <style>
-                /* Generel tabel styling */
-                .league-table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    font-size: 14px; 
-                } 
-                
-                /* 1. Centrer alle celler som udgangspunkt */
-                .league-table th, .league-table td { 
-                    text-align: center !important; 
-                    padding: 8px 4px;
-                    width: 90px;
-                }
-
-                /* 2. Venstrestil kolonne 3 (HOLD) */
-                .league-table td:nth-child(3), 
-                .league-table th:nth-child(3) { 
-                    text-align: left !important; 
-                    font-weight: bold;
-                    width: 200px;
-                }
-
-                /* 3. Venstrestil kolonne 11 (NÆSTE) */
-                .league-table td:nth-child(11), 
-                .league-table th:nth-child(11) { 
-                    text-align: left !important;
-                    width: 350px;
-                }
-
-                /* Logo-kolonnen (nr. 2) skal ofte have lidt mindre bredde */
-                .league-table td:nth-child(2) {
-                    width: 30px !important;
-                }
+                .league-table { width: 100%; border-collapse: collapse; font-size: 14px; } 
+                .league-table th, .league-table td { text-align: center !important; padding: 8px 4px; }
+                .league-table td:nth-child(3), .league-table th:nth-child(3) { text-align: left !important; font-weight: bold; width: 180px; }
+                .league-table td:nth-child(11), .league-table th:nth-child(11) { text-align: left !important; width: 200px; }
+                .league-table td:nth-child(2) { width: 30px !important; }
             </style>
         """, unsafe_allow_html=True)
         
         df_disp = df_liga.copy()
-        # Sikr at vi har de rigtige kolonner til rådighed
         df_disp.insert(1, ' ', [get_logo_html(u) for u in df_disp['UUID']])
-        
-        # Hvis style_form returnerer HTML cirkler, så sørg for at de er centreret
         df_disp['FORM'] = df_disp['FORM'].apply(style_form)
         
-        # Vis tabellen
         st.write(df_disp[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM', 'NÆSTE']].to_html(
             escape=False, index=False, border=0, classes='league-table'), unsafe_allow_html=True)
 
@@ -243,10 +225,12 @@ def vis_side(dp_unused=None):
         h_list2 = [h for h in h_list if h != team1]
         team2 = c2.selectbox("Hold 2", h_list2, index=0)
 
-        # FANER TIL STATISTIK
         tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
         with tabs[0]: draw_h2h_chart(team1, team2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_wy, "gen", df_liga)
         with tabs[1]: draw_h2h_chart(team1, team2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_wy, "xg", df_liga)
         with tabs[2]: draw_h2h_chart(team1, team2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSFROMBOX', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'I feltet', 'Danger Zone'], df_wy, "shot", df_liga)
         with tabs[3]: draw_h2h_chart(team1, team2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interc.', 'Tackler', 'Clearing'], df_wy, "def", df_liga)
         with tabs[4]: draw_h2h_chart(team1, team2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass", df_liga)
+
+if __name__ == "__main__":
+    vis_side()
