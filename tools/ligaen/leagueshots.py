@@ -41,14 +41,31 @@ ZONE_BOUNDARIES = {
 def load_league_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
+    
+    # Subquery til at finde de rigtige kampe
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+    
+    # SQL med JOIN på OPTA_PLAYERS for at sammensætte fulde navne
     sql = f"""
-        SELECT e.*, q.QUALIFIER_VALUE as XG_RAW FROM {DB}.OPTA_EVENTS e 
+        SELECT 
+            e.*, 
+            TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as FULL_PLAYER_NAME,
+            q.QUALIFIER_VALUE as XG_RAW 
+        FROM {DB}.OPTA_EVENTS e 
+        JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+            ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
-        WHERE e.EVENT_TYPEID IN (13,14,15,16) AND e.MATCH_OPTAUUID IN ({match_sql})
+        WHERE e.EVENT_TYPEID IN (13,14,15,16) 
+        AND e.MATCH_OPTAUUID IN ({match_sql})
     """
+    
     df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     df.columns = [c.upper() for c in df.columns]
+    
+    # Overskriv PLAYER_NAME med det fulde navn fra vores JOIN
+    if 'FULL_PLAYER_NAME' in df.columns:
+        df['PLAYER_NAME'] = df['FULL_PLAYER_NAME']
+        
     return df
 
 @st.cache_data(ttl=3600)
@@ -81,11 +98,11 @@ def vis_side(dp=None):
         .stTabs { margin-top: 10px !important; }
         .stat-box { 
             background-color: #f8f9fa; 
-            padding: 5px !important; /* Øget lidt for at give luft indeni boksen også */
+            padding: 5px !important; 
             border-radius: 5px; 
             border-left: 5px solid #cc0000; 
-            margin-bottom: 20px !important; /* Her styres afstanden mellem boksene */
-            display: block; /* Sikrer at margenen respekteres korrekt */
+            margin-bottom: 20px !important; 
+            display: block; 
         }
         .stat-label { font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: bold; }
         .stat-value { font-size: 1.2rem; font-weight: 800; color: #1a1a1a; margin-top: 3px; }
@@ -111,7 +128,6 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    # DZ Definition: 88.5m til 105m (mållinje)
     df_team['IS_DZ'] = (df_team['X_M'] >= 94.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
@@ -119,7 +135,6 @@ def vis_side(dp=None):
 
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
-        # TAB 0: SPILLEROVERSIGT (OPDATERET LOGIK)
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
             s, m = len(d), len(d[d['EVENT_TYPEID']==16])
@@ -134,20 +149,17 @@ def vis_side(dp=None):
                 "DZ-Skud": dz_s,
                 "DZ-Mål": dz_m,
                 "DZ-Konv.%": (dz_m/dz_s*100 if dz_s > 0 else 0),
-                # Ganger med 100 her, så tallet er f.eks. 100 eller 85
                 "DZ-Andel": (dz_s / s * 100 if s > 0 else 0) 
             })
 
         df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
-        
-        # Beregn højde: ca. 35px per række + 40px til header
         dynamic_height = (len(df_display) + 1) * 35 + 40
 
         st.dataframe(
             df_display,
             use_container_width=True, 
             hide_index=True,
-            height=dynamic_height, # Her fjernes scroll-baren
+            height=dynamic_height,
             column_config={
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
@@ -207,7 +219,9 @@ def vis_side(dp=None):
                     if len(z_d) > 0:
                         top_p = z_d['PLAYER_NAME'].value_counts().idxmax()
                         z_summary.append({"Zone": z, "Antal": len(z_d), "Andel": (len(z_d)/total_count if total_count > 0 else 0), "Topscorer": top_p})
-                st.dataframe(pd.DataFrame(z_summary).sort_values("Antal", ascending=False), hide_index=True, use_container_width=True, column_config={"Andel": st.column_config.NumberColumn(format="%.1f%%")})
+                
+                if z_summary:
+                    st.dataframe(pd.DataFrame(z_summary).sort_values("Antal", ascending=False), hide_index=True, use_container_width=True, column_config={"Andel": st.column_config.NumberColumn(format="%.1f%%")})
             with c1:
                 pitch = VerticalPitch(**pitch_cfg)
                 fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
