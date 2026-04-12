@@ -155,23 +155,31 @@ def vis_side(dp=None):
         df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
         dynamic_height = (len(df_display) + 1) * 35 + 40
 
-        st.dataframe(
-            df_display,
-            use_container_width=True, 
-            hide_index=True,
-            height=dynamic_height,
-            column_config={
-                "DZ-Andel": st.column_config.ProgressColumn(
-                    "DZ-Andel", 
-                    help="Andel af skud foretaget i Danger Zone",
-                    format="%d%%", 
-                    min_value=0, 
-                    max_value=100
-                ),
-                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%"),
-                "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%")
-            }
-        )
+        df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
+    dynamic_height = (len(df_display) + 1) * 35 + 40
+
+    st.dataframe(
+        df_display,
+        use_container_width=True, 
+        hide_index=True,
+        height=dynamic_height,
+        column_config={
+            "Spiller": st.column_config.TextColumn(
+                "Spiller",
+                width="large",  # Gør kolonnen markant bredere
+            ),
+            "DZ-Andel": st.column_config.ProgressColumn(
+                "DZ-Andel", 
+                help="Andel af skud foretaget i Danger Zone",
+                format="%d%%", 
+                min_value=0, 
+                max_value=100,
+                width="medium"
+            ),
+            "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%", width="small"),
+            "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%", width="small")
+        }
+    )
         
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
