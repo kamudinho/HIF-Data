@@ -166,7 +166,7 @@ def vis_side(dp=None):
         column_config={
             "Spiller": st.column_config.TextColumn(
                 "Spiller",
-                width="large",  # Gør kolonnen markant bredere
+                width="medium",  # Gør kolonnen markant bredere
             ),
             "DZ-Andel": st.column_config.ProgressColumn(
                 "DZ-Andel", 
