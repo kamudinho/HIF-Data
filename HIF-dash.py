@@ -118,9 +118,9 @@ with st.sidebar:
     if hoved_omraade == "HVIDOVRE IF":
         sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
     elif hoved_omraade == "HOLDANALYSE":
-        sel = option_menu(None, options=filtrer_menu(["Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
+        sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
-        sel = option_menu(None, options=["Spillerprofil", "Modstanderanalyse", "Charts"])
+        sel = option_menu(None, options=["Spillerprofil", "Charts"])
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
@@ -158,9 +158,6 @@ try:
         if sel == "Charts":
             import tools.ligaen.chart as pc
             pc.vis_side()
-        elif sel == "Modstanderanalyse":
-            import tools.ligaen.modstanderanalyse as ma
-            ma.vis_side()
         elif sel == "Spillerprofil":
             import tools.players.player_profile as pp
             pp.vis_side()
@@ -178,6 +175,9 @@ try:
         elif sel == "Fysisk data":
             import tools.ligaen.fysisk as fd_page
             fd_page.vis_side(_get_snowflake_conn())
+        elif sel == "Modstanderanalyse":
+            import tools.ligaen.modstanderanalyse as ma
+            ma.vis_side()
 
     elif hoved_omraade == "ADMIN":
         if sel == "System Log":
