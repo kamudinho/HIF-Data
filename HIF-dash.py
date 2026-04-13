@@ -186,6 +186,10 @@ try:
         elif sel == "Profil":
             import tools.admin_page.profil as profil
             profil.vis_side({})
+        elif sel == "Fysisk profil":
+            import tools.player.fysisk_player as fp
+            fp.vis_side()
+
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
