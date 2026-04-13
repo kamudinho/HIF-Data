@@ -4,20 +4,14 @@ import numpy as np
 import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
-import requests
-from PIL import Image
-from io import BytesIO
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 HVIDOVRE_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
-CURRENT_SEASON = "2025/2026"
+LIGA_IDS = "('335', '328', '329', '43319', '331')" # Standard liga IDs
 
 def get_advanced_physical_data(player_name, player_opta_uuid, db_conn):
-    """ 
-    Henter avanceret fysisk data inkl. TIP (Team in Possession), 
-    OTIP (Opponent in Possession) og BOP (Ball out of Play).
-    """
+    """ Henter avanceret fysisk data inkl. TIP, OTIP og BOP baseret på din SQL """
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
     sql = f"""
@@ -49,75 +43,100 @@ def get_advanced_physical_data(player_name, player_opta_uuid, db_conn):
         ON p.MATCH_SSIID = h.MATCH_SSIID 
         AND p."optaId" = h.opta_id
     WHERE (p."optaId" = '{clean_id}' OR p.PLAYER_NAME ILIKE '%{player_name}%')
-      AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+      AND p.MATCH_DATE >= '2025-07-01'
     ORDER BY p.MATCH_DATE DESC
     """
     return db_conn.query(sql)
 
 def vis_side(dp=None):
-    st.markdown("<style>.metric-card { background: #f8f9fa; padding: 10px; border-radius: 5px; }</style>", unsafe_allow_html=True)
-    
+    st.set_page_config(layout="wide")
     conn = _get_snowflake_conn()
-    if not conn or dp is None:
-        st.error("Ingen spiller valgt.")
+    
+    if not conn:
+        st.error("Kunne ikke forbinde til Snowflake.")
         return
 
-    valgt_spiller = dp['spiller_navn']
-    valgt_player_uuid = dp['spiller_uuid']
+    # --- MANUEL SPILLERVÆLGER (HVIS DP ER NONE) ---
+    if dp is None:
+        st.info("Ingen spiller sendt fra oversigten. Vælg en spiller manuelt herunder:")
+        c1, c2 = st.columns(2)
+        
+        # Hent spillere fra Hvidovre (baseret på dit SSID)
+        sql_players = f"""
+            SELECT DISTINCT PLAYER_NAME, "optaId" 
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            WHERE MATCH_DATE >= '2025-07-01'
+            ORDER BY PLAYER_NAME
+        """
+        df_all_players = conn.query(sql_players)
+        
+        if df_all_players is not None:
+            valgt_navn = c1.selectbox("Spiller", df_all_players['PLAYER_NAME'].tolist())
+            valgt_id = df_all_players[df_all_players['PLAYER_NAME'] == valgt_navn]['optaId'].iloc[0]
+            player_info = {'spiller_navn': valgt_navn, 'spiller_uuid': valgt_id}
+        else:
+            st.error("Kunne ikke hente spillerliste.")
+            return
+    else:
+        player_info = dp
 
-    df = get_advanced_physical_data(valgt_spiller, valgt_player_uuid, conn)
+    # --- HENT DATA ---
+    df = get_advanced_physical_data(player_info['spiller_navn'], player_info['spiller_uuid'], conn)
 
     if df is None or df.empty:
-        st.warning(f"Ingen avancerede fysiske data fundet for {valgt_spiller}.")
+        st.warning(f"Ingen avanceret fysisk data fundet for {player_info['spiller_navn']}.")
         return
+
+    st.title(f"Fysisk Analyse: {player_info['spiller_navn']}")
 
     # --- KAMPVALG ---
     df['Display'] = df['MATCH_DATE'].astype(str) + " : " + df['MATCH_TEAMS']
-    valgt_kamp = st.selectbox("Vælg kamp", df['Display'].tolist())
+    valgt_kamp = st.selectbox("Vælg kamp for detaljer", df['Display'].tolist())
     row = df[df['Display'] == valgt_kamp].iloc[0]
 
-    # --- TOP KPI'ER ---
+    # --- OVERORDNEDE METRICS ---
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Dist", f"{round(row['DISTANCE']/1000, 2)} km")
-    m2.metric("HSR", f"{int(row['DISTANCE_HSR'])} m")
+    m1.metric("Total Distance", f"{round(row['DISTANCE']/1000, 2)} km")
+    m2.metric("HSR (High Speed)", f"{int(row['DISTANCE_HSR'])} m")
     m3.metric("Sprint", f"{int(row['DISTANCE_SPRINT'])} m")
     m4.metric("Topfart", f"{round(row['TOP_SPEED'], 1)} km/t")
 
     st.markdown("---")
 
-    col_left, col_right = st.columns(2)
+    # --- VISUALISERING AF POSSESSION CONTEXT ---
+    col1, col2 = st.columns(2)
 
-    with col_left:
-        st.subheader("Possession Context (Distance)")
-        # TIP vs OTIP vs BOP
-        labels = ['Med bold (TIP)', 'Mod bold (OTIP)', 'Bold ude (BOP)']
+    with col1:
+        st.subheader("Arbejdsrate pr. fase (Distance)")
+        labels = ['Eget hold i besiddelse (TIP)', 'Modstander i besiddelse (OTIP)', 'Bold ude af spil (BOP)']
         values = [row['DISTANCE_TIP'], row['DISTANCE_OTIP'], row['DISTANCE_BOP']]
         
-        fig_pos = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4, marker_colors=['#00CC96', '#EF553B', '#636EFA'])])
-        fig_pos.update_layout(height=350, margin=dict(t=0, b=0, l=0, r=0))
-        st.plotly_chart(fig_pos, use_container_width=True)
+        fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4, marker_colors=['#2ecc71', '#e74c3c', '#95a5a6'])])
+        fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-    with col_right:
-        st.subheader("Intensitets-zoner (Meter)")
-        # Zone opdeling
-        zones = ['Walking', 'Jogging', 'Running', 'HSR', 'Sprinting']
-        z_values = [row['WALKING'], row['JOGGING'], row['RUNNING'], row['DISTANCE_HSR'], row['DISTANCE_SPRINT']]
+    with col2:
+        st.subheader("Højintensive løb (HI Runs)")
+        # Bar chart for HI Runs i de forskellige faser
+        hi_labels = ['Total', 'Med bold (TIP)', 'Mod bold (OTIP)', 'Ude af spil (BOP)']
+        hi_values = [row['HI_RUNS_TOTAL'], row['HI_RUNS_TIP'], row['HI_RUNS_OTIP'], row['HI_RUNS_BOP']]
         
-        fig_zones = go.Figure(data=[go.Bar(x=zones, y=z_values, marker_color='#cc0000')])
-        fig_zones.update_layout(height=350, margin=dict(t=20, b=20, l=20, r=20), plot_bgcolor='white')
-        st.plotly_chart(fig_zones, use_container_width=True)
+        fig_hi = go.Figure(data=[go.Bar(x=hi_labels, y=hi_values, marker_color='#cc0000')])
+        fig_hi.update_layout(yaxis_title="Antal aktioner", plot_bgcolor='white', height=300)
+        st.plotly_chart(fig_hi, use_container_width=True)
 
-    # --- HIGH INTENSITY BREAKDOWN ---
-    st.subheader("Høj-intensitetsløb (HI Runs)")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("HI Runs (Total)", int(row['HI_RUNS_TOTAL']))
-    c2.metric("HI Runs (Med bold)", int(row['HI_RUNS_TIP']))
-    c3.metric("HI Runs (Mod bold)", int(row['HI_RUNS_OTIP']))
+    # --- INTENSITETSZONER ---
+    st.subheader("Distance i Intensitetszoner (m)")
+    zones = ['Walking', 'Jogging', 'Running', 'HSR', 'Sprinting']
+    z_values = [row['WALKING'], row['JOGGING'], row['RUNNING'], row['DISTANCE_HSR'], row['DISTANCE_SPRINT']]
+    
+    fig_zones = go.Figure(data=[go.Bar(x=zones, y=z_values, text=z_values, textposition='auto', marker_color='#34495e')])
+    fig_zones.update_layout(plot_bgcolor='white', height=350)
+    st.plotly_chart(fig_zones, use_container_width=True)
 
-    # --- HISTORIK ---
-    with st.expander("Se fuld sæsonoversigt"):
-        st.dataframe(df[['MATCH_DATE', 'MATCH_TEAMS', 'DISTANCE', 'DISTANCE_HSR', 'DISTANCE_SPRINT', 'TOP_SPEED', 'HI_RUNS_TOTAL']], 
-                     hide_index=True, use_container_width=True)
+    # --- TABEL ---
+    with st.expander("Se rådata for sæsonen"):
+        st.dataframe(df.drop(columns=['Display']), hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
