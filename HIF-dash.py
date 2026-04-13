@@ -187,7 +187,7 @@ try:
             import tools.admin_page.profil as profil
             profil.vis_side({})
         elif sel == "Fysisk profil":
-            import tools.player.fysisk_player as fp
+            import tools.players.fysisk_player as fp
             fp.vis_side()
 
 
