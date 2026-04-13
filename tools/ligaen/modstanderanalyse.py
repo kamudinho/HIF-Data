@@ -381,6 +381,63 @@ def vis_side(dp=None):
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
+
+    with t3:
+        uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
+        c_left, c_right = st.columns([2, 1])
+        v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
+        
+        erobring_ids = [7, 8, 12, 127] 
+        duel_ids = [7, 44] 
+
+        if "Erobringer" in v_uden:
+            ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        elif "Pres" in v_uden:
+            ids, tit, cm, zn = erobring_ids, "Off. halvdel: PRES", "Oranges", "down"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        elif "Egen halvdel: Dueller" in v_uden:
+            ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 17) & (df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        else: # Off. halvdel: Dueller
+            ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
+            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+
+        total_act = len(df_f)
+
+        with c_left:
+            st.pyplot(plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+
+        with c_right:
+            acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
+            avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
+            m_cols = st.columns(3)
+            m_cols[0].metric("Total", total_act); m_cols[1].metric("p90", round(avg_p90, 1)); m_cols[2].metric("Succes", f"{int(acc_pct)}%")
+            
+            st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
+            st.write(f"**Top 8: {v_uden}**")
+            
+            if not df_f.empty:
+                df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('OUTCOME', 'sum')).reset_index()
+                df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
+                
+                # Her sorteres efter RATE (mindst 1 aktion)
+                df_top = df_top[df_top['TOTAL'] >= 1]
+                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
+    
+                for _, r in df_top.iterrows():
+                    rate_val = int(r['RATE'])
+                    st.markdown(f"""
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
+                                <span>{r['PLAYER_NAME']}</span>
+                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate_val}%)</span>
+                            </div>
+                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
+                                <div style="background-color: #ec7014; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
     with t4:
         if not df_all_events.empty:
