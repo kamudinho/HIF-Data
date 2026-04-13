@@ -124,7 +124,7 @@ with st.sidebar:
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil"]))
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Fysisk profil"]))
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
