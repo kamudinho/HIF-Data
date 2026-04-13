@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from data.data_load import _get_snowflake_conn
@@ -9,8 +8,8 @@ from data.data_load import _get_snowflake_conn
 DB = "KLUB_HVIDOVREIF.AXIS"
 HVIDOVRE_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
-def get_player_list(db_conn):
-    """ Henter alle unikke Hvidovre-spillere fra fysisk data """
+def get_hvidovre_players(db_conn):
+    """Henter alle spillere der har spillet for Hvidovre i SS-data"""
     sql = f"""
         SELECT DISTINCT PLAYER_NAME, "optaId" 
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
@@ -20,7 +19,7 @@ def get_player_list(db_conn):
     return db_conn.query(sql)
 
 def get_advanced_physical_data(player_opta_id, db_conn):
-    """ Henter den avancerede data inkl. possession faser """
+    """Henter den fulde fysiske profil med TIP/OTIP/BOP logik"""
     sql = f"""
     WITH hvidovre_ids AS (
         SELECT DISTINCT
@@ -36,15 +35,16 @@ def get_advanced_physical_data(player_opta_id, db_conn):
     )
     SELECT 
         p.MATCH_DATE, p.MATCH_TEAMS, p.PLAYER_NAME, p.MINUTES,
-        p.DISTANCE, p.AVERAGE_SPEED, p.TOP_SPEED,
+        p.DISTANCE, p.TOP_SPEED, p.AVERAGE_SPEED,
         p.WALKING, p.JOGGING, p.RUNNING, 
         p."HIGH SPEED RUNNING" AS DISTANCE_HSR,
         p.SPRINTING AS DISTANCE_SPRINT,
         p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS_TOTAL,
-        p.DISTANCE_TIP, p.HSR_DISTANCE_TIP, p.SPRINT_DISTANCE_TIP, p.NO_OF_HIGH_INTENSITY_RUNS_TIP AS HI_RUNS_TIP,
-        p.DISTANCE_OTIP, p.HSR_DISTANCE_OTIP, p.SPRINT_DISTANCE_OTIP, p.NO_OF_HIGH_INTENSITY_RUNS_OTIP AS HI_RUNS_OTIP,
-        p.DISTANCE_BOP, p.HSR_DISTANCE_BOP, p.SPRINT_DISTANCE_BOP, p.NO_OF_HIGH_INTENSITY_RUNS_BOP AS HI_RUNS_BOP,
-        p.MATCH_SSIID
+        p.DISTANCE_TIP, p.HSR_DISTANCE_TIP, p.SPRINT_DISTANCE_TIP, 
+        p.NO_OF_HIGH_INTENSITY_RUNS_TIP AS HI_RUNS_TIP,
+        p.DISTANCE_OTIP, p.HSR_DISTANCE_OTIP, p.SPRINT_DISTANCE_OTIP, 
+        p.NO_OF_HIGH_INTENSITY_RUNS_OTIP AS HI_RUNS_OTIP,
+        p.DISTANCE_BOP, p.MATCH_SSIID
     FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
     INNER JOIN hvidovre_ids h 
         ON p.MATCH_SSIID = h.MATCH_SSIID 
@@ -56,100 +56,99 @@ def get_advanced_physical_data(player_opta_id, db_conn):
     return db_conn.query(sql)
 
 def vis_side():
-    st.set_page_config(page_title="Fysisk Spillerprofil", layout="wide")
+    st.markdown("""
+        <style>
+        .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px solid #eee; }
+        [data-testid="stMetricValue"] { color: #cc0000; font-weight: bold; }
+        </style>
+    """, unsafe_allow_html=True)
+
     conn = _get_snowflake_conn()
-
     if not conn:
-        st.error("Kunne ikke oprette forbindelse til databasen.")
+        st.error("Databaseforbindelse fejlede.")
         return
 
-    # --- SIDEBAR: SPILLERVALG ---
-    st.sidebar.header("Filter")
-    df_players = get_player_list(conn)
-    
+    # --- SIDEBAR SELECTOR ---
+    df_players = get_hvidovre_players(conn)
     if df_players is not None and not df_players.empty:
-        selected_player_name = st.sidebar.selectbox("Vælg Spiller", df_players['PLAYER_NAME'].unique())
-        selected_player_id = df_players[df_players['PLAYER_NAME'] == selected_player_name]['optaId'].iloc[0]
+        valgt_navn = st.sidebar.selectbox("Vælg Spiller", df_players['PLAYER_NAME'].tolist())
+        valgt_id = df_players[df_players['PLAYER_NAME'] == valgt_navn]['optaId'].iloc[0]
     else:
-        st.sidebar.warning("Ingen spillere fundet.")
+        st.error("Kunne ikke hente spillerliste.")
         return
 
-    # --- HENT DATA ---
-    df_phys = get_advanced_physical_data(selected_player_id, conn)
-
-    if df_phys is None or df_phys.empty:
-        st.warning(f"Ingen fysisk data fundet for {selected_player_name}.")
+    # --- DATA LOAD ---
+    df = get_advanced_physical_data(valgt_id, conn)
+    if df is None or df.empty:
+        st.warning("Ingen fysisk data fundet for denne spiller.")
         return
 
-    # --- HOVEDLAYOUT ---
-    st.title(f"Fysisk Profil: {selected_player_name}")
+    st.title(f"Fysisk Profil: {valgt_navn}")
     
-    # Sæson gennemsnit metrics
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Gns. Distance", f"{round(df_phys['DISTANCE'].mean()/1000, 2)} km")
-    m2.metric("Gns. HSR", f"{int(df_phys['DISTANCE_HSR'].mean())} m")
-    m3.metric("Max Topfart", f"{round(df_phys['TOP_SPEED'].max(), 1)} km/t")
-    m4.metric("Gns. HI Runs", f"{int(df_phys['HI_RUNS_TOTAL'].mean())}")
+    # --- OVERORDNET SÆSON-SNIT ---
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Gns. Distance", f"{round(df['DISTANCE'].mean()/1000, 2)} km")
+    col2.metric("Gns. HSR", f"{int(df['DISTANCE_HSR'].mean())} m")
+    col3.metric("Topfart (Sæson)", f"{round(df['TOP_SPEED'].max(), 1)} km/t")
+    col4.metric("Gns. HI Runs", int(df['HI_RUNS_TOTAL'].mean()))
 
     st.markdown("---")
 
-    # --- KAMP-SPECIFIK ANALYSE ---
-    df_phys['Match_Label'] = df_phys['MATCH_DATE'].astype(str) + " : " + df_phys['MATCH_TEAMS']
-    selected_match_label = st.selectbox("Vælg kamp for detaljeret analyse", df_phys['Match_Label'].tolist())
-    row = df_phys[df_phys['Match_Label'] == selected_match_label].iloc[0]
+    # --- KAMP-VALG ---
+    df['Match_Label'] = df['MATCH_DATE'].astype(str) + " : " + df['MATCH_TEAMS']
+    valgt_kamp = st.selectbox("Vælg Kamp for detaljeret analyse", df['Match_Label'].tolist())
+    row = df[df['Match_Label'] == valgt_kamp].iloc[0]
 
-    t1, t2 = st.tabs(["Possession Analyse", "Intensitets Zoner"])
+    # --- DETALJERET ANALYSE ---
+    c_left, c_right = st.columns([1, 1])
 
-    with t1:
-        c1, c2 = st.columns([1, 1.5])
-        with c1:
-            st.write("**Distance fordelt på fase**")
-            labels = ['TIP (Med bold)', 'OTIP (Mod bold)', 'BOP (Spilstop)']
-            values = [row['DISTANCE_TIP'], row['DISTANCE_OTIP'], row['DISTANCE_BOP']]
-            fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4, marker_colors=['#00cc96', '#ef553b', '#636efa'])])
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        with c2:
-            st.write("**Højintensive løb (HI Runs) pr. fase**")
-            hi_data = {
-                'Fase': ['Total', 'Med bold', 'Mod bold', 'Spilstop'],
-                'Antal': [row['HI_RUNS_TOTAL'], row['HI_RUNS_TIP'], row['HI_RUNS_OTIP'], row['HI_RUNS_BOP']]
-            }
-            fig_hi = px.bar(hi_data, x='Fase', y='Antal', color='Fase', color_discrete_map={
-                'Total': '#333', 'Med bold': '#00cc96', 'Mod bold': '#ef553b', 'Spilstop': '#636efa'
-            })
-            st.plotly_chart(fig_hi, use_container_width=True)
-
-    with t2:
-        st.write("**Distance i hastighedszoner (Meter)**")
-        zone_labels = ['Walking', 'Jogging', 'Running', 'HSR', 'Sprinting']
-        zone_values = [row['WALKING'], row['JOGGING'], row['RUNNING'], row['DISTANCE_HSR'], row['DISTANCE_SPRINT']]
-        
-        fig_zones = go.Figure(data=[go.Bar(
-            x=zone_labels, 
-            y=zone_values, 
-            text=zone_values, 
-            textposition='outside',
-            marker_color='#1f77b4'
+    with c_left:
+        st.subheader("Possession Breakdown")
+        # Pie chart for Distance i faser
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=['Eget hold (TIP)', 'Modstander (OTIP)', 'Bold ude (BOP)'],
+            values=[row['DISTANCE_TIP'], row['DISTANCE_OTIP'], row['DISTANCE_BOP']],
+            hole=.4,
+            marker_colors=['#2ecc71', '#e74c3c', '#95a5a6']
         )])
-        fig_zones.update_layout(yaxis_title="Meter", plot_bgcolor='rgba(0,0,0,0)')
+        fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
+        # HI Runs split
+        st.write(f"**Højintensive aktioner (HI Runs):** {int(row['HI_RUNS_TOTAL'])}")
+        st.caption(f"TIP (Med bold): {int(row['HI_RUNS_TIP'])} | OTIP (Uden bold): {int(row['HI_RUNS_OTIP'])}")
+
+    with c_right:
+        st.subheader("Intensitetszoner (m)")
+        zone_data = {
+            'Zone': ['Walking', 'Jogging', 'Running', 'HSR', 'Sprinting'],
+            'Meter': [row['WALKING'], row['JOGGING'], row['RUNNING'], row['DISTANCE_HSR'], row['DISTANCE_SPRINT']]
+        }
+        fig_zones = px.bar(zone_data, x='Zone', y='Meter', color='Zone', 
+                           color_discrete_sequence=px.colors.sequential.Reds_r)
+        fig_zones.update_layout(showlegend=False, plot_bgcolor='white', height=300, margin=dict(t=0, b=0))
         st.plotly_chart(fig_zones, use_container_width=True)
 
-    # --- SÆSON TRENDS ---
+    # --- TREND GRAF ---
     st.markdown("---")
-    st.subheader("Sæsonudvikling: Distance & HSR")
+    st.subheader("Sæsonudvikling: Distance vs. Intensitet")
     
     fig_trend = go.Figure()
-    fig_trend.add_trace(go.Scatter(x=df_phys['MATCH_DATE'], y=df_phys['DISTANCE'], name="Total Distance", line=dict(color="#636efa")))
-    fig_trend.add_trace(go.Scatter(x=df_phys['MATCH_DATE'], y=df_phys['DISTANCE_HSR'], name="HSR", yaxis="y2", line=dict(color="#ef553b")))
+    fig_trend.add_trace(go.Scatter(x=df['MATCH_DATE'], y=df['DISTANCE'], name="Total Dist.", line=dict(color='#333', width=2)))
+    fig_trend.add_trace(go.Scatter(x=df['MATCH_DATE'], y=df['DISTANCE_HSR'], name="HSR", yaxis="y2", line=dict(color='#cc0000', width=3)))
     
     fig_trend.update_layout(
         yaxis=dict(title="Total Distance (m)"),
-        yaxis2=dict(title="HSR (m)", overlaying="y", side="right"),
+        yaxis2=dict(title="HSR (m)", overlaying='y', side='right'),
         hovermode="x unified",
-        legend=dict(orientation="h", y=1.1)
+        legend=dict(orientation="h", y=1.1),
+        plot_bgcolor='white'
     )
     st.plotly_chart(fig_trend, use_container_width=True)
+
+    with st.expander("Se kampskema (Rå data)"):
+        st.dataframe(df[['MATCH_DATE', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'DISTANCE_HSR', 'TOP_SPEED', 'HI_RUNS_TOTAL']], 
+                     hide_index=True, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
