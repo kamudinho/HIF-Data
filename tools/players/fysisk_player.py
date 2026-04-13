@@ -11,6 +11,7 @@ from io import BytesIO
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
+LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 CURRENT_SEASON = "2025/2026"
 
 # --- HJÆLPEFUNKTIONER ---
@@ -26,12 +27,12 @@ def get_logo_img(opta_uuid):
     except: return None
 
 def get_physical_summary(player_name, player_opta_uuid, db_conn):
-    """ Henter overordnet kamp-statistik """
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
+    # Vi søger bredt på navn eller ID for at sikre match
     sql = f"""
         SELECT 
             MATCH_DATE, MATCH_TEAMS, MATCH_SSIID,
-            CAST(MINUTES AS FLOAT) as MINUTES, 
+            TRY_CAST(MINUTES AS FLOAT) as MIN_VAL, 
             DISTANCE, "HIGH SPEED RUNNING" as HSR, 
             SPRINTING, TOP_SPEED, NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
@@ -42,7 +43,6 @@ def get_physical_summary(player_name, player_opta_uuid, db_conn):
     return db_conn.query(sql)
 
 def get_physical_splits(player_opta_uuid, match_ssiid, db_conn):
-    """ Henter minut-for-minut data for en specifik kamp """
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     sql = f"""
         SELECT 
@@ -50,7 +50,7 @@ def get_physical_splits(player_opta_uuid, match_ssiid, db_conn):
             PHYSICAL_METRIC_TYPE,
             PHYSICAL_METRIC_VALUE
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-        WHERE "PLAYER_OPTAID" = '{clean_id}'
+        WHERE ("PLAYER_OPTAID" = '{clean_id}' OR "PLAYER_OPTAID" LIKE '%{clean_id}%')
           AND MATCH_SSIID = '{match_ssiid}'
         ORDER BY MINUTE_SPLIT ASC
     """
@@ -60,129 +60,106 @@ def vis_side(dp=None):
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] { font-size: 18px !important; font-weight: bold; }
-        .match-card { border: 1px solid #eee; padding: 15px; border-radius: 10px; background: #f9f9f9; }
+        .main-header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
         </style>
     """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
-    if not conn or dp is None:
-        st.error("Kunne ikke forbinde til database eller ingen spiller valgt.")
+    if not conn:
+        st.error("Ingen forbindelse til Snowflake.")
         return
 
-    # Data fra 'dp' (som sendes med fra hovedmenuen)
-    valgt_spiller = dp['spiller_navn']
-    valgt_player_uuid = dp['spiller_uuid']
-    valgt_hold_uuid = dp['hold_uuid']
-    hold_logo = get_logo_img(valgt_hold_uuid)
+    # --- HÅNDTERING AF SPILLERVALG (Input eller Manuel) ---
+    if dp is None:
+        # Hvis ingen spiller er sendt med, lav en vælger ligesom på profil-siden
+        col1, col2 = st.columns(2)
+        df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
+        
+        team_options = sorted(df_teams['CONTESTANTHOME_NAME'].tolist()) if df_teams is not None else []
+        valgt_hold_navn = col1.selectbox("Vælg Hold", team_options)
+        
+        hold_uuid = df_teams[df_teams['CONTESTANTHOME_NAME'] == valgt_hold_navn]['CONTESTANTHOME_OPTAUUID'].iloc[0]
+        
+        df_players = conn.query(f"SELECT DISTINCT FIRST_NAME || ' ' || LAST_NAME as NAVN, PLAYER_OPTAUUID FROM {DB}.OPTA_PLAYERS WHERE TEAM_OPTAUUID = '{hold_uuid}'")
+        valgt_spiller = col2.selectbox("Vælg Spiller", sorted(df_players['NAVN'].tolist()))
+        valgt_player_uuid = df_players[df_players['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
+    else:
+        valgt_spiller = dp['spiller_navn']
+        valgt_player_uuid = dp['spiller_uuid']
+        hold_uuid = dp['hold_uuid']
 
-    st.title(f"Fysisk Analyse: {valgt_spiller}")
+    hold_logo = get_logo_img(hold_uuid)
 
-    # 1. Hent Summary Data
-    df_phys = get_physical_summary(valgt_spiller, valgt_player_uuid, conn)
+    # --- HENT DATA ---
+    with st.spinner("Henter fysisk data..."):
+        df_phys = get_physical_summary(valgt_spiller, valgt_player_uuid, conn)
 
     if df_phys is None or df_phys.empty:
-        st.warning(f"Ingen fysisk data fundet for {valgt_spiller} i sæsonen {CURRENT_SEASON}")
+        st.info(f"Ingen fysisk data (Second Spectrum) fundet for {valgt_spiller}.")
         return
 
-    # --- TOP METRICS (Sæson gennemsnit) ---
-    avg_col = st.columns(4)
-    avg_col[0].metric("Gns. Distance", f"{round(df_phys['DISTANCE'].mean()/1000, 2)} km")
-    avg_col[1].metric("Gns. HSR", f"{int(df_phys['HSR'].mean())} m")
-    avg_col[2].metric("Max Topfart", f"{round(df_phys['TOP_SPEED'].max(), 1)} km/t")
-    avg_col[3].metric("Gns. HI Runs", int(df_phys['HI_RUNS'].mean()))
+    # --- LAYOUT START ---
+    st.markdown(f'<div class="main-header">{valgt_spiller} - Fysisk Rapport</div>', unsafe_allow_html=True)
+
+    # Top Metrics (Gennemsnit)
+    m_col = st.columns(4)
+    m_col[0].metric("Gns. Distance", f"{round(df_phys['DISTANCE'].mean()/1000, 2)} km")
+    m_col[1].metric("Gns. HSR", f"{int(df_phys['HSR'].mean())} m")
+    m_col[2].metric("Max Topfart", f"{round(df_phys['TOP_SPEED'].max(), 1)} km/t")
+    m_col[3].metric("Gns. HI Runs", int(df_phys['HI_RUNS'].mean()))
 
     st.markdown("---")
 
-    # --- KAMP SELEKTOR ---
-    df_phys['Dato_Modstander'] = df_phys['MATCH_DATE'].dt.strftime('%d/%m') + " - " + df_phys['MATCH_TEAMS']
-    valgt_kamp_str = st.selectbox("Vælg kamp for detaljeret minut-analyse", df_phys['Dato_Modstander'].tolist())
+    # --- KAMPVALG TIL SPLITS ---
+    df_phys['Display'] = df_phys['MATCH_DATE'].astype(str) + " : " + df_phys['MATCH_TEAMS']
+    valgt_kamp = st.selectbox("Vælg kamp for minut-analyse", df_phys['Display'].tolist())
     
-    selected_match = df_phys[df_phys['Dato_Modstander'] == valgt_kamp_str].iloc[0]
-    match_ssiid = selected_match['MATCH_SSIID']
+    match_row = df_phys[df_phys['Display'] == valgt_kamp].iloc[0]
+    match_ssiid = match_row['MATCH_SSIID']
 
-    # --- KAMP SPECIFIKKE METRICS ---
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Distance", f"{round(selected_match['DISTANCE']/1000, 2)} km")
-    m2.metric("HSR", f"{int(selected_match['HSR'])} m")
-    m3.metric("Sprint", f"{int(selected_match['SPRINTING'])} m")
-    m4.metric("Minutter", int(selected_match['MINUTES']))
-
-    # --- SPLITS ANALYSE (MINUT FOR MINUT) ---
-    st.subheader("Intensitet over tid (Minut-splits)")
-    
+    # --- MINUT FOR MINUT GRAF ---
     df_splits = get_physical_splits(valgt_player_uuid, match_ssiid, conn)
-
+    
     if df_splits is not None and not df_splits.empty:
-        # Pivot data så vi har metrikker som kolonner
-        df_pivoted = df_splits.pivot(index='MINUTE_SPLIT', columns='PHYSICAL_METRIC_TYPE', values='PHYSICAL_METRIC_VALUE').reset_index()
+        # Pivotér data så vi har metrikker som kolonner
+        df_p = df_splits.pivot(index='MINUTE_SPLIT', columns='PHYSICAL_METRIC_TYPE', values='PHYSICAL_METRIC_VALUE').reset_index()
         
-        # Omdøb for læsbarhed
-        rename_map = {
-            'distance': 'Distance (m)',
-            'high_speed_running': 'HSR (m)',
-            'sprinting': 'Sprint (m)'
-        }
-        df_pivoted = df_pivoted.rename(columns=rename_map)
-
-        # Plotly figur
         fig = go.Figure()
         
-        # Tilføj Distance som bar i baggrunden
-        fig.add_trace(go.Bar(
-            x=df_pivoted['MINUTE_SPLIT'],
-            y=df_pivoted['Distance (m)'],
-            name='Total Distance',
-            marker_color='rgba(200, 200, 200, 0.3)',
-            yaxis='y2'
-        ))
-
-        # Tilføj HSR som linje
-        fig.add_trace(go.Scatter(
-            x=df_pivoted['MINUTE_SPLIT'],
-            y=df_pivoted['HSR (m)'],
-            name='High Speed Running',
-            line=dict(color='#cc0000', width=3),
-            mode='lines'
-        ))
+        # Total Distance pr minut (Bar)
+        if 'distance' in df_p.columns:
+            fig.add_trace(go.Bar(
+                x=df_p['MINUTE_SPLIT'], y=df_p['distance'],
+                name='Meter/min', marker_color='rgba(180, 180, 180, 0.4)', yaxis='y2'
+            ))
+        
+        # HSR pr minut (Linje)
+        if 'high_speed_running' in df_p.columns:
+            fig.add_trace(go.Scatter(
+                x=df_p['MINUTE_SPLIT'], y=df_p['high_speed_running'],
+                name='HSR Meter', line=dict(color='#cc0000', width=3)
+            ))
 
         fig.update_layout(
+            title=f"Intensitet i kampen: {valgt_kamp}",
             hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            yaxis=dict(title="HSR Meter pr. minut", side="left"),
-            yaxis2=dict(title="Total Meter pr. minut", side="right", overlaying='y', showgrid=False),
-            xaxis=dict(title="Minut", dtick=5),
-            height=400,
-            margin=dict(l=20, r=20, t=30, b=20),
-            plot_bgcolor='white'
+            yaxis=dict(title="HSR (m)"),
+            yaxis2=dict(title="Total Distance (m)", overlaying='y', side='right', showgrid=False),
+            xaxis=dict(title="Minut"),
+            plot_bgcolor='white',
+            height=350
         )
-        
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Ingen minut-for-minut splits tilgængelige for denne kamp.")
+        st.warning("Der blev ikke fundet minut-splits for denne kamp.")
 
-    # --- HISTORISK UDVIKLING ---
-    st.subheader("Sæsonudvikling")
-    df_hist = df_phys.sort_values('MATCH_DATE')
-    
-    tab_dist, tab_hsr, tab_speed = st.tabs(["Distance", "HSR", "Topfart"])
-    
-    with tab_dist:
-        fig_dist = px.line(df_hist, x='MATCH_DATE', y='DISTANCE', points="all", 
-                           labels={'DISTANCE': 'Meter'}, color_discrete_sequence=['#333'])
-        fig_dist.update_layout(plot_bgcolor='white')
-        st.plotly_chart(fig_dist, use_container_width=True)
-
-    with tab_hsr:
-        fig_hsr = px.bar(df_hist, x='MATCH_DATE', y='HSR', 
-                         color='HSR', color_continuous_scale='Reds')
-        fig_hsr.update_layout(plot_bgcolor='white')
-        st.plotly_chart(fig_hsr, use_container_width=True)
-
-    with tab_speed:
-        fig_speed = px.scatter(df_hist, x='MATCH_DATE', y='TOP_SPEED', size='HI_RUNS', 
-                               trendline="lowess", title="Topfart vs Antal HI-løb (størrelse)")
-        st.plotly_chart(fig_speed, use_container_width=True)
+    # --- TABEL OVERSIGT ---
+    st.subheader("Kamp-log")
+    st.dataframe(
+        df_phys[['MATCH_DATE', 'MATCH_TEAMS', 'MIN_VAL', 'DISTANCE', 'HSR', 'TOP_SPEED', 'HI_RUNS']],
+        hide_index=True,
+        use_container_width=True
+    )
 
 if __name__ == "__main__":
-    # Test-mock hvis kørt direkte
     vis_side()
