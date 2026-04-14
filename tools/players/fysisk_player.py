@@ -9,7 +9,7 @@ from data.utils.team_mapping import TEAMS
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_IDS = "('328', '329', '43319', '331')" # Ekskluderer Superliga (335)
+LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331')"
 
 @st.cache_data(ttl=600)
 def get_physical_splits(player_name, player_opta_id, match_date, _conn):
