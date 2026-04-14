@@ -130,7 +130,7 @@ def vis_side():
         df = df.fillna(0)
         latest = df.iloc[0]
         
-        st.write(f"### Seneste Kamp: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE']})")
+        st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE']})")
         
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
