@@ -59,19 +59,23 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
 
 @st.cache_data(ttl=600)
 def get_f53a_percentages(match_ssiid, player_name, _conn):
-    """Henter KUN procenterne fra F53A tabellen separat for at sikre visning i Tab 2"""
+    """Henter procenter med de korrekte kolonnenavne fra dit datasæt"""
     navne_dele = player_name.strip().split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
     
     sql = f"""
         SELECT 
-            PERCENTDISTANCESTANDING as STANDING_PCT, PERCENTDISTANCEWALKING as WALKING_PCT,
-            PERCENTDISTANCEJOGGING as JOGGING_PCT, PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT,
-            PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT, PERCENTDISTANCEHIGHSPEEDSPRINTING as SPRINT_PCT
+            PERCENTDISTANCESTANDING as STANDING_PCT, 
+            PERCENTDISTANCEWALKING as WALKING_PCT,
+            PERCENTDISTANCEJOGGING as JOGGING_PCT, 
+            PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT, -- Tjek om denne findes, ellers brug PERCENTDISTANCELOWSPEEDSPRINTING
+            PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT, 
+            PERCENTDISTANCEHIGHSPEEDSPRINTING as SPRINT_PCT
         FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
         WHERE MATCH_SSIID = '{match_ssiid}' 
           AND (PLAYER_NAME ILIKE '%{f_name}%' AND PLAYER_NAME ILIKE '%{l_name}%')
+        LIMIT 1
     """
     return _conn.query(sql)
 
