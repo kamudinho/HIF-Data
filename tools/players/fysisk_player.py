@@ -36,9 +36,13 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
           AND s.MATCH_DATE >= '{SEASON_START}'
         ORDER BY s.MATCH_DATE DESC
     """
-    df = conn.query(sql)
-    if not df.empty:
-        df['MATCH_DATE'] = pd.to_datetime(df['MATCH_DATE'])
+    # Tving data til en rigtig Pandas DataFrame med .copy()
+    raw_df = conn.query(sql)
+    if raw_df is None or raw_df.empty:
+        return pd.DataFrame()
+    
+    df = raw_df.copy()
+    df['MATCH_DATE'] = pd.to_datetime(df['MATCH_DATE'])
     return df
 
 def draw_phase_pitch(val, title, color):
