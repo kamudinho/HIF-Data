@@ -14,10 +14,8 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
-    """Henter udvidet fysisk data filtreret på det valgte hold"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    # Hvis navnet er kort, bruger vi hele navnet
     if not navne_dele: navne_dele = [player_name]
     name_conditions = " OR ".join([f"s.PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
 
@@ -34,9 +32,13 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
             s.HSR_DISTANCE_TIP as HSR_TIP, s.SPRINT_DISTANCE_TIP as SPRINT_TIP,
             s.HSR_DISTANCE_OTIP as HSR_OTIP, s.SPRINT_DISTANCE_OTIP as SPRINT_OTIP,
             s.HSR_DISTANCE_BOP as HSR_BOP,
-            f.PERCENTDISTANCESTANDING as STANDING_PCT, f.PERCENTDISTANCEWALKING as WALKING_PCT,
-            f.PERCENTDISTANCEJOGGING as JOGGING_PCT, f.PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT,
-            f.PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT, f.PERCENTDISTANCEHIGHSPEEDSPRINTING as SPRINT_PCT,
+            -- Vi sikrer os mod NULL værdier her direkte i SQL
+            COALESCE(f.PERCENTDISTANCESTANDING, 0) as STANDING_PCT, 
+            COALESCE(f.PERCENTDISTANCEWALKING, 0) as WALKING_PCT,
+            COALESCE(f.PERCENTDISTANCEJOGGING, 0) as JOGGING_PCT, 
+            COALESCE(f.PERCENTDISTANCELOWSPEEDRUNNING, 0) as LSR_PCT,
+            COALESCE(f.PERCENTDISTANCEHIGHSPEEDRUNNING, 0) as HSR_PCT, 
+            COALESCE(f.PERCENTDISTANCEHIGHSPEEDSPRINTING, 0) as SPRINT_PCT,
             sea.SEASONLABEL, sea.COMPETITIONLABEL, s.MATCH_SSIID
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
         LEFT JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
@@ -52,85 +54,44 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
     """
     return _conn.query(sql)
 
-@st.cache_data(ttl=600)
-def get_minute_splits(match_ssiid, player_name, _conn):
-    sql = f"""
-        SELECT MINUTE_SPLIT, PHYSICAL_METRIC_TYPE, PHYSICAL_METRIC_VALUE
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-        WHERE MATCH_SSIID = '{match_ssiid}' 
-          AND PLAYER_NAME = '{player_name}'
-          AND PHYSICAL_METRIC_TYPE IN ('distance', 'high_speed_running_distance')
-        ORDER BY MINUTE_SPLIT ASC
-    """
-    return _conn.query(sql)
-
 def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
     fig.patch.set_alpha(0)
-    
-    # Cirkel bag tallene for bedre visuel indikation
     ax.scatter(50, 50, s=3000, color=color, alpha=0.1, zorder=1)
-    
-    # Tekst med hvid kant (Path effects)
-    txt = ax.text(50, 50, f"{int(val)}m", color=color, fontsize=45, 
+    txt = ax.text(50, 50, f"{int(val) if not np.isnan(val) else 0}m", color=color, fontsize=45, 
                   fontweight='bold', ha='center', va='center', zorder=3)
     txt.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
-    
     ax.set_title(title, fontsize=16, pad=15, fontweight='bold', color='#333333')
     return fig
 
 def vis_side():
-    st.markdown("""
-        <style>
-        [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: bold !important; color: #cc0000; }
-        .stTabs [data-baseweb="tab"] { font-weight: bold; }
-        div.block-container { padding-top: 2rem; }
-        </style>
-    """, unsafe_allow_html=True)
-
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- 1. HOLDVALG ---
+    # --- HOLD OG SPILLER VALG ---
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME as TEAM_NAME, CONTESTANTHOME_OPTAUUID as TEAM_UUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY TEAM_NAME"
     df_teams_raw = conn.query(sql_teams)
     
     col_h1, col_h2 = st.columns(2)
     valgt_hold = col_h1.selectbox("Vælg Hold", df_teams_raw['TEAM_NAME'].unique())
-    
-    # Hent holdets UUID og SSID
-    valgt_uuid_hold = df_teams_raw[df_teams_raw['TEAM_NAME'] == valgt_hold]['TEAM_UUID'].iloc[0]
-    # Her henter vi SSID fra din mapping fil
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
+    valgt_uuid_hold = df_teams_raw[df_teams_raw['TEAM_NAME'] == valgt_hold]['TEAM_UUID'].iloc[0]
 
-    # --- 2. SPILLERVALG ---
-    sql_spillere = f"""
-        SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID 
-        FROM {DB}.OPTA_EVENTS e 
-        JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID 
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-          AND e.EVENT_TIMESTAMP >= '2025-07-01' 
-        ORDER BY NAVN
-    """
+    sql_spillere = f"SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' AND e.EVENT_TIMESTAMP >= '2025-07-01' ORDER BY NAVN"
     df_pl = conn.query(sql_spillere)
-    
-    if df_pl is not None and not df_pl.empty:
-        valgt_spiller = col_h2.selectbox("Vælg Spiller", df_pl['NAVN'].tolist())
-        valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
-    else:
-        st.error("Ingen spillere fundet for dette hold.")
-        return
+    valgt_spiller = col_h2.selectbox("Vælg Spiller", df_pl['NAVN'].tolist())
+    valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
 
-    st.markdown("---")
-
-    # --- 3. DATA HENTNING ---
+    # --- DATA ---
     df = get_extended_player_data(valgt_spiller, valgt_player_uuid, target_ssiid, conn)
 
     if df is not None and not df.empty:
+        # Fyld alle NaN med 0 for at undgå "nan%" i graferne
+        df = df.fillna(0)
         latest = df.iloc[0]
         
-        # KPI række
+        # Metrics
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
         m2.metric("HSR (>19.8 km/h)", f"{int(latest['HSR'])} m")
@@ -141,11 +102,9 @@ def vis_side():
 
         with tabs[0]:
             st.write(f"### HSR Fordeling: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE']})")
-            c_a, c_b = st.columns(2)
-            with c_a:
-                st.pyplot(draw_phase_pitch(latest['HSR_TIP'], "TIP (Angreb)", "#2ecc71"))
-            with c_b:
-                st.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "OTIP (Forsvar)", "#e74c3c"))
+            c1, c2 = st.columns(2)
+            c1.pyplot(draw_phase_pitch(latest['HSR_TIP'], "TIP (Angreb)", "#2ecc71"))
+            c2.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "OTIP (Forsvar)", "#e74c3c"))
 
         with tabs[1]:
             st.write("### Distancefordeling pr. hastighedszone (%)")
@@ -154,40 +113,16 @@ def vis_side():
                 'Jogging': latest['JOGGING_PCT'], 'LSR': latest['LSR_PCT'],
                 'HSR': latest['HSR_PCT'], 'Sprint': latest['SPRINT_PCT']
             }
-            fig_bar = go.Figure(go.Bar(
+            fig = go.Figure(go.Bar(
                 x=list(splits_data.values()), y=list(splits_data.keys()),
                 orientation='h', marker_color='#cc0000', 
-                text=[f"{v}%" for v in splits_data.values()], textposition='outside'
+                text=[f"{v}%" if v > 0 else "0%" for v in splits_data.values()], textposition='outside'
             ))
-            fig_bar.update_layout(xaxis=dict(range=[0, 70]), height=350, margin=dict(t=20, b=20))
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        with tabs[2]:
-            st.write("### Intensitet minut-for-minut")
-            df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
-            if not df_splits.empty:
-                df_hsr_splits = df_splits[df_splits['PHYSICAL_METRIC_TYPE'] == 'high_speed_running_distance']
-                fig_split = go.Figure()
-                fig_split.add_trace(go.Scatter(
-                    x=df_hsr_splits['MINUTE_SPLIT'], y=df_hsr_splits['PHYSICAL_METRIC_VALUE'],
-                    fill='tozeroy', line_color='#cc0000', name="HSR Meter"
-                ))
-                fig_split.update_layout(xaxis_title="Minut", yaxis_title="HSR Meter", height=400)
-                st.plotly_chart(fig_split, use_container_width=True)
-            else:
-                st.info("Ingen split-data tilgængelig for denne kamp.")
-
-        with tabs[3]:
-            df_trend = df.sort_values('MATCH_DATE')
-            fig_trend = go.Figure()
-            fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], name="Total HSR", line=dict(color='#cc0000', width=3)))
-            fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_TIP'], name="TIP HSR", line=dict(color='#2ecc71', dash='dot')))
-            fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_OTIP'], name="OTIP HSR", line=dict(color='#e74c3c', dash='dot')))
-            fig_trend.update_layout(plot_bgcolor="white", height=400, title="HSR udvikling over sæsonen")
-            st.plotly_chart(fig_trend, use_container_width=True)
+            fig.update_layout(xaxis=dict(range=[0, 70]), height=400)
+            st.plotly_chart(fig, use_container_width=True)
             
     else:
-        st.warning(f"Ingen kampdata fundet for {valgt_spiller} hos {valgt_hold} i denne sæson.")
+        st.warning(f"Ingen data fundet for {valgt_spiller} hos {valgt_hold}.")
 
 if __name__ == "__main__":
     vis_side()
