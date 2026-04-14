@@ -155,31 +155,52 @@ def vis_side():
                 if selected_readable:
                     m_type = map_back[selected_readable]
                     
-                    # 1. Data for den valgte spiller
-                    d_player = df_all_splits[(df_all_splits['METRIC'] == m_type) & 
-                                             (df_all_splits['PLAYER_NAME'].get_extended_player_dataILIKE(f'%{f_clean}%')) & 
-                                             (df_all_splits['PLAYER_NAME'].str.contains(l_clean, case=False))].copy()
+                    # 1. Data for den valgte spiller (Rettet filtrering her)
+                    d_player = df_all_splits[
+                        (df_all_splits['METRIC'] == m_type) & 
+                        (df_all_splits['PLAYER_NAME'].str.contains(f_clean, case=False, na=False)) & 
+                        (df_all_splits['PLAYER_NAME'].str.contains(l_clean, case=False, na=False))
+                    ].copy()
                     
                     # 2. Data for holdet (gennemsnit pr. minut-split)
                     d_team = df_all_splits[df_all_splits['METRIC'] == m_type].groupby('MINUTE_SPLIT')['VAL'].mean().reset_index()
 
+                    # Definer suffix og enheder
+                    is_total_dist = "TOTAL" in m_type
+                    suffix = "km" if is_total_dist else "m"
+                    
+                    # Konverter værdier hvis det er Total Distance (km)
+                    if is_total_dist:
+                        d_player['VAL_PLOT'] = d_player['VAL'] / 1000
+                        d_team['VAL'] = d_team['VAL'] / 1000
+                    else:
+                        d_player['VAL_PLOT'] = d_player['VAL']
+                    
                     # Metrics række
                     c1, c2, c3 = st.columns(3)
                     total_v = d_player['VAL'].sum()
-                    suffix = "km" if "TOTAL" in m_type else "m"
-                    display_total = total_v/1000 if suffix == "km" else total_v
+                    display_total = total_v/1000 if is_total_dist else total_v
                     
                     c1.metric("Total", f"{display_total:.2f} {suffix}")
-                    c2.metric("Max/min", f"{d_player['VAL'].max():.1f} m")
-                    c3.metric("Gns/min", f"{d_player['VAL'].mean():.1f} m")
+                    c2.metric("Max/min", f"{d_player['VAL_PLOT'].max():.1f} {suffix}")
+                    c3.metric("Gns/min", f"{d_player['VAL_PLOT'].mean():.1f} {suffix}")
 
                     # Graf
                     fig_s = go.Figure()
 
+                    # Hold benchmark (Grå solid linje) - tilføjes først så den ligger bagerst
+                    fig_s.add_trace(go.Scatter(
+                        x=d_team['MINUTE_SPLIT'], y=d_team['VAL'],
+                        line=dict(color="#D3D3D3", width=1.5),
+                        mode='lines',
+                        name="Hold Gns.",
+                        hoverinfo="skip"
+                    ))
+
                     # Hoved-trace (Spilleren)
                     fig_s.add_trace(go.Scatter(
                         x=d_player['MINUTE_SPLIT'], 
-                        y=d_player['VAL'], 
+                        y=d_player['VAL_PLOT'], 
                         fill='tozeroy', 
                         line=dict(color='#cc0000', width=2.5), 
                         mode='lines+markers',
@@ -187,27 +208,22 @@ def vis_side():
                         hovertemplate=f"Min: %{{x}}<br>Værdi: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # Spillerens gennemsnit (Sort stiplet)
-                    player_avg = d_player['VAL'].mean()
-                    fig_s.add_shape(type="line", x0=d_player['MINUTE_SPLIT'].min(), x1=d_player['MINUTE_SPLIT'].max(),
-                                    y0=player_avg, y1=player_avg,
-                                    line=dict(color="black", width=1.5, dash="dash"))
-                    
-                    # Hold benchmark (Grå linje)
-                    fig_s.add_trace(go.Scatter(
-                        x=d_team['MINUTE_SPLIT'], y=d_team['VAL'],
-                        line=dict(color="#D3D3D3", width=2),
-                        mode='lines',
-                        name="Hold Gns.",
-                        hoverinfo="skip"
-                    ))
+                    # Spillerens gennemsnit (Sort stiplet linje)
+                    p_avg = d_player['VAL_PLOT'].mean()
+                    fig_s.add_shape(
+                        type="line", 
+                        x0=d_player['MINUTE_SPLIT'].min(), 
+                        x1=d_player['MINUTE_SPLIT'].max(),
+                        y0=p_avg, y1=p_avg,
+                        line=dict(color="black", width=1.5, dash="dash")
+                    )
 
                     fig_s.update_layout(
                         plot_bgcolor="white", height=400, 
                         margin=dict(t=20, b=20, l=0, r=0),
                         showlegend=False,
                         xaxis=dict(title="Kampminut", showgrid=False),
-                        yaxis=dict(title=f"{suffix}", gridcolor='#f0f0f0')
+                        yaxis=dict(title=suffix, gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
             else:
