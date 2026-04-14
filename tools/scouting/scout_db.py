@@ -125,9 +125,22 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     with t4:
         st.markdown("### Karriereoversigt")
         if career_df is not None:
+            # 1. Filtrér på spillerens ID
             stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
+            
             if not stats.empty:
-                st.dataframe(stats, use_container_width=True, hide_index=True)
+                # 2. FJERN DUPLIKATER: Vi viser kun én række per sæson, klub og turnering
+                # Vi sorterer først (f.eks. efter flest minutter), så vi beholder den mest relevante række
+                if 'MINUTES' in stats.columns:
+                    stats = stats.sort_values('MINUTES', ascending=False)
+                
+                stats_clean = stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME'])
+                
+                # Sorter kronologisk efter sæson (nyeste øverst)
+                stats_clean = stats_clean.sort_values('SEASONNAME', ascending=False)
+                
+                # 3. Vis den rensede dataframe
+                st.dataframe(stats_clean, use_container_width=True, hide_index=True)
             else:
                 st.warning("Ingen karrieredata fundet i Wyscout-filen.")
 
