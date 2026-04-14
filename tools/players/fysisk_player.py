@@ -132,7 +132,7 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            st.caption("### Distancefordeling pr. hastighedszone (%)")
+            st.caption("Distancefordeling pr. hastighedszone (%)")
             z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
             z_vals = [latest['STANDING_PCT'], latest['WALKING_PCT'], latest['JOGGING_PCT'], latest['LSR_PCT'], latest['HSR_PCT'], latest['SPRINT_PCT']]
             
@@ -148,7 +148,7 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.caption("### Intensitet minut-for-minut (HSR)")
+            st.caption("Intensitet minut-for-minut (HSR)")
             df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
             
             if not df_splits.empty:
