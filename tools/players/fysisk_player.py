@@ -100,17 +100,73 @@ def vis_side():
                 st.plotly_chart(fig, use_container_width=True, key=f"int_{p_uuid}")
 
         with tabs[2]:
-            df_splits = conn.query(f"SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' AND PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' GROUP BY 1, 2 ORDER BY 1 ASC")
+            st.markdown("### Minut-for-minut intensitet")
+            
+            # 1. Hent data specifikt for splits
+            df_splits = conn.query(f"""
+                SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
+                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
+                WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
+                  AND PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' 
+                GROUP BY 1, 2 ORDER BY 1 ASC
+            """)
+            
             if not df_splits.empty:
-                metrics = df_splits['METRIC'].unique().tolist()
-                sub_tabs = st.tabs([m.replace(' DISTANCE', '').title() for m in metrics])
-                for i, m in enumerate(metrics):
-                    with sub_tabs[i]:
-                        d_m = df_splits[df_splits['METRIC'] == m]
-                        fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=3)))
-                        fig_s.update_layout(plot_bgcolor="white", height=350)
-                        st.plotly_chart(fig_s, use_container_width=True, key=f"split_{m}_{p_uuid}")
+                # 2. Lav metrik-vælgeren som de bokse du har i din "Spilleranalyse"
+                metrics_options = sorted(df_splits['METRIC'].unique().tolist())
+                readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
+                map_back = dict(zip(readable_options, metrics_options))
+                
+                # Segmented control (Boksene fra dit screenshot)
+                selected_readable = st.segmented_control(
+                    "Vælg metrik", 
+                    options=readable_options, 
+                    default=readable_options[0] if readable_options else None,
+                    key=f"split_box_selector_{p_uuid}"
+                )
+                
+                if selected_readable:
+                    m_type = map_back[selected_readable]
+                    d_m = df_splits[df_splits['METRIC'] == m_type]
+                    
+                    # 3. Store Metrics Bokse (Ligesom top-rækken i dit screenshot)
+                    st.markdown("---")
+                    c1, c2, c3, c4 = st.columns(4)
+                    
+                    total_val = d_m['VAL'].sum()
+                    max_val = d_m['VAL'].max()
+                    avg_val = d_m['VAL'].mean()
+                    
+                    # Enhedshåndtering (km hvis det er distance og over 1000m)
+                    is_dist = "DISTANCE" in m_type
+                    u = "km" if is_dist and total_val > 1000 else "m"
+                    disp_total = total_val / 1000 if u == "km" else total_val
+                    
+                    c1.metric(f"Total {selected_readable}", f"{disp_total:.2f} {u}")
+                    c2.metric("Max pr. minut", f"{max_val:.1f} m")
+                    c3.metric("Gennemsnit", f"{avg_val:.1f} m")
+                    c4.metric("Antal Splits", f"{len(d_m)}")
 
+                    # 4. Grafen
+                    fig_s = go.Figure(go.Scatter(
+                        x=d_m['MINUTE_SPLIT'], 
+                        y=d_m['VAL'], 
+                        fill='tozeroy', 
+                        line=dict(color='#cc0000', width=3),
+                        mode='lines+markers',
+                        hovertemplate="Minut %{x}<br>Værdi: %{y:.1f}m<extra></extra>"
+                    ))
+                    
+                    fig_s.update_layout(
+                        plot_bgcolor="white", 
+                        height=400,
+                        margin=dict(t=20, b=20, l=10, r=10),
+                        xaxis=dict(title="Kampminut", dtick=10, showgrid=False),
+                        yaxis=dict(title="Meter", showgrid=True, gridcolor='#f0f0f0')
+                    )
+                    st.plotly_chart(fig_s, use_container_width=True, key=f"plt_split_{m_type}_{latest['MATCH_SSIID']}")
+            else:
+                st.info("Ingen minut-splits fundet for denne kamp.")
         with tabs[3]:
             # HER ER DIN INDSENDTE LOGIK
             cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
