@@ -23,7 +23,6 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
     f_name = navne_dele[0].replace("'", "''")
     l_name = navne_dele[-1].replace("'", "''")
 
-    # Vi dropper s."optaId" da det skaber fejl, og bruger navne-match kombineret med team-context
     sql = f"""
         SELECT 
             s.MATCH_DATE, s.MATCH_TEAMS, s.PLAYER_NAME, s.MATCH_SSIID,
@@ -85,6 +84,11 @@ def vis_side():
     valgt_spiller = c2.selectbox("Vælg Spiller", df_pl['NAVN'].tolist(), label_visibility="collapsed")
     p_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
 
+    # --- DEFINER NAVNE HER SÅ ALLE TABS KAN SE DEM ---
+    navne_dele = valgt_spiller.strip().split(' ')
+    f_clean = navne_dele[0].replace("'", "''")
+    l_clean = navne_dele[-1].replace("'", "''")
+
     # 3. Hent Fysisk Data
     df = get_extended_player_data(valgt_spiller, p_uuid, target_ssiid)
 
@@ -109,82 +113,54 @@ def vis_side():
 
         with tabs[1]:
             st.caption("Intensitetsprofil (Beregnet ud fra kampens splits)")
-            
-            # 1. Vi genbruger df_all_splits fra Tab 2, men filtrerer for den valgte spiller
-            # Hvis vi ikke har den i hukommelsen her, henter vi den hurtigt:
             df_calc = conn.query(f"""
                 SELECT UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}'
-                  AND PLAYER_NAME ILIKE '%{l_clean}%' AND PLAYER_NAME ILIKE '%{f_clean}%'
+                  AND PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%'
                 GROUP BY 1
             """)
 
-            if not df_calc.empty:
-                # Vi udtrækker de specifikke værdier
+            if df_calc is not None and not df_calc.empty:
                 metrics = df_calc.set_index('METRIC')['TOTAL_VAL'].to_dict()
+                total_dist = metrics.get('TOTAL DISTANCE', 1)
                 
-                total_dist = metrics.get('TOTAL DISTANCE', 1) # Undgå division med 0
-                
-                # Beregn procenter for de zoner vi har
-                # Bemærk: Vi antager at 'JOGGING DISTANCE' etc findes i dine splits
                 z_map = {
                     'Sprint': metrics.get('SPRINT DISTANCE', 0),
                     'HSR': metrics.get('HSR DISTANCE', 0),
                     'LSR': metrics.get('LOW SPEED RUNNING DISTANCE', 0),
-                    'Jogging': metrics.get('JOGGING DISTANCE', 0),
-                    'Gående/Stående': total_dist - (metrics.get('SPRINT DISTANCE', 0) + 
-                                                   metrics.get('HSR DISTANCE', 0) + 
-                                                   metrics.get('LOW SPEED RUNNING DISTANCE', 0) + 
-                                                   metrics.get('JOGGING DISTANCE', 0))
+                    'Jogging': metrics.get('JOGGING DISTANCE', 0)
                 }
+                
+                acc_dist = sum(z_map.values())
+                z_map['Gående/Stående'] = max(0, total_dist - acc_dist)
 
                 z_labels = list(z_map.keys())
-                # Beregn % af total distance
                 z_vals = [(v / total_dist) * 100 for v in z_map.values()]
 
                 fig = go.Figure(go.Bar(
-                    x=z_vals,
-                    y=z_labels,
-                    orientation='h',
-                    marker_color='#cc0000',
-                    text=[f"{v:.1f}%" for v in z_vals],
-                    textposition='outside',
-                    hovertemplate="%{y}: %{x:.1f}%<extra></extra>"
+                    x=z_vals, y=z_labels, orientation='h', marker_color='#cc0000',
+                    text=[f"{v:.1f}%" for v in z_vals], textposition='outside'
                 ))
-
                 fig.update_layout(
-                    plot_bgcolor="white",
-                    height=350,
-                    margin=dict(l=0, r=60, t=10, b=0),
+                    plot_bgcolor="white", height=350, margin=dict(l=0, r=60, t=10, b=0),
                     xaxis=dict(showticklabels=False, range=[0, max(z_vals)*1.4 if any(z_vals) else 100], showgrid=False),
                     yaxis=dict(autorange="reversed")
                 )
                 st.plotly_chart(fig, use_container_width=True, key=f"calc_pct_{p_uuid}")
             else:
-                st.info("Kunne ikke beregne profil (ingen split-data fundet).")
+                st.info("Ingen split-data fundet til profil-beregning.")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
-            f_clean = valgt_spiller.strip().split(' ')[0].replace("'", "''")
-            l_clean = valgt_spiller.strip().split(' ')[-1].replace("'", "''")
-
-            # 1. HENT SÆSON-SPLITS (Gennemsnit pr. minut-trin for hele sæsonen)
             df_season_splits = conn.query(f"""
-                SELECT 
-                    MINUTE_SPLIT,
-                    UPPER(PHYSICAL_METRIC_TYPE) as METRIC,
-                    AVG(PHYSICAL_METRIC_VALUE) as AVG_VAL,
-                    CASE 
-                        WHEN (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%') THEN 'PLAYER' 
-                        ELSE 'TEAM' 
-                    END as SCOPE
+                SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, AVG(PHYSICAL_METRIC_VALUE) as AVG_VAL,
+                    CASE WHEN (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%') THEN 'PLAYER' ELSE 'TEAM' END as SCOPE
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
                 WHERE MATCH_DATE >= '{SEASON_START}'
                 GROUP BY 1, 2, 4
             """)
 
-            # 2. HENT AKTUEL KAMP-DATA
             df_current_match = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -197,71 +173,27 @@ def vis_side():
                 all_metrics = [m for m in df_current_match['METRIC'].unique() if 'COUNT' not in m]
                 prio = ["HSR DISTANCE", "SPRINT DISTANCE", "TOTAL DISTANCE"]
                 sorted_metrics = [m for m in prio if m in all_metrics] + [m for m in all_metrics if m not in prio]
-                
                 readable_options = [m.replace(' DISTANCE', '').title() for m in sorted_metrics]
                 map_back = dict(zip(readable_options, sorted_metrics))
                 selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0], key=f"split_sel_{p_uuid}")
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
-                    is_total_dist = "TOTAL" in m_type
-                    suffix = "km" if is_total_dist else "m"
-                    div = 1000 if is_total_dist else 1
-
-                    # Forbered data til graf
+                    div = 1000 if "TOTAL" in m_type else 1
+                    suffix = "km" if "TOTAL" in m_type else "m"
                     d_current = df_current_match[df_current_match['METRIC'] == m_type].copy()
-                    
-                    # Sæson-kurver (Splits)
                     d_s_player = df_season_splits[(df_season_splits['METRIC'] == m_type) & (df_season_splits['SCOPE'] == 'PLAYER')].sort_values('MINUTE_SPLIT')
                     d_s_team = df_season_splits[(df_season_splits['METRIC'] == m_type) & (df_season_splits['SCOPE'] == 'TEAM')].groupby('MINUTE_SPLIT')['AVG_VAL'].mean().reset_index()
 
                     fig_s = go.Figure()
-
-                    # 1. HOLDETS SÆSON-SNIT PR. MINUT (Grå solid linje)
-                    fig_s.add_trace(go.Scatter(
-                        x=d_s_team['MINUTE_SPLIT'], y=d_s_team['AVG_VAL'] / div,
-                        line=dict(color="#D3D3D3", width=1.5),
-                        mode='lines', name="Hold Sæson Gns.",
-                        hoverinfo="skip"
-                    ))
-
-                    # 2. SPILLERENS SÆSON-SNIT PR. MINUT (Sort stiplet linje)
-                    fig_s.add_trace(go.Scatter(
-                        x=d_s_player['MINUTE_SPLIT'], y=d_s_player['AVG_VAL'] / div,
-                        line=dict(color="black", width=1.5, dash="dash"),
-                        mode='lines', name="Spiller Sæson Gns.",
-                        hoverinfo="skip"
-                    ))
-
-                    # 3. AKTUEL KAMP (Rødt Areal)
-                    fig_s.add_trace(go.Scatter(
-                        x=d_current['MINUTE_SPLIT'], y=d_current['VAL'] / div, 
-                        fill='tozeroy', line=dict(color='#cc0000', width=2.5), 
-                        mode='lines+markers', name="Denne kamp",
-                        hovertemplate=f"Min: %{{x}}<br>Aktuel: %{{y:.1f}} {suffix}<extra></extra>"
-                    ))
-
-                    fig_s.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=20, b=20, l=0, r=0),
-                        showlegend=False, xaxis=dict(title="Kampminut", showgrid=False, range=[0, 95]),
-                        yaxis=dict(title=suffix, gridcolor='#f0f0f0')
-                    )
+                    fig_s.add_trace(go.Scatter(x=d_s_team['MINUTE_SPLIT'], y=d_s_team['AVG_VAL']/div, line=dict(color="#D3D3D3", width=1.5), name="Hold Sæson Gns."))
+                    fig_s.add_trace(go.Scatter(x=d_s_player['MINUTE_SPLIT'], y=d_s_player['AVG_VAL']/div, line=dict(color="black", width=1.5, dash="dash"), name="Spiller Sæson Gns."))
+                    fig_s.add_trace(go.Scatter(x=d_current['MINUTE_SPLIT'], y=d_current['VAL']/div, fill='tozeroy', line=dict(color='#cc0000', width=2.5), mode='lines+markers', name="Denne kamp"))
+                    fig_s.update_layout(plot_bgcolor="white", height=400, margin=dict(t=20, b=20, l=0, r=0), xaxis=dict(title="Kampminut", range=[0, 95]), yaxis=dict(title=suffix))
                     st.plotly_chart(fig_s, use_container_width=True)
-                    
-                    st.markdown(f"""
-                    <div style='font-size: 0.8rem; color: #666;'>
-                        <span style='color: #cc0000;'>■</span> Denne kamp | 
-                        <span style='color: black;'>---</span> Spiller Sæson Gns. | 
-                        <span style='color: #D3D3D3;'>━</span> Hold Sæson Gns.
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("Ingen minut-data tilgængelig for denne kamp.")
 
         with tabs[3]:
-            # Trend-graf baseret på de kampe vi har i 'df'
             df_chart = df.copy().drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS']).sort_values('MATCH_DATE')
-            
             cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)")
             mapping = {"HSR (m)": ("HSR", 1), "Sprint (m)": ("SPRINTING", 1), "Distance (km)": ("DISTANCE", 1000), "Topfart (km/t)": ("TOP_SPEED", 1)}
             col_name, div = mapping[cat_choice]
@@ -275,7 +207,6 @@ def vis_side():
                 df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opp(x, valgt_hold))
                 df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
                 y_vals = df_chart[col_name] / div
-                
                 fig_t = go.Figure(go.Bar(x=df_chart['Label'], y=y_vals, marker_color='#cc0000', text=y_vals.round(1), textposition='outside'))
                 fig_t.update_layout(plot_bgcolor="white", height=400, yaxis=dict(range=[0, y_vals.max()*1.3]))
                 st.plotly_chart(fig_t, use_container_width=True)
