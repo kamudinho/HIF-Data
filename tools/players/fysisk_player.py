@@ -93,25 +93,33 @@ def vis_side():
     df = get_physical_summary(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
     if df is not None and not df.empty:
-        latest = df.iloc[0]
+        latest = df.iloc[0].copy()
         
-        # Individuelle beregninger (Normalisering)
-        mins = latest['MINUTES'] if latest['MINUTES'] > 0 else 1
+        # --- SIKKER KONVERTERING TIL TAL ---
+        cols_to_fix = ['DISTANCE', 'HSR', 'SPRINTING', 'MINUTES', 'HI_RUNS', 'HI_RUNS_TIP', 'HI_RUNS_OTIP']
+        for col in cols_to_fix:
+            latest[col] = pd.to_numeric(latest[col], errors='coerce') or 0
+
+        # --- INDIVIDUELLE BEREGNINGER (Nu med sikre tal) ---
+        mins = float(latest['MINUTES']) if latest['MINUTES'] > 0 else 1.0
+        
         hsr_90 = int((latest['HSR'] / mins) * 90)
         sprint_90 = int((latest['SPRINTING'] / mins) * 90)
         dist_90 = round((latest['DISTANCE'] / mins) * 90 / 1000, 2)
         
-        # Eksplosivitets-index (% af total distance der er højintens)
-        hi_dist = latest['HSR'] + latest['SPRINTING']
-        hi_index = round((hi_dist / latest['DISTANCE']) * 100, 1) if latest['DISTANCE'] > 0 else 0
+        # Eksplosivitets-index
+        hi_dist = float(latest['HSR'] + latest['SPRINTING'])
+        total_dist = float(latest['DISTANCE'])
+        hi_index = round((hi_dist / total_dist) * 100, 1) if total_dist > 0 else 0.0
 
-        # Metrics række
+        # --- METRICS RÆKKE ---
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km", f"{dist_90} p90", delta_color="off")
+        m1.metric("Distance", f"{round(total_dist/1000, 2)} km", f"{dist_90} p90", delta_color="off")
         m2.metric("HSR", f"{int(latest['HSR'])} m", f"{hsr_90} p90", delta_color="off")
         m3.metric("Sprint", f"{int(latest['SPRINTING'])} m", f"{sprint_90} p90", delta_color="off")
-        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7 else "off")
-
+        
+        # Rettet: Vi sammenligner nu float med float (hi_index > 7.0)
+        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7.0 else "off")
         tabs = st.tabs(["📍 Individuel Profil", "📈 Sæson-trend", "📋 Kamp-historik"])
 
         with tabs[0]:
