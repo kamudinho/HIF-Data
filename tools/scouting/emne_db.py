@@ -245,7 +245,7 @@ def vis_side():
                         # FARVE-LOGIK MED PRIORITET
                         if r['ER_AKADEMI']:
                             # Akademi (Lilla)
-                            txt_c, bg = "white", AKADEMI_FARVE
+                            txt_c, bg = "black", AKADEMI_FARVE
                         elif not r['IS_HIF']:
                             # Emner (Grøn/Blå)
                             if r['KONTRAKT_DT'] <= ref_dt:
