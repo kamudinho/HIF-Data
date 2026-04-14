@@ -219,17 +219,19 @@ def vis_side():
                     # Graf
                     fig_s = go.Figure()
 
-                    # 1. Hold-benchmark minut-for-minut (Grå solid linje)
+                    # 1. HOLDETS gennemsnit minut-for-minut (Grå solid linje)
+                    # Denne følger splits ligesom du ønsker
                     fig_s.add_trace(go.Scatter(
                         x=d_team['MINUTE_SPLIT'], 
                         y=d_team['VAL_PLOT'],
-                        line=dict(color="#D3D3D3", width=1.5),
+                        line=dict(color="#D3D3D3", width=2),
                         mode='lines',
                         name="Hold Gns. pr. min",
-                        hoverinfo="skip"
+                        hovertemplate=f"Hold Gns: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # 2. Spillerens graf (Rødt areal)
+                    # 2. SPILLERENS faktiske værdier (Rødt areal)
+                    # Denne følger også splits
                     fig_s.add_trace(go.Scatter(
                         x=d_player['MINUTE_SPLIT'], 
                         y=d_player['VAL_PLOT'], 
@@ -237,10 +239,11 @@ def vis_side():
                         line=dict(color='#cc0000', width=2.5), 
                         mode='lines+markers',
                         name=valgt_spiller,
-                        hovertemplate=f"Min: %{{x}}<br>Værdi: %{{y:.1f}} {suffix}<extra></extra>"
+                        hovertemplate=f"Min: %{{x}}<br>{valgt_spiller}: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # 3. Holdets totale gennemsnit (Sort stiplet linje)
+                    # 3. BENCHMARK: Holdets totale gennemsnit (Sort stiplet - flad linje)
+                    # Den viser bare "ligger han over/under normalen for holdet"
                     team_avg_total = d_team['VAL_PLOT'].mean()
                     fig_s.add_shape(
                         type="line", 
@@ -248,16 +251,6 @@ def vis_side():
                         x1=d_team['MINUTE_SPLIT'].max(),
                         y0=team_avg_total, y1=team_avg_total,
                         line=dict(color="black", width=1, dash="dash")
-                    )
-
-                    # 4. Spillerens eget gennemsnit (Mørkerød stiplet linje)
-                    player_avg_total = d_player['VAL_PLOT'].mean()
-                    fig_s.add_shape(
-                        type="line", 
-                        x0=d_player['MINUTE_SPLIT'].min(), 
-                        x1=d_player['MINUTE_SPLIT'].max(),
-                        y0=player_avg_total, y1=player_avg_total,
-                        line=dict(color="#8B0000", width=1.5, dash="dot")
                     )
 
                     fig_s.update_layout(
