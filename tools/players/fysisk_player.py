@@ -174,7 +174,7 @@ def vis_side():
                 )
                 st.plotly_chart(fig, use_container_width=True, key=f"pct_fixed_v2_{p_uuid}")
             else:
-                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller}.")
+                st.info(f"Fandt ikke noget for {valgt_spiller}.")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
