@@ -113,44 +113,67 @@ def vis_side():
 
         with tabs[1]:
             st.caption("Intensitetsprofil (Beregnet ud fra kampens splits)")
+            
+            # Vi henter alle fysiske metrics for spilleren i denne kamp
             df_calc = conn.query(f"""
-                SELECT UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
+                SELECT UPPER(TRIM(PHYSICAL_METRIC_TYPE)) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}'
-                  AND PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%'
+                  AND (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%')
                 GROUP BY 1
             """)
 
             if df_calc is not None and not df_calc.empty:
-                metrics = df_calc.set_index('METRIC')['TOTAL_VAL'].to_dict()
-                total_dist = metrics.get('TOTAL DISTANCE', 1)
+                # Lav ordbog: {'TOTAL DISTANCE': 10500, 'HSR DISTANCE': 600, ...}
+                m_dict = df_calc.set_index('METRIC')['TOTAL_VAL'].to_dict()
+                
+                # Vi finder den samlede distance
+                total_dist = m_dict.get('TOTAL DISTANCE', 1)
+                
+                # Vi prøver at finde HSR og Sprint (nogle gange uden 'DISTANCE' i navnet)
+                hsr = m_dict.get('HSR DISTANCE', m_dict.get('HSR', 0))
+                sprint = m_dict.get('SPRINT DISTANCE', m_dict.get('SPRINTING', 0))
+                lsr = m_dict.get('LOW SPEED RUNNING DISTANCE', m_dict.get('LOW SPEED RUNNING', 0))
+                jog = m_dict.get('JOGGING DISTANCE', m_dict.get('JOGGING', 0))
+
+                # Beregn "Gående/Stående" som det overskydende op til total distance
+                walking_standing = total_dist - (hsr + sprint + lsr + jog)
                 
                 z_map = {
-                    'Sprint': metrics.get('SPRINT DISTANCE', 0),
-                    'HSR': metrics.get('HSR DISTANCE', 0),
-                    'LSR': metrics.get('LOW SPEED RUNNING DISTANCE', 0),
-                    'Jogging': metrics.get('JOGGING DISTANCE', 0)
+                    'Sprint': sprint,
+                    'HSR': hsr,
+                    'LSR': lsr,
+                    'Jogging': jog,
+                    'Gående/Stående': max(0, walking_standing)
                 }
-                
-                acc_dist = sum(z_map.values())
-                z_map['Gående/Stående'] = max(0, total_dist - acc_dist)
 
+                # Lav lister til grafen
                 z_labels = list(z_map.keys())
                 z_vals = [(v / total_dist) * 100 for v in z_map.values()]
 
                 fig = go.Figure(go.Bar(
-                    x=z_vals, y=z_labels, orientation='h', marker_color='#cc0000',
-                    text=[f"{v:.1f}%" for v in z_vals], textposition='outside'
+                    x=z_vals,
+                    y=z_labels,
+                    orientation='h',
+                    marker_color='#cc0000',
+                    text=[f"{v:.1f}%" if v > 0 else "" for v in z_vals],
+                    textposition='outside'
                 ))
+
                 fig.update_layout(
-                    plot_bgcolor="white", height=350, margin=dict(l=0, r=60, t=10, b=0),
+                    plot_bgcolor="white",
+                    height=350,
+                    margin=dict(l=0, r=60, t=10, b=0),
                     xaxis=dict(showticklabels=False, range=[0, max(z_vals)*1.4 if any(z_vals) else 100], showgrid=False),
                     yaxis=dict(autorange="reversed")
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"calc_pct_{p_uuid}")
+                st.plotly_chart(fig, use_container_width=True, key=f"calc_profile_fixed_{p_uuid}")
+                
+                # DEBUG: Hvis du stadig ikke ser noget, kan du fjerne kommentaren herunder:
+                # st.write("Fundne metrics:", m_dict)
             else:
                 st.info("Ingen split-data fundet til profil-beregning.")
-
+                
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
             df_season_splits = conn.query(f"""
